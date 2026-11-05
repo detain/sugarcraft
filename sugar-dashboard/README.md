@@ -628,9 +628,13 @@ foreach ($procs as $row => $p) {
 
 | Type | Description | Key Properties |
 |------|-------------|----------------|
-| `Key` | Key representation |
-| `KeyAction` | Key action |
-| `KeyMap` | Key mapping |
+| `Key` | Keyboard key combination; `withCtrl()` / `withAlt()` / `withShift()` return modified copies; `matches()` tests an incoming key | `toString()` |
+| `KeyAction` | Action triggered by a key combination | `execute()` |
+| `KeyMap` | Keyboard shortcut handler (renderable, implements `SizedItem`) | `on()`, `onAny()`, `off()` |
+| `Category` | String-backed enum of key-binding categories | `label()` |
+| `KeyIdentifier` | Unique identifier for a key binding, built from a string via `of()` | `of()`, `quit()`, `help()`, `refresh()`, `focusNext()`, `focusPrev()` |
+| `KeyMeta` | Metadata for a key binding (display string, full description) | `display()`, `fullDescription()` |
+| `KeyRegistry` | Static central registry for key bindings (teautils KeyRegistry pattern) | `register()`, `get()`, `byCategory()`, `categories()`, `match()`, `reset()` |
 
 ## State Namespace (State Management)
 
@@ -655,9 +659,9 @@ foreach ($procs as $row => $p) {
 
 | Type | Description | Key Methods |
 |------|-------------|-------------|
-| `Center` | Calculate centered position |
-| `HAlign` | `Left`, `Right`, `Center` |
-| `VAlign` | `Top`, `Middle`, `Bottom` |
+| `Center` | Calculate centered position | |
+| `HAlign` | `Left`, `Right`, `Center` | |
+| `VAlign` | `Top`, `Middle`, `Bottom` | |
 
 > Note: `Position\Center` is the geometry helper (computes centered
 > coordinates); `Layout\Center` is a separate renderable wrapper that centres
