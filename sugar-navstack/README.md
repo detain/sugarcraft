@@ -66,13 +66,13 @@ echo $popped->title;             // "Display"
 echo $stack->current()->title;   // "Settings"
 ```
 
-> **Untrusted-display caution** — `current()`, `parent()`, and `pop()` hand
-> back the **raw** stored title, unsanitized. When titles come from outside
-> your code (paths, URLs, user data), print them through the public surfaces
-> that sanitize at the boundary — `view()`, `viewHtml()`, `Breadcrumb::render()`,
-> or `Breadcrumb::renderTitles()` — or escape the raw title yourself before
-> echoing. (`TitleSanitizer` is `@internal` machinery behind those surfaces,
-> not a published API.)
+> **Untrusted-display caution** — `current()`, `parent()`, `pop()`, and
+> `items()` hand back the **raw** stored title, unsanitized. When titles come
+> from outside your code (paths, URLs, user data), print them through the
+> public surfaces that sanitize at the boundary — `view()`, `viewHtml()`,
+> `Breadcrumb::render()`, or `Breadcrumb::renderTitles()` — or escape the raw
+> title yourself before echoing. (`TitleSanitizer` is `@internal` machinery
+> behind those surfaces, not a published API.)
 
 `NavStack` is **mutable by design** — `push`, `popTo`, `updateTop`,
 `setItems`, and `clear` mutate in place and return `$this` for chaining (`pop`
@@ -88,7 +88,7 @@ returns a new instance.
 | `push(string $title, mixed $data = null): self` | Append an item (mutates) |
 | `pop(): ?NavigationItem` | Remove and return the top; `null` when empty |
 | `canPop(): bool` | True only when depth > 1 — guards the root crumb |
-| `popTo(int $index): self` | Truncate so item `$index` becomes the top (out-of-range clamps silently) |
+| `popTo(int $index): self` | Truncate so item `$index` becomes the top; out-of-range clamps silently — a negative index clamps to EMPTY (guard with `max(0, $index)` for root-or-deeper), an oversized one clamps to the current top |
 | `current(): ?NavigationItem` / `parent(): ?NavigationItem` | Peek at the top / one below it |
 | `depth(): int` / `isEmpty(): bool` / `items(): list<NavigationItem>` | Inspect the stack |
 | `updateTop(mixed $data): self` | Replace the top item's payload (no-op when empty) |
@@ -96,7 +96,7 @@ returns a new instance.
 | `clear(): self` | Remove everything |
 | `view(string $separator = ' › '): string` | Plain-text crumb trail; titles sanitized for terminal safety |
 | `viewHtml(): string` | Semantic `<nav>` HTML; last crumb gets `aria-current="page"`, titles HTML-escaped |
-| `filter(string $term): self` | New stack of items whose title **or** payload matches a case-insensitive substring (array payloads match when any nested scalar/Stringable value does) |
+| `filter(string $term): self` | New stack of items whose title **or** payload matches a case-insensitive substring (array payloads match when any nested scalar/Stringable value does); payloads nested deeper than 64 levels throw |
 
 ### Guards — limits & refusals
 

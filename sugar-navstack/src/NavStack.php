@@ -161,6 +161,10 @@ final class NavStack
     /**
      * Get all items as a list.
      *
+     * UNTRUSTED OUTLET: the returned items carry their RAW stored titles —
+     * like current()/parent()/pop(), this accessor bypasses the render-path
+     * sanitization. Treat `$item->title` from here as untrusted display data.
+     *
      * @return list<NavigationItem>
      */
     public function items(): array
@@ -304,6 +308,9 @@ final class NavStack
      * filtered stack refer to FILTERED positions, not the original ones.
      * The root is not exempt: if level 0 does not match, it is dropped.
      * An empty `$term` matches everything (substring semantics).
+     *
+     * @throws \InvalidArgumentException When an array payload nests deeper
+     *                                   than the 64-level search limit
      */
     public function filter(string $term): self
     {
