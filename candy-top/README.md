@@ -54,6 +54,8 @@ composer require sugarcraft/candy-top
 
 Add `:@dev` (`composer require sugarcraft/candy-top:@dev`) while your project's `minimum-stability` is `stable` and no tagged release exists. Composer installs the launcher as `vendor/bin/candy-top`. For a global tool, use `composer global require sugarcraft/candy-top` and put Composer's global `vendor/bin` on your `PATH`.
 
+The two GitHub locations are intentional and describe one codebase: development happens in the [detain/sugarcraft](https://github.com/detain/sugarcraft) monorepo — issues, tags and the phar releases all live there — and CI syncs each library's tree to the standalone [sugarcraft/candy-top](https://github.com/sugarcraft/candy-top) repository, which is what the `sugarcraft/candy-top` package installs from Packagist and what this package's homepage points at.
+
 ### Phar release and self-update
 
 The release workflow attaches a single-file executable archive to each
@@ -733,7 +735,7 @@ These are deliberate deviations and gaps; the accumulated notes live in `CALIBER
 - **Where the files live.** Config `$XDG_CONFIG_HOME/candy-top/config.conf`, themes in the same directory, tree-collapse state in `$XDG_STATE_HOME/candy-top/tree-state.json`. There is no log file: `log_level` is accepted for btop.conf compatibility and ignored.
 - **It refuses to start.** `candy-top --version` proves the binary itself is fine; the startup refusals (no tty, an unusable config path) all print a reason on stderr and exit non-zero before drawing anything.
 
-Bug reports and feature requests: [the SugarCraft issue tracker](https://github.com/detain/sugarcraft/issues). Say which version (`candy-top --version`), which terminal, and whether it reproduces with `--fake` — a fake-data repro needs no host state at all.
+Bug reports and feature requests: [the SugarCraft issue tracker](https://github.com/detain/sugarcraft/issues) — the monorepo tracker, not the split `sugarcraft/candy-top` repository's, which CI only fills by syncing. Say which version (`candy-top --version`), which terminal, and whether it reproduces with `--fake` — a fake-data repro needs no host state at all.
 
 ## Development
 
