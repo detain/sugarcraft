@@ -65,6 +65,12 @@ final class DiffWriter
     /**
      * Write a colored ANSI diff suitable for terminal output.
      *
+     * Layout: plain '--- EXPECTED ---' / '--- ACTUAL ---' dash rules, then
+     * one row per line carrying a ' ' (same) or '!' (differing) text cue.
+     * The color (green/red) is decoration — the difference signal is
+     * legible without SGR, so it survives colour-blind viewers, NO_COLOR
+     * piping and mono terminals.
+     *
      * @param string $expected Expected output (from cassette)
      * @param string $actual Actual output (from program)
      * @param resource $output Output stream (default: STDOUT)
@@ -75,48 +81,55 @@ final class DiffWriter
         $actualLines = explode("\n", $this->normalizeLineEndings($actual));
 
         $maxLines = max(count($expectedLines), count($actualLines));
-        // The EXPECTED/ACTUAL labels are the box's minimum width; anything
-        // narrower would have hand-padded the header with a negative repeat.
-        $maxWidth = 8;
+        // The '--- EXPECTED ---' rule is the report's minimum width; any-
+        // thing narrower would have hand-padded the rule with a negative
+        // dash repeat (the same crash-shape the old box header guarded).
+        $maxWidth = 12;
         for ($i = 0; $i < $maxLines; $i++) {
             $expLine = $expectedLines[$i] ?? '';
             $actLine = $actualLines[$i] ?? '';
             $maxWidth = max($maxWidth, strlen($expLine), strlen($actLine));
         }
 
-        $sep = str_repeat('─', $maxWidth + 2);
+        // Content field is prefix + space + padded line; every row (rules
+        // included) lands on exactly $fieldWidth + 2 columns.
+        $fieldWidth = max($maxWidth, 12);
+        $totalWidth = $fieldWidth + 2;
+        $rule = static fn (string $label): string =>
+            str_pad("--- {$label} ", $totalWidth, '-', STR_PAD_RIGHT);
 
         fwrite($output, "\n");
-        fwrite($output, Ansi::sgr(1, 33) . "┌{$sep}┐" . Ansi::reset() . "\n"); // Yellow border, expected header
-        fwrite($output, Ansi::sgr(1, 33) . "│ " . str_pad('EXPECTED', $maxWidth) . " │" . Ansi::reset() . "\n");
-        fwrite($output, Ansi::sgr(1, 33) . "└{$sep}┘" . Ansi::reset() . "\n");
+        fwrite($output, Ansi::sgr(1, 33) . $rule('EXPECTED') . Ansi::reset() . "\n"); // Yellow rule, expected header
 
         for ($i = 0; $i < $maxLines; $i++) {
             $expLine = $expectedLines[$i] ?? '';
             $actLine = $actualLines[$i] ?? '';
             $isSame = $expLine === $actLine;
             $color = $isSame ? Ansi::sgr(32) : Ansi::sgr(31); // Green for same, Red for diff
-            $_prefix = $isSame ? ' ' : '!';
+            // The '!' text cue rides the row so same-vs-differing never
+            // depends on color alone (colour-blind and mono terminals).
+            $prefix = $isSame ? ' ' : '!';
             fwrite($output, sprintf(
-                "%s│ %-{$maxWidth}s │" . Ansi::reset() . "\n",
+                "%s%s %-{$fieldWidth}s" . Ansi::reset() . "\n",
                 $color,
+                $prefix,
                 $expLine,
             ));
         }
 
         fwrite($output, "\n");
-        fwrite($output, Ansi::sgr(1, 36) . "┌{$sep}┐" . Ansi::reset() . "\n"); // Cyan border, actual header
-        fwrite($output, Ansi::sgr(1, 36) . "│ " . str_pad('ACTUAL', $maxWidth) . " │" . Ansi::reset() . "\n");
-        fwrite($output, Ansi::sgr(1, 36) . "└{$sep}┘" . Ansi::reset() . "\n");
+        fwrite($output, Ansi::sgr(1, 36) . $rule('ACTUAL') . Ansi::reset() . "\n"); // Cyan rule, actual header
 
         for ($i = 0; $i < $maxLines; $i++) {
             $expLine = $expectedLines[$i] ?? '';
             $actLine = $actualLines[$i] ?? '';
             $isSame = $expLine === $actLine;
             $color = $isSame ? Ansi::sgr(32) : Ansi::sgr(31);
+            $prefix = $isSame ? ' ' : '!';
             fwrite($output, sprintf(
-                "%s│ %-{$maxWidth}s │" . Ansi::reset() . "\n",
+                "%s%s %-{$fieldWidth}s" . Ansi::reset() . "\n",
                 $color,
+                $prefix,
                 $actLine,
             ));
         }

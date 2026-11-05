@@ -164,4 +164,53 @@ final class DiffWriterTest extends TestCase
         $this->assertStringContainsString('-', $diff);
         $this->assertStringContainsString('+', $diff);
     }
+
+    public function testDifferingRowsCarryTheBangTextCueInBothSections(): void
+    {
+        $text = $this->ansiDiffPlain("alpha\nbravo\n", "alpha\ncharlie\n");
+
+        // Differing rows carry '!' in both the EXPECTED and ACTUAL blocks;
+        // the same row carries the space cue — never '!'.
+        self::assertMatchesRegularExpression('/^! bravo/m', $text);
+        self::assertMatchesRegularExpression('/^! charlie/m', $text);
+        self::assertMatchesRegularExpression('/^  alpha/m', $text);
+        self::assertLessThan(2, preg_match_all('/^! alpha/m', $text), 'same line must never carry the bang cue');
+    }
+
+    public function testAnsiDiffLabelsAndRulesAreLegibleWithoutColor(): void
+    {
+        $text = $this->ansiDiffPlain("hello\n", "world\n");
+
+        // Plain dash rules, not box-drawing chrome: the labels survive an
+        // SGR strip and a non-Unicode-safe terminal alike.
+        self::assertMatchesRegularExpression('/^--- EXPECTED -/m', $text);
+        self::assertMatchesRegularExpression('/^--- ACTUAL -/m', $text);
+    }
+
+    public function testAnsiDiffEmitsNoBoxDrawingGlyphs(): void
+    {
+        $stream = Stream::memory('w+');
+        $this->writer->writeAnsiDiff('a', 'b', $stream);
+        rewind($stream);
+        $raw = stream_get_contents($stream) ?: '';
+
+        foreach (['┌', '┐', '└', '┘', '│', '─'] as $glyph) {
+            self::assertStringNotContainsString($glyph, $raw, "box glyph {$glyph} must be gone from the diff chrome");
+        }
+    }
+
+    /**
+     * Run writeAnsiDiff and return its output with every SGR sequence
+     * removed — what a NO_COLOR pipe or colour-blind reader effectively
+     * sees, so pins on the returned shape test the text cues alone.
+     */
+    private function ansiDiffPlain(string $expected, string $actual): string
+    {
+        $stream = Stream::memory('w+');
+        $this->writer->writeAnsiDiff($expected, $actual, $stream);
+        rewind($stream);
+        $raw = stream_get_contents($stream) ?: '';
+
+        return preg_replace('/\x1b\[[0-9;]*m/', '', $raw) ?? $raw;
+    }
 }
