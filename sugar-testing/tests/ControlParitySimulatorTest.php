@@ -76,7 +76,7 @@ final class ControlParitySimulatorTest extends TestCase
             ->send(new BatchMsg(['not-a-cmd']));
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('requires callables');
+        $this->expectExceptionMessage('must be Closures here');
 
         $sim->run();
     }

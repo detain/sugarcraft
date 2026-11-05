@@ -20,6 +20,8 @@ simulation, VHS tape building, and graphics-stream decoding.
 - **Snapshot assertions** — `assertGoldenAnsi`, `assertCellGrid`, `assertAnsiEquals`,
   `assertViewIdempotent` — the parsers reject malformed expectation shapes at the
   boundary, so an assertion that would compare nothing fails loudly instead of passing
+  (`assertViewIdempotent`'s model-unchanged leg uses a shallow clone: nested
+  mutation by reference is out of its reach, output idempotence is the guarantee)
 - **`GoldenFile`** — lifecycle-aware `.golden` helper: `load()` (null only when
   missing; unreadable or symlinked goldens throw), `save()` (atomic clobber —
   fixture seeding), `create()` (one-way, refuses an existing golden),
@@ -150,7 +152,8 @@ simulator, not the real runtime, and the boundary is explicit:
 - `BatchMsg` / `SequenceMsg` — each member closure runs as a Cmd would; the
   messages they produce are dispatched, appended behind everything already queued —
   so a member's result lands after later-listed messages, not in member-list order.
-  Members must be callables; anything
+  Members must be `Closure` instances (production's scheduler takes
+  callables; this dispatch requires the narrower type); anything
   else throws. The container itself never reaches `update()`.
 - `TickRequest` — `produce()` fires **immediately**. There is no virtual clock:
   the requested delay is not simulated, and nothing is armed on a loop.
@@ -185,7 +188,8 @@ Assertions::assertCellGrid($grid, $buffer);
 // Byte-exact ANSI comparison with readable diff on failure.
 Assertions::assertAnsiEquals("\x1b[1;32mHello\x1b[0m", $actual);
 
-// Render purity: view() must be idempotent and must not mutate the model.
+// Render purity: view() must be idempotent and must not mutate the model
+// (the unchanged-check is a shallow clone — nested-by-reference mutation passes).
 Assertions::assertViewIdempotent($model);
 ```
 
@@ -229,9 +233,11 @@ is never skipped into a pass):
   height or row-width mismatch fails the assertion, naming the dimensions.
   Ragged rows used to leave their tails never-compared — they are a hard error
   now.
-- A row is either a plain string (its clusters spread cell-by-cell; a wide
-  cluster claims the following continuation cell) or a list of cells of
-  exactly buffer width.
+- A row is a plain string (its clusters spread cell-by-cell; a wide
+  cluster claims the following continuation cell), a list of cells of
+  exactly buffer width, or plain `null` — a legal whole-row wildcard, though
+  the row slot must still exist (a fully-wildcard grid then trips the
+  zero-cells rule below).
 - A cell is `null` (a deliberate wildcard for that one position), a string
   holding a **single narrow** grapheme cluster, or an array with keys from
   `rune` and `width` (`0` continuation / `1` / `2`). Unknown keys throw with a
@@ -240,7 +246,7 @@ is never skipped into a pass):
   across cells or use the array form.
 - A grid whose every cell is a wildcard **fails** ("compared zero cells") —
   a vacuous pass is the exact failure mode this library exists to prevent.
-- Failures dump up to 20 mismatching cells with `(row, col)` coordinates, then
+- Failures dump up to 20 mismatching cells with `(col, row)` coordinates, then
   a summary of cells compared vs skipped, so a full-buffer diff cannot flood a
   test log.
 
@@ -268,8 +274,9 @@ if ($expected === null) {
 // GoldenFile::update($path, $actual);               // deliberate re-baseline (same atomic write)
 ```
 
-Every write goes through a uniquely named temp file and a `rename()`, so a
-crash mid-write cannot leave a half-baseline; empty content (0 bytes) is a
+Every write goes through a uniquely named temp file and a single publish step
+— `rename()` for `save()`/`update()`, `link()` for the no-clobber `create()`
+path — so a crash mid-write cannot leave a half-baseline; empty content (0 bytes) is a
 legal golden for a silent renderer. Reading or writing **through** a symlinked
 golden is refused outright — a fixture path must be a fixture.
 
@@ -321,7 +328,7 @@ $input = ScriptedInput::new()
     ->ticks(5)              // 5 harness TickMsgs — see the tick note below
     ->resize(120, 40)
     ->key('q')
-    ->build();              // list<Msg>, feed with $sim->send(...$input->build())
+    ->build();              // list<Msg>, feed with $sim->send(...$input)
 ```
 
 Builders: `new()`, `key(char, shift:, ctrl:, alt:)`, `namedKey(KeyType, rune,
