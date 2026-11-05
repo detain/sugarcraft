@@ -124,19 +124,29 @@ Cassettes support two timestamp modes:
 | `absolute` (default) | `t` = seconds since cassette start | Playback timing |
 | `relative` | `dt` = interval since previous event (like asciinema v3) | Deterministic replay; easier manual editing |
 
-Select the mode at record time via `Recorder::withFormat()`:
+Select the mode at record time via the header you pass `Recorder::open()`:
 
 ```php
+use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Recorder;
-use SugarCraft\Vcr\Format\RelativeFormat;
 
-// Relative timestamps (delta between events)
-$recorder = Recorder::open('/tmp/session.cas')
-    ->withFormat(new RelativeFormat());
+// Relative timestamps (delta between events) — the mode rides the header.
+// Recorder::withFormat(new RelativeFormat()) does NOT flip modes: it only
+// confirms the header already matches the format and throws RuntimeException
+// on a mismatch. Recorder::defaultHeader() (what open() uses without a
+// header) is always absolute — it has no timestampMode knob.
+$recorder = Recorder::open('/tmp/session.cas', new CassetteHeader(
+    version: CassetteHeader::CURRENT_VERSION,
+    createdAt: gmdate('Y-m-d\TH:i:s\Z'),
+    cols: 80,
+    rows: 24,
+    runtime: 'sugarcraft/candy-vcr@dev',
+    timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
+));
 
-(new Program($model))
-    ->withRecorder($recorder)
-    ->run();
+$program = new Program($model);
+$program->setRecorder($recorder);   // withRecorder() is the deprecated chain form
+$program->run();
 ```
 
 The `Player::open()` factory auto-detects which format a cassette uses: a
@@ -219,7 +229,7 @@ The core types in `SugarCraft\Vcr\`:
 | `CassetteHeader` | Schema metadata — `$version`, `$createdAt`, `$cols`, `$rows`, `$runtime`, `$theme`, `$typingSpeed`, `$env`, `$timestampMode`, `$playbackSpeed`, `$fontSize`, `$fontFamily`, `$widthPx`, `$heightPx`. Constants `CURRENT_VERSION` (2 — the version writers stamp; `MAX_READABLE_VERSION` is also 2, so readers accept v2 today and refuse anything newer), `PLAYBACK_SPEED_DEFAULT` (1.0), `TIMESTAMP_MODE_ABSOLUTE`, `TIMESTAMP_MODE_RELATIVE`. (The wire key is `created`; the DTO property is `$createdAt`.) |
 | `Event` | One recorded line. Fields: `t: float`, `kind: EventKind`, payload `array`. |
 | `EventKind` | Enum: `Resize`, `Input`, `Output`, `Quit`, `Snapshot`, `Hide`, `Show`. |
-| `Recorder` | Record-side. Construct via `Recorder::open($path)` — the cassette file is created and tightened to `0600` (owner-only) because cassettes can embed secrets. Methods: `withFormat(Format)`, `withHook(Hook)`, `withIdleTrim($threshold, $compressedMax=0.5)`, `recordResize($cols, $rows)`, `recordInputBytes($bytes)`, `recordOutput($bytes)`, `recordQuit()`, `close()`, `captureWriteErrors(): int` (count of failed write/flush attempts — a non-zero total means the cassette is silently incomplete). Helpers `defaultHeader($cols, $rows, $runtime)`, `hooks(): HookRegistry`. Env filtering is `RecordCommand::filteredHostEnv()` — see the record options below. |
+| `Recorder` | Record-side. Construct via `Recorder::open($path, ?CassetteHeader $header = null)` — the cassette file is created and tightened to `0600` (owner-only) because cassettes can embed secrets; the header's `timestampMode` decides absolute vs relative. Methods: `withFormat(Format)` (confirms only — throws when the header is not relative), `withHook(Hook)`, `withIdleTrim($threshold, $compressedMax=0.5)`, `recordResize($cols, $rows)`, `recordInputBytes($bytes)`, `recordOutput($bytes)`, `recordQuit()`, `close()`, `captureWriteErrors(): int` (count of failed write/flush attempts — a non-zero total means the cassette is silently incomplete). Helpers `defaultHeader($cols, $rows, $runtime)`, `hooks(): HookRegistry`. Env filtering is `RecordCommand::filteredHostEnv()` — see the record options below. |
 | `Player` | Replay-side. Factories: `Player::open($path)` (a `.gz` name is routed straight to `CompressedJsonlFormat` without sniffing; any other name content-sniffs the second line — a `dt` field selects `RelativeFormat`, otherwise `JsonlFormat`, so for non-`.gz` names the extension is not consulted), `Player::loadAny($path)` (extension + content sniff via `CassetteLoader`, accepts `.tape` sources). Methods: `withIdleTrim(?float)`, `play(programFactory, ?assertion, speed, ?serializerRegistry, ?timeoutSeconds, skipFirstResize, ?matcher, ?idleThresholdSeconds, useRawTimestamps)`. Constants `SPEED_INSTANT`, `SPEED_REALTIME`, `INSTANT_YIELD_SECONDS`. |
 | `Format\Format` (interface) | `write(Cassette, $path)`, `read($path): Cassette`, `encode(Cassette): string`, `decode(string): Cassette`. Implementations: `JsonlFormat` (default), `CompressedJsonlFormat`, `RelativeFormat`, `YamlFormat`. `AsciinemaFormat` is a read-only importer with `read()` only and implements nothing. |
 | `Format\CassetteLoader` | `load($path): Cassette` — auto-detects cassette vs tape source. `isTape($path): bool` — exposes the sniff. |
@@ -423,11 +433,11 @@ entirely).
 |-------|-----------|
 | `PassthroughMatcher` | Every event matches — equivalent to omitting `matcher:` entirely (`Player::play()` defaults it to `null`, which skips matcher filtering); pairs with `ByteAssertion` for the actual diff. |
 | `ContentMatcher` | Matches on `(kind, payload)`; ignores `t`. Useful when replay timing isn't deterministic. |
-| `TimingTolerantMatcher` | Matches when `\|t_actual - t_recorded\| ≤ $tolerance`. Construct with `$tolerance: float` (seconds). |
+| `TimingTolerantMatcher` | Matches when `\|t_actual - t_recorded\| ≤ timingTolerance`. Construct with `timingTolerance:` (float seconds, default 0.1); negative values throw `InvalidArgumentException`. |
 
 ```php
 use SugarCraft\Vcr\Matcher\TimingTolerantMatcher;
-$matcher = new TimingTolerantMatcher(tolerance: 0.05);  // ±50 ms
+$matcher = new TimingTolerantMatcher(timingTolerance: 0.05);  // ±50 ms (default 0.1)
 $matcher->matches($recordedEvent, $actualEvent);  // bool
 ```
 
