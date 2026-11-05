@@ -14,8 +14,7 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * {@see ../lang/en.php} (source of truth) plus the 15 non-English locales;
  * sugar-gallery is an original component, so these entry points are the
  * lib's own — they are not inherited from any Go project (the old
- * "mirrors charmbracelet/gum" line in lang/en.php was false; docs-review-1023
- * M3 retired it).
+ * "mirrors charmbracelet/gum" line in lang/en.php was false and was retired).
  *
  * @extends BaseLang
  */

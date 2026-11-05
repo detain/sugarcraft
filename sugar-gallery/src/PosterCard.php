@@ -43,7 +43,7 @@ final readonly class PosterCard
      *                                   paints the bytes there. Null with an image
      *                                   set means nothing can address the art —
      *                                   an id outside ImageOverlay's paintable
-     *                                   range 0..MAX_IMAGES-1 likewise (C1) — so
+     *                                   range 0..MAX_IMAGES-1 likewise — so
      *                                   the cell renders as a skeleton and
      *                                   {@see hasPoster()} reports it unfilled.
      * @param bool        $failed        Set once the owner's fetch for this
@@ -51,8 +51,8 @@ final readonly class PosterCard
      *                                   distinct unavailable state (localised
      *                                   line over '?' fill rows) instead of the
      *                                   loading skeleton, so a dead request is
-     *                                   not indistinguishable from a slow one
-     *                                   (M4). {@see hasPoster()} reports the
+     *                                   not indistinguishable from a slow one.
+     *                                   {@see hasPoster()} reports the
      *                                   cell unfilled, keeping it inside the
      *                                   re-queue policy for a retry.
      */
@@ -88,7 +88,7 @@ final readonly class PosterCard
      * Mark the cell's art-fetch as failed (or, passing false, back to loading):
      * the body shows a localised unavailable line over '?' fill rows instead
      * of the loading skeleton, and {@see hasPoster()} reports the cell
-     * unfilled so a retry policy still re-queues it (M4). Attaching real art
+     * unfilled so a retry policy still re-queues it. Attaching real art
      * afterwards (withPoster/withImage) does NOT clear the flag — pass
      * withFailed(false) alongside the fill, which is exactly what a
      * retry-resolved callback does.
@@ -134,8 +134,8 @@ final readonly class PosterCard
      *
      * Like {@see withSafeStyledTitle()}, this guards the TEXT channel only.
      * Private-use-area codepoints survive as printable glyphs to the scanner —
-     * with one deliberate carve-out (gallery review M8, fleet
-     * untrusted-for-marked-frames law): the candy-mouse ZONE sentinels
+     * with one deliberate carve-out (the fleet untrusted-for-marked-frames
+     * law): the candy-mouse ZONE sentinels
      * U+E000/U+E001 are swept, because a forged pair reads as zone markup to
      * whatever marks or scans the frame downstream. Image-overlay markers
      * (U+E002 and up) still survive — the same declared boundary sugar-core's
@@ -158,9 +158,9 @@ final readonly class PosterCard
      * text frame — the card renders a marker block reserving the poster area, and
      * the {@see \SugarCraft\Core\Program} paints the image on top. The graphics
      * bytes are stored VERBATIM and bypass the text guard — they are out-of-band
-     * payloads, not frame text: the CALLER owns their provenance (n15). An $id
+     * payloads, not frame text: the CALLER owns their provenance. An $id
      * outside ImageOverlay's paintable range degrades the cell to an unfilled
-     * skeleton (re-queued for a fresh id) instead of throwing (C1).
+     * skeleton (re-queued for a fresh id) instead of throwing.
      */
     public function withImage(string $bytes, int $id): self
     {
@@ -218,8 +218,8 @@ final readonly class PosterCard
      * constructor. A `readonly class` forbids writing to a clone, so state
      * re-enters only through `new self(...)` — and routing that through a
      * single choke point means a field can never be silently dropped the way
-     * five hand-rolled positional reconstructions could (docs-review-1023
-     * m6; the snapshot rides {@see get_object_vars()}, so a field added to
+     * five hand-rolled positional reconstructions could (the snapshot rides
+     * {@see get_object_vars()}, so a field added to
      * the constructor flows through automatically and a typo in an override
      * name fails loud).
      *
@@ -290,7 +290,7 @@ final readonly class PosterCard
      * {@see render()} actually draws: an overlay blob with no id has no marker to
      * paint, renders as a skeleton, and must count as unfilled so the owner re-queues it.
      *
-     * Two more shapes are UNFILLED under the same law (gallery review C1/M7):
+     * Two more shapes are UNFILLED under the same law:
      *  - an empty inline poster — `withPoster('')` is the shape a cache or HTTP
      *    layer leaves behind when it stored nothing, and reading it as "loaded"
      *    would park the cell as a blank filled frame forever, outside the
@@ -300,7 +300,7 @@ final readonly class PosterCard
      *    a host minting its own numbering) used to throw from every frame the
      *    grid drew and never re-queue, because {@see hasPoster()} called it
      *    filled;
-     *  - a FAILED fetch (M4) — the cell shows the unavailable state, not art,
+     *  - a FAILED fetch — the cell shows the unavailable state, not art,
      *    and stays re-queueable for a retry.
      */
     public function hasPoster(): bool
@@ -341,7 +341,7 @@ final readonly class PosterCard
      * Range gate in front of the {@see ImageOverlay::marker()} throw site: ids
      * are the blessed stable per-item index in 0..{@see ImageOverlay::MAX_IMAGES}-1.
      * Out-of-range ids degrade like a null id — skeleton body, unfilled cell —
-     * so a single poisoned card can never crash the whole grid frame (C1).
+     * so a single poisoned card can never crash the whole grid frame.
      */
     private static function overlayIdIsPaintable(int $imageId): bool
     {
@@ -405,7 +405,7 @@ final readonly class PosterCard
     {
         // A failed cell bypasses the memo entirely: its first line carries
         // LOCALE-resolved text, and the process-wide memo must never freeze a
-        // translation against a later T::setLocale() (M4). The rebuild is a
+        // translation against a later T::setLocale(). The rebuild is a
         // str_repeat plus one fit — no per-frame fit cost worth caching.
         if ($this->failed) {
             return self::failedRows($width, $posterHeight);
@@ -484,7 +484,7 @@ final readonly class PosterCard
     }
 
     /**
-     * The unavailable-state body rows for a failed cell (M4): a localised
+     * The unavailable-state body rows for a failed cell: a localised
      * notice on the first row, neutral-width '?' fill on the rest — visually
      * distinct from both the loading skeleton ('░') and blank overlay
      * reservations, and never memoized so the locale stays live.
@@ -539,7 +539,7 @@ final readonly class PosterCard
     {
         $rows = preg_split('/\r\n|\r|\n/', $poster);
         if ($rows === false) {
-            // Fail CLOSED (n16): harmonised with withSafePoster()'s `?: ['']` —
+            // Fail CLOSED: harmonised with withSafePoster()'s `?: ['']` —
             // a PCRE internal failure must not wave unsplit raw bytes at the
             // terminal. The padding loop below renders the reserved area blank.
             $rows = [];
@@ -591,8 +591,8 @@ final readonly class PosterCard
      * spelled out as a trailing label inside the reserved width and the bar
      * shrinks to match — the glyph run alone saturates at both clamped ends
      * (every ▓ is a full bar, every ░ an empty one) and rounds coarse at
-     * typical widths, so '(60%)' tells the user what the blocks only suggest
-     * (M5). Too narrow for a bar beside the label, the label is dropped and
+     * typical widths, so '(60%)' tells the user what the blocks only suggest.
+     * Too narrow for a bar beside the label, the label is dropped and
      * the bar takes the full width as before.
      */
     private static function progressBar(float $progress, int $width): string

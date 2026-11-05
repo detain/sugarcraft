@@ -22,8 +22,8 @@ final readonly class Rail
      * The taught construction path is "restore a saved (cursor, scroll) pair",
      * so the constructor CLAMPS rather than validates: the cursor lands inside
      * [0, count-1] and the scroll at or below it, instead of a stale restore
-     * printing e.g. "(1000/2)" with a phantom empty row (2026-11-03 review
-     * m10). Every with*-carrier rides the same clamp via {@see carrying()};
+     * printing e.g. "(1000/2)" with a phantom empty row. Every with*-carrier
+     * rides the same clamp via {@see carrying()};
      * the render-time window re-clamp in {@see windowedScroll()} still handles
      * perRow changes between moves.
      *
@@ -49,8 +49,8 @@ final readonly class Rail
     }
 
     /**
-     * The one carrier law (mirrors PosterCard::carrying() — 2026-11-03 review
-     * M9): every with-family and move-family mutator rebuilds through a full
+     * The one carrier law (mirrors PosterCard::carrying()): every with-family
+     * and move-family mutator rebuilds through a full
      * state snapshot plus named overrides, so a field added to the
      * constructor can never be silently dropped by a hand-rolled positional
      * reconstruction again.
@@ -91,7 +91,7 @@ final readonly class Rail
      * Replace a single card by id (e.g. when its poster finishes loading).
      * A card whose id is not in the list is a SILENT no-op: the copy is
      * returned with the original cards, cursor, and scroll untouched
-     * (2026-11-03 review m1 — this was pinned by tests but undocumented).
+     * (this was pinned by tests but undocumented).
      */
     public function withCard(PosterCard $card): self
     {
@@ -153,8 +153,8 @@ final readonly class Rail
     /**
      * The minimum scroll that keeps $cursor inside a $perRow-wide window —
      * the ONE copy of this math, shared by {@see moveCursor()} and the
-     * render-time re-clamp (it was twin text in both before docs-review-1023
-     * NIT-dup). The result is always >= 0, so a rail constructed with a
+     * render-time re-clamp. The result is always >= 0, so a rail constructed
+     * with a
      * negative scroll normalises on the first move as well as on render.
      */
     private static function windowedScroll(int $cursor, int $scroll, int $perRow): int
@@ -183,10 +183,10 @@ final readonly class Rail
         // documents: titles are DB/server-sourced, so the exact scanner
         // PosterCard::render() runs ({@see AnsiGuard::stripControls()}) gates
         // the heading too — a server-returned title can move no cursor, clear
-        // no screen, and smuggle no OSC-8 hyperlink into the frame
-        // (docs-review-1023 M4). Both header lines are then clamped to
-        // $railWidth so an over-long title cannot overflow the rail (M4's
-        // width twin of the README's exact-width invariant).
+        // no screen, and smuggle no OSC-8 hyperlink into the frame.
+        // Both header lines are then clamped to $railWidth so an over-long
+        // title cannot overflow the rail (the width twin of the README's
+        // exact-width invariant).
         $prefix = ($focused ? '●' : '○') . ' ';
         $counter = $count > 0 ? '  (' . ($this->cursor + 1) . '/' . $count . ')' : '';
         $title = AnsiGuard::stripControls($this->title);
@@ -194,7 +194,7 @@ final readonly class Rail
         // The position/total counter is DATA, not decoration: it is reserved
         // BEFORE the title is trimmed, so a narrow rail truncates the title
         // and the counter survives whole. Before this the whole line went
-        // through one clamp and the counter died first (2026-11-03 review M3).
+        // through one clamp and the counter died first.
         if (Width::string($prefix . $title . $counter) > max(1, $railWidth)) {
             $room = max(1, $railWidth) - Width::string($prefix . $counter) - 1;
             $title = $room > 0 ? Width::truncate($title, $room) . '…' : '';
@@ -204,8 +204,8 @@ final readonly class Rail
 
         if ($this->cards === []) {
             // The one prose string in this widget is a translation lookup,
-            // not a literal (docs-review-1023 M2/M3 — lang/ was wired into
-            // sugar-core's T registry by src/Lang.php). The two-space indent
+            // not a literal (lang/ is wired into sugar-core's T registry by
+            // src/Lang.php). The two-space indent
             // stays structural, outside the translated value.
             return $head . "\n" . self::fitHead('  ' . Lang::t('rail.empty'), $railWidth);
         }

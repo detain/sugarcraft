@@ -27,7 +27,9 @@ use SugarCraft\Mouse\Zones\Manager as ZoneManager;
  *
  * Each cell is a uniform `cardWidth × cellHeight` box (`cellHeight =
  * posterHeight + 2`, reserving a title and a progress row) so columns and rows
- * always line up regardless of which cards carry progress bars.
+ * always line up regardless of which cards carry progress bars — the progress
+ * line is drawn only by cards that carry one; the box pads the reserved row
+ * for the rest.
  */
 final class PosterGrid
 {
@@ -108,8 +110,8 @@ final class PosterGrid
      * Non-integer keys and wrong-typed values are refused loudly at this
      * ingress: `'abc' >= 0` evaluates TRUE in PHP 8, so a string key used to
      * slip into the sparse map and detonate later as a frame-wide TypeError
-     * deep inside render() (2026-11-03 review m1 — fail-fast, not silent-drop).
-     * Negative INTENTIONAL indices are skipped quietly (a pinned contract for
+     * deep inside render() — fail-fast, not silent-drop.
+     * Intentionally-negative indices are skipped quietly (a pinned contract for
      * hosts that splice whole API pages without pre-filtering).
      *
      * @param array<array-key, mixed> $items absolute index → card
@@ -164,8 +166,7 @@ final class PosterGrid
     public function withoutItemsOutside(array $range): self
     {
         // Shape-gate before the destructure: ['start' => 0, 'end' => 5] used to
-        // fatal with "Cannot access offset of type string" (2026-11-03 review
-        // m1 twin).
+        // fatal with "Cannot access offset of type string".
         if (count($range) !== 2 || !array_key_exists(0, $range) || !array_key_exists(1, $range)
             || !is_int($range[0]) || !is_int($range[1])) {
             throw new \InvalidArgumentException(
@@ -432,8 +433,7 @@ final class PosterGrid
      * How many loaded cards sit INSIDE the current total. Entries the host
      * spliced past the end of the list (then shrank withTotal) stay in the
      * sparse map for the next widening, but they are not loaded content of
-     * this collection — counting them over-reported progress (2026-11-03
-     * review n20).
+     * this collection — counting them over-reported progress.
      */
     public function loadedCount(): int
     {
@@ -483,8 +483,8 @@ final class PosterGrid
      * or `''` for an empty grid. The grid frame is deliberately chrome-free
      * (every row is cell geometry the owner composes), so unlike Rail it prints
      * no heading: the composing screen places this string where it belongs
-     * (2026-11-03 review M2 — before this seam the 2-D view had no way to tell
-     * the user where they were).
+     * (before this seam, the 2-D view had no way to tell the user where they
+     * were).
      */
     public function positionText(): string
     {
@@ -498,7 +498,7 @@ final class PosterGrid
     /**
      * Does the configured cell geometry actually fit a viewport? columns()
      * and visibleRows() floor at one, so a sub-cell viewport still renders —
-     * and silently LIES about what is visible (2026-11-03 review M14). This is
+     * and silently LIES about what is visible. This is
      * the detection seam callers want before laying a screen around the grid;
      * the grid keeps its floor rather than collapsing frames to blank.
      * Defaults to the grid's own current viewport.
@@ -681,7 +681,7 @@ final class PosterGrid
         if ($this->total <= 0) {
             // An empty grid has no window to keep — reset rather than freeze
             // a stale cursor/scroll that would resurface (wrongly) after the
-            // next withTotal() widens the list again (2026-11-03 review n11).
+            // next withTotal() widens the list again.
             if ($this->cursor === 0 && $this->scrollRow === 0) {
                 return $this;
             }
