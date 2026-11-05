@@ -379,12 +379,14 @@ whole thing is **fail-soft**: outside tmux, without the binary, or against
 an unparseable answer it degrades to the manual-configuration silence,
 never a throw. Embedders who own their tmux configuration opt out with
 `Detect::setAutoPassthrough(false)`. GNU screen has its own envelope
-instead: the `Passthrough/` decorators (`TmuxPassthroughDecorator`,
-`ScreenPacketizer` / `ScreenPassthrough`).
+instead: `ScreenPacketizer` and `ScreenPassthrough`, which live under
+`Passthrough/` behind the shared `PassthroughDecorator` interface. The
+tmux half of the family — `TmuxPassthrough` + `TmuxPassthroughDecorator`
+— sits in the root namespace, not in `Passthrough/`.
 
 ## Animation
 
-Drive a sequence of frames through `AnimationDriver` — a `Model`-implementing class that uses `Cmd::tick()` for per-frame timing and `Renderer::delete()` / `Renderer::renderFrame()` for clean per-frame redraws on Kitty/iTerm2 terminals.
+Drive a sequence of frames through `AnimationDriver` — a `Model`-implementing class that uses `Cmd::tick()` for per-frame timing and `Renderer::delete()` + `KittyRenderer::renderFrame()` for clean per-frame redraws on Kitty terminals (iTerm2 gets delete + a full re-render, as its payload has no stable per-frame id).
 
 ```php
 use SugarCraft\Image\Animation;
@@ -578,6 +580,7 @@ SugarCraft\Image
 ├── AsyncRenderer / PacedAsyncRenderer / SyncAsyncRenderer  # Async render paths
 ├── PixelGrid              # 2-D cell grid (foreground, background, alpha, char)
 ├── PlacedImage            # placeTracked() result: marker block + assigned id
+├── TmuxPassthrough / TmuxPassthroughDecorator  # tmux allow-passthrough envelope (root namespace)
 ├── Renderer
 │   ├── AsciiRenderer      # Character ramp (Mono/Ansi16/Ansi256/TrueColor)
 │   ├── ChafaRenderer      # External command renderer
@@ -592,6 +595,6 @@ SugarCraft\Image
 ├── Dither                 # Shared dithering arithmetic (Floyd-Steinberg, ordered…)
 ├── Levels                 # Luminance stretching (Rec.709 weights)
 ├── Render                 # Band splitting
-├── Passthrough            # tmux/screen envelope decorators
+├── Passthrough            # GNU screen envelope decorators (interface + packetizer)
 └── Support                # OutputOptimizer, GdAvailability, PushToPull
 ```
