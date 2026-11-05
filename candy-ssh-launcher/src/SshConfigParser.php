@@ -30,7 +30,10 @@ use RuntimeException;
  * - Pattern matching is literal-or-bare-`*` only. OpenSSH's `?`, character
  *   classes, and negated `!patterns` are not interpreted — a `Host web*`
  *   block never cross-applies to the host `web1`; only the exact string
- *   `web*` (or the universal bare `*`) matches.
+ *   `web*` (or the universal bare `*`) matches. Negated `!patterns` are
+ *   moreover never MINTED as endpoints (F-24): they are exclusion tokens,
+ *   not hostnames, and a row dispatching the literal '!internal' is a bug
+ *   surface, not a feature.
  * - Quoted arguments, `Match` blocks, and multi-line continuations are
  *   unimplemented.
  */
@@ -209,6 +212,14 @@ final class SshConfigParser
                 if ($pattern === '*') {
                     // A wildcard pattern never names an endpoint of its own;
                     // it only contributes options (see resolveOptions).
+                    continue;
+                }
+                if (str_starts_with($pattern, '!')) {
+                    // F-24: a '!pattern' is an ssh_config(5) EXCLUSION token,
+                    // never a hostname. Minting it offered a selectable row
+                    // that dispatched the literal '!internal'. The token stays
+                    // in the block's pattern list, so resolveOptions matching
+                    // is unaffected — only the mint is skipped.
                     continue;
                 }
                 if (isset($minted[$pattern])) {

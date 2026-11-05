@@ -310,4 +310,22 @@ CONF;
         $this->assertSame('example.com', $endpoints[0]->host);
         $this->assertSame('spaces', $endpoints[0]->user);
     }
+
+    public function testNegationPatternIsNeverMinted(): void
+    {
+        // F-24 (Step 19): '!internal' is an exclusion token, not a hostname.
+        // Base minted a selectable 'internal' row dispatching that literal.
+        $raw = "Host * !internal\n  User root\n";
+        $this->assertSame([], $this->parse($raw));
+    }
+
+    public function testPositivePatternsStillMintAlongsideNegations(): void
+    {
+        $raw = "Host a !x b\n  User u\n";
+        $names = array_map(
+            static fn(\SugarCraft\SshLauncher\Endpoint $e): string => $e->name,
+            $this->parse($raw),
+        );
+        $this->assertSame(['a', 'b'], $names);
+    }
 }
