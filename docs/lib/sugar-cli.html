@@ -100,7 +100,7 @@ echo StatusLine::error  ('connection refused'), "\n";</code></pre>
 <tr><td>Section</td><td>header(label, ?theme, leftPad = 2, width = Auto, rune = '─')</td><td>Label + fill rule; a non-null width is a hard cap (long labels end in …)</td></tr>
 <tr><td>Section</td><td>rule(?theme, width = Auto, rune = '─') / subHeader(label, ?theme, indent = 4, width = Auto, rune = '·')</td><td>Bare divider / indented nested heading</td></tr>
 <tr><td>Stage</td><td>step(n, total, msg, ?theme, glyph, width = Auto)</td><td>Numbered step line</td></tr>
-<tr><td>Stage</td><td>subStep(msg, ?theme, width = Auto) / subStepWithProgress(msg, done, total, ?theme, width = Auto, ?frame)</td><td>Sub-step, and sub-step with a progress bar (total &gt; 0) or spinner (frame pins the glyph)</td></tr>
+<tr><td>Stage</td><td>subStep(msg, ?theme, isLast = false, indent = 2, width = Auto) / subStepWithProgress(msg, current, total, ?theme, isLast = false, indent = 2, width = Auto, ?frame)</td><td>Sub-step, and sub-step with a progress bar (total &gt; 0) or spinner (frame pins the glyph)</td></tr>
 <tr><td>HelpText</td><td>render(usage, sections, description = '', ?theme, width = Auto, usageLabel = 'USAGE')</td><td>Full --help page; wraps to width, null = never wrap, width &lt; 1 throws</td></tr>
 <tr><td>HelpText</td><td>renderRows(rows, ?theme, width = Auto) / renderPage(page, ?width)</td><td>One two-column block (stacked below MIN_DESCRIPTION_WIDTH = 16 cells) / a pre-composed page, never re-wrapped</td></tr>
 <tr><td>Theme</td><td>ansi() / plain() / detect(?env, ?stream) / auto(?msg)</td><td>Colourful palette / no styling / palette downgraded to the stream's ColorProfile / background-adaptive</td></tr>
