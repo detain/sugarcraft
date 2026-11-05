@@ -15,6 +15,7 @@ return [
     'config.json_entry_object' => 'wishlist json: كل إدخال يجب أن يكون كائنًا',
     'config.yaml_continuation' => "wishlist yaml: لا يمكن تعيين المتابعة قبل أي كتلة '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: سطر غير قابل للتحليل: {line}',
+    'config.yaml_block_mapping' => 'wishlist yaml: تعيين كتلة تحت `{field}:` في السطر {line} — يجب أن يكون هذا الحقل قائمة عناصر `- value`',
     'config.entry_missing_field' => 'إدخال wishlist بحقل مطلوب مفقود: name أو host',
     'config.field_not_scalar'  => 'إدخال wishlist: الحقل [{field}] يجب أن يكون قياسياً، والنوع {type}',
     'config.unreadable'       => 'تعذر قراءة تكوين wishlist: {path}',

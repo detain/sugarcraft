@@ -15,6 +15,7 @@ return [
     'config.json_entry_object' => 'Wishlist-JSON: Jeder Eintrag muss ein Objekt sein',
     'config.yaml_continuation' => "Wishlist-YAML: Fortsetzung vor jedem '- name:'-Block",
     'config.yaml_unparseable'  => 'Wishlist-YAML: nicht analysierbare Zeile: {line}',
+    'config.yaml_block_mapping' => 'Wishlist-YAML: Block-Mapping unter `{field}:` in Zeile {line} — dieses Feld muss eine Liste von `- value`-Einträgen sein',
     'config.entry_missing_field' => 'Wishlist-Eintrag mit fehlendem Pflichtfeld: name oder host',
     'config.field_not_scalar'  => 'wishlist-Eintrag: Feld [{field}] muss ein Skalar sein, erhalten {type}',
     'config.unreadable'       => 'Wishlist-Konfiguration konnte nicht gelesen werden: {path}',

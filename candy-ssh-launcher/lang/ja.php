@@ -15,6 +15,7 @@ return [
     'config.json_entry_object' => 'wishlist json：各エントリはオブジェクトである必要があります',
     'config.yaml_continuation' => "wishlist yaml：'- name:' ブロックの前には Continuation を設定できません",
     'config.yaml_unparseable'  => 'wishlist yaml：解析できない行：{line}',
+    'config.yaml_block_mapping' => 'wishlist yaml：`{field}:` の下のブロックマッピング（行 {line}）— このフィールドは `- value` アイテムのリストである必要があります',
     'config.entry_missing_field' => 'wishlist エントリに必要なフィールドが不足しています：name または host',
     'config.field_not_scalar'  => 'wishlist エントリー: フィールド [{field}] はスカラーである必要があります。取得型: {type}',
     'config.unreadable'       => 'wishlist 設定を読み込めません：{path}',

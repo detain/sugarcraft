@@ -15,6 +15,7 @@ return [
     'config.json_entry_object' => 'wishlist json: každá položka musí být objekt',
     'config.yaml_continuation' => "wishlist yaml: pokračování před jakýmkoliv blokem '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: neparsovatelný řádek: {line}',
+    'config.yaml_block_mapping' => 'wishlist yaml: blokové mapování pod `{field}:` na řádku {line} — toto pole musí být seznam položek `- value`',
     'config.entry_missing_field' => 'wishlist položka s chybějícím povinným polem: name nebo host',
     'config.field_not_scalar'  => 'položka wishlist: pole [{field}] musí být skalár, získáno {type}',
     'config.unreadable'       => 'konfiguraci wishlist nelze načíst: {path}',

@@ -15,6 +15,7 @@ return [
     'config.json_entry_object' => 'wishlist json: each entry must be an object',
     'config.yaml_continuation' => "wishlist yaml: continuation before any '- name:' block",
     'config.yaml_unparseable'  => 'wishlist yaml: unparseable line: {line}',
+    'config.yaml_block_mapping' => 'wishlist yaml: block mapping under `{field}:` on line {line} — this field must be a list of `- value` items',
     'config.entry_missing_field' => 'wishlist entry missing required field: name or host',
     'config.field_not_scalar'  => 'wishlist entry: field [{field}] must be a scalar, got {type}',
     'config.unreadable'       => 'wishlist config could not be read: {path}',

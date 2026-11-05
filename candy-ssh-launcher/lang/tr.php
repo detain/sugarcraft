@@ -15,6 +15,7 @@ return [
     'config.json_entry_object' => 'wishlist json: her giriş bir nesne olmalıdır',
     'config.yaml_continuation' => "wishlist yaml: herhangi bir '- name:' bloğundan önce Devamlılık ayarlanamaz",
     'config.yaml_unparseable'  => 'wishlist yaml: ayrıştırılamayan satır: {line}',
+    'config.yaml_block_mapping' => 'wishlist yaml: {line}. satırda `{field}:` altında blok eşlemesi — bu alan bir `- value` öğeleri listesi olmalıdır',
     'config.entry_missing_field' => 'eksik zorunlu alana sahip wishlist girişi: name veya host',
     'config.field_not_scalar'  => 'wishlist girdisi: [{field}] alanı skaler olmalı, alınan tür: {type}',
     'config.unreadable'       => 'wishlist yapılandırması okunamadı: {path}',

@@ -15,6 +15,7 @@ return [
     'config.json_entry_object' => 'wishlist json: каждая запись должна быть объектом',
     'config.yaml_continuation' => "wishlist yaml: продолжение перед любым блоком '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: неразбираемая строка: {line}',
+    'config.yaml_block_mapping' => 'wishlist yaml: блочное отображение под `{field}:` в строке {line} — это поле должно быть списком элементов `- value`',
     'config.entry_missing_field' => 'запись wishlist с отсутствующим обязательным полем: name или host',
     'config.field_not_scalar'  => 'запись wishlist: поле [{field}] должно быть скаляром, получено {type}',
     'config.unreadable'       => 'не удалось прочитать конфигурацию wishlist: {path}',

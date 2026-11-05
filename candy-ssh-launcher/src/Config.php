@@ -32,7 +32,8 @@ use SugarCraft\Core\Util\Json;
  *     ```
  *
  * Unknown keys are ignored so the format can grow without breaking
- * older configs.
+ * older configs; a block mapping indented under a list field is refused
+ * by name (field and line) — it used to flatten silently (F-19).
  */
 final class Config
 {
@@ -130,6 +131,10 @@ final class Config
         // lines should append into a list. Reset whenever we hit
         // anything else (a new entry header, a non-empty key:value, etc.).
         $listKey = null;
+        /** Field whose list mode the current line just ended (F-19 witness). */
+        $pendingList = null;
+        /** Indent (in spaces) at which the active list key was opened. */
+        $listKeyIndent = 0;
         foreach (explode("\n", $raw) as $rawLine) {
             // Normalize tab indentation to spaces so tab-indented
             // continuation keys parse instead of aborting.
@@ -152,6 +157,8 @@ final class Config
                 continue;
             }
 
+            $indent = strlen($line) - strlen(ltrim($line, ' '));
+
             // Nested string list under the active $listKey:
             // `    - ServerAliveInterval=30`
             if ($listKey !== null && $current !== null
@@ -162,7 +169,11 @@ final class Config
                 $current[$listKey] = $bucket;
                 continue;
             }
-            // Any other line ends list-collection mode.
+            // Any other line ends list-collection mode — but remember the
+            // field that was open: an indented `Key: value` continuation
+            // arriving deeper than the list field is a block mapping this
+            // reader refuses by name (F-19), not a silent flatten.
+            $pendingList = $listKey;
             $listKey = null;
             if (preg_match('/^-\s+(\w+):\s*(.*)$/', $line, $m)) {
                 if ($current !== null) {
@@ -172,6 +183,7 @@ final class Config
                 if ($m[2] === '') {
                     $current[$m[1]] = [];
                     $listKey = $m[1];
+                    $listKeyIndent = $indent;
                 } else {
                     $current[$m[1]] = self::yamlScalar($m[2]);
                 }
@@ -181,9 +193,20 @@ final class Config
                 if ($current === null) {
                     throw new \RuntimeException(Lang::t('config.yaml_continuation'));
                 }
+                if ($pendingList !== null && $indent > $listKeyIndent) {
+                    // A `Key: value` indented under a list field (options:,
+                    // identityFiles:) is a block mapping; this flat reader
+                    // would otherwise drop it silently and leave the list
+                    // empty. Refuse naming the field and the offending line.
+                    throw new \RuntimeException(Lang::t('config.yaml_block_mapping', [
+                        'field' => $pendingList,
+                        'line'  => trim($rawLine),
+                    ]));
+                }
                 if ($m[2] === '') {
                     $current[$m[1]] = [];
                     $listKey = $m[1];
+                    $listKeyIndent = $indent;
                 } else {
                     $current[$m[1]] = self::yamlScalar($m[2]);
                 }

@@ -15,6 +15,7 @@ return [
     'config.json_entry_object' => 'wishlist json: 각 항목은 객체여야 합니다',
     'config.yaml_continuation' => "wishlist yaml: '- name:' 블록 앞에는 Continuation을 설정할 수 없습니다",
     'config.yaml_unparseable'  => 'wishlist yaml: 구문 분석할 수 없는 줄: {line}',
+    'config.yaml_block_mapping' => 'wishlist yaml: `{field}:` 아래 블록 매핑(줄 {line}) — 이 필드는 `- value` 항목 목록이어야 합니다',
     'config.entry_missing_field' => '필수 필드가 누락된 wishlist 항목: name 또는 host',
     'config.field_not_scalar'  => 'wishlist 항목: 필드 [{field}]는 스칼라여야 하며, {type}를 받음',
     'config.unreadable'       => 'wishlist 구성을 읽을 수 없음: {path}',

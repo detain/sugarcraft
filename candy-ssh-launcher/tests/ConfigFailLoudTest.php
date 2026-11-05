@@ -162,4 +162,25 @@ final class ConfigFailLoudTest extends TestCase
 
         self::assertSame([], $endpoints[0]->options);
     }
+
+    public function testYamlBlockMappingUnderListFieldIsRefused(): void
+    {
+        // F-19 (Step 17): 'Key: value' lines indented under an options: list
+        // used to flatten into silently-ignored unknown top-level keys — the
+        // field never reached ssh and nothing was reported. Now refused by
+        // name, field and line.
+        $raw = implode("\n", [
+            '- name: prod',
+            '  host: p.test',
+            '  options:',
+            '    Command: "echo hi"',
+        ]) . "\n";
+        try {
+            Config::parse($raw, 'wishlist.yml');
+            self::fail('expected a named refusal');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('options', $e->getMessage());
+            self::assertStringContainsString('Command: "echo hi"', $e->getMessage());
+        }
+    }
 }

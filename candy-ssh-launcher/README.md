@@ -17,7 +17,7 @@
 
 candy-ssh-launcher — a TUI directory of SSH endpoints for PHP 8.3+. Launch `candy-ssh-launcher`, pick a host, hit Enter, and the current process is replaced with `ssh` connecting to it.
 
-The config schema here is a **flat top-level list** of endpoint objects; charmbracelet/wishlist's nested `host:`-keyed `wishlist.yml` is deliberately *not* accepted — feeding one in fails loudly (`wishlist yaml: unparseable line`, or a named refusal for inline-flow values), never silently. <!-- @rename-keep -->
+The config schema here is a **flat top-level list** of endpoint objects; charmbracelet/wishlist's nested `host:`-keyed `wishlist.yml` is deliberately *not* accepted — feeding one in fails loudly (`wishlist yaml: unparseable line`, or a named refusal for inline-flow values and block mappings under list fields), never silently. <!-- @rename-keep -->
 
 ```
 ── wishlist ──
@@ -134,7 +134,7 @@ Flat list of endpoint objects (YAML subset or JSON). The reader format follows t
 | `proxyJump` | string, optional | Passed to ssh as `-J`. |
 | `options` | list, optional | Passed verbatim as repeated `-o Key=Value`; a bare scalar is accepted as a one-item list. |
 
-Limits of the embedded YAML reader: flat entries only, and a nested list is written one `- item` line at a time — any number of items accumulates, but each must be a scalar. **Inline flow collections** (`options: [a, b]`) are refused with a message that names the fix — write the nested list form; block mappings under list items are outside the supported subset. A `#` after whitespace starts a comment, and stripping is quote-aware: outside quotes only, so `description: "fix #1"` keeps its hash. Booleans (`name: yes`) are refused at any string field rather than reaching ssh as `"1"`.
+Limits of the embedded YAML reader: flat entries only, and a nested list is written one `- item` line at a time — any number of items accumulates, but each must be a scalar. **Inline flow collections** (`options: [a, b]`) are refused with a message that names the fix — write the nested list form; block mappings indented under a list field are refused by name, field and line. A `#` after whitespace starts a comment, and stripping is quote-aware: outside quotes only, so `description: "fix #1"` keeps its hash. Booleans (`name: yes`) are refused at any string field rather than reaching ssh as `"1"`.
 
 ## Keybindings
 

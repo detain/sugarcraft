@@ -15,6 +15,7 @@ return [
     'config.json_entry_object' => 'wishlist json: ogni voce deve essere un oggetto',
     'config.yaml_continuation' => "wishlist yaml: continuazione prima di qualsiasi blocco '- name:'",
     'config.yaml_unparseable'  => 'wishlist yaml: riga non analizzabile: {line}',
+    'config.yaml_block_mapping' => 'wishlist yaml: mappatura a blocchi sotto `{field}:` alla riga {line} — questo campo deve essere un elenco di voci `- value`',
     'config.entry_missing_field' => 'voce wishlist con campo obbligatorio mancante: name o host',
     'config.field_not_scalar'  => 'voce wishlist: il campo [{field}] deve essere uno scalare, ottenuto {type}',
     'config.unreadable'       => 'impossibile leggere la configurazione wishlist: {path}',
