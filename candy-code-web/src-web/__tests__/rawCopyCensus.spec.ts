@@ -44,8 +44,6 @@ const KNOWN_RAWS = [
   "src-web/components/CanvasCard.vue|text|Show canvas",
   "src-web/components/approvals/attention.ts|ts|The turn is done.",
   "src-web/components/approvals/attention.ts|ts|is waiting for an answer",
-  "src-web/components/panels/BackgroundPanel.vue|interp|No output yet.",
-  "src-web/components/panels/BackgroundPanel.vue|interp|No schedules listed.",
   "src-web/components/panels/BackgroundPanel.vue|text|Permission mode : nothing will ask a human before this run acts.",
   "src-web/components/panels/ChangesPanel.vue|text|is untracked — no diff for it in the workspace.",
   "src-web/components/panels/ContextPanel.vue|script|The file on disk no longer holds the bytes this listing measured — reopen Edit to save against the current file.",

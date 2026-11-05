@@ -161,7 +161,7 @@ function toggle(session: BackgroundSession): void {
         <div v-if="expanded === session.bgId" class="body">
           <p class="task">{{ session.task }}</p>
           <p v-if="session.error" class="error">{{ session.error }}</p>
-          <pre data-testid="bg-output">{{ background.output(session.bgId).text || (background.output(session.bgId).loading ? 'Loading…' : 'No output yet.') }}</pre>
+          <pre data-testid="bg-output">{{ background.output(session.bgId).text || (background.output(session.bgId).loading ? t('web.panels.bg_loading') : t('web.panels.bg_no_output')) }}</pre>
           <div v-if="canWrite" class="actions">
             <button type="button" @click="background.loadOutput(session.bgId)">{{ t('web.panels.bg_refresh_output') }}</button>
             <button v-if="!isSettled(session)" type="button" class="danger" @click="act(() => background.stop(session.bgId))">{{ t('web.panels.stop') }}</button>
@@ -176,7 +176,7 @@ function toggle(session: BackgroundSession): void {
         <button v-if="sessionId" type="button" data-testid="bg-schedules-refresh" :disabled="schedulesBusy" @click="act(loadSchedules)">{{ t('web.panels.refresh') }}</button>
       </div>
       <p v-if="!sessionId" class="empty">{{ t('web.panels.bg_open_roster') }}</p>
-      <p v-else-if="scheduleLines.length === 0" class="empty" data-testid="bg-schedules-empty">{{ schedulesBusy ? 'Loading…' : 'No schedules listed.' }}</p>
+      <p v-else-if="scheduleLines.length === 0" class="empty" data-testid="bg-schedules-empty">{{ schedulesBusy ? t('web.panels.bg_loading') : t('web.panels.bg_no_schedules') }}</p>
       <ul v-else>
         <li v-for="(line, index) in scheduleLines" :key="index" data-testid="bg-schedule-line">
           <span class="sched-text">{{ line.text }}</span>
