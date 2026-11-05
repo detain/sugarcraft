@@ -38,7 +38,7 @@ composer require sugarcraft/sugar-dashboard
 |------|-------------|-------------|
 | `Item` | Anything that can be rendered as a string | `render(): string` |
 | `Sizer` | An Item that knows its own dimensions (extends Item) | `setSize(int $width, int $height): Sizer`, `render(): string` |
-| `Drawable` | Universal draw contract with GetRect/SetRect/Draw | `getRect(): Rect`, `setRect(Rect): void`, `draw(Buffer): void` |
+| `Drawable` | Universal draw contract with getRect/setRect/draw | `getRect(): Rect`, `setRect(Rect): void`, `draw(Buffer): void` |
 
 ### Configuration Classes
 
@@ -239,7 +239,7 @@ against oracle fixtures generated from btop's own C++).
 | `Plot\ProcRow\ProcRow` | Process DTO (pid, name, cmd, threads, user, cpu, memPercent, ?memLabel) | `new(...)` |
 | `Plot\ProcRow\ProcColumns` | btop column widths | `btop(boxWidth, cpuGraphs)`, `new(prog, cmd, threads, user, cpuGraphs)`, `width()` |
 | `Plot\ProcRow\ProcRowPalette` | Theme slots + the `proc` / `proc_color` / `process` ramps | `btop()`, `new(...)`, `withRamps()`, `withSelected()`, `withFollowed()` |
-| `Plot\ProcRow\ProcGraphTracker` | Per-pid mini-graph lifecycle (create on cpu > 0, drop after 10 idle samples) | `new(width, family)`, `observe(pid, cpu)`, `retain(pids)`, `graph(pid)`, `sample(cpu)` |
+| `Plot\ProcRow\ProcGraphTracker` | Per-pid mini-graph lifecycle: a graph is created when a pid is first seen busy (cpu > 0), dropped after 10 consecutive samples below `IDLE_THRESHOLD` (0.1) | `new(width, family)`, `observe(pid, cpu)`, `retain(pids)`, `graph(pid)`, `sample(cpu)` |
 
 Run `php examples/dual-sample-graph.php` for all three graph families,
 an inverted graph, the underlay mini-graph and position-mode meters.
@@ -493,7 +493,7 @@ foreach ($procs as $row => $p) {
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
 | `Modal` | Modal dialog | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/modal.gif) |
-| `Notification` | Toast notification | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/notification.gif) |
+| `Notification` | Alert card for modal overlays — styled severity message with optional icon (not the `Components\Toast` DTO above, which is the queue payload) | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/notification.gif) |
 | `Progress` | Progress indicator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress.gif) |
 | `ProgressBar` | Progress bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress-bar.gif) |
 | `ProgressRing` | Circular progress indicator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress-ring.gif) |
@@ -658,6 +658,11 @@ foreach ($procs as $row => $p) {
 | `Center` | Calculate centered position |
 | `HAlign` | `Left`, `Right`, `Center` |
 | `VAlign` | `Top`, `Middle`, `Bottom` |
+
+> Note: `Position\Center` is the geometry helper (computes centered
+> coordinates); `Layout\Center` is a separate renderable wrapper that centres
+> an item in the `Layout` namespace. Both are live classes — distinct
+> responsibilities, same word.
 
 ## Output Namespace (Extracted Helpers)
 
@@ -843,6 +848,10 @@ The `examples/` directory contains standalone demo files that showcase individua
 | `dashboard-devtools.php` | Devtools components demo |
 | `dashboard-layout.php` | Layout containers demo |
 | `dual-sample-graph.php` | btop-style `DualSampleGraph` in all three families (braille / block / tty), inverted + underlay graphs, and position-coloured `Meter` bars |
+
+The table lists the headline demos only — `examples/` carries the full set
+(one file per component family and beyond); see the directory for anything
+not named above.
 
 ## Accessor deprecation (2026-10-24)
 
