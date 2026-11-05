@@ -204,6 +204,11 @@ drop-into-your-app path.
 cd sugar-cli && composer install && vendor/bin/phpunit
 ```
 
+In a monorepo checkout, run `php scripts/refresh-deps.php --mode=linked` from the
+repo root after the install — otherwise the bare install above resolves sibling
+`sugarcraft/*` packages from their (stale) Packagist snapshots instead of the
+working tree you are actually testing.
+
 ## Snapshot tests
 
 Presenter output is pinned via `sugar-testing`'s `assertGoldenAnsi`
