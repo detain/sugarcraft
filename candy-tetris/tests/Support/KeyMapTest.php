@@ -111,6 +111,51 @@ final class KeyMapTest extends TestCase
         $this->expectRefusal('{"quit": ["ctrl q"]}');
     }
 
+    public function testTokenBearingEscapeBytesIsRefusedAtTheDoor(): void
+    {
+        // m23: the help card, the versus strip and the on-ramp label print
+        // the LIVE token verbatim. The stderr notice channel clamps control
+        // bytes through the binary's cliVisible(); the frame had no matching
+        // door, so a crafted keys.json carrying ESC bytes would paint raw
+        // escape sequences into the terminal on every render. The refusal
+        // closes the asymmetry at the validation gate instead.
+        $this->expectRefusal('{"quit": ["\u001b[31m"]}', 'printable key name');
+    }
+
+    public function testTokenBearingBareControlByteIsRefusedAtTheDoor(): void
+    {
+        $this->expectRefusal('{"hold": ["a\u0007b"]}', 'printable key name');
+    }
+
+    public function testTokenPastTheLengthCeilingIsRefusedAtTheDoor(): void
+    {
+        // 33 bytes is one past the widest shape the door admits; no named
+        // key the decoder emits is anywhere near this long.
+        $this->expectRefusal('{"quit": ["' . str_repeat('x', 33) . '"]}', 'printable key name');
+    }
+
+    public function testTokenAtTheLengthCeilingIsAccepted(): void
+    {
+        // Cap-boundary pair for the refusal above: the registry stays
+        // context-free about whether a token names a REAL key — the door
+        // polices shape (printable, bounded), never vocabulary.
+        $path = $this->write('{"quit": ["' . str_repeat('x', 32) . '"]}');
+        $bindings = KeyMap::load($path, Bindings::table());
+
+        self::assertSame([str_repeat('x', 32)], $bindings->tokens('quit'));
+    }
+
+    public function testWideNamedKeyAndMultibyteRunePassThePrintableGate(): void
+    {
+        // 'backspace' is the widest named token the shipped decoder answers
+        // with; a multibyte rune is legal at one character. Neither may be
+        // collateral of the m23 door.
+        $path = $this->write('{"quit": ["backspace", "é"]}');
+        $bindings = KeyMap::load($path, Bindings::table());
+
+        self::assertSame(['backspace', 'é'], $bindings->tokens('quit'));
+    }
+
     public function testEmptyTokenIsRefusedNamingThePath(): void
     {
         $this->expectRefusal('{"quit": [""]}');
@@ -203,7 +248,7 @@ final class KeyMapTest extends TestCase
         }
     }
 
-    private function expectRefusal(string $json): void
+    private function expectRefusal(string $json, string $detail = ''): void
     {
         $path = $this->write($json);
         $table = Bindings::table();
@@ -213,6 +258,9 @@ final class KeyMapTest extends TestCase
             self::fail('expected a RuntimeException naming ' . $path);
         } catch (RuntimeException $problem) {
             self::assertStringContainsString($path, $problem->getMessage());
+            if ($detail !== '') {
+                self::assertStringContainsString($detail, $problem->getMessage());
+            }
         }
     }
 

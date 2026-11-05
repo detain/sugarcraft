@@ -27,6 +27,14 @@ use SugarCraft\Core\Util\AtomicJsonFile;
 final class KeyMap
 {
     /**
+     * Longest binding token the loader accepts, in bytes. Named keys are
+     * short words ('backspace' is the widest the decoder emits); a single
+     * character rune costs at most four bytes. Anything past this ceiling
+     * is not a key name, and no frame column can absorb it without lying.
+     */
+    private const MAX_TOKEN_BYTES = 32;
+
+    /**
      * Fold the user's overrides (when the file exists) onto $defaults.
      *
      * @throws \RuntimeException when the file is unparseable or malformed
@@ -66,6 +74,20 @@ final class KeyMap
             foreach ($tokens as $token) {
                 if (!\is_string($token) || $token === '' || str_contains($token, ' ')) {
                     throw new \RuntimeException(self::problem($path, "token for \"$id\" is not a single key"));
+                }
+                // The help card, the versus strip and the on-ramp label all
+                // print the LIVE token verbatim (Bindings::helpCard,
+                // Bindings::vsStrip, Game::introBeginLabel). The stderr
+                // notice channel clamps control bytes through the binary's
+                // cliVisible(); the frame had no matching door, so a crafted
+                // keys.json carrying ESC bytes would paint raw escape
+                // sequences into the terminal every render. Control bytes
+                // (\x00-\x1f, \x7f) and over-long tokens are refused at the
+                // validation gate so no renderer path can receive them.
+                if (preg_match('/[\x00-\x1f\x7f]/', $token) === 1
+                    || \strlen($token) > self::MAX_TOKEN_BYTES
+                ) {
+                    throw new \RuntimeException(self::problem($path, "token for \"$id\" is not a printable key name"));
                 }
             }
 
