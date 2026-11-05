@@ -91,7 +91,10 @@ echo $model->view();
 
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<caption>Public API surface of sugar-treelist</caption>
+<thead>
+<tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
+</thead>
 <tr><td>Model</td><td>new()</td><td>Create model with defaults</td></tr>
 <tr><td>Model</td><td>withFilterFn(\Closure)</td><td>Filter items; returns new Model; filterState → filtering</td></tr>
 <tr><td>Model</td><td>withoutFilter()</td><td>Clear filter; restore original items; filterState → unfiltered</td></tr>
