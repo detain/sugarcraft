@@ -176,7 +176,7 @@ Total: 44 bytes vs 51 bytes for the same 5×2 frame repainted via `toAnsi()` (wh
 ## Security & trust boundaries
 
 - **Cell runes are stored and emitted VERBATIM.** `toAnsi()` and the diff encoder write whatever rune you put in a cell. Stripping control bytes is the CALLER's duty: C0 controls and DEL (and the hostile 8-bit C1 range) must not reach a cell from untrusted input — pass external text through sugar-core's `Sanitize::untrusted()` first. Raw escapes in runes desync the cursor and inject live SGR onto the wire.
-- **`Hyperlink` hard-rejects** C0/DEL in url and id, and semicolons in the id, at construction and again on unserialization — the OSC 8 fields cannot be forged through those types.
+- **`Hyperlink` hard-rejects** C0 controls, DEL, and the C1 range (raw bytes and their UTF-8 `C2 xx` spellings) in url and id, and semicolons in the id, at construction and again on unserialization — the OSC 8 fields cannot be forged through those types.
 - **`Buffer::fromString()` is test-support**, not a terminal emulator: it walks bytes, skips OSC frames, and is lossy by contract (hyperlinks never re-attached; a lone trailing `ESC` or an unrecognised `ESC` digraph is stored as a plain rune; an unterminated CSI deposits its parameter text into cells). Do not feed it untrusted input expecting a parse.
 - **`Buffer::fromGrid()` skips pair enforcement** (see Wide characters) — it validates the dimensions and the exact `width*height` cell count, but takes the cells as given; the pair law is yours there.
 - **Serialize hooks re-validate**: `__unserialize` on Buffer/Cell/Style/Hyperlink/Region re-runs every constructor invariant, so a forged payload fails closed instead of minting a structurally invalid buffer.

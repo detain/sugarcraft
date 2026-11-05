@@ -206,6 +206,65 @@ final class HyperlinkTest extends TestCase
         $this->assertSame('', $link->id());
     }
 
+    public function testTheC1RangeIsRefusedRawAndUtf8Encoded(): void
+    {
+        // 8-bit C1 controls are escape introducers: \x9B is CSI and \x9C is ST
+        // on their own. Their UTF-8 spellings (C2 80-BF) decode back to them,
+        // so both shapes are refused in both fields.
+        foreach ([
+            "https://example.com/\x9Cst",
+            "https://example.com/\x9bnext",
+            "https://example.com/\xC2\x9Cevil",
+            "https://example.com/\xC2\x9Bevil",
+        ] as $poisoned) {
+            try {
+                new Hyperlink($poisoned, 'ok');
+                $this->fail('raw/encoded C1 in url was accepted: ' . addcslashes($poisoned, "\x80-\x9f"));
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('control characters', $e->getMessage());
+            }
+        }
+
+        foreach (["id\x9Cx", "id\x9Bx", "id\xC2\x9Cx", "id\xC2\x9Bx"] as $poisonedId) {
+            try {
+                new Hyperlink('https://example.com', $poisonedId);
+                $this->fail('raw/encoded C1 in id was accepted: ' . addcslashes($poisonedId, "\x80-\x9f"));
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('control characters', $e->getMessage());
+            }
+        }
+    }
+
+    public function testUnserializationReforgesTheC1Guards(): void
+    {
+        // The unserialization gate must re-apply the same C1 refusal — a
+        // cached payload cannot smuggle an escape introducer past the type.
+        $shapes = [
+            ['url' => "https://example.com/\x9Cst", 'id' => 'ok'],
+            ['url' => 'https://example.com', 'id' => "id\xC2\x9Bx"],
+        ];
+
+        foreach ($shapes as $data) {
+            try {
+                $this->blankHyperlink()->__unserialize($data);
+                $this->fail('unserialize accepted a C1-bearing payload');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('control characters', $e->getMessage());
+            }
+        }
+    }
+
+    public function testWellFormedUtf8OutsideTheC1RangeStillPasses(): void
+    {
+        // café carries C3 A9 and NBSP carries C2 A0 — neither is a C1 control,
+        // so the widened refusal must not turn into a bare-UTF8 ban.
+        $link = new Hyperlink('https://example.com/café');
+        $this->assertStringContainsString('café', $link->url());
+
+        $nbsp = new Hyperlink("https://example.com/a\xC2\xA0b", 'ok');
+        $this->assertSame("https://example.com/a\xC2\xA0b", $nbsp->url());
+    }
+
     private function blankHyperlink(): Hyperlink
     {
         // The hook runs on a freshly allocated instance (as unserialize()

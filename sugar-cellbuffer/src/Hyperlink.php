@@ -9,8 +9,9 @@ namespace SugarCraft\CellBuffer;
  *
  * Mirrors charmbracelet/lipgloss's Hyperlink field and the OSC 8 spec.
  * URL and ID are validated at construction to prevent ANSI escape
- * injection into the OSC 8 wire format (C0/DEL controls rejected; a
- * semicolon is rejected in the ID, which would shift the URL field).
+ * injection into the OSC 8 wire format (C0/DEL controls and the C1 range —
+ * raw bytes and their UTF-8 C2 xx encodings — are rejected; a semicolon is
+ * rejected in the ID, which would shift the URL field).
  *
  * @throws \InvalidArgumentException on any rejected value.
  *
@@ -22,10 +23,10 @@ final class Hyperlink implements \JsonSerializable
         public readonly string $url,
         public readonly string $id = '',
     ) {
-        if (preg_match('/[\x00-\x1f\x7f]/', $url) === 1) {
+        if (preg_match('/[\x00-\x1f\x7f\x80-\x9f]|\xC2[\x80-\x9F]/', $url) === 1) {
             throw new \InvalidArgumentException('Hyperlink URL must not contain control characters');
         }
-        if (preg_match('/[\x00-\x1f\x7f]/', $id) === 1) {
+        if (preg_match('/[\x00-\x1f\x7f\x80-\x9f]|\xC2[\x80-\x9F]/', $id) === 1) {
             throw new \InvalidArgumentException('Hyperlink ID must not contain control characters');
         }
         if (str_contains($id, ';')) {
@@ -91,10 +92,10 @@ final class Hyperlink implements \JsonSerializable
     {
         $url = (string) ($data['url'] ?? '');
         $id = (string) ($data['id'] ?? '');
-        if (preg_match('/[\x00-\x1f\x7f]/', $url) === 1) {
+        if (preg_match('/[\x00-\x1f\x7f\x80-\x9f]|\xC2[\x80-\x9F]/', $url) === 1) {
             throw new \InvalidArgumentException('Hyperlink URL must not contain control characters');
         }
-        if (preg_match('/[\x00-\x1f\x7f]/', $id) === 1) {
+        if (preg_match('/[\x00-\x1f\x7f\x80-\x9f]|\xC2[\x80-\x9F]/', $id) === 1) {
             throw new \InvalidArgumentException('Hyperlink ID must not contain control characters');
         }
         if (str_contains($id, ';')) {
