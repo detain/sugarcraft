@@ -71,11 +71,19 @@ $source->cancel(); // prints "Cancelled!"
 
 // Timeout wrapper
 $loop = \React\EventLoop\Loop::get();
+$somePromise = \React\Promise\resolve('eventually');
 $promise = AsyncOps::withTimeout($loop, $somePromise, 5.0);
 
 // Retry with backoff
+$attempts = 0;
 $promise = AsyncOps::retry(
-    fn() => $httpClient->request('GET', 'https://example.com'),
+    function () use (&$attempts) {
+        if (++$attempts < 3) {
+            return \React\Promise\reject(new \RuntimeException('transient failure'));
+        }
+
+        return \React\Promise\resolve('succeeded on attempt ' . $attempts);
+    },
     attempts: 3,
     baseBackoffSeconds: 0.5,
 );</code></pre>
