@@ -63,9 +63,11 @@ echo $stack->current()->title;   // "Settings"
 
 > **Untrusted-display caution** — `current()`, `parent()`, and `pop()` hand
 > back the **raw** stored title, unsanitized. When titles come from outside
-> your code (paths, URLs, user data), print them through `view()`,
-> `viewHtml()`, or `Breadcrumb::render()` — all sanitize at the boundary —
-> or call `TitleSanitizer::sanitize()` yourself before echoing.
+> your code (paths, URLs, user data), print them through the public surfaces
+> that sanitize at the boundary — `view()`, `viewHtml()`, `Breadcrumb::render()`,
+> or `Breadcrumb::renderTitles()` — or escape the raw title yourself before
+> echoing. (`TitleSanitizer` is `@internal` machinery behind those surfaces,
+> not a published API.)
 
 `NavStack` is **mutable by design** — `push`, `popTo`, `updateTop`,
 `setItems`, and `clear` mutate in place and return `$this` for chaining (`pop`
@@ -219,8 +221,9 @@ runs each title through `TitleSanitizer` (terminal controls, zone sentinels,
 invisible formatting) at the boundary. The one deliberate exception is
 `setItemRenderer()`: a custom closure's return string is emitted RAW so theme
 ANSI styling survives (the trust split in the `Breadcrumb` class docblock).
-A closure that includes user data in its output must sanitize it first, e.g.
-via `TitleSanitizer::sanitize()`.
+A closure that includes user data in its output must sanitize it first with
+your own escaper — the library's `TitleSanitizer` is `@internal` machinery,
+not a published API.
 
 ## Escape
 
