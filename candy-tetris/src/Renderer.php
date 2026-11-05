@@ -50,8 +50,10 @@ final class Renderer
 {
     /**
      * Natural frame: the full board + full sidebar as laid out below
-     * (measured: 31 rows x 40 cols). A terminal at least this wide and
-     * tall gets the complete experience with nothing reflowed.
+     * (measured: 32 rows x 40 cols, matching the constants two lines
+     * down and the README's "frame is 40x32"). A terminal at least
+     * this wide and tall gets the complete experience with nothing
+     * reflowed.
      */
     public const NATURAL_COLS = 40;
     public const NATURAL_ROWS = 32;

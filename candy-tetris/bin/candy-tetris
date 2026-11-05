@@ -56,8 +56,9 @@ function cliVisible(string $raw): string
     return strlen($clean) > 40 ? substr($clean, 0, 39) . '…' : $clean;
 }
 
-// UI language from $LANG / $LC_ALL (matters only once non-en catalogues
-// exist; 'en' values are byte-identical to the literals they replaced).
+// UI language from $LANG / $LC_ALL. Fifteen non-en catalogues ship, so
+// this is load-bearing today; the 'en' values stay byte-identical to the
+// literals the first i18n pass replaced.
 \SugarCraft\Core\I18n\T::setLocale(\SugarCraft\Core\I18n\T::detect());
 
 // The version line answers before the argv contract: `--version` is not a
