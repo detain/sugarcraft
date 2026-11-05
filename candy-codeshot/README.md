@@ -59,7 +59,7 @@ Every flag the parser accepts. Flag values are **separate arguments** —
 `--theme dracula`, not `--theme=dracula` (the `=` form is rejected as an
 unrecognised flag).
 
-- `--theme <name>` — colour palette: `dark` (default), `light`, `dracula`, `tokyo-night`, `nord`.
+- `--theme <name>` — colour palette: `dark` (default), `light`, `dracula`, `tokyo-night`, `nord`. Names match case-insensitively with `_` read as `-`, so `tokyo_night`, `Tokyo-Night` and `DARK` are all accepted.
 - `--padding <n>` — content padding inside the frame (default 24).
 - `--no-window` — drop the window chrome entirely (traffic lights, title bar).
 - `--no-shadow` — drop the drop-shadow.
@@ -72,7 +72,7 @@ unrecognised flag).
 - `--unsafe-paths` — allow input / `--font` / `--output` paths outside the CWD (see Path confinement).
 - `--highlight <start:end[:color]>` — highlight lines `start:end` with an optional colour (default: the theme’s own highlight colour). Ranges are validated: `start >= 1`, `end >= start`, else a friendly refusal, exit 2. **SVG only.**
 - `--format <svg|png>` — output format (default `svg`; `png` requires `ext-gd`).
-- `-t`, `--type <lang>` — force the syntax-highlighting language (default: filename, then shebang, then content detection).
+- `-t`, `--type <lang>` — force the syntax-highlighting language (default: filename, then shebang, then content detection). The value is not validated: any string is accepted, and a name with no grammar renders as plain text rather than erroring.
 - `-o`, `--output <path>` — write the screenshot to a file instead of stdout.
 - `-h`, `--help` — show the help message.
 - `-v`, `--version` — print the version and exit.
@@ -120,7 +120,11 @@ them together with `--format png`, the CLI **announces each dropped option on
 stderr** instead of failing silently. If `ext-gd` is missing, PNG requests exit
 2 with a clear message; likewise `--format png` without an `--output` file is
 refused (exit 2) when stdout is a terminal, because raw high-bit PNG bytes
-belong in a file and not on your shell. Writing `--format svg` (or omitting it)
+belong in a file and not on your shell. Font checks are not part of that
+drop-list, though: the `--font` confinement, existence and signature checks run
+before the format branch decides to discard the option, so
+`--format png --font <bad-path>` exits 2 on the refused font even though a
+valid font would merely have been dropped. Writing `--format svg` (or omitting it)
 to a `*.png` filename — or `--format png` to a `*.svg` filename — still writes
 the bytes of the requested format but warns on stderr that the extension and
 format disagree.
@@ -129,6 +133,11 @@ format disagree.
 
 ```php
 use SugarCraft\CodeShot\SvgRenderer;
+
+$code = <<<'PHP'
+<?php
+echo "hello, world\n";
+PHP;
 
 $svg = SvgRenderer::dracula()
     ->withLineNumbers(true)
@@ -275,6 +284,9 @@ their own). VS Code and Chroma palettes can be imported with
 - **Numeric ceilings** — the CLI refuses `--padding` above 512 and
   `--border-radius` above 64; engine constructors clamp to 0..4096 /
   0..256, and PNG output above 40,000,000 pixels is refused, not allocated.
+  Language detection reads at most 1 MB of content (`src/LanguageDetector.php:87`):
+  input beyond that cap is treated as plain text, so a multi-megabyte paste is
+  rendered unhighlighted rather than refused.
 - **Font embedding caps at 32 MiB** — unreadable or oversized font files
   raise a loud `RuntimeException` (CLI exit 2); SVG never silently drops
   the `@font-face`. The CLI verifies the font's signature before reading it;
