@@ -22,7 +22,6 @@ return [
     'log.encode_failed' => 'nie udało się zakodować wpisu logu do json',
     'log.bad_format' => 'nieprawidłowy ciąg --format: {format}',
     'spinner.unknown_style'   => 'nieznany styl spinera: {name}',
-    'format.unknown_type'     => 'nieznany --type: {type}',
     'format.unknown_theme'    => 'nieznany motyw: {name}',
     'io.read_failed' => 'nie można odczytać pliku: {path}',
     'io.write_failed' => 'nie można zapisać do pliku: {path}',

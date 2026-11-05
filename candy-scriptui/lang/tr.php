@@ -22,7 +22,6 @@ return [
     'log.encode_failed' => 'log kaydı json olarak kodlanamadı',
     'log.bad_format' => 'geçersiz --format dizisi: {format}',
     'spinner.unknown_style'   => 'bilinmeyen spinner stili: {name}',
-    'format.unknown_type'     => 'bilinmeyen --type: {type}',
     'format.unknown_theme'    => 'bilinmeyen tema: {name}',
     'io.read_failed' => 'dosya okunamadı: {path}',
     'io.write_failed' => 'dosyaya yazılamadı: {path}',

@@ -22,7 +22,6 @@ return [
     'log.encode_failed' => 'nepodařilo se zakódovat záznam protokolu do json',
     'log.bad_format' => 'neplatný řetězec --format: {format}',
     'spinner.unknown_style'   => 'neznámý styl spinneru: {name}',
-    'format.unknown_type'     => 'neznámý --type: {type}',
     'format.unknown_theme'    => 'neznámé téma: {name}',
     'io.read_failed' => 'soubor nelze přečíst: {path}',
     'io.write_failed' => 'do souboru nelze zapsat: {path}',

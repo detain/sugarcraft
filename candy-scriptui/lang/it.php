@@ -22,7 +22,6 @@ return [
     'log.encode_failed' => 'codifica della voce di log in json non riuscita',
     'log.bad_format' => 'stringa --format non valida: {format}',
     'spinner.unknown_style'   => 'stile spinner sconosciuto: {name}',
-    'format.unknown_type'     => '--type sconosciuto: {type}',
     'format.unknown_theme'    => 'tema sconosciuto: {name}',
     'io.read_failed' => 'impossibile leggere il file: {path}',
     'io.write_failed' => 'impossibile scrivere sul file: {path}',

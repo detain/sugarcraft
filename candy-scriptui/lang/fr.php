@@ -35,7 +35,6 @@ return [
     'spinner.unknown_style'   => 'style de spinner inconnu : {name}',
 
     // Command/FormatCommand.php
-    'format.unknown_type'     => '--type inconnu : {type}',
     'format.unknown_theme'    => 'thème inconnu : {name}',
     'io.read_failed' => 'impossible de lire le fichier : {path}',
     'io.write_failed' => "impossible d'écrire dans le fichier : {path}",

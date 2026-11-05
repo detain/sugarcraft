@@ -22,7 +22,6 @@ return [
     'log.encode_failed' => '将日志条目编码为 json 失败',
     'log.bad_format' => '无效的 --format 字符串：{format}',
     'spinner.unknown_style'   => '未知微调器样式：{name}',
-    'format.unknown_type'     => '未知的 --type：{type}',
     'format.unknown_theme'    => '未知主题：{name}',
     'io.read_failed' => '无法读取文件：{path}',
     'io.write_failed' => '无法写入文件：{path}',

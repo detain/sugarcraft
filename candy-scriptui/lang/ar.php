@@ -22,7 +22,6 @@ return [
     'log.encode_failed' => 'فشلت ترميز سجل الإدخال إلى json',
     'log.bad_format' => 'سلسلة --format غير صالحة: {format}',
     'spinner.unknown_style'   => 'نمط spinner غير معروف: {name}',
-    'format.unknown_type'     => '--type غير معروف: {type}',
     'format.unknown_theme'    => 'سمة غير معروفة: {name}',
     'io.read_failed' => 'تعذرت قراءة الملف: {path}',
     'io.write_failed' => 'تعذرت الكتابة إلى الملف: {path}',

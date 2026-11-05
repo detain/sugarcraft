@@ -22,7 +22,6 @@ return [
     'log.encode_failed' => 'не удалось кодировать запись журнала в json',
     'log.bad_format' => 'недопустимая строка --format: {format}',
     'spinner.unknown_style'   => 'неизвестный стиль спиннера: {name}',
-    'format.unknown_type'     => 'неизвестный --type: {type}',
     'format.unknown_theme'    => 'неизвестная тема: {name}',
     'io.read_failed' => 'не удалось прочитать файл: {path}',
     'io.write_failed' => 'не удалось записать в файл: {path}',

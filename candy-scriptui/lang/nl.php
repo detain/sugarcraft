@@ -22,7 +22,6 @@ return [
     'log.encode_failed' => 'kon logvermelding niet naar json coderen',
     'log.bad_format' => 'ongeldige --format-tekenreeks: {format}',
     'spinner.unknown_style'   => 'onbekende spinnerstijl: {name}',
-    'format.unknown_type'     => 'onbekend --type: {type}',
     'format.unknown_theme'    => 'onbekend thema: {name}',
     'io.read_failed' => 'kon bestand niet lezen: {path}',
     'io.write_failed' => 'kon niet naar bestand schrijven: {path}',

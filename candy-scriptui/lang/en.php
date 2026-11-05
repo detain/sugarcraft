@@ -35,7 +35,6 @@ return [
     'spinner.unknown_style'   => 'unknown spinner style: {name}',
 
     // Command/FormatCommand.php
-    'format.unknown_type'     => 'unknown --type: {type}',
     'format.unknown_theme'    => 'unknown theme: {name}',
 
     // IO errors

@@ -22,7 +22,6 @@ return [
     'log.encode_failed' => 'ログエントリのjsonエンコードに失敗しました',
     'log.bad_format' => '無効な --format 文字列: {format}',
     'spinner.unknown_style'   => '不明なスピナースタイル：{name}',
-    'format.unknown_type'     => '不明な --type：{type}',
     'format.unknown_theme'    => '不明なテーマ：{name}',
     'io.read_failed' => 'ファイルを読み込めません: {path}',
     'io.write_failed' => 'ファイルに書き込めません: {path}',
