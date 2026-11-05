@@ -36,7 +36,7 @@ exactly one request.
 - PHP 8.3+
 - `react/event-loop: ^1.6`
 - `react/promise: ^3.3`
-- `sugarcraft/sugar-core` (shared exception-message formatting)
+- `sugarcraft/sugar-core` (shared i18n Lang base)
 
 ## Installation
 
