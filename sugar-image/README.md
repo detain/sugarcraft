@@ -130,16 +130,21 @@ Codec matrix (sugar-image native paths only):
 
 ## Limits
 
-Decoding untrusted images is budgeted — the caps are live constants on
-`ImageSource`, each pinned by tests:
+Decoding untrusted images is budgeted — the caps are constants on
+`ImageSource`:
 
 | Budget | Value | What it stops |
 |---|---|---|
-| `ImageSource::MAX_BYTES` | 64 MiB | the file/payload read itself — oversized files are refused before GD ever sees them |
-| `ImageSource::MAX_PIXELS` | 50,000,000 px | per-decode pixel budget (constructor and every factory take `maxPixels` to tune it) |
+| `ImageSource::MAX_BYTES` | 64 MiB | the file, animated-file and URL reads — oversized payloads are refused before GD ever sees them (`fromString()` enforces no length ceiling on bytes you already hold; there the format-signature and pixel budgets below are the guards) |
+| `ImageSource::MAX_PIXELS` | 50,000,000 px | per-decode pixel budget — `fromFile()`, `fromAnimatedFile()` and `fromString()` check it against declared dimensions, every renderer re-checks it on the decoded frame, and `withMaxPixels()` tunes it per source |
+| `FLIP_FRAME_CAP` (private) | 256 frames | animated-GIF frame list: walks beyond the cap are sliced away rather than decoded (a silent truncation, not a refusal) |
 | `FLIP_MAX_CELLS` (private) | 100,000 cells | per-frame ceiling for animated GIFs: one frame wider than `width × height` allows is refused with a mosaic-owned message before sugar-animation's decoder sees it (the sibling's own `Decoder::MAX_CELLS` mirror) |
 | `FLIP_MAX_TOTAL_CELLS` (private) | 400,000 cells | animated-GIF aggregate budget: frames × per-frame pixels — stops a bomb whose every single frame is individually in-budget |
 | `MAX_RIFF_CHUNKS` (private) | 64 | the pure-PHP WebP RIFF walk bails out of a chunk flood instead of iterating forever |
+
+Every refusal cap above is pinned by tests; `FLIP_FRAME_CAP` is the
+documented slice-out and is verified by the flip-walk parity pins around it,
+not by its own boundary test.
 
 ## Chafa binary discovery
 
