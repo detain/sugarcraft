@@ -153,6 +153,7 @@ reference projects supplied the ideas, not the code.
 | SugarCraft package | Ideas sparked by |
 |---|---|
 | SugarAnsiParser (sugar-ansi-parser/) | [x/ansi](https://github.com/charmbracelet/x/tree/main/ansi) |
+| SugarAnimation (sugar-animation/) | [gifterm](https://github.com/namzug16/gifterm) |
 | SugarAsync (sugar-async/) | none — first-party |
 | SugarCellbuffer (sugar-cellbuffer/) | [vte](https://github.com/charmbracelet/vte) |
 | CandyFiles (candy-files/) | [superfile](https://github.com/yorukot/superfile) |

@@ -73,7 +73,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/sugar-table.png" width="48" alt=""> | **[SugarTable](sugar-table/)** | Customizable data table — column definitions, StyledCell ANSI formatting, pagination, frozen columns. Keyboard-driven; wire sugar-input/sugar-mouse events yourself. |
 | <img src="media/icons/sugar-diff.png" width="48" alt=""> | **[SugarDiff](sugar-diff/)** | Unified-diff engine — LCS line diff, `diff -u` hunks, writer + line-number scanner. Extracted from candy-code. |
 | <img src="media/icons/sugar-mcp-client.png" width="48" alt=""> | **[Sugar MCP Client](sugar-mcp-client/)** | Model Context Protocol (MCP) client core — JSON-RPC 2.0 codec, stdio transport with bounded child lifecycle, initialize/tools handshake, tool narrowing. Extracted from candy-code. |
-| <img src="media/icons/sugar-animation.png" width="48" alt=""> | **[SugarAnimation](sugar-animation/)** | ANSI/GIF animation toolkit — ext-gd decode, cell-grid downsample, solid / luminance-ramp presets, `.ansi` art playback; the viewer CLI lives in candy-gifview. |
+| <img src="media/icons/sugar-animation.png" width="48" alt=""> | **[SugarAnimation](sugar-animation/)** | ANSI/GIF animation toolkit (formerly published as `sugarcraft/candy-flip`, renamed 2026-10) — ext-gd decode, cell-grid downsample, solid / density (luminance-ramp) presets, `.ansi` art playback; the viewer CLI lives in candy-gifview. |
 | <img src="media/icons/sugar-video.png" width="48" alt=""> | **[SugarVideo](sugar-video/)** | Terminal video player — pipes mp4 (and more) through `ffmpeg`/`ffprobe` on the fly and renders to ASCII / ANSI / truecolor half-block / sixel / kitty (GIF via ext-gd, no ffmpeg). |
 
 ## Apps built on the stack
