@@ -385,8 +385,10 @@ field as hostile bytes:
   hostile paste can forge marker bytes. Frame-marked composites should sweep
   with sugar-core's `SugarCraft\Core\Util\Sanitize::untrustedForMarkedFrames()`
   before rendering. (This library deliberately keeps the bytes: it decodes,
-  it does not clean — the consumer that renders owns the sweep. sugar-readline
-  is an example of a consumer that strips.)
+  it does not clean — the consumer that renders owns the sweep. sugar-core's
+  `InputReader` is an example of a consumer that strips: it runs paste payloads
+  through `Sanitize::untrustedForMarkedFrames()` when its paste sanitization
+  is on.)
 
 The decoder's own caps (partial sequence, 1 MiB paste, 1 KiB/64 KiB string
 replies) contain parser resource use; they do not make the content trustworthy.
@@ -396,12 +398,15 @@ The fleet-wide contract lives in
 ## Two decoders in the fleet
 
 `sugar-input` is the byte-level decoder that `sugar-readline`, `sugar-pty` and
-the input-facing apps consume. `candy-code` additionally carries an older
-stream reader of its own lineage; the two are NOT guaranteed to agree on every
+the input-facing apps consume. The fleet's other lineage is sugar-core's
+`InputReader`: a stateful byte-stream parser that every sugar-core `Program`
+runs on its stdin path — `candy-code` included, which carries no reader of its
+own. The two are NOT guaranteed to agree on every
 exotic frame, and neither patches the other's gaps at runtime. Pick ONE decoder
 for a program's whole input path; do not pipe bytes through both. The
 private-use-area law differs on purpose (above): this library passes PUA bytes
-through, while sugar-readline strips them at its own boundary. Convergence of
+through, while sugar-core's `InputReader` sweeps them from paste payloads at
+its own boundary. Convergence of
 the two readers is tracked as a fleet finding, not a promise this README makes.
 
 ## License
