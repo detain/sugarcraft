@@ -34,6 +34,7 @@ $req-&gt;counter('events');</code></pre>
       <div class="feature"><strong>Histogram buckets</strong><span>Prometheus backend emits 14 cumulative le buckets (0.005–100) +Inf for classic Prometheus compatibility.</span></div>
       <div class="feature"><strong>Cardinality tracking</strong><span>FIFO eviction of oldest label combinations when per-metric limit (default 10 000) is exceeded. Inspect with <code>cardinality()</code>.</span></div>
       <div class="feature"><strong>Descriptor registration</strong><span>Pre-emit <code># TYPE</code> / <code># HELP</code> lines before first sample (Prometheus textfile collector metadata).</span></div>
+      <div class="feature"><strong>Untrusted-value trust boundary</strong><span>SSH username/term tags are sanitized to <code>[A-Za-z0-9._:@/-]</code> and clamped to 64 bytes; every backend wire-sweep folds hostile framing tokens (<code>:</code> <code>|</code> <code>,</code>, space, control/DEL/C1) and the Prometheus writer throws loudly on fold-collisions and two-kind families. Treat untrusted strings as label <em>values</em>, never as metric names.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
