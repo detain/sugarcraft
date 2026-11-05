@@ -9,6 +9,7 @@ use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Socket\ConnectionInterface;
 use SugarCraft\Code\Cli\Serve\ServeManagement;
+use SugarCraft\Code\Cli\Serve\ServeStartup;
 use SugarCraft\Code\Host\Commands\BackgroundCommand;
 use SugarCraft\Code\Host\SessionHub;
 use SugarCraft\Code\Lang;
@@ -88,6 +89,7 @@ use SugarCraft\Code\Support\HomeDirectory;
 final class Serve
 {
     use ServeManagement;
+    use ServeStartup;
 
     /** The management verbs; none of them starts a server. */
     public const ACTIONS = ['status', 'stop', 'logs', 'url', 'token'];
@@ -240,133 +242,13 @@ final class Serve
         return ParentPidWatchdog::parse(\is_string($flag) ? $flag : ($env['CANDY_CODE_SERVER_PARENT_PID'] ?? null));
     }
 
-    // ── starting ─────────────────────────────────────────────────────────
 
     /** @param array<string, string> $env */
-    private static function start(ParsedArgs $args, array $env): int
-    {
-        try {
-            $config = self::config($args, $env, Bootstrap::readUserConfig());
-            $parentPid = self::parentPid($args, $env);
-        } catch (ServerConfigException $e) {
-            return NonInteractive::failUsage('candy-code serve: ' . $e->getMessage(), $args->outputFormat);
-        }
-        $detach = isset($args->subcommandFlags['--detach']);
-
-        $problems = Preflight::detect()->problems($config);
-        if ($problems !== []) {
-            return NonInteractive::failUsage(
-                'candy-code serve: ' . $problems[0],
-                $args->outputFormat,
-                \count($problems) > 1 ? Lang::t('cli.serve.also', ['problems' => \implode('; ', \array_slice($problems, 1))]) : null,
-            );
-        }
-
-        // Every file the server creates (the token, the record, the lock, the
-        // log) is this user's alone.
-        \umask(0o077);
-
-        try {
-            $state = StateDir::open($config->stateDir);
-            $tokens = TokenStore::new($state->path)->withOverride($env['CANDY_CODE_SERVER_TOKEN'] ?? null);
-            $tokens->token();
-            $static = StaticFiles::new($config->webRoot ?? ($config->web ? self::installedWebRoot() : null));
-            $watchdog = $parentPid === null ? null : ParentPidWatchdog::of($parentPid);
-        } catch (\InvalidArgumentException | \RuntimeException $e) {
-            return NonInteractive::failUsage('candy-code serve: ' . $e->getMessage(), $args->outputFormat);
-        }
-
-        try {
-            $locked = $state->acquireLock();
-        } catch (\RuntimeException $e) {
-            return self::failStart($args, $config, $e->getMessage());
-        }
-        if (!$locked) {
-            $running = DiscoveryFile::read($state);
-
-            return self::failStart(
-                $args,
-                $config,
-                $running !== null && $running->isLive()
-                    ? Lang::t('cli.serve.already_running_pid', ['dir' => $state->path, 'pid' => $running->pid, 'url' => $running->url])
-                    : Lang::t('cli.serve.already_running', ['dir' => $state->path]),
-            );
-        }
-
-        if (!$detach) {
-            return self::serve($args, $config, $state, $tokens, $static, $watchdog, false, function (array $report) use ($args, $config, $static): void {
-                if ($report['ok']) {
-                    self::announce($args, $config, $report, $static, false);
-                }
-            });
-        }
-
-        return self::detachAndServe($args, $config, $state, $tokens, $static, $watchdog);
-    }
-
     /**
      * `--detach`: daemonize, let the daemon bind and report over a socket
      * pair, and print what it reported. The original process returns as soon
      * as the daemon has either bound its port or failed to.
      */
-    private static function detachAndServe(
-        ParsedArgs $args,
-        ServerConfig $config,
-        StateDir $state,
-        TokenStore $tokens,
-        StaticFiles $static,
-        ?ParentPidWatchdog $watchdog,
-    ): int {
-        $state->rotateLog();
-        $pair = @\stream_socket_pair(\STREAM_PF_UNIX, \STREAM_SOCK_STREAM, \STREAM_IPPROTO_IP);
-        if ($pair === false) {
-            $state->releaseLock();
-
-            return self::failStart($args, $config, Lang::t('cli.serve.no_report_channel'));
-        }
-        [$parentEnd, $daemonEnd] = $pair;
-
-        try {
-            Daemonize::detach($state->logPath(), static function () use ($args, $config, $state, $tokens, $static, $watchdog, $parentEnd, $daemonEnd): int {
-                \fclose($parentEnd);
-
-                return self::serve($args, $config, $state, $tokens, $static, $watchdog, true, static function (array $report) use ($daemonEnd): void {
-                    @\fwrite($daemonEnd, (string) \json_encode($report, \JSON_UNESCAPED_SLASHES) . "\n");
-                    @\fclose($daemonEnd);
-                });
-            });
-        } catch (\RuntimeException $e) {
-            \fclose($parentEnd);
-            \fclose($daemonEnd);
-            $state->releaseLock();
-
-            return self::failStart($args, $config, $e->getMessage());
-        }
-
-        // The daemon holds the lock now (the same open file description,
-        // inherited); unlocking it here would unlock it for the daemon.
-        $state->forgetLock();
-        \fclose($daemonEnd);
-        $report = self::readReport($parentEnd, self::DETACH_REPORT_SECONDS);
-        \fclose($parentEnd);
-
-        if ($report === null) {
-            return self::failStart($args, $config, Lang::t('cli.serve.no_report', [
-                'seconds' => (int) self::DETACH_REPORT_SECONDS,
-                'log' => $state->logPath(),
-            ]));
-        }
-        if (!$report['ok']) {
-            return self::failStart($args, $config, Lang::t('cli.serve.reason_see_log', [
-                'reason' => (string) ($report['reason'] ?? Lang::t('cli.serve.failed_to_start')),
-                'log' => $state->logPath(),
-            ]));
-        }
-        self::announce($args, $config, $report, $static, true);
-
-        return NonInteractive::EXIT_OK;
-    }
-
     /**
      * Bind, publish the discovery record and control socket, report, and run
      * the loop until a signal (or the parent-pid watchdog) stops it.
@@ -374,295 +256,6 @@ final class Serve
      * @param \Closure(array<string, mixed>): void $report called exactly once,
      *        with `ok` and either the URLs or the `reason` it failed
      */
-    private static function serve(
-        ParsedArgs $args,
-        ServerConfig $config,
-        StateDir $state,
-        TokenStore $tokens,
-        StaticFiles $static,
-        ?ParentPidWatchdog $watchdog,
-        bool $detached,
-        \Closure $report,
-    ): int {
-        $log = static function (string $line): void {
-            self::stderr('[' . \date('H:i:s') . '] ' . $line);
-        };
-        $loop = Loop::get();
-
-        // One AuthContext (and with it one ViewerTokens instance) serves both
-        // the HTTP auth path below and the token.* protocol handlers — the
-        // dispatcher threads it onto its workspace as a service, so a revoke
-        // made over the wire and a rotation made at the cookie layer act on
-        // the same rows. The construction is hoisted here because the
-        // workspace is built before the server; AuthContext::new is a pure
-        // in-memory mint by the store's own law (nothing touches disk at
-        // construction), so it cannot throw and needs no guard here.
-        $auth = AuthContext::new($tokens);
-
-        // The protocol's sessions are built HERE, in the process that serves
-        // them — after a --detach fork, never before it: the workspace holds
-        // the session database and the forked turns' notice inbox, neither of
-        // which may be shared with the process that returns to the shell.
-        try {
-            $protocol = self::protocol($config, $loop, $log, $auth);
-        } catch (\Throwable $e) {
-            $state->releaseLock();
-            $reason = Lang::t('cli.serve.workspace_unavailable', ['error' => $e->getMessage()]);
-            self::stderr('candy-code serve: ' . $reason);
-            $report(['ok' => false, 'reason' => $reason]);
-
-            return NonInteractive::EXIT_FAILURE;
-        }
-
-        // The gateway (roadmap O-7) answers `workspace.*` and routes a request
-        // naming another project root to that root's workspace host; every
-        // other request reaches $protocol untouched.
-        $gateway = Gateway::new($protocol, $config, Help::versionString(), $loop);
-        // SES-3 (COMPARISON §6.5): share pages are read from the same session
-        // database the workspace writes, built HERE like the workspace itself
-        // (after any detach fork — a connection may not ride into the child
-        // that returns to the shell). The lookup is fail-safe: a database
-        // without the shares table answers 404, never an error page.
-        // C-SES-3.d: the renderer carries LIVE pages (`/share serve --live`).
-        // It re-reads the CURRENT transcript through the exact serializer a
-        // snapshot went through — ShareSession's row filter and SecretRedactor
-        // included. OD-10 (D-19) put a size bound on what that re-render may
-        // cost: the newest SharePageController::MAX_SHARE_ROWS rows survive
-        // into the serialize, a fixed notice row says how many did not, and
-        // the byte budget caps the finished page — all before the reply
-        // returns, so the render memo (D-20) only ever holds post-budget
-        // bytes. The reply carries the session's event lastSeq as its
-        // revision: a new transcript row bumps it, the memo key misses, the
-        // page re-renders. Every other failure
-        // (session deleted, store unreadable, a row nothing can revive)
-        // answers null, which the controller returns as the shared 404; the
-        // page can never outlive its session nor leak more than a snapshot
-        // could, and `Cache-Control: no-store` (the controller's own law,
-        // D-22) keeps proxies from freezing what promises to track.
-        $sessionStore = Bootstrap::sessionStore(prune: false);
-        $share = new SharePageController(
-            ShareStore::atPath($sessionStore->path()),
-            static function (string $sessionId) use ($sessionStore): ?array {
-                try {
-                    $rows = $sessionStore->loadTranscript($sessionId);
-                    if ($rows === null) {
-                        return null;
-                    }
-                    $revision = $sessionStore->sessionEventBounds($sessionId)[1];
-                    $dropped = 0;
-                    $rows = SharePageController::budgetRows($rows, $dropped);
-                    $messages = array_map(
-                        static fn(array $row): \SugarCraft\Code\Message => \SugarCraft\Code\Host\TranscriptStore::reviveRow($row),
-                        $rows,
-                    );
-
-                    $html = (new ShareSession($messages, ShareSession::FORMAT_HTML))->serialize();
-
-                    return [
-                        'html' => SharePageController::capBytes(
-                            $dropped > 0 ? $html . SharePageController::truncationNotice($dropped) : $html,
-                        ),
-                        'revision' => $revision,
-                    ];
-                } catch (\Throwable) {
-                    return null;
-                }
-            },
-            // D-20 probe: lastSeq as a single indexed MAX() read — this is
-            // what lets the memo answer without the full re-serialize above.
-            // A null (unreadable store) simply forces the honest render path.
-            static function (string $sessionId) use ($sessionStore): ?int {
-                try {
-                    return $sessionStore->sessionEventBounds($sessionId)[1];
-                } catch (\Throwable) {
-                    return null;
-                }
-            },
-        );
-        // C-TOOL-6.g: sandboxed canvas pages. Built after the detach fork,
-        // like $share — the minted-link table is live server state and must
-        // not ride into the child. The controller answers both doors: the
-        // authenticated `POST /api/canvas` mint and the public single-use
-        // `/canvas/{token}` page; the mint re-checks the artifact against the
-        // media store, the page re-resolves it again at delivery, so a sweep
-        // between the two retires the link with the artifact.
-        $canvas = new CanvasPageController(CanvasLinks::new());
-        // AUT-6: inbound webhook delivery, mounted ONLY when the operator's
-        // user config names hooks (they were validated at launch inside
-        // ServerConfig::resolve — one bad hook refused the boot, never a
-        // half-mounted route). The run closure is the same door `bg.spawn`
-        // walks: the server context's background supervisor, tracked, and the
-        // summary answered to the caller — caps, draining and the event feed
-        // stay one truth. A throw here is logged at its cause (ISS-057) and
-        // answered as the handler's generic 503.
-        $hooks = $config->webhooks === [] ? null : HookWebhooks::new(
-            $config->webhooks,
-            static function (string $name, array $hook, string $prompt) use ($protocol, $config): array {
-                $server = $protocol->context();
-                if ($server->isDraining()) {
-                    throw new \RuntimeException('the server is shutting down');
-                }
-                $events = $server->background();
-                if ($events === null) {
-                    throw new \RuntimeException('this server has no background supervisor');
-                }
-                $manager = $server->hub()->workspace()->agentManager;
-                $agent = $manager?->get('default') ?? ($manager?->all()[0] ?? null) ?? BackgroundCommand::defaultAgent();
-                // The hook's own configured mode wins (launch-validated, and
-                // bypass-class was refused there); unmodeled hooks run in the
-                // server's mode, clamped to the Default family (AUT-6 MINOR-1)
-                // so a bypass-class server cannot hand an inbound HTTP request
-                // the unattended bypass the per-hook refusal denies it.
-                $mode = $hook['permissionMode'];
-                $modeValue = $mode?->value ?? $config->hookPermissionModeFallback();
-                $root = $server->hub()->workspace()->root;
-                try {
-                    $session = $events->supervisor()->spawnSession(
-                        name: BackgroundCommand::sessionName('hook ' . $name),
-                        agent: $agent,
-                        task: $prompt,
-                        workingDirectory: $root !== null && $root !== '' ? $root : '.',
-                        permissionMode: $modeValue,
-                        permissionAskTimeout: $config->askTimeoutSeconds,
-                    );
-                } catch (\Throwable $e) {
-                    $server->logError($e, 'webhook ' . $name . ' failed');
-
-                    throw $e;
-                }
-                $events->track($session);
-
-                return $events->summary($session);
-            },
-        );
-        $server = Server::new($config, $auth, $static, $gateway, $loop, $log, null, null, $share(...), $canvas(...), $hooks);
-
-        try {
-            $server->start();
-            $record = DiscoveryFile::forThisProcess(
-                Help::versionString(),
-                $server->url(),
-                $config->host,
-                (int) $server->port(),
-                $config->root,
-                $detached,
-                $detached ? $state->logPath() : null,
-                // W6.7: the same boot-time flags the hello carries, so an
-                // attach-style client reading server.json sees one truth.
-                media: MediaAffordance::current(),
-            );
-            $record->write($state);
-        } catch (\RuntimeException $e) {
-            $server->stop();
-            $gateway->stop($e->getMessage());
-            $protocol->stop();
-            $protocol->context()->hub()->closeAll();
-            $state->releaseLock();
-            self::stderr('candy-code serve: ' . $e->getMessage());
-            $report(['ok' => false, 'reason' => $e->getMessage()]);
-            if (!$detached && $args->outputFormat === NonInteractive::FORMAT_JSON) {
-                echo NonInteractive::encodeDocument(['result' => ['listening' => false, 'address' => $config->bindUri(), 'reason' => $e->getMessage()]]) . "\n";
-            }
-
-            return NonInteractive::EXIT_FAILURE;
-        }
-
-        $control = self::openControlSocket($state, $server, $tokens, $log);
-
-        $loginUrls = $server->loginUrls();
-        $report([
-            'ok' => true,
-            'url' => $server->url(),
-            'loginUrl' => $loginUrls[0],
-            'loginUrls' => $loginUrls,
-            'pid' => \getmypid(),
-            'log' => $detached ? $state->logPath() : null,
-        ]);
-        if ($detached) {
-            // The log gets the address, never the sign-in code.
-            $log(\sprintf('listening on %s (pid %d, root %s)', $server->url(), \getmypid(), $config->root ?? '(none)'));
-        }
-
-        $rotation = null;
-        if ($detached) {
-            $rotation = $loop->addPeriodicTimer(self::LOG_ROTATE_CHECK_SECONDS, static function () use ($state): void {
-                if ($state->rotateLog()) {
-                    Daemonize::redirectStdio($state->logPath());
-                }
-            });
-        }
-
-        $stopping = false;
-        $handlers = [];
-        $finish = static function (string $reason) use (&$stopping, &$handlers, $server, $protocol, $gateway, $state, $record, $control, $watchdog, $rotation, $loop): void {
-            if ($stopping) {
-                return;
-            }
-            $stopping = true;
-            self::stderr(Lang::t('cli.serve.stopping', ['reason' => $reason]));
-            $watchdog?->disarm($loop);
-            if ($rotation instanceof TimerInterface) {
-                $loop->cancelTimer($rotation);
-            }
-            $control?->close();
-            @\unlink($state->controlSocketPath());
-            $protocol->stop($reason);
-            $server->stop();
-            $gateway->stop($reason);
-            $protocol->context()->hub()->closeAll();
-            $record->removeFrom($state);
-            $state->releaseLock();
-            foreach ($handlers as $signal => $handler) {
-                Loop::removeSignal($signal, $handler);
-            }
-            Loop::stop();
-        };
-
-        // DRAIN FIRST (`server.drainSeconds`, Appendix O §4.6): admit nothing
-        // new, tell the clients, and give the turns in flight their time to
-        // settle; a second signal stops at once. What still runs when the
-        // drain ends is cancelled by the hub's closeAll() above.
-        $stop = static function (string $reason, ?float $drainSeconds = null) use ($finish, $protocol, $config): void {
-            $drainSeconds ??= $config->drainSeconds;
-            $protocol->drain($drainSeconds, static function (bool $settled) use ($finish, $reason): void {
-                $finish($settled ? $reason : $reason . '; cancelling the turns still running');
-            }, $reason);
-            if ($protocol->isDraining()) {
-                $running = $protocol->context()->turnsRunning();
-                $params = [
-                    'reason' => $reason,
-                    'seconds' => \rtrim(\rtrim(\sprintf('%.1f', $drainSeconds), '0'), '.'),
-                    'count' => $running,
-                ];
-                self::stderr($running === 1
-                    ? Lang::t('cli.serve.draining.one', $params)
-                    : Lang::t('cli.serve.draining.many', $params));
-            }
-        };
-
-        // Never SIGCHLD: the turn children are reaped by EngineBackend's own
-        // sweep, and a SIGCHLD handler would race it (Appendix O §4.6).
-        foreach ([\SIGINT => 'SIGINT', \SIGTERM => 'SIGTERM'] as $signal => $name) {
-            $handlers[$signal] = static function () use ($stop, $name): void {
-                $stop($name);
-            };
-            Loop::addSignal($signal, $handlers[$signal]);
-        }
-        $watchdog?->arm($loop, static function (int $pid) use ($stop): void {
-            $stop(\sprintf('parent process %d is gone', $pid));
-        });
-        $protocol->context()->onShutdown(static function (?float $drainSeconds) use ($stop, $loop): void {
-            // Next tick: the client's answer goes out before the sockets close.
-            $loop->futureTick(static fn () => $stop('server.shutdown was requested', $drainSeconds));
-        });
-        $protocol->start();
-        $gateway->start();
-
-        Loop::run();
-
-        return NonInteractive::EXIT_OK;
-    }
-
     /**
      * The `candy-code.v1` protocol over this server's workspace: the launch's
      * workspace for the served root ({@see Bootstrap::workspace()}, the same
@@ -670,23 +263,6 @@ final class Serve
      * `server.maxOpenSessions`, and the {@see Dispatcher} the WebSocket
      * transport hands its messages to.
      */
-    private static function protocol(ServerConfig $config, LoopInterface $loop, ?\Closure $log = null, ?AuthContext $auth = null): Dispatcher
-    {
-        $workspace = Bootstrap::workspace($config->root);
-        // G4-G addendum: the token.* handlers reach the store through the
-        // workspace locator (ServerContext carries no auth accessor). Hosts
-        // without an AuthContext answer tokens_unavailable, never a half-
-        // governed grant surface.
-        if ($auth !== null) {
-            $workspace = $workspace->withService(ViewerTokens::class, $auth->viewerTokens);
-        }
-        $hub = SessionHub::new($workspace, $config->maxOpenSessions, \SugarCraft\Code\Context\CompactorConfig::fromSettings(Bootstrap::readUserConfig()));
-
-        // ISS-057: the dispatcher's -32099 arms hide their cause from the
-        // client; the context's log sink is where that cause lands instead.
-        return Dispatcher::new(ServerContext::new($hub, $config, Help::versionString(), $loop, null, $log));
-    }
-
     /**
      * The local control socket `serve url` asks for a fresh sign-in URL on:
      * the login codes live in this process's memory, so a code minted anywhere
@@ -698,68 +274,6 @@ final class Serve
      *
      * @param \Closure(string): void $log
      */
-    private static function openControlSocket(StateDir $state, Server $server, TokenStore $tokens, \Closure $log): ?Listener
-    {
-        $path = $state->controlSocketPath();
-        // This process holds the singleton lock, so whatever is at the path
-        // was left by a server that died without cleaning up.
-        $stat = @\lstat($path);
-        if ($stat !== false && ((int) $stat['mode'] & 0o170000) === 0o140000) {
-            @\unlink($path);
-        }
-
-        try {
-            $listener = Listener::bind('unix://' . $path, Loop::get());
-        } catch (\RuntimeException $e) {
-            $log('control socket unavailable (serve url will not reach this server): ' . $e->getMessage());
-
-            return null;
-        }
-
-        $listener->on('connection', static function (ConnectionInterface $connection) use ($server, $tokens): void {
-            $buffer = '';
-            $connection->on('data', static function (string $chunk) use (&$buffer, $connection, $server, $tokens): void {
-                $buffer .= $chunk;
-                if (\strlen($buffer) > 4096) {
-                    $connection->close();
-
-                    return;
-                }
-                $newline = \strpos($buffer, "\n");
-                if ($newline === false) {
-                    return;
-                }
-                [$verb, $token] = \explode(' ', \substr($buffer, 0, $newline), 2) + [1 => ''];
-                $reloaded = null;
-                if ($verb === self::CONTROL_RELOAD_TOKEN) {
-                    try {
-                        $reloaded = $server->reloadToken();
-                    } catch (\RuntimeException) {
-                        // Two causes reach this guard: the token file itself
-                        // could not be read (the shape the answer names), or —
-                        // since WEB-6's fail-closed revocation — the rotation's
-                        // revokeAll could not land its revocation on disk nor
-                        // discard the durable copy. Either way the client is
-                        // told it may not trust the reload; the answer text
-                        // stays single-purpose bytes.
-                        $connection->end((string) \json_encode(['ok' => false, 'error' => 'the token file could not be read'], \JSON_UNESCAPED_SLASHES) . "\n");
-
-                        return;
-                    }
-                }
-                $answer = match (true) {
-                    !$tokens->matches(\trim($token)) => ['ok' => false, 'error' => 'unauthorized'],
-                    $verb === self::CONTROL_LOGIN_URL => (static fn (array $urls): array => ['ok' => true, 'loginUrl' => $urls[0], 'loginUrls' => $urls])($server->loginUrls()),
-                    $verb === self::CONTROL_RELOAD_TOKEN => ['ok' => true, 'rotated' => $reloaded !== null, 'closed' => $reloaded ?? 0],
-                    default => ['ok' => false, 'error' => 'unknown request'],
-                };
-                $connection->end((string) \json_encode($answer, \JSON_UNESCAPED_SLASHES) . "\n");
-            });
-        });
-
-        return $listener;
-    }
-
 
     /** @param array<string, string> $env */
     /** @param array<string, string> $env */
@@ -854,37 +368,6 @@ final class Serve
      *
      * @return array<string, mixed>|null
      */
-    private static function readReport($stream, float $seconds): ?array
-    {
-        \stream_set_blocking($stream, false);
-        $buffer = '';
-        $deadline = \microtime(true) + $seconds;
-        while (!\str_contains($buffer, "\n")) {
-            $remaining = $deadline - \microtime(true);
-            if ($remaining <= 0) {
-                return null;
-            }
-            $read = [$stream];
-            $write = $except = null;
-            $ready = @\stream_select($read, $write, $except, (int) $remaining, (int) (($remaining - (int) $remaining) * 1_000_000));
-            if ($ready === false) {
-                return null;
-            }
-            if ($ready === 0) {
-                continue;
-            }
-            $chunk = @\fread($stream, 8192);
-            if ($chunk === false || ($chunk === '' && \feof($stream))) {
-                return null;
-            }
-            $buffer .= $chunk;
-        }
-
-        $report = \json_decode(\substr($buffer, 0, (int) \strpos($buffer, "\n")), true);
-
-        return \is_array($report) && \is_bool($report['ok'] ?? null) ? $report : null;
-    }
-
     /** Poll until $record's process is gone, up to $seconds; whether it went. */
     /**
      * `GET /api/health` on $url, bounded to two seconds: the one route that
@@ -956,18 +439,6 @@ final class Serve
      * mode. `distPath()` would raise a `RuntimeException` the caller's catch
      * turns into a hard `failUsage`, never reaching that graceful branch.
      */
-    private static function installedWebRoot(): ?string
-    {
-        $assets = 'SugarCraft\\CodeWeb\\Assets';
-        if (!\class_exists($assets) || !\method_exists($assets, 'tryDistPath')) {
-            return null;
-        }
-
-        $path = $assets::tryDistPath();
-
-        return \is_string($path) && \is_dir($path) ? $path : null;
-    }
-
     /**
      * The startup lines (stderr) and, under JSON, the one stdout document —
      * from the foreground server itself, or from the process that detached
@@ -975,74 +446,6 @@ final class Serve
      *
      * @param array<string, mixed> $report
      */
-    private static function announce(ParsedArgs $args, ServerConfig $config, array $report, StaticFiles $static, bool $detached): void
-    {
-        $url = (string) $report['url'];
-        $loginUrl = (string) $report['loginUrl'];
-        $loginUrls = self::loginUrlsOf($report);
-        $pid = (int) $report['pid'];
-
-        if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
-            echo NonInteractive::encodeDocument(['result' => [
-                'url' => $url,
-                'loginUrl' => $loginUrl,
-                'loginUrls' => $loginUrls,
-                'pid' => $pid,
-                'protocol' => ServerConfig::PROTOCOL_MAJOR,
-                'root' => $config->root,
-                'permissionMode' => $config->permissionMode->value,
-                'web' => $static->root() !== null,
-                'detached' => $detached,
-                'log' => $report['log'] ?? null,
-            ]]) . "\n";
-        }
-
-        $mode = ['mode' => $config->permissionMode->value];
-        $ttl = ['seconds' => LoginCodes::TTL_SECONDS];
-        $lines = [
-            $detached
-                ? Lang::t('cli.serve.announce.background', ['url' => $url, 'pid' => $pid])
-                : Lang::t('cli.serve.announce.listening', ['url' => $url, 'pid' => $pid]),
-            Lang::t('cli.serve.announce.root', ['root' => $config->root ?? Lang::t('cli.serve.none')]),
-            $config->allowBypass
-                ? Lang::t('cli.serve.announce.mode_bypass', $mode)
-                : Lang::t('cli.serve.announce.mode', $mode),
-            $static->root() !== null
-                ? Lang::t('cli.serve.announce.web', ['dir' => $static->root()])
-                : Lang::t('cli.serve.announce.web_missing'),
-            ...($config->allowedIps === [] ? [] : [Lang::t('serve.announce.allowed_ips', ['ips' => \implode(', ', $config->allowedIps)])]),
-            ...($config->dirBrowse ? [Lang::t('serve.announce.dir_browse', ['root' => (string) $config->browseRoot])] : []),
-            Lang::t('cli.serve.announce.sign_in', ['url' => \implode("\n                   ", $loginUrls)]),
-            $detached
-                ? Lang::t('cli.serve.announce.code_detached', $ttl)
-                : Lang::t('cli.serve.announce.code_foreground', $ttl),
-        ];
-        if ($detached) {
-            $lines[] = Lang::t('cli.serve.announce.log', ['log' => (string) ($report['log'] ?? '')]);
-            $lines[] = Lang::t('cli.serve.announce.stop');
-        }
-        if ($config->isWildcard() && $config->interfaceAddresses === []) {
-            $lines[] = Lang::t('cli.serve.announce.no_interface');
-        }
-        // D-16: the remote-bind warning is about reachability, not only
-        // cleartext. A TLS listener still hands every credential that
-        // survives a leaked page to whoever can route to the port, so the
-        // block fires on ANY non-loopback bind and the wording branches on
-        // TLS; an empty --allowed-ips roster says so out loud. Credentials
-        // stay mandatory on every bind either way (docs/SERVER.md, "Remote
-        // access").
-        if (!$config->isLoopback()) {
-            $lines[] = '';
-            $lines[] = $config->hasTls()
-                ? Lang::t('cli.serve.announce.remote_tls', ['host' => $config->host])
-                : Lang::t('cli.serve.announce.remote', ['host' => $config->host]);
-            if ($config->allowedIps === []) {
-                $lines[] = Lang::t('cli.serve.announce.remote_unpinned');
-            }
-        }
-        self::stderr(\implode("\n", $lines));
-    }
-
     /**
      * The sign-in URLs a report or a `serve url` answer carries; one, the
      * `loginUrl`, when it predates `loginUrls`.
@@ -1051,13 +454,6 @@ final class Serve
      *
      * @return list<string>
      */
-    private static function loginUrlsOf(array $answer): array
-    {
-        $urls = \is_array($answer['loginUrls'] ?? null) ? \array_values(\array_filter($answer['loginUrls'], 'is_string')) : [];
-
-        return $urls !== [] ? $urls : [(string) ($answer['loginUrl'] ?? '')];
-    }
-
     /**
      * The server's one stderr channel: startup lines, the request log and the
      * stop notice. Stderr alone, never the transcript seam — there is no
