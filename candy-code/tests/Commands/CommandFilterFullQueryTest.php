@@ -24,9 +24,11 @@ final class CommandFilterFullQueryTest extends TestCase
 {
     public function testAnAnchoredSpreadOutPrefixFindsItsCommand(): void
     {
-        // W4.4 roster truth: 'seo' rides s-e-n-d-t-o too (s@0 e@1 o@5), so the
-        // anchored spread-out pin now names both survivors, scored order first.
-        self::assertSame(['sendto', 'sessions'], self::names(CommandRegistry::filter('seo')));
+        // W4.4 roster truth: 'seo' rides s-e-n-d-t-o too (s@0 e@1 o@5). The
+        // CC-UXD-03 typed doors added the session-prefixed session-delete and
+        // session-pin specs, so the anchored spread-out pin now names all four
+        // in-order survivors, scored order first (G2-L3-FIX2 battery re-pin).
+        self::assertSame(['sendto', 'session-delete', 'session-pin', 'sessions'], self::names(CommandRegistry::filter('seo')));
         self::assertSame(['permissions'], self::names(CommandRegistry::filter('pns')));
         self::assertSame(['rewind'], self::names(CommandRegistry::filter('rwd')), 'the typo-tolerant case still holds');
     }
