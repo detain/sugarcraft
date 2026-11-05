@@ -74,9 +74,9 @@ echo $model->view();
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Box-drawing prefixes</strong><span>Customizable prefixers per depth level — lines, bullets, arrows.</span></div>
+      <div class="feature"><strong>Box-drawing prefixes</strong><span>Swap in your own prefixer; the shipped one picks its glyph by item position (first / middle / last), not by nesting depth.</span></div>
             <div class="feature"><strong>Cursor navigation</strong><span>Up / Down / Home / End movement with viewport tracking.</span></div>
-            <div class="feature"><strong>Word-wrap</strong><span>Auto-wrap long items to terminal width.</span></div>
+            <div class="feature"><strong>Word-wrap</strong><span>Long items wrap at the configured viewport width (setWidth) — the terminal is never auto-detected.</span></div>
             <div class="feature"><strong>Filter state machine</strong><span>withFilterFn() / withoutFilter() with FilterState enum (unfiltered / filtering).</span></div>
             <div class="feature"><strong>Fuzzy matching</strong><span>FuzzyMatch delegates scoring to sugar-fuzzy's SmithWatermanMatcher (SSOT).</span></div>
             
@@ -107,8 +107,15 @@ echo $model->view();
 <tr><td>Model</td><td>setPrefixer(Prefixer)</td><td>Attach a prefixer instance</td></tr>
 <tr><td>Model</td><td>setSuffixer(Suffixer)</td><td>Attach a suffixer instance</td></tr>
 <tr><td>Model</td><td>lines()</td><td>Return visible lines as array</td></tr>
-<tr><td>Model</td><td>view()</td><td>Render list as ANSI string</td></tr>
-<tr><td>Model</td><td>filterState()</td><td>Current FilterState (unfiltered / filtering)</td></tr>
+<tr><td>Model</td><td>view()</td><td>Render the list as an ANSI string: a full frame after resetPreviousFrame() (or on first render), then only changed rows as CUP + row + EL delta fragments</td></tr>
+<tr><td>Model</td><td>resetPreviousFrame()</td><td>Drop the delta memo so the next view() repaints the full frame (void; mutates this instance)</td></tr>
+<tr><td>Model</td><td>filterState()</td><td>Current ?FilterState — null until the first withFilterFn()/withoutFilter() call, then unfiltered / filtering</td></tr>
+<tr><td>Model</td><td>setViewport(width, height)</td><td>Set both dimensions at once</td></tr>
+<tr><td>Model</td><td>setCursor(int) / cursorUp(int) / cursorDown(int)</td><td>Jump to, or step the cursor (default 1 row); clamped to the item range</td></tr>
+<tr><td>Model</td><td>cursorPageUp(int) / cursorPageDown(int)</td><td>Jump by whole viewport pages (default 1)</td></tr>
+<tr><td>Model</td><td>cursorToStart() / cursorToEnd()</td><td>Jump to the first / last item</td></tr>
+<tr><td>Model</td><td>cursorIndex() / cursorItem() / tryCursorItem()</td><td>Read the cursor: index; its \Stringable (throws on an empty list); the same, or null</td></tr>
+<tr><td>Model</td><td>setCursorOffset(int) / setWrap(int)</td><td>Pin the cursor's row within the viewport; cap an item to N wrapped lines (0 = no cap)</td></tr>
 <tr><td>FilterState</td><td>unfiltered</td><td>No filter active</td></tr>
 <tr><td>FilterState</td><td>filtering</td><td>Filter function set and applied</td></tr>
 <tr><td>FuzzyMatch</td><td>score(query, candidate)</td><td>Smith-Waterman alignment score via the sugar-fuzzy SSOT (int, higher = better)</td></tr>
@@ -127,14 +134,14 @@ echo $model->view();
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-treelist/.vhs/basic.gif" alt="Cursor + filter" onerror="this.parentElement.style.display='none'">
-                <h3>Cursor + filter</h3>
-                <span class="demo-caption">Tree/list view with cursor nav and word-wrap.</span>
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-treelist/.vhs/basic.gif" alt="Cursor navigation" onerror="this.parentElement.style.display='none'">
+                <h3>Cursor navigation</h3>
+                <span class="demo-caption">Box-drawing gutter with cursor movement, repainted as a full frame after resetPreviousFrame().</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-treelist/.vhs/custom-styling.gif" alt="Custom styling" onerror="this.parentElement.style.display='none'">
                 <h3>Custom styling</h3>
-                <span class="demo-caption">Per-node colours and box-drawing prefixes.</span>
+                <span class="demo-caption">Hand-written ★ Prefixer and ◉ Suffixer plugged into the same list.</span>
             </div>
         </div>
     </div>
