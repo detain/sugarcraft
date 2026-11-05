@@ -75,20 +75,21 @@ Dock\* (DockLayout/DockGeometry/DockSlot/Side)   standalone IDE-dock surface, no
 
 ## Constraint types
 
-- `Constraint::length(int $cells)` — fixed cell count. One exception: when a
+- `Constraint::length(int $n)` — fixed cell count. One exception: when a
   set has neither `Min` nor `Fill`, `Max`-clamp reclaims are shared with
   Length/Percentage/Ratio and inflate them (the **reclaim ladder** — step 6
   below).
-- `Constraint::min(int $floor)` — soft floor. It grows only when **slack**
+- `Constraint::min(int $n)` — soft floor of `$n` cells. It grows only when **slack**
   (what the fixed reservation leaves over) survives Fill and Max
   (proportional clamp under demand); on its own it absorbs the whole span.
-- `Constraint::max(int $ceiling)` — ceiling, greedy: takes slack up to the cap.
+- `Constraint::max(int $n)` — ceiling, greedy: takes slack up to the cap.
 - `Constraint::fill(int $weight = 1)` — proportional claim on the slack left
   after the **fixed reservation** (Length plus resolved Percentage/Ratio —
   step 2 below).
-- `Constraint::percentage(int $percent)` — `$percent` of the solved-axis span,
+- `Constraint::percentage(int $n)` — `$n` of the solved-axis span,
   integer `0`–`100` inclusive (so 33⅓ is inexpressible; use `ratio(1, 3)`).
-- `Constraint::ratio(int $num, int $denom)` — `num/denom` of the total span on
+- `Constraint::ratio(int $numerator, int $denominator)` — `numerator/denominator`
+  of the total span on
   the solved axis, reserved like a fixed size. It is **not** an aspect ratio:
   `solve()` is strictly single-axis, so `Ratio(2, 1)` makes a pane twice as
   *wide*, never height-locked to width.
@@ -140,9 +141,12 @@ region at its full base size instead (the layout runs off-grid).
 | `->withRoundSplit(bool $on = true)` | `round()` instead of `floor()` for Percentage/Ratio sizes |
 | `->withRemainderToLast(bool $on = true)` | rounding remainder rides the LAST region instead of the first |
 | `->withoutOverflowTruncation()` | on overflow every region keeps its full base size (off-grid) |
-| `->withMinShare(int $cells = 1, int $reserveGap = 0, int $reserveLead = 0)` | sequential "reserve ≥N columns per unplaced region" floor over Fill weights — reproduces sugar-panels's non-flex `distribute()` byte-for-byte; inherently round-split + remainder-to-last while engaged |
-| `GreedySolver::solveStatic(Region $region, array $constraints, Direction $direction)` | legacy no-instance entry for the pre-immutable default policy. **Transposed argument order vs `solve()`** — region, constraints, direction. Signature frozen for callers; prefer an instance. |
-| `CassowarySolver::new()/greedy()/cassowary()` | deprecated shim — `solve()` emits `E_USER_DEPRECATED` and delegates wholly to `GreedySolver` |
+| `->withOverflowTruncation(bool $on = true)` | inverse knob: re-enables (or with `false`, disables again) proportional overflow truncation — `compat()` is the factory that starts non-truncating, so this is how a compat instance re-arms it |
+| `new GreedySolver(bool $roundSplit = false, bool $remainderToLast = false, bool $truncateOverflow = true, int $minShare = 0, int $reserveGap = 0, int $reserveLead = 0)` | public six-named-arg constructor — a supported entry point (sugar-style's `SolverFactory` and `CassowarySolver` construct through it; the zero-arg call preserves the legacy defaults byte-for-byte). Negative `$minShare`/`$reserveGap`/`$reserveLead` throw `InvalidArgumentException`; all six fields are public readonly, so the resolved policy reads back off the instance |
+| `->withMinShare(int $cells = 1, int $reserveGap = 0, int $reserveLead = 0)` | sequential "reserve ≥N cells (columns on the horizontal axis, rows on the vertical) per unplaced region" floor over Fill weights — reproduces sugar-panels's non-flex `distribute()` byte-for-byte; inherently round-split + remainder-to-last while engaged. It is its own proportional path: a set containing anything that is not `Fill` is refused with `InvalidArgumentException` ("Min-share floor supports only Fill constraints (proportional split); got …") on both axes |
+| `GreedySolver::solveStatic(Region $area, array $constraints, Direction $dir)` | legacy no-instance entry for the pre-immutable default policy. **Transposed argument order vs `solve()`** — area, constraints, direction. Signature frozen for callers; prefer an instance. |
+| `CassowarySolver::new()/cassowary()` | deprecated shim — `solve()` emits `E_USER_DEPRECATED` and delegates wholly to `GreedySolver` |
+| `CassowarySolver::greedy()` | escape hatch returning a plain supported `GreedySolver` — warns nothing (it is **not** the deprecated path despite living on the shim class) |
 
 The compat knobs exist for one reason: `sugar-panels` retired its hand-rolled
 distribution helpers against this package while keeping its golden frames
