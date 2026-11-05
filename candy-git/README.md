@@ -365,7 +365,7 @@ code: clone, open, and commit only what you trust.
 
 ## Shared foundations
 
-candy-git uses [sugar-fuzzy](https://sugarcraft.github.io/lib/sugar-fuzzy.html) for Smith-Waterman scored matching infrastructure, laying the groundwork for future fuzzy stash search.
+candy-git uses [sugar-fuzzy](https://sugarcraft.github.io/lib/sugar-fuzzy.html): `StashManager::fuzzyFilter()` is a live, tested public API backed by its Smith-Waterman scored matcher, ranking stash entries by message and branch. The stash overlay UI is not wired to it yet — that integration is the future work, not the matching engine.
 
 ## Testing
 
