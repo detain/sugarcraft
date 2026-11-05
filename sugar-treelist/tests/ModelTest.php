@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\TreeList\Tests;
 
-use SugarCraft\TreeList\{DefaultPrefixer, DefaultSuffixer, FilterState, Model, StringItem};
+use SugarCraft\TreeList\{DefaultPrefixer, DefaultSuffixer, FilterState, Model, StringItem, Suffixer};
 use SugarCraft\TreeList\Tests\Support\RowDeltaAssertions;
 use PHPUnit\Framework\TestCase;
 
@@ -1618,14 +1618,69 @@ final class ModelTest extends TestCase
     public function testCarriageReturnsNeverReachRenderedRows(): void
     {
         // CR neutralization was accidental under the old splitter (it was a
-        // /\s+/ delimiter); the sanitize choke strips it, so this pins the
-        // load-bearing path, not a side effect.
+        // /\s+/ delimiter); sweepForFrame() folds CRs at the frame choke now.
+        // The old claim that the sanitize sweep STRIPPED CR was false — bare
+        // CR survives untrusted() by design — so this pins the fold itself.
         $m = $this->model->setViewport(20, 10)->addItem(new StringItem("a\r\nb"));
 
         foreach ($m->lines() as $row) {
             $this->assertStringNotContainsString("\r", $row);
         }
         $this->assertCount(2, $m->lines());
+    }
+
+    public function testMidContentCarriageReturnSplitsTheItem(): void
+    {
+        // A lone CR (no following LF) must become a line break: the content
+        // SPLITS into two rows, it never splices into "visibleHIDDEN" and no
+        // raw CR rides the frame to overwrite earlier columns.
+        $m = $this->model->setViewport(20, 10)->addItem(new StringItem("visible\rHIDDEN"));
+
+        $this->assertSame(['visible', 'HIDDEN'], $m->lines());
+        $this->assertStringNotContainsString("\r", $m->view());
+    }
+
+    public function testCarriageLineFeedPairFoldsToOneLineBreak(): void
+    {
+        // CRLF must yield ONE break, not two rows plus an empty — this leg
+        // discriminates a reversed fold order (["\r"] first would leave a
+        // dangling "\n" and split "head\r\ntail" into three rows).
+        $m = $this->model->setViewport(20, 10)->addItem(new StringItem("head\r\ntail"));
+
+        $this->assertSame(['head', 'tail'], $m->lines());
+    }
+
+    public function testErrorFrameCarriesNoRawCarriageReturn(): void
+    {
+        // The catch-return in view() is frame content too: an exception
+        // message with CRs must not emit a cursor-return overwrite either.
+        $hostile = new class implements Suffixer {
+            public function initSuffixer(
+                \Stringable $value,
+                int $currentIndex,
+                int $cursorIndex,
+                int $lineOffset,
+                int $width,
+                int $height,
+            ): int {
+                return 0;
+            }
+
+            public function suffix(int $currentLine, int $totalLines): string
+            {
+                throw new \RuntimeException("layout\rbroke\r\nnow");
+            }
+        };
+
+        $frame = $this->model
+            ->setViewport(20, 10)
+            ->addItem(new StringItem('anything'))
+            ->setSuffixer($hostile)
+            ->view();
+
+        $this->assertStringNotContainsString("\r", $frame);
+        $this->assertStringContainsString('layout', $frame);
+        $this->assertStringContainsString('broke', $frame);
     }
 
     public function testRowBudgetCapsLayoutWorkForPathologicalValues(): void

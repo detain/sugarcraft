@@ -1014,16 +1014,33 @@ final class Model
             $this->prevHeight = null;
             $logger?->warning('View rendering failed: {message}', ['message' => $e->getMessage()]);
             // Exception prose is untrusted text and this return value is
-            // frame content: it goes through the same marked-frames sweep
-            // as item values so no control byte or forged zone sentinel
-            // can ride the error sink.
-            return Sanitize::untrustedForMarkedFrames($e->getMessage()) . "\n";
+            // frame content: it goes through the same frame sweep (sanitize
+            // + CR fold) as item values so no control byte, forged zone
+            // sentinel, or cursor-return overwrite can ride the error sink.
+            return self::sweepForFrame($e->getMessage()) . "\n";
         }
     }
 
     // -------------------------------------------------------------------------
     // Internal rendering
     // -------------------------------------------------------------------------
+
+    /**
+     * Frame-content sweep: sugar-core's marked-frames sanitization, then a
+     * CR→LF fold. {@see Sanitize::untrustedForMarkedFrames()} deliberately
+     * keeps TAB, LF and CR (they are layout characters, not control damage) —
+     * but a bare CR inside an ANSI frame returns the cursor to column 1 and
+     * overwrites earlier content, so it must never ride a full-frame or
+     * CUP+EL delta sink. Folding AFTER the sweep turns every CR into an
+     * ordinary line break that hardWrap() already understands: content
+     * SPLITS at a carriage return, it never splices. (Sanitize::
+     * untrustedForDisplay() also folds CR, but it drops the zone-sentinel
+     * sweep, so it cannot be this choke point.)
+     */
+    private static function sweepForFrame(string $text): string
+    {
+        return \str_replace(["\r\n", "\r"], "\n", Sanitize::untrustedForMarkedFrames($text));
+    }
 
     /**
      * Render styled lines for a single item — applies prefix, optional padded
@@ -1066,6 +1083,9 @@ final class Model
         // whole BMP private-use arena through BY CONTRACT — that is correct
         // for image-marker frames but wrong for a frame sink that composes
         // zone markers downstream; the marked-frames variant is the fleet cure.)
+        // sweepForFrame() additionally folds CR to LF after the sanitization:
+        // a mid-content bare CR survives untrusted() BY DESIGN and would
+        // otherwise ride the CUP+EL delta as a cursor-return overwrite.
         // The legitimate SGR ESC is injected LATER by applyStyle(), after this
         // point, and therefore survives — item-value ANSI is stripped by design.
         // Row budget: no item can usefully contribute more rows than the
@@ -1073,7 +1093,7 @@ final class Model
         // there — a pathological 200k-line value now costs O(budget) per
         // frame instead of O(value).
         $rawLines = $this->hardWrap(
-            Sanitize::untrustedForMarkedFrames((string) $item->value),
+            self::sweepForFrame((string) $item->value),
             $contentWidth,
             $this->wrap > 0 ? $this->wrap : $this->height,
         );
@@ -1151,7 +1171,8 @@ final class Model
             // the frame could exceed its column budget. Expand to spaces
             // (run length preserved) instead of smuggling a jump into a row.
             // (The old /\s+/ splitter collapsed tabs with everything else;
-            // CR never reaches here — the sanitize choke strips it, pinned.)
+            // CR never reaches here either — sweepForFrame() folds it into
+            // an LF upstream of the split.)
             $paragraphLine = \strtr($paragraphLine, "\t", ' ');
             if ($paragraphLine === '') {
                 $lines[] = '';

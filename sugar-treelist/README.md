@@ -56,11 +56,13 @@ echo $model->view();
 
 ## Item Types
 
-**Note:** Item values are rendered through the sugar-core sanitize choke point
-(`Sanitize::untrustedForMarkedFrames`): C0/C1 control bytes, DEL, any ANSI
-embedded in the item text, and mouse-zone sentinels (U+E000/U+E001) are
-stripped at render time — item content can forge neither a frame nor a click
-zone. The only styles that reach the output are the SGR parameters you pass to
+**Note:** Item values are rendered through the library frame choke
+(`Model::sweepForFrame`: sugar-core `Sanitize::untrustedForMarkedFrames` plus a
+CR→LF fold): C0/C1 control bytes, DEL, any ANSI embedded in the item text, and
+mouse-zone sentinels (U+E000/U+E001) are stripped at render time, and carriage
+returns become line breaks (content splits, never overwrites) — item content
+can forge neither a frame nor a click zone. The only styles that reach the
+output are the SGR parameters you pass to
 `setLineStyle()`/`setCurrentStyle()` — each is sanitize-then-reject: leading
 escape/`[`/`m` decoration bytes are trimmed before the `[0-9;]` gate, so a
 style like `m1;3` is repaired to `1;3` and accepted, while anything else that
