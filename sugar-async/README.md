@@ -166,12 +166,18 @@ a stateful coalescing closure. Where a helper takes a `LoopInterface`, passing
 - `withDeadline(?loop, promise, seconds, onTimeout:, label:)` — the cancelling
   sibling: rejects after N seconds AND `cancel()`s the inner, with an optional
   `onTimeout` abort hook (fired once, errors swallowed) for server-side kills the
-  driver's own cancellation cannot perform. A bounded I/O ceiling — not a blanket
+  driver's own cancellation cannot perform. Best-effort in the literal sense: a
+  throwing hook and a throwing inner `cancel()` are both caught silently, so a
+  failed server-side kill is *unobservable* here — the rejection is the timeout,
+  never a receipt that the abort worked. A bounded I/O ceiling — not a blanket
   per-request wall-clock killer.
 - `cancellable(promise, token, onCancel:)` — the returned promise rejects
   immediately with `OperationCancelledException` when the token fires, a late inner
-  result is dropped, and an optional `onCancel` hook aborts the underlying work
-  exactly once. The wrapper unsubscribes its own token registration at settlement.
+  result is dropped, and an optional `onCancel` hook fires at most once as a
+  best-effort abort of the underlying work — likewise silently fault-tolerant: if
+  the hook or the inner `cancel()` throws, nothing propagates and you cannot tell
+  the abort failed. The wrapper unsubscribes its own token registration at
+  settlement.
 - `singleFlight(keyFn, worker)` — coalescing callable: concurrent calls with the
   same key share ONE worker invocation and the same promise; the slot frees on
   settle (success, failure, or synchronous throw). The partition is the key
