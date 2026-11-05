@@ -268,6 +268,12 @@ $styles->caller                      = Style::new()->foreground(Color::parse('wh
 $log->setStyles($styles);
 ```
 
+Panic reports are not covered by these styles: the default `PanicFormatter::pretty()`
+also paints the backtrace and footer in bright-black (ansi 8), and no `Styles`
+override reaches it. To keep a panic report high-contrast — in practice, ANSI-free —
+pass an explicit formatter: `Log::installPanicHandler(PanicFormatter::plain())`. The
+`pretty()`/`plain()` factories are the public surface; there is no per-role style knob.
+
 Without a `value` style, each context pair is rendered as one `key=value` run
 using `keys['key']`; setting `keys['value']` (or a per-field `values[$key]`)
 renders key and value as separate styled segments around a bare `=`.
