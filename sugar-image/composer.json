@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-image",
-    "description": "Image-to-cell renderer for terminals \u2014 PNG/JPEG/GIF/APNG/WebP decoded via ext-gd and rendered through the best available protocol: Sixel, Kitty, iTerm2, the chafa CLI, or Unicode text tiers (half/quarter block, character ramp, chafa-style symbol coverage).",
+    "description": "Image-to-cell renderer for terminals \u2014 PNG/JPEG/GIF/APNG/WebP/BMP decoded via ext-gd and pure-PHP animated-container decoders and rendered through the best available protocol: Sixel, Kitty, iTerm2, the chafa CLI, or Unicode text tiers (half/quarter block, ASCII character ramp, chafa-style symbol coverage).",
     "type": "library",
     "license": "MIT",
     "keywords": [

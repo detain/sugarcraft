@@ -124,6 +124,7 @@ Codec matrix (sugar-image native paths only):
 | PNG (still + APNG) | ✅ decode | APNG frames via `fromAnimatedFile()` → an `Animation` |
 | JPEG, static GIF | ✅ decode | GIF animates via `fromAnimatedFile()` → an `Animation` |
 | WebP — static (VP8/VP8L/VP8X) | ✅ decode via `fromString()` | ext-gd WebP build |
+| BMP | ✅ decode via `fromString()` | ext-gd decode; `fromFile()` refuses it — its declared-MIME allowlist is png/jpeg/gif only |
 | WebP — animated (VP8X ANIM bit / ANMF) | ❌ refused by name | `UnsupportedFormatException` — needs chafa CLI or sugar-video's pure-PHP `AnimatedWebpDecoder` (no released ffmpeg decodes animated WebP frames — its demuxer skips ANMF); the refusal is structural (pure-PHP RIFF walk), so the silent first-frame degrade class is closed on every host |
 | AVIF / HEIF / HEIC (`ftyp` brands) | ❌ refused by name | no PHP-side decoder; chafa CLI renders a still |
 | JPEG XL (`FF 0A` codestream, `jxl ` brand) | ❌ refused by name | same |
