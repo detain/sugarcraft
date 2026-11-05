@@ -5,7 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Async;
 
 /**
- * Contract for a subscription handle returned by subscribe()-style APIs.
+ * Contract for a subscription handle returned by onCancel(), debounce() and
+ * throttle().
  *
  * The subscriber calls unsubscribe() to dispose of the subscription.
  * isActive() reports whether the subscription is still live.

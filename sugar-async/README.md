@@ -2,7 +2,7 @@
 
 > Formerly published as `sugarcraft/candy-async` (renamed 2026-10). <!-- @rename-keep -->
 
-Shared async utilities for SugarCraft — cancellation tokens, subscriptions, disposable timer handles, fan-in combinators, and an async cache-aside — built on ReactPHP.
+Shared async utilities for SugarCraft — cancellation tokens, subscriptions, disposable timer handles, fan-in combinators, and a bounded cache-aside store — built on ReactPHP.
 
 ## Overview
 
@@ -20,7 +20,7 @@ A TUI cannot block: blocking is a frozen screen. Every render tick needs the
 event loop free, so slow work (HTTP, DNS, subprocesses, deferred queries) must
 run as promises that settle *between* frames. This library is the shared
 vocabulary for that pattern — timeouts you can see as values, cancellation you
-can hand to a worker, and coalescing so a impatient user mashing a key causes
+can hand to a worker, and coalescing so an impatient user mashing a key causes
 exactly one request.
 
 ### When NOT to use it
@@ -123,9 +123,13 @@ $source = CancellationSource::new();
 echo $source->token()->isCancelled() ? "cancelled\n" : "awaiting Ctrl-C\n";
 ```
 
+Without ext-pcntl the mapping is the same: route your host's interrupt event to
+`$source->cancel()`.
+
 ## Subscriptions
 
-`Subscription` is the disposal handle returned by subscribe-style APIs.
+`Subscription` is the disposal handle returned by `onCancel()`, `debounce()`,
+and `throttle()`.
 `Subscriptions::compose()` lets multiple subscriptions be disposed atomically;
 `Subscriptions::of()` mints one from any cleanup closure, so hand-owned
 resources join the composite without a producer that hands out handles:
@@ -245,7 +249,7 @@ a stateful coalescing closure. Where a helper takes a `LoopInterface`, passing
   once per window. Suppressed calls resolve `null` (they are visible in the
   promise chain, not silently ignored). With `trailing: true` the LAST suppressed
   call fires at window end (earlier suppressed ones stay superseded to `null`).
-  `unsubscribe()` cancels any queued trailing call.
+  `unsubscribe()` drops any queued trailing call — its promise resolves `null`.
 - `all(promises)` / `race(promises)` — fan-in with keys preserved: `all` resolves
   a keyed list (`[]` resolves immediately) and rejects with the first error;
   `race` settles with the first outcome — on empty input it THROWS
@@ -256,8 +260,9 @@ a stateful coalescing closure. Where a helper takes a `LoopInterface`, passing
   runs once ("Still waiting on login…"); the inner is never cancelled by this
   helper. Without a hook the derived promise rejects with a `TimeoutException`
   naming the abandonment ("… (still pending)") while the inner keeps running —
-  bounded-wait semantics for user-paced actions, honoring the no-blanket-timeout
-  law.
+  bounded-wait semantics for user-paced actions: the wait lifts at N seconds,
+  the inner is never killed — this library puts no blanket wall-clock timeout on
+  operations whose pace belongs to the user.
 
 Both failure modes surface as `RuntimeException` subclasses — `TimeoutException`
 for timeouts (with structured `seconds()` / `label()` fields),
@@ -436,7 +441,7 @@ $loop->run();
   `otherwise()` arm in examples and tests, always.
 - **A timeout that never fires.** The loop must actually run: `Loop::run()` (or
   your host program's loop) drives every timer this library arms.
-- **`Composer` resolves an old `candy-async`.** The package was renamed to
+- **`composer` resolves an old `candy-async`.** The package was renamed to
   `sugarcraft/sugar-async` in the 2026-10 rename; `class_alias` shims were never
   shipped — update use statements.
 - Issues: <https://github.com/detain/sugarcraft/issues>
