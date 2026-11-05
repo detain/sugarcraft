@@ -299,8 +299,14 @@ final class McpRouterTest extends TestCase
 
     /**
      * Review N1 (fix wave): PHP normalises the numeric-looking key "0" to
-     * an int; the routed view restored the declared string-keyed shape and
-     * deny rules written as {"0":"deny"} actually reach server "0".
+     * an int; what the fix guarantees is that a numeric server name stays
+     * REACHABLE — never skipped by a TypeError or a silent miss.
+     *
+     * Review C-1 (fix wave MC-1) re-where the boundary: the map spelling
+     * {"0":"deny"} decodes to the PHP list [0 => 'deny'], and the list law
+     * reads that as the PATTERN "deny" (the collision is documented on
+     * normalizeDenyActions()). Digit-named servers are addressed through the
+     * list notation ['0'], whose entries carry the literal name.
      */
     public function testNumericServerNamesAreAddressable(): void
     {
@@ -312,6 +318,76 @@ final class McpRouterTest extends TestCase
         // reachable — never skipped by a TypeError or a silent miss.
         self::assertSame([0], array_keys((new McpRouter($servers))->resolveAllowedServers()));
         self::assertSame(['zero'], self::toolNames($servers, ['0']), 'an allow-list entry "0" admits server 0');
-        self::assertSame([], self::toolNames($servers, [], ['0' => 'deny']), 'a deny rule "0" reaches server 0');
+        self::assertSame([], self::toolNames($servers, [], ['0']), 'the list rule ["0"] reaches server 0');
+        // The documented collision: the same decoded bytes as a one-entry
+        // map read as the pattern "deny", not as a rule for server "0".
+        self::assertSame(['zero'], self::toolNames($servers, [], ['0' => 'deny']), 'a list-shaped map is the pattern side, per the collision law');
+        self::assertTrue(McpRouter::serverDenied('deny', ['0' => 'deny']), 'and it denies a server literally named "deny"');
+    }
+
+    /**
+     * Review C-1 (fix wave MC-1): the README documents deny patterns as a
+     * plain list of globs — `['scratch', 'untrusted_*']`. That notation used
+     * to fail OPEN: the list's numeric keys made the VALUES act as actions
+     * ('scratch' ≠ 'deny'), so every listed rule read as inert and the
+     * boundary silently widened — the exact failure this class throws for
+     * elsewhere. A plain list now denies every entry it names, on both doors.
+     */
+    public function testAPlainListOfDenyPatternsDeniesEveryEntry(): void
+    {
+        $servers = [
+            'fs' => self::server('fs', ['f1']),
+            'scratch' => self::server('scratch', ['s1']),
+            'untrusted_x' => self::server('untrusted_x', ['u1']),
+            'good' => self::server('good', ['g1']),
+        ];
+
+        self::assertSame(
+            ['f1', 'g1'],
+            self::toolNames($servers, [], ['scratch', 'untrusted_*']),
+            'the list denies exact names and globs alike',
+        );
+
+        // The public static — the door downstream gates read — honours the
+        // same notation.
+        self::assertTrue(McpRouter::serverDenied('scratch', ['scratch']));
+        self::assertTrue(McpRouter::serverDenied('untrusted_x', ['untrusted_*']));
+        self::assertFalse(McpRouter::serverDenied('good', ['scratch', 'untrusted_*']));
+
+        // The map spelling is byte-unchanged (its pins live in the sibling
+        // tests; this shows the two notations deny the same server).
+        self::assertSame(
+            self::toolNames($servers, [], ['scratch', 'untrusted_*']),
+            self::toolNames($servers, [], ['scratch' => 'deny', 'untrusted_*' => 'deny']),
+        );
+    }
+
+    public function testADenyListEntryThatIsNotAStringIsRefused(): void
+    {
+        $servers = ['x' => self::server('x', ['t'])];
+
+        // Fail-fast law at both doors: a list entry that cannot be a pattern
+        // throws, mirroring the map side's garbage-spec refusal.
+        foreach ([[42], [null], ['ok', 7]] as $index => $badList) {
+            $caught = null;
+            try {
+                new McpRouter($servers, $badList);
+            } catch (\RuntimeException $thrown) {
+                $caught = $thrown;
+            }
+
+            self::assertNotNull($caught, 'deny list ' . json_encode($badList) . ' (case ' . $index . ') must be refused');
+            self::assertStringContainsString('deny pattern list entry', $caught->getMessage());
+
+            $staticCaught = null;
+            try {
+                McpRouter::serverDenied('x', $badList);
+            } catch (\RuntimeException $thrown) {
+                $staticCaught = $thrown;
+            }
+
+            self::assertNotNull($staticCaught, 'the static refuses the same shape');
+            self::assertStringContainsString('deny pattern list entry', $staticCaught->getMessage());
+        }
     }
 }

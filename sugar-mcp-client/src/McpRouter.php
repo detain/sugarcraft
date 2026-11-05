@@ -29,18 +29,63 @@ final class McpRouter
 
     /**
      * @param array<string,McpServer> $servers keyed by server name
-     * @param array<string,string|array{action:string}> $denyPatterns pattern =>
-     *        action string (the candy-code config spelling, e.g. 'fs-*' => 'deny')
+     * @param array<array-key, string|array{action:string}> $denyPatterns two
+     *        config notations are legal (fix wave MC-1, review C-1): a PLAIN
+     *        LIST of glob patterns — `['scratch', 'untrusted_*']` — where every
+     *        entry denies, or a pattern => action map (the candy-code config
+     *        spelling, e.g. 'fs-*' => 'deny') where the action is a bare string
      *        or a spec array carrying a string "action"; only "deny" applies,
-     *        other actions are ignored. Any other shape — including an array
-     *        with no usable string action — throws at construction: a
-     *        deny rule that silently reads as no rule widens the boundary,
-     *        and the allow-list side of this class already refuses to guess.
+     *        other actions are ignored. Any other shape — including a
+     *        non-string list entry or an array with no usable string action —
+     *        throws at construction: a deny rule that silently reads as no
+     *        rule widens the boundary, and the allow-list side of this class
+     *        already refuses to guess.
      */
     public function __construct(
         private readonly array $servers,
         array $denyPatterns = [],
     ) {
+        $this->denyActions = self::normalizeDenyActions($denyPatterns);
+    }
+
+    /**
+     * Reduce either documented deny-config notation to ONE normalised
+     * pattern => action map.
+     *
+     * The list discriminator is the plan law {@see array_is_list()}: a plain
+     * list carries pattern strings and denies each of them; anything else is
+     * the pattern => action map, validated entry by entry.
+     *
+     * DOCUMENTED COLLISION: JSON cannot tell `["deny"]` from `{"0": "deny"}` —
+     * decoded by PHP both are the list `[0 => 'deny']`. The list law wins, so
+     * such a map-shaped config reads as the PATTERN "deny", never as a rule
+     * for a server named "0". Deny a digit-named server with the list spelling
+     * `['0']` (list entries carry the literal name); a map that is not
+     * list-shaped (e.g. `{ "64": "deny" }`, or two or more named keys) keeps
+     * the map reading byte-for-byte.
+     *
+     * @param array<array-key, mixed> $denyPatterns the raw config shape
+     * @return array<string,string> pattern => action
+     */
+    private static function normalizeDenyActions(array $denyPatterns): array
+    {
+        if (array_is_list($denyPatterns)) {
+            $listed = [];
+            foreach ($denyPatterns as $position => $pattern) {
+                if (!is_string($pattern)) {
+                    throw new \RuntimeException(sprintf(
+                        'MCP deny pattern list entry %d must be a pattern string, got %s.',
+                        $position,
+                        get_debug_type($pattern),
+                    ));
+                }
+
+                $listed[$pattern] = 'deny';
+            }
+
+            return $listed;
+        }
+
         $actions = [];
         foreach ($denyPatterns as $pattern => $spec) {
             if (is_string($spec)) {
@@ -61,7 +106,7 @@ final class McpRouter
             ));
         }
 
-        $this->denyActions = $actions;
+        return $actions;
     }
 
     /**
@@ -144,41 +189,25 @@ final class McpRouter
     private function matchesAnyDenyPattern(string $name): bool
     {
         // One law: the public static below is what every caller outside the
-        // router asks too, so the instance filter delegates rather than
-        // mirroring. The constructor already reduced specs to action strings.
-        return self::serverDenied($name, $this->denyActions);
+        // router asks too, so both doors share ONE raw-map implementation.
+        // The constructor already reduced the config to action strings, and
+        // the normalised map is matched directly — never re-parsed through
+        // the list law, which would misread a stored pattern named "0"
+        // (decoded list-shaped) back as the pattern "deny".
+        return self::denyMapMatches($name, $this->denyActions);
     }
 
     /**
-     * Whether ONE server name matches a deny-pattern map (pattern => "deny",
-     * `fnmatch` wildcards, compared against the RAW config key exactly as
-     * {@see serverAllowed()} is).
+     * Whether ONE server name matches a normalised deny map (pattern =>
+     * action strings, `fnmatch` wildcards, compared against the RAW config
+     * key exactly as {@see serverAllowed()} is). Shared by both doors of the
+     * deny law; takes the map the constructor produced, never raw config.
      *
-     * Public static because the same question gets asked without a router in
-     * sight: candy-code's McpClient applies the operator's deny map to the
-     * servers it starts and to its unrestricted arm, which never builds a
-     * router over the servers it refuses (folded from the candy-code
-     * original; this class is now the single home of both predicates).
-     *
-     * An empty pattern never matches: the literal "" a stray config colon
-     * leaves behind is not a rule anyone authored against a server name.
-     * Numeric-looking array keys arrive from PHP as ints and are read at
-     * their string spelling — a server literally named "0" is addressable,
-     * and a deny rule spelling that name must reach it; a deny side that
-     * skipped such a key would fail OPEN, the one direction this layer
-     * refuses. Patterns are GLOBS honored by fnmatch with all its semantics:
-     * backslash escapes are live, so a pattern authored as a regular
-     * expression (`\d+`, `.*`) is a foot-gun — the deny side is glob by
-     * contract. An entry whose action is not the exact string "deny" is
-     * likewise not a deny rule; other actions are ignored, never
-     * interpreted.
-     *
-     * @param array<array-key, mixed> $denyPatterns pattern => action, the raw
-     *        config shape (or the constructor-normalised action map).
+     * @param array<string,string> $denyActions
      */
-    public static function serverDenied(string $server, array $denyPatterns): bool
+    private static function denyMapMatches(string $server, array $denyActions): bool
     {
-        foreach ($denyPatterns as $pattern => $action) {
+        foreach ($denyActions as $pattern => $action) {
             $spelling = is_int($pattern) ? (string) $pattern : (\is_string($pattern) ? $pattern : '');
 
             if ($action === 'deny' && $spelling !== '' && fnmatch($spelling, $server)) {
@@ -187,6 +216,44 @@ final class McpRouter
         }
 
         return false;
+    }
+
+    /**
+     * Whether ONE server name matches a deny-pattern config.
+     *
+     * Public static because the same question gets asked without a router in
+     * sight: candy-code's McpClient applies the operator's deny map to the
+     * servers it starts and to its unrestricted arm, which never builds a
+     * router over the servers it refuses (folded from the candy-code
+     * original; this class is now the single home of both predicates).
+     *
+     * The argument is the RAW config shape, so BOTH documented notations
+     * work here exactly as in the constructor — plain list of patterns
+     * (each denies) or pattern => action map — and a malformed entry
+     * throws, here as at construction (fix wave MC-1, review C-1: the
+     * static is the door downstream gates read, it may not answer a plain
+     * list by failing open).
+     *
+     * An empty pattern never matches: the literal "" a stray config colon
+     * leaves behind is not a rule anyone authored against a server name.
+     * Numeric-looking array keys arrive from PHP as ints and are read at
+     * their string spelling — a server literally named "64" is addressable
+     * by the map rule `{"64":"deny"}` (not list-shaped, keeps the map
+     * reading), while the single-entry `{"0":"deny"}` IS list-shaped and
+     * reads as the pattern "deny" per the collision law on
+     * {@see normalizeDenyActions()}. Patterns are GLOBS honored by fnmatch
+     * with all its semantics: backslash escapes are live, so a pattern
+     * authored as a regular expression (`\d+`, `.*`) is a foot-gun — the
+     * deny side is glob by contract. An entry whose action is not the exact
+     * string "deny" is likewise not a deny rule; other actions are ignored,
+     * never interpreted.
+     *
+     * @param array<array-key, mixed> $denyPatterns the raw config shape
+     *        (list of pattern strings, or pattern => action map).
+     */
+    public static function serverDenied(string $server, array $denyPatterns): bool
+    {
+        return self::denyMapMatches($server, self::normalizeDenyActions($denyPatterns));
     }
 
     /**
