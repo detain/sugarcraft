@@ -78,16 +78,21 @@ default branch regardless. Use the plain form once a stable tag exists.
 ## Requirements
 
 - PHP `^8.3` (PHPUnit `^10.5` for the suite).
-- The decoder itself is pure: no extensions, no tty, no environment reads.
-  It models bytes; everything about the terminal is the host's (below).
+- The decoder itself is pure — no tty, no environment reads — with one
+  extension it cannot dodge: Kitty text codepoints materialize through
+  `mb_chr()`, so `ext-mbstring` is a hard require (declared). It models
+  bytes; everything about the terminal is the host's (below).
 - `ext-pcntl` (+ `ext-posix` to self-signal in tests) for
   `SignalResizeDriver`; without pcntl, `arm()` returns `false` and detection
   stays off — never a silent half-start.
 - A `tput` binary on `PATH` for the resize driver's dimension probes. When
   terminfo cannot be resolved the probe fails soft and dimensions keep their
   last known value (80×24 until a real answer arrives).
-- `react/stream` + `react/event-loop` only if you use `ReactInputDriver`;
-  it emits through `evenement` (declared).
+- `evenement`, `react/stream` and `react/event-loop` are hard requires
+  (declared): `ReactInputDriver` emits through `evenement` and takes a
+  `LoopInterface` to read on, and `react/stream` underpins its writable
+  event stream. The sibling `sugarcraft/sugar-core` is hard-required too —
+  the `Lang` facade extends `Core\I18n\Lang`.
 
 ## API
 
