@@ -633,10 +633,12 @@ final class AsyncOps
                 // Cancellation must be prompt. Without this wiring a cancel
                 // landing mid-backoff left the promise pending and the shared
                 // loop held for the remaining (doubling) delay. $settled makes
-                // the abort and the timer callback mutually exclusive; it also
-                // disarms a stale registration, because the token offers no
-                // unregister — an abort queued by a stage that already ran
-                // must never fire on a later cancel().
+                // the abort and the timer callback mutually exclusive: this
+                // registration is deliberately kept for the life of the
+                // backoff (the removal handle onCancel() returns is discarded
+                // here), so the latch — not an unregister — is what stops an
+                // abort queued by a stage that already ran from firing on a
+                // later cancel().
                 $pending = null;
                 $settled = false;
 
