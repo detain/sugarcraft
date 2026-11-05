@@ -13,7 +13,7 @@
 
 ![demo](.vhs/play.gif)
 
-Tetris built on the SugarCraft stack. SugarCraft runtime, SugarStyle for the rounded borders and per-piece colours, uniform-shuffled 7-bag (with an injectable source for deterministic tests), ghost piece, hard drop, hold, level-driven gravity ramp, line-clear scoring.
+Tetris built on the SugarCraft stack. SugarCraft runtime, SugarStyle for the rounded borders and per-piece colours, uniform-shuffled 7-bag (with an injectable source for deterministic tests), ghost piece, hard drop, hold, level-driven gravity ramp, NES-style base scoring with Guideline bonuses (T-Spin, back-to-back, combo, perfect clear).
 
 ## Run it
 
