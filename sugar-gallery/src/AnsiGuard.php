@@ -28,6 +28,12 @@ use SugarCraft\Core\Util\Sanitize;
  * (`0x9B`) or its UTF-8 re-encoding (`C2 9B` = U+009B), which mainstream terminals
  * act on as if the `ESC` had been spelled out.
  *
+ * Private-use codepoints are printable TEXT to this scanner: the zone sentinels
+ * `U+E000`/`U+E001` pass `assertSafe()`/`isSafe()` unflagged. The sweep lives on
+ * the coercing side — `sanitize()` and `stripControls()` run
+ * `Sanitize::stripZoneSentinels()` inline before scanning, and
+ * {@see stripSentinels()} is that sweep as a standalone call.
+ *
  * Two wire-semantics notes, measured against the scanner (n13/n14 of the
  * gallery review): an UNTERMINATED sequence runs to end-of-input and is judged
  * there — the scanner follows the WHATWG/Unicode "RESTART" pairing convention,

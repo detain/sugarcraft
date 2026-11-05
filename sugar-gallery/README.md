@@ -301,7 +301,13 @@ $card = $card->withSafePoster($bytesFromYourCache);   // same sweep for poster b
 ```
 
 `AnsiGuard::isSafe()` / `::sanitize()` are public if you want to check or clean
-before you build the highlight. Nothing about the default path changed —
+before you build the highlight. The fail-fast pair classifies, it does not
+sweep: it sees the zone sentinels `U+E000`/`U+E001` as ordinary printable text
+and passes them (`isSafe()` on a forged sentinel pair answers true). Removing
+them is the coercers' job — both `sanitize()` and `stripControls()` run
+`Sanitize::stripZoneSentinels()` inline before the ANSI scan, and
+`AnsiGuard::stripSentinels()` does exactly that and nothing else.
+Nothing about the default path changed —
 `withStyledTitle($ansi)` is still verbatim, so existing callers are untouched.
 
 **Poster bytes carry the same contract as styled titles.** `withPoster($ansi)`
