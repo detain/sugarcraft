@@ -41,7 +41,7 @@ foreach (Position::cases() as $pos) {
     echo "[{$pos->name}] " . $t->view($bg, 80, 20) . "\n\n";
 }
 
-echo "=== Duration variants ===\n\n";
+echo "=== Configured durations (identical paint — expiry is behaviour, not pixels) ===\n\n";
 
 // Short (1s), Medium (3s), Long (10s), Persistent (null = manual dismiss)
 foreach ([1.0, 3.0, 10.0, null] as $secs) {
