@@ -7,7 +7,7 @@ Model–Update–View apps in this repo: scripted input, golden snapshots
 (committed byte-exact reference output), cell-grid assertions, program
 simulation, VHS tape building, and graphics-stream decoding.
 
-> **Architecture background:** SugarCraft apps follow the MVC-style Model–Update–View architecture. Testing such programs deterministically has been a long-standing gap — `sugar-testing` closes it for the PHP ecosystem.
+> **Architecture background:** SugarCraft apps follow the MVC-style Model–Update–View architecture. `sugar-testing` is the deterministic test harness for such programs in this PHP toolchain.
 
 ## Overview
 
@@ -25,8 +25,9 @@ simulation, VHS tape building, and graphics-stream decoding.
 - **`GoldenFile`** — lifecycle-aware `.golden` helper: `load()` (null only when
   missing; unreadable or symlinked goldens throw), `save()` (atomic clobber —
   fixture seeding), `create()` (one-way, refuses an existing golden),
-  `update()` (deliberate re-baseline), `resolve()` (fixtures-relative path with a
-  traversal *and* symlink jail)
+  `update()` (deliberate re-baseline), `resolve()` (fixtures-relative path — the
+  traversal *and* symlink jail keeps the walk inside `<base>/fixtures`'s subtree;
+  the fixtures root itself is the sanctioned container)
 - **`TestResult`** — what `run()` returns: final model, last view, captured cmds,
   raw output, per-turn `frames`, and `droppedAfterStop`
 - **`Graphics\`** — inline-image stream assertions (`KittyStream`, `KittyImage`,
@@ -43,9 +44,15 @@ simulation, VHS tape building, and graphics-stream decoding.
 ## Requirements
 
 - PHP 8.3+
+- PHPUnit `^10.5` — `Assertions` extends `PHPUnit\Framework\Assert` and the
+  `TestResult` verbs report through it; that is the version this suite is
+  verified against
 - `sugarcraft/sugar-core` (Program, Msg, Model, Cmd)
 - `sugarcraft/sugar-cellbuffer` (Buffer for cell-grid assertions)
 - `react/event-loop` (the loop `LoopPin` swaps)
+- `phpunit/phpunit` `^10.5` — a de facto dependency of the consumer: `Assertions`
+  delegates to PHPUnit's `Assert` (declared here as a dev-requirement, because the
+  lib is only ever pulled into test code)
 - `ext-gd` — only needed to materialize pixels in `Graphics` assertions; it is a
   `suggest`, not a hard requirement, and streams can be decoded without it
 
@@ -132,7 +139,7 @@ $sim->withFakeCmdRunner(fn ($cmd) => $nextMsg);    // substitute the Cmd result
 $result = $sim->run();                             // replayable from the initial state
 
 echo $result->view;                                // last view() string
-echo $result->output;                              // every view() line, concatenated
+echo $result->output;                              // view() across the run + RawMsg/PrintMsg writes
 $finalModel = $result->model;                      // the model object — inspect it, don't echo it
 ```
 
@@ -170,9 +177,10 @@ simulator, not the real runtime, and the boundary is explicit:
   `ColorProfileMsg` *before* `init()`. The simulator replays that order only
   when armed, so a default run stays byte-identical to pre-parity suites:
   `->withWindowSize(80, 24)->withEnvironment($vars)->withColorProfile($profile)`.
-- Subscriptions are fired after `init()` and after each delivered message, as
+- Subscriptions are fired after `init()` and after each sent message, as
   `Program` does. A runaway cmd↔message loop is refused at 10,000 update
-  cycles — a fixed bound, not a growable one.
+  cycles within a single drain chain — a fixed bound, not a growable one,
+  re-armed fresh by each `run()`.
 
 ### Assertions
 
@@ -378,8 +386,12 @@ never arrives is closed out eagerly. For a bare `PasteMsg` with no envelope,
 `push(new PasteMsg($text))`.
 
 `ProgramSimulator` fires each subscription once after `init()` and once after every sent
-message, delivering what it produces before the next sent message; `run()` replays from
-the Program's model each time, so repeated runs give the same result.
+message (not every delivered one — subscription-produced messages do not re-fire the
+roster; the runtime spaces those fires by interval, the simulator has no clock to space
+them with), delivering what it produces before the next sent message. Each sent message
+drains its cmd chain through the same pump, bounded at `MAX_CYCLES` = 10,000 cycles per
+chain — a model that produces a cmd on every update trips a named throw, not a hang.
+`run()` replays from the Program's model each time, so repeated runs give the same result.
 
 ### TestResult
 
