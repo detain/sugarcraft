@@ -27,6 +27,8 @@ composer require sugarcraft/sugar-cellbuffer
 
 Requires PHP `^8.3`.
 
+Packaged from the monorepo, this lib ships only a `dev-master` line on Packagist — consumers without `minimum-stability: dev` must pin explicitly (`composer require sugarcraft/sugar-cellbuffer:@dev`). The 2026-10 rename left the old `sugarcraft/candy-buffer` provider registered and frozen at its last old-name release; depend on the new name only. Inside the monorepo or a vendored checkout, a path repository on the `sugar-cellbuffer/` directory is the alternative.
+
 ## Quickstart
 
 Coordinates are zero-based (`col`, `row`); the CUP sequences the encoders emit are one-based.
