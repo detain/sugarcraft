@@ -23,7 +23,7 @@ cd my-app
 
 Packagist carries only `dev-master` today: `create-project` refuses a dev-only package unless told to accept it, hence `--stability=dev` above (equivalently, pin the package as `sugarcraft/candy-starter:"@dev"`). Once a `candy-starter/*` tag exists the flag is no longer needed.
 
-and you'll see a working counter — quit it with `q`, `Esc`, or Ctrl+C. Replace `src/Counter.php` with your own `Model`, keep editing.
+and you'll see a working counter — quit it with `q`, `Esc`, or Ctrl+C; the quit keypress exits cooperatively with `0`, while `130` belongs to a real `SIGINT` delivered by the operating system (see the exit tail under "What you get"). Replace `src/Counter.php` with your own `Model`, keep editing.
 
 ## What you get
 
@@ -52,7 +52,7 @@ my-app/
     └── start.gif         # the rendered demo (kept tracked by .gitignore's !.vhs/start.gif; CI regenerates)
 ```
 
-`bin/start` is a handful of meaningful lines: load the autoloader, instantiate your `Model`, hand it to `Program::run()`, then answer `stopSignal()` so a signal-stopped run exits `128+N` (130 after SIGINT, 143 after `kill`) while cooperative quits keep their 0. The Program harness owns the event loop, render tick, signal installation, raw-mode setup, and alt-screen lifecycle — you only write Models. Inside the monorepo the same script runs as `cd candy-starter && bin/start` once the package-local vendor exists (per-lib `composer install`, or `php ../scripts/refresh-deps.php --mode=linked` from inside the package — equivalently `php scripts/refresh-deps.php --mode=linked` from the repo root); it resolves the autoloader relative to its own file — the one `<package>/vendor/autoload.php` candidate — not the working directory.
+`bin/start` is a handful of meaningful lines: load the autoloader, instantiate your `Model`, hand it to `Program::run()`, then answer `stopSignal()` so a signal-stopped run exits `128+N` (130 after SIGINT, 143 after `kill`) while cooperative quits keep their 0 — Ctrl+C included: on a raw-mode tty the keypress reaches `update()` as a `KeyMsg` and the demo exits through `Cmd::quit()`, so 130 is the OS-delivered-signal path only (`kill -INT`, or a terminal whose raw-mode setup never landed). The Program harness owns the event loop, render tick, signal installation, raw-mode setup, and alt-screen lifecycle — you only write Models. Inside the monorepo the same script runs as `cd candy-starter && bin/start` once the package-local vendor exists (per-lib `composer install`, or `php ../scripts/refresh-deps.php --mode=linked` from inside the package — equivalently `php scripts/refresh-deps.php --mode=linked` from the repo root); it resolves the autoloader relative to its own file — the one `<package>/vendor/autoload.php` candidate — not the working directory.
 
 ## Requirements
 
@@ -85,6 +85,16 @@ The shape follows the MVC-style Model–Update–View architecture. State lives 
 ### Beyond keys
 
 Keys are not the only traffic `update()` sees. The harness also dispatches `WindowSizeMsg` (once at startup, then on every resize) — the demo's one fixed box needs no layout recompute, so it drops them, but any width-aware app must capture that Msg **before** its key filter or resize handling is dead on arrival. Async work reports failure as an `ExceptionMsg` — whether you scheduled it with `Cmd::promise()` or it rides a `WorkerCmd`-backed promise — and through that single channel only: a Model that swallows it loses its errors in silence. `src/Counter.php` sketches both arms, commented, at the top of `update()`.
+
+### Getting Msgs in
+
+`update()` only ever sees what the harness dispatches, and there are exactly three doors in. The terminal is the first: keystrokes, mouse events, resizes and pastes arrive as `Msg` objects with no work from you. The other two are yours to use — and the `bin/start` promise that "you just write the Model" holds only because they exist:
+
+- **`subscriptions()` — the live-source seam.** The required interface method is not decoration. Return a `Subscriptions` collection — e.g. `(new Subscriptions())->withTick('clock', 1.0, $produce)` (also `withKey`, `withSignal`, `withCustom`; each `produce` is a `Closure(): Msg`) — and the harness starts every entry, re-diffs the set after each `update()` cycle (starting new ones, cancelling dropped ones), and dispatches whatever a subscription's `produce` returns for as long as it stays in the set. The demo returns `null`: nothing live, nothing to reconcile.
+- **A promise that resolves to a Msg.** `Cmd::promise($factory)` runs work off-loop; when its promise resolves **with a `Msg`**, the harness dispatches that Msg straight into your `update()` (resolving `null` dispatches nothing), and a rejection arrives as an `ExceptionMsg` — the failure channel named above.
+- **`Program::send()`.** Public on the harness, and not a test-only back door — the harness itself uses it, e.g. its resize poll injects `WindowSizeMsg` through `send()`. Anything holding the program handle can push a Msg onto the running loop; a `send()` issued before `run()` is buffered and drained when the loop starts.
+
+The demo takes none of these doors (no subscriptions, no promises, external `send()` has no caller in `bin/start`) — but every real app wires at least one, and they are how non-keyboard traffic reaches the Model.
 
 ### Trust boundary
 

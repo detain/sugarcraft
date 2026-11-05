@@ -7,7 +7,12 @@
  * Replace the `Counter` import below with your own Model once you've
  * forked this template. The Program harness (event loop, render
  * tick, signal handling, raw-mode setup, alt-screen lifecycle) is
- * production-ready out of the box — you just write the Model.
+ * production-ready out of the box — you just write the Model. The
+ * Model's `subscriptions()` method is the seam for live Msg sources
+ * (ticks, streams, signals); `Cmd::promise()` resolutions and the
+ * public `Program::send()` are the other doors non-keyboard Msgs
+ * reach `update()` through — all three are spelled out in the
+ * README's "Getting Msgs in".
  * Supports an opt-in panic handler via `Log::installPanicHandler()`
  * (uncomment below).
  */
@@ -42,7 +47,9 @@ use SugarCraft\Core\Program;
 // Log::installPanicHandler();
 
 // Harness tunables live in ProgramOptions (framerate, alt-screen,
-// mouse tracking, raw-mode details) — pass one as the second argument
+// mouse tracking, raw-mode details, cursor visibility — hideCursor
+// defaults to true, which hides the terminal cursor) — pass one as
+// the second argument
 // when you need them, keeping the same run + stopSignal() shape at the
 // tail of this file:
 // $program = new Program(new Counter(), new \SugarCraft\Core\ProgramOptions(framerate: 30.0));
@@ -57,8 +64,11 @@ $program->run();
 // Cooperative quits therefore keep the conventional 0, while a SIGINT /
 // SIGTERM / SIGHUP-stopped run exits 128+N — 130 / 143 / 129 — so
 // supervisors, scripts and CI signal checks read this app the same way
-// they read any signal-terminated child. Discarding the stop reason (the
-// template's pre-2026-11 shape) made every fork exit 0 after a kill.
+// they read any signal-terminated child. Ctrl+C included: on a raw-mode
+// tty the keypress is read as a KeyMsg and the demo quits cooperatively
+// (exit 0) — 130 is reserved for a SIGINT delivered by the OS, such as
+// `kill -INT` or a terminal whose raw-mode setup never landed. Discarding
+// the stop reason made every fork exit 0 after a kill.
 // -----------------------------------------------------------------------
 $stoppedBySignal = $program->stopSignal();
 if ($stoppedBySignal !== null) {
