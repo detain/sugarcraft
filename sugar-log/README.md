@@ -90,6 +90,33 @@ try {
 $log->print('always prints'); // bypasses the level FILTER — the label still renders
 ```
 
+## Formatted Helpers
+
+Every level method has a `sprintf`-style sibling — `debugf()`, `infof()`,
+`warnf()`, `errorf()`, `fatalf()`, plus `printf()` for the always-print
+method — all sharing the shape `(string $format, mixed $context = [], mixed ...$args)`:
+
+```php
+use SugarCraft\Log\Logger;
+
+$log = Logger::new();
+$log->infof('batch %d done', 4);                      // scalar slot two = first sprintf arg
+$log->infof('%d of %d loaves', ['oven' => 1], 7, 8);  // array slot two = context fields
+```
+
+Slot two is `mixed` on purpose: an array there is the record's context fields
+(the shape every unformatted method takes); anything else is the first
+`sprintf` argument — so `infof('count %d', 7)` formats the way the name
+promises instead of `TypeError`-ing. For context alongside real arguments,
+pass the array in slot two and the arguments after it (second line above).
+
+The five level-bound helpers consult `enabled($level)` *before* running
+`sprintf`, so a call the level filter would drop pays neither the formatting
+cost nor the side effects of building its arguments (a `__toString()` spy
+never gets called). `enabled(Level $level)` answers publicly whether a level
+passes the current `minLevel`. `printf()` skips the guard exactly like
+`print()` — it always renders — but still accepts the mixed slot two.
+
 ## Static Facade
 
 `Log` is a process-shared façade over one lazily-created default `Logger` — the

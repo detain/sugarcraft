@@ -100,6 +100,9 @@ $child-&gt;info('Batch complete');</code></pre>
 <tr><td>Logger</td><td>warn(msg, context)</td><td>Log warning message</td></tr>
 <tr><td>Logger</td><td>error(msg, context)</td><td>Log error message</td></tr>
 <tr><td>Logger</td><td>fatal(msg, context)</td><td>Log fatal message</td></tr>
+<tr><td>Logger</td><td>debugf/infof/warnf/errorf/fatalf(format, context, args)</td><td>sprintf siblings per level — slot two is mixed (array = context, scalar = first argument); enabled() guards the formatting</td></tr>
+<tr><td>Logger</td><td>printf(format, context, args)</td><td>sprintf sibling of print() — bypasses the level filter</td></tr>
+<tr><td>Logger</td><td>enabled(Level)</td><td>Whether a level passes the current minLevel</td></tr>
 <tr><td>Logger</td><td>with(array)</td><td>Create child logger with persistent context</td></tr>
 <tr><td>Logger</td><td>withFormatter(Formatter)</td><td>Set output formatter</td></tr>
 <tr><td>Logger</td><td>withMinLevel(Level)</td><td>Set minimum output level</td></tr>
