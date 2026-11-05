@@ -19,6 +19,8 @@ Cell-grid value objects for terminal rendering — immutable `Buffer` and `Cell`
 
 The model is consumed by sugar-overlay, sugar-toast, sugar-panels, sugar-table, sugar-forms, sugar-style, sugar-charts, sugar-image, sugar-dashboard, sugar-testing, sugar-video, sugar-datepicker, sugar-flexbox, candy-minesweeper and candy-tetris. Some renderers keep independent engines by design (sugar-core's line-diff Renderer, sugar-vterm's mutable grid) and candy-code does not consume this library; the package's role is the shared *data model* and its byte encoders.
 
+`src/Lang.php` and `lang/` are the per-package i18n facade scaffolded for failure messages, currently DORMANT: zero `Lang::` call sites in `src/` — every exception message is a literal English string, and there is no translation API to expect yet.
+
 ## Install
 
 ```sh
