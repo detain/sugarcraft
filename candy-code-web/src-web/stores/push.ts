@@ -1,7 +1,10 @@
 // C-WEB-5.e: the device-push consent store. The SettingsView toggle is the
-// ONLY caller (`dormantRoster`'s `push.*` rows drop with it): permission →
-// service-worker registration → `pushManager.subscribe(vapidKey)` →
-// `push.subscribe`, and OFF unwinds both sides (browser, then server).
+// only caller of the consent handshake (`dormantRoster`'s `push.*` rows drop
+// with it): permission → service-worker registration →
+// `pushManager.subscribe(vapidKey)` → `push.subscribe`, and OFF unwinds both
+// sides (browser, then server). The module's other exit,
+// `closeNotificationInbox()`, is called from the logout chain in
+// `protocol/auth.ts` — no consent, no handshake, only the OS-inbox sweep.
 //
 // The laws this file keeps:
 //   * CONSENT GATES EVERYTHING. No push call — not even the read-only
@@ -58,6 +61,47 @@ function base64UrlToBytes(value: string): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
   return bytes
+}
+
+/** Every notification card the app's worker shows carries this tag prefix
+ *  (sw.ts composes `candy-code:question|finished|generic[:<sessionId>]`).
+ *  Paired by comment with sw.ts, not by import: pulling this module's pinia
+ *  graph into the worker bundle would be absurd. The worker-half pins in
+ *  `stores/__tests__/push.spec.ts` fix the three shapes this sweep must
+ *  recognise. */
+const NOTIFICATION_TAG_PREFIX = 'candy-code:'
+
+/**
+ * Logout sweep (OWED-CLOSEOUT (ii) of the L-DBA lane): an OS notification
+ * inbox outlives the tab that minted it, so after sign-out queued cards can
+ * still show the previous principal's session bodies. Close every card this
+ * app owns under EVERY service-worker registration of this origin — all of
+ * them, because a stale registration from an older deploy path would keep
+ * its own inbox otherwise.
+ *
+ * Best-effort by contract (the surrounding logout chain's idiom): the
+ * function never rejects, a broken registration cannot strand the others
+ * (per-registration fan-out through allSettled), and cards whose tag is not
+ * ours are left alone — a co-registered but unrelated notification is not
+ * this logout's to close. Runs at LOGOUT only: login-side rotation
+ * (`rotateCacheScope`) has nothing to sweep, since cards are minted by the
+ * server for a session the new login does not yet have, and unwinding on
+ * sign-in would burn cards the fresh principal may legitimately be handed.
+ */
+export async function closeNotificationInbox(): Promise<void> {
+  try {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
+    const registrations = await navigator.serviceWorker.getRegistrations()
+    await Promise.allSettled(registrations.map(async (registration) => {
+      const inbox = await registration.getNotifications()
+      await Promise.allSettled(inbox
+        .filter((card) => typeof card.tag === 'string' && card.tag.startsWith(NOTIFICATION_TAG_PREFIX))
+        .map((card) => card.close()))
+    }))
+  } catch {
+    // Fail-soft: logout must never block on the push surface. The consent
+    // flag stays as the user left it; the next logout sweeps again.
+  }
 }
 
 export const usePushStore = defineStore('push', () => {

@@ -166,6 +166,16 @@ export async function canvasLink(sessionId: string, artifactId: string, fetchImp
  * (`stores/storage.ts`). The same sweep runs at the next login, so a session
  * that ended without an explicit sign-out never hands its caches to the
  * following principal either.
+ *
+ * `closeNotificationInbox()` sweeps the one store logout cannot reach from
+ * localStorage: cards the service worker already queued to the OS inbox
+ * carry session bodies in their notification text, and they survive the tab
+ * (`stores/push.ts`). It is fail-soft by contract — a refusing push surface
+ * never blocks the rest of sign-out. The module is imported lazily on
+ * purpose: a static auth → push edge would close an import cycle (push's
+ * connection store calls back into this file's logout) and would re-order
+ * the SettingsView graph that the push suite pins its connection
+ * interception through.
  */
 export async function logout(fetchImpl: Fetch = fetch): Promise<void> {
   try {
@@ -174,6 +184,8 @@ export async function logout(fetchImpl: Fetch = fetch): Promise<void> {
     clearLoginSecret()
     clearPromptHistory()
     dropCacheScope()
+    const { closeNotificationInbox } = await import('../stores/push')
+    await closeNotificationInbox()
   }
 }
 

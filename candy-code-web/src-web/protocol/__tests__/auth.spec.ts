@@ -195,6 +195,78 @@ describe('sign-out sweeps the browser (WEB-6 C)', () => {
     expect([...erased].sort()).toEqual(['drafts', 'focused', 'lastSession', 'tabs'])
     for (const off of offs) off()
   })
+
+  it('logout closes every app card in the service workers notification inbox', async () => {
+    // OWED-CLOSEOUT (ii) of L-DBA: queued OS notifications carry session
+    // bodies and outlive the tab. The shapes below are exactly what sw.ts
+    // mints (question/finished/generic, pinned by push.spec's worker half);
+    // the 'mastodon:' card belongs to a different app sharing a
+    // registration and must survive.
+    localStorage.clear()
+    const closed: string[] = []
+    const card = (tag: string) => ({
+      tag,
+      close: async () => { closed.push(tag) },
+    })
+    const registrations = [
+      { getNotifications: async () => [card('candy-code:question:s-42_x'), card('candy-code:generic'), card('mastodon:notify')] },
+      { getNotifications: async () => [card('candy-code:finished')] },
+    ]
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { getRegistrations: async () => registrations },
+    })
+    try {
+      const { fetchImpl } = responder(() => json(200, { ok: true }))
+      await logout(fetchImpl)
+      expect(closed.sort()).toEqual(['candy-code:finished', 'candy-code:generic', 'candy-code:question:s-42_x'])
+    } finally {
+      Reflect.deleteProperty(navigator, 'serviceWorker')
+    }
+  })
+
+  it('a refusing getRegistrations never blocks the rest of sign-out', async () => {
+    localStorage.clear()
+    writeJson('promptHistory', ['typed before the push surface broke'])
+    const ringKey = storageKey('promptHistory')
+    const stored = responder(() => json(200, { ok: true, loginSecret: 'abc123' }))
+    await login({ code: 'c0dec0dec0de' }, stored.fetchImpl)
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { getRegistrations: async () => { throw new Error('push surface on fire') } },
+    })
+    try {
+      const { fetchImpl } = responder(() => json(200, { ok: true }))
+      await logout(fetchImpl) // resolves — the sweep is fail-soft, not a gate
+      expect(storedLoginSecret()).toBeNull()
+      expect(localStorage.getItem(ringKey)).toBeNull()
+    } finally {
+      Reflect.deleteProperty(navigator, 'serviceWorker')
+    }
+  })
+
+  it('one broken registration cannot strand the sweep of another', async () => {
+    // Per-registration fan-out (allSettled): a getNotifications that throws
+    // in the first registration must not un-reach the second one's inbox.
+    localStorage.clear()
+    const closed: string[] = []
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        getRegistrations: async () => [
+          { getNotifications: async () => { throw new Error('this registration is a husk') } },
+          { getNotifications: async () => [{ tag: 'candy-code:question:s-7', close: async () => { closed.push('survivor') } }] },
+        ],
+      },
+    })
+    try {
+      const { fetchImpl } = responder(() => json(200, { ok: true }))
+      await logout(fetchImpl)
+      expect(closed).toEqual(['survivor'])
+    } finally {
+      Reflect.deleteProperty(navigator, 'serviceWorker')
+    }
+  })
 })
 
 /**

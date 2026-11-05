@@ -158,7 +158,9 @@ scope.addEventListener('push', (event) => {
       : payload.sessionId === '' ? `candy-code:${payload.kind}` : `candy-code:${payload.kind}:${payload.sessionId}`
     // `tag` collapses repeats into one card, so a busy server cannot
     // carpet-bomb the inbox; `data` carries the pre-sanitised href the click
-    // handler will honour — the raw payload never reaches it.
+    // handler will honour — the raw payload never reaches it. The
+    // `candy-code:` prefix is also what `closeNotificationInbox()` in
+    // `stores/push.ts` recognises when the logout sweep clears the inbox.
     await scope.registration.showNotification(titleFor(payload), {
       body: payload?.body ?? '',
       tag,
