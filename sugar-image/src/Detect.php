@@ -155,7 +155,7 @@ final class Detect
     private static $probeStdin = null;
 
     /**
-     * CC-QA-3: bytes the probe readers pulled off the tty that were NOT
+     * Stray input: bytes the probe readers pulled off the tty that were NOT
      * part of any reply — the user's own keystrokes, typed while the boot
      * queries were in flight. A slurp takes whatever the kernel queued,
      * and the parser only ever looks at the reply shape, so without this
@@ -350,7 +350,7 @@ final class Detect
      * Deliberately does NOT clear the override seams ($repeatOverride,
      * $tmuxTermFeatures, $terminfoSixel) — tests that armed one must call
      * the matching {@see clearSupportsRepeatOverride()}-style clear
-     * explicitly. The CC-QA-3 stray store is cleared: it is probe output,
+     * explicitly. The stray input store is cleared: it is probe output,
      * not a seam.
      */
     public static function reset(): void
@@ -371,7 +371,7 @@ final class Detect
 
     /**
      * Take the keystrokes the probe readers swallowed alongside their
-     * replies (CC-QA-3), clearing the store so a second take cannot
+     * replies, clearing the store so a second take cannot
      * double-replay. Empty string when every read was reply-pure.
      */
     public static function takeStrayInputBytes(): string
@@ -809,7 +809,7 @@ final class Detect
      * Drain up to $limitMs milliseconds of already-available stdin data.
      * This suppresses spurious replies from earlier queries.
      *
-     * CC-QA-3 reviewed, kept discarding: in this last window a late spurious
+     * Deliberate, kept discarding: in this last window a late spurious
      * reply and a fresh keystroke are byte-indistinguishable, and replaying
      * an answer to a query the program never made is a worse failure than
      * the ≤50 ms tail it can still cost the user. Keystrokes eaten by the
@@ -892,7 +892,7 @@ final class Detect
             // the QUERY bytes "\x1b[c", which a reply never contains — the
             // read then always ran the full 100 ms budget.
             if (preg_match($replyTerminator, $buf) === 1) {
-                // CC-QA-3: the buffer is a slurp — whatever the kernel had
+                // The buffer is a slurp — whatever the kernel had
                 // queued, not just the reply. Subtract the reply shape and
                 // keep the rest.
                 self::stashSurplus($buf, $replyTerminator);
@@ -904,7 +904,7 @@ final class Detect
         // is still parser material, but its leading run before any ESC
         // cannot be reply at all — every answer opens with ESC — so those
         // bytes are the user's own keystrokes and join the stray store too
-        // (CC-QA-3: on a terminal that answers late, or a harness that never
+        // (on a terminal that answers late, or a harness that never
         // answers, the plain-text prefix is exactly what typed input looks
         // like here).
         if ($buf !== '' && \preg_match($replyTerminator, $buf) !== 1) {
@@ -916,7 +916,7 @@ final class Detect
 
     /**
      * Remove one occurrence of every terminator's match from the buffer
-     * and append what remains to the CC-QA-3 stray store. Emitters are
+     * and append what remains to the stray input store. Emitters are
      * gated once per query, so a completed buffer carries at most one
      * reply per shape; any further duplicate would ride into the replay
      * and the input parser treats a stray reply as noise, same as it
@@ -944,7 +944,7 @@ final class Detect
      * user keystrokes, present even when the terminal answered late or
      * never. From the first ESC onward the bytes are a split reply
      * fragment or a bare Escape keypress, byte-indistinguishable, so
-     * they stay with the parser (CC-QA-3).
+     * they stay with the parser.
      */
     private static function stashUserPrefix(string $buf): void
     {
@@ -1169,7 +1169,7 @@ final class Detect
             }
         }
 
-        // CC-QA-3: once the pair is complete the buffer's non-reply bytes
+        // Once the pair is complete the buffer's non-reply bytes
         // are the user's keystrokes, not protocol noise — preserve them
         // for the launcher's replay. An incomplete window has no complete
         // pair to subtract, but its plain-text prefix before any ESC still

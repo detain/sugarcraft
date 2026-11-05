@@ -130,7 +130,7 @@ final class ApngDecoder
         $ihdr = self::parseIhdr($chunks[0]['data']);
         [$width, $height, $channels, $colorType] = $ihdr;
 
-        // Format sanity independent of the pixel budget (L3/NEW-6): reject zero or
+        // Format sanity independent of the pixel budget: reject zero or
         // absurd geometry with a typed parse error so the str_repeat() canvas
         // allocation downstream can never see a float operand (which happens when
         // two huge uint32 dims multiply past PHP_INT_MAX with $maxPixels <= 0).

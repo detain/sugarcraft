@@ -18,7 +18,7 @@ namespace SugarCraft\Image\Renderer;
  * the recenter step mirrors fill_matrix()'s `(v - maxval/2) * (256/maxval)
  * * magnitude` form.
  *
- * Rounding deviation (NTC-2, orchestrator-ruled): chafa adds +0.5f then
+ * Rounding deviation (accepted, deliberate): chafa adds +0.5f then
  * truncates toward zero via the gint cast — which biases negatives UP by
  * one unit ((int)(-127.5) == -127). PHP's round() is symmetric
  * (half away from zero), so at magnitude 1.0 this port yields the exact
@@ -71,7 +71,7 @@ final class OrderedTexture
      * The 64x64 three-channel blue-noise texture chafa uses for
      * CHAFA_DITHER_MODE_NOISE. Mirrors chafa_gen_noise_matrix()
      * (chafa-noise.c:225-238): `matrix[i] = ((gfloat) blue_noise_src[i]
-     * - 128.0f) * magnitude + 0.5f` -> gint, ported with the same NTC-2
+     * - 128.0f) * magnitude + 0.5f` -> gint, ported with the same
      * symmetric-rounding deviation documented on the class.
      *
      * Layout mirrors the flat blue_noise_src array: [pixel][channel] with
