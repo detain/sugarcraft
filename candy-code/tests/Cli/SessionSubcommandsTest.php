@@ -153,8 +153,17 @@ final class SessionSubcommandsTest extends TestCase
         }
 
         [, $one] = $this->dispatch(['session', 'list', '--all', '--limit', '1']);
-        self::assertSame(1, substr_count(trim($one), "\n") + 1, $one);
-        self::assertStringStartsWith('★ sess-main-0001', $one, 'pinned rows list first');
+        // NN-09 (OD-1 clause j): a limited table still leads with the fixed-width
+        // untranslated header, so `--limit 1` is header plus the one row. The
+        // header is byte-pinned at its exact column shape (id width 14, forced
+        // by sess-main-0001) because that shape IS the feature; BinCandyCode
+        // DispatchTest holds the offset-agreement legs beside it.
+        self::assertSame(2, substr_count(trim($one), "\n") + 1, $one);
+        // rtrim only — the header's two leading star-slot spaces are part of
+        // its fixed-width shape and trim() would eat them before the byte-pin.
+        $oneLines = explode("\n", rtrim($one));
+        self::assertSame('  ID              UPDATED              KIND        TURNS  SPEND      PROVIDER/MODEL            NAME', $oneLines[0], 'the header names every column at its fixed offset: ' . $one);
+        self::assertStringStartsWith('★ sess-main-0001', $oneLines[1], 'pinned rows list first — under the header, one line below');
     }
 
     public function testListJsonCarriesTheNewColumns(): void
