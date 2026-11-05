@@ -283,18 +283,33 @@ This combines `scrollYForKey()` + `withScrollY()` in one call.
 
 
 ```php
+use SugarCraft\Input\Event\KeyEvent;
 use SugarCraft\Table\Table;
 
 // Create table with viewport virtualization enabled
 $t = Table::fromColumns([...])
-    ->withRows([...])
+    ->withRows([...])  // Row objects — see Rows
     ->withViewportHeight(15);
 
-// Simulate keyboard input
-$key = 'arrowDown';  // from your input library (e.g., sugar-pty)
-$t = $t->handleKey($key);
+// sugar-input decodes key presses into KeyEvent (sugar-pty carries the raw
+// bytes; sugar-mouse is the pointer companion). Its $key names are
+// PascalCase ("ArrowDown"), while handleKey()/scrollYForKey() match the
+// Table::KEY_* values ('arrowDown') strictly — translate the names:
+/** @var KeyEvent $event */
+$key = match ($event->key) {
+    'ArrowUp'   => Table::KEY_ARROW_UP,
+    'ArrowDown' => Table::KEY_ARROW_DOWN,
+    'PageUp'    => Table::KEY_PAGE_UP,
+    'PageDown'  => Table::KEY_PAGE_DOWN,
+    'Home'      => Table::KEY_HOME,
+    'End'       => Table::KEY_END,
+    default     => null,
+};
+if ($key !== null) {
+    $t = $t->handleKey($key);
+}
 
-// Or use the constants
+// Or pass the constants directly
 $t = $t->handleKey(Table::KEY_PAGE_DOWN);
 ```
 
