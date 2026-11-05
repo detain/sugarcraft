@@ -11,7 +11,7 @@ namespaces below.
 composer require sugarcraft/sugar-dashboard
 ```
 
-## Namespace Structure (12 Namespaces)
+## Namespace Structure (13 Namespaces)
 
 | Namespace | Description |
 |-----------|-------------|
@@ -23,6 +23,7 @@ composer require sugarcraft/sugar-dashboard
 | `Registry\` | Registry pattern for modules |
 | `Plugin\` | Plugin system with JSON protocol |
 | `Modules\` | Built-in modules (Clock, System, Weather, etc.) |
+| `Msg\` | Host-traffic message types — `AdapterTickMsg`, the scheduled refresh tick that drives legacy panel updates (kept a dedicated type so unrelated traffic, keystrokes above all, passes through without a blocking plugin round-trip) |
 | `Keys\` | Key registry and mappings |
 | `Position\` | ANSI-aware geometry helpers |
 | `Output\` | Extracted helpers (truncate, render bar) |
