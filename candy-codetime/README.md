@@ -52,13 +52,16 @@ anything real.
 | Command | Arguments | What it does |
 |---------|-----------|--------------|
 | `dashboard` | — | Open the TUI (reads the selected backend). Default when no command is given. Without an interactive terminal it refuses with a pointer to `export` instead of hanging. |
-| `push` | `<project> <language> <file> [duration]` | Record one heartbeat. `duration` is whole seconds (default 60); a non-numeric value is rejected, not silently read as 0. |
-| `milestone` | `<add\|list> [name] [description]` | Manage release markers. Milestones live only in SQLite, so this command forces the sqlite backend regardless of `--backend`; the dashboard never displays them. |
-| `export` | `<csv\|json\|ics> [days]` | Dump heartbeats for the last N days (default 7, clamped to [1, 3660]). |
-| `gaps` | `[days]` | List untracked stretches of at least 300 seconds within the last N days (default 7). |
+| `push` | `<project> <language> <file> [duration]` | Record one heartbeat. `duration` is whole seconds (default 60); a non-numeric value is rejected, not silently read as 0; durations above one year are clamped to 31,536,000 s. |
+| `milestone` | `add [name] [description]` \| `list` | Manage release markers. `name` and `description` are read for `add` only. Milestones live only in SQLite, so this command forces the sqlite backend regardless of `--backend`; the dashboard never displays them. |
+| `export` | `<csv\|json\|ics> [days]` | Dump heartbeats for the last N days (default 7, clamped to [1, 3660]). Output goes to STDOUT — redirect it to a file to save it. |
+| `gaps` | `[days]` | List untracked stretches of at least 300 seconds within the last N days (default 7, days clamped to [1, 3660]). |
 | `backup` | — | Archive day files (`*.jsonl`) older than 30 days into `<dir>-backups/`. Copies only — it never deletes your data. Archives are named `<dir>_<file>.<day>` after the source day and its mtime date; re-running `backup` the same day is a no-op for files already archived (an existing target is skipped). **The SQLite database is not archived**: a byte copy of a live `.db` is a torn snapshot, so sqlite users must use `sqlite3 <db> ".backup <dest>"` or `VACUUM INTO '<dest>'` (the CLI prints this reminder when a `.db` is present). |
 | `help`, `--help`, `-h` | — | Print usage. |
 | `--version`, `-v` | — | Print the version. |
+
+Any command word not listed above prints a one-line error followed by the full
+usage on stderr and exits 1.
 
 Options (accepted before or after the command):
 
