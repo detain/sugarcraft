@@ -3,7 +3,7 @@
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-widgets</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Widgets\TextInput\TextInput;
 use SugarCraft\Widgets\Spinner\Spinner;
 use SugarCraft\Core\{Cmd, Model, Msg, Program, Subscriptions};
@@ -68,18 +68,18 @@ echo OptionRow::render('Update ms', TextEdit::new('2000', numeric: true),
       <li>Originally inspired by <a href="https://github.com/charmbracelet/bubbles">bubbles</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>TextInput</td><td>new()</td><td>Create a new text input instance <em>(deprecated alias — depend on sugarcraft/sugar-forms)_</em></td></tr>
+<tr><td>TextInput</td><td>new()</td><td>Create a new text input instance <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 <tr><td>TextInput</td><td>update(Msg)</td><td>Handle input events</td></tr>
 <tr><td>TextInput</td><td>withValidateOn(ValidateOn)</td><td>Set validation timing — None / Blur / Change / Submit</td></tr>
 <tr><td>TextInput</td><td>withRestrict(string $pattern)</td><td>PCRE regex filter — only matching keystrokes are accepted</td></tr>
 <tr><td>ValidateOn</td><td>enum</td><td>Cases: None / Blur / Change / Submit — controls when validation fires</td></tr>
-<tr><td>TextArea</td><td>new()</td><td>Create a multi-line text area <em>(deprecated alias — depend on sugarcraft/sugar-forms)_</em></td></tr>
-<tr><td>Spinner</td><td>new(Style)</td><td>Create spinner with given style <em>(deprecated alias — depend on sugarcraft/sugar-forms)_</em></td></tr>
+<tr><td>TextArea</td><td>new()</td><td>Create a multi-line text area <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
+<tr><td>Spinner</td><td>new(?Style $style = null)</td><td>Create spinner; style optional (defaults to line) <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 <tr><td>Spinner</td><td>tick()</td><td>Return tick command for animation</td></tr>
 <tr><td>Table</td><td>new(headers, rows)</td><td>Create data table</td></tr>
 <tr><td>Table</td><td>withSort(string $column, SortDirection $dir = Asc)</td><td>Set primary sort column and direction — clears prior sort chain</td></tr>
@@ -108,7 +108,7 @@ echo OptionRow::render('Update ms', TextEdit::new('2000', numeric: true),
 <tr><td>Table</td><td>paginator(): Paginator</td><td>Return a Paginator wired to the table's current page state</td></tr>
 <tr><td>Tree</td><td>new(Node ...$roots)</td><td>Create tree view from root nodes (mutable: <code>new Tree(...)</code> is also supported)</td></tr>
 <tr><td>Tree</td><td>withStyle(...)</td><td>Immutable override of the chrome knobs — cursorPrefix / unselectedPrefix / expandedGlyph / collapsedGlyph / leafGlyph (sanitised to single-line)</td></tr>
-<tr><td>Viewport</td><td>new(width = 80, height = 24)</td><td>Create scrollable viewport; content arrives via <code>setContent(string)</code> <em>(deprecated alias — depend on sugarcraft/sugar-forms)_</em></td></tr>
+<tr><td>Viewport</td><td>new(width = 80, height = 24)</td><td>Create scrollable viewport; content arrives via <code>setContent(string)</code> <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 <tr><td>Progress</td><td>new(ratio)</td><td>Create progress bar from a 0.0–1.0 ratio (clamped; NaN renders 0%)</td></tr>
 <tr><td>Progress</td><td>withPercent(float)</td><td>Return a new bar at the given ratio (same clamp; accepts NaN → 0%)</td></tr>
 <tr><td>Progress</td><td>withColorFunc(?Closure)</td><td>Per-filled-cell colour <code>fn(int $i, int $filledCells, float $percent, int $barWidth): Color</code> — the 4th arg (true bar width) enables btop position-coloured ramps; 3-arg closures still work</td></tr>
@@ -124,8 +124,8 @@ echo OptionRow::render('Update ms', TextEdit::new('2000', numeric: true),
 <tr><td>TextEdit</td><td>withNumeric(bool)</td><td>Digits-only mode — strips existing non-digits</td></tr>
 <tr><td>TextEdit</td><td>view(int $limit = 0)</td><td>Render with SGR 4 underline caret, windowed to $limit display cells</td></tr>
 <tr><td>OptionRow</td><td>render(name, value, selected, editing, hasArrows, …)</td><td>btop options-menu two-line row (bold centred name + <code>← value →</code> / <code>↵</code>) <em>(deprecated — use <code>renderRow()</code> for the width-correct single-line row)</em></td></tr>
-<tr><td>FilePicker</td><td>new(directory)</td><td>Create file picker <em>(deprecated alias — depend on sugarcraft/sugar-forms)_</em></td></tr>
-<tr><td>ItemList</td><td>new(items)</td><td>Create selectable item list; items are <code>Item</code>/<code>StringItem</code> values <em>(deprecated alias — depend on sugarcraft/sugar-forms)_</em></td></tr>
+<tr><td>FilePicker</td><td>new(?string $cwd = null, int $height = 10)</td><td>Create file picker — cwd optional (defaults to the process cwd), height in rows <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
+<tr><td>ItemList</td><td>new(items)</td><td>Create selectable item list; items are <code>Item</code>/<code>StringItem</code> values <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 </table>
   </div>
 </section>
