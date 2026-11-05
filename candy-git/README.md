@@ -23,8 +23,10 @@ composer require sugarcraft/candy-git
 vendor/bin/candy-git    # run inside any git working tree
 ```
 
-From a clone of this repository, `php candy-git/bin/candy-git` works too, and
-release users can grab the `candy-git.phar` from the GitHub release and run
+From a clone of this repository, run `composer install` inside `candy-git/`
+first — `vendor/` is gitignored, and without it the launcher exits with
+`candy-git: cannot find composer autoload.php`. Then `php candy-git/bin/candy-git`
+works. Release users can grab the `candy-git.phar` from the GitHub release and run
 `php candy-git.phar`. Until a stable `candy-git/v*` tag is cut, the only release
 channel is the rolling `candy-git/dev` prerelease. `--version`, `--help`, and the
 `-h` alias short-circuit and exit 0 anywhere; any *other* argument exits 2 with a
@@ -225,6 +227,14 @@ of 137 keys):
 | `branches.empty`       | `(no branches)`                                                  | —          |
 | `log.empty`            | `(empty log)`                                                    | —          |
 | `help.keyhints`         | `S  stash  ·  V  cherry-pick  ·  i  rebase-i  ·  w  worktrees  ·  tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  P  diff  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  u  undo  ·  M  merge  ·  r  rebase  ·  ?  help  ·  q  quit` | —          |
+
+**Switching locale:** 16 locales ship (`lang/*.php`). The `bin/candy-git`
+launcher adopts the environment automatically at startup via
+`T::setLocale(T::detect())` — the core chain reads `LC_ALL`, then
+`LC_MESSAGES`, then `LANG`, strips the encoding suffix (`de_DE.UTF-8` → `de`),
+and falls back to `en` (`C` and `POSIX` count as unset). So
+`LANG=de_DE.UTF-8 candy-git` gives a German UI. Embedders drive it directly
+with `SugarCraft\Core\I18n\T::setLocale('de')`.
 
 To add a locale, copy `lang/en.php` to `lang/<code>.php` and translate the
 values. The lookup chain follows `SugarCraft\Core\I18n\T`:
