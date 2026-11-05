@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-dashboard",
-    "description": "Dashboard TUI library \u2014 column grid, constraint layout, ratio grid, data grid, tree, modal, status bar, tabs, plot/canvas, and module/plugin system. Ports patterns from bubble-grid, bubbletea-tilelayout, go-tealeaves, bubbleboxer, lattice, Homedash, and termui.",
+    "description": "Dashboard TUI library \u2014 column grid, constraint layout, ratio grid, data grid, tree, modal, status bar, tabs, plot/canvas, and module/plugin system. Ports patterns from shahar3/bubble-grid, aristocratos/btop, treilik/bubbleboxer, gizak/termui, floatpane/lattice, mko88/bubbletea-tilelayout, mikeschinkel/go-tealeaves, and lamarios/Homedash2.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -18,6 +18,7 @@
         "plot",
         "chart",
         "status-bar",
+        "btop",
         "bubbletea",
         "sugarcraft"
     ],

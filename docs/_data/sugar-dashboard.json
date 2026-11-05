@@ -7,5 +7,5 @@
     "displayName": "SugarDashboard",
     "tagline": "Dashboard TUI library — grid layouts, panels, and more",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/charmbracelet/bubble-grid\" style=\"color: inherit;\">charmbracelet/bubble-grid</a></span>\n          <span class=\"tag-chip\">dashboard</span><span class=\"tag-chip\">layout</span><span class=\"tag-chip\">grid</span><span class=\"tag-chip\">panel</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/shahar3/bubble-grid\" style=\"color: inherit;\">shahar3/bubble-grid</a> \u00b7 <a href=\"https://github.com/aristocratos/btop\" style=\"color: inherit;\">aristocratos/btop</a> \u00b7 <a href=\"https://github.com/gizak/termui\" style=\"color: inherit;\">gizak/termui</a></span>\n          <span class=\"tag-chip\">dashboard</span><span class=\"tag-chip\">layout</span><span class=\"tag-chip\">grid</span><span class=\"tag-chip\">panel</span>"
 }
