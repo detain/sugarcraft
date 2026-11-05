@@ -41,6 +41,13 @@ $candidates = ['apple', 'applet', 'application', 'apricot'];
 $results = $matcher->matchAll('app', $candidates);
 // Returns array of MatchResult sorted by score
 
+// The generator form yields the same ranked output — note it drains and sorts
+// the whole candidate list before the first yield (ranking is global), so it
+// streams results, it does not skip or stagger scoring
+foreach ($matcher->matchAllGenerator('app', $candidates) as $result) {
+    // ...
+}
+
 // Limit results to top N with optional minScore threshold
 $top5 = $matcher->matchAll('app', $candidates, limit: 5);
 $highQuality = $matcher->matchAll('app', $candidates, minScore: 10);

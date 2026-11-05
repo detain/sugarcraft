@@ -116,16 +116,18 @@ final class SahilmMatcher implements FuzzyMatcher
     }
 
     /**
-     * Match a query against an iterable of candidates, yielding results as they are found.
+     * Match a query against an iterable of candidates, yielding ranked results.
      *
-     * Generator-based iteration for memory efficiency with large candidate lists.
-     * Results are yielded as they are computed, then sorted and sliced at the end.
+     * LAZINESS LIMITATION: ranking is a global property, so this drains and
+     * sorts the whole input before the first `yield` (see
+     * {@see SmithWatermanMatcher::matchAllGenerator()} for the full story).
+     * Output is identical to {@see self::matchAll()}.
      *
      * @param string    $query      The search query
      * @param iterable<string> $candidates Candidate strings to score
      * @param int|null  $limit      Maximum number of results to return (null = unlimited)
      * @param int       $minScore   Minimum score threshold (default 1; scores are integers so >= 1 ≡ > 0)
-     * @return \Generator<MatchResult> Yields MatchResult as they are computed
+     * @return \Generator<MatchResult> Yields MatchResult in ranked order
      */
     public function matchAllGenerator(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): \Generator
     {
