@@ -1,8 +1,8 @@
 {
     "title": "SugarCraft — SugarGallery",
-    "description": "SugarGallery: Poster grids and carousels for media-browsing terminal apps — smooth scrolling over large libraries, with pluggable rendering.",
+    "description": "SugarGallery: Poster grids and carousels for media-browsing terminal apps — virtualized paging over large libraries.",
     "ogTitle": "SugarCraft — SugarGallery",
-    "ogDescription": "Browse-grid widgets for media TUIs: a 2-D virtualized PosterGrid that holds only the cards on screen (sparse, absolute-indexed) and emits a need-range window for owner-driven paging, a Rail carousel, and a renderer-agnostic PosterCard. Immutable.",
+    "ogDescription": "Browse-grid widgets for media TUIs: a 2-D virtualized PosterGrid that holds only the cards that have been fetched (sparse, absolute-indexed) and exposes a visible-range window for owner-pulled paging, a Rail carousel, and a renderer-agnostic PosterCard. Immutable.",
     "emoji": "",
     "displayName": "SugarGallery",
     "tagline": "Poster grids & rails for media TUIs — virtualized PosterGrid, Rail carousel, PosterCard",
