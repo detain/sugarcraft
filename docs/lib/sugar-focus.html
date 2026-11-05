@@ -87,7 +87,7 @@ if ($msg instanceof KeyMsg &amp;&amp; $msg->type === KeyType::Tab
 $style = $ring->isFocused('sidebar') &amp;&amp; $ring->isEnabled('sidebar')
     ? $accentBorder : $plainBorder;</code></pre>
 
-    <p>On the wire, <strong>Shift+Tab</strong> arrives as <code>Tab</code> with <code>shift: true</code> — sugar-core's <code>InputReader</code> decodes <code>ESC [ Z</code> (CSI-Z, the literal "Backtab" sequence) into that shape. <strong>Ctrl+Tab</strong> and <strong>Ctrl+Shift+Tab</strong> also arrive as plain <code>Tab</code> on basic terminals, so the <code>!$msg-&gt;ctrl &amp;&amp; !$msg-&gt;alt</code> gate leaves those chords free for other bindings. The <code>isEnabled()</code> conjunct in the paint matters: focus can legally park on a disabled region, so <code>isFocused()</code> alone can accent a dimmed panel.</p>
+    <p>On the wire, <strong>Shift+Tab</strong> arrives as <code>Tab</code> with <code>shift: true</code> — sugar-core's <code>InputReader</code> decodes <code>ESC [ Z</code> (CSI-Z, the literal "Backtab" sequence) into that shape. The ring leg is gated on <code>!$msg-&gt;ctrl &amp;&amp; !$msg-&gt;alt</code>, so <strong>Ctrl+Tab</strong> and <strong>Ctrl+Shift+Tab</strong> stay free for other bindings — but only on terminals that <em>report</em> modifiers (kitty keyboard negotiation or an xterm <code>modifyOtherKeys</code>-style decoder); on legacy/basic terminals Ctrl+Tab is byte-identical to bare Tab and moves the ring like a plain Tab would. The <code>isEnabled()</code> conjunct in the paint matters: focus can legally park on a disabled region, so <code>isFocused()</code> alone can accent a dimmed panel.</p>
 
     <h3 style="margin-top: 32px;">Behaviour</h3>
     <div class="feature-grid">

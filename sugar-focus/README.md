@@ -51,11 +51,13 @@ if ($msg instanceof KeyMsg && $msg->type === KeyType::Tab
 
 On the wire, **Shift+Tab** arrives as `Tab` with `shift: true` — sugar-core's
 `InputReader` decodes `ESC [ Z` (CSI-Z, the literal "Backtab" sequence
-terminals send for Shift+Tab) into that shape. **Ctrl+Tab** and
-**Ctrl+Shift+Tab** also arrive as plain `Tab`: basic terminals cannot
-separate them from bare Tab until kitty keyboard negotiation is on, so the leg
-is gated on `!$msg->ctrl && !$msg->alt` and leaves those chords free for other
-bindings. (On sugar-core builds predating the `ESC [ Z` decoder arm the shift
+terminals send for Shift+Tab) into that shape. The ring leg is gated on
+`!$msg->ctrl && !$msg->alt`, so **Ctrl+Tab** and **Ctrl+Shift+Tab** stay free
+for other bindings — but that holds only on terminals that *report* modifiers
+(kitty keyboard negotiation, or an xterm `modifyOtherKeys`-style decoder).
+On legacy/basic terminals Ctrl+Tab is byte-identical to bare Tab: nothing can
+separate the two there, and those presses move the ring like a plain Tab
+would. (On sugar-core builds predating the `ESC [ Z` decoder arm the shift
 leg never fires at all.)
 
 …and let each region style itself in `view()`:
