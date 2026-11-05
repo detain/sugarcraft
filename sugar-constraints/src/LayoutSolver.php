@@ -9,7 +9,7 @@ namespace SugarCraft\Constraints;
  *
  * Solves a list of constraints against a region in the given direction,
  * returning a list of sub-regions. For a well-constrained set the returned
- * widths (or heights) tile the region's total dimension exactly. Two shapes
+ * widths (or heights) tile the region's total dimension exactly. Three shapes
  * deliberately fall outside that guarantee:
  *  - an UNDER-CONSTRAINED set — nothing but fixed Length/Percentage/Ratio
  *    whose sum is below the region — leaves an untiled gap rather than
@@ -17,7 +17,10 @@ namespace SugarCraft\Constraints;
  *  - a solver in compatibility mode ({@see GreedySolver::compat()},
  *    {@see GreedySolver::withoutOverflowTruncation()}) keeps every region at
  *    its full base size when demand exceeds the area, so the layout runs
- *    off-grid on purpose.
+ *    off-grid on purpose;
+ *  - a set with zero total elastic demand — every `Fill` weight 0, so no
+ *    positive-weight recipient exists to absorb the span — leaves the slack
+ *    untiled (`[fill(0)]@100` resolves to one 0-wide region).
  *
  * Mirrors ratatui's layout constraint solving.
  *

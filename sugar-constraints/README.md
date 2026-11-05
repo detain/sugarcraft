@@ -183,19 +183,23 @@ its Ratio path returned 0). The simplex was deleted rather than rewritten:
 the shim keeps the class name alive for straggling callers and warns them on
 every `solve()`.
 
-## Tiling guarantee — and its two carve-outs
+## Tiling guarantee — and its three carve-outs
 
 `solve()` tiles the region exactly for every well-constrained set: the widths
-(or heights) sum to the region's total. Two deliberate exceptions:
+(or heights) sum to the region's total. Three deliberate exceptions:
 
 1. **Under-constrained fixed-only sets keep their gap.** `[percentage(30)]@100`
    yields one 30-wide region and 70 untiled columns — the constraints never
    asked for more.
 2. **`compat()` / `withoutOverflowTruncation()` runs off-grid on overflow by
    design:** `[length(60), length(60)]@100` yields 60+60 = 120.
+3. **Zero total elastic demand keeps its gap.** `[fill(0)]@100` yields one
+   0-wide region: a `Fill` weight of 0 is weightless, and with no positive-
+   weight recipient the span is never absorbed — the slack stays untiled.
 
-Both are pinned in `tests/` and called out on the `LayoutSolver` interface
-docblock — check them before painting a pane edge-to-edge off the sum law.
+The first two are pinned in `tests/`; all three are called out on the
+`LayoutSolver` interface docblock — check them before painting a pane
+edge-to-edge off the sum law.
 
 ## Degradation
 
@@ -215,12 +219,16 @@ in both modes.
 
 The solver is stateless — nothing to cache, and re-solving on every
 `ResizeMsg` is the intended pattern (and what sugar-panels and candy-code's
-Dock do). Measured envelope on the 2026-07 CI hardware: ~0.18–0.85 ms per
-`solve()`, 471 µs for a full 210-cell dashboard frame, and linear growth to
-100k constraints (125 ms / 30 MB) — fixed-point divergence is structurally
-impossible because no relational constraints survive the simplex retirement.
-The one quadratic entry point is `DockLayout::withSlotAdded()` on very large
-stacks (n=1500 → ~2 s); batch from `fromArray()` or keep stacks human-sized.
+Dock do). Measured envelope (2026-11, PHP 8.3.6 dev box, CLI): ~0.01 ms for
+the six-constraint quickstart, ~0.15 ms for a dashboard-sized frame of ~210
+constraints, and linear growth to 100k constraints (~95 ms for one solve) —
+fixed-point divergence is structurally impossible because no relational
+constraints survive the simplex retirement.
+Every `DockLayout` slot mutator — `withSlotAdded()`, `withSlotRemoved()`,
+`withSlotMovedTo()` — scans all docked slots, O(n) per call, so assembling or
+dismantling a large stack is quadratic: a 1,500-slot add chain and its
+removal chain each measured ~2 s here. Batch with `fromArray()` (a single
+linear pass) or keep stacks human-sized.
 
 ## Expressivity limits
 
@@ -306,9 +314,16 @@ of its slots.
 **Shares.** Column shares are rational `[num, denom]` pairs (like candy-code's
 `Tui/SplitLayout`, referenced but not depended on). `withColumnShare()`
 **throws** on malformed rationals (numerator or denominator < 1) and **clamps**
-requested magnitudes down under the pair rule — a tightened side may take at
-most half the usable columns once the other side has its share, so chat stays
-the primary surface. The shipped creation default is thirds left+right, which
+requested magnitudes down under the pair rule — once the other side holds its
+share, a tightened side caps at 1/2 minus that share, that is
+(otherDenom − 2·otherNum) / (2·otherDenom), floored to whole columns. With the
+default right share of 1/3 the left side caps at 1/6: on a 100-column frame
+that floors to 16 columns, which `resolve()` then raises to the 20-column side
+minimum while the centre keeps its 24; on a 300-column frame the cap is 49.
+Chat stays the primary surface. The comparison is an integer cross-product —
+exact for realistic magnitudes; shares near `PHP_INT_MAX` overflow it into
+float arithmetic and the ceiling can bind incorrectly, while `resolve()`
+itself still degrades safely and never throws. The shipped creation default is thirds left+right, which
 sums to 2/3 and predates the tightening ceiling. The ceiling is a mutator
 policy: `fromArray()` restores persisted shares verbatim so round-trips are
 lossless. Stack heights are split in exact integer arithmetic over the
@@ -317,9 +332,11 @@ stack weight set whose scaled sum would exceed `PHP_INT_MAX` is refused with
 `InvalidArgumentException` at the mutator or manifest that introduces it —
 `resolve()` itself never throws.
 
-**Gutters.** The stack gap is one fixed row (internal constant), and
-`dividerCols` defaults to 1 with no public mutator — it is geometry input at
-construction, not persisted state.
+**Gutters.** The stack gap is one fixed row (internal constant). The divider
+width is fixed at 1 column with no public configuration:
+`DockLayout::__construct` is private, `new()` takes only the centre pane id
+and hardcodes the divider, every `with*()` preserves it, and `fromArray()`
+forces 1 — it is not part of the persisted shape.
 
 **Persistence.** `toArray()`/`fromArray()` ship an exact versioned shape:
 `['version' => 1, 'center' => 'chat', 'sides' => ['left' => [['id' => …, 'weight' => [n, d]], …], 'right' => […]], 'columnShare' => ['left' => [1, 3], 'right' => [1, 3]], 'minimums' => [24, 20]]`.
