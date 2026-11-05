@@ -86,6 +86,9 @@
       <div class="feature"><strong>Composer-installable</strong><span>Single binary at <code>vendor/bin/candy-ssh-launcher</code>.</span></div>
     </div>
 
+    <h3 style="margin-top: 32px;">Security</h3>
+    <p>Your config file is <strong>trusted input</strong> — exactly like <code>~/.ssh/config</code> itself. Whatever a config declares, the launcher passes to ssh: <code>options:</code> entries become real <code>-o</code> settings verbatim, and OpenSSH options such as <code>ProxyCommand</code> / <code>LocalCommand</code> <strong>execute arbitrary commands at connect time</strong>. Keep config files (and <code>~/.ssh/config</code>) owned by you with <code>0600</code>/<code>0644</code> permissions and do not accept endpoint files from strangers; see the fleet-wide <a href="../TRUST-BOUNDARY.md">trust boundary</a>.</p>
+
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-ssh-launcher">Source on GitHub</a></li>
