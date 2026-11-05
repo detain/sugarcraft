@@ -81,7 +81,7 @@ final class Server
      * picked because it cannot collide with anything a served program
      * exits with (0-127 is the useful range, 128+ is the shell's) and
      * because `1` would be indistinguishable from a script that simply
-     * failed. Audit MAJOR 9: an refused login used to answer `0`, so
+     * failed. Audit MAJOR 9: a refused login used to answer `0`, so
      * `ssh host backup.sh` looked like a successful backup to the cron
      * job and the CI step that ran it.
      */

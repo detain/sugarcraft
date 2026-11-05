@@ -147,7 +147,7 @@ final class RateLimit implements Middleware
      * A session with no client address is not exempt: it lands in a single
      * shared `ip:_unknown` bucket together with every other such session,
      * which behind a proxy or on a transport that never learned the peer is
-     * one global throttle, not a per-client one (audit MINOR 8). That is
+     * one global throttle, not a per-client one (audit MINOR 8).
      * The failure direction is worth naming: a shared bucket is strict, not
      * safe. One noisy client that arrived without an address can burn the
      * burst and lock out every other address-less client behind it, which is
