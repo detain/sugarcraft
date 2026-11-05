@@ -101,6 +101,9 @@ use SugarCraft\Core\Util\Sanitize;
  */
 trait SessionCommands
 {
+
+    // ── commands (roadmap O-2h) ────────────────────────────────────────
+
     /**
      * Run the built-in command `/$name $args` (roadmap O-2h, Appendix O §6.3
      * `command.exec`) and say what it produced. Its rows are already in the

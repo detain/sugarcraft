@@ -102,6 +102,9 @@ use SugarCraft\Core\Util\Sanitize;
  */
 trait SessionAdmission
 {
+
+    // ── admission ──────────────────────────────────────────────────────
+
     private function admitWhileBusy(string $text, SubmitOptions $options): TurnTicket
     {
         $turns = $this->turns();

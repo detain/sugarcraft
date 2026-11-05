@@ -58,6 +58,9 @@ use SugarCraft\Code\Support\HomeDirectory;
  */
 trait ServeManagement
 {
+
+    // ── managing a running server ────────────────────────────────────────
+
     /** @param array<string, string> $env */
     private static function status(ParsedArgs $args, array $env): int
     {

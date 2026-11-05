@@ -60,6 +60,9 @@ use SugarCraft\Code\Support\HomeDirectory;
  */
 trait ServeStartup
 {
+
+    // ── starting ─────────────────────────────────────────────────────────
+
     /** @param array<string, string> $env */
     private static function start(ParsedArgs $args, array $env): int
     {
