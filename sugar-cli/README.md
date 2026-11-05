@@ -144,8 +144,10 @@ echo StatusLine::error('connection refused'), "\n";
   `COLUMNS`, else 80 cells; implausibly large advertised values are
   discarded as junk), an `int` means exactly that many cells, and `null`
   renders without a cap. Most presenters default to `Auto`; the two
-  opt-outs are `Banner::title()` (`null` sizes the box to its content) and
-  `HelpText::renderPage()` (`null` never re-wraps).
+  opt-outs have different shapes. `Banner::title()` takes a plain `?int`
+  (`AutoWidth::Auto` is a `TypeError` there) and `null` sizes the box to
+  its content; `HelpText::renderPage()` takes the full
+  `int|AutoWidth|null` sentinel and `null` means never re-wrap.
 
 ## What this is not
 
