@@ -22,7 +22,7 @@ interface Prefixer
      * @param \Stringable $value          The current item's value
      * @param int         $currentIndex   Index of the current item in the list
      * @param int         $cursorIndex    The currently selected item index
-     * @param int         $lineOffset     How many lines to keep visible above/below cursor
+     * @param int         $lineOffset     Pass-through context value for relative markers; viewport tracking lives in the Model (cursorOffset/width/height), not here - the default hooks ignore it
      * @param int         $width          Viewport width in cells
      * @param int         $height         Viewport height in lines
      * @param int         $totalItems     Number of items in the (post-filter) list
