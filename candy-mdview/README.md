@@ -48,7 +48,9 @@ Flags:
   accepted. `solarized`, `monokai`, and `github` load JSON theme files from
   `themes/`. With `--theme` omitted: **ansi** on a color-capable terminal,
   **ascii** when color is off (bold/italic survive, color does not), **plain**
-  when stdout is not a terminal.
+  when stdout is not a terminal or `--no-ansi` vetoes the stream. The mirror
+  edge: forcing decoration (`--ansi` / `CLICOLOR_FORCE` / `FORCE_COLOR`) yields
+  a decorated tier even on a pipe.
 - `--style` / `-s` — alias for `--theme` (glamour-compat).
 - `--theme-config <path>` — load a custom JSON theme (up to 1 MB). Two shapes
   are detected automatically: a **glamour** config (top-level `"document"`
