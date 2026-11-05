@@ -147,11 +147,17 @@ final class RailGuardTest extends TestCase
         // neutral in every source) while omitting the two glyphs that
         // genuinely are — the progress fill and the truncation ellipsis.
         // The roster is quoted by exact name here, so editing one side
-        // without the other goes red.
+        // without the other goes red. Each glyph now rides its codepoint,
+        // because `▸` U+25B8 (neutral) is confusable with `▶` U+25B6
+        // (ambiguous) at a glance.
         $readme = (string) file_get_contents(__DIR__ . '/../README.md');
 
-        self::assertStringContainsString('rendered `●`, `○`, `▓` and `…` are', $readme);
-        self::assertStringContainsString('`▸` and `░` are neutral', $readme);
+        self::assertStringContainsString('`●` `U+25CF` and `○` `U+25CB`', $readme);
+        self::assertStringContainsString('`▓` `U+2593` (the filled leg of the progress bar) and `…`', $readme);
+        self::assertStringContainsString('`U+2026` (truncation ellipsis)', $readme);
+        self::assertStringContainsString('the focus marker is `▸`', $readme);
+        self::assertStringContainsString('not the ambiguous large `▶`', $readme);
+        self::assertStringContainsString('is `░` `U+2591`.)', $readme);
         self::assertStringNotContainsString('`●`, `○`, `▸` and `░` are', $readme);
     }
 

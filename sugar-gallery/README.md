@@ -60,10 +60,15 @@ return match ($key) {
 
 It also owns **no colour**: every frame ships unstyled text, and any SGR you see
 in output rode in on *your* card bytes (`withPoster()` / `withStyledTitle()`).
-Theming is entirely yours. (One heads-up for narrow layouts: the chrome glyphs
-rendered `●`, `○`, `▓` and `…` are East-Asian-Ambiguous width — most modern
-terminals render them single-cell, but a user's ambiguous-width setting moves
-them, no font install required. The two chrome glyphs `▸` and `░` are neutral everywhere.)
+Theming is entirely yours. (One heads-up for narrow layouts: four chrome glyphs
+are East-Asian-Ambiguous width — `●` `U+25CF` and `○` `U+25CB` (the rail
+selection bullets), `▓` `U+2593` (the filled leg of the progress bar) and `…`
+`U+2026` (truncation ellipsis). Most modern terminals render them single-cell,
+but a user's ambiguous-width setting moves them, no font install required. The
+other two are neutral by codepoint and stay put: the focus marker is `▸`
+`U+25B8` — the *small* black triangular right, not the ambiguous large `▶`
+`U+25B6` it is so easily confusable with — and the skeleton/placeholder shade
+is `░` `U+2591`.)
 
 ### Owner-driven paging (the `need-range` pattern)
 

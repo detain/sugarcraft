@@ -28,7 +28,7 @@ if ($start &lt;= $end &amp;&amp; $start !== $lastFetchedStart) {
 // Async poster arrived for one cell?
 $grid = $grid->withItem($index, $card->withPoster($ansi));</code></pre>
 
-    <p>Render the visible rows (the cursor shows only when the grid is focused; an empty grid renders <code>''</code> so the owner paints its own empty-state). Pass a <a href="sugar-mouse.html">sugar-mouse</a> <code>Manager</code> to make each cell mouse-clickable — wrapped as zone id <code>cell:&lt;index&gt;</code>:</p>
+    <p>Render the visible rows (the cursor shows only when the grid is focused; an empty grid renders <code>''</code> so the owner paints its own empty-state). Pass a <a href="sugar-mouse.html">sugar-mouse</a> <code>Manager</code> to make each cell mouse-clickable — wrapped as zone id <code>cell:&lt;index&gt;</code>. The chrome stays on two width-neutral codepoints — focus <code>▸</code> <code>U+25B8</code> (the <em>small</em> triangular right, not the ambiguous <code>▶</code> <code>U+25B6</code>) and skeleton shade <code>░</code> <code>U+2591</code> — but the rail bullets <code>●</code> <code>U+25CF</code> / <code>○</code> <code>U+25CB</code>, the bar’s filled leg <code>▓</code> <code>U+2593</code>, and truncation <code>…</code> <code>U+2026</code> are East-Asian-Ambiguous: a user’s ambiguous-width setting can widen them a cell:</p>
     <pre class="code"><code class="language-php">echo $grid->render(focused: true);
 
 $frame = $grid->render(true, $zones);
