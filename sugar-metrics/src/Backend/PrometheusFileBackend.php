@@ -225,7 +225,10 @@ final class PrometheusFileBackend implements Backend
      * Make room for a NEW series: when its family is at
      * maxSeriesPerFamily, drop the family's oldest series (insertion
      * order — PHP preserves it for string keys that are never re-assigned
-     * after unset). The per-family index keeps this O(1); the eviction
+     * after unset). The per-family index is written through in place — a
+     * new-series add never copies the family, so this is O(1) in series per
+     * family (an earlier read-copy-local/reassign shape paid a
+     * copy-on-write separation of the whole index per write); the eviction
      * also clears the collision detector's records and the family index
      * for the dropped key, so a later raw that folds onto the freed slot
      * is measured against its own first sighting, not a ghost.
@@ -236,15 +239,16 @@ final class PrometheusFileBackend implements Backend
     private function ensureSpace(array &$accumulator, array &$dirty, string $key): void
     {
         [$family] = self::splitKey($key);
-        $index = $this->familyKeys[$family] ?? [];
-        if (count($index) >= $this->maxSeriesPerFamily) {
-            $oldest = array_key_first($index);
+        if (!isset($this->familyKeys[$family])) {
+            $this->familyKeys[$family] = [];
+        }
+        if (count($this->familyKeys[$family]) >= $this->maxSeriesPerFamily) {
+            $oldest = array_key_first($this->familyKeys[$family]);
             if ($oldest !== null) {
-                unset($accumulator[$oldest], $dirty[$oldest], $this->rawFacts[$oldest], $index[$oldest]);
+                unset($accumulator[$oldest], $dirty[$oldest], $this->rawFacts[$oldest], $this->familyKeys[$family][$oldest]);
             }
         }
-        $index[$key] = true;
-        $this->familyKeys[$family] = $index;
+        $this->familyKeys[$family][$key] = true;
     }
 
     /**

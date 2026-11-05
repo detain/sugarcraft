@@ -588,4 +588,24 @@ final class PrometheusFileBackendTest extends TestCase
             self::fail('unique staging file leaked to disk: ' . $leaked);
         }
     }
+
+    public function testEnsureSpaceWritesTheFamilyIndexInPlaceNoPerFamilyCopy(): void
+    {
+        // MT-8 perf shape: a new-series write used to read the WHOLE family
+        // key index into a local, mutate it, and reassign it. Copy-on-write
+        // separation made every new series O(series-in-family) — with the
+        // default cap of 10 000 that is a multi-kilobyte hash-table copy per
+        // write. ensureSpace must now address $this->familyKeys[$family]
+        // directly, so adding a series does O(1) work in family size.
+        $src = (string) file_get_contents(
+            __DIR__ . '/../../src/Backend/PrometheusFileBackend.php'
+        );
+        $matched = preg_match('/private function ensureSpace.*?\n    \}\n/s', $src, $m);
+        $this->assertSame(1, $matched, 'ensureSpace() vanished — perf-shape pin needs re-aiming');
+        $slice = $m[0];
+        $this->assertStringNotContainsString('?? []', $slice);
+        $this->assertStringNotContainsString('$index[', $slice);
+        $this->assertStringNotContainsString('$index =', $slice);
+        $this->assertStringContainsString('$this->familyKeys[$family][$key] = true;', $slice);
+    }
 }
