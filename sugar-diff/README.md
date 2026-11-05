@@ -12,7 +12,7 @@ composer require sugarcraft/sugar-diff:@dev
 
 ## Role
 
-- **`Diff::compute()`** — prefix/suffix-trimmed LCS over lines (same algorithmic guarantees as the candy-code trait: `>=` tie-break deletes first, `maxLcsCells` budget falls back to a whole-middle replace block, reported by the `degraded` flag), producing numbered `Line` rows grouped into `Hunk`s.
+- **`Diff::compute()`** — prefix/suffix-trimmed LCS over lines (same algorithmic guarantees as the candy-code trait: `>=` tie-break deletes first, `maxLcsCells` budget falls back to a whole-middle replace block, reported by the `degraded` flag — with the 250 000-cell default, edits far apart in a large file really can exceed the budget, so check the flag), producing numbered `Line` rows grouped into `Hunk`s.
 - **`Writer\UnifiedFormat`** — renders `diff -u` shaped text: `--- / +++` headers, `@@ -a[,b] +c[,d] @@` hunk headers (GNU count elision included), optional `\ No newline at end of file` markers and `/dev/null` empty-side labels. Path labels are control-byte-safe (quoted like git's `core.quotePath`).
 - **`Writer\SideBySideFormat`** — pairs one diff into side-by-side `[left?, right?]` rows, line by line, for split viewers: `rows(Diff)` from the hunk model, `fromUnified(string|list<string>)` from already-rendered patch text via `Reader\UnifiedScan` (both return the same rows for the same change). Leftover removals/additions stand alone; width and colour stay with the caller.
 - **`Reader\UnifiedScan`** — walks any rendered unified diff and tells a viewer which old/new line each row points at, honouring each hunk's declared counts and classifying every row with a `Reader\ScanRowKind` (the gutter model the candy-code TUI was built from), without owning any view code.
