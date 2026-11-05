@@ -127,6 +127,15 @@ final class McpTool
             return false;
         }
 
+        // The refusal is deliberately NAME-scoped. A description is
+        // free-form prose the server authors for humans — tabs and newlines
+        // are legitimate inside a multi-line paragraph — and fromArray()
+        // passes it through verbatim, so a blanket control-byte sweep here
+        // would reject valid rosters, not protect them. The description's
+        // hazard is display-side: the contract the README quick start
+        // demonstrates is that renderers sweep it through
+        // SugarCraft\Core\Util\Sanitize::untrusted(), exactly as diagnostics
+        // already are.
         foreach (self::TOOL_DEFINITION_TYPES as $field => $predicate) {
             if (!isset($definition[$field])) {
                 continue;
