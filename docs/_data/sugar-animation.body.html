@@ -44,6 +44,9 @@ echo $art-&gt;sgrText(0), PHP_EOL; // animated files: pick a frame index</code><
     <h3 style="margin-top: 40px;">Untrusted .ansi input</h3>
     <p>The parser is defensive but not a sandbox. Complete OSC sequences and unknown CSI bodies are dropped, not rendered, and <code>Frame</code>/<code>AnsiArt</code> keep only canonical SGR runs, so <code>sgrText()</code> never replays an escape the input carried. Two caveats stand: C0 control bytes that are not part of an escape sequence are preserved <em>as glyph data</em> — echoing <code>$cell-&gt;glyph</code> raw (or <code>sgrText()</code>) hands them to your terminal, an audible-and-cursor hazard on hostile files — and parsing applies no input-size cap, so bound the corpora you point <code>ArtLibrary</code> at.</p>
 
+    <h3 style="margin-top: 40px;">Reduced motion</h3>
+    <p>No <code>REDUCE_MOTION</code> (or other reduce-motion convention) is consulted anywhere in the library — autoplay is autoplay. The real mitigations are API-side: construct the <code>Player</code> paused (<code>new Player($frames, paused: true)</code>) so nothing moves until <code>Space</code>, step manually with <code>←</code>/<code>→</code>, slow the cadence with <code>withFixedFps()</code>, and bound the run with <code>playOnce()</code> / <code>withMaxSeconds()</code>. Consulting <code>REDUCE_MOTION</code> by default is a tracked code follow-up, not a current behavior.</p>
+
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-animation">Source on GitHub</a></li>

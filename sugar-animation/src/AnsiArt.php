@@ -32,7 +32,13 @@ use RuntimeException;
  * Anything the corpus never emits (unknown CSI sequences, well-formed OSC
  * strings such as hyperlinks, stray `\r` inside a row body) is dropped
  * conservatively: art is replayed cell-wise, so a positioning sequence we
- * cannot honour must not leak into the model as a phantom glyph. Dropped
+ * cannot honour must not leak into the model as a phantom glyph. Unknown CSI
+ * sequences are dropped across the FULL ECMA-48 final-byte range (0x40-0x7E)
+ * except SGR `m` — including finals like `[ \ ] ^ _ ` { | } ~ that older
+ * narrow classes let through as glyph cells. Residual known limit: an OSC
+ * string carrying a bare ESC inside its payload (before any BEL/ST
+ * terminator) is truncated at the orphan-ESC skip boundary, so its remaining
+ * printable tail can re-enter as glyph cells. Dropped
  * bytes are documented per site below. Unknown or truncated SGR parameters
  * are ignored gracefully and never corrupt the cumulative state.
  *
@@ -55,8 +61,8 @@ final class AnsiArt
     /** An SGR sequence: ESC [ <parameter bytes> m (';' is inside \x30-\x3f). */
     private const SGR_AT = '/\G\x1b\[([\x30-\x3f]*)m/';
 
-    /** Any other CSI sequence (final byte @-Z or a-z minus m) — dropped. */
-    private const OTHER_CSI_AT = '/\G\x1b\[[\x30-\x3f]*[@-Za-ln-z]/';
+    /** Any other CSI sequence (final byte in the ECMA-48 range 0x40-0x7E, except SGR `m`) — dropped. */
+    private const OTHER_CSI_AT = '/\G\x1b\[[\x30-\x3f]*[\x40-\x6c\x6e-\x7e]/';
 
     /**
      * A complete OSC string (ESC ] … terminated by BEL or ST) — dropped.

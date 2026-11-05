@@ -103,6 +103,31 @@ final class AnsiArtTest extends TestCase
         self::assertSame('', $row[0]->sgr, 'erased-screen sequence does not become a cell prefix');
     }
 
+    public function testEveryCsiFinalByteRangeIsDroppedNotLeakedAsGlyphs(): void
+    {
+        // Finals 0x5B-0x60 and 0x7B-0x7E ([ \ ] ^ _ ` { | } ~) sit outside the
+        // old narrow drop class and used to leak their bodies as phantom glyph
+        // cells; the widened class covers the full ECMA-48 range except SGR m.
+        $sequences = [
+            "\x1b[1[",   // 0x5B
+            "\x1b[1\\",  // 0x5C
+            "\x1b[1]",   // 0x5D
+            "\x1b[1^",   // 0x5E
+            "\x1b[1_",   // 0x5F
+            "\x1b[1`",   // 0x60
+            "\x1b[1{",   // 0x7B
+            "\x1b[1|",   // 0x7C
+            "\x1b[1}",   // 0x7D
+            "\x1b[1~",   // 0x7E
+        ];
+        foreach ($sequences as $i => $seq) {
+            $art = AnsiArt::fromString($seq . 'A');
+            $row = $art->frameCells(0)[0];
+            self::assertSame(['A'], array_map(static fn (AnsiCell $c): string => $c->glyph, $row), "CSI final {$seq} is dropped, not rendered (case {$i})");
+            self::assertSame('', $row[0]->sgr, "dropped CSI final {$seq} carries no style");
+        }
+    }
+
     public function testOrphanEscapeDropped(): void
     {
         $art = AnsiArt::fromString("\x1bA");

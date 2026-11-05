@@ -47,14 +47,15 @@ final class Renderer
      *
      * Queries the terminal size via ioctl(TIOCGWINSZ) — no shell-out to tput.
      * When adaptive size is set, the renderer clamps the output grid to the
-     * available rows and columns so the GIF never overflow the viewport.
+     * available rows and columns, so rendered art is clipped to the viewport;
+     * it never re-scales.
      *
-     * ## WHAT THIS ASKED ABOUT, AND WHY IT CHANGED
+     * ## What this asked about, and why it changed
      *
-     * WHAT IT SAID: `SizeIoctl::query((int) STDOUT)`, under a `@throws` line
+     * What it said: `SizeIoctl::query((int) STDOUT)`, under a `@throws` line
      * promising the exception means STDOUT is not a TTY.
      *
-     * WHAT IS TRUE: an `(int)` cast of a PHP stream yields its RESOURCE ID,
+     * What is true: an `(int)` cast of a PHP stream yields its RESOURCE ID,
      * not its file descriptor. MEASURED, PHP 8.3.6, three takes, identical
      * every time: `(int) STDOUT` is **2**, and descriptor 2 is STDERR. So it
      * asked the kernel for STDERR's window size while its own doc-block
@@ -102,9 +103,9 @@ final class Renderer
     /**
      * @internal Creates a Renderer with explicit adaptive constraints.
      *
-     * Not "for testing only" (A3b truth-flip): Player's ResizeMsg handler is a
-     * production caller (src/Player.php). Still internal API — pre-1.0, the
-     * public surface is new()/fromFile(); do not build on this from outside.
+     * Not "for testing only": Player's WindowSizeMsg handler is a production
+     * caller (src/Player.php). Still internal API — pre-1.0, the public
+     * surface is new()/withAdaptiveSize(); do not build on this from outside.
      *
      * @param int<0, max> $rows
      * @param int<0, max> $cols

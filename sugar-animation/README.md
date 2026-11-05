@@ -58,6 +58,10 @@ Both presets always emit 24-bit truecolor SGR (`38;2;…` / `48;2;…`). There i
 
 The `.ansi` side has its own fallback: `ArtLibrary` resolves a slug through a `tc` → `256` → `16` depth cascade, picking a pre-authored variant that matches the detected `ColorProfile` instead of re-coloring at runtime.
 
+## Reduced motion
+
+The library does not consult `REDUCE_MOTION` (or the GNOME `gtk-enable-animations` / debian `reduce-motion` conventions) anywhere — autoplay is autoplay. Hosts and users who need motion restraint have real mitigations: construct the `Player` paused (`new Player($frames, paused: true)`) so nothing moves until `Space`, step manually with `←`/`→`, slow the cadence with `withFixedFps()` below the source frame rate, and bound the run with `playOnce()` / `withMaxSeconds()`. Honoring `REDUCE_MOTION` by default is a plausible code follow-up; this wave documents the state rather than changing it.
+
 ## Localization
 
 Refusal and decode errors route through sugar-core `Lang` in the `sugar-animation: …` voice, with translations shipped for every locale in `lang/` (see the repo's `LOCALES.md`). The Player's one-line status overlay is currently English-only; i18n-ing it is a tracked follow-up.

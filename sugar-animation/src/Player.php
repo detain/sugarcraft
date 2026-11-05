@@ -92,12 +92,13 @@ final class Player implements Model
     /**
      * E-10: how often a watching Player re-runs its probe, in seconds —
      * chicle's exact poll cadence for `--watch` (g_usleep(10000) at
-     * tools/chafa/chafa.c:926), delivered here as an event-loop timer
+     * tools/chafa/chafa.c:924, counted in the chafa clone @ 413b76e4d),
+     * delivered here as an event-loop timer
      * instead of a sleep. Deviations from chicle, both deliberate: its
-     * 250 ms backoff while the file is missing (:932) is not copied (the
+     * 250 ms backoff while the file is missing (:930) is not copied (the
      * probe owner decides what a failed stat costs; a stat(2) of a missing
      * path is cheap), and its re-decode of the file on EVERY poll because
-     * "we can't rely on timestamps" (:913-914) is replaced by the host
+     * "we can't rely on timestamps" (:915-916) is replaced by the host
      * probe's own change token — the recommended token is dev+ino+size+
      * mtime_ns, which catches renames-in-place and same-named rewrites a
      * coarse-mtime check would miss.
@@ -120,7 +121,7 @@ final class Player implements Model
      *        the shape {@see Decoder::loopCount()} answers for a stream with
      *        no NETSCAPE extension; N >= 1 plays exactly N times and then
      *        quits on the tick that completes the Nth lap (libnsgif
-     *        animation_complete semantics, gif.c:1854).
+     *        animation_complete semantics, namzug16/libnsgif gif.c:1854).
      * @param int $lapsCarried E-02 playthroughs already completed before the
      *        one the schedule is inside. Derived state — like `$anchor` it is
      *        only ever moved by {@see advanceSchedule()}: each automatic wrap
@@ -315,7 +316,7 @@ final class Player implements Model
     /**
      * E-02: play the frame stream exactly once and quit. This is the honest
      * counterpart of libnsgif's remark that "the only way to play the
-     * animation once is not to have this extension at all" (gif.c:862-871):
+     * animation once is not to have this extension at all" (namzug16/libnsgif gif.c:862-871):
      * because an unauthored stream reports infinite from
      * {@see Decoder::loopCount()}, a host that wants one pass must ask the
      * Player for it, not read it off the bytes.
@@ -451,7 +452,7 @@ final class Player implements Model
         // count of laps completed since it, so a lap bound is checked straight
         // off it — before any landing work, keeping the last shown frame on
         // screen exactly as libnsgif's animation_complete stops at the
-        // boundary (gif.c:1854).
+        // boundary (namzug16/libnsgif gif.c:1854).
         if ($this->loops !== null && $this->lapsCarried + $cycle >= $this->loops) {
             return [$this, Cmd::quit()];
         }

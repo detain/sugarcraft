@@ -95,7 +95,7 @@ final class Decoder
 
     /**
      * E-02: the NETSCAPE2.0 loop extension in GIF bytes, normalised to total
-     * playthroughs (mirror of libnsgif's app-extension intake, gif.c:808 and
+     * playthroughs (mirror of libnsgif's app-extension intake, namzug16/libnsgif gif.c:808 and
      * :862-871 — the block at 0x21 0xFF whose 11-byte identifier is
      * "NETSCAPE2.0" or its Animation Shop twin "ANIMEXTS1.0", carrying the
      * sub-block 0x03 0x01 &lt;lo&gt; &lt;hi&gt;).
@@ -112,7 +112,7 @@ final class Decoder
      *
      * A stream with NO loop extension reports null = infinite. That is the
      * deliberate divergence from libnsgif's internal `loop_max = 1` seed
-     * (gif.c:1601): chicle and every browser play an unauthored animation
+     * (namzug16/libnsgif gif.c:1601): chicle and every browser play an unauthored animation
      * forever (chicle-gif-loader.c carries zero loop references — the CLI
      * never consumes the field at all), and an inspection API that answered
      * "play once" for the overwhelmingly common unauthored file would hand
