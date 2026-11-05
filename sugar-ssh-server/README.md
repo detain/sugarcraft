@@ -409,6 +409,7 @@ and who fills each slot changes what you may trust in it.
 | `COLUMNS`, `LINES` | not by sshd -- the window size lives on the tty (this transport ioctls it, or accepts `withSizeProvider()`) | `Session::$cols/$rows` | Whatever you measured, not the peer's claim. |
 | `SSH_USER_AUTH` | sshd **only** with `ExposeAuthInfo` (see `sshd_config(5)` on your release): the authorized_keys line that matched | `Auth::fingerprint()` | Good -- server-side, since sshd picked the line. |
 | `SSH_USER_KEY_FINGERPRINT` | not sshd; a wrapper that parses `SSH_USER_AUTH`, or your own `AuthorizedKeysCommand` | `Auth::fingerprint()` | Depends entirely on your wrapper. |
+| `KEY_FINGERPRINT` | same producers — the shorter alternate name the same gate reads | `Auth::fingerprint()` | Depends entirely on your wrapper. |
 | `SSH_PASSWORD` | **nothing in OpenSSH ever sets it** | `PasswordAuth` | Operator-injected out of band, or peer-asserted through `AcceptEnv` -- never a credential proof. |
 | `SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE` | nothing; the first is Apache mod_ssl, the others are aspirational | `CertificateAuth::ENV_KEYS` | If your wrapper does not export one, the gate sees nothing. |
 | `SSH_CLIENT_VERSION`, `SSH_SERVER_VERSION` | nothing in stock OpenSSH | `Session::$clientVersion/$serverVersion` | Usually empty; do not treat them as audit columns. |

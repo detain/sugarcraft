@@ -22,8 +22,9 @@ use SugarCraft\SshServer\StreamHelper;
  *   - `keyFingerprints` — list of acceptable
  *     `SHA256:<base64>` fingerprints. The fingerprint is read
  *     from `\$_SERVER['SSH_USER_KEY_FINGERPRINT']` /
- *     `KEY_FINGERPRINT` (sshd writes one of these depending on
- *     version) as verbatim bare values. For `\$_SERVER['SSH_USER_AUTH']`
+ *     `KEY_FINGERPRINT` as verbatim bare values — names no stock OpenSSH
+ *     exports, so a wrapper must supply them. For
+ *     `\$_SERVER['SSH_USER_AUTH']`
  *     (OpenSSH ExposeAuthInfo multi-line blob, e.g.
  *     `publickey ssh-ed25519 SHA256:AbC123=`), the fingerprint
  *     token is extracted via regex. Empty list = skip key check.
@@ -64,9 +65,12 @@ use SugarCraft\SshServer\StreamHelper;
  * **Trust boundary — the fingerprint is NOT verified here.** The
  * fingerprint is read verbatim from environment variables
  * (`SSH_USER_KEY_FINGERPRINT` / `KEY_FINGERPRINT` / `SSH_USER_AUTH`).
- * In the intended deployment those are written by the host `sshd` AFTER
- * it has cryptographically verified the client's key — sshd is the real
- * trust boundary and this class is a post-hoc allowlist layered on top.
+ * Only `SSH_USER_AUTH` has a stock producer: sshd writes it (via
+ * `ExposeAuthInfo`) AFTER it has cryptographically verified the client's
+ * key — sshd is the real trust boundary and this class is a post-hoc
+ * allowlist layered on top. The two bare-fingerprint names are exported
+ * by no stock OpenSSH; their trust is exactly the trust of the wrapper
+ * that sets them.
  * In any other arrangement (a middleware upstream that copies client-
  * supplied data into these vars, an in-process transport without a
  * verifying sshd) the values are FORGEABLE: matching the allowlist then
@@ -230,7 +234,7 @@ final class Auth implements Middleware
     private function fingerprint(): ?string
     {
         // SSH_USER_KEY_FINGERPRINT and KEY_FINGERPRINT are bare fingerprints
-        // written verbatim by sshd.
+        // as verbatim values; no stock OpenSSH exports them — a wrapper does.
         foreach (['SSH_USER_KEY_FINGERPRINT', 'KEY_FINGERPRINT'] as $k) {
             $v = $_SERVER[$k] ?? getenv($k);
             if (is_string($v) && $v !== '') {
