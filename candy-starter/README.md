@@ -76,7 +76,7 @@ final class Greeter implements Model
 }
 ```
 
-Only the *return* of `init()` is optional — the method itself is required, and returning `null` just means "no startup Cmd". `subscriptions()` is likewise required; return `null` when the model needs no subscriptions. And note the fence above narrows `view(): string` deliberately: the interface's contract is `string|View` (the `View` value object adds cursor placement and window-title control), so a plain-string app may narrow — but if you ever want those extras your return type must widen back to `string|View`.
+Only the *return* of `init()` is optional — the method itself is required, and returning `null` just means "no startup Cmd". `subscriptions()` is likewise required; return `null` when the model needs no subscriptions. And note the fence above narrows `view(): string` deliberately: the interface's contract is `string|View` (the `View` value object adds cursor placement and shape, window title, taskbar progress (OSC 9;4), terminal foreground/background colours (OSC 10/11), a per-frame mouse-tracking mode, focus reporting, bracketed paste, and a pixel-graphics image layer), so a plain-string app may narrow — but if you ever want those extras your return type must widen back to `string|View`.
 
 The shape follows the MVC-style Model–Update–View architecture. State lives on the value object, transitions are pure functions, side effects (timers, HTTP, file I/O) get *scheduled* as Cmds rather than executed inline. The demo schedules only `Cmd::quit()`; `sugar-core`'s `Cmd` also offers `every()`, `tick()`, `promise()` and friends — return one from `init()` or `update()` and the harness runs it, feeding whatever `Msg` it produces back through `update()`.
 
@@ -84,7 +84,7 @@ The shape follows the MVC-style Model–Update–View architecture. State lives 
 
 ### Beyond keys
 
-Keys are not the only traffic `update()` sees. The harness also dispatches `WindowSizeMsg` (once at startup, then on every resize) — the demo's one fixed box needs no layout recompute, so it drops them, but any width-aware app must capture that Msg **before** its key filter or resize handling is dead on arrival. Async work you schedule with `Cmd::promise()` reports failure as an `ExceptionMsg`, and only there: a Model that swallows it loses its errors in silence. `src/Counter.php` sketches both arms, commented, at the top of `update()`.
+Keys are not the only traffic `update()` sees. The harness also dispatches `WindowSizeMsg` (once at startup, then on every resize) — the demo's one fixed box needs no layout recompute, so it drops them, but any width-aware app must capture that Msg **before** its key filter or resize handling is dead on arrival. Async work reports failure as an `ExceptionMsg` — whether you scheduled it with `Cmd::promise()` or it rides a `WorkerCmd`-backed promise — and through that single channel only: a Model that swallows it loses its errors in silence. `src/Counter.php` sketches both arms, commented, at the top of `update()`.
 
 ### Trust boundary
 
@@ -100,13 +100,13 @@ Keys are not the only traffic `update()` sees. The harness also dispatches `Wind
 | Tail a log into a scrollable pane | `sugarcraft/sugar-forms` — `Viewport`    |
 | Build a multi-page wizard         | `sugarcraft/sugar-forms` — `Group`       |
 | Plot a sparkline                  | `sugarcraft/sugar-charts` — `Sparkline`  |
-| Style the frame (bold, faint, colour) | `sugarcraft/sugar-style` — `Style`, `Theme` (the demo already frames itself with a `Style`) |
+| Style the frame (bold, faint, colour) | `sugarcraft/sugar-style` — `Style`, `Theme` (the demo already frames itself with a `Style` — built once into a static, the memoize-at-the-boundary pattern for any constant decoration) |
 | Translate your UI strings         | `sugarcraft/sugar-core` — `Lang::t()` with `lang/<code>.php` lookup files (see `LOCALES.md`) |
 | Make it `ssh`-accessible          | `sugarcraft/sugar-ssh-server`            |
 
 One trust note for the log-tail row: multi-line external text is exactly where CR-overwrite and bidi spoofing apply — pipe log contents (or any other foreign stream) through `Sanitize::untrustedForDisplay()` before it reaches a pane: the `untrusted()` sweep plus CR-to-LF conversion and invisible-format marking (sugar-core).
 
-Add the dep, import its classes, return them from `view()`. Most are renderers on the shared `Style`-based vocabulary — but not all of them are pure: `sugar-ssh-server` runs an authenticated server around your Program, and `sugar-core`'s `Lang` reads locale files at boot. Check each package's own README for setup and side effects instead of assuming the render-on-call shape. The demo itself covers the happy path only — one static frame, no colour beyond the border, and no loading or empty state — and the rows above are where you take it from there.
+Add the dep, import its classes, return them from `view()`. Most are renderers on the shared `Style`-based vocabulary — but not all of them are pure: `sugar-ssh-server` runs an authenticated server around your Program, and `sugar-core`'s `Lang` registers its locale dir on first use and reads the locale files lazily per locale (memoised after the first lookup). Check each package's own README for setup and side effects instead of assuming the render-on-call shape. The demo itself covers the happy path only — one static frame, no colour anywhere (the frame is rounded border glyphs, not a palette), and no loading or empty state — and the rows above are where you take it from there.
 
 ## Forking checklist
 
@@ -114,7 +114,7 @@ The six things you actually have to change after `create-project`:
 
 1. `composer.json` — rename `name` (and `description`) to your app.
 2. `bin/start` — swap the `use App\Counter;` import for your own Model.
-3. `src/` and `tests/` — replace the demo Model and its matrix; keep the `App\` / `App\Tests\` namespaces or update the PSR-4 prefixes in `composer.json` to match.
+3. `src/` and `tests/` — replace the demo Model and its matrix; keep the `App\` / `App\Tests\` namespaces or update the PSR-4 prefixes in `composer.json` to match. Also delete or adapt the three documentation guards that ship here (`ReadmeSnippetsTest`, `ModelContractDocumentationTest`, `SiteBodyTruthTest`): they pin *this* README and site page against the interface, and go red the moment your app stops being this tutorial.
 4. `composer.lock` — the shipped `.gitignore` ignores it, which is right for this template repo but wrong for the app you fork it into: apps ship a lockfile for reproducible, auditable builds. Delete the ignore line and commit the lock.
 5. Before shipping a real product, pin your sibling deps to a released constraint — the skeleton rides `dev-master` (`sugarcraft/sugar-core`, `sugarcraft/sugar-style`), which is deliberately bleeding-edge so the template never goes stale.
 6. Re-run `vendor/bin/phpunit` (or `composer test` — the skeleton ships that script alias).
