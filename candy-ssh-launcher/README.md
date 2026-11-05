@@ -92,7 +92,7 @@ So a config in the directory you launch from takes precedence over your home con
 
 ## Config format
 
-Flat list of endpoint objects (YAML subset or JSON):
+Flat list of endpoint objects (YAML subset or JSON). The reader format follows the file extension (`.json`, `.yml`/`.yaml`); a config named otherwise is content-sniffed — JSON iff the payload opens with `[` or `{`, else the YAML subset:
 
 ```yaml
 - name: production
@@ -129,11 +129,11 @@ Flat list of endpoint objects (YAML subset or JSON):
 | `user` | string, optional | Remote user (omitted → ssh's own default). |
 | `description` | string, optional | Dimmed text after the endpoint row. |
 | `identityFiles` | list, optional | Identity files, in order, each passed as its own `-i`; a bare scalar (`identityFiles: ~/.ssh/id`) is accepted as a one-item list. |
-| `identity_file` / `identityFile` | string, optional | Singular aliases of the above. |
+| `identity_file` / `identityFile` | string, optional | Singular aliases of the above. They are not merged: the plural `identityFiles` wins when present, else `identity_file`, else `identityFile` — a losing alias is silently discarded, so spell exactly one per endpoint. |
 | `proxyJump` | string, optional | Passed to ssh as `-J`. |
 | `options` | list, optional | Passed verbatim as repeated `-o Key=Value`; a bare scalar is accepted as a one-item list. |
 
-Limits of the embedded YAML reader: flat entries, nested one-item lists only, `#` comments. **Inline flow collections** (`options: [a, b]`) are refused with a message that names the fix — write the nested list form. Booleans (`name: yes`) are refused at any string field rather than reaching ssh as `"1"`.
+Limits of the embedded YAML reader: flat entries only, and a nested list is written one `- item` line at a time — any number of items accumulates, but each must be a scalar. **Inline flow collections** (`options: [a, b]`) are refused with a message that names the fix — write the nested list form; block mappings under list items are outside the supported subset. A `#` after whitespace starts a comment, and comment stripping is quote-blind — a `#` inside a quoted value truncates that value. Booleans (`name: yes`) are refused at any string field rather than reaching ssh as `"1"`.
 
 ## Keybindings
 
@@ -179,6 +179,8 @@ The parser handles:
 Keywords accept both `Key Value` and `Key=Value` spacing (ssh_config(5) legal forms), and a repeated `Host` pattern reuses its block instead of duplicating endpoints. Precedence follows `ssh_config(5)`: *for each parameter, the first obtained value will be used.* A `Host *` block wins only where it appears before any matching specific block — conventionally it is written last and therefore acts as a fallback. `IdentityFile` is the documented exception and accumulates in file order. Host patterns are used as the endpoint name (when no `HostName` is specified, the pattern itself becomes the host).
 
 Pattern matching is a deliberate **subset** of ssh_config(5): a block applies to a host only when the host matches a pattern *literally* or the pattern is exactly `*`. Wildcards like `Host web*` therefore contribute nothing to `web1` (they still mint a `web*` entry of their own). This mirrors what `ssh` does **not** do, so treat imports as a starting point and diff against your real config.
+
+Import surprises worth knowing: keywords outside the table above are dropped silently; a block whose only pattern is `Host *` mints no endpoint of its own; a multi-pattern block `Host a b c` mints one endpoint **per pattern** (sharing the block's values); and quoted patterns are no exception — patterns split on spaces, so `Host "web 1"` mints a `web` and a `1"` entry.
 
 ## Security
 
