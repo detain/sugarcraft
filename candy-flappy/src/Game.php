@@ -24,8 +24,10 @@ use SugarCraft\Flappy\PipeGenerator;
  *
  * Keys: space / ⏎ / w / ↑ — flap, which also starts the run.  q / esc /
  * Ctrl+C — quit.  r — restart at any moment, after a crash or mid-flight,
- * landing on the ready card (M19).  Ctrl+C is the only chord action (m1,
- * review round 2): every other Ctrl-combination is inert.
+ * landing on the ready card (M19).  Esc is gated to the plain key (n4,
+ * step 13): Ctrl+C is the only chord the model reads. Legacy terminals
+ * send Ctrl+[ as a bare 0x1B byte — hardware-identical to Esc, so it
+ * quits by byte identity and no gate can separate the two.
  *
  * Playability (M10/M18, lib-reviews-1102): the board opens in a READY phase —
  * the bird hovers at spawn and the world does not scroll until the first
@@ -372,7 +374,12 @@ final class Game implements Model
             // m1 (r2): Ctrl+C is the ONLY chord action; plain keys behind
             // chords (Ctrl+Q) must not fire them. Ctrl+W/Ctrl+Enter are text
             // editor idioms — a flap on a chord would be a surprise.
-            if ($msg->type === KeyType::Escape
+            // n4 (step 13): the Escape leg lacked the ctrl gate its q/r
+            // siblings carry; under kitty extended reporting Ctrl+Esc
+            // arrives as Escape+ctrl and must not quit. Legacy Ctrl+[ is
+            // byte-identical to Esc (bare 0x1B) and still quits — the
+            // decoder cannot separate the two.
+            if (($msg->type === KeyType::Escape && $msg->ctrl === false)
                 || ($msg->type === KeyType::Char && $rune === 'q' && $msg->ctrl === false)
                 || ($msg->ctrl && $msg->rune === 'c')) {
                 // M18: quitting mid-flight used to discard a qualifying

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Flappy\Tests;
 
 use SugarCraft\Core\BatchMsg;
+use SugarCraft\Core\InputReader;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Flappy\Bird;
@@ -886,6 +887,61 @@ final class GameTest extends TestCase
         // The one chord that IS documented stays alive.
         [, $cmdC] = $g->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
         self::assertNotNull($cmdC, 'Ctrl+C still quits');
+
+        // n4 (step 13): Escape carries the same ctrl gate its q/r siblings
+        // do — under kitty extended reporting Ctrl+[ arrives as
+        // Escape+ctrl=true (InputReader maps code 27 with the modifier
+        // bits) and must be inert, while a plain Esc still quits. Legacy
+        // Ctrl+[ is the bare 0x1B byte and decodes with ctrl=false, so it
+        // is hardware-identical to Esc and quits by byte identity.
+        [$afterCe, $cmdCe] = $g->update(new KeyMsg(KeyType::Escape, ctrl: true));
+        self::assertNull($cmdCe, 'Escape with ctrl set must not quit');
+        self::assertSame($g, $afterCe);
+
+        [, $cmdEsc] = $g->update(new KeyMsg(KeyType::Escape));
+        self::assertNotNull($cmdEsc, 'plain Esc still quits');
+    }
+
+    public function testCrashedBoardIgnoresCtrlEscapeStillQuitsOnPlainEsc(): void
+    {
+        // n4 (step 13): the quit arm is shared by the live and the crashed
+        // board — the original finding sat on the crash branch, so pin the
+        // posture there explicitly: Ctrl+Esc inert, plain Esc quits.
+        $g = new Game(
+            bird: Bird::spawn(Game::BIRD_COL, Game::HEIGHT / 2.0),
+            pipes: [],
+            score: 3,
+            crashed: true,
+            configDir: $this->hermeticConfigDir(),
+        );
+        [$after, $cmd] = $g->update(new KeyMsg(KeyType::Escape, ctrl: true));
+        self::assertNull($cmd, 'Escape with ctrl set must not quit a crashed board');
+        self::assertSame($g, $after);
+
+        [, $cmdEsc] = $g->update(new KeyMsg(KeyType::Escape));
+        self::assertNotNull($cmdEsc, 'plain Esc still quits a crashed board');
+    }
+
+    public function testLegacyCtrlBracketIsByteIdenticalToEscape(): void
+    {
+        // n4 (step 13) probe record. Ctrl+[ physically sends the single
+        // 0x1B byte — identical to what the Esc key sends; no consumer can
+        // tell them apart at byte level. sugar-core's InputReader buffers a
+        // lone 0x1B awaiting disambiguation (Program polls
+        // hasPendingEscape() and promotes after a short timeout via
+        // flushPending()), and the promotion is a plain KeyType::Escape with
+        // the ctrl flag never set. That is why the README and the Game
+        // docblock state legacy Ctrl+[ quits by hardware identity while the
+        // model-level gate binds only the protocol-flagged chord (kitty
+        // 27;5u) — pinning the decoder shape so a future change to it must
+        // revisit that claim.
+        $reader = new InputReader();
+        self::assertSame([], $reader->parse("\x1b"), 'a lone ESC byte buffers, awaiting disambiguation');
+        self::assertTrue($reader->hasPendingEscape());
+        $msg = $reader->flushPending();
+        self::assertInstanceOf(KeyMsg::class, $msg);
+        self::assertSame(KeyType::Escape, $msg->type);
+        self::assertFalse($msg->ctrl, 'the promoted Escape never carries ctrl — legacy Ctrl+[ is indistinguishable from Esc');
     }
 
     public function testSettleOnExitSavesALiveQualifyingScore(): void
