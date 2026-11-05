@@ -155,7 +155,7 @@ The ring has no built-in layer concept: a modal dialog is just more regions,
 and the trap is the disabled set. The recipe:
 
 ```php
-$saved = $ring->current();                       // what the dialog interrupts
+$saved = $ring->current();                       // what the dialog interrupts (null on an empty ring)
 $ring = $ring->register('dialog-field')          // the dialog's focusables
     ->focus('dialog-field');
 foreach (['sidebar', 'grid', 'filter'] as $id) {
@@ -166,8 +166,13 @@ foreach (['sidebar', 'grid', 'filter'] as $id) {
 foreach (['sidebar', 'grid', 'filter'] as $id) {
     $ring = $ring->enable($id);
 }
-$ring = $ring->unregister('dialog-field')->focus($saved);
+$ring = $ring->unregister('dialog-field');
+$ring = $saved === null ? $ring->focusFirst() : $ring->focus($saved);
 ```
+
+`current()` is `null` when nothing was focused — a dialog opened over an
+empty ring must restore via `focusFirst()` (or accept where `unregister()`
+landed), never by handing `null` to the `string` parameter of `focus()`.
 
 Mind the edges: `unregister()` of the *focused* region lands on the nearest
 enabled survivor, so bring the background back before removing the dialog
