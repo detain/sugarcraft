@@ -6,7 +6,6 @@
     "keywords": [
         "sugarcraft",
         "candy-code",
-        "crush",
         "web-ui",
         "vue",
         "vite",
@@ -63,7 +62,9 @@
             "/tsconfig.vitest.json",
             "/tsconfig.e2e.json",
             "/playwright-report",
-            "/test-results"
+            "/test-results",
+            "/tests",
+            "/phpunit.xml"
         ]
     },
     "minimum-stability": "dev",
