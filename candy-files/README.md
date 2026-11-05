@@ -50,7 +50,8 @@ composer install
 **3. Rolling phar** — the self-contained build published on GitHub Releases under
 `candy-files/dev` as `candy-files.phar` (with `.sha256` and `.sig` sidecars);
 stable cuts ride the same release pipeline on `candy-files/v*` tags. The launcher
-detects that it is running from inside a phar and resolves its assets accordingly:
+detects that it is running from inside a phar and `--version` reports that archive's
+own build stamp (see `Support\Version` below):
 
 ```bash
 wget https://github.com/detain/sugarcraft/releases/download/candy-files/dev/candy-files.phar
@@ -131,12 +132,14 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 | `Entry`             | Value object: name, isDir, size, mtime, isLink, isHidden                |
 | `Sort`              | Enum (NameAsc/NameDesc/MtimeAsc/MtimeDesc/SizeAsc/SizeDesc) + comparator |
 | `Pane`              | One pane: cwd, entries, cursor, selection set, sort, showHidden          |
-| `ConfirmState`      | Pending-confirmation enum (None / Delete / Copy / Move / Rename selected)     |
+| `ConfirmState`      | Pending-confirmation enum (None / DeleteSelected / CopySelected / MoveSelected / RenameSelected)     |
 | `Manager`           | SugarCraft Model — orchestrates two panes, handles all keys + confirm gate |
 | `FsLister`          | Default lister: `scandir` + `lstat` against the live filesystem          |
-| `Renderer`          | Pure view function — two pane boxes side-by-side + status line           |
-| `AsyncOps`          | Tick-deferred copy/move/rename futures (React\Promise + futureTick); sole home of the recursive copy engine + depth cap |
-| `UndoAction`        | Immutable undo record (delete/rename/move/copy) consumed by the undo stacks |
+| `Renderer`          | Pure view function — tab bar, two pane boxes side-by-side, optional search overlay, status line |
+| `AsyncOps`          | Tick-sliced deferred COPY engine (sole home of the recursive copy, depth-capped at `MAX_COPY_DEPTH` = 256; React\Promise + futureTick); move/rename run synchronously via `@rename` |
+| `UndoAction`        | Immutable undo record consumed by the undo stacks — `$items` is one of two shapes: a list of delete-records (`{path, isDir, trash}`) for restores, or an old→new path map for rename/move/copy |
+| `Lang`              | i18n wrapper over the `lang/*.php` catalogues (16 locales) consumed by Manager/Renderer strings |
+| `Support\Version`   | `--version` build-stamp resolution — the phar archive's own stamp wins when launched from a stamped phar; a source checkout reports `dev-master` |
 | `ManagerBuilder`    | Fluent builder for `Manager` — avoids 17-argument positional construction   |
 | `Msg/CopyCompletedMsg` | Async-copy completion Msg dispatched by the Program into `Manager::update()` |
 
@@ -211,13 +214,14 @@ The direct constructor is kept for backward compatibility only — new code shou
 
 ## Status
 
-Phase 10 entry — copy / move / rename / undo are wired. Delete moves files into a **per-session ephemeral trash**: undo (`u`) recovers them only while the process lives — quitting wipes the trash, and there is no cross-session bin (a persistent XDG-trash implementation is deliberately out of scope). The `d`/`c`/`m` operations use a three-phase confirm gate (`y` confirms, any other keystroke — including `Escape` — cancels the pending op); `R` rename is instead a text-entry submode: type the new name, `Enter` commits it (an empty buffer cancels), `Esc` cancels. The undo stack is capped at 50 operations (`UNDO_LIMIT`); the oldest entries fall off. Undo restores delete/move/rename; copy undo is informational (original preserved). Everything underneath (the pure-state transition layer) is already in place.
+Copy / move / rename / undo are wired. Delete moves files into a **per-session ephemeral trash**: undo (`u`) recovers them only while the process lives — quitting wipes the trash, and there is no cross-session bin (a persistent XDG-trash implementation is deliberately out of scope). The `d`/`c`/`m` operations use a three-phase confirm gate (`y` confirms, any other keystroke — including `Escape` — cancels the pending op); `R` rename is instead a text-entry submode: type the new name, `Enter` commits it (an empty buffer cancels), `Esc` cancels. The undo stack is capped at 50 operations (`UNDO_LIMIT`); the oldest entries fall off. Undo restores delete/move/rename; copy undo is informational (original preserved). Everything underneath (the pure-state transition layer) is already in place.
 
 Status-line semantics (all counts are **actions applied**, never arm-time intentions):
 
 - `deleted N entries` / `copied N entries` / `moved N entries` count entries that really landed.
 - When a stale or filtered name was skipped (`..`, empty), the message appends `(S skipped)`; when a leg failed, it says `N entries with E errors` instead — error precedence wins over skipped, and skipped wins over the overwrite note.
-- Copy silently **replaces** an existing destination; the completion message announces `(O overwrote)` for the legs that landed on a pre-existing target (measured at schedule time).
+- Copying a file onto an existing **file** silently replaces it; the completion message announces `(O overwrote)` for the legs that landed on a pre-existing target (measured at schedule time). Directory copies **merge**: destination-only entries survive. A copied **symlink** whose destination already exists fails silently — replace-onto-existing is guaranteed for regular files only (symlink replacement is a known gap tracked in the findings ledger).
+- Copy does **not** preserve source file modes: the destination gets default-permission bits, and copied directories are created `0755` (umask-filtered) regardless of the source — a `0600` secret routed through copy lands widened.
 - A delete that had to fall back to **permanent removal** (cross-device EXDEV) cannot be undone — undo reports it as an error rather than claiming a restore that has no bytes to recover.
 - The selection survives `r` (refresh) and `.` (hidden toggle) for entries that still exist, and `Escape` clears it; failed copy/move legs never enter the undo history.
 
