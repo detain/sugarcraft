@@ -124,7 +124,7 @@ $manual = Buffer::fromGrid(2, 1, [Cell::new('中', null, null, 2), $cont]);
 
 ## Diffing & delta ANSI
 
-`Buffer::diff(Buffer $previous)` compares two frames and returns a minimal list of `DiffOp` objects. Passing those ops through `DiffEncoder::encode()` produces a tight ANSI byte stream — no full repaint, just the cells that changed.
+`Buffer::diff(Buffer $previous)` compares two frames and returns a minimal list of `DiffOp` objects. Passing those ops through `DiffEncoder::encode()` produces a tight ANSI byte stream — no full repaint, just the cells that changed. `encode()` resets its cursor, style and hyperlink state to home on every call, so one encoder instance reused across frames is safe: each emitted frame is self-contained — absolute-position ops with `CUP` as needed, no dependence on what a previous frame left on screen.
 
 **DiffOp types**
 
