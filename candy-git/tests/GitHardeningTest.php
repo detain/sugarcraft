@@ -914,4 +914,46 @@ final class GitHardeningTest extends TestCase
 
         return $path;
     }
+
+    /**
+     * PB-GIT-16 (m23): filterConfigProbe parses two emitter layouts. The
+     * single-field shape "file:ORIGIN\tkey\nvalue" must record its filter
+     * lane exactly like the measured 2.43 two-record shape. Pre-fix the
+     * single-field branch demanded the record NOT contain 'filter.' while
+     * its own recording condition required the key to START with it — the
+     * conjunction was empty, so a hostile repo's filter lane fell through
+     * unrecorded: silent announce-skip and strict-mode pass-through
+     * (fail-open). Discriminating pin: green only when both shapes parse
+     * to the same entry.
+     */
+    public function testBothConfigProbeEmitterShapesRecordFilterLanes(): void
+    {
+        $parse = new \ReflectionMethod(Git::class, 'parseConfigProbeRecords');
+        $parse->setAccessible(true);
+
+        $origin = 'file:/repo/.git/config';
+        $twoRecord = implode("\0", [
+            $origin,
+            "filter.lfs.smudge\ngit lfs smudge %f",
+            $origin,
+            "core.bare\nfalse",
+        ]) . "\0";
+        $singleField = implode("\0", [
+            $origin . "\t" . "filter.lfs.smudge\ngit lfs smudge %f",
+            $origin . "\t" . "core.bare\nfalse",
+        ]) . "\0";
+
+        $expected = [[$origin, 'filter.lfs.smudge', 'git lfs smudge %f']];
+
+        self::assertSame(
+            $expected,
+            $parse->invoke(null, $twoRecord),
+            'measured git 2.43 two-record shape must keep recording the filter lane',
+        );
+        self::assertSame(
+            $expected,
+            $parse->invoke(null, $singleField),
+            'single-field shape must record the filter lane too - dropping it is the m23 fail-open',
+        );
+    }
 }

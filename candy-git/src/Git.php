@@ -775,25 +775,47 @@ final class Git implements GitDriver
             return []; // corrupt/unreadable: git's own command will explain it
         }
 
+        return self::parseConfigProbeRecords($probe['stdout']);
+    }
+
+    /**
+     * Parse one `git config --list -z --show-origin` payload into filter
+     * lanes. Two emitter shapes exist across git builds: the measured 2.43
+     * layout (origin is its OWN NUL record, entry follows as "key\nvalue")
+     * and the single-field layout ("file:ORIGIN\tkey[\nvalue]" in one NUL
+     * record). PB-GIT-16 (m23): lanes must be recorded from BOTH shapes —
+     * the pre-fix single-field branch gated on the record NOT containing
+     * 'filter.' while its recording condition required the key to START
+     * with it, mutually excluding the two halves and silently dropping
+     * repo-defined filter lanes (fail-open: no notice, no strict refusal).
+     *
+     * @return list<array{0: string, 1: string, 2: string}> [origin, key, value]
+     */
+    private static function parseConfigProbeRecords(string $stdout): array
+    {
         $entries = [];
-        $records = explode("\0", $probe['stdout']);
+        $records = explode("\0", $stdout);
         $pending = null; // origin field awaiting its key/value partner
         foreach ($records as $record) {
             if ($record === '') {
                 continue; // trailing empty piece after the final NUL
             }
             $tab = strpos($record, "\t");
-            if ($tab !== false && stripos($record, 'filter.') === false && str_starts_with($record, 'file:')) {
-                // Single-field shape "file:ORIGIN\tkey\nvalue" (one possible
-                // emitter layout): parse origin and entry together.
+            if ($tab !== false && str_starts_with($record, 'file:')) {
+                // Single-field shape "file:ORIGIN\tkey[\nvalue]" (one possible
+                // emitter layout): the KEY after the tab decides what it is.
+                // PB-GIT-16 (m23): the pre-fix extra gate demanded the record
+                // lack 'filter.' while the record condition demanded the key
+                // start with it - mutually exclusive, so every filter lane in
+                // this shape fell through UNRECORDED (no notice, no strict
+                // refusal: fail-open on a hostile-clone filter driver).
                 $origin = substr($record, 0, $tab);
-                $record = substr($record, $tab + 1);
-                $nl     = strpos($record, "\n");
-                $key    = $nl === false ? $record : substr($record, 0, $nl);
-                if (stripos($key, 'filter.') !== 0) {
-                    continue;
+                $rest   = substr($record, $tab + 1);
+                $nl     = strpos($rest, "\n");
+                $key    = $nl === false ? $rest : substr($rest, 0, $nl);
+                if (stripos($key, 'filter.') === 0) {
+                    $entries[] = [$origin, $key, $nl === false ? '' : substr($rest, $nl + 1)];
                 }
-                $entries[] = [$origin, $key, $nl === false ? '' : substr($record, $nl + 1)];
                 continue;
             }
             if ($pending === null && !str_contains($record, "\n")) {
