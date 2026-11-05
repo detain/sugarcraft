@@ -302,7 +302,8 @@ and every `push()` scrolls the frame half a cell (a whole cell in `tty`).
   still carries the reading; see **Value redundancy** under Chart
   Components).
 - `withUnderlay(Color $inactiveFg)` paints btop's `graph_bg` glyph
-  (`⣀` / `▄` / `░`, see `underlayGlyph()`) wherever a one-row graph is
+  (`⣀` / `▄` / `🬭` / `░` for the braille / block / block2 / tty families
+  respectively, see `underlayGlyph()`) wherever a one-row graph is
   transparent; static `underlay($family, $cells, $inactiveFg)` returns the
   bare strip for callers that compose it themselves.
 - `render(?ColorProfile)` returns `height` lines; it implements `Sizer`,
