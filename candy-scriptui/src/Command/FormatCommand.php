@@ -103,7 +103,11 @@ final class FormatCommand extends Command
             'code'         => self::renderCode($raw, (string) $input->getOption('language'), $themeName),
             'template'     => self::renderTemplate($raw, $allowEnv, $unresolved),
             'emoji'        => self::renderEmoji($raw),
-            default        => throw new \InvalidArgumentException(Lang::t('format.unknown_type', ['type' => $type])),
+            // Unreachable by construction: the validation door above admits
+            // only '' and self::TYPES, and each carries its own arm. A hit
+            // here means the door and this match drifted apart — a wiring
+            // bug, never user input, so it fails fast as a logic error.
+            default        => throw new \LogicException("unreachable: --type '{$type}' cleared the door but has no renderer"),
         };
 
         if ($unresolved !== []) {
