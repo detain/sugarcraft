@@ -11,8 +11,10 @@ use SugarCraft\ColorProfile\Probe;
  *
  * Styling may only reach destinations that can render it: a real terminal,
  * or anywhere at all when the user sets CLICOLOR_FORCE=1 (explicit override,
- * same spelling as the sugar-colorprofile detection chain — note that the
- * widely-assumed FORCE_COLOR name is NOT honored by this stack).
+ * same spelling as the sugar-colorprofile detection chain). The widely-assumed
+ * FORCE_COLOR name is NOT honored by this gate — the
+ * construction-time color-profile probe does read it (sugar-colorprofile
+ * DetectionChain step 2, ranked above NO_COLOR).
  *
  * @internal Library plumbing; not part of the public API surface.
  */

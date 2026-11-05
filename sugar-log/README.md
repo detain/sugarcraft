@@ -17,7 +17,7 @@ sugar-log — a minimal, colorful leveled logging library for PHP 8.3+.
 ## Features
 
 - **Leveled logging** — `Debug`, `Info`, `Warn`, `Error`, `Fatal` levels
-- **Colorful human-readable output** — styled when the destination is a color-capable terminal (honors `NO_COLOR`, force with `CLICOLOR_FORCE`; plain bytes on files and pipes by design)
+- **Colorful human-readable output** — styled when the destination is a color-capable terminal (the per-write gate honors `NO_COLOR`, force with `CLICOLOR_FORCE`; plain bytes on files and pipes by design — the construction-time color probe additionally reads `FORCE_COLOR`, see [Styling](#styling))
 - **Multiple formatters** — `TextFormatter` (default), `JsonFormatter`, `LogfmtFormatter`
 - **Structured key/value pairs** — pass arbitrary context with every log call
 - **Sub-loggers** — `with([...])` creates a child logger with persistent fields (a channel analogue: give each subsystem its own `withPrefix()`/`with()` child)
@@ -164,7 +164,7 @@ consults `sugar-colorprofile`'s Probe and — for each write — the stream it i
 about to use: `TextFormatter` output reaches a file or a piped stream as plain
 bytes, never as baked-in ANSI escapes. Set `NO_COLOR` to force plain output on
 terminals, or `CLICOLOR_FORCE=1` to opt styling back in for captured output
-(`FORCE_COLOR` is **not** a knob this fleet reads). A standalone
+(`FORCE_COLOR` is **not** a knob the per-write destination gate reads; the construction-time `Probe::colorProfile()` consults sugar-colorprofile's detection chain, which does read `FORCE_COLOR` — and ranks it above `NO_COLOR` there). A standalone
 `new TextFormatter(useColors: true)` still emits SGR by contract — the gate
 lives in the `Logger`, not in the formatter.
 
