@@ -65,6 +65,11 @@ echo StatusLine::error('connection refused'), "\n";
   (`detect()` throws an `InvalidArgumentException` when a stream you pass
   explicitly is not an open resource; the implicit `STDOUT` substitute
   never errors).
+  Two seeded styles bypass the downgrade because they are rendered as
+  given and emit SGR even through a pipe: `Frame::new()`'s slate border
+  (`#64748b`) and the tint from `Logo::withColor()`. For fully plain
+  output under every profile pass `Theme::plain()` and, for a colourless
+  Frame border, `->withBorderStyle(Style::new())`.
 - **`StatusLine`** — `success` / `error` / `warn` / `info` / `prompt` static
   helpers returning a themed glyph + space + message. Only the glyph and
   its space are styled; the message itself stays plain. Every call takes a
