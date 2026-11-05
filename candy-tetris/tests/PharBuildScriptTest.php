@@ -8,9 +8,9 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Tetris\Support\Version;
 
 /**
- * The phar packaging contract, pinned WITHOUT building an archive inside the
- * suite (a real build seals the whole vendor tree — the smoke bar runs in
- * tools/build-phar.php by hand). Three laws:
+ * The phar packaging contract, pinned without sealing the REAL vendor tree
+ * inside the suite — the only archive a test builds is over a bounded
+ * synthetic package (five real files, section 4). Three laws plus one:
  *
  *  1. bin/candy-tetris is a VALID STUB: the build script refuses any other shape,
  *     and the archive guard candidate is what makes `php candy-tetris.phar` find
@@ -21,6 +21,12 @@ use SugarCraft\Tetris\Support\Version;
  *  3. Support\Version answers CURRENT outside an archive, refuses every
  *     un-stampable path with null, and judges the stamp itself as a pure
  *     function: CURRENT is overridden ONLY under a stamped phar.
+ *  4. The locales SHIP INSIDE the archive: `Lang::DIR = __DIR__ . '/../lang'`
+ *     is a `__DIR__`-relative data site, so 'lang' must be in INCLUDE_ROOTS
+ *     (a source pin) and the synthetic-package build must actually seal every
+ *     catalogue (an archive-membership pin). Before TET-LOCALES-era catalogues
+ *     landed, the packaged root list omitted lang/ and the phar channel
+ *     rendered raw 'tetris.*' keys — this section is the C1 regression wall.
  */
 final class PharBuildScriptTest extends TestCase
 {
@@ -51,6 +57,70 @@ final class PharBuildScriptTest extends TestCase
         self::assertSame(2, $exit, 'an unknown option must refuse with exit 2, got: ' . $err);
         self::assertStringContainsString('unrecognized option --nope', $err);
         self::assertSame('', $out, 'refusals are stderr-only; stdout stays clean');
+    }
+
+    public function testThePackagedRootsListTheShippedLangCatalogues(): void
+    {
+        $script = file_get_contents(__DIR__ . '/../tools/build-phar.php');
+        self::assertIsString($script);
+        self::assertStringContainsString(
+            "const INCLUDE_ROOTS = ['bin', 'src', 'lang', 'vendor'];",
+            $script,
+            'the packaged root list must carry lang — Lang::DIR is a __DIR__-relative data site, and an archive without it renders raw tetris.* keys',
+        );
+        self::assertStringNotContainsString(
+            'no `lang/` catalogue',
+            $script,
+            'the pre-TET-LOCALES docblock claim that no lang catalogue exists is false and must not return',
+        );
+
+        $files = array_values(array_filter(
+            scandir(__DIR__ . '/../lang') ?: [],
+            static fn (string $name): bool => str_ends_with($name, '.php'),
+        ));
+        self::assertCount(16, $files, 'every shipped locale must exist on disk for the root to seal them');
+    }
+
+    public function testASyntheticPackageBuildSealsEveryLangCatalogueIntoTheArchive(): void
+    {
+        // A five-file real package under a temp dir: the walk, the guards and
+        // the seal run for real without freezing the monorepo's linked vendor.
+        $root = sys_get_temp_dir() . '/candy-tetris-phar-smoke-' . getmypid() . '-' . uniqid('u', true);
+        $out = $root . '/dist/tetris.phar';
+        foreach (['/tools', '/bin', '/src', '/lang', '/vendor', '/tests'] as $dir) {
+            self::assertTrue(mkdir($root . $dir, 0o755, true));
+        }
+        $script = realpath(__DIR__ . '/../tools/build-phar.php');
+        self::assertIsString($script);
+        self::assertTrue(copy($script, $root . '/tools/build-phar.php'));
+        // The stub-shape pin in the script demands this exact opening.
+        file_put_contents($root . '/bin/candy-tetris', "#!/usr/bin/env php\n<?php // synthetic stub\n");
+        file_put_contents($root . '/src/Fake.php', "<?php\n");
+        file_put_contents($root . '/lang/en.php', "<?php\nreturn [];\n");
+        file_put_contents($root . '/lang/de.php', "<?php\nreturn [];\n");
+        file_put_contents($root . '/vendor/autoload.php', "<?php\n");
+        file_put_contents($root . '/LICENSE', "synthetic license\n");
+        file_put_contents($root . '/tests/FakeTest.php', "<?php\n");
+
+        try {
+            [$exit, $outText, $err] = self::runScript($root . '/tools/build-phar.php', ['--vendor=monorepo', '--out=' . $out]);
+            self::assertSame(0, $exit, "synthetic build must succeed, got: $err$outText");
+
+            $phar = new \Phar($out);
+            foreach (['bin/candy-tetris', 'src/Fake.php', 'lang/en.php', 'lang/de.php', 'vendor/autoload.php', 'LICENSE'] as $member) {
+                self::assertTrue(isset($phar[$member]), "the archive must carry $member");
+            }
+            self::assertFalse(isset($phar['tests/FakeTest.php']), 'tests/ is not a packaged root');
+        } finally {
+            @unlink($out);
+            @unlink($root . '/dist');
+            foreach (['/tools/build-phar.php', '/bin/candy-tetris', '/src/Fake.php', '/lang/en.php', '/lang/de.php', '/vendor/autoload.php', '/LICENSE', '/tests/FakeTest.php'] as $file) {
+                @unlink($root . $file);
+            }
+            foreach (['/tools', '/bin', '/src', '/lang', '/vendor', '/tests', '/dist', ''] as $dir) {
+                @rmdir($root . $dir);
+            }
+        }
     }
 
     public function testVersionAnswersCurrentOutsideAnArchiveAndNullForUnopenablePaths(): void
@@ -94,6 +164,16 @@ final class PharBuildScriptTest extends TestCase
         $script = realpath(__DIR__ . '/../tools/build-phar.php');
         self::assertIsString($script, 'sanity: the build script exists');
 
+        return self::runScript($script, $args);
+    }
+
+    /**
+     * @param list<string> $args
+     *
+     * @return array{0: int, 1: string, 2: string} exit code, stdout, stderr
+     */
+    private static function runScript(string $script, array $args): array
+    {
         $proc = proc_open(
             [PHP_BINARY, '-d', 'phar.readonly=0', $script, ...$args],
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],

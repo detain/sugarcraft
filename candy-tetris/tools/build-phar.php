@@ -60,10 +60,10 @@ declare(strict_types=1);
  *
  * WHAT IS PACKAGED, and why the entry point is special
  * ====================================================
- * The archive root mirrors the package root (bin/, src/, vendor/, LICENSE) so the binary's
+ * The archive root mirrors the package root (bin/, src/, lang/, vendor/, LICENSE) so the binary's
  * autoload guard resolves inside the archive with no composer-mode change,
  * and so every `__DIR__`-relative DATA read keeps the layout it was written
- * against: neither the app nor sugar-core reads any packaged data through `__DIR__` for this tool (no `lang/` catalogue; game state lives under the user's config dir), and `src/` carries no `glob()`, so nothing inside the archive is stream-wrapper-hostile.
+ * against: the shipped locales are the app's only `__DIR__`-relative data site (`Lang::DIR = __DIR__ . '/../lang'`), and the shared sugar-core i18n loader reads them with `is_file()` + `require` — both stream-wrapper-safe, so translations keep working from inside the archive. `src/` carries no `glob()`; game state lives under the user's config dir, which the archive never writes.
  *
  * The STUB is the source of bin/candy-tetris itself, byte-for-byte, with
  * `__HALT_COMPILER();` appended — not a generated `require
@@ -147,7 +147,7 @@ if (!is_file($package . '/vendor/autoload.php')) {
 }
 
 /** Roots packaged at the archive, verbatim. Everything else stays out. */
-const INCLUDE_ROOTS = ['bin', 'src', 'vendor'];
+const INCLUDE_ROOTS = ['bin', 'src', 'lang', 'vendor'];
 /** Loose files packaged at the archive root. */
 const INCLUDE_FILES = ['LICENSE'];
 /** Never shipped, at any depth. */
