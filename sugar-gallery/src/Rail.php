@@ -115,7 +115,7 @@ final readonly class Rail
     /**
      * Return a copy with a different cursor, clamped to [0, count-1].
      * Scroll is clamped to at most the cursor so the card stays visible.
-     * To restore an arbitrary (scroll, cursor) pair, construct the rail
+     * To restore an arbitrary (cursor, scroll) pair, construct the rail
      * directly: `new Rail($title, $cards, $cursor, $scroll)` (or {@see new()},
      * same signature) — the constructor applies the SAME clamp, so a stale
      * pair degrades to the nearest legal window rather than rendering lies.

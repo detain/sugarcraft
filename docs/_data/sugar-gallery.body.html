@@ -42,7 +42,7 @@ $rail = new Rail('Continue Watching', $cards);
 $rail = $rail->moveCursor(+1, Rail::perRow($railWidth, $cardWidth));
 echo $rail->render($railWidth, focused: true, cardWidth: 16, posterHeight: 9);</code></pre>
 
-    <p>The heading rides the same title guard a card uses (<code>AnsiGuard::stripControls()</code>) and both header lines are clamped to the rail width; the empty state is localised via <code>Lang::t('rail.empty')</code> (16-locale family in <code>lang/</code>). <code>moveCursor()</code> takes a delta — restore an arbitrary <code>(scroll, cursor)</code> pair by constructing <code>Rail</code> with its fourth argument.</p>
+    <p>The heading rides the same title guard a card uses (<code>AnsiGuard::stripControls()</code>) and both header lines are clamped to the rail width; the empty state is localised via <code>Lang::t('rail.empty')</code> (16-locale family in <code>lang/</code>). <code>moveCursor()</code> takes a delta — restore an arbitrary <code>(cursor, scroll)</code> pair by constructing <code>Rail</code> with its third and fourth arguments (a stale pair is clamped, not restored verbatim: scroll follows the cursor).</p>
 
     <h3 style="margin-top: 32px;">PosterCard — one tile</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Gallery\PosterCard;
