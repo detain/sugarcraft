@@ -681,7 +681,8 @@ foreach ($procs as $row => $p) {
 > never outlive the dashboard that started it. The same bounded-teardown story
 > covers `GenericModule` and `SystemModule` command runs (5 s deadline, 1 MiB
 > output cap via `BoundedCommand`) and the weather fetch (synchronous inside the
-> dispatched command, bounded by the HTTP client's 10 s timeout).
+> dispatched command, bounded by the HTTP client's 5 s timeout —
+> `WttrInClient`'s stream context).
 >
 > **Color environment.** Every color emission routes through
 > `Foundation\ColorMode`: `NO_COLOR` set to any non-empty value and `TERM=dumb`
