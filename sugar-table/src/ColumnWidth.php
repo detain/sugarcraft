@@ -25,11 +25,14 @@ enum ColumnWidth: string
     case Content = 'content';
 
     /**
-     * Flexible: take an equal share of the width left after Fixed/Percent
-     * columns, IGNORING content length (content is truncated to fit). The "fill
-     * the rest" column — unlike Dynamic it never grows past its share, so a table
-     * with a Flex column and a set width ({@see Table::withWidth()}) renders to an
-     * exact, deterministic total width.
+     * Flexible: take a share of the width left after Fixed/Percent columns
+     * PROPORTIONAL to its {@see Column::withFlexibleWidth()} weight (an
+     * unweighted Flex keeps one share), IGNORING content length (content is
+     * truncated to fit). The "fill the rest" column — unlike Dynamic it never
+     * grows past its share, so a table with a Flex column and a set width
+     * ({@see Table::withWidth()}) renders to an exact, deterministic total
+     * width: the last Flex absorbs the integer-rounding slack of the split.
+     * {@see Column::withMaxWidth()} then caps the result for every kind.
      */
     case Flex = 'flex';
 }

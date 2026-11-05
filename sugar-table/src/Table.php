@@ -514,6 +514,11 @@ final class Table
      * string — match against a key via Columns()[$col]->key. Hidden columns
      * keep their index; the callback simply never fires for them.
      *
+     * $row is the 0-based slot within the rows rendered in the current
+     * frame — page- and scroll-relative, not the absolute index into
+     * Rows(). $value arrives post-Sanitize (control and private-use
+     * characters already stripped), so match on display-safe text.
+     *
      * When not set, existing baseStyle/column style/row style/cell style
      * precedence is used as before.
      *
@@ -1004,11 +1009,14 @@ final class Table
     }
 
     /**
-     * Search across ALL columns (case-insensitive).
+     * Global full-text search (case-insensitive).
      *
-     * Applies a global full-text search across every column in the table.
-     * Matching is case-insensitive and uses OR logic: a row is included if
-     * ANY column's value contains the search text.
+     * Scans every column while NO column is marked filterable (the
+     * back-compat default); once at least one column carries
+     * {@see Column::withFilterable()}, the scan is restricted to the
+     * filterable-marked columns only. Matching is case-insensitive and
+     * uses OR logic: a row is included if ANY scanned column's value
+     * contains the search text.
      *
      * Combines with column filters (Filter()) via AND logic — a row must
      * satisfy both the global search and all active column filters.

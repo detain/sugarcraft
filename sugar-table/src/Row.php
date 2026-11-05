@@ -40,6 +40,14 @@ final class Row
         return new self($this->data, $ansiStyle, $this->zebra, $this->zebraStyleIndex);
     }
 
+    /**
+     * Enable zebra striping for this row with the given stripe selector.
+     *
+     * The model is two-stripe: $styleIndex 1 picks the odd stripe, index 0
+     * (and any other value) picks the even stripe — an index of 2 or higher
+     * behaves exactly like 0. Table-level {@see Table::withZebra()} must
+     * also be enabled for any striping to render.
+     */
     public function withZebra(int $styleIndex = 0): self
     {
         return new self($this->data, $this->style, true, $styleIndex);
