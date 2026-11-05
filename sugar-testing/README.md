@@ -2,10 +2,10 @@
 
 > Formerly published as `sugarcraft/candy-testing` (renamed 2026-10). <!-- @rename-keep -->
 
-Deterministic test harness for SugarCraft apps — MVC-style Model–Update–View
-programs — for PHP 8.3+: scripted input, golden snapshots, cell-grid
-assertions, program simulation, VHS tape building, and graphics-stream
-decoding.
+Deterministic test harness for PHP 8.3+ SugarCraft programs — the MVC-style
+Model–Update–View apps in this repo: scripted input, golden snapshots
+(committed byte-exact reference output), cell-grid assertions, program
+simulation, VHS tape building, and graphics-stream decoding.
 
 > **Architecture background:** SugarCraft apps follow the MVC-style Model–Update–View architecture. Testing such programs deterministically has been a long-standing gap — `sugar-testing` closes it for the PHP ecosystem.
 
@@ -18,8 +18,8 @@ decoding.
   (see [Simulation subset](#simulation-subset))
 - **`ScriptedInput`** — fluent builder for message sequences (`->key('q')->enter()`)
 - **Snapshot assertions** — `assertGoldenAnsi`, `assertCellGrid`, `assertAnsiEquals`,
-  `assertViewIdempotent` — every shape that cannot assert anything **fails loudly**;
-  a silent green is never produced by a malformed expectation
+  `assertViewIdempotent` — the parsers reject malformed expectation shapes at the
+  boundary, so an assertion that would compare nothing fails loudly instead of passing
 - **`GoldenFile`** — lifecycle-aware `.golden` helper: `load()` (null only when
   missing; unreadable or symlinked goldens throw), `save()` (atomic clobber —
   fixture seeding), `create()` (one-way, refuses an existing golden),
@@ -203,8 +203,8 @@ CI only ever compares).
 
 The grid is a list of rows compared against a `SugarCraft\CellBuffer\Buffer`.
 Every part of the shape is parsed at the boundary and **nothing is silently
-skipped** — a grid that cannot assert anything fails, so a typo can never
-produce a false green:
+skipped** — a grid that cannot assert anything fails, so a typo cannot produce
+a false pass:
 
 ```php
 // A plain string row spreads its grapheme clusters across cells, one per
@@ -219,8 +219,8 @@ Assertions::assertCellGrid([
 ], $buffer);
 ```
 
-Rules the parser enforces (each violation raises immediately — older versions
-skipped malformed input and passed green):
+Rules the parser enforces (each violation raises immediately; malformed input
+is never skipped into a pass):
 
 - The outer grid must be a list, with exactly `$buffer->height()` rows; a
   height or row-width mismatch fails the assertion, naming the dimensions.
@@ -235,8 +235,8 @@ skipped malformed input and passed green):
   teaching message — a typo'd `'run'` would once have unchecked the position
   forever. A string cell claiming more than one cluster throws: spread it
   across cells or use the array form.
-- A grid whose every cell is a wildcard **fails** (“compared zero cells”) —
-  vacuous green is the exact failure mode this library exists to prevent.
+- A grid whose every cell is a wildcard **fails** ("compared zero cells") —
+  a vacuous pass is the exact failure mode this library exists to prevent.
 - Failures dump up to 20 mismatching cells with `(row, col)` coordinates, then
   a summary of cells compared vs skipped, so a full-buffer diff cannot flood a
   test log.
@@ -295,13 +295,13 @@ GraphicsAssertions::assertProtocolRoundTrip($bytes, Mode::Iterm2);
 Pixel materialization goes through GD. Where ext-gd is absent the pixel paths
 **fail loudly** (a `RuntimeException` naming the missing extension) — a
 graphics assertion never skips silently, because a skipped pixel check reads
-identical to a passing one in a green run. Decoding needs no GD.
+identical to a passing one once the suite reports OK. Decoding needs no GD.
 
 These decoders eat captured output, which may be hostile-sized, so
 `DecodeLimits` budgets every allocation before it happens: declared rasters
 beyond 4M cells, numeric literals beyond 9 digits, `o=z` payloads inflating
 past 64 MiB (capped **while** streaming, so a bomb cannot pre-materialize),
-and images declaring more than 16.7M pixels all raise a catchable
+and images declaring more than 16,777,216 pixels (2^24) all raise a catchable
 `MalformedGraphicsException` with a precise reason — never an OOM-killed
 runner. Malformed streams likewise raise `MalformedGraphicsException` (bad
 parameter, missing introducer, unterminated payload…).
@@ -332,8 +332,8 @@ drain, production-style), `mouse(...)`, `wheel(...)`, `paste(content)`,
 
 **Ticks.** Every fleet lib ships its *own* tick message class (`minesweeper`,
 `widgets`, `forms`, … each match their own), so a bare `ticks(5)` enqueues the
-harness’s `SugarCraft\Testing\Input\TickMsg` — which matches **nothing** in
-your model. Pass the factory to script your lib’s real tick:
+harness's `SugarCraft\Testing\Input\TickMsg` — which matches **nothing** in
+your model. Pass the factory to script your lib's real tick:
 
 ```php
 ->ticks(3, factory: fn (int $i, float $s) => new \My\Lib\Msg\TickMsg($s))
@@ -387,7 +387,7 @@ the Program's model each time, so repeated runs give the same result.
   over-sent)
 
 Verbs: `assertCmdCount(int)`, `assertCmdContains(callable $filter, ?string $message)`
-(failure names the captured-cmd count, since “matched none of 0” is the usual story),
+(failure names the captured-cmd count, since "matched none of 0" is the usual story),
 `assertNoCmds()`.
 
 ### TapeRecorder
@@ -445,11 +445,10 @@ timer armed for 10s after 12s of idle is already overdue and fires on the first 
 your safety net fires instead of the work and the test fails **having consumed no wall
 time** — an intermittent flake with no obvious cause.
 
-The measurements — a 5s timer armed after N seconds of synchronous work at five different
-arming sites, under ext-uv and under `StreamSelectLoop` — live in exactly one place: the
+The measurements — a 5s timer armed after N seconds of synchronous work at each arming
+site, under ext-uv and under `StreamSelectLoop` — live in exactly one place: the
 timer-accuracy notes on `SugarCraft\Core\Program::run()` in sugar-core. They are not
-copied here, because a copy in three files is how one wrong row came to be wrong in three
-files.
+copied here; one home for the table means one place to correct it.
 
 What the numbers show: every ext-uv figure is linear in the idle, which is the proof the
 deadline comes off a stale clock rather than the OS clock. `StreamSelectLoop` returns the
@@ -458,7 +457,7 @@ full delay at every site and every N.
 **Do not read "armed before the loop's first `run()`" as an escape hatch.** It survives
 only in the degenerate case where the armed timer is the loop's earliest deadline and
 nothing else wakes the first poll; the apparent safety is an arithmetic cancellation
-inside `UV::RUN_ONCE`, not — as it is often stated — an absent baseline. A never-run loop
+inside `UV::RUN_ONCE`, not an absent baseline. A never-run loop
 has a baseline (`uv_loop_new()` sets it), and `uv_now()` shows the cache stale by the full
 pre-run idle at the moment of the arm. Add a periodic render tick, an earlier timer, or a
 stream with bytes already waiting — a real `Program` always has at least one — and the
@@ -505,5 +504,5 @@ MIT
 ## Credits & inspiration
 
 Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem
-(upstream-antecedented by `charmbracelet/x/exp/golden` and `charmbracelet/teatest`);
+(with `charmbracelet/x/exp/golden` and `charmbracelet/teatest` as the nearest prior art);
 SugarCraft is developed as a native PHP project.
