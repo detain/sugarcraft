@@ -1,6 +1,6 @@
 <img src=".assets/icon.png" alt="candy-scriptui" width="160" align="right">
 
-# CandyScriptui
+# Candy-Scriptui
 
 > Formerly published as `sugarcraft/candy-shell` (renamed 2026-10). <!-- @rename-keep -->
 > Namespace changed: `SugarCraft\Shell\` → `SugarCraft\ScriptUi\`. <!-- @rename-keep -->
@@ -23,13 +23,19 @@ candy-scriptui — a composer-installable CLI of SugarCraft TUI primitives for
 shell scripts, for PHP 8.3+. Composer installs the launcher at
 `vendor/bin/candy-scriptui`; the examples below assume it is on your `PATH`
 (add `vendor/bin` to it, or invoke the full path). Prebuilt single-file
-binaries are published per commit as rolling dev phars:
+binaries are published per commit that changes this app as rolling dev phars:
 
 ```sh
-curl -fsSL -o candy-scriptui \
+curl -fsSLO \
   https://github.com/detain/sugarcraft/releases/download/candy-scriptui/dev/candy-scriptui.phar
-chmod +x candy-scriptui
+curl -fsSLO \
+  https://github.com/detain/sugarcraft/releases/download/candy-scriptui/dev/candy-scriptui.phar.sha256
+sha256sum -c candy-scriptui.phar.sha256 && chmod +x candy-scriptui.phar
 ```
+
+The published `.phar.sha256` sidecar is `<hex>  candy-scriptui.phar`, so
+`sha256sum -c` verifies the download verbatim before you make it executable;
+run it as `./candy-scriptui.phar` (or rename it once verified).
 
 ```sh
 # Apply styling.
@@ -189,13 +195,18 @@ flags across commands:
   Substring matching is the default; fuzzy Smith-Waterman is opt-in.
 - `--header "Email:"` / `--prompt "> "` / `--value "$LAST"` /
   `--char-limit N` / `--width N` on `input` and `write`; `--max-lines N`
-  and `--show-line-numbers` exist on `write` only.
+  exists on `write` only, while `--show-line-numbers` exists on `write`
+  AND `pager`.
 - `--affirmative "Yes"` / `--negative "No"` / `--default=yes|no` /
-  `--show-output` on `confirm`. An unknown `--default` word is refused
+  `--show-output` on `confirm`. `--default` also accepts the one-letter
+  spellings `y` / `n` (case-insensitive); any other unknown word is refused
   (exit `1`) rather than silently treated as "no".
-- `--show-output` / `--show-error` plus 12 spinner styles
+- `--show-output` / `--show-error` (aliased `--show-stdout` /
+  `--show-stderr`) plus 12 spinner styles
   (`dot` · `line` · `pulse` · `globe` · `points` · `monkey` · `moon`
   · `meter` · `mini-dot` · `hamburger` · `ellipsis` · `jump`) on `spin`.
+  Both `mini-dot` and `minidot` spellings are accepted for the dotted
+  style; the help text and refusals name the `mini-dot` form.
 - `--min-level info` / `--prefix` / `--time RFC3339` / `--file out.log`
   / `--formatter text|json|logfmt` / `--structured` on `log`. Unknown
   `--formatter` names are refused (exit `1`).
@@ -216,8 +227,9 @@ sugar-core's ColorProfile semantics: `Ascii` drops colour but keeps
 decoration, `NoTty` emits no escapes at all, and `Ansi`/`Ansi256`
 re-quantise colours to that depth.
 
-- **`--no-ansi`** (global flag) emits plain bytes — every SGR escape
-  dropped, decoration included. `--ansi` overrides.
+- **`--no-ansi`** (global flag) is FINAL — it outranks every other rule,
+  including `--ansi`: every SGR escape is dropped, decoration included.
+  `--ansi` overrides the ENV tiers only.
 - **`NO_COLOR`** (any truthy value) disables colour; decoration (bold,
   underline, …) and layout survive.
 - **`CLICOLOR=0`** disables colour when stdout is not a TTY (otherwise
@@ -226,7 +238,10 @@ re-quantise colours to that depth.
   redirected, winning over `NO_COLOR`.
 - **`FORCE_COLOR=1|2|3`** forces a specific tier (16 / 256 /
   TrueColor) and wins over every other env rule.
-- **`TERM=dumb`** emits plain bytes, like `--no-ansi`.
+- **`TERM=dumb`** emits plain bytes (the no-escape tier) — but it is the
+  LAST tier checked: `NO_COLOR` or `CLICOLOR=0` resolve earlier to the
+  decoration-kept tier (colour off, bold/underline survive), and
+  `FORCE_COLOR` / `CLICOLOR_FORCE` outrank `TERM=dumb` entirely.
 
 Being a pipe does not by itself strip colour — styled bytes flow to
 redirected output as always; set `CLICOLOR=0` for pipe-aware muting.
@@ -235,7 +250,9 @@ redirected output as always; set `CLICOLOR=0` for pipe-aware muting.
 
 Only presentation options may be given via an environment variable, keyed
 by the `CANDY_SCRIPTUI_` prefix followed by the option name in uppercase
-with non-alphanumeric characters replaced by `_`. The permitted names are
+with non-alphanumeric characters replaced by `_`. A flag option (like
+`bold`) arms only on `1`, `true`, or `yes` — case-insensitive — and any
+other value is ignored exactly like an unknown name. The permitted names are
 `align`, `background`, `bold`, `border`, `border-foreground`,
 `cursor-prefix`, `faint`, `foreground`, `height`, `italic`, `prefix`,
 `reverse`, `separator`, `strikethrough`, `timeout`, `underline`,
@@ -248,7 +265,8 @@ CANDY_SCRIPTUI_FOREGROUND=#ff0000 CANDY_SCRIPTUI_BOLD=1 candy-scriptui style "He
 
 Everything else is CLI-only **by construction**: options that answer for
 the user (`--default`, `--selected`, `--value`), grant capability
-(`format --allow-env`), or redirect data (`--file`, `--out`) are never
+(`format --allow-env`), or redirect data (`--file`, whose `log` shortcut is
+`-o`) are never
 read from the environment — a stray `CANDY_SCRIPTUI_*` in a shared CI
 image cannot silently weaken a fail-closed flag. Names outside the list
 are ignored with no notice.
@@ -292,7 +310,10 @@ precedence order:
 ### Language
 
 `candy-scriptui` reads `LC_ALL`, then `LC_MESSAGES`, then `LANG` at startup
-and answers refusal and UI messages in that language. Sixteen catalogs ship
+and answers its UI and hint strings in that language — a handful of
+programmer-facing diagnostics (the `format` unknown-value refusal
+scaffolding, the `find()` did-you-mean suggestions) are English-only by
+design. Sixteen catalogs ship
 with the package; a territory spelling falls back to its base language
 (`de_DE.UTF-8` → `de`) and then to English. `C`/`POSIX` stay English.
 
@@ -384,18 +405,25 @@ behavioural differences:
   alongside `--theme`. Template support is the lightweight `{{VAR}}`
   expansion — Go template-function helpers are not implemented. Expansion
   is fail-closed: only variables named in `--allow-env=A,B` are read from
-  the environment, and a placeholder that resolves to nothing is announced
-  on STDERR instead of vanishing silently.
+  the environment (`"*"` expands every variable — opt-in, and only safe
+  for trusted input), and a placeholder that resolves to nothing is
+  announced on STDERR instead of vanishing silently.
 - `--timeout`, `--show-help`, and `--strip-ansi` work on the commands that
   accept them: `--timeout` arms a real deadline (exit `124`) on every
-  interactive command including `file`, `--show-help` is honoured as an
-  alias for `--help` on every command that defines it, and `--strip-ansi`
+  interactive command including `file` (on `file` it is capped at 86400
+  seconds — one day), `--show-help` is honoured as an alias for `--help`
+  on every command that defines it, and `--strip-ansi`
   is read by `input`, `format`, and `style`. The `--cursor-mode` flag is
   honoured by `input` and `write` (`hidden` hides the cursor; `blink`
   and `static` leave the terminal default) and refuses any other value.
-  Where a flag is meaningless to a non-interactive command (`format`,
-  `join`, `log`, `style`, `table`) it is still accepted but treated
-  as a no-op.
+  `--timeout` is a documented no-op on `join`, `log`, `style`, and `table`
+  (they run no interaction to bound); on `format` it is instead REFUSED
+  loudly (exit `1` on STDERR), since a deadline there would be silently
+  ignored. Flags a command never defines — `--cursor-mode` and
+  `--strip-ansi` on the non-interactive five (`format`, `join`, `log`,
+  `style`, `table`) — are NOT accepted: they fail with Symfony's
+  unknown-option error (exit `1`), consistent with the rule above that
+  every flag listed by a command's `--help` is live.
 - `confirm --default=yes|no` is the form to use; the older `--default-yes`
   alias is preserved.
 
