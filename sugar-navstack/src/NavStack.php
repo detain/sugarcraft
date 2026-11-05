@@ -215,7 +215,7 @@ final class NavStack
             if (!$v instanceof NavigationItem) {
                 throw new \InvalidArgumentException(
                     'Navigation stack items must all be NavigationItem; got '
-                    . (\is_scalar($v) ? \get_debug_type($v) : \get_class($v)) . ' at key ' . $k
+                    . \get_debug_type($v) . ' at key ' . $k
                 );
             }
         }

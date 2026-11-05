@@ -6,6 +6,7 @@ namespace SugarCraft\NavStack\Tests;
 
 use SugarCraft\NavStack\{Breadcrumb, NavStack, NavigationItem, Shell};
 use SugarCraft\Core\Util\Width;
+use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 
 final class NavStackTest extends TestCase
@@ -434,5 +435,35 @@ final class NavStackTest extends TestCase
 
         $rendered = $shell->renderBreadcrumb();
         $this->assertSame('Home › Settings', $rendered);
+    }
+
+    // ─── setItems() element-type refusal (NS-14) ───────────────────────────────
+
+    public function testSetItemsRefusesNonObjectShapesWithTheDocumentedException(): void
+    {
+        // get_class(null) / get_class(array) raise TypeError, so the documented
+        // InvalidArgumentException must derive the name via get_debug_type() for
+        // EVERY shape — including the nested list and assoc array elements.
+        $stack = new NavStack();
+
+        foreach (
+            [
+                'null' => [null, 'null at key 0'],
+                'list' => [['a', 'b'], 'array at key 0'],
+                'assoc' => [['k' => 'v'], 'array at key 0'],
+                'object' => [new \stdClass(), 'stdClass at key 0'],
+            ] as $label => [$element, $needle]
+        ) {
+            try {
+                $stack->setItems([$element]);
+                self::fail("{$label} element accepted");
+            } catch (InvalidArgumentException $e) {
+                self::assertStringContainsString($needle, $e->getMessage());
+            }
+        }
+
+        // A genuinely valid list still passes untouched (green control).
+        $stack->setItems([new NavigationItem('Home'), new NavigationItem('Settings')]);
+        $this->assertSame(2, $stack->depth());
     }
 }
