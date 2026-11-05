@@ -65,6 +65,12 @@ the stranded partial with `$driver->escapeDecoder()->reset()` (which clears the
 remainder and lets `isEof()` answer true) or exit on a grace period of
 EOF-idle polls.
 
+To watch the decoder work on a scripted byte stream, run
+`php examples/decode.php` — it feeds labeled frames (plain keys, legacy and
+Kitty arrows, a Kitty release, modifyOtherKeys, SGR 1016 pixels, a forged
+mouse frame, a DA reply, focus, a bracketed paste) and prints the decoded
+events.
+
 ## Installation
 
 ```sh
