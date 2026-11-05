@@ -95,7 +95,10 @@ echo StatusLine::error('connection refused'), "\n";
   bare `rule()`, and indented `subHeader()` for nesting under a parent.
   An explicit `width` is a hard cap: an over-long label is cut with `…`
   rather than overflowing the line. Omitted `width` defaults to the
-  terminal width (exported `COLUMNS`, else 80 cells); `null` opts out.
+  terminal width (exported `COLUMNS`, else 80 cells). `null` opts out of
+  the cap and the fill, not of the line: `header()`/`subHeader()` render
+  label plus a single trailing rune, and `rule()` renders a fixed
+  two-cell dash.
 - **`Stage`** — per-line step renderers for progressive CLI output:
   `step()` (numbered), `subStep()`, and `subStepWithProgress()` (bar or
   spinner). Messages take the same width budget as `StatusLine` (tree
