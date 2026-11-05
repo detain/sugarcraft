@@ -153,7 +153,8 @@ $ring = is_array($decoded)
   trusted (a
   legacy session file from before a layout change cannot crash startup). It
   drops `disabled` entries for regions that no longer exist and still loads
-  legacy positional-only snapshots. Malformed `ids` throw
+  legacy positional-only snapshots — which carry no `disabled` key, so
+  everything in them comes back **enabled**. Malformed `ids` throw
   `InvalidArgumentException`; everything else *in the array payload* degrades
   fail-soft. Entry comparison is string-on-string: a hand-edited
   numeric `1` in `disabled` never matches the id `"1"`, so that region comes
@@ -228,7 +229,7 @@ perceivable (2.4.7 *Focus Visible*).
 | `FocusRing::new(): self` | An empty ring. |
 | `FocusRing::of(string ...$ids): self` | A ring of regions (duplicates dropped), focusing the first. |
 | `FocusRing::ofStrict(string ...$ids): self` | Like `of()`, but throws `InvalidArgumentException` on a duplicate id. |
-| `FocusRing::restore(array $snapshot): self` | Inverse of `jsonSerialize()` — clamps stale indices on legacy positional-only snapshots, unknown `focused` ids land on the first region, drops unknown disabled entries. Takes a decoded **array**: guard `json_decode()` with `is_array()` before calling. |
+| `FocusRing::restore(array $snapshot): self` | Inverse of `jsonSerialize()` — clamps stale indices on legacy positional-only snapshots, unknown `focused` ids land on the first region, drops unknown disabled entries; a legacy positional-only snapshot has no `disabled` key, so every region comes back enabled. Takes a decoded **array**: guard `json_decode()` with `is_array()` before calling. |
 | `register(string $id): self` | Add an enabled region to the end of the order. |
 | `unregister(string $id): self` | Remove a region, preserving focus where possible. |
 | `reorder(string ...$ids): self` | Replace the traversal order, keeping focus on the current id when it survives. |
