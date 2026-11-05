@@ -54,6 +54,7 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
 
     <h3 style="margin-top: 32px;">Highlighter</h3>
     <p>Takes a <code>MatchResult</code> and a styler <code>\Closure(string): string</code>, returns the candidate string with matched runs passed through the styler. Non-matched runs are returned unchanged.</p>
+    <p>Highlighting is visual by default: pair color with bold/underline cues for color-blind users, and expose the <code>matchedIndices</code> + the deterministic <code>matchAll()</code> ranking for non-visual/screen-reader channels.</p>
 
     <h3 style="margin-top: 32px;">Security</h3>
     <p>The highlighter is presentation-neutral and forwards unmatched haystack segments verbatim. Callers <strong>must</strong> sanitize candidate text (strip <code>\x1b</code>/control bytes) before display — the styler callback receives raw matched substrings only and does not sanitize; sanitization belongs to the TUI render layer. Case folding maps malformed UTF-8 bytes to <code>?</code>, so a literal <code>?</code> in a query can forge a match against untrusted text — validate UTF-8 on either side when inputs are hostile.</p>
@@ -63,7 +64,7 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
       <li><strong>Filter-as-you-type with highlighted matches</strong> — know exactly which characters triggered the match for underline/bold/color highlighting.</li>
       <li><strong>Ranked autocomplete</strong> — matchAll sorts results by relevance score, not alphabetical order.</li>
       <li><strong>File/path fuzzy finding</strong> — SahilmMatcher bonus for separators and camelCase makes it ideal for IDE-style file openers.</li>
-      <li><strong>Foundation for sugar-quickpick</strong> — the fuzzy finder overlay uses matched indices to highlight the current selection.</li>
+      <li><strong>Foundation for sugar-quickpick</strong> — the fuzzy finder overlay uses matched indices to paint the matched characters in each ranked row (match styling opt-in; selection is the formatter's <code>$isSelected</code> flag).</li>
     </ul>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>

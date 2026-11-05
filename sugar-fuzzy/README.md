@@ -267,6 +267,16 @@ New code should depend on `SugarCraft\Fuzzy\*` directly.
 
 The highlighter is presentation-neutral and forwards unmatched haystack segments verbatim. Callers **must** sanitize candidate text (strip `\x1b`/control bytes) before display — the styler callback receives raw matched substrings only and does not sanitize. This is the correct responsibility division: sanitization belongs to the TUI render layer.
 
+## Accessibility note
+
+Highlighting conveys the match through color alone, which fails color-blind
+users — pair it with shape cues (bold/underline) in the styler callback. ANSI
+styling is never announced to screen readers: the accessible channels are the
+`matchedIndices` on each result and `matchAll()`'s deterministic ranking
+(ordering is reproducible at equal scores), and carrying that rank into
+non-visual channels (plain-text listings, ARIA live regions in web UIs) is
+the consumer's responsibility.
+
 ## Links
 
 - [Smith-Waterman algorithm](https://en.wikipedia.org/wiki/Smith%E2%80%93Waterman_algorithm)
