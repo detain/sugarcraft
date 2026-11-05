@@ -32,7 +32,7 @@ final class HandlerAdapterPrintCharTest extends TestCase
         // Instead, wrap in HandlerAdapter and use a concrete CsiHandler impl.
         $csiImpl = new class ($this->csi) implements CsiHandler {
             public function __construct(private DebugHandler $log) {}
-            public function printable(string $byte): void { $this->log->printChar($byte); }
+            public function printable(string $rune): void { $this->log->printChar($rune); }
             public function cuu(int $count): void { $this->log->csiDispatch(ord('A'), [$count], 0, 0); }
             public function cud(int $count): void { $this->log->csiDispatch(ord('B'), [$count], 0, 0); }
             public function cuf(int $count): void { $this->log->csiDispatch(ord('C'), [$count], 0, 0); }

@@ -35,8 +35,14 @@ namespace SugarCraft\AnsiParser\Codec;
  *   dispatched, then the interrupting escape sequence parses normally.
  *   This is NOT park-until-ST; a terminal that parked would swallow the
  *   following escape sequence (the VT500 table's behaviour is authoritative).
- *   A bare ESC inside the PRELUDE aborts the sequence outright (no dispatch);
- *   both edges are pinned in DcsTruncationTest.
+ *   A bare ESC inside the PRELUDE aborts the sequence outright (no dispatch)
+ *   only once DcsParam/DcsIntermediate has collected bytes. In the bare
+ *   DcsEntry state the table instead re-wires 0x1B to Put→DcsString (the
+ *   VT500/tmux quirk), so `"\x1bP\x1b[0m"` + flush dispatches a `final === 0`
+ *   frame. Both edges are pinned:
+ *   {@see \SugarCraft\AnsiParser\Tests\DcsTruncationTest::testBareEscInsideThePreludeAbortsWithoutADcsDispatch()},
+ *   {@see \SugarCraft\AnsiParser\Tests\DcsTruncationTest::testDcsWithNoFinalByteDispatchesTheZeroSentinel()}
+ *   and {@see \SugarCraft\AnsiParser\Tests\DcsTruncationTest::testEscQuirkPayloadAlsoDispatchesTheZeroSentinel()}.
  */
 final class Dcs
 {

@@ -179,7 +179,7 @@ final class HyperlinkParsingTest extends TestCase
     {
         $oscImpl = new OscHandlerImpl();
         $csiImpl = new class implements CsiHandler {
-            public function printable(string $byte): void {}
+            public function printable(string $rune): void {}
             public function cuu(int $count): void {}
             public function cud(int $count): void {}
             public function cuf(int $count): void {}

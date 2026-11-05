@@ -19,14 +19,13 @@ interface CsiHandler
     /**
      * Print one character to the current cell.
      *
-     * Despite the parameter name, this is not restricted to printable ASCII:
-     * {@see HandlerAdapter::printChar()} forwards whole multi-byte UTF-8 runes
-     * collected by the parser's Utf8 state (any lead byte >= 0xC2) alongside
-     * the 0x20-0x7E range, so implementations must accept a complete
-     * multi-byte codepoint (a full rune, up to four bytes), not a single
-     * byte.
+     * The unit is one complete UTF-8 codepoint (a full rune, up to four
+     * bytes) — not a single byte and not a grapheme cluster.
+     * {@see HandlerAdapter::printChar()} forwards runes collected by the
+     * parser's Utf8 state (any lead byte >= 0xC2) alongside the 0x20-0x7E
+     * range, so implementations must accept multi-byte text.
      */
-    public function printable(string $byte): void;
+    public function printable(string $rune): void;
 
     /**
      * Cursor Up — move cursor up $count rows.
