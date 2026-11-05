@@ -59,8 +59,11 @@ simulation, VHS tape building, and graphics-stream decoding.
 ## Install
 
 ```sh
-composer require sugarcraft/sugar-testing:@dev
+composer require --dev sugarcraft/sugar-testing:@dev
 ```
+
+This is a PHPUnit test harness: it belongs in `require-dev` and must not enter
+runtime dependencies.
 
 ## Quickstart
 
