@@ -22,6 +22,7 @@ return [
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.repos_header'         => 'Repositories:',
     'cli.repo_listing_plain'   => '  {name}',
+    'cli.repo_listing_public'  => '  {name} (öffentlich)',
 
     // bin/candy-git-server — init
     'cli.already_initialized'  => 'Bereits initialisiert: {path}',

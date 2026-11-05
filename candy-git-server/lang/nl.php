@@ -20,6 +20,7 @@ return [
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.repos_header'         => 'Opslagplaatsen:',
     'cli.repo_listing_plain'   => '  {name}',
+    'cli.repo_listing_public'  => '  {name} (openbaar)',
     'cli.already_initialized'  => 'Reeds geïnitialiseerd: {path}',
     'cli.initializing'         => 'CandyGitServer-gegevensmap initialiseren: {path}',
     'cli.done'                 => 'Klaar.',

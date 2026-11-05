@@ -20,6 +20,7 @@ return [
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.repos_header'         => 'Repositórios:',
     'cli.repo_listing_plain'   => '  {name}',
+    'cli.repo_listing_public'  => '  {name} (público)',
     'cli.already_initialized'  => 'Já inicializado: {path}',
     'cli.initializing'         => 'Inicializando o diretório de dados do CandyGitServer: {path}',
     'cli.done'                 => 'Concluído.',

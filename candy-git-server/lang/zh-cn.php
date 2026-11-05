@@ -20,6 +20,7 @@ return [
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.repos_header'         => '仓库：',
     'cli.repo_listing_plain'   => '  {name}',
+    'cli.repo_listing_public'  => '  {name}（公开）',
     'cli.already_initialized'  => '已初始化：{path}',
     'cli.initializing'         => '正在初始化 CandyGitServer 数据目录：{path}',
     'cli.done'                 => '完成。',

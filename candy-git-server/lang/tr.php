@@ -20,6 +20,7 @@ return [
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.repos_header'         => 'Depolar:',
     'cli.repo_listing_plain'   => '  {name}',
+    'cli.repo_listing_public'  => '  {name} (genel)',
     'cli.already_initialized'  => 'Zaten başlatılmış: {path}',
     'cli.initializing'         => 'CandyGitServer veri dizini başlatılıyor: {path}',
     'cli.done'                 => 'Tamamlandı.',

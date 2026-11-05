@@ -598,10 +598,25 @@ function cmdRepoList(array $args): int
     foreach (\scandir($reposPath) as $entry) {
         if ($entry === '.' || $entry === '..') continue;
         $repoPath = $reposPath . '/' . $entry;
-        if (!\is_dir($repoPath . '/.git')) continue;
+        // Repo shapes accepted exactly as the serve scan accepts them: a
+        // bare repo (HEAD + objects) or a normal repo whose .git is bare.
+        if (\is_file($repoPath . '/HEAD') && \is_dir($repoPath . '/objects')) {
+            $gitDir = $repoPath;
+        } elseif (\is_file($repoPath . '/.git/HEAD') && \is_dir($repoPath . '/.git/objects')) {
+            $gitDir = $repoPath . '/.git';
+        } else {
+            continue;
+        }
+
+        // Visibility persists only via the marker — directory presence
+        // is never publication, the same law the serve scan obeys.
+        $visibility = Repo::markerVisibility($gitDir);
 
         $found = true;
-        echo Lang::t('cli.repo_listing_plain', ['name' => $entry]) . "\n";
+        echo Lang::t(
+            $visibility === Visibility::Public ? 'cli.repo_listing_public' : 'cli.repo_listing_plain',
+            ['name' => $entry]
+        ) . "\n";
     }
 
     if (!$found) {
@@ -667,11 +682,20 @@ function cmdRepoInfo(array $args): int
     $name     = $args[0];
     $path     = "{$dataPath}/repositories/{$name}";
 
-    if (!\is_dir($path . '/.git')) {
+    if (!Repo::isJailSafeName($name)) {
+        return error(Lang::t('cli.repo_invalid_name', ['name' => $name]) . "\n");
+    }
+
+    // Same shapes the serve scan accepts, same fail-closed marker law.
+    if (\is_file($path . '/HEAD') && \is_dir($path . '/objects')) {
+        $gitDir = $path;
+    } elseif (\is_file($path . '/.git/HEAD') && \is_dir($path . '/.git/objects')) {
+        $gitDir = $path . '/.git';
+    } else {
         return error(Lang::t('cli.repo_not_found', ['name' => $name]) . "\n");
     }
 
-    $repo = Repo::new($name, $path);
+    $repo = Repo::new($name, $gitDir)->withVisibility(Repo::markerVisibility($gitDir));
 
     $yes = Lang::t('cli.bool_yes');
     $no  = Lang::t('cli.bool_no');

@@ -20,6 +20,7 @@ return [
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.repos_header'         => 'Repozitáře:',
     'cli.repo_listing_plain'   => '  {name}',
+    'cli.repo_listing_public'  => '  {name} (veřejný)',
     'cli.already_initialized'  => 'Již inicializováno: {path}',
     'cli.initializing'         => 'Inicializace datového adresáře CandyGitServer: {path}',
     'cli.done'                 => 'Hotovo.',

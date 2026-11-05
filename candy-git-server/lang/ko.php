@@ -20,6 +20,7 @@ return [
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.repos_header'         => '저장소:',
     'cli.repo_listing_plain'   => '  {name}',
+    'cli.repo_listing_public'  => '  {name} (공개)',
     'cli.already_initialized'  => '이미 초기화됨: {path}',
     'cli.initializing'         => 'CandyGitServer 데이터 디렉토리 초기화 중: {path}',
     'cli.done'                 => '완료.',

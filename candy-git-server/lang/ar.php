@@ -20,6 +20,7 @@ return [
     'cli.banner'               => 'CandyGitServer v{version}',
     'cli.repos_header'         => 'المستودعات:',
     'cli.repo_listing_plain'   => '  {name}',
+    'cli.repo_listing_public'  => '  {name} (عام)',
     'cli.already_initialized'  => 'مهيأ بالفعل: {path}',
     'cli.initializing'         => 'جاري تهيئة دليل بيانات CandyGitServer: {path}',
     'cli.done'                 => 'تم.',
