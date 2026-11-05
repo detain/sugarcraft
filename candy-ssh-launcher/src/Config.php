@@ -11,14 +11,14 @@ use SugarCraft\Core\Util\Json;
  *
  * Two formats are accepted (auto-detected by extension):
  *
- *   - **JSON** (`wishlist.json`) — a top-level array of objects: @rename-keep
+ *   - **JSON** (`wishlist.json`) — a top-level array of objects:
  *     ```json
  *     [
  *       { "name": "production", "host": "prod.example.com", "port": 2222, "user": "deploy" },
  *       { "name": "staging",    "host": "stage.example.com" }
  *     ]
  *     ```
- *   - **YAML-ish flat list** (`wishlist.yml`, `wishlist.yaml`) — one @rename-keep
+ *   - **YAML-ish flat list** (`wishlist.yml`, `wishlist.yaml`) — one
  *     endpoint per `- name:` block. Parsed by a tiny built-in
  *     reader so we don't drag in `ext-yaml` for what's effectively
  *     a config file:
@@ -280,7 +280,7 @@ final class Config
         // YAML inline flow collections (`[a, b]`, `{k: v}`) are valid YAML
         // this flat parser cannot represent — silently carrying them as the
         // literal string would put "[a, b]" into an ssh argv token. Refuse
-        // with the fix spelled out instead (2026-10-23, C6). Quoted forms
+        // with the fix spelled out instead (2026-10-23). Quoted forms
         // ("[a,b]") are ordinary scalars and keep passing through above.
         if (str_starts_with($v, '[') || str_starts_with($v, '{')) {
             throw new \RuntimeException(Lang::t('config.yaml_inline_flow', ['value' => $v]));
@@ -361,8 +361,8 @@ final class Config
      *
      * Booleans are `is_scalar` but have no sane string form here: the tiny
      * YAML parser maps `yes`/`no` to bool, and without this leg a config
-     * `name: yes` reached ssh as the literal host user "1" (2026-10-23,
-     * C5). Numeric fields go through parsePort which rejects bools too.
+     * `name: yes` reached ssh as the literal host user "1" (2026-10-23).
+     * Numeric fields go through parsePort which rejects bools too.
      *
      * @throws \InvalidArgumentException when $value is not a usable scalar
      */

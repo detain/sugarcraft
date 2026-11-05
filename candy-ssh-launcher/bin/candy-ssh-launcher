@@ -9,8 +9,8 @@ declare(strict_types=1);
  *   candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list]
  *                      [-h|--help] [-v|--version]
  *
- * Without `--config` the search order is: `wishlist.yml`, @rename-keep
- * `wishlist.yaml`, `wishlist.json` in the CURRENT DIRECTORY first, @rename-keep
+ * Without `--config` the search order is: `wishlist.yml`,
+ * `wishlist.yaml`, `wishlist.json` in the CURRENT DIRECTORY first,
  * then `~/.config/wishlist.{yml,yaml,json}` — first candidate that EXISTS
  * wins at each tier. `--ssh` must be an existing executable PATH
  * (`pcntl_exec` performs no `$PATH` search — a bare name like `ssh` fails
@@ -117,7 +117,7 @@ for ($i = 0; $i < $count; $i++) {
     if ($name === '-v' || $name === '--version') {
         // Version prints before anything else can fail — no config read, no
         // HOME guard, no terminal touch. Under a running archive the build
-        // stamp wins (DST-1: InstalledVersions lies under the frozen vendor/);
+        // stamp wins (InstalledVersions lies under the frozen vendor/ copy);
         // outside one the compiled-in Support\Version::CURRENT fallback answers.
         $archive = str_ends_with(__FILE__, '.phar')
             ? __FILE__

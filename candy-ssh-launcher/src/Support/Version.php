@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\SshLauncher\Support;
 
 /**
- * Version surface for the phar build (lane PHE, the DST-1 shape).
+ * Version surface for the phar build (the installed-version probe shape).
  *
  * `candy-ssh-launcher -v|--version` renders {@see resolve()} — under a running
  * archive the version stamped into the archive metadata at build time wins,
  * because the frozen vendor/ inside the artifact makes Composer's
- * InstalledVersions report the build root's dev guess (candy-code's measured
- * DST-1 lesson: a stamp nothing consumes makes --version lie). Outside an
+ * InstalledVersions report the build root's dev guess (the measured
+ * lesson: a stamp nothing consumes makes --version lie). Outside an
  * archive — or when the stamp is absent or unparseable — the compiled-in
  * {@see CURRENT} fallback answers. The `candy-ssh-launcher/` tag prefix and an
  * optional leading `v` are stripped so the caller always sees bare X.Y.Z.

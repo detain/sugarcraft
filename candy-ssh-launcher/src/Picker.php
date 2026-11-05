@@ -13,7 +13,8 @@ use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
 /**
- * Tiny terminal picker — renders a numbered list of {@see Endpoint}s,
+ * Tiny terminal picker — renders marker-prefixed display lines
+ * (SELECTED_MARKER over displayLine()) of {@see Endpoint}s,
  * lets the user move with j/k, ↑/↓, Home/End and PgUp/PgDn, narrow with
  * type-to-search,
  * and pick with Enter. Returns the selected Endpoint or null on Esc or
@@ -35,7 +36,7 @@ class Picker
     /**
      * Palette bytes for the selected-row marker and the filter echo, as
      * exactly produced by Ansi::sgr(1,36)/Ansi::reset()/Ansi::sgr(36).
-     * Byte-pinned by the picker tests (2026-10-23, T4 — extracted from the
+     * Byte-pinned by the picker tests (2026-10-23 — extracted from the
      * inline literals without changing a single emitted byte).
      */
     private const SELECTED_MARKER = "\x1b[1;36m▸\x1b[0m ";
@@ -58,7 +59,7 @@ class Picker
     /**
      * Denominator for the "N of M" count row while filtering: total
      * endpoints handed to pick(), so `draw()` still takes its test-pinned
-     * single argument (2026-10-23, U1).
+     * single argument (2026-10-23).
      */
     private int $totalEndpoints = 0;
     private bool $aborted = false;
@@ -218,7 +219,7 @@ class Picker
                 // meaningful record (and ssh takes the screen over
                 // anyway), so only the cancel path cleans up — and only
                 // the cancel path may show eraseScreen, pinned by the
-                // sanitize suite (2026-10-23, T1).
+                // sanitize suite (2026-10-23).
                 fwrite($this->out, Ansi::cursorTo(1, 1) . Ansi::eraseScreen());
             }
             fwrite($this->out, "\n");
@@ -340,7 +341,7 @@ class Picker
         fwrite($this->out, $this->clampRow($filterLine) . "\r\n");
         if ($this->filter !== '' && $this->totalEndpoints > 0) {
             // Honest funnel: how much of the config the filter killed
-            // (2026-10-23, U1). The count row stays out of the filter line
+            // (2026-10-23). The count row stays out of the filter line
             // itself (the integrity suite counts ESC bytes per 'filter: '
             // line) and out of reflection draws where totalEndpoints is
             // still 0.
@@ -387,7 +388,7 @@ class Picker
      * Truncate a composed row to one less than the terminal width, so a
      * long host or description cannot force a soft wrap that strands the
      * overflow under the next redraw (eraseToEnd only clears to the end of
-     * the CURRENT line; 2026-10-23, T2). Non-terminals — every byte-pinned
+     * the CURRENT line; 2026-10-23). Non-terminals — every byte-pinned
      * picker test and any piped run — probe null and pass through unclamped.
      */
     private function clampRow(string $row): string
