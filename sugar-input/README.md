@@ -4,7 +4,7 @@
 
 Terminal escape sequence decoder for keyboard (legacy + Kitty progressive keyboard protocol + xterm modifyOtherKeys) and mouse (SGR 1006/1016, urxvt 1015, X10). Provides the `InputDriver` interface and `EscapeDecoder` implementation.
 
-New here? Read [Quickstart](#quickstart), then [Terminal replies](#terminal-replies--drained-not-dropped) if you host a prober, and [Security](#security-decoded-content-is-untrusted) before shipping. Glossary: a *frame* is one wire sequence (`ESC [ 57352 ; 1u`), an *event* is its decoded product, a *reply* is a frame the terminal sends unprompted by your keys.
+New here? Read [Quickstart](#quickstart), then [Terminal replies](#terminal-replies--drained-not-dropped) if you host a prober, and [Security](#security-decoded-content-is-untrusted) before shipping. Glossary: a *frame* is one wire sequence (`ESC [ 57352 ; 1u`), an *event* is its decoded product, a *reply* is a frame the terminal sends on its own, not in answer to your keystrokes.
 
 ## Overview
 
