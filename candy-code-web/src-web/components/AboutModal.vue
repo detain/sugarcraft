@@ -350,7 +350,8 @@ ul {
   overflow-y: auto;
 }
 /* CW-UX-08: About is already a constant-padded centered sheet; the media block
-   only tightens the cap further so its internal scroll never leaves the view. */
+   only tightens the cap further so its internal scroll never leaves the view.
+   UX-12: short — height axis of the shared scale (App.vue header). */
 @media (max-height: 480px) {
   .backdrop {
     padding: 0.5rem;

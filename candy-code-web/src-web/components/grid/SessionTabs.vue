@@ -338,6 +338,7 @@ onBeforeUnmount(() => {
   color: var(--accent);
 }
 @media (max-width: 760px) {
+  /* UX-12: medium */
   .modes button {
     padding: 0.15rem 0.35rem;
   }

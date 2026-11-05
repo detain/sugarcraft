@@ -189,7 +189,8 @@ li {
   cursor: pointer;
 }
 /* CW-UX-08: on short viewports the vh gutters eat the screen - collapse them
-   to a constant and tighten the cap so the dialog's own scroll stays visible. */
+   to a constant and tighten the cap so the dialog's own scroll stays visible.
+   UX-12: short — height axis of the shared scale (App.vue header). */
 @media (max-height: 480px) {
   .backdrop {
     padding: 1rem;

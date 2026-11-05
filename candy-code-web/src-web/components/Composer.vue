@@ -1465,6 +1465,7 @@ textarea:focus {
     color: var(--error);
 }
 @media (max-width: 600px) {
+    /* UX-12: narrow */
     .composer {
         flex-direction: column;
         align-items: stretch;

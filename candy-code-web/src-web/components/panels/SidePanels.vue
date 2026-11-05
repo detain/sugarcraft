@@ -185,6 +185,7 @@ function onKey(event: KeyboardEvent): void {
 /* CW-UX-25: --panels-width is defined in styles/tokens.css (theme-invariant
    layout metric) and consumed here for the body clearance. */
 @media (min-width: 1100px) {
+  /* UX-12: wide */
   html.sc-panels-open body {
     padding-right: var(--panels-width);
   }

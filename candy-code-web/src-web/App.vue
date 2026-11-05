@@ -193,6 +193,13 @@ async function signOut(): Promise<void> {
 </template>
 
 <style scoped>
+/* UX-12: the shared breakpoint scale for this app. CSS cannot interpolate
+   custom properties inside @media, so the scale lives as a documented
+   convention and every media query in src-web cites it:
+     width axis  — narrow 600px · medium 760px · wide 1100px
+     height axis — short 480px (modal family only, CW-UX-08 caps)
+   A touched breakpoint MUST carry a `UX-12: <name>` comment. PaneGrid.vue's
+   760 predates this lane's ownership and already matches medium. */
 .shell {
   display: flex;
   flex-direction: column;
@@ -283,10 +290,12 @@ async function signOut(): Promise<void> {
 .content > :deep(*:not(.tabs-strip)) {
   flex: 1;
 }
-@media (max-width: 480px) {
-  /* ISS-105: phone widths. The spacer becomes a deliberate line break, so
-     ☰+brand ride the first row and every action the second, instead of the
-     bar pushing the page into horizontal scroll. */
+@media (max-width: 600px) {
+  /* UX-12: narrow — was a second 480px step; the scale collapses the two
+     sub-760 widths into one so topbar wrap and composer slimming switch
+     together. ISS-105: phone widths. The spacer becomes a deliberate line
+     break, so ☰+brand ride the first row and every action the second,
+     instead of the bar pushing the page into horizontal scroll. */
   .topbar {
     flex-wrap: wrap;
     row-gap: 0.35rem;
@@ -305,6 +314,7 @@ async function signOut(): Promise<void> {
 }
 
 @media (max-width: 760px) {
+  /* UX-12: medium */
   .topbar {
     gap: 0.5rem;
     padding: 0.5rem 0.75rem;
