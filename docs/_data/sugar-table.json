@@ -1,11 +1,11 @@
 {
     "title": "SugarTable — SugarCraft",
-    "description": "SugarTable: Full-featured interactive data table.",
+    "description": "SugarTable: Customizable keyboard-driven data table with sorting, pagination, and a programmatic row cursor.",
     "ogTitle": "SugarTable — SugarCraft",
-    "ogDescription": "Full-featured interactive data table.",
+    "ogDescription": "Customizable keyboard-driven data table with sorting, pagination, and a programmatic row cursor.",
     "emoji": "📋",
     "displayName": "SugarTable",
-    "tagline": "Full-featured interactive data table",
+    "tagline": "Customizable keyboard-driven data table with sorting, pagination, and a programmatic row cursor",
     "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/Evertras/bubble-table\" style=\"color: inherit;\">Evertras/bubble-table</a></span>\n          <span class=\"tag-chip\">table</span><span class=\"tag-chip\">data</span><span class=\"tag-chip\">grid</span><span class=\"tag-chip\">interactive</span>"
 }
