@@ -34,6 +34,10 @@
         "phpunit/phpunit": "^10.5",
         "sugarcraft/sugar-testing": "dev-master"
     },
+    "suggest": {
+        "ext-uv": "Drives the faster ReactPHP loop, but its deadline clock refreshes once per iteration: timers armed after a long synchronous idle are already overdue. Test suites that bound waits with timers need sugar-testing's LoopPin::pinStableClock() from tests/bootstrap.php (see the README 'Testing with AsyncOps' section).",
+        "ext-pcntl": "Delivers SIGINT so a loop-driving program can map Ctrl-C onto CancellationSource::cancel() as ordinary teardown instead of a stack trace (see the README 'Cancellation' sketch)."
+    },
     "autoload": {
         "psr-4": {
             "SugarCraft\\Async\\": "src/"
