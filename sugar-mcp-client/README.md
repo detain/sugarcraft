@@ -22,8 +22,8 @@ dependency-free trial.
 
 Extracted from the [candy-code](https://github.com/sugarcraft/candy-code)
 MCP stack, where these classes carry its entire stdio server lifecycle. The
-wire algorithms are faithful ports; everything product-specific stayed
-downstream.
+wire algorithms are faithful extractions from that candy-code past, not ports
+of a Go implementation; everything product-specific stayed downstream.
 
 ## Install
 
@@ -41,12 +41,14 @@ composer require sugarcraft/sugar-mcp-client
 | `McpServer` | Transport contract: `start` / `stop` / `listTools` / `callTool` |
 | `StdioMcpServer` | Child-process stdio transport: argv-array spawn, explicit spawn directory (`cwd`, default inherit), NDJSON framing, one-clock handshake deadline, tail-bounded stderr capture, `BoundedShutdown` teardown, `__destruct` back-stop (the SIGKILLed-owner residual is named in *Fork safety*) |
 | `McpRouter` | Deny-before-allow SERVER narrowing over raw config keys (tool rosters follow servers); empty allow-list means allow-all |
-| `RequestIdSequence` | JSON-RPC ids unique across `pcntl_fork()`: plain counters in the owner, `<pid>-<nonce>-<n>` elsewhere |
+| `RequestIdSequence` | JSON-RPC ids unique across `pcntl_fork()`: plain counters in the owner, `<pid>-<nonce>-<n>` elsewhere; the transport stringifies what it sends, so an outbound request carries `"5"` on the wire, never a bare `5` |
 | `ExchangeLock` | Cross-process `flock` for one connection, carrying the shared read buffer and the dead-holder phase marker |
 
 ## Quick start
 
 ```php
+require 'vendor/autoload.php';
+
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\McpClient\StdioMcpServer;
 
