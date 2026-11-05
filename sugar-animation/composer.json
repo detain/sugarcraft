@@ -31,7 +31,7 @@
         "sugarcraft/sugar-pty": "dev-master"
     },
     "suggest": {
-        "ext-gd": "Required to decode GIF animations (Player/Decoder); ANSI art playback needs neither."
+        "ext-gd": "Required to decode GIFs (Decoder). The .ansi art playback side (AnsiArt/ArtLibrary/ArtLoop) and Player do not need it."
     },
     "require-dev": {
         "phpunit/phpunit": "^10.0",
