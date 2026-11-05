@@ -3,6 +3,8 @@
  * sugar-overlay — composite overlays on a base terminal view.
  *
  * Run: php examples/multiple-overlays.php
+ * (after `composer install` in sugar-overlay/ — vendor/ is gitignored,
+ * so a cold clone's require above fatals until dependencies exist)
  */
 
 declare(strict_types=1);

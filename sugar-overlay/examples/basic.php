@@ -6,6 +6,8 @@ declare(strict_types=1);
  * sugar-overlay basic demo — overlay a modal box over a background.
  *
  * Run: php examples/basic.php
+ * (after `composer install` in sugar-overlay/ — vendor/ is gitignored,
+ * so a cold clone's require above fatals until dependencies exist)
  */
 
 require __DIR__ . '/../vendor/autoload.php';
