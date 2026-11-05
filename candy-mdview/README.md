@@ -162,10 +162,22 @@ locales; `--help` and the document itself stay as-is.
 
 ## Library API
 
-Beyond the CLI, candy-mdview exposes two utility helpers for integrating its
-behaviour into other PHP projects. Visual width measuring (CJK/emoji) is
-delegated to `SugarCraft\Core\Util\Width` in **sugar-core** — use that
-directly; this package ships no local width helpers.
+Beyond the CLI, candy-mdview exposes three public pieces for integrating its
+behaviour into other PHP projects: the pager's TEA model (`MdViewModel`) and
+two utility helpers (`FileWatcher`, `GlamourTheme`). The deprecated
+`RenderCommand::set*Callback()` test seams and the legacy public
+`RenderCommand::loadInput()` are deliberately off this surface — kept for
+tests and integrators, not advertised API. Visual width measuring
+(CJK/emoji) is delegated to `SugarCraft\Core\Util\Width` in **sugar-core** —
+use that directly; this package ships no local width helpers.
+
+### MdViewModel
+
+The pager's Model (init/update/view over sugar-core's Program): `fromContent()`
+builds it from already-rendered text at a given size, `withDocument()` prepends
+the status header row (name · scroll% · reload marker), `withWatch()` arms
+auto-reload from disk via the `FileWatcher` tuple API, and `isWatching()`
+reports whether a watch is armed.
 
 ### FileWatcher
 
@@ -187,18 +199,22 @@ if ($watcher->hasChangedSince($lastMtime)) {
 ```
 
 `FileWatcher::watch()` (a generator) is currently consumed only by tests; the
-pager uses the tuple API directly on its idle tick.
+pager uses the tuple API directly on its idle tick, whose sweep cadence
+`idlePollDelayMicroseconds()` bounds (exponential backoff with a cap).
 
 ### GlamourTheme
 
 `GlamourTheme` parses charmbracelet/glamour style JSON (a `"document"`
 block, per-element `StylePrimitive` maps, and a `chroma` token map) and
-projects it onto SugarMarkdown's `Theme`: document block affixes, indent and
+projects it onto SugarMarkdown's `Theme` via `toMarkdownTheme()`: document block affixes, indent and
 margin, heading/paragraph/inline element styles, and the Keyword /
-LiteralString / LiteralNumber / Comment chroma families. Unmappable fields
-are exposed verbatim through `element()` / `chroma()` for integrations
-that need them. This — plus the three JSON preset files — is the theme
-extension point; the built-in theme set itself is fixed.
+LiteralString / LiteralNumber / Comment chroma families. `isGlamourSchema()`
+detects the shape; `fromFile()` / `fromJsonString()` parse it, and
+`fromDecoded()` is the entry the CLI's `--theme-config` path actually takes.
+Unmappable fields are exposed verbatim through `element()` / `chroma()` /
+`indentToken()` for integrations that need them — no silent loss. This —
+plus the three JSON preset files — is the theme extension point; the built-in
+theme set itself is fixed.
 
 ## Shared foundations
 

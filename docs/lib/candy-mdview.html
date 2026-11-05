@@ -101,12 +101,17 @@ candy-mdview --theme-config ./my-theme.json README.md</code></pre>
 <tr><td>MdViewModel</td><td>fromContent(content, width, height)</td><td>Build the pager Model from already-rendered text</td></tr>
 <tr><td>MdViewModel</td><td>withDocument(name)</td><td>Prepend a status header (file name, scroll percent, reload marker)</td></tr>
 <tr><td>MdViewModel</td><td>withWatch(path, reRender)</td><td>Auto-reload from disk when the (mtime, size) tuple changes</td></tr>
+<tr><td>MdViewModel</td><td>isWatching()</td><td>Whether a file watch is armed on this model</td></tr>
 <tr><td>FileWatcher</td><td>snapshot(path)</td><td>Current (mtime, size) tuple for a file, or null when unreadable</td></tr>
 <tr><td>FileWatcher</td><td>pollTuple(path, lastMtime, lastSize)</td><td>Sweep one file against the last-seen tuple</td></tr>
+<tr><td>FileWatcher</td><td>hasChangedSince(lastMtime)</td><td>Instance check against a remembered mtime</td></tr>
 <tr><td>FileWatcher</td><td>idlePollDelayMicroseconds(idle, cap)</td><td>Bounded exponential backoff for idle poll sweeps</td></tr>
+<tr><td>FileWatcher</td><td>watch(path)</td><td>Generator yielding on tuple changes (consumed by tests today)</td></tr>
 <tr><td>GlamourTheme</td><td>isGlamourSchema(decoded)</td><td>Detect a Glamour-style theme document from decoded JSON</td></tr>
 <tr><td>GlamourTheme</td><td>fromJsonString(json)</td><td>Parse a Glamour theme JSON string</td></tr>
 <tr><td>GlamourTheme</td><td>fromFile(path)</td><td>Load a size-capped Glamour theme JSON file</td></tr>
+<tr><td>GlamourTheme</td><td>fromDecoded(array)</td><td>Build from already-decoded JSON — the entry the CLI --theme-config path takes</td></tr>
+<tr><td>GlamourTheme</td><td>element(name) / chroma(kind) / indentToken(token)</td><td>Verbatim access to unmapped style fields — no silent loss</td></tr>
 <tr><td>GlamourTheme</td><td>toMarkdownTheme()</td><td>Convert to a SugarMarkdown Theme</td></tr>
 </table>
       <p>Visual width measuring is delegated to <code>SugarCraft\Core\Util\Width</code> in sugar-core; this package ships no local width helpers.</p>
