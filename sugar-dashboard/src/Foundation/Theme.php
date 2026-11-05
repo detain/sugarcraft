@@ -12,7 +12,7 @@ use SugarCraft\Dashboard\Layout\HAlign;
 use SugarCraft\Dashboard\Components\Card\Text;
 
 /**
- * Sugar-dash inline-termui Theme (10 colour slots + helper methods
+ * Sugar-dash inline-termui Theme (9 colour slots + helper methods
  * bar(), text(), fg(), bg(), color(), highlight()). Intentionally
  * distinct from \SugarCraft\Style\Theme (13 colour slots: adds
  * muted, info, border, separator, cursor; readonly properties only,
