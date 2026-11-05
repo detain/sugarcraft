@@ -16,7 +16,7 @@
 
 ![demo](.vhs/render.gif)
 
-candy-mdview — a Markdown CLI viewer for PHP 8.3+ that composes **SugarMarkdown** (rendering) and **SugarForms Viewport** (scrolling). It is the native-PHP counterpart of the Go viewer [glow](https://github.com/charmbracelet/glow): rendering, paging, themes, and live reload are ported; glow's search, config UI, and editing features are not part of this tool.
+candy-mdview — a Markdown CLI viewer for PHP 8.3+ that composes **SugarMarkdown** (rendering) and **SugarForms Viewport** (scrolling). It is the native-PHP counterpart of the Go viewer [glow](https://github.com/charmbracelet/glow): rendering, paging, themes, and live reload are ported; glow's search, config UI, and presentation modes are not part of this tool.
 
 ## Install
 
@@ -24,7 +24,7 @@ candy-mdview — a Markdown CLI viewer for PHP 8.3+ that composes **SugarMarkdow
 composer require sugarcraft/candy-mdview   # binary lands in vendor/bin/candy-mdview
 ```
 
-Prefer a single file? The rolling dev phar is rebuilt on every push to master:
+Prefer a single file? The rolling dev phar is rebuilt on every push to master that affects this lib:
 
 ```sh
 wget https://github.com/detain/sugarcraft/releases/download/candy-mdview/dev/candy-mdview.phar
@@ -51,7 +51,13 @@ Flags:
   when stdout is not a terminal or `--no-ansi` vetoes the stream. The mirror
   edge: forcing decoration (`--ansi` / `CLICOLOR_FORCE` / `FORCE_COLOR`) yields
   a decorated tier even on a pipe.
-- `--style` / `-s` — alias for `--theme` (glamour-compat).
+- `--style` / `-s` — alias for `--theme` (glamour-compat). When both are given,
+  `--style` silently wins; there is no warning.
+- `--version` — handled by the Symfony Console application (no row in the
+  command's own flags). Inside a phar the build stamp wins; outside an archive
+  it reports the composer/dev fallback — the only documented way to tell
+  `vendor/bin/candy-mdview`, a wget'd `candy-mdview.phar`, and a bare checkout
+  apart.
 - `--theme-config <path>` — load a custom JSON theme (up to 1 MB). Two shapes
   are detected automatically: a **glamour** config (top-level `"document"`
   block with nested element/chroma maps) is mapped by `GlamourTheme` onto a
