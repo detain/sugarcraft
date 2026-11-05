@@ -151,7 +151,9 @@ $log = Logger::new(formatter: new TextFormatter());   // human line (the default
 `JsonFormatter` and `LogfmtFormatter` take an optional second constructor
 argument, `$timeFormat` — a `DateTime` format string; it defaults to
 `DateTimeInterface::ATOM` because machine parsers pin timestamps to that
-shape, so change it deliberately, not casually. Inside a **text** line,
+shape, so change it deliberately, not casually. A `TextFormatter` line's
+timestamp defaults to `Y/m/d H:i:s` — full date, then time (the sample output
+below shows that default). Inside a **text** line,
 array context values render as `[a b c]`: elements joined positionally,
 associative keys not shown — use JSON or logfmt when key names matter.
 
@@ -502,7 +504,7 @@ the un-forced path: once a level is forced, `print()` goes through the
 Three formatters, three records, no color (what a file sink or pipe receives):
 
 ```text
-07:15:04 WRN bakery <baker.php:88> Almost ready batch=2 oven=convection
+2026/11/03 07:15:04 WRN bakery <baker.php:88> Almost ready batch=2 oven=convection
 {"level":"ERROR","msg":"Temperature too low","time":"2026-11-03T07:15:04+00:00","caller":"oven.php:31","prefix":"bakery","err":"underheated"}
 time=2026-11-03T07:15:04+00:00 level=INFO msg="Starting oven" prefix=bakery degree=375
 ```
