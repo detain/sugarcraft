@@ -234,8 +234,7 @@ the progress yourself, e.g. `examples/animated_line.php`.
 ### Per-point and per-bar colors
 
 One color per series is too coarse for value-heat graphs — btop tints every
-graph point and meter by its value through the theme gradient
-(btop's C++ drawing code roughly samples a theme color at the point value). Two optional resolvers bring
+graph point and meter by its value through the theme gradient. Two optional resolvers bring
 that to SugarCharts:
 
 - `LineChart::withSeriesColorFn(?Closure)` — `fn(string $dataset, int $x, float $value): ?Color`.
