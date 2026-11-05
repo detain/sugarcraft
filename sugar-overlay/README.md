@@ -39,8 +39,11 @@ hit-testing and incremental diff output for efficient redraws.
 composer require sugarcraft/sugar-overlay
 ```
 
-Every example below assumes the Composer autoloader is already required
-(`require __DIR__ . '/../vendor/autoload.php';` from a project script).
+Every example below assumes the Composer autoloader is already required:
+`require __DIR__ . '/vendor/autoload.php';` from a project script sitting
+next to its `vendor/`, or the package-internal
+`require __DIR__ . '/../vendor/autoload.php';` shape used by files inside
+this library (its `examples/`, for instance).
 
 ## Quick Start
 
@@ -58,8 +61,9 @@ $output = $veil->composite($modal, $background, Position::CENTER, Position::CENT
 echo $output;
 ```
 
-`composite()` returns the full merged frame (or a diff — see the diff
-section below). The background is the canvas: an overlay wider or taller
+`composite()` returns the full merged frame (or a diff — see
+[Buffer diffing](#buffer-diffing-and-rendersession)). The background is
+the canvas: an overlay wider or taller
 than it is clipped to the canvas, and a background with no cells (the
 empty string, or rows of zero width) offers no canvas at all, so the
 overlay itself is returned as the frame.
@@ -263,8 +267,8 @@ $stack = VeilStack::new()
 echo $stack->composite($bg, Position::CENTER, Position::CENTER) . "\n";
 ```
 
-(0 is a real z-index; the default. `maxZIndex()`/`minZIndex()` return
-`null` only for an empty stack.)
+(0 is a real z-index; it is the default. `maxZIndex()`/`minZIndex()`
+return `null` only for an empty stack.)
 
 ## VeilStack
 
@@ -306,8 +310,8 @@ earlier veils, including their dimming) and run each veil
 `withoutSession()` so stacked painting always emits full frames (the stack
 never diffs — full frames are its architecture, not an oversight). A stack
 holds at most `VeilStack::MAX_LAYERS` (256) layers; `add()` throws
-`OverflowException` beyond the bound, which keeps `compositeAll()`'s
-per-frame walk cost finite.
+`OverflowException` beyond the bound, which keeps the per-frame walk cost
+of both `composite()` and `compositeAll()` finite.
 
 The stack reads each veil's `content()` **verbatim** — it performs no
 sweep of its own. Untrusted payloads must be swept per-veil with
@@ -368,9 +372,11 @@ echo $veil->composite($fg, $bg, Position::CENTER, Position::CENTER) . "\n";
 
 `sugar-style` `Border` exposes static factories — `Border::normal()`,
 `Border::rounded()`, `Border::thick()`, `Border::double()`,
-`Border::block()`, `Border::ascii()`, `Border::hidden()` — and the
-rendering itself is done by `sugar-style` `Style`. `withBorder(null)`
-clears the chrome.
+`Border::block()`, `Border::ascii()`, `Border::hidden()`,
+`Border::markdownBorder()` — plus `Border::catalog()`, which returns the
+catalogue of preset borders as an array rather than a single `Border` —
+and the rendering itself is done by `sugar-style` `Style`.
+`withBorder(null)` clears the chrome.
 
 ## Click-Outside Dismissal
 
@@ -416,8 +422,13 @@ Notes:
   clone — while the pre-scan original stays unscanned. `hit()` returns
   the `Zone` at a cell or `null`; `Zone::$id` is the public id. Both
   `hit()` and `isClickOutside()` are **1-based**: `isClickOutside()`
-  forwards `MouseMsg::$x/$y` straight into `hit()`, so normalize the
-  terminal's 0-based report before constructing the message.
+  forwards `MouseMsg::$x/$y` straight into `hit()`, and SGR mouse
+  reports — what terminals emit and what sugar-core's `InputReader`
+  decodes — are already 1-based and passed through unshifted, so
+  construct the message from the report as-is. Only convert if your own
+  event source counts from zero; subtracting one blindly shifts every
+  edge click onto the wrong cell and makes a click on the canvas border
+  self-dismiss the modal.
 - `scan()` throws `InvalidArgumentException` when the frame carries two
   zones with the same id (`sugar-mouse` refuses ambiguous zones) — keep
   `mark()` ids unique per frame.
@@ -473,9 +484,10 @@ from. (These three figures are pinned live by `tests/ReadmeByteFigureTest.php`
 
 Extended color operands saturate before any arithmetic runs: a `38;5;n`
 palette index is clamped to 0–255 and `38;2;r;g;b` components to 0–255
-each, so a hostile `38;5;300` cannot push the 6×6×6 cube formula past the
+each, so a hostile `38;5;300` cannot push the grayscale-ramp formula
+(38;5;232-255 is the grey ramp, not the 6×6×6 colour cube) past the
 `0xRRGGBB` range the cell model stores (unclamped, it would have run the
-grey ramp to 688 per channel — a value no frame can round-trip).
+ramp to 688 per channel — a value no frame can round-trip).
 
 ## Security — untrusted content
 
@@ -570,13 +582,18 @@ Dismissal by click is only the pointer half of a modal. sugar-overlay
 deliberately ships no key handling — wire the keyboard side in your app:
 bind Esc/Enter to the same dismiss action `isClickOutside()` answers, and
 keep focus movement inside sugar-focus / sugar-navstack so the overlay's
-buttons are reachable without a mouse. When an overlay opens, announce it
-(a title line or `withBorder()` frame helps screen-reader users locate the
-new block) and return focus to the underlying pane when it closes.
+buttons are reachable without a mouse. When an overlay opens, announce it:
+the **text** you emit (a title line) is the screen-reader cue; a
+`withBorder()` frame is a sighted-user affordance that only adds
+box-glyph noise for terminal screen readers, so never treat it as the
+announcement. Return focus to the underlying pane when it closes.
 
 For motion, call `withReducedMotion()` whenever the user has asked their
 platform to reduce it (sugar-colorprofile's `Probe::reducedMotion()` is
-the fleet-standard read): `animate()` then treats every progress as 1.0
+the fleet-standard read — note it sees only the `REDUCE_MOTION` /
+`PREFERS_REDUCED_MOTION` environment variables: a desktop accessibility
+toggle reaches a terminal process only when exported into its
+environment, so offer an in-app setting as well): `animate()` then treats every progress as 1.0
 and paints the settled frame in one shot, with no dim-pen sweep and no
 travel. During ordinary animation the scrim ramps with the animation
 instead of snapping to full opacity at frame one.
