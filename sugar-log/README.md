@@ -17,7 +17,7 @@ sugar-log — a minimal, colorful leveled logging library for PHP 8.3+.
 ## Features
 
 - **Leveled logging** — `Debug`, `Info`, `Warn`, `Error`, `Fatal` levels
-- **Colorful human-readable output** — styled when the destination is a color-capable terminal (the per-write gate honors `NO_COLOR`, force with `CLICOLOR_FORCE`; plain bytes on files and pipes by design — the construction-time color probe additionally reads `FORCE_COLOR`, see [Styling](#styling))
+- **Colorful human-readable output** — styled when the destination is a color-capable terminal (the per-write gate honors `NO_COLOR`, force with `CLICOLOR_FORCE` — exactly `1`; plain bytes on files and pipes by design — the construction-time color probe additionally reads `FORCE_COLOR`, see [Styling](#styling))
 - **Multiple formatters** — `TextFormatter` (default), `JsonFormatter`, `LogfmtFormatter`
 - **Structured key/value pairs** — pass arbitrary context with every log call
 - **Sub-loggers** — `with([...])` creates a child logger with persistent fields (a channel analogue: give each subsystem its own `withPrefix()`/`with()` child)
@@ -63,8 +63,8 @@ Levels carry charmbracelet/log-aligned integer deltas (Debug -4 through
 Fatal 12 — deliberately *not* RFC 5424 severities) — use `->value` for
 threshold comparisons. A record is emitted when its level value is at or
 above the logger's `minLevel` (default `Info`, hence the `Debug` opt-in
-above; `print()` and its formatted sibling `printf()` are the two methods
-that bypass the filter):
+above). The two methods that bypass the filter are `print()` and its
+formatted sibling `printf()`:
 
 ```php
 use SugarCraft\Log\Level;
@@ -194,8 +194,12 @@ Styles are applied only when the destination can render them. A `Logger`
 consults `sugar-colorprofile`'s Probe and — for each write — the stream it is
 about to use: `TextFormatter` output reaches a file or a piped stream as plain
 bytes, never as baked-in ANSI escapes. Set `NO_COLOR` to force plain output on
-terminals, or `CLICOLOR_FORCE=1` to opt styling back in for captured output
-(`FORCE_COLOR` is **not** a knob the per-write destination gate reads; the construction-time `Probe::colorProfile()` consults sugar-colorprofile's detection chain, which does read `FORCE_COLOR` — and ranks it above `NO_COLOR` there). A standalone
+terminals, or `CLICOLOR_FORCE=1` (exactly `1` — any other value is ignored) to
+opt styling back in for captured output
+(`FORCE_COLOR` is **not** a knob the per-write destination gate reads; the construction-time `Probe::colorProfile()` consults sugar-colorprofile's detection chain, which does read `FORCE_COLOR` — and ranks it above `NO_COLOR` there). The construction-time probe runs once when the `Logger`
+is built — changing `FORCE_COLOR` mid-process does not re-probe an existing
+logger (the per-write `NO_COLOR`/`CLICOLOR_FORCE` gate keeps reading the
+current environment on each write). A standalone
 `new TextFormatter(useColors: true)` still emits SGR by contract — the gate
 lives in the `Logger`, not in the formatter.
 
@@ -286,8 +290,8 @@ column-aligned log output (the formatter pads the short labels it renders):
 ```php
 use SugarCraft\Log\Styles;
 
-Styles::padLevelText('INF');  // "INF  "
-Styles::padLevelText('DEBUG'); // "DEBUG" (already 5 wide)
+Styles::padLevelText('INF');   // "INF  " — 'INF' plus two pad spaces to width 5
+Styles::padLevelText('DEBUG'); // "DEBUG" (already 5 wide, returned unchanged)
 ```
 
 Set the `padLevelText` property on a `Styles` instance to make
@@ -317,8 +321,10 @@ use SugarCraft\Log\Level;
 
 // 1. Custom stream — send a logger anywhere (immutable: returns a new Logger)
 $log = Logger::new();
+// fopen('a') creates the file as 0666 & ~umask — a typical umask of 0022
+// leaves world-readable 0644; set umask 0077 (or chmod after) for a 0600 log.
 $fh  = fopen('/tmp/app.log', 'a');   // plain bytes on files: styling is auto-dropped
-$out = $log->withOutput($fh);         // create with 0600 (umask) in real deployments
+$out = $log->withOutput($fh);
 
 // 2. Error-stream routing — severe records go to a second stream
 $err = fopen('php://stderr', 'w');
@@ -353,7 +359,7 @@ Untrusted data can never forge or reshape a record:
   instead of letting it fail the encode.
 - **logfmt escaping** — backslash and double-quote inside values are escaped
   (`\\`, `\"`), newline/CR/tab become `\n`/`\r`/`\t`, and a value is quoted
-  whenever it contains whitespace, `=`, `"`, or `\`.
+  whenever it contains whitespace, `=`, `"`, `\`, U+2028, or U+2029.
 - **Reserved keys** — context keys colliding with the record envelope
   (`level`, `msg`, `time`, `caller`, `prefix`, `_encode_error`) are renamed
   with a repeated
