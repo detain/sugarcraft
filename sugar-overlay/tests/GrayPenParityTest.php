@@ -50,6 +50,34 @@ final class GrayPenParityTest extends TestCase
         }
     }
 
+    /**
+     * M6 (docs-reviews-1104): dims do not compound. The pen closest to the
+     * text wins, so wrapping an already-dimmed line leaves the first pen
+     * bytes intact and sitting directly before the glyph — the outer scrim
+     * can never overwrite what an inner dim already touched.
+     */
+    public function testTheFirstDimPenStillWinsInsideASecondScrim(): void
+    {
+        $inner = Veil::new()->withBackdrop(70);
+        $outer = Veil::new()->withBackdrop(30);
+
+        $once = $this->dimLine($inner, 'x');
+        $twice = $this->dimLine($outer, $once);
+
+        $firstPen = substr($once, 0, strpos($once, 'x'));
+        $this->assertNotSame('', $firstPen, 'the inner dim must carry a pen');
+        $this->assertStringContainsString(
+            $firstPen,
+            $twice,
+            'a second wrap must not strip the first pen — dims do not replace each other'
+        );
+        $this->assertSame(
+            strpos($twice, 'x'),
+            strpos($twice, $firstPen) + strlen($firstPen),
+            'the first pen must sit directly before the glyph: it is the pen the terminal honours'
+        );
+    }
+
     private function veilHex(int $idx, bool $bright): int
     {
         static $method = null;
@@ -64,5 +92,13 @@ final class GrayPenParityTest extends TestCase
         $method ??= new ReflectionMethod(Style::class, 'ansiColorToHex');
 
         return $method->invoke(null, $idx, $bright);
+    }
+
+    private function dimLine(Veil $veil, string $line): string
+    {
+        static $method = null;
+        $method ??= new ReflectionMethod(Veil::class, 'dimLine');
+
+        return $method->invoke($veil, $line);
     }
 }

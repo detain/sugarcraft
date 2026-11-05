@@ -145,6 +145,16 @@ animation the scrim ramps with the transition —
 the first frames are partially dimmed, full strength lands only with the
 settled frame (see [Animations](#animations)).
 
+Dims do not stack: the pen closest to the text wins, so when a second
+scrim wraps an already-dimmed line the outer pen never reaches those
+cells — the first dim to touch a cell governs and later veils cannot
+darken it further. In a `VeilStack` this bites through ordering: a
+content-less backdrop veil is usually added first, so its lighter dim
+lands before the modal's heavier `withBackdrop()` ever sees those
+cells, and the region reads at the backdrop's opacity, not the modal's.
+Do not rely on stacked veils to reach a contrast target — dim once, at
+the strength you need.
+
 `composite()` anchors horizontally with a deliberate asymmetry: `baseX` is
 **not** clamped, so an overlay wider than the canvas at `LEFT` keeps its
 left cells and loses its right edge (the reverse at `RIGHT`). A

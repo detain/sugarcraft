@@ -823,10 +823,13 @@ final class Veil
      * color after the dim pen keeps that color (the pen inside wins): the
      * dim reaches exactly the cells that were on the default foreground.
      *
-     * Two honest limits: dims do not COMPOUND (each call replaces the pen,
-     * so stacking two veils at 50% does not read as 75%), and the blend
-     * assumes a light default foreground — on a light terminal the gray pen
-     * can brighten dark text instead of dimming it.
+     * Two honest limits: dims do not COMPOUND — the pen closest to the
+     * text wins, so a second wrap leaves the first pen bytes intact and
+     * the outer scrim simply never reaches already-dimmed cells: stacking
+     * two veils at 50% does not read as 75%, the first dim to touch a
+     * cell governs. And the blend assumes a light default foreground —
+     * on a light terminal the gray pen can brighten dark text instead of
+     * dimming it.
      */
     private function dimLine(string $line): string
     {
