@@ -395,7 +395,7 @@ The eight CI-recorded GIFs cover eight renderers; `line.php` drives
 
 ![heatmap](.vhs/heatmap.gif)
 
-### Line chart
+### Streamline (line.gif)
 
 ![line](.vhs/line.gif)
 
