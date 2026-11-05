@@ -829,6 +829,26 @@ in the same namespace are its value parts.
 > the `plugin-refresh` tick subscription — not the host's own tick rate. A
 > panel that needs keyboard input is a host component, not a plugin.
 >
+> **Motion & reduced motion.** The library owns no clock and no event loop:
+> every render is a synchronous, pure snapshot, and all apparent motion is
+> frame-driven by the host. The moving surfaces are exactly two —
+> `Components\Feedback\Spinner`, whose `render()` picks its animation frame
+> from wall time against the `withInterval()` speed it was given, and
+> `Components\Media\Marquee`, whose `render($frame)` scrolls text by a frame
+> offset the host advances (`nextFrame()`, `withSpeed()` characters per frame,
+> `withDirection()`, optional `withFadeEdges()`). Everything else that looks
+> alive is presentation only: `Components\System\Timer` displays whatever
+> `withElapsed()` the host feeds it, the tree's `StateTransition` carries an
+> expanded/collapsed state rather than an animation, and the plot canvases
+> (`DotMatrix`, `BrailleCanvas`, `DualSampleGraph`) render their input
+> statically. Because the host supplies every frame, a reduced-motion
+> presentation is always reachable from the outside — render a fixed frame
+> (`Spinner::frameAt(0)`, or a constant `$frame` for `Marquee`) and hold the
+> redraw cadence still. There is deliberately no `REDUCE_MOTION`/
+> `prefers-reduced-motion` runtime knob inside the library; honoring such a
+> signal is a host-policy decision (the candy-top app owns that precedent),
+> and the frames above stay valid no matter which way that ruling lands.
+>
 > **Color environment.** Every color emission routes through
 > `Foundation\ColorMode`: `NO_COLOR` set to any non-empty value and `TERM=dumb`
 > collapse to plain ASCII; otherwise TrueColor. `ColorMode::use($profile)`
