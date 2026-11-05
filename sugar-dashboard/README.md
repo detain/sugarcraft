@@ -646,7 +646,7 @@ foreach ($procs as $row => $p) {
 
 | Type | Description | Key Methods |
 |------|-------------|-------------|
-| `Module` | MVC-style Model–Update–View interface aligned with `Core\Model`: `init(): ?Closure`, `update(Msg): array{0:Module,1:?Cmd}`, `view(): string`, `subscriptions(): ?Subscriptions`, plus `name(): string`, `minSize(): array{0:int,1:int}` |
+| `Module` | MVC-style Model–Update–View interface aligned with `Core\Model`: `init(): ?Closure`, `update(Msg): array{0:Module,1:?Cmd}`, `view(): string|View`, `subscriptions(): ?Subscriptions`, plus `name(): string`, `minSize(): array{0:int,1:int}` |
 | `BaseModule` | Abstract helper — `withState(array): static` for immutable state, default `update()` returns `[self,null]` |
 | `LegacyModule` | Deprecated array-state interface — superseded by `Module` |
 | `LegacyModuleAdapter` | `@internal` wrapper that adapts `LegacyModule` to the `Module` contract |
