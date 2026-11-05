@@ -91,7 +91,7 @@ strength itself under 1.4.11 *Non-text Contrast*).
   clamped slot itself; emptying the ring clears focus.
 - `next()` / `previous()` wrap around and are no-ops with fewer than two
   **enabled** regions — with one exception: focus parked on a disabled region
-  beats the no-op and moves to the nearest enabled survivor.
+  beats the no-op and moves to the nearest enabled survivor in that direction.
 - `reorder()` replaces the traversal order in one step: ids are deduped
   (first wins), focus stays on the current region if it survives (otherwise
   focus lands on the first **enabled** survivor — index 0 only when every
@@ -110,7 +110,7 @@ strength itself under 1.4.11 *Non-text Contrast*).
   in that state.
 - Disabling the **focused** region does not move focus — `current()` still
   names it. The following `next()` or `previous()` call moves focus to the
-  nearest enabled region — even a sole enabled survivor.
+  nearest enabled region in that direction — even a sole enabled survivor.
 - `focus()` refuses a disabled id: it is a no-op, just like focusing an
   unknown or already-focused region. Restore order relies on this — focus
   first, then re-apply the disabled flags (see the persistence recipe below).
