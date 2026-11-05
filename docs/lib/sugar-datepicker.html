@@ -80,7 +80,7 @@ $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Month grid</strong><span>A 6×7 month view with localised day and month names, today and the cursor highlighted, and optional ISO week numbers.</span></div>
-      <div class="feature"><strong>Keyboard nav</strong><span><code>handleKey()</code> takes the <code>KEY_*</code> constants: arrows move the cursor, Home/End jump to the first/last cell, Enter selects (single mode) or sets the range start/end, Esc clears.</span></div>
+      <div class="feature"><strong>Keyboard nav</strong><span><code>handleKey()</code> takes the <code>KEY_*</code> constants: arrows move the cursor, Home/End jump to the first/last valid day of the viewed month, Enter selects (single mode) or sets the range start/end, Esc clears.</span></div>
       <div class="feature"><strong>Range selection</strong><span><code>withRangeMode(true)</code>: the first Enter sets the start, the second the end (swapped if needed), a third starts over; Esc clears.</span></div>
       <div class="feature"><strong>Date bounds</strong><span><code>withMinDate()</code>/<code>withMaxDate()</code> clamp navigation to the allowed months and refuse out-of-range selection; <code>withoutMinDate()</code>/<code>withoutMaxDate()</code> lift a bound.</span></div>
       <div class="feature"><strong>SugarCraft model</strong><span><code>Model</code> wraps the picker as a sugar-core Model with an optional event store.</span></div>
@@ -120,9 +120,9 @@ $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-datepicker/.vhs/basic.gif" alt="May / June 2026" onerror="this.parentElement.style.display='none'">
-                <h3>May / June 2026</h3>
-                <span class="demo-caption">Month-grid datepicker with cursor and selected day.</span>
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-datepicker/.vhs/basic.gif" alt="May to June 2026" onerror="this.parentElement.style.display='none'">
+                <h3>May → June 2026</h3>
+                <span class="demo-caption">Month-grid date picker with cursor and selected day; the recording walks all four sections of examples/basic.php (May and June views, a July selection, a direct-API December cursor move).</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-datepicker/.vhs/constraints.gif" alt="Min / max constraints" onerror="this.parentElement.style.display='none'">
