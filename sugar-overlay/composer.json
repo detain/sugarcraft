@@ -22,7 +22,8 @@
     ],
     "support": {
         "issues": "https://github.com/sugarcraft/sugar-overlay/issues",
-        "source": "https://github.com/sugarcraft/sugar-overlay"
+        "source": "https://github.com/sugarcraft/sugar-overlay",
+        "docs": "https://sugarcraft.github.io/lib/sugar-overlay.html"
     },
     "require": {
         "php": "^8.3",
