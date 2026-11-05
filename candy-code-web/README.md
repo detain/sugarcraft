@@ -211,14 +211,17 @@ documents the protocol and the UI).
   session, theme.
 - <a id="voice-input"></a>**Voice input**: the composer's mic dictates
   through one of two engines, and the button's title says which is live.
-  The *browser* engine hands audio to the browser vendor's speech service
-  (Chrome routes through Google, Safari through Apple) and contacts nothing
-  on the candy-code side; the *server* engine — chosen whenever the server
-  advertises `transcribe` — records locally and sends the audio to the
-  server, from where it goes to your own configured voice endpoint. Firefox
-  has no browser engine at all, and a plain-http serve on a LAN host is not
-  a secure context, so there the button rides the server engine or hides:
-  the browser refuses both APIs in an insecure page.
+  - The *server* engine — chosen whenever the server advertises
+    `transcribe` and this browser can record — captures locally and sends
+    the audio to the server, from where it goes to your own configured
+    voice endpoint.
+  - The *browser* engine is the fallback: it hands audio to the browser
+    vendor's speech service (Chrome routes through Google, Safari through
+    Apple) and contacts nothing on the candy-code side. Firefox has no
+    browser engine.
+  - Both engines need a secure context: on a plain-http serve (a LAN host,
+    say) the browser refuses the microphone and speech APIs, so neither
+    engine runs and the mic button is simply absent.
 - **Canvas artifacts**: a tool can answer with self-contained HTML, rendered
   as a CanvasCard in a sandboxed frame served from `GET /canvas/{token}`, the
   token minted once by `POST /api/canvas` (the
