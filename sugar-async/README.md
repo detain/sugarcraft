@@ -158,7 +158,7 @@ a stateful coalescing closure. Where a helper takes a `LoopInterface`, passing
   `onTimeout` abort hook (fired once, errors swallowed) for server-side kills the
   driver's own cancellation cannot perform. A bounded I/O ceiling — not a blanket
   per-request wall-clock killer.
-- `cancellable(promise, token, onCancel:, ?loop:)` — the returned promise rejects
+- `cancellable(promise, token, onCancel:)` — the returned promise rejects
   immediately with `OperationCancelledException` when the token fires, a late inner
   result is dropped, and an optional `onCancel` hook aborts the underlying work
   exactly once. The wrapper unsubscribes its own token registration at settlement.
