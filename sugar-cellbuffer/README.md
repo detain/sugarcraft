@@ -187,6 +187,12 @@ Total: 44 bytes vs 51 bytes for the same 5×2 frame repainted via `toAnsi()` (wh
 
 Buffers are full-grid copy-on-write: a one-cell `with*()` copies the `width × height` cell list. Serialisation briefly holds both the old and new structures (~2-3× transient). Dimensions are caller-trusted at construction — size the grid to the pane, not the content. Region costs are bounded: `withRegion()`/`fill()` iterate only the clipped intersection, and `copy()` refuses regions above `MAX_COPY_CELLS` (1,000,000 cells).
 
+## Degraded terminals & non-visual output
+
+- **No capability gating.** `toAnsi()`, the diff encoder and `applyDiff()` emit SGR, ECH, REP and OSC 8 unconditionally — there is no `NO_COLOR`/`CLICOLOR`/`isatty`/terminfo check anywhere in `src/`. Adapting output to degraded terminals is the caller's job; `toAnsi()` (full repaint, no REP/ECH) is the conservative fallback.
+- **`Buffer::text()` is the non-visual projection.** Style-free, one row per line, continuation cells skipped — the right source for accessibility trees, clipboard and search.
+- **Palette slots carry identity, not just colour.** `fgSlot`/`bgSlot`/`ulSlot` keep the 0-255 terminal-palette identity of themed colours across delta round-trips, which doubles as the hook for monochrome/high-contrast remapping: remap the slot, not the hex.
+
 ## Where next
 
 - Full repaint: `Buffer::toAnsi()`.
