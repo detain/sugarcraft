@@ -23,7 +23,7 @@ return [
     'ui.cleared' => '★ cleared — press r to play again',
     'ui.help_rules' => 'a number counts nearby mines',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  move  ·  space / enter  reveal',
-    'ui.help_board' => 'f  flag  ·  c / middle-click  open around flags  ·  right-click  flag',
+    'ui.help_board' => 'left-click  open · f / right-click  flag · c / middle-click  open around flags',
     'ui.help_session' => 'r  restart  ·  S  save  ·  L  load  ·  q / Esc / Ctrl+C  quit',
     'ui.saved' => 'game saved',
     'ui.restarted' => 'board restarted',

@@ -23,7 +23,7 @@ return [
     'ui.cleared' => '★ gagné — appuyez sur r pour rejouer',
     'ui.help_rules' => 'un chiffre compte les mines voisines',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  déplacer  ·  espace / entrée  révéler',
-    'ui.help_board' => 'f  drapeau  ·  c / clic du milieu  groupée  ·  clic droit  drapeau',
+    'ui.help_board' => 'clic gauche  ouvrir · f / clic droit  drapeau · c / clic du milieu  groupée',
     'ui.help_session' => 'r  rejouer  ·  S  sauvegarder  ·  L  charger  ·  q / Esc / Ctrl+C  quitter',
     'ui.saved' => 'Partie sauvegardée',
     'ui.restarted' => 'Plateau relancé',

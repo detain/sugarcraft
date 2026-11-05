@@ -23,7 +23,7 @@ return [
     'ui.cleared' => '★ vyčištěno — stiskněte r pro novou hru',
     'ui.help_rules' => 'číslo udává počet min v okolí',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  pohyb  ·  mezerník / enter  odkrytí',
-    'ui.help_board' => 'f  vlajka · c / prostřední tlačítko  odkrytí okolí · pravé tlačítko  vlajka',
+    'ui.help_board' => 'levé tlačítko  odkryt · f / pravé  vlajka · c / prostřední  okolí',
     'ui.help_session' => 'r  restart  ·  S  uložit  ·  L  načíst  ·  q / Esc / Ctrl+C  konec',
     'ui.saved' => 'Hra uložena',
     'ui.restarted' => 'Plocha restartedova',

@@ -129,7 +129,8 @@ final class Renderer
         // padding cell — so status and footer line up under the first
         // interior column. Each footer line carries it, not just the first.
         $indent = str_repeat(' ', self::INTERIOR_COL_OFFSET);
-        // Every bound key names itself here — the footer is the app's only
+        // Every bound key AND mouse action names itself here — left-click
+        // reveal included — the footer is the app's only
         // discoverability surface (there is no separate help screen). Values
         // ship translated in all 16 locales, and every locale's lines fit
         // an 80-column terminal — FooterWidthGuardTest enforces that budget

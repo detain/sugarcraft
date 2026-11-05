@@ -113,7 +113,7 @@ final class I18nWiringTest extends TestCase
         T::setLocale('en');
         $view = Renderer::render(self::freshGame());
 
-        foreach (['↑', '↓', '←', '→', 'hjkl', 'space', 'enter', 'f', 'c', 'S  save', 'L  load', 'r', 'q', 'Esc', 'Ctrl+C', 'right-click', 'middle-click'] as $token) {
+        foreach (['↑', '↓', '←', '→', 'hjkl', 'space', 'enter', 'f', 'c', 'S  save', 'L  load', 'r', 'q', 'Esc', 'Ctrl+C', 'left-click', 'right-click', 'middle-click'] as $token) {
             $this->assertStringContainsString($token, $view, "footer must advertise `$token`");
         }
     }

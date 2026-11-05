@@ -23,7 +23,7 @@ return [
     'ui.cleared' => '★ 通关 — 按 r 再玩一局',
     'ui.help_rules' => '数字表示周围的地雷数',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  移动  ·  space / enter  翻开',
-    'ui.help_board' => 'f  插旗  ·  c / 中键  开周围  ·  右键  插旗',
+    'ui.help_board' => '左键  打开 · f / 右键  插旗 · c / 中键  开周围',
     'ui.help_session' => 'r  重开  ·  S  保存  ·  L  读取  ·  q / Esc / Ctrl+C  退出',
     'ui.saved' => '游戏已保存',
     'ui.restarted' => '棋盘已重新开始',

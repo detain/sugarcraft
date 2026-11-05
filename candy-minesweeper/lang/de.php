@@ -23,7 +23,7 @@ return [
     'ui.cleared' => '★ Geschafft — drücken Sie r für eine neue Partie',
     'ui.help_rules' => 'eine Zahl zählt die Minen daneben',
     'ui.help_moves' => '↑ ↓ ← → / hjkl  bewegen  ·  Space / Enter  aufdecken',
-    'ui.help_board' => 'f  flaggen  ·  c / Mittelklick  aufdecken  ·  Rechtsklick  flaggen',
+    'ui.help_board' => 'Linksklick  aufdecken · f / Rechtsklick  flaggen · c / Mittelklick  aufdecken',
     'ui.help_session' => 'r  Neustart  ·  S  speichern  ·  L  laden  ·  q / Esc / Ctrl+C  beenden',
     'ui.saved' => 'Spiel gespeichert',
     'ui.restarted' => 'Feld neu gestartet',
