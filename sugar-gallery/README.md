@@ -336,6 +336,13 @@ own edge stays yours: an app that composes frames for a marker-consuming
 renderer sanitises the assembled frame at its own boundary, not here.
 ImageOverlay art markers live at
 `U+E002` and above, outside the sentinel window: they survive every sweep.
+That survival has a visible edge: an overlay poster renders as a single
+`U+E002`-range marker cell (top-left of the reserved block; the runtime paints
+the real graphics there), so a path that extracts *text* from a rendered frame —
+search, clipboard, a screen scrape — reads unassigned private-use glyphs at that
+cell. For those consumers sugar-core ships `Sanitize::stripPrivateUse()`, which
+sweeps the whole private-use block out of extracted text; the frame itself must
+keep the marker, or the image renderer has nothing to find.
 
 ## Internationalisation
 

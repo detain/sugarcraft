@@ -109,6 +109,8 @@ $card = $card->withSafePoster($fromCache);  // …or sweep untrusted bytes: SGR 
 $card = $card->withProgress(0.6);           // optional continue-watching bar
 echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 
+    <p>Overlay posters (<code>withImage()</code>) draw as a single <code>U+E002</code>-range marker cell inside the reserved block — the image renderer paints the real graphics there, and the marker deliberately survives every text sweep (it lives outside the zone-sentinel window). Text-extraction paths (search, clipboard) therefore see an unassigned private-use glyph at that cell; sugar-core's <code>Sanitize::stripPrivateUse()</code> sweeps the whole block out of extracted text without touching the frame.</p>
+
     <h3 style="margin-top: 32px;">Behaviour</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Sparse & absolute-indexed</strong><span>The grid knows the <code>total()</code> up front but holds only fetched cards keyed by absolute index; indices with no card yet render as <code>░</code> skeleton placeholders.</span></div>
