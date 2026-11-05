@@ -202,8 +202,9 @@ a stateful coalescing closure. Where a helper takes a `LoopInterface`, passing
   `unsubscribe()` cancels any queued trailing call.
 - `all(promises)` / `race(promises)` — fan-in with keys preserved: `all` resolves
   a keyed list (`[]` resolves immediately) and rejects with the first error;
-  `race` settles with the first outcome (rejecting an empty field with
-  `InvalidArgumentException` — a race nobody entered has no answer to give).
+  `race` settles with the first outcome — on empty input it THROWS
+  `InvalidArgumentException` synchronously at the call site (no promise is ever
+  produced to carry a rejection; a race nobody entered has no answer to give).
 - `onPending(promise, seconds, onPending:, ?loop:, label:)` — pure notice
   combinator: if the promise is still pending after N seconds the advisory hook
   runs once ("Still waiting on login…"); the inner is never cancelled by this
