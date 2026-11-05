@@ -407,7 +407,7 @@ echo $driver->view(); // renders first frame immediately
 ## Text-tier renderers
 
 Three backends need no graphics protocol at all — they paint the image as
-text, so they work everywhere:
+text, so they reach any Unicode-capable terminal for sighted readers:
 
 - **Half-block** (`▀`, 24-bit fg/bg over two pixel rows per cell) and
   **quarter-block** (`░▒▓█`, 2×2 sub-pixel canvas per cell) shade pixels
@@ -425,6 +425,14 @@ text, so they work everywhere:
   glyphs under `all`; default corpus byte-frozen at 676). The double-width
   wide-glyph engine plus the opt-in kana tier ride
   `SymbolMap::withSelectors('wide')` and the renderer's lookback pass.
+
+Assistive technology reads none of this as picture. A screen reader
+pronounces braille/sextant glyphs by dot-pattern name, the block glyphs as
+their Unicode labels, and there is no alt-text channel anywhere in the text
+tiers; `ImageLayer` placements ride a paint layer, so an AT consumer traversing
+the frame text sees the marker block and the surrounding lines, never the
+image. The tiers are for sighted readers on Unicode-capable terminals — put
+content that must survive assistive parsing in your own caption text.
 
 `Mosaic::auto()` seats the symbol engine as the floor of the fallback ladder —
 plain half-block is reached only when text output itself is refused — while the
