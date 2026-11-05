@@ -136,7 +136,7 @@ final class Renderer
         $frame = $header . "\n" . $body . "\n " . $help . $err . $success . $commitBar . $branchBar . $mergeBar . $diffOverlay . $rebaseOverlay . $stashOverlay . $cherryPickBar . $worktreeOverlay . $interactiveRebaseOverlay . $overlay;
 
         // Hard ceiling: whatever the per-pane budgets missed, the frame never
-        // ships more rows than the terminal has ). The trailing empty
+        // ships more rows than the terminal has. The trailing empty
         // piece of explode-on-"\n" keeps the final newline byte-identical.
         if ($a->height !== null) {
             $lines = explode("\n", $frame);
@@ -221,7 +221,7 @@ final class Renderer
             $subject = self::sanitize($entry['subject']);
             $subjectMax = $a->logSubjectWidth();
             // Cell-width aware: mb_strlen counts codepoints, so CJK subjects
-            // (double-width) overran the pane budget .
+            // (double-width) overran the pane budget.
             if (Width::of($subject) > $subjectMax) {
                 $subject = Width::truncate($subject, max(0, $subjectMax - 1)) . '…';
             }
@@ -709,7 +709,7 @@ final class Renderer
                     };
                     // Pad the PLAIN action text to 8 cells before colorizing:
                     // sprintf %-8s counted the SGR bytes of the rendered string
-                    // as content, so every column collapsed .
+                    // as content, so every column collapsed.
                     $line = '  '
                         . Style::new()->foreground(Color::hex($actionColor))->render(Width::padRight($commit->action->value, 8))
                         . ' '

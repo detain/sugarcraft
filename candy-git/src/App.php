@@ -1158,7 +1158,7 @@ final class App implements Model
                 // the old `default => null` claimed success on garbage.
                 default => throw new \RuntimeException(Lang::t('history.unknown_op', ['op' => $op])),
             };
-            // A redo must not announce itself as an undo ); both
+            // A redo must not announce itself as an undo; both
             // lanes name the operation through its humanized label.
             $label  = $this->opLabel($entry->op);
             $msg    = $forward
