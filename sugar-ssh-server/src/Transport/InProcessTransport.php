@@ -213,8 +213,8 @@ final class InProcessTransport implements Transport, ChildSpawner
 
         // The session carries the answer: the pumped child's code when a
         // Spawn / DefaultChannelHandler path ran, EXIT_DENIED when a gate
-        // refused, 0 when the chain never reached a terminal (audit
-        // MAJOR 9 — this used to be `lastChildStatus ?? 0`, which could
+        // refused, 0 when the chain never reached a terminal (this
+        // used to be `lastChildStatus ?? 0`, which could
         // only ever report success, and which outlived a transport reuse).
         return $this->dispatch($ctx, $authenticatedSession, $stack, 0);
     }

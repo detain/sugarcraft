@@ -401,7 +401,7 @@ and who fills each slot changes what you may trust in it.
 | --- | --- | --- | --- |
 | `USER`, `LOGNAME` | sshd, for the target account | `Session::fromEnvironment()` | Good -- sshd writes it for the account it launched; which account to ask for was the client's choice. |
 | `SSH_CONNECTION` | sshd: `client-ip client-port server-ip server-port` | `Session::fromEnvironment()` | Good -- socket-derived, not peer-asserted. |
-| `SSH_CLIENT` | sshd: `client-ip client-port server-port` (older, 3 fields) | `Session::fromEnvironment()` fallback | Good, but it has no server-IP slot: `fromEnvironment()` counts the fields and leaves `$serverHost` empty rather than storing the port in it (audit MINOR 15). |
+| `SSH_CLIENT` | sshd: `client-ip client-port server-port` (older, 3 fields) | `Session::fromEnvironment()` fallback | Good, but it has no server-IP slot: `fromEnvironment()` counts the fields and leaves `$serverHost` empty rather than storing the port in it. |
 | `SSH_ORIGINAL_COMMAND` | sshd, when `ForceCommand` rewrote `command` `ssh host some command` | `Session::$command`, then your decoder | Good -- but see the [exec policy](#exec-policy-the-program-comes-from-the-peer): the program string is peer-chosen. |
 | `SSH_TTY` | sshd when a PTY was allocated | `Session::$tty` | Good. |
 | `TERM` | sshd, from the client's pty-request | `Session::$term` | Peer-asserted. Shape it before it reaches a terminfo lookup. |
@@ -572,8 +572,8 @@ $s->isInteractive();
 $s->toLogContext();
 ```
 
-`$s->toLogContext()` is what the bundled `Logger` writes, and since audit
-MAJOR 3 it carries nine fields: the six above plus `session`, `auth_method`
+`$s->toLogContext()` is what the bundled `Logger` writes, and it carries nine
+fields: the six above plus `session`, `auth_method`
 and `key_fingerprint` (a dash stands for "not carried", so a line never loses
 the authentication column silently).
 
@@ -723,7 +723,7 @@ The `InProcessTransport` dispatches SSH channel-level messages through a
 `ChannelHandler` rather than handling them inline. This lets you replace the
 default PTY/shell wiring with a custom implementation.
 
-**Which messages actually arrive (audit K1).** The library mints exactly one
+**Which messages actually arrive.** The library mints exactly one
 channel message itself: `WindowChangeMsg`, from a `SIGWINCH` observed while
 pumping. `pty-req`, `shell`, `exec`, `env`, `signal` and `break` are **not fed from the
 wire** — this transport sits behind sshd's `ForceCommand`, so sshd has
