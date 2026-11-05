@@ -52,9 +52,10 @@ final class Toast
      * caveat only bounded alert COUNT — a remote string 100x longer than any
      * viewport was an amplifier for the (now-linear) renderer and for the
      * stack geometry. Over the cap the message truncates with a visible
-     * '[truncated]' marker; the full text still rides the Alert into
-     * history(). 8192 cells ≈ 170 wrapped rows at the default width — past
-     * any readable notification, far below any hostile budget.
+     * ' …[truncated]' marker (leading space, ellipsis); the full text still
+     * rides the Alert into history(). 8192 cells ≈ 170 wrapped rows at the
+     * default width — past any readable notification, far below any hostile
+     * budget.
      */
     public const MAX_MESSAGE_CELLS = 8192;
 
@@ -1246,7 +1247,7 @@ final class Toast
         $marker = ' …[truncated]';
         $cut = Width::truncateAnsi($message, self::MAX_MESSAGE_CELLS - Width::string($marker));
         // truncateAnsi may leave inline styling open; close it before the
-        // marker so '[truncated]' never inherits hostile colour.
+        // marker so ' …[truncated]' never inherits hostile colour.
         return $cut . Ansi::reset() . $marker;
     }
 
