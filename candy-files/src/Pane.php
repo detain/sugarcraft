@@ -12,16 +12,17 @@ namespace SugarCraft\Files;
  * set (a Set of entry names — strings, not indices, so a refresh
  * doesn't break selection), and the active sort order.
  *
- * Immutable: every transition (`navigateTo`, `moveCursor`,
+ * Immutable: every transition (`navigate`, `moveCursor`,
  * `toggleSelection`, `setSort`) returns a fresh Pane so the
  * surrounding {@see Manager} can return `[nextManager, ?cmd]`
  * cleanly.
  *
- * Filesystem reads happen via an injected `Listing` callable —
- * tests pass a closure that returns a fixed list, prod passes
- * one that scans `$cwd` with `scandir`/`stat`. Decoupling the
- * I/O lets the entire transition layer be tested with no
- * tmp-dir setup or filesystem fixtures.
+ * Filesystem reads happen via an injected `\Closure(string $path):
+ * list<Entry>` — tests pass a closure returning a fixed list, prod
+ * passes an FsLister lister (`scandir` + `lstat`: size and mtime
+ * always describe the link itself, never the followed target).
+ * Decoupling the I/O lets the entire transition layer be tested
+ * with no tmp-dir setup or filesystem fixtures.
  */
 final class Pane
 {

@@ -66,7 +66,7 @@ final class Renderer
     /**
      * Render one pane box.
      *
-     * Width derivation (MAJOR-2, docs-fix-1023): with a live terminal width
+     * Width derivation: with a live terminal width
      * the two panes split it (minus the 2-cell gutter), floored at the
      * historical 40 cells; without one ($termCols === 0 — unit tests, or a
      * Model built before the first WindowSizeMsg) every column keeps its

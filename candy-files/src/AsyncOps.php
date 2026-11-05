@@ -10,7 +10,7 @@ use React\Promise\PromiseInterface;
 /**
  * Tick-deferred file operations wrapped in React\Promise.
  *
- * HONEST SEMANTICS (docs-fix-1023): each operation defers its work to the
+ * HONEST SEMANTICS: each operation defers its work to the
  * next event-loop tick via Loop::futureTick — that lets the keypress
  * round-trip finish and the frame paint BEFORE the I/O starts. It does NOT
  * make the I/O itself non-blocking: once a tick runs a large recursive
@@ -177,7 +177,9 @@ final class AsyncOps
     }
 
     /**
-     * Move multiple files/directories in parallel.
+     * Move multiple files/directories tick-sliced in sequential
+     * batches — never parallel disk I/O (same contract as
+     * {@see self::copyManyAsync()}).
      *
      * @param array<string, string> $map Source → Destination mapping
      * @return PromiseInterface<array<string, bool>> Map of source → success

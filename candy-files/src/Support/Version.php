@@ -12,9 +12,11 @@ namespace SugarCraft\Files\Support;
  * override is the build stamp of the phar this process was launched from.
  * candy-files ships no `self-update`, so the ordering machinery candy-top
  * needs (parse/compare, fail-closed on `dev-master`) has nothing to serve
- * here — any non-empty stamp the build wrote is reported verbatim, and a
- * dev-built archive (whose stamp is the sentinel `dev-build`) honestly falls
- * through to CURRENT.
+ * here — any non-empty stamp the build wrote is reported verbatim
+ * (published dev archives stamp a real `dev-<shortsha7>` from the
+ * release workflow), and only the sentinel `dev-build` — written by
+ * tools/build-phar.php as a last resort when no git stamp could be
+ * read — honestly falls through to CURRENT.
  *
  * WHY THE ARCHIVE ARM EXISTS AT ALL (DST-1): the frozen `vendor/` baked
  * into a release archive reports the BUILD ROOT's dev guess, so a `--version`
@@ -35,10 +37,13 @@ final class Version
     public const CURRENT = 'dev-master';
 
     /**
-     * The stamp a dev working-tree build carries. It is not a version, so
-     * {@see self::fromPharMetadata()} refuses it and the report falls
-     * through to {@see self::CURRENT} — mirroring candy-code's rule that
-     * `dev-build` is never read as a version.
+     * The sentinel tools/build-phar.php stamps an archive with ONLY as a
+     * last resort, when no git stamp could be read; published dev builds
+     * carry the real `dev-<shortsha7>` and are reported verbatim. This
+     * sentinel is not a version, so {@see self::fromPharMetadata()}
+     * refuses it and the report falls through to {@see self::CURRENT} —
+     * mirroring candy-code's rule that `dev-build` is never read as a
+     * version.
      */
     public const DEV_BUILD = 'dev-build';
 

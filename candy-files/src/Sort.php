@@ -74,9 +74,10 @@ enum Sort: string
     }
 
     /**
-     * Cycle through name → mtime → size → back to name. Tapping
-     * `s` once moves through asc orders; tapping it on the same
-     * field flips to desc.
+     * Cycle the active sort: every tap of `s` alternates the
+     * direction, and the field advances on the following tap —
+     * from NameAsc the order is NameDesc, MtimeAsc, MtimeDesc,
+     * SizeAsc, SizeDesc, back to NameAsc.
      */
     public function cycle(): self
     {

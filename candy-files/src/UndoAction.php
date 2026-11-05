@@ -22,9 +22,6 @@ final class UndoAction
      *        bytes were moved to; '' when the cross-device fallback removed
      *        them permanently. move/rename/copy: a map of old/source path →
      *        new/destination path.)
-     * @param array<string,string> $renames Map of old path => new path (for rename)
-     * @param array<string,string> $moves Map of original path => new path (for move)
-     * @param array<string,string> $copies Map of source => destination (for copy)
      */
     private function __construct(
         public readonly UndoActionType $type,

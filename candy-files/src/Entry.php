@@ -37,7 +37,7 @@ final class Entry
     /**
      * Display string for the size column. Directories render
      * "DIR", links render "LINK", regular files render their byte
-     * size compacted to KB/MB/GB.
+     * size compacted to KB/MB/GB/TB.
      */
     public function displaySize(): string
     {
@@ -62,10 +62,12 @@ final class Entry
 
     /**
      * Strip every terminal-control construct so a filename is inert when
-     * rendered: complete escape sequences first (OSC/DCS strings consumed
-     * whole with their parameters, CSI, then all remaining ESC-initiated
-     * ECMA-48 sequences), then a sweep of every leftover C0 control, ESC,
-     * and DEL byte, then UTF-8-encoded C1 controls.
+     * rendered: complete escape sequences first (OSC strings consumed
+     * whole with their parameters, likewise CSI; other ESC-initiated
+     * ECMA-48 sequences lose only their introducer to the generic
+     * leg — a DCS string is not consumed up to its ST, so its
+     * parameter body stays behind), then a sweep of every leftover
+     * C0 control, ESC, and DEL byte, then UTF-8-encoded C1 controls.
      *
      * The old implementation exempted ESC (\x1b) itself from the sweep and
      * only knew the CSI shape, so an OSC set-title, a charset selection
