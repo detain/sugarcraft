@@ -195,6 +195,11 @@ one (sort arrows, filter chips) must track the state they pass in themselves.
 
 Scroll the table vertically using keyboard input via `scrollYForKey()` and `handleKey()`:
 
+`handleKey()` drives vertical scrolling ONLY. Moving the row cursor
+(`SelectNext()`/`SelectPrevious()`), turning pages (`withPage()`/`NextPage()`/
+`PreviousPage()`) and horizontal panning (`withScrollX()`) are separate API
+calls — no key constant performs them, so the host must map its own keys to them.
+
 ```php
 use SugarCraft\Table\Table;
 
