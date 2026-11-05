@@ -51,7 +51,9 @@ $buf = $buf->withRegion(Region::new(Position::new(0, 0), 2, 2), $sub);
 $cell = $buf->cellAt(5, 1);
 echo $cell->rune(); // 'H'
 
-// Paint the whole grid and show it.
+// Paint the whole grid and show it. toAnsi() joins rows with a bare LF,
+// which a canonical (ONLCR) line turns into CRLF; raw-mode callers must
+// write "\r\n" or interpose CUP themselves — see the toAnsi() contract.
 echo $buf->toAnsi();
 ```
 
@@ -82,7 +84,7 @@ $manual = Buffer::fromGrid(2, 1, [Cell::new('中', null, null, 2), $cont]);
 - `Buffer::copy(Region $region): self` — extract a region-sized buffer (verbatim blit; capped by `MAX_COPY_CELLS`).
 - `Buffer::diff(Buffer $previous): list<DiffOp>` — minimal delta ops (see [Diffing](#diffing--delta-ansi)).
 - `Buffer::applyDiff(array $ops): self` — replay a diff stream onto a buffer; refuses negative cursor ops.
-- `Buffer::toAnsi(): string` — full-repaint ANSI for the whole grid.
+- `Buffer::toAnsi(): string` — full-repaint ANSI for the whole grid. Rows are joined with a **bare LF only** — no CR, no cursor addressing — so the stream lands on the right rows only where the terminal maps newlines to CRLF (canonical cooked mode, ONLCR on) or the grid is exactly as wide as the terminal (auto-wrap returns the cursor). Raw-mode callers post-process `"\r\n"` themselves or interpose CUP moves between rows; `text()` shares the bare-LF join contract.
 - `Buffer::text(?Region $region = null): string` — plain-text extraction (continuations skipped).
 - `Buffer::fromString(?string $ansi, int $width, int $height): self` — **test-support** ANSI parser (lossy; see Security); all three arguments are required and non-positive dimensions are refused.
 - `Buffer::fromGrid(int $width, int $height, array $grid): self` — wrap a flat cell list (index = `row*width + col`); positive dimensions and exactly `width*height` cells are enforced, pair law is not.
