@@ -152,7 +152,7 @@ final class HandlerAdapter implements Handler
         // OSC 8 — hyperlink: `ESC ] 8 ; params ; uri ST`, where `params` is a
         // colon-separated key=value list (only `id=` is defined) and `uri` is
         // everything after the second `;` and may be empty (closes the link).
-        // The xterm HVP spelling without a params field — `ESC ] 8 ; uri ` ` `
+        // The backtick-terminated spelling without a params field — `ESC ] 8 ; uri ` ` `
         // (backtick-terminated) — is accepted: a trailing backtick is stripped
         // before parsing. A malformed `8;…` that has neither a second `;` nor
         // the backtick terminator CLOSES the current link instead of being

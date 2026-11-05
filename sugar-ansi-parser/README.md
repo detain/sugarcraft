@@ -28,7 +28,19 @@ The lib stops at abstract events: it recognizes bytes and hands them over. Cell 
 
 ## Status
 
-🟢 Working. The VT500 state machine plus the abstract `Handler`, `CsiHandler`, and `OscHandler` boundaries live here and are the shared source of truth for downstream consumers (`sugar-vterm`, `candy-ansi-inspect`, `sugar-quickpick`, `candy-codeshot`, `sugar-pty`, `candy-vcr`). `CsiHandler` covers the **renderer's working CSI set** — CUU/CUD/CUF/CUB, CUP/HVP, SGR, ED/EL, DECSTBM, DECSET/DECRST, TBC, CBT/CHT, SU/SD, IL/DL, ICH/DCH, REP, SCO save/restore, CR/LF — deliberately not every ECMA-48 final: HPA (`G`), VPA (`d`), ECH (`X`), DSR (`n`), DECSCUSR (`SP q`) and DA (`c`) have no method. The `HandlerAdapter` that bridges `Handler` events onto `CsiHandler`/`OscHandler` is a deliberate **sieve**: beyond those unmapped finals it also drops the whole ESC family, DCS, SOS/PM/APC payloads, and every execute except HT/LF/CR/BS (BEL, VT, FF, and the C1 band stop there too). Pass the optional third constructor argument — `new HandlerAdapter($csi, $osc, $fallback)` — and a fallback `Handler` recovers everything the sieve did not consume (the SCO-gated `CSI ? s` / `CSI ? u` discard is considered consumed and stays dropped on purpose). OSC 8 accepts both the canonical `8;params;uri` form and the xterm HVP backtick spelling `8;uri` + `` ` ``; a malformed `8;…` payload closes the current link rather than being dropped. That CsiHandler set is what `sugar-vterm` implements directly instead of forking its own parser. The `src/Codec/` decoders are the canonical extraction home for inspector-grade sequence semantics; `candy-ansi-inspect` already consumes the DCS one — see [Decoders](#decoders-codec). Note that sugar-vterm keeps near-copies of two sink classes (`Vterm\Parser\DebugHandler`, `Vterm\Parser\OscHandlerImpl`); the shared truth here is the state machine and the interfaces, and those copies are a known drift surface.
+🟢 Working. The VT500 state machine plus the abstract `Handler`, `CsiHandler`, and `OscHandler` boundaries live here as the shared source of truth. The `src/Codec/` decoders are the canonical extraction home for inspector-grade sequence semantics; `candy-ansi-inspect` already consumes the DCS one — see [Decoders](#decoders-codec).
+
+**Consumers** — `sugar-vterm`, `candy-ansi-inspect`, `candy-codeshot`, `sugar-pty`, `candy-vcr`.
+
+**Coverage (unmapped finals)** — `CsiHandler` covers the **renderer's working CSI set** — CUU/CUD/CUF/CUB, CUP/HVP, SGR, ED/EL, DECSTBM, DECSET/DECRST, TBC, CBT/CHT, SU/SD, IL/DL, ICH/DCH, REP, SCO save/restore, CR/LF — deliberately not every ECMA-48 final: HPA (`G`), VPA (`d`), ECH (`X`), DSR (`n`), DECSCUSR (`SP q`) and DA (`c`) have no method. That set is what `sugar-vterm` implements directly instead of forking its own parser.
+
+**Implementing `CsiHandler`** — the interface is not just cursor and color callbacks: it also requires `printable(string $rune)` (one complete UTF-8 codepoint per call — see [Handler interface](#handler-interface)) and `gridRows()`/`gridCols(): int`. The adapter consults `gridRows()` for the DECSTBM bottom-margin default when that param is omitted, and SCO save/restore clamping is the handler's obligation against the grid it reports.
+
+**Sieve & `$fallback` escape hatch** — the `HandlerAdapter` that bridges `Handler` events onto `CsiHandler`/`OscHandler` is a deliberate **sieve**: beyond those unmapped finals it also drops the whole ESC family, DCS, SOS/PM/APC payloads, and every execute except HT/LF/CR/BS (BEL, VT, FF, and the C1 band stop there too). Pass the optional third constructor argument — `new HandlerAdapter($csi, $osc, $fallback)` — and a fallback `Handler` recovers everything the sieve did not consume (the SCO-gated `CSI ? s` / `CSI ? u` discard is considered consumed and stays dropped on purpose).
+
+**OSC 8** — the adapter accepts both the canonical `8;params;uri` form and the backtick-terminated OSC 8 form `8;uri` + `` ` ``; a malformed `8;…` payload closes the current link rather than being dropped. `OscHandlerImpl` ships here as a ready-made `OscHandler` — it stores the window title and tracks the current hyperlink pair — wired as `new HandlerAdapter($csi, new OscHandlerImpl())`.
+
+**Known drift surface** — `sugar-vterm` keeps near-copies of two sink classes (`Vterm\Parser\DebugHandler`, `Vterm\Parser\OscHandlerImpl`); the shared truth here is the state machine and the interfaces, and those copies are a known drift surface.
 
 Two implementation paths, both supported: the 7-method `Handler` interface is the implement-anywhere sink (every parser event, nothing interpreted — `DebugHandler` shows the full shape), while renderer-shaped consumers implement `CsiHandler` + `OscHandler` and receive filtered events through `HandlerAdapter`. If you need the full byte-level truth *and* the typed callbacks, wire your own `Handler` and forward to the adapter from it (or forward from the adapter to it as `$fallback`).
 
@@ -50,11 +62,12 @@ $parser  = new Parser($handler);
 $parser->parseComplete("hello\x1b[31mworld\x1b[0m");
 
 // $handler->log contains every parse action, each one
-// ['type' => ..., 'detail' => ...]; the csi entries are
+// ['type' => ..., 'detail' => ...]; the first csi entry (from \x1b[31m) is
 // ['type' => 'csi', 'detail' => ['final' => 109, 'params' => [31], 'prefix' => 0, 'intermediate' => 0]]
-// and ['final' => 109, 'params' => [0], ...] respectively — $params is a list<int>
-// in which -1 marks a default (omitted or empty) slot. Finals and prefixes are
-// raw byte values (ord() of the character).
+// and the second (from \x1b[0m) is
+// ['type' => 'csi', 'detail' => ['final' => 109, 'params' => [0], 'prefix' => 0, 'intermediate' => 0]].
+// $params is a list<int> in which -1 marks a default (omitted or empty)
+// slot. Finals and prefixes are raw byte values (ord() of the character).
 ```
 
 A fuller walkthrough of every event type lives in [`examples/debug.php`](examples/debug.php).
@@ -272,7 +285,7 @@ generators, plain-text exports):
   shorter than the sender's intent (see Limits above for the exact bands).
 - Hyperlinks pair: an OSC 8 event opens a span and one with an empty URI
   closes it. Through `HandlerAdapter` a malformed `8;…` (no second `;`, no
-  HVP backtick) closes the current link rather than being dropped; reading
+  backtick terminator) closes the current link rather than being dropped; reading
   the raw `oscDispatch()` stream instead, treat every `8;`-prefixed payload
   as link-state and end the span on empty/malformed payloads yourself.
   `OscHandlerImpl` exposes the current `hyperlinkUri()`/`hyperlinkId()` (raw, unvalidated).
