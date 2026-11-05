@@ -160,7 +160,10 @@ checkout the launch stood in.
   (`DEFAULT_START_TIMEOUT_SECONDS`, 60s, sized for cold `npx` fetches) shared
   across `initialize`, `notifications/initialized` and `tools/list`. A slow
   start is not a silence: `start(onWait: $beat)` gets the same liveness beat
-  every poll slice while the handshake runs.
+  every poll slice while the handshake runs. The `startTimeoutSeconds:`
+  override is a silent-fallback knob: null, zero or a negative value lands on
+  the 60s default — a 0 that means 60 — so a bad setting can never disable the
+  handshake bound entirely.
 - Every handshake leg must succeed, or `start()` stops the child and throws a
   `RuntimeException` (with any captured stderr) rather than reporting "up, 0
   tools": an `initialize` or `tools/list` reply carrying `error` names the
@@ -359,6 +362,15 @@ and the default still lands as `{}` byte-for-byte. Advertise what you will
 answer: a capability-gating server asks `roots/list` or sends
 `elicitation/create` only of clients that declared the capability, so the
 handler below section cannot fire without it.
+
+The same frame carries the client identity, configured with the `clientInfo:`
+constructor argument. It must be a non-empty string `name` and a string
+`version`; anything else throws an `InvalidArgumentException` at construction,
+and the shipped default is the only shape that may stand in for an omission —
+an explicit `[]` is a bug, not a reset. The untouched default is resolved to
+the real installed package version when the Composer runtime knows it (a
+frozen literal would keep announcing an outdated version, release after
+release); an explicitly supplied identity is never rewritten.
 
 Tool arguments are shaped one level further: a model's `{"filter":{}}`
 decodes (assoc) to `['filter' => []]`, so `callTool()` walks the arguments
