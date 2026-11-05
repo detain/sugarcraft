@@ -4,11 +4,11 @@
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-toast</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\Toast\{Toast, ToastType, Position};
+    <pre class="code"><code class="language-php">use SugarCraft\Toast\{Position, Toast, ToastType};
 
 $toast = Toast::new(50)  // max width 50
-    -&gt;withPosition(Position::MiddleRight)
-    -&gt;withAllowEscToClose(true);
+    -&gt;withPosition(Position::TopRight)
+    -&gt;withDuration(10.0);  // seconds
 
 $toast = $toast-&gt;alert(ToastType::Success, 'File saved!');
 $toast = $toast-&gt;alert(ToastType::Error, 'Connection failed');
