@@ -56,6 +56,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
     <h3 style="margin-top: 32px;">Behaviour</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Sparse & absolute-indexed</strong><span>The grid knows the <code>total()</code> up front but holds only fetched cards keyed by absolute index; indices with no card yet render as <code>░</code> skeleton placeholders.</span></div>
+      <div class="feature"><strong>Failed is a state, not silence</strong><span>A cell whose last fetch failed is marked with <code>withFailed()</code>: it falls back to the plain skeleton and <code>hasPoster()</code> stays false, so a retry policy re-queues it. An empty grid renders nothing — <code>emptyMessage()</code> hands the owner the localised sentence to paint instead.</span></div>
       <div class="feature"><strong>2-D virtualization</strong><span>Only the rows inside the viewport are ever rendered, so a 50,000-item library costs the same to draw as a 50-item one.</span></div>
       <div class="feature"><strong>Owner-driven paging</strong><span><code>visibleRange(overscanRows)</code> returns the absolute-index window on screen (with optional prefetch overscan) — the terminal analogue of the web grid's <code>need-range</code> event; the owner fetches and splices via <code>withItems()</code>.</span></div>
       <div class="feature"><strong>Clamped navigation</strong><span><code>left/right/up/down/pageUp/pageDown/home/end/moveTo</code> all clamp into range and scroll the minimum needed to keep the cursor's row visible.</span></div>
@@ -113,16 +114,24 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 <tr><td>PosterGrid</td><td>item(int $index): ?PosterCard</td><td>The card at an absolute index, or null when not loaded</td></tr>
 <tr><td>PosterGrid</td><td>cursorCard(): ?PosterCard</td><td>The card under the cursor, or null</td></tr>
 <tr><td>PosterGrid</td><td>isEmpty(): bool</td><td>Whether the grid has no items</td></tr>
-<tr><td>PosterGrid</td><td>render(bool $focused = true, ?ZoneManager $zones = null): string</td><td>Render the visible rows; cursor shown only when focused; optional sugar-mouse cell marking; <code>''</code> when the grid is empty</td></tr>
-<tr><td>Rail</td><td>__construct(string $title, array $cards = [], int $cursor = 0, int $scroll = 0)</td><td>A horizontal carousel of PosterCards with a title, cursor, and scroll offset</td></tr>
+<tr><td>PosterGrid</td><td>render(bool $focused = true, ?SugarCraft\Mouse\Zones\Manager $zones = null): string</td><td>Render the visible rows; cursor shown only when focused; optional sugar-mouse cell marking; <code>''</code> when the grid is empty</td></tr>
+<tr><td>PosterGrid</td><td>positionText(): string</td><td>The grid's position readout — <code>"  (3/12)"</code>, or <code>''</code> for an empty grid; the grid frame is deliberately chrome-free, so the composing screen places this string where it belongs</td></tr>
+<tr><td>PosterGrid</td><td>fitsViewport(?int $cols = null, ?int $rows = null): bool</td><td>Whether the cell geometry actually fits a viewport — <code>columns()</code> and <code>visibleRows()</code> floor at one, so a sub-cell viewport renders yet silently lies about what is visible; defaults to the grid's own current viewport</td></tr>
+<tr><td>PosterGrid</td><td>static emptyMessage(): string</td><td>The localised empty-grid notice (lang key <code>grid.empty</code>) — <code>render()</code> itself stays silent on an empty grid, so this is the seam for an owner-painted message; resolves live, honouring a mid-session locale switch</td></tr>
+<tr><td>PosterGrid</td><td>static clearBoxCache(): int</td><td>Drop the shared boxed-cell memo, returning how many entries were cleared — purely an optimization, never changes a single rendered byte</td></tr>
+<tr><td>Rail</td><td>__construct(string $title, array $cards = [], int $cursor = 0, int $scroll = 0)</td><td>A horizontal carousel of PosterCards with a title, cursor, and scroll offset; a stale pair is clamped, not restored verbatim</td></tr>
+<tr><td>Rail</td><td>static new(string $title, array $cards = [], int $cursor = 0, int $scroll = 0): self</td><td>Canonical factory — mirrors the public constructor</td></tr>
 <tr><td>Rail</td><td>withCards(array $cards): self</td><td>Replace the card list, clamping cursor/scroll into range</td></tr>
 <tr><td>Rail</td><td>withCard(PosterCard $card): self</td><td>Replace a single card by id (e.g. when its poster finishes loading)</td></tr>
+<tr><td>Rail</td><td>withTitle(string $title): self</td><td>Return a copy with a different title (immutable+fluent)</td></tr>
+<tr><td>Rail</td><td>withCursor(int $cursor): self</td><td>Return a copy with a different cursor, clamped to [0, count-1]; scroll clamps to at most the cursor so the card stays visible</td></tr>
 <tr><td>Rail</td><td>focusedCard(): ?PosterCard</td><td>The card under the cursor, or null</td></tr>
 <tr><td>Rail</td><td>isEmpty(): bool</td><td>Whether the rail has no cards</td></tr>
 <tr><td>Rail</td><td>moveCursor(int $delta, int $perRow): self</td><td>Move the cursor by $delta, scrolling so it stays visible</td></tr>
 <tr><td>Rail</td><td>static perRow(int $railWidth, int $cardWidth, int $spacing = 2): int</td><td>How many cards of $cardWidth fit in $railWidth at $spacing gap</td></tr>
 <tr><td>Rail</td><td>render(int $railWidth, bool $focused, int $cardWidth, int $posterHeight, int $spacing = 2): string</td><td>Render the title plus the visible slice of cards; the heading is control-stripped and both header lines clamped to $railWidth</td></tr>
-<tr><td>PosterCard</td><td>__construct(string $id, string $title, ?string $posterUrl = null, ?float $progress = null, ?string $poster = null, ?string $styledTitle = null, ?string $posterImage = null, ?int $imageId = null)</td><td>One tile: poster area, title, and optional progress bar</td></tr>
+<tr><td>PosterCard</td><td>__construct(string $id, string $title, ?string $posterUrl = null, ?float $progress = null, ?string $poster = null, ?string $styledTitle = null, ?string $posterImage = null, ?int $imageId = null, bool $failed = false)</td><td>One tile: poster area, title, optional progress bar, and the failed-fetch flag</td></tr>
+<tr><td>PosterCard</td><td>static new(string $id, string $title, ?string $posterUrl = null, ?float $progress = null, ?string $poster = null, ?string $styledTitle = null, ?string $posterImage = null, ?int $imageId = null, bool $failed = false): self</td><td>Canonical factory — mirrors the public constructor</td></tr>
 <tr><td>PosterCard</td><td>withPoster(string $ansi): self</td><td>Attach the rendered ANSI poster (e.g. when an async render resolves) — emitted verbatim, the caller is the trust boundary</td></tr>
 <tr><td>PosterCard</td><td>withSafePoster(string $ansi): self</td><td>Attach poster bytes through the AnsiGuard sweep row-by-row — colours and block glyphs stay byte-identical, every control sequence goes</td></tr>
 <tr><td>PosterCard</td><td>withImage(string $bytes, int $id): self</td><td>Attach an overlay fill (sixel / kitty / iterm2): the card draws only the marker cell, the runtime paints the art over it</td></tr>
@@ -130,12 +139,16 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 <tr><td>PosterCard</td><td>withSafeStyledTitle(string $ansi): self</td><td>The coercion half: keep the SGR, drop every other escape — and keep the plain title when only styling and ASCII blank space survive (`trim` semantics; a non-breaking space is text)</td></tr>
 <tr><td>PosterCard</td><td>static assertSafeAnsi(string $ansi): string</td><td>Return the styled title or throw — the same guard, standalone</td></tr>
 <tr><td>PosterCard</td><td>withProgress(?float $progress): self</td><td>Set (or clear) the continue-watching progress bar</td></tr>
+<tr><td>PosterCard</td><td>withFailed(bool $failed = true): self</td><td>Mark the cell's last fetch as failed (clear with <code>withFailed(false)</code>) — the cell falls back to the plain skeleton and <code>hasPoster()</code> reports it unfilled so a retry policy still re-queues it; attaching real art afterwards does NOT clear the flag, pass <code>withFailed(false)</code> alongside the fill</td></tr>
+<tr><td>PosterCard</td><td>isFailed(): bool</td><td>Whether the last fetch for this cell failed</td></tr>
 <tr><td>PosterCard</td><td>hasPoster(): bool</td><td>Whether art will actually paint here — inline text or a marker-addressed overlay</td></tr>
 <tr><td>PosterCard</td><td>render(bool $focused, int $width, int $posterHeight): string</td><td>Render a fixed-$width block: poster (or placeholder) rows, a title row, and a progress row when set</td></tr>
+<tr><td>PosterCard</td><td>static clearFitCache(): int</td><td>Drop the shared fitted-body memo, returning how many entries were cleared — purely an optimization, never changes a single output byte</td></tr>
 <tr><td>AnsiGuard</td><td>static assertSafe(string $ansi): string</td><td>Return $ansi when it carries only SGR styling and printable text, else throw with the byte offset and hex of the offender</td></tr>
 <tr><td>AnsiGuard</td><td>static isSafe(string $ansi): bool</td><td>The same question without the exception</td></tr>
 <tr><td>AnsiGuard</td><td>static sanitize(string $ansi): string</td><td>Drop every non-SGR escape and control byte, keeping styling and text — colour may be lost, a cursor move never will be</td></tr>
 <tr><td>AnsiGuard</td><td>static stripControls(string $text): string</td><td>Drop escapes and styling alike — what a plain, untrusted title is rendered through (card title <em>and</em> Rail heading)</td></tr>
+<tr><td>AnsiGuard</td><td>static stripSentinels(string $text): string</td><td>Surgically drop forged <code>U+E000/U+E001</code> zone sentinels (delegates to sugar-core <code>Sanitize::stripZoneSentinels()</code>) — anything handed to a zone-marking <code>Manager</code> must pass this sweep first; legitimate <code>U+E002</code>-and-up image markers survive untouched</td></tr>
 <tr><td>Lang</td><td>static t(string $key, array $params = []): string</td><td>i18n facade over the 16-locale <code>lang/</code> family — three keys today: <code>rail.empty</code> (the Rail heading's empty-state line), <code>card.failed</code> (a PosterCard in the failed-fetch state) and <code>grid.empty</code> (the empty PosterGrid message)</td></tr>
 </table>
   </div>
