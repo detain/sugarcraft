@@ -386,7 +386,7 @@ $group = (new SpringCollection())
     ->withSpring('panel', Spring::fromPreset(\SugarCraft\Spring\SpringPreset::Molasses), 0.0, 0.0, 90.0);
 
 $frame = 0;
-while (!$group->settled() && $frame < 600) {   // settled(): every member within Spring::SETTLING_THRESHOLD
+while (!$group->settled() && $frame < 600) {   // settled(): every member's position AND velocity within Spring::SETTLING_THRESHOLD
     $group = $group->tick();                   // tick(): self — NOT a position map
     $frame++;
 }
