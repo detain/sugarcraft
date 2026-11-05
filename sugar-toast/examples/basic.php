@@ -10,6 +10,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Toast\{Position, SymbolSet, Toast, ToastType};
 
 // Background — simulate an app viewport
@@ -19,14 +20,20 @@ for ($i = 0; $i < 20; $i++) {
 }
 $bg = \implode("\n", $bgLines);
 
-// Build toast
+// Build toast — the last message simulates bytes from a remote service:
+// attacker-controlled text must arrive at alert() already sanitised (see
+// README Security, "the terminal is a sink"). untrusted() strips control
+// and escape constructs; reach for untrustedForMarkedFrames() when the
+// host layers its own zone markers over the frame.
+$remoteError = Sanitize::untrusted("Failed to load plugin:\x1b[2J missing dependency");
+
 $t = Toast::new(50)
     ->withPosition(Position::TopLeft)
     ->withSymbolSet(SymbolSet::Unicode)
     ->info('Application started')
     ->success('Connected to server')
     ->warning('Config file not found, using defaults')
-    ->error('Failed to load plugin: missing dependency');
+    ->error($remoteError);
 
 echo "=== Toast at TopLeft ===\n";
 echo $t->view($bg, 80, 20) . "\n\n";

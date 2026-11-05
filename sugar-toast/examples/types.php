@@ -8,7 +8,7 @@ declare(strict_types=1);
  * Run: php examples/types.php
  */
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Toast\{Toast, ToastType, Position, SymbolSet};
 
