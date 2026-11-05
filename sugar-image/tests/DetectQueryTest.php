@@ -287,6 +287,41 @@ final class DetectQueryTest extends TestCase
     }
 
     /**
+     * CC-QA-3: the colour reader shares the boot window with the user's
+     * first keystrokes. Typed bytes riding in the same chunk as the reply
+     * pair stay out of the parsed colours and land in the take-once stray
+     * store for the launcher to replay into the program.
+     */
+    public function testKeystrokesSharingTheColorWindowSurviveForReplay(): void
+    {
+        $pair = $this->preload("q\r\x1b]10;rgb:0d/0e/0f\x1b\\\x1b]11;rgb:fe/dc/ba\x1b\\\x1b[16t");
+
+        [$fg, $bg] = $this->colorsFrom($pair);
+
+        $this->assertSame('0d0e0f', $fg);
+        $this->assertSame('fedcba', $bg);
+        $this->assertSame("q\r\x1b[16t", Detect::takeStrayInputBytes(), 'surplus around the reply pair must reach the stray store, in order');
+    }
+
+    /**
+     * CC-QA-3 negative + boundary legs: a complete pair contributes nothing
+     * beyond itself, and a window that never completed its pair keeps only
+     * its plain-text prefix for replay — bytes from the first ESC onward
+     * are indistinguishable between a split reply and a bare Escape, so
+     * they stay parser material.
+     */
+    public function testACleanColorPairStashesNothingAndAnIncompleteWindowKeepsItsPrefix(): void
+    {
+        $clean = $this->preload("\x1b]10;rgb:0d/0e/0f\x1b\\\x1b]11;rgb:fe/dc/ba\x1b\\");
+        $this->colorsFrom($clean);
+        $this->assertSame('', Detect::takeStrayInputBytes(), 'a clean reply pair must not fabricate replay bytes');
+
+        $half = $this->preload("x\r\x1b]10;rgb:0d/0e/0f\x1b\\"); // OSC 11 never answers
+        $this->colorsFrom($half);
+        $this->assertSame("x\r", Detect::takeStrayInputBytes(), 'the plain-text prefix of an incomplete window is user keystrokes, not reply material');
+    }
+
+    /**
      * Continuation — the pair-completion `&&` break pinned staggered.
      * The preload pin above hands fg and bg in ONE chunk, so it stays green
      * even if `&&` decays to `||` (the pair is in hand at the first read

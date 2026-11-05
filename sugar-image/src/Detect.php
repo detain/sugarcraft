@@ -154,6 +154,17 @@ final class Detect
     private static $probeStdin = null;
 
     /**
+     * CC-QA-3: bytes the probe readers pulled off the tty that were NOT
+     * part of any reply — the user's own keystrokes, typed while the boot
+     * queries were in flight. A slurp takes whatever the kernel queued,
+     * and the parser only ever looks at the reply shape, so without this
+     * store the surplus would be consumed AND discarded before the
+     * program's input pump exists to see it. Take-once via
+     * {@see takeStrayInputBytes()}; replaying it is the launcher's job.
+     */
+    private static string $strayInputBytes = '';
+
+    /**
      * Opt-out: when false, {@see TmuxPassthrough::ensure()} refuses to
      * touch the tmux `allow-passthrough` option at all. Library politeness
      * for embedders that own their tmux configuration — chafa gates the
@@ -338,12 +349,14 @@ final class Detect
      * Deliberately does NOT clear the override seams ($repeatOverride,
      * $tmuxTermFeatures, $terminfoSixel) — tests that armed one must call
      * the matching {@see clearSupportsRepeatOverride()}-style clear
-     * explicitly.
+     * explicitly. The CC-QA-3 stray store is cleared: it is probe output,
+     * not a seam.
      */
     public static function reset(): void
     {
-        self::$cached       = null;
-        self::$lastDa1Reply = null;
+        self::$cached           = null;
+        self::$lastDa1Reply     = null;
+        self::$strayInputBytes  = '';
     }
 
     /**
@@ -353,6 +366,19 @@ final class Detect
     public static function lastDa1Reply(): ?string
     {
         return self::$lastDa1Reply;
+    }
+
+    /**
+     * Take the keystrokes the probe readers swallowed alongside their
+     * replies (CC-QA-3), clearing the store so a second take cannot
+     * double-replay. Empty string when every read was reply-pure.
+     */
+    public static function takeStrayInputBytes(): string
+    {
+        $bytes                = self::$strayInputBytes;
+        self::$strayInputBytes = '';
+
+        return $bytes;
     }
 
     /**
@@ -782,6 +808,13 @@ final class Detect
      * Drain up to $limitMs milliseconds of already-available stdin data.
      * This suppresses spurious replies from earlier queries.
      *
+     * CC-QA-3 reviewed, kept discarding: in this last window a late spurious
+     * reply and a fresh keystroke are byte-indistinguishable, and replaying
+     * an answer to a query the program never made is a worse failure than
+     * the ≤50 ms tail it can still cost the user. Keystrokes eaten by the
+     * REPLY readers before this drain are preserved via
+     * {@see takeStrayInputBytes()} instead.
+     *
      * Null means {@see stdinFd()} found no usable descriptor 0, and there is
      * then nothing to drain. This is the site a past closed-handle fatal came out of:
      * {@see probe()} drains UNCONDITIONALLY on all three of its exits, with no
@@ -858,11 +891,68 @@ final class Detect
             // the QUERY bytes "\x1b[c", which a reply never contains — the
             // read then always ran the full 100 ms budget.
             if (preg_match($replyTerminator, $buf) === 1) {
+                // CC-QA-3: the buffer is a slurp — whatever the kernel had
+                // queued, not just the reply. Subtract the reply shape and
+                // keep the rest.
+                self::stashSurplus($buf, $replyTerminator);
                 break;
             }
         }
 
+        // The window expired with the reply absent or truncated. The buffer
+        // is still parser material, but its leading run before any ESC
+        // cannot be reply at all — every answer opens with ESC — so those
+        // bytes are the user's own keystrokes and join the stray store too
+        // (CC-QA-3: on a terminal that answers late, or a harness that never
+        // answers, the plain-text prefix is exactly what typed input looks
+        // like here).
+        if ($buf !== '' && \preg_match($replyTerminator, $buf) !== 1) {
+            self::stashUserPrefix($buf);
+        }
+
         return $buf;
+    }
+
+    /**
+     * Remove one occurrence of every terminator's match from the buffer
+     * and append what remains to the CC-QA-3 stray store. Emitters are
+     * gated once per query, so a completed buffer carries at most one
+     * reply per shape; any further duplicate would ride into the replay
+     * and the input parser treats a stray reply as noise, same as it
+     * does today when an answer arrives after the pump is installed.
+     */
+    private static function stashSurplus(string $buf, string ...$terminators): void
+    {
+        $rest = $buf;
+        foreach ($terminators as $pattern) {
+            if (preg_match($pattern, $rest, $hit, PREG_OFFSET_CAPTURE) !== 1) {
+                continue;
+            }
+            $rest = \substr_replace($rest, '', $hit[0][1], \strlen($hit[0][0]));
+        }
+
+        if ($rest !== '') {
+            self::$strayInputBytes .= $rest;
+        }
+    }
+
+    /**
+     * Keep the leading run of an unanswered buffer that cannot be the
+     * start of a reply: every answer opens with ESC, so everything before
+     * the first ESC — or the whole buffer when it holds none — is plain
+     * user keystrokes, present even when the terminal answered late or
+     * never. From the first ESC onward the bytes are a split reply
+     * fragment or a bare Escape keypress, byte-indistinguishable, so
+     * they stay with the parser (CC-QA-3).
+     */
+    private static function stashUserPrefix(string $buf): void
+    {
+        $cut   = \strpos($buf, "\x1b");
+        $bytes = $cut === false ? $buf : \substr($buf, 0, $cut);
+
+        if ($bytes !== '') {
+            self::$strayInputBytes .= $bytes;
+        }
     }
 
     /**
@@ -1076,6 +1166,20 @@ final class Detect
             ) {
                 break; // the complete pair is in hand — stop early
             }
+        }
+
+        // CC-QA-3: once the pair is complete the buffer's non-reply bytes
+        // are the user's keystrokes, not protocol noise — preserve them
+        // for the launcher's replay. An incomplete window has no complete
+        // pair to subtract, but its plain-text prefix before any ESC still
+        // cannot be reply material, so that run survives too; from the
+        // first ESC onward only parser material remains.
+        if (preg_match(self::OSC10_REPLY_TERMINATOR, $buf) === 1
+            && preg_match(self::OSC11_REPLY_TERMINATOR, $buf) === 1
+        ) {
+            self::stashSurplus($buf, self::OSC10_REPLY_TERMINATOR, self::OSC11_REPLY_TERMINATOR);
+        } else {
+            self::stashUserPrefix($buf);
         }
 
         return [

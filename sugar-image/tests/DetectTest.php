@@ -737,6 +737,105 @@ final class DetectTest extends TestCase
     }
 
     /**
+     * CC-QA-3: keystrokes that share a buffer with a reply stay OUT of the
+     * returned reply text and land in the take-once stray store, in order.
+     * The boot query readers used to hand the whole slurp to the parser,
+     * which matched its reply and dropped the rest — the tty had already
+     * consumed the user's typing, and with no pump installed yet it died
+     * with the cooked-mode echo that surfaced it on the pre-alt screen.
+     */
+    public function testKeystrokesSharingTheBufferSurviveOutsideTheReply(): void
+    {
+        $read = new \ReflectionMethod(Detect::class, 'readStdinTimed');
+
+        $pair = $this->createStreamPair();
+        @fwrite($pair['write'], "hello\r\x1b[?62;4;0c" . "\x1b[16t");
+        @fflush($pair['write']);
+        usleep(20_000);
+
+        $buf = $read->invoke(null, 400, $pair['read'], Detect::DA1_REPLY_TERMINATOR);
+
+        $this->assertSame("hello\r\x1b[?62;4;0c\x1b[16t", $buf, 'the read must keep handing the whole buffer to the parser');
+        $this->assertSame("hello\r\x1b[16t", Detect::takeStrayInputBytes(), 'surplus bytes must reach the stray store, reply excluded and in order');
+
+        @fclose($pair['write']);
+    }
+
+    /**
+     * CC-QA-3 polarity leg: an unterminated reply IS reply material, not
+     * surplus — the parser still consumes it — and nothing may be stashed
+     * for replay from it.
+     */
+    public function testAnUnterminatedReplyStashesNothing(): void
+    {
+        $read = new \ReflectionMethod(Detect::class, 'readStdinTimed');
+
+        $pair = $this->createStreamPair();
+        @fwrite($pair['write'], "\x1b[?62;4");
+        @fflush($pair['write']);
+
+        $buf = $read->invoke(null, 80, $pair['read'], Detect::DA1_REPLY_TERMINATOR);
+
+        $this->assertSame("\x1b[?62;4", $buf);
+        $this->assertSame('', Detect::takeStrayInputBytes(), 'unterminated reply bytes are parser input, never replay material');
+
+        @fclose($pair['write']);
+    }
+
+    /**
+     * CC-QA-3 unanswered leg: a terminal (or harness) that never answers
+     * leaves the user's plain-text keystrokes as the whole buffer. No ESC
+     * can open them, so they are by construction not reply material and
+     * must reach the stray store for replay rather than die in a parser
+     * that will never match a terminator against them.
+     */
+    public function testPlainKeystrokesSurviveAnUnansweredRead(): void
+    {
+        $read = new \ReflectionMethod(Detect::class, 'readStdinTimed');
+
+        $pair = $this->createStreamPair();
+        @fwrite($pair['write'], "hello\r");
+        @fflush($pair['write']);
+        usleep(20_000);
+
+        $buf = $read->invoke(null, 80, $pair['read'], Detect::DA1_REPLY_TERMINATOR);
+
+        $this->assertSame("hello\r", $buf);
+        $this->assertSame("hello\r", Detect::takeStrayInputBytes(), 'an ESC-less buffer in an unanswered read is plain user input and joins the stray store');
+
+        @fclose($pair['write']);
+    }
+
+    /**
+     * CC-QA-3 take-once: a completed read feeds the stray store exactly
+     * once; a later read adds nothing, so the store cannot double-replay.
+     */
+    public function testTakingTheStrayStoreClearsIt(): void
+    {
+        $read = new \ReflectionMethod(Detect::class, 'readStdinTimed');
+
+        $pair = $this->createStreamPair();
+        @fwrite($pair['write'], "a\x1b[?1;2c");
+        @fflush($pair['write']);
+        usleep(20_000);
+
+        $read->invoke(null, 400, $pair['read'], Detect::DA1_REPLY_TERMINATOR);
+        $this->assertSame('a', Detect::takeStrayInputBytes());
+        $this->assertSame('', Detect::takeStrayInputBytes(), 'the stray store is take-once');
+
+        $more = $this->createStreamPair();
+        @fwrite($more['write'], "\x1b[?62;2c");
+        @fflush($more['write']);
+        usleep(20_000);
+
+        $read->invoke(null, 400, $more['read'], Detect::DA1_REPLY_TERMINATOR);
+        $this->assertSame('', Detect::takeStrayInputBytes(), 'a clean reply contributes nothing to the store');
+
+        @fclose($pair['write']);
+        @fclose($more['write']);
+    }
+
+    /**
      * ISS-048 guard: enterQueryMode() must never touch the developer's
      * real terminal for an exchange that reads from an injected stream or
      * from no interactive tty at all.
