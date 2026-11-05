@@ -347,11 +347,16 @@ public mutator and is not persisted.
 
 ## Development and tests
 
-After `composer install`, the examples run directly (`php examples/sidebar.php`)
-and the suite lives in `tests/` (`vendor/bin/phpunit -c phpunit.xml`). Every
-fenced `php` block in this README is executed by `tests/ReadmeSnippetsTest.php`,
-which also asserts `examples/sidebar.php` prints the exact frames quoted here —
-the snippets cannot rot.
+After `composer install`, the examples run directly: `php examples/sidebar.php`
+walks the horizontal quickstart (fixed rail, elastic content, a crushed frame),
+`php examples/vertical.php` runs the same walk on `Direction::Vertical` — where
+a "cell" is one text row — and `php examples/dock.php` resolves the `Dock\*`
+surface (center pane, weighted side stacks, and the small-frame ladder that
+drops sides instead of throwing). The suite lives in `tests/`
+(`vendor/bin/phpunit -c phpunit.xml`). Every fenced `php` block in this README
+is executed by `tests/ReadmeSnippetsTest.php`, which also asserts
+`examples/sidebar.php` prints the exact frames quoted here — the snippets
+cannot rot.
 
 ## Credits & inspiration
 
