@@ -128,7 +128,7 @@ $child-&gt;info('Batch complete');</code></pre>
 <tr><td>PartsOrder</td><td>has(PART_*): bool</td><td>Check whether a part is included in the order</td></tr>
 <tr><td>PartsOrder</td><td>PART_TIMESTAMP, PART_LEVEL, PART_PREFIX, PART_CALLER, PART_MESSAGE, PART_FIELDS</td><td>Part name constants</td></tr>
 <tr><td>CallerFormatter</td><td>find(): ?string</td><td>Walk call stack, return "file:line" of first external caller</td></tr>
-<tr><td>Level</td><td>Debug, Info, Warn, Error, Fatal</td><td>Enum: syslog-aligned int values (-4, 0, 4, 8, 12)</td></tr>
+<tr><td>Level</td><td>Debug, Info, Warn, Error, Fatal</td><td>Enum: charmbracelet/log-aligned int deltas (-4, 0, 4, 8, 12) — deliberately NOT RFC 5424/syslog severities</td></tr>
 <tr><td>TextFormatter</td><td>new(bool, ?string, bool, bool)</td><td>Human-readable formatter with ANSI color</td></tr>
 <tr><td>JsonFormatter</td><td>new(bool)</td><td>JSON object per log line</td></tr>
 <tr><td>LogfmtFormatter</td><td>new()</td><td>Logfmt key=value format</td></tr>
