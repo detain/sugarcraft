@@ -212,7 +212,7 @@ The ipmi box (candy-top's own; btop has none) shows the machine's BMC — the ba
 
 - **Layout.** A full-width band directly under the cpu box (and the gpu boxes), 28% of the terminal height between 6 and 16 rows, never squeezing the boxes below it under their minimums; alone with cpu it takes the whole rest. It stays shown beside the [VM dashboard](#vms) (on a hypervisor, the BMC's power and thermals are the other half of the fleet picture), and its minimum (40×6) counts toward the size notice. The outline uses the `net_box` family and its flow: the band's neighbours are cpu above and mem, proc or the VM dashboard below, none of which is the net family.
 - **Detail levels.** The box degrades by size, as the gpu boxes do:
-  - full (64×14 or more, or 100×8 for a short band): titled sub-panels in 2, 3 or a 4-column strip (power | temperatures | fans + voltages | status), whichever leaves the least blank space;
+  - full (64×14 or more, or 100×5 for a short band): titled sub-panels in 2, 3 or a 4-column strip (power | temperatures | fans + voltages | status), whichever leaves the least blank space;
   - compact (34×6): the power gauge beside the hottest temperatures, a fan summary and the fault chips;
   - tiny: a power bar, the hottest temperatures and the faults, one line each.
 - **Header.** The machine (FRU product), the BMC vendor and firmware (`iLO fw 2.82`, `ASUS fw 1.02`) and the BMC's LAN address ride the top border.
