@@ -102,13 +102,30 @@ final class ManagerTest extends TestCase
         $this->assertSame('/', $up->right->cwd);
     }
 
-    public function testSpaceTogglesSelectionAndAdvances(): void
+    /**
+     * C-1: the space key must be driven from REAL wire bytes. The old
+     * pin fabricated `new KeyMsg(KeyType::Char, ' ')` — a shape
+     * InputReader never emits (bare 0x20 and kitty code 32 both decode
+     * to KeyType::Space, rune ' ') — so it stayed green while the live
+     * dispatch arm was dead. Same parse()-seam discipline as the
+     * ctrl+Tab pins below.
+     */
+    public static function spaceWireBytes(): iterable
+    {
+        yield 'plain 0x20'    => [' '];
+        yield 'kitty code-32' => ["\x1b[32u"];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('spaceWireBytes')]
+    public function testSpaceTogglesSelectionAndAdvances(string $bytes): void
     {
         $m = $this->start();
+        $key = $this->decode($bytes);
+        $this->assertSame(KeyType::Space, $key->type, 'fixture premise: space decodes to KeyType::Space, never Char');
         // Cursor 0 of left pane (no parent sentinel at root). With
         // name-asc + dirs-first, that's "etc" (alphabetical < "home").
         $cursorName = $m->left->entries[0]->name;
-        [$next] = $m->update(new KeyMsg(KeyType::Char, ' '));
+        [$next] = $m->update($key);
         $this->assertSame([$cursorName], $next->left->selectedNames());
         $this->assertSame(1, $next->left->cursor, 'cursor advances after toggle');
     }
@@ -155,7 +172,7 @@ final class ManagerTest extends TestCase
     {
         $m = $this->start();
         // '/' has no parent sentinel; NameAsc order is etc, home, readme.
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));   // select 'etc'
+        [$m] = $m->update($this->decode(' '));                   // select 'etc' (real wire byte, C-1)
         $this->assertSame(['etc'], $m->activePane()->selectedNames());
         [$r] = $m->update(new KeyMsg(KeyType::Char, 'r'));
         $this->assertSame(['etc'], $r->activePane()->selectedNames(), 'refresh must preserve surviving selection');
@@ -171,8 +188,8 @@ final class ManagerTest extends TestCase
     public function testEscapeClearsSelection(): void
     {
         $m = $this->start();
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));   // select 'etc'
-        [$m] = $m->update(new KeyMsg(KeyType::Char, ' '));   // cursor advanced; select 'home'
+        [$m] = $m->update($this->decode(' '));   // select 'etc' (real wire byte, C-1)
+        [$m] = $m->update($this->decode(' '));   // cursor advanced; select 'home'
         $this->assertCount(2, $m->activePane()->selectedNames());
         [$cleared] = $m->update(new KeyMsg(KeyType::Escape, ''));
         $this->assertSame([], $cleared->activePane()->selectedNames());

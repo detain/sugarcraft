@@ -312,6 +312,17 @@ final class Manager implements Model
             $msg->type === KeyType::Left,
             $msg->type === KeyType::Char && $msg->rune === 'h'
                 => $this->goUp(),
+            // Space toggles selection. InputReader decodes a bare 0x20
+            // (and the kitty CSI-u code-32 report negotiated in init())
+            // to KeyType::Space with rune ' ' — NEVER to a printable
+            // Char. The old arm keyed on Char + ' ', a shape the parser
+            // cannot emit, so the binding was DEAD in production while
+            // fabricated unit pins stayed green (C-1: same trap
+            // sugar-core's KeyBindings names the `space` token for; this
+            // lib bypasses that registry, so the arm spells the type).
+            // The Char leg stays as belt-braces for a future parser
+            // revision that surfaces space on the printable side.
+            $msg->type === KeyType::Space,
             $msg->type === KeyType::Char && $msg->rune === ' '
                 => $this->withActivePane(fn(Pane $p) => $p->toggleSelection())
                        ->withActivePane(fn(Pane $p) => $p->moveCursor(1)),
@@ -468,8 +479,11 @@ final class Manager implements Model
                 return [$this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
                     ->withInputBuffer(null), null];
             }
-            // Printable character: accumulate in buffer
-            if ($msg->type === KeyType::Char && !$msg->ctrl) {
+            // Printable character: accumulate in buffer. Space is its own
+            // key type at the parser (see dispatch), so it must be
+            // accepted here too — names containing spaces are real and
+            // must be renameable (C-1 family).
+            if (($msg->type === KeyType::Char || $msg->type === KeyType::Space) && !$msg->ctrl) {
                 $buf = $this->inputBuffer ?? '';
                 $newBuf = $buf . $msg->rune;
                 return [$this->withConfirm(ConfirmState::RenameSelected,
@@ -1050,8 +1064,10 @@ final class Manager implements Model
             }
             return $this->search($newQuery);
         }
-        // Regular chars append to query
-        if ($msg->type === KeyType::Char && !$msg->ctrl && $msg->rune !== '/') {
+        // Regular chars append to query. Space arrives as its own key
+        // type (see dispatch), so it must append here or a file whose
+        // name contains a space can never be searched for (C-1 family).
+        if (($msg->type === KeyType::Char || $msg->type === KeyType::Space) && !$msg->ctrl && $msg->rune !== '/') {
             return $this->search(($this->searchQuery ?? '') . $msg->rune);
         }
         return $this;

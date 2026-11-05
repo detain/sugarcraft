@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Files\Tests;
 
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Files\Entry;
 use SugarCraft\Files\Manager;
 use PHPUnit\Framework\TestCase;
@@ -41,6 +43,23 @@ final class ManagerSearchFuzzyTest extends TestCase
     private function names(Manager $m): array
     {
         return array_map(static fn(Entry $e) => $e->name, $m->searchResults);
+    }
+
+    /**
+     * C-1 family: bare 0x20 decodes to KeyType::Space, not a printable
+     * Char. While the search append leg only accepted Char, a query
+     * containing a space was untypeable — file names with spaces are
+     * ordinary, so the promise was broken. Drive the real key shape
+     * through update(), not the direct search() seam.
+     */
+    public function testSearchAcceptsSpaceFromTheWire(): void
+    {
+        $m = $this->start();
+        [$m] = $m->update(new KeyMsg(KeyType::Char, '/'));   // enter search
+        [$m] = $m->update(new KeyMsg(KeyType::Space, ' '));  // type a space
+        $this->assertSame(' ', $m->searchQuery, 'Space must append to the query');
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'm'));   // continue typing
+        $this->assertSame(' m', $m->searchQuery);
     }
 
     public function testEmptyQueryReturnsAllEntries(): void

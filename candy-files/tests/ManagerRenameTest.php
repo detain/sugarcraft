@@ -45,6 +45,34 @@ final class ManagerRenameTest extends TestCase
         @rmdir($path);
     }
 
+    /**
+     * C-1 family: a bare 0x20 decodes to KeyType::Space, not a printable
+     * Char. While the rename submode's append leg only accepted Char,
+     * no name containing a space could ever be typed — a broken user
+     * promise the docblock itself contradicts ("printables append").
+     */
+    public function testRenameCanTypeSpaceInTheNewName(): void
+    {
+        file_put_contents($this->tmpDir . '/oldname.txt', 'content');
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));   // off the parent sentinel onto oldname.txt
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'R'));
+        $this->assertSame(ConfirmState::RenameSelected, $armed->confirm);
+        foreach (['m', 'y', ' ', 'f', 'i', 'l', 'e'] as $ch) {
+            // The space arrives as the REAL parser shape: KeyType::Space,
+            // rune ' ' (InputReader maps 0x20 that way, never Char).
+            $key = $ch === ' '
+                ? new KeyMsg(KeyType::Space, ' ')
+                : new KeyMsg(KeyType::Char, $ch);
+            [$armed] = $armed->update($key);
+        }
+        $this->assertSame('my file', $armed->inputBuffer, 'space must land in the typed buffer');
+        [$done] = $armed->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertTrue(file_exists($this->tmpDir . '/my file'), 'rename with a space committed');
+        $this->assertFalse(file_exists($this->tmpDir . '/oldname.txt'), 'old name is gone');
+        $this->assertSame(ConfirmState::None, $done->confirm);
+    }
+
     public function testArmRenameWithNoSelectionShowsError(): void
     {
         $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
