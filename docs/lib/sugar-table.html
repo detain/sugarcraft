@@ -89,7 +89,7 @@ echo $table-&gt;View();</code></pre>
     </div>
 
     <h3 style="margin-top: 32px;">Accessors</h3>
-    <p>Property reads are bare: public <code>readonly</code> state (<code>$column-&gt;style</code>, <code>$row-&gt;data</code>, <code>$cell-&gt;value</code>) or bare methods (<code>Table::Rows()</code>, <code>scrollY()</code>). No <code>getFoo()</code>-form accessor ships in this lib — under the get*-era ruling (2026-10-24) there was nothing here to deprecate; <code>RowData::get()</code>/<code>::has()</code> and <code>Table::isExpanded()</code> stay ruled as keyed lookups and predicates, pinned by <code>tests/BareAccessorEraTest.php</code>.</p>
+    <p>Property reads are bare: public <code>readonly</code> state (<code>$column-&gt;style</code>, <code>$row-&gt;data</code>, <code>$cell-&gt;value</code>) or bare methods (<code>Table::Columns()</code>, <code>Table::CurrentRow()</code>, <code>Table::scrollY()</code>). No <code>getFoo()</code>-form accessor ships in this lib — under the get*-era ruling (2026-10-24) there was nothing here to deprecate; <code>RowData::get()</code>/<code>::has()</code> and <code>Table::isExpanded()</code> stay ruled as keyed lookups and predicates, pinned by <code>tests/BareAccessorEraTest.php</code>.</p>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>

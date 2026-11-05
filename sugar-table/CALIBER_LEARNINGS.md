@@ -165,3 +165,14 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   optional columns that can be toggled via UI without losing data. See
   `Table.php` lines 134–135 (property), 367–381 (`withHiddenCols`), and 1087–1098
   (`isColumnVisible` hidden check at line 1089–1092).
+
+- **[history:accessor-rename-era]** sugar-table shipped zero `get*()` property
+  accessors before the fleet rename window opened. Owner ruling 3b (dated
+  2026-10-24) froze legacy `get*()` forwarders fleet-wide for removal no earlier
+  than v2.0.0; this lib needed no forwarders — the pre-era audit row
+  "getStyle() 25-file rename" counts repo-wide `getStyle` **sites**, all of them
+  other libraries' own classes, and no `getStyle()` ever existed here. The ruled
+  get/has/is keepers (`RowData::get`, `RowData::has`, `Table::isExpanded`) are
+  keyed lookups and predicates, pinned fail-closed by
+  `tests/BareAccessorEraTest.php` — the README "Accessors" section and that
+  test's roster must move together.
