@@ -78,8 +78,11 @@ region, so `isFocused()` alone can paint an accent border on a dimmed panel.
   the ring was empty; re-registering an existing id is a no-op.
 - `unregister()` keeps focus on the same region where possible; removing the
   focused region lands focus on the nearest **enabled** survivor at or after
-  the vacated slot (wrapping around), falling back to the clamped slot only
-  when every survivor is disabled; emptying the ring clears focus.
+  the vacated slot — the slot is first clamped to the new end, so removing the
+  focused *tail* lands on the new tail rather than wrapping to the head, and
+  the wrap reaches the earliest enabled survivor only when every survivor
+  ahead of the slot is disabled. With nothing enabled left, focus parks on the
+  clamped slot itself; emptying the ring clears focus.
 - `next()` / `previous()` wrap around and are no-ops with fewer than two
   **enabled** regions — with one exception: focus parked on a disabled region
   beats the no-op and moves to the nearest enabled survivor.
