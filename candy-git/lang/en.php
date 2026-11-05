@@ -27,7 +27,7 @@ return [
 
     // UI labels
     'ui.error_prefix'  => 'error: ',
-    // Chrome titles routed through Lang (audit A16).
+    // Chrome titles routed through Lang.
     'ui.title.app'    => ' CandyGit ',
     'ui.pane.status'  => ' status ',
     'ui.pane.branches'=> ' branches ',

@@ -10,8 +10,9 @@ namespace SugarCraft\Git;
  * so transition correctness can be asserted without staging real
  * repos in tmp dirs.
  *
- * @deprecated All methods are synchronous-only. Async git operations
- * (using React\ChildProcess\Process) are planned for v2.
+ * @deprecated All methods are synchronous-only. Async git operations are
+ * planned for v2; the off-loop transport is still to be chosen. The shipped
+ * Process layer is deliberately a bounded proc_open drain loop.
  */
 interface GitDriver
 {

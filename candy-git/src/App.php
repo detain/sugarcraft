@@ -106,7 +106,7 @@ final class App implements Model
         if ($msg instanceof PasteMsg) {
             return $this->applyPaste($msg);
         }
-        // Audit A28: the program probes the terminal's colour capability once
+        // The program probes the terminal's colour capability once
         // at launch (NO_COLOR / TERM / COLORTERM via ColorProfile::detect)
         // and hands the answer to the model. The profile is process render
         // state, not model state - sugar-style's Style::new() reads the
@@ -332,7 +332,7 @@ final class App implements Model
             if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
                 return [$this->navigateHunk(+1), null];
             }
-            // Audit K3: Page keys hop hunks, Home/End snap to the first/last one.
+            // Page keys hop hunks, Home/End snap to the first/last one.
             if ($msg->type === KeyType::PageUp) {
                 return [$this->navigateHunk(-1), null];
             }
@@ -365,7 +365,7 @@ final class App implements Model
             || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
             return [$this->moveCursor(+1), null];
         }
-        // Audit K3: viewport keys for the list panes — Page keys jump roughly a
+        // Viewport keys for the list panes — Page keys jump roughly a
         // screen, Home/End snap to the edges.
         if ($msg->type === KeyType::PageUp || $msg->type === KeyType::PageDown
             || $msg->type === KeyType::Home || $msg->type === KeyType::End) {
@@ -460,7 +460,7 @@ final class App implements Model
      * Rows available for the pane/overlay area after fixed chrome (header row,
      * help line, trailing row) and any notice or prompt bars. NULL until the
      * terminal reports its size — callers then treat lists as unbounded, which
-     * is the historical byte-stable first-frame output (audit K3: the height
+     * is the historical byte-stable first-frame output (the height
      * was stored but never read, so every list and overlay rendered in full
      * and appended below each other off the bottom of the screen).
      */
@@ -537,7 +537,7 @@ final class App implements Model
         return max(1, $rows - $this->paneArea());
     }
 
-    /** Horizontal budget for full-width prompt/notice bars (audit A26). */
+    /** Horizontal budget for full-width prompt/notice bars. */
     public function barWidth(): int
     {
         return $this->width === null ? PHP_INT_MAX : max(1, $this->width - 2);
@@ -786,7 +786,7 @@ final class App implements Model
     /**
      * PageUp/PageDown jump by one visible page (minus a 2-row overlap for
      * context), Home snaps to the first row, End to the last — all through the
-     * same clamped moveCursor so an empty list is a no-op (audit K3).
+     * same clamped moveCursor so an empty list is a no-op.
      */
     private function viewportKey(KeyType $type): self
     {
@@ -826,7 +826,7 @@ final class App implements Model
         if (!is_array($row) || !isset($row['path'])) {
             return $this;
         }
-        // Audit K6/A3: discarding worktree bytes is unrecoverable - git has no
+        // Discarding worktree bytes is unrecoverable - git has no
         // undo for it either. One press arms (naming the target), the same
         // press on the same target executes; Escape cancels.
         $arm = 'discard:' . $row['path'];
@@ -853,7 +853,7 @@ final class App implements Model
         }
         try {
             // Conflicted ('U') and untracked ('?') rows stage on the first key:
-        // their index letters are not a staged change to reverse (audit A5/A7).
+        // their index letters are not a staged change to reverse.
         $isStaged = !in_array((string) ($row['index_status'] ?? ' '), [' ', '?', 'U'], true);
             $newHistory = null;
             if ($isStaged) {
@@ -889,7 +889,7 @@ final class App implements Model
         }
         // Captured BEFORE the switch: the branches list is still the
         // pre-checkout snapshot, so this names the branch the user is
-        // leaving (audit A2 — the inverse needs an origin to return to).
+        // leaving — the inverse needs an origin to return to.
         $from = $this->currentBranchName();
         try {
             $this->git->checkout($branch['name']);
@@ -964,7 +964,7 @@ final class App implements Model
 
     /** Explicit-set diffViewer swap — the null argument MEANS "close the overlay",
      * which withAll's `?? $this->diffViewer` keep-existing fallthrough cannot express
-     * unaided, hence the diffViewerSet sentinel (audit #12: single construction site).
+     * unaided, hence the diffViewerSet sentinel (single construction site).
      * error/successMessage ride through unchanged, matching the old full-arg bypass.
      */
     private function withDiffViewer(?DiffViewer $dv): self
@@ -1158,8 +1158,8 @@ final class App implements Model
                 // the old `default => null` claimed success on garbage.
                 default => throw new \RuntimeException(Lang::t('history.unknown_op', ['op' => $op])),
             };
-            // A redo must not announce itself as an undo (audit A19); both
-            // lanes name the operation through its humanized label (A17).
+            // A redo must not announce itself as an undo ); both
+            // lanes name the operation through its humanized label.
             $label  = $this->opLabel($entry->op);
             $msg    = $forward
                 ? Lang::t('history.redone', ['op' => $label])
@@ -1175,7 +1175,7 @@ final class App implements Model
     }
 
     /**
-     * Human-readable name for a history op (audit A17): 'createBranch'
+     * Human-readable name for a history op: 'createBranch'
      * becomes "branch creation" via the history.op.<op> keys. Unknown ops
      * fall back to the raw identifier — Lang::t returns the key itself
      * when no translation exists, so the substitution is detectable.
@@ -1198,7 +1198,7 @@ final class App implements Model
         if ($branch['current'] ?? false) {
             return $this->withError(Lang::t('branch.delete_current'));
         }
-        // Audit A3: branch deletion needs the same armed second press as discard.
+        // Branch deletion needs the same armed second press as discard.
         $arm = 'branch:' . $branch['name'];
         if ($this->pendingConfirm !== $arm) {
             return $this->armConfirm($arm, Lang::t('confirm.delete_branch', ['name' => (string) $branch['name']]));
@@ -1250,7 +1250,7 @@ final class App implements Model
         } catch (\RuntimeException $e) {
             // A conflicted merge leaves rows in the index; refresh so they are
             // visible, and name the failure in human terms when git reports
-            // conflicts (audit A5/A6).
+            // conflicts.
             $msg = str_contains($e->getMessage(), 'CONFLICT')
                 ? Lang::t('merge.conflict', ['branch' => $this->mergeTarget])
                 : $e->getMessage();
@@ -1263,11 +1263,11 @@ final class App implements Model
     {
         // The probe shells out (git rev-parse); a failing git must land in the
         // error lane like every other operation, not as an uncaught fatal
-        // that takes the TUI down (audit K4).
+        // that takes the TUI down.
         try {
             // One menu serves every sequencer stop; 'r' during a conflicted
             // merge gets an honest hint instead of a lie about rebasing
-            // (audit A5 - cherry-pick continue/abort had no callers at all).
+            // (cherry-pick continue/abort had no callers at all).
             $state = $this->git->sequenceState();
             if ($state === 'rebase' || $state === 'cherry') {
                 return $this->withRebaseMenu(true, $state);
@@ -1360,7 +1360,7 @@ final class App implements Model
 
     /** Explicit-set stashManager swap — the null argument MEANS "close the overlay",
      * which withAll's `?? $this->stashManager` keep-existing fallthrough cannot express
-     * unaided, hence the stashManagerSet sentinel (audit #12: single construction site).
+     * unaided, hence the stashManagerSet sentinel (single construction site).
      * error/successMessage ride through unchanged, matching the old full-arg bypass.
      */
     private function withStashManager(?StashManager $sm): self
@@ -1402,7 +1402,7 @@ final class App implements Model
         if ($sm === null) return $this;
         $current = $sm->current();
         if ($current === null) return $this;
-        // Audit A3: dropping a stash discards its only copy - arm first.
+        // Dropping a stash discards its only copy - arm first.
         $arm = 'stash:' . $current->stashRef();
         if ($this->pendingConfirm !== $arm) {
             return $this->armConfirm($arm, Lang::t('confirm.stash_drop', ['ref' => $current->stashRef()]));
@@ -1428,7 +1428,7 @@ final class App implements Model
 
     /** Explicit-set cherryPick swap — the null argument MEANS "close the overlay",
      * which withAll's `?? $this->cherryPick` keep-existing fallthrough cannot express
-     * unaided, hence the cherryPickSet sentinel (audit #12: single construction site).
+     * unaided, hence the cherryPickSet sentinel (single construction site).
      * error/successMessage ride through unchanged, matching the old full-arg bypass.
      */
     private function withCherryPick(?CherryPick $cp): self
@@ -1454,7 +1454,7 @@ final class App implements Model
             );
         } catch (\RuntimeException $e) {
             // A stopped cherry-pick needs the same continue/abort path a
-            // rebase stop does (audit A5).
+            // rebase stop does.
             return $this->withCherryPick(null)->refresh()->withAll(
                 showRebaseMenu: true, rebaseMenuKind: 'cherry', error: $e->getMessage()
             );
@@ -1475,7 +1475,7 @@ final class App implements Model
 
     /** Explicit-set worktrees swap — the null argument MEANS "close the overlay",
      * which withAll's `?? $this->worktrees` keep-existing fallthrough cannot express
-     * unaided, hence the worktreesSet sentinel (audit #12: single construction site).
+     * unaided, hence the worktreesSet sentinel (single construction site).
      * error/successMessage ride through unchanged, matching the old full-arg bypass.
      */
     private function withWorktrees(?Worktrees $wt): self
@@ -1537,7 +1537,7 @@ final class App implements Model
 
     /** Explicit-set interactiveRebase swap — the null argument MEANS "close the overlay",
      * which withAll's `?? $this->interactiveRebase` keep-existing fallthrough cannot express
-     * unaided, hence the interactiveRebaseSet sentinel (audit #12: single construction site).
+     * unaided, hence the interactiveRebaseSet sentinel (single construction site).
      * error/successMessage ride through unchanged, matching the old full-arg bypass.
      */
     private function withInteractiveRebase(?InteractiveRebase $ir): self

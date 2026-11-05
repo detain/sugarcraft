@@ -48,7 +48,7 @@ final class Renderer
             . Style::new()->foreground(Color::hex('#a78bfa'))
                 ->render($a->branchSummary !== '' ? "[{$a->branchSummary}]" : '');
 
-        // A26 (audit 2026-11): the key-hint strip is the longest single line
+        // The key-hint strip is the longest single line
         // in the frame; clip it to the terminal instead of overflowing.
         $help = self::truncate(
             Style::new()->foreground(Color::hex('#7d6e98'))
@@ -125,7 +125,7 @@ final class Renderer
         $frame = $header . "\n" . $body . "\n " . $help . $err . $success . $commitBar . $branchBar . $mergeBar . $diffOverlay . $rebaseOverlay . $stashOverlay . $cherryPickBar . $worktreeOverlay . $interactiveRebaseOverlay . $overlay;
 
         // Hard ceiling: whatever the per-pane budgets missed, the frame never
-        // ships more rows than the terminal has (audit K3). The trailing empty
+        // ships more rows than the terminal has ). The trailing empty
         // piece of explode-on-"\n" keeps the final newline byte-identical.
         if ($a->height !== null) {
             $lines = explode("\n", $frame);
@@ -210,7 +210,7 @@ final class Renderer
             $subject = self::sanitize($entry['subject']);
             $subjectMax = $a->logSubjectWidth();
             // Cell-width aware: mb_strlen counts codepoints, so CJK subjects
-            // (double-width) overran the pane budget (audit #14).
+            // (double-width) overran the pane budget .
             if (Width::of($subject) > $subjectMax) {
                 $subject = Width::truncate($subject, max(0, $subjectMax - 1)) . '…';
             }
@@ -241,7 +241,7 @@ final class Renderer
      * Row window keeping $cursor visible in $visible rows of a $count-long
      * list, reserving one row per hidden side for the "+N above/below"
      * indicators. $visible = PHP_INT_MAX (size never reported) shows
-     * everything — the historical byte-stable frame (audit K3).
+     * everything — the historical byte-stable frame.
      *
      * @return array{int,int,int,int} start offset, row count, hidden above, hidden below
      */
@@ -288,7 +288,7 @@ final class Renderer
 
     /**
      * Overlay box width: the historical constant is a ceiling, not a floor —
-     * a narrow terminal shrinks the box instead of overflowing it (audit A26).
+     * a narrow terminal shrinks the box instead of overflowing it.
      */
     private static function overlayWidth(App $a, int $max): int
     {
@@ -298,7 +298,7 @@ final class Renderer
         // The style box spends 2 columns on the rounded border and 2 more on
         // the horizontal padding OUTSIDE the given content width (measured:
         // width(58) prints a 62-cell border row), so the content budget is
-        // terminal width minus 6 (A26, audit 2026-11).
+        // terminal width minus 6.
         return max(16, min($max, $a->width - 6));
     }
 
@@ -388,10 +388,10 @@ final class Renderer
         // whole-line rendering below byte-for-byte (DiffHighlighter opt-in law).
         $language = DiffHighlighter::languageForPath($dv->path);
 
-        // K3 (audit 2026-11): window the diff body to the terminal height —
+        // Window the diff body to the terminal height —
         // every line used to be appended below the frame where nothing could
         // reach it. The selected hunk's first line (the cursor) stays visible;
-        // lines clip to the box width (A26). The 3 reserved rows are the
+        // lines clip to the box width. The 3 reserved rows are the
         // title, the navigation hint, and one scroll indicator at most.
         $boxW = self::overlayWidth($a, 72);
         $inner = max(10, $boxW - 5);
@@ -404,7 +404,7 @@ final class Renderer
             $lines[] = self::scrollHint(Lang::t('viewport.above', ['n' => $above]));
         }
 
-        // The selected-hunk bounds are loop-invariant; hoist them out (A27).
+        // The selected-hunk bounds are loop-invariant; hoist them out.
         $selStart = -1;
         $selEnd = -1;
         $hunkIdx = array_search($dv->hunkCursor, $dv->hunkStarts, true);
@@ -420,7 +420,7 @@ final class Renderer
 
             $st = Style::new();
             $line = self::truncate(self::sanitize($line), $inner);
-            // Audit M-render: extended-header lines ('--- a/f', '+++ b/f',
+            // Extended-header lines ('--- a/f', '+++ b/f',
             // 'diff ', 'index ') start with the same bytes as content
             // markers and were painted green/red as if they were changes.
             // They are metadata - keep them neutral like context lines.
@@ -536,9 +536,9 @@ final class Renderer
             '',
         ];
 
-        // K3 (audit 2026-11): window the entries list to the terminal height
+        // Window the entries list to the terminal height
         // (9 = title, blanks, and the fixed action footer) and clip lines to
-        // the box width (A26).
+        // the box width.
         $boxW = self::overlayWidth($a, 64);
         $inner = max(10, $boxW - 5);
         if ($sm->stashes === []) {
@@ -586,7 +586,7 @@ final class Renderer
         $wt = $a->worktrees;
         if ($wt === null) return '';
 
-        // K3/A26: window the worktree list and clip paths to the box width.
+        // Window the worktree list and clip paths to the box width.
         $boxW = self::overlayWidth($a, 64);
         $inner = max(10, $boxW - 5);
         $lines = [
@@ -656,7 +656,7 @@ final class Renderer
         $ir = $a->interactiveRebase;
         if ($ir === null) return '';
 
-        // K3/A26: window the todo list to the terminal height and clip
+        // Window the todo list to the terminal height and clip
         // subjects to the box width.
         $boxW = self::overlayWidth($a, 72);
         $inner = max(10, $boxW - 5);
@@ -694,7 +694,7 @@ final class Renderer
                     };
                     // Pad the PLAIN action text to 8 cells before colorizing:
                     // sprintf %-8s counted the SGR bytes of the rendered string
-                    // as content, so every column collapsed (audit #14).
+                    // as content, so every column collapsed .
                     $line = '  '
                         . Style::new()->foreground(Color::hex($actionColor))->render(Width::padRight($commit->action->value, 8))
                         . ' '
