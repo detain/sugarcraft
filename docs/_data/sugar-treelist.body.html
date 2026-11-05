@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">Tree and flat list views with customizable box-drawing prefixes, cursor navigation, and word-wrap. Composes with any SugarCraft model.</p>
+<p class="lede" style="margin-top: 28px;">List view with customizable box-drawing prefixes, cursor navigation, word-wrap, and live filtering. Composes with any SugarCraft model.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-treelist</code></pre>
@@ -22,7 +22,7 @@ echo $model->view();
             <div class="feature"><strong>Cursor navigation</strong><span>Up / Down / Home / End movement with viewport tracking.</span></div>
             <div class="feature"><strong>Word-wrap</strong><span>Auto-wrap long items to terminal width.</span></div>
             <div class="feature"><strong>Filter state machine</strong><span>withFilterFn() / withoutFilter() with FilterState enum (unfiltered / filtering).</span></div>
-            <div class="feature"><strong>Fuzzy matching</strong><span>FuzzyMatch delegates scoring to sugar-fuzzy's SmithWatermanMatcher (SSOT); over-cap candidates are aligned on their prefix.</span></div>
+            <div class="feature"><strong>Fuzzy matching</strong><span>FuzzyMatch delegates scoring to sugar-fuzzy's SmithWatermanMatcher (SSOT).</span></div>
             
     </div>
 
@@ -57,7 +57,7 @@ echo $model->view();
 <tr><td>FilterState</td><td>filtering</td><td>Filter function set and applied</td></tr>
 <tr><td>FuzzyMatch</td><td>score(query, candidate)</td><td>Smith-Waterman alignment score via the sugar-fuzzy SSOT (int, higher = better)</td></tr>
 <tr><td>FuzzyMatch</td><td>match(query, list&lt;\Stringable&gt;)</td><td>Filter and rank items by score; returns list of [item, score] pairs</td></tr>
-<tr><td>ScoringProfile</td><td>canonical() / strict() / lenient()</td><td>@deprecated class_alias of SugarCraft\Fuzzy\ScoringProfile (sugar-fuzzy is the SSOT); new code depends on sugar-fuzzy directly</td></tr>
+<tr><td>ScoringProfile</td><td>canonical() / strict() / lenient()</td><td>@deprecated class_alias of SugarCraft\Fuzzy\ScoringProfile (sugar-fuzzy is the SSOT); FuzzyMatch keeps a ?ScoringProfile constructor parameter and withProfile() for migration only - new code depends on sugar-fuzzy directly</td></tr>
 <tr><td>Item</td><td>value</td><td>The underlying \Stringable</td></tr>
 <tr><td>StringItem</td><td>new(string)</td><td>Wrap a plain string as a list item</td></tr>
 </table>

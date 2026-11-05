@@ -13,12 +13,12 @@
 > Formerly published as `sugarcraft/candy-lister` (renamed 2026-10). <!-- @rename-keep -->
 > Namespace changed: `SugarCraft\Lister\` → `SugarCraft\TreeList\`. <!-- @rename-keep -->
 
-sugar-treelist — a tree-list view component for terminal UIs, for PHP 8.3+. Renders items with custom prefix/suffix hooks, line wrapping, and cursor-aware styling.
+sugar-treelist — a tree-list view component for terminal UIs, for PHP 8.3+. Renders items with custom prefix/suffix hooks (box-drawing gutters by default), whitespace-faithful word wrap, cursor navigation, and host-driven live filtering.
 
 ## Features
 
-- **Customisable Prefixer** — generates per-line prefix strings (0-based line numbers, box-drawing borders, tree branches)
-- **Customisable Suffixer** — generates per-line suffix strings (status markers, padding)
+- **Customizable Prefixer** — generates per-line prefix strings (0-based line numbers, box-drawing borders, tree branches)
+- **Customizable Suffixer** — generates per-line suffix strings (status markers, padding)
 - **Line wrapping** — items wrap to multiple lines within a fixed viewport width, whitespace-faithfully (indentation and inter-word runs survive)
 - **Cursor navigation** — current item highlighted with configurable style
 - **Viewport awareness** — fixed-height rendering via `setViewport()`; `setCursorOffset()` controls the context gap kept above the cursor (render-clamped so it can never exceed the viewport)
@@ -254,7 +254,10 @@ for fuzzy scoring (reciprocally documented in sugar-fuzzy's README):
 - `SugarCraft\TreeList\FuzzyMatch` is a **thin delegating shim** over
   `SmithWatermanMatcher` (keeping sugar-treelist's own `\Stringable`-item
   contract and input-order tiebreak, plus the prefix-alignment cap behaviour
-  documented above).
+  documented above). Its `?ScoringProfile` constructor parameter and
+  `withProfile()` exist for migration only — because the alias is the same
+  class, sugar-fuzzy's own profile passes straight through; new code depends
+  on `SugarCraft\Fuzzy\` directly.
 
 **New code should depend on `SugarCraft\Fuzzy\*` directly** and use
 `sugar-fuzzy`'s `SmithWatermanMatcher` / `ScoringProfile`; the re-exports here

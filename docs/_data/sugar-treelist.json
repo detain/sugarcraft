@@ -1,11 +1,11 @@
 {
     "title": "SugarTreelist — SugarCraft",
-    "description": "SugarTreelist: Tree / list view with box-drawing prefixes + cursor nav.",
+    "description": "SugarTreelist: List view with box-drawing prefixes, cursor navigation, word-wrap, and live filtering.",
     "ogTitle": "SugarTreelist — SugarCraft",
-    "ogDescription": "Tree / list view with box-drawing prefixes + cursor nav.",
+    "ogDescription": "List view with box-drawing prefixes, cursor navigation, word-wrap, and live filtering.",
     "emoji": "",
     "displayName": "SugarTreelist",
-    "tagline": "Tree / list view with box-drawing prefixes + cursor nav",
+    "tagline": "List view with box-drawing prefixes, cursor navigation, word-wrap, and live filtering",
     "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/treilik/bubblelister\" style=\"color: inherit;\">treilik/bubblelister</a></span>\n          <span class=\"tag-chip\">tree</span><span class=\"tag-chip\">list</span><span class=\"tag-chip\">view</span><span class=\"tag-chip\">navigation</span>"
 }

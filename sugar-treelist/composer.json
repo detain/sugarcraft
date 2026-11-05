@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-treelist",
-    "description": "Tree-list view component for terminal UIs in PHP \u2014 customisable prefix/suffix rendering, whitespace-faithful line wrapping, cursor navigation, and per-row delta repaint. Design antecedent: treilik/bubblelister.",
+    "description": "Tree-list view component for terminal UIs in PHP \u2014 customizable prefix/suffix rendering, whitespace-faithful line wrapping, cursor navigation, live filtering, and per-row delta repaint. Design antecedent: treilik/bubblelister.",
     "type": "library",
     "license": "MIT",
     "keywords": [
