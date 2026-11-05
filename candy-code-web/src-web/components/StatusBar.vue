@@ -330,6 +330,7 @@ select {
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 0.1rem 0.25rem;
+  min-height: 1.5rem; /* UX-15: keep the hit target at the 24px floor */
 }
 button.action {
   font: inherit;

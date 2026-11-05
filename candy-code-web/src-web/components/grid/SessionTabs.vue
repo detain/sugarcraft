@@ -261,6 +261,7 @@ onBeforeUnmount(() => {
 }
 .x {
   padding: 0.25rem 0.5rem 0.25rem 0.2rem;
+  min-height: 1.5rem; /* UX-15: 24px hit-target floor */
   color: var(--muted);
 }
 .dot {

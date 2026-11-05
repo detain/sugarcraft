@@ -155,6 +155,7 @@ function onKey(event: KeyboardEvent): void {
 .close {
   margin-left: auto;
   padding: 0 0.3rem;
+  min-height: 1.5rem; /* UX-15: 24px hit-target floor */
   text-decoration: none;
 }
 .body {
