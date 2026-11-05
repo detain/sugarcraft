@@ -51,9 +51,11 @@ final class BinCliTest extends TestCase
      *
      * @param list<string> $args
      * @param array<string,string> $extraEnv merged over the minimal env
+     * @param string $stdin bytes written to the child's stdin before close
+     *                     ('' keeps the historical immediately-closed shape)
      * @return array{int,string,string}
      */
-    private function runBin(array $args, array $extraEnv = []): array
+    private function runBin(array $args, array $extraEnv = [], string $stdin = ''): array
     {
         $cmd = array_merge([PHP_BINARY, self::BIN], $args);
         $proc = proc_open(
@@ -64,6 +66,9 @@ final class BinCliTest extends TestCase
             ['PATH' => '/usr/bin:/bin', 'HOME' => \sys_get_temp_dir()] + $extraEnv,
         );
         $this->assertIsResource($proc);
+        if ($stdin !== '') {
+            fwrite($pipes[0], $stdin);
+        }
         fclose($pipes[0]);
         $stdout = stream_get_contents($pipes[1]);
         $stderr = stream_get_contents($pipes[2]);
@@ -276,5 +281,58 @@ final class BinCliTest extends TestCase
         $this->assertSame(0, $code, 'stderr: ' . $err);
         $this->assertSame($de['cli.usage'] . "\n", $out);
         $this->assertStringStartsWith('Aufruf', $out);
+    }
+
+    public function testVersionPrintsNameAndExitsZero(): void
+    {
+        // Behavioral pin (F-2): --version answers without reading config or
+        // touching a terminal, and glued =value portions are ignored exactly
+        // as README documents (F-49's documented side).
+        [$code, $out, $err] = $this->runBin(['--version']);
+        $this->assertSame(0, $code, 'stderr: ' . $err);
+        $this->assertMatchesRegularExpression('/^candy-ssh-launcher \S+\n$/', $out);
+        $this->assertStringStartsWith('candy-ssh-launcher ', $out);
+
+        [$gluedCode, $gluedOut] = $this->runBin(['--version=ignored']);
+        $this->assertSame(0, $gluedCode);
+        $this->assertSame($out, $gluedOut);
+    }
+
+    public function testUnknownArgSanitizesHostileToken(): void
+    {
+        // An argv-interpolating refusal message must not smuggle raw escape
+        // bytes onto stderr (F-21).
+        [$code, $out, $err] = $this->runBin(["--\x1b[2Jevil"]);
+        $this->assertSame(2, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString('evil', $err);
+        $this->assertStringNotContainsString("\x1b", $err);
+        $this->assertSame('', $out);
+    }
+
+    public function testSshNotExecutableSanitizesHostilePath(): void
+    {
+        $cfg = $this->writeFixture("- name: prod\n  host: p.test\n");
+        [$code, , $err] = $this->runBin(
+            ['--config', $cfg, '--ssh', "/tmp/no\x1b[2Jpe"],
+        );
+        $this->assertSame(1, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString('pe', $err);
+        $this->assertStringNotContainsString("\x1b", $err);
+    }
+
+    public function testDispatchRefusalFailsLoudWithBoundedExit(): void
+    {
+        // F-6: a field the Endpoint layer refuses at dispatch time used to
+        // escape as a raw stack trace; it now exits 3 with a named,
+        // sanitized stderr line. The name field carries hostile bytes to
+        // prove the same wrap covers the message.
+        $cfg = $this->writeFixture(
+            "- name: \"p\x1b[2Jtest\"\n  host: p.test\n  proxyJump: \"-o=evil\"\n"
+        );
+        [$code, , $err] = $this->runBin(['--config', $cfg], [], "\r");
+        $this->assertSame(3, $code, 'stderr: ' . $err);
+        $this->assertStringContainsString('proxyJump', $err);
+        $this->assertStringContainsString('unsafe leading-dash', $err);
+        $this->assertStringNotContainsString("\x1b", $err);
     }
 }
