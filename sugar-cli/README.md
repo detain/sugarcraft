@@ -122,7 +122,9 @@ echo StatusLine::error('connection refused'), "\n";
   stacked layout (description under the key) when the key column leaves
   fewer than `HelpText::MIN_DESCRIPTION_WIDTH` (16) cells. Keys and
   section titles are never wrapped or cut — in stacked mode a very long
-  key can overflow the width, so keep keys short. `renderRows()` renders
+  key overflows the width on its own line, and in grid mode it widens
+  the whole key column (pushing descriptions toward their one-cell wrap
+  floor), so keep keys short either way. `renderRows()` renders
   just the key/description grid, and `renderPage()` renders a complete
   pre-composed page without re-wrapping it by default (`null`); pass an
   `int`/`AutoWidth` to word-wrap over-long rows.
