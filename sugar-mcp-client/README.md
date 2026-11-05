@@ -72,8 +72,8 @@ is the same three constructor arguments — name, command, argv list.
 
 `callTool()` answers with the tool's result envelope — normally
 `['content' => [['type' => 'text', 'text' => ...], ...], 'isError' => bool]`
-as the server shaped it (a non-table result is wrapped into a one-item
-`content` list for you) — or, on failure, `['error' => 'why']`. It never
+as the server shaped it (a non-array (scalar) result is wrapped into a
+one-item `content` list for you) — or, on failure, `['error' => 'why']`. It never
 throws for a call that merely failed; see *Failure shapes*.
 
 ## Trust boundary
