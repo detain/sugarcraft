@@ -103,7 +103,7 @@ the README's [Limitations](../README.md#limitations)).
 | Field | Type | Description |
 |-------|------|-------------|
 | `t` | `float` | Timestamp. |
-| `tRaw` | `float` | Present only on trimmed events (see above). |
+| `tRaw` | `float` | Original wallclock-relative timestamp. Present only on events that follow a trimmed idle gap — once `--idle-trim` has compressed a gap, every later event carries it (see the Dual-Timestamp section below). |
 | `k` | `"input"` | Kind discriminant. |
 | `b` | `string` | Raw bytes written to the PTY slave (keystrokes). Present when no `msg` is. |
 | `msg` | `object` | Serialized Msg envelope (`@type` names the class). The Player decodes it through `Msg\Registry` and feeds the typed object to the program. Emitted by session-host pipelines; the `.tape` Compiler emits only `b`. |
