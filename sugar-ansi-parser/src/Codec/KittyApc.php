@@ -11,7 +11,10 @@ namespace SugarCraft\AnsiParser\Codec;
  * {@see \SugarCraft\AnsiParser\Parser\Handler::sosPmApcDispatch()} with
  * `kind === 'apc'`:
  *
- *   G <key>=<value>,<key>=<value>,… ; <base64 payload>
+ *   G<key>=<value>,<key>=<value>,…;<base64 payload>
+ *
+ * There is no space after the `G` opener — `parse()` is byte-literal about
+ * that, and so are the senders.
  *
  * Byte-stream inspectors label every `G` APC by byte count only ("kitty
  * graphics (N bytes)") — candy-ansi-inspect still does today (adoption of
