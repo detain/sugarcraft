@@ -54,6 +54,13 @@ final class EntryTest extends TestCase
         $this->assertSame('hello', Entry::sanitizeName("hello\xc2\x80")); // U+0080
         $this->assertSame('hello', Entry::sanitizeName("hello\xc2\x9f")); // U+009F
 
+        // M-11: the LONE 8-bit spellings are controls too (a raw \x9b acts
+        // as CSI), and stripping them must not eat valid multi-byte text.
+        $this->assertSame('hello', Entry::sanitizeName("hello\x9b"));         // lone CSI
+        $this->assertSame('xy', Entry::sanitizeName("x\x80\x9fy"));           // lone boundary bytes
+        $this->assertSame('日本語', Entry::sanitizeName("日本\x9b語"));         // C1 dropped, sequence survives
+        $this->assertSame('café.txt', Entry::sanitizeName("caf\xc3\xa9.txt")); // é is C3 A9, not C1
+
         // Normal filenames pass through unchanged
         $this->assertSame('normal_file.txt', Entry::sanitizeName('normal_file.txt'));
         $this->assertSame('日本語', Entry::sanitizeName('日本語'));
@@ -86,6 +93,8 @@ final class EntryTest extends TestCase
             'nested OSC: inner consumed, outer params degrade to printable garbage' => ["\x1b]0;\x1b]1;x\x07y\x07", '0;y'],
             'ESC + final byte is a real sequence (REP) and dies whole' => ["a\x1bb", 'a'],
             'two adjacent controls with no sequence body die in sweep' => ["a\x1b\x07b", 'ab'],
+            'lone 8-bit C1 CSI (0x9b) stripped, its params degrade to printable' => ["a\x9b[31mb", 'a[31mb'],
+            'lone C1 boundary bytes 0x80/0x9f stripped' => ["x\x80\x9fy", 'xy'],
         ];
     }
 

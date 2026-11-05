@@ -67,7 +67,14 @@ final class Entry
      * ECMA-48 sequences lose only their introducer to the generic
      * leg — a DCS string is not consumed up to its ST, so its
      * parameter body stays behind), then a sweep of every leftover
-     * C0 control, ESC, and DEL byte, then UTF-8-encoded C1 controls.
+     * C0 control, ESC, and DEL byte, then C1 controls in BOTH
+     * spellings: the UTF-8-encoded form (\xc2\x80-\xc2\x9f) and lone
+     * 8-bit bytes (0x80-0x9F) outside a valid UTF-8 sequence, per the
+     * sugar-core Ansi/Sanitize doctrine — a raw \x9b acts as CSI for
+     * many terminals, so it must never reach one. Canonical multi-byte
+     * text is matched whole first and survives (日本語, é); a dangling
+     * lead byte of an invalid sequence degrades to printable junk, the
+     * same intentional outcome the ESC legs accept.
      *
      * The old implementation exempted ESC (\x1b) itself from the sweep and
      * only knew the CSI shape, so an OSC set-title, a charset selection
@@ -98,6 +105,16 @@ final class Entry
         // Strip C1 control chars (U+0080-U+009F, encoded as \xc2\x80-\xc2\x9f in UTF-8)
         // Use separate pattern without /u to avoid PCRE UTF-8 mode conflicts
         $s = preg_replace('/\xc2[\x80-\x9f]/', '', $s) ?? '';
+        // Lone 8-bit C1 bytes are controls too (0x9b is CSI for VT-style
+        // hosts). Byte-mode walk: canonical UTF-8 sequences are matched
+        // whole by the leading alternation branches and kept, so only a
+        // C1 byte that is NOT part of a valid sequence falls through to
+        // the final branch and is dropped. No /u — same reason as above.
+        $s = preg_replace_callback(
+            '/[\xC2-\xDF][\x80-\xBF]|\xE0[\xA0-\xBF][\x80-\xBF]|[\xE1-\xEC\xEE\xEF][\x80-\xBF]{2}|\xED[\x80-\x9F][\x80-\xBF]|\xF0[\x90-\xBF][\x80-\xBF]{2}|[\xF1-\xF3][\x80-\xBF]{3}|\xF4[\x80-\x8F][\x80-\xBF]{2}|[\x80-\x9f]/',
+            static fn(array $m): string => strlen($m[0]) === 1 ? '' : $m[0],
+            $s,
+        ) ?? '';
         return $s;
     }
 }
