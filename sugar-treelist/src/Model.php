@@ -14,7 +14,8 @@ use SugarCraft\Core\Util\Width;
  *
  * List view model. Key properties:
  * - Items are stored as {@see Item} wrappers around \Stringable values
- * - CursorOffset keeps the cursor N lines from the visible viewport edge
+ * - CursorOffset keeps the cursor N lines from the TOP edge of the viewport
+ *   (the gap is enforced above the cursor only, render-clamped to height - 1)
  * - lineOffset controls how many lines *before* the cursor to show in the
  *   prefixer/suffixer gap — distinct from cursorOffset which is the viewport
  *   anchor; lineOffset is passed to initPrefixer()/initSuffixer() to compute
@@ -592,6 +593,9 @@ final class Model
 
     /**
      * Sort items using the configured LessFunc.
+     *
+     * With no LessFunc configured there is nothing to order by: the call is an
+     * identity return and hands back $this unchanged (no clone is minted).
      *
      * The cursor follows the logical item it was on (Item::$id), so a sort is
      * never silently a de-select. While a filter is active the pristine list
