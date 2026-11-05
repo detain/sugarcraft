@@ -32,7 +32,7 @@ $req-&gt;counter('events');</code></pre>
       <div class="feature"><strong>Time helper</strong><span><code>$stop = $reg->time('http.duration'); $stop()</code> — emit a histogram sample on close.</span></div>
       <div class="feature"><strong>Backends</strong><span>InMemoryBackend, JsonStreamBackend, StatsdBackend, PrometheusFileBackend, MultiBackend.</span></div>
       <div class="feature"><strong>Histogram buckets</strong><span>Prometheus backend emits 14 cumulative le buckets (0.005–100) +Inf for classic Prometheus compatibility.</span></div>
-      <div class="feature"><strong>Cardinality tracking</strong><span>FIFO eviction of oldest label combinations when per-metric limit (default 10 000) is exceeded. Inspect with <code>cardinality()</code>.</span></div>
+      <div class="feature"><strong>Cardinality tracking</strong><span>FIFO eviction of oldest label combinations when per-metric limit (default 10 000) is exceeded — reclaiming the series on storing backends (InMemory, Prometheus textfile), tracker-only against push-only StatsD/JSON stream arms. Inspect with <code>cardinality()</code>.</span></div>
       <div class="feature"><strong>Descriptor registration</strong><span>Pre-emit <code># TYPE</code> / <code># HELP</code> lines before first sample (Prometheus textfile collector metadata).</span></div>
       <div class="feature"><strong>Untrusted-value trust boundary</strong><span>SSH username/term tags are sanitized to <code>[A-Za-z0-9._:@/-]</code> and clamped to 64 bytes; every backend wire-sweep folds hostile framing tokens (<code>:</code> <code>|</code> <code>,</code>, space, control/DEL/C1) and the Prometheus writer throws loudly on fold-collisions and two-kind families. Treat untrusted strings as label <em>values</em>, never as metric names.</span></div>
     </div>
@@ -69,7 +69,7 @@ $req-&gt;counter('events');</code></pre>
 <tr><td>Registry</td><td>cardinalityLimit()</td><td>The per-metric label-combination budget (constructor argument)</td></tr>
 <tr><td>Registry</td><td>cardinality(name)</td><td>Number of unique label-value combinations currently tracked for a metric</td></tr>
 <tr><td>Registry</td><td>flush()</td><td>Publish the backend's state. Stream/socket backends emit as you record and no-op here; a textfile collector is only rewritten inside flush() and nothing in the library arms a timer — always call flush() explicitly from your own schedule</td></tr>
-<tr><td>Registry</td><td>remove(name, tags)</td><td>Reclaim a series from the backend and the cardinality tracker together (default tags are merged once, exactly as the emit path does)</td></tr>
+<tr><td>Registry</td><td>remove(name, tags)</td><td>Reclaim the tracker entry and — on storing backends — the series (StatsD/JSON-stream remove() is a deliberate no-op; default tags are merged once, exactly as the emit path does)</td></tr>
 <tr><td>Registry</td><td>deleteLabelValues(name, tags)</td><td>Drop a label combination from the cardinality tracker only — backend series are NOT touched; use remove() for a full reclaim (FIFO eviction also runs automatically when the limit is exceeded)</td></tr>
 <tr><td>Registry</td><td>newUpDownCounter(name, help, tags)</td><td>Create a bound UpDownCounter instrument (preferred over constructing the instrument directly)</td></tr>
 <tr><td>Registry</td><td>newAsyncCounter(name, help, callback, tags)</td><td>Create an AsyncCounter observed via callback at collection time</td></tr>
