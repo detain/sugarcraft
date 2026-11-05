@@ -193,7 +193,9 @@ if ($delay !== null) {
 
 - **`nextExpiry(): ?float`** — the soonest expiry instant (seconds since epoch)
   among queued alerts that auto-dismiss, or `null` if none expire. May be in the
-  past when an alert is already due.
+  past when an alert is already due. Expiry is read from the wall clock
+  (`CLOCK_REALTIME`), so a system clock step — an NTP sync, for instance — can
+  stretch or cut an alert's on-screen lifetime.
 
 - **`secondsUntilNextExpiry(): ?float`** — the same as a delay from now, clamped
   to `>= 0.0` (an already-due alert yields `0.0`), or `null` if nothing expires.
@@ -406,7 +408,7 @@ already over the new cap survive until the next push evicts them.
 | `->info(string $message): self` | Convenience queue for `ToastType::Info` |
 | `->success(string $message): self` | Convenience queue for `ToastType::Success` |
 | `->hasActiveAlert(): bool` | True if non-expired alerts queued |
-| `->nextExpiry(): ?float` | Soonest expiry instant (epoch seconds) of an auto-dismissing alert, or `null` |
+| `->nextExpiry(): ?float` | Soonest expiry instant (epoch seconds, wall clock — an NTP step shifts it) of an auto-dismissing alert, or `null` |
 | `->secondsUntilNextExpiry(): ?float` | Delay until the next expiry, clamped `>= 0.0`, or `null` — schedule one prune tick |
 | `->dismiss() / clear() / pruneExpired()` | Lifecycle: `dismiss()` files EVERY queued alert (expired included) into history and stops rendering until `clear()`, which also resets the flag but files nothing; `pruneExpired()` drops expired alerts silently |
 | `->history(): list<Alert>` | Return all recorded alerts — dismissed AND overflow-evicted (`DropOldest`); cumulative, `clear()` never resets it |
