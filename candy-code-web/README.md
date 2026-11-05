@@ -366,6 +366,40 @@ widen any directive from the shipped default — in particular `ws:`/`wss:`
 entries are unnecessary additions (the socket already passes) and would admit
 cross-origin sockets the app never uses.
 
+## Accessibility
+
+The UI is keyboard-first: the tab chord, the command palette, the help
+overlay and every panel are driven without a mouse (keys in
+[What it does](#what-it-does)), and `:focus-visible` rings are set globally
+for buttons, links, selects, inputs and textareas
+(`src-web/styles/tokens.css`) — they show on keyboard focus, not on click.
+
+Screen readers ride polite `sr-only` `aria-live` regions: a newly arrived
+question announces from the app shell with where it came from and what it
+offers (`useQuestionAnnouncements`, `src-web/lib/questions.ts`), and a
+completed reply is announced once at the transcript tail
+(`reply-announcement`, `src-web/views/SessionView.vue`) — nothing with
+`aria-live` tracks token deltas, which would spam. A byte-identical repeat
+is still announced: the text is cleared before it is re-set, since live
+regions announce replacements, not equality
+(`src-web/lib/questions.ts`).
+
+Every shipped dialog runs one spine, `src-web/lib/useDialog.ts` — help,
+about, history search, the directory picker, the media card, the approvals
+drawer, the command palette, the context panel, the sidebar and the mint
+dialog: focus enters the panel on open, `Tab` stays trapped inside it, `Esc`
+dismisses, and the trigger regains focus on close. A census in
+`src-web/lib/__tests__/useDialog.spec.ts` reddens if any `role="dialog"`
+ever bypasses the spine.
+
+Diff rows never lean on colour alone: each carries a `+`/`−` sign glyph and
+a kind class beside the tint, and old/new line numbers read out per row.
+Motion honors `prefers-reduced-motion: reduce` with a global kill-all of
+animations and transitions (`src-web/styles/tokens.css`), and the tab title
+wears a `(N)` pending-count from the attention model
+(`src-web/components/approvals/attention.ts`), so waiting asks are legible
+without reading the page at all.
+
 ## Developing the UI
 
 The TypeScript lives in `src-web/` so it stays out of the PSR-4 `src/` tree.
