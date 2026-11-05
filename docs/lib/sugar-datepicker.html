@@ -107,8 +107,13 @@ $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
 <tr><td>DatePicker</td><td>withMinDate(DateTimeImmutable) / withMaxDate(DateTimeImmutable) / withoutMinDate() / withoutMaxDate() / minDate() / maxDate() / inBounds()</td><td>Min/max date constraints (clamped navigation, refused selection)</td></tr>
 <tr><td>DatePicker</td><td>withoutToday()</td><td>Drop the pinned "today" reference</td></tr>
 <tr><td>DatePicker</td><td>View(int $width = 21, bool $showWeekNumbers = false)</td><td>Render the month grid</td></tr>
-<tr><td>DatePicker</td><td>WithHeaderStyle() / WithTodayStyle() / WithSelectedStyle() / WithCursorStyle() / WithRangeStyle()</td><td>Styling (SGR strings)</td></tr>
-<tr><td>Model</td><td>static new(?DateTimeImmutable, ?EventStoreInterface) / picker()</td><td>sugar-core Model wrapping the picker</td></tr>
+<tr><td>DatePicker</td><td>WithHeaderStyle() / WithDayNameStyle() / WithTodayStyle() / WithSelectedStyle() / WithSelectedTodayStyle() / WithCursorStyle() / WithRangeStyle()</td><td>Styling (SGR strings)</td></tr>
+<tr><td>DatePicker</td><td>MoveToDate(DateTimeImmutable) / dateAtCursor() / CursorIndex() / ViewMonth() / ViewYear()</td><td>Aim and read the cursor</td></tr>
+<tr><td>Model</td><td>static new(?DateTimeImmutable, ?EventStoreInterface) / update($msg) / view() / picker()</td><td>sugar-core Model wrapping the picker; view() renders the default 21×9 grid — call picker()->View($width, $showWeekNumbers) for a sized render</td></tr>
+<tr><td>DateRange</td><td>public readonly $start / $end / withStart() / withEnd() / contains() / durationInDays(?$now) / isComplete()</td><td>Immutable start/end value object behind range mode</td></tr>
+<tr><td>EventStore</td><td>__construct(?\Closure $clock = null) / record($type, $payload) / release() / hasEvents() / count()</td><td>Bounded transition ring (MAX_EVENTS 1000); optional clock seam for deterministic tests</td></tr>
+<tr><td>EventStoreInterface</td><td>record() / release() / hasEvents() / count()</td><td>The contract Model consumes</td></tr>
+<tr><td>Navigation</td><td>static gridIndexToDate(int $gridIndex, int $month, int $year)</td><td>Raw grid index → date; throws when month is outside 1–12 or year is below 1</td></tr>
 </table>
   </div>
 </section>

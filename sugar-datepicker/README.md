@@ -189,8 +189,10 @@ than resetting its style:
 ```php
 $picker = $picker
     ->WithHeaderStyle('1;36')
+    ->WithDayNameStyle('1')
     ->WithTodayStyle('1;33')
     ->WithSelectedStyle('1;32')
+    ->WithSelectedTodayStyle('1;33;44')
     ->WithCursorStyle('7')
     ->WithRangeStyle('4;35');
 ```
@@ -270,6 +272,16 @@ Beyond `DatePicker` itself, the shipped public classes are:
 - **`DatePicker` accessors** — `minDate()`, `maxDate()`, `isRangeMode()`,
   `CursorIndex()`, `ViewMonth()`, `ViewYear()`, `dateAtCursor()`, and
   `MoveToDate()` (aim the cursor at an existing value).
+- **Naming** — the picker keeps upstream bubble-datepicker's mixed casing:
+  PascalCase verbs and accessors (`GoTo*()`, `SetTime()`, `Move*()`,
+  `SelectDate()`, `ClearDate()`, `ToggleSelection()`, `SelectedDate()`,
+  `IsSelecting()`, `CursorIndex()`, `ViewMonth()`, `ViewYear()`, `View()`,
+  `With*Style()`) coexist with camelCase clones and probes (`with*()`,
+  `without*()`, `handleKey()`, `rangeStart()`, `rangeEnd()`, `isRangeMode()`,
+  `minDate()`, `maxDate()`, `dateAtCursor()`). There is no `setTime()`,
+  `setRangeMode()`, or lowercase `view()` on `DatePicker` — the shipped
+  spellings are `SetTime()`, `withRangeMode()`, and `View()`; `Model::view()`
+  stays lowercase because that is the sugar-core contract.
 
 ## Internationalization
 
