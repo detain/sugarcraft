@@ -73,7 +73,11 @@ $promise = AsyncOps::retry(
 
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<caption>Public API surface of sugar-async: class, method signature, and behavior.</caption>
+<thead>
+<tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
+</thead>
+<tbody>
 <tr><td>CancellationSource</td><td>new(): self</td><td>Factory: create a new source with its own token</td></tr>
 <tr><td>CancellationSource</td><td>token(): CancellationToken</td><td>Returns the read-only token for this source</td></tr>
 <tr><td>CancellationSource</td><td>cancel(): void</td><td>Request cancellation. Idempotent.</td></tr>
@@ -116,6 +120,7 @@ $promise = AsyncOps::retry(
 <tr><td>AsyncCache</td><td>count() · keys() · ttlSeconds() · servesStaleOnError() · maxEntries() · withTtl() · withServeStaleOnError() · withMaxEntries()</td><td>Introspection over stored keys (fresh or stale, insertion order) and settings; the with* setters return new handles over the same store</td></tr>
 <tr><td>OperationCancelledException</td><td>(extends RuntimeException)</td><td>Rejection when a token-guarded operation is cancelled — cancellable(), and a token cancelled mid-retry</td></tr>
 <tr><td>TimeoutException</td><td>seconds(): ?float · label(): ?string</td><td>Rejection from withTimeout(), withDeadline(), and retry()'s maxTotalSeconds budget; carries the budget and optional label for message building</td></tr>
+</tbody>
 </table>
   </div>
 </section>
