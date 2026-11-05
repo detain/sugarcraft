@@ -59,7 +59,6 @@ use SugarCraft\Code\Support\HomeDirectory;
 trait ServeManagement
 {
     /** @param array<string, string> $env */
-
     private static function status(ParsedArgs $args, array $env): int
     {
         $found = self::locate($args, $env);
@@ -114,7 +113,6 @@ trait ServeManagement
     }
 
     /** @param array<string, string> $env */
-
     private static function stop(ParsedArgs $args, array $env): int
     {
         $found = self::locate($args, $env);
@@ -179,7 +177,6 @@ trait ServeManagement
     }
 
     /** @param array<string, string> $env */
-
     private static function logs(ParsedArgs $args, array $env): int
     {
         $follow = isset($args->subcommandFlags['--follow']) || isset($args->subcommandFlags['-f']);
@@ -221,7 +218,6 @@ trait ServeManagement
     }
 
     /** @param array<string, string> $env */
-
     private static function url(ParsedArgs $args, array $env): int
     {
         $qr = isset($args->subcommandFlags['--qr']);
@@ -283,7 +279,6 @@ trait ServeManagement
     }
 
     /** @param array<string, string> $env */
-
     private static function token(ParsedArgs $args, array $env): int
     {
         $rotate = isset($args->subcommandFlags['--rotate']);
@@ -340,7 +335,6 @@ trait ServeManagement
      * codes elsewhere), or an http bind on a loopback host where the token
      * never leaves the machine. Names the host only — never the fragment code.
      */
-
     private static function qrCleartextHost(string $loginUrl): ?string
     {
         $parts = \parse_url($loginUrl);
@@ -358,7 +352,6 @@ trait ServeManagement
     }
 
     /** Poll until $record's process is gone, up to $seconds; whether it went. */
-
     private static function waitForExit(DiscoveryFile $record, float $seconds): bool
     {
         $deadline = \microtime(true) + $seconds;
@@ -377,7 +370,6 @@ trait ServeManagement
      * needs no credential, so `status` proves the server answers without
      * spending the token.
      */
-
     private static function probeHealth(string $url): bool
     {
         $parts = \parse_url($url);
@@ -404,7 +396,6 @@ trait ServeManagement
      *
      * @return array<string, mixed>|null
      */
-
     private static function controlRequest(StateDir $state, string $line): ?array
     {
         $socket = @\stream_socket_client('unix://' . $state->controlSocketPath(), $errno, $errstr, 5.0);
@@ -428,7 +419,6 @@ trait ServeManagement
      *
      * @param array<string, string> $env
      */
-
     private static function stopWaitSeconds(array $env): float
     {
         try {
@@ -441,7 +431,6 @@ trait ServeManagement
     }
 
     /** The token file's token, read without minting one; null when absent. */
-
     private static function storedToken(StateDir $state): ?string
     {
         $path = $state->path . '/' . TokenStore::FILE;
@@ -459,7 +448,6 @@ trait ServeManagement
      * rotation (the file shrinks or is replaced), until the server named by
      * $record is gone — or forever if there was none to watch (Ctrl+C ends it).
      */
-
     private static function follow(string $path, int $offset, ?DiscoveryFile $record): void
     {
         $inode = @\fileinode($path);

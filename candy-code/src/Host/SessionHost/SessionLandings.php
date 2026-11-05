@@ -108,7 +108,6 @@ trait SessionLandings
      * as conversation on the next turn. An answer arriving late, or after
      * {@see self::release()}, is billed and dropped.
      */
-
     private function landPromptSuggestion(mixed $msg): void
     {
         if (!$msg instanceof PromptSuggestionMsg) {
@@ -147,7 +146,6 @@ trait SessionLandings
      * producer's own notice row, or nothing when the run saved nothing.
      * An answer arriving after {@see self::release()} is billed and dropped.
      */
-
     private function landConsolidation(mixed $msg): void
     {
         if (!$msg instanceof MemoryConsolidatedMsg) {
@@ -176,7 +174,6 @@ trait SessionLandings
      * ALWAYS shows. An answer arriving after {@see self::release()} is
      * billed and dropped.
      */
-
     private function landAutoCommit(mixed $msg): void
     {
         if (!$msg instanceof AutoCommittedMsg) {
@@ -200,7 +197,6 @@ trait SessionLandings
      * nothing when the pass neither saved nor proposed. An answer arriving
      * after {@see self::release()} is billed and dropped.
      */
-
     private function landDream(mixed $msg, ?Backend $engine): void
     {
         if (!$msg instanceof DreamPassCompletedMsg) {
@@ -227,7 +223,6 @@ trait SessionLandings
      * lands through {@see self::landGoalVerdict()} on this promise's own
      * channel — the same shape the ahead-of-need compaction uses.
      */
-
     private function scheduleGoalJudge(GoalState $goal): void
     {
         $judge = $this->workspace->titleBackend;
@@ -270,7 +265,6 @@ trait SessionLandings
      * prompt goes out through {@see self::submit()}, so every admission gate
      * applies to it, refusal row and all.
      */
-
     private function landGoalVerdict(mixed $msg): void
     {
         if (!$msg instanceof GoalJudgedMsg) {
@@ -329,7 +323,6 @@ trait SessionLandings
      * minus the TUI's terminal-notification, which a headless session has no
      * terminal to notify.
      */
-
     private function endGoal(GoalState $goal, string $status, string $notice): void
     {
         $this->appendMessageRow(Message::notice($notice));
@@ -343,7 +336,6 @@ trait SessionLandings
      * `default` — and only while the session is still in `plan`, before a
      * queued prompt starts the next turn ({@see TurnRunner::approvedPlanExit()}).
      */
-
     private function applyApprovedPlanExit(): void
     {
         if ($this->permissionMode() !== PermissionMode::Plan) {

@@ -249,7 +249,6 @@ trait SessionAdmission
      * {@see dispatch()}'s backend, never stored on the session, so the next
      * turn answers on the session's model by construction.
      */
-
     private function admitExpanded(string $typed, ?string $expanded, ?CommandSpec $spec = null): TurnTicket
     {
         $expanded = trim((string) $expanded);
@@ -284,7 +283,6 @@ trait SessionAdmission
      *
      * @param array{0: CommandSpec, 1: string} $command
      */
-
     private function parkExpansion(string $text, array $command): TurnTicket
     {
         [$spec, $arguments] = $command;
@@ -385,7 +383,6 @@ trait SessionAdmission
      *     the requested model could not be served and the turn rides the
      *     session's model instead; a notice row, never an override
      */
-
     private function admitPrompt(
         string $text,
         bool $resolveMentions,
@@ -535,7 +532,6 @@ trait SessionAdmission
      *
      * @return array{0: HookResult, 1: ?HookResult}|null
      */
-
     private function fireTurnHooks(string $text, bool $resolveMentions, string $draft, array $attachments = [], ?PermissionMode $modeCeiling = null, ?string $oneTurnModel = null, ?string $commandModelNotice = null): ?array
     {
         $hooks = $this->workspace->hooks ?? throw new \LogicException('fireTurnHooks() needs a hook manager');
@@ -580,7 +576,6 @@ trait SessionAdmission
      * @param \Closure(): array<int, mixed> $inline
      * @param \Closure(array<int, mixed>): void $resume
      */
-
     private function park(\Closure $childWork, \Closure $collect, \Closure $inline, \Closure $resume): void
     {
         $cancellation = new CancellationToken();

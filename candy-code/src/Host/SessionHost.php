@@ -1159,7 +1159,6 @@ final class SessionHost
         $this->lease = null;
     }
 
-
     /**
      * C-MCP-4.c: one UI-only notice row from a later-landing process event —
      * today the served `mcp auth login` beats that {@see \SugarCraft\Code\Host\ServedMcpLogins}
@@ -1285,7 +1284,6 @@ final class SessionHost
         ], $this->sessionId));
     }
 
-    /** The session as a host command reads it ({@see CommandContext}). */
     /**
      * WEB-3a: this session's structured context sources for `context.sources`
      * ({@see \SugarCraft\Code\Protocol\Methods\ContextMethods}). Built through

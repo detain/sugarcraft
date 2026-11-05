@@ -242,13 +242,6 @@ final class Serve
         return ParentPidWatchdog::parse(\is_string($flag) ? $flag : ($env['CANDY_CODE_SERVER_PARENT_PID'] ?? null));
     }
 
-
-    /** @param array<string, string> $env */
-    /** @param array<string, string> $env */
-    /** @param array<string, string> $env */
-    /** @param array<string, string> $env */
-    /** @param array<string, string> $env */
-    /** @param array<string, string> $env */
     // ── helpers ──────────────────────────────────────────────────────────
 
     /**
@@ -323,8 +316,6 @@ final class Serve
         return $code;
     }
 
-    /** Poll until $record's process is gone, up to $seconds; whether it went. */
-    /** The token file's token, read without minting one; null when absent. */
     /**
      * The variables `serve` consults, read by name rather than taken from a
      * whole-environment dump, so the set this command depends on is the list

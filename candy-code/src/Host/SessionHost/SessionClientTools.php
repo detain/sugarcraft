@@ -105,7 +105,6 @@ trait SessionClientTools
      *
      * @param list<ClientToolSpec> $specs
      */
-
     public function registerClientTools(string $clientKey, array $specs): string
     {
         return $this->clientTools->register($clientKey, $specs);
@@ -117,7 +116,6 @@ trait SessionClientTools
      * calls as errors, so a child blocked on one of them learns the truth
      * instead of waiting out its deadline.
      */
-
     public function forgetClientTools(string $clientKey): void
     {
         $this->clientTools->forget($clientKey);
@@ -138,7 +136,6 @@ trait SessionClientTools
      * same from here: false. A client re-registered between the call and
      * the answer is exactly the case that id exists to refuse.
      */
-
     public function resolveClientCall(string $callId, string $registrationId, string $content, bool $isError): bool
     {
         $entry = $this->pendingClientCalls[$callId] ?? null;
@@ -170,7 +167,6 @@ trait SessionClientTools
      *
      * @param (\Closure(PendingClientCall, string, string): void)|null $hook
      */
-
     public function onClientCall(?\Closure $hook): void
     {
         $this->clientCallListener = $hook;
@@ -186,7 +182,6 @@ trait SessionClientTools
      * registration owns (the client forgot it mid-turn, after this turn's
      * roster was fixed) is answered as an error at once rather than held.
      */
-
     private function clientCallSink(): \Closure
     {
         return function (PendingClientCall $pending, \Closure $answer): void {

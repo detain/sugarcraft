@@ -116,7 +116,6 @@ trait SessionCommands
      * A name that is no built-in is refused too: unlike {@see submit()},
      * this never sends text to the model.
      */
-
     public function runCommand(string $name, string $args = ''): CommandResult
     {
         $name = ltrim(trim($name), '/');
@@ -147,7 +146,6 @@ trait SessionCommands
      * Run $text when it is a built-in command and say how it was taken, or
      * null when it is not one (prose, or a `/word` no built-in answers to).
      */
-
     private function command(string $text): ?TurnTicket
     {
         $result = $this->dispatchCommand($text);
@@ -175,7 +173,6 @@ trait SessionCommands
      * body, or one whose answer is a screen ({@see CommandEffectKind::OpenTitleEditor}),
      * is {@see CommandResult::clientOnly()}.
      */
-
     private function dispatchCommand(string $text): ?CommandResult
     {
         if (TurnController::isBareMcpAuthCommand($text)) {
@@ -216,7 +213,6 @@ trait SessionCommands
      * it controls holds the session — the one command a busy session runs
      * (audit WF-4). A command file of that name is a prompt, so it queues.
      */
-
     private function isWorkflowControl(string $text): bool
     {
         if (!$this->workflowTurn || $this->workspace->workflowEngine === null) {
@@ -247,7 +243,6 @@ trait SessionCommands
      * is what lets {@see self::CONTEXT_CHANGING_COMMANDS} mark a result that
      * rewrote the prompt's sources (C-CTX-2.d).
      */
-
     private function applyCommandResult(CommandResult $result, string $commandName = ''): void
     {
         // WEB-2: a prompt an init-style command queued is submitted only AFTER
@@ -393,7 +388,6 @@ trait SessionCommands
      * back INSIDE the folded history — announce what the fold appended, and
      * the transcript matches the terminal row for row.
      */
-
     private function typedCompact(string $text): void
     {
         $compaction = $this->compaction();
@@ -504,14 +498,12 @@ trait SessionCommands
      * while a successful answer keeps the plain `local` label. The renderer
      * never sniffs the text, so the flag has to arrive with the producer.
      */
-
     private function appendCommandRow(string $text, bool $error = false): void
     {
         $this->appendMessageRow(Message::assistant($text)->withUiOnly()->withError($error));
     }
 
     /** The session as a host command reads it ({@see CommandContext}). */
-
     private function commandContext(): CommandContext
     {
         // The session's own view of its backend: an override this host's

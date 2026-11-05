@@ -61,7 +61,6 @@ use SugarCraft\Code\Support\HomeDirectory;
 trait ServeStartup
 {
     /** @param array<string, string> $env */
-
     private static function start(ParsedArgs $args, array $env): int
     {
         try {
@@ -128,7 +127,6 @@ trait ServeStartup
      * pair, and print what it reported. The original process returns as soon
      * as the daemon has either bound its port or failed to.
      */
-
     private static function detachAndServe(
         ParsedArgs $args,
         ServerConfig $config,
@@ -194,7 +192,6 @@ trait ServeStartup
      * @param \Closure(array<string, mixed>): void $report called exactly once,
      *        with `ok` and either the URLs or the `reason` it failed
      */
-
     private static function serve(
         ParsedArgs $args,
         ServerConfig $config,
@@ -491,7 +488,6 @@ trait ServeStartup
      * `server.maxOpenSessions`, and the {@see Dispatcher} the WebSocket
      * transport hands its messages to.
      */
-
     private static function protocol(ServerConfig $config, LoopInterface $loop, ?\Closure $log = null, ?AuthContext $auth = null): Dispatcher
     {
         $workspace = Bootstrap::workspace($config->root);
@@ -520,7 +516,6 @@ trait ServeStartup
      *
      * @param \Closure(string): void $log
      */
-
     private static function openControlSocket(StateDir $state, Server $server, TokenStore $tokens, \Closure $log): ?Listener
     {
         $path = $state->controlSocketPath();
@@ -591,7 +586,6 @@ trait ServeStartup
      *
      * @return array<string, mixed>|null
      */
-
     private static function readReport($stream, float $seconds): ?array
     {
         \stream_set_blocking($stream, false);
@@ -630,7 +624,6 @@ trait ServeStartup
      *
      * @param array<string, mixed> $report
      */
-
     private static function announce(ParsedArgs $args, ServerConfig $config, array $report, StaticFiles $static, bool $detached): void
     {
         $url = (string) $report['url'];
@@ -707,7 +700,6 @@ trait ServeStartup
      *
      * @return list<string>
      */
-
     private static function loginUrlsOf(array $answer): array
     {
         $urls = \is_array($answer['loginUrls'] ?? null) ? \array_values(\array_filter($answer['loginUrls'], 'is_string')) : [];
@@ -729,7 +721,6 @@ trait ServeStartup
      * mode. `distPath()` would raise a `RuntimeException` the caller's catch
      * turns into a hard `failUsage`, never reaching that graceful branch.
      */
-
     private static function installedWebRoot(): ?string
     {
         $assets = 'SugarCraft\\CodeWeb\\Assets';

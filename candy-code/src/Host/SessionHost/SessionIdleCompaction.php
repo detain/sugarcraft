@@ -108,7 +108,6 @@ trait SessionIdleCompaction
      * @param list<Message> $baseHistory the conversation to summarise
      * @return bool whether a request actually went out
      */
-
     private function requestAheadOfNeed(array $dispatched, array $baseHistory): bool
     {
         $request = $this->compaction()->buildSummarizationRequest(
@@ -177,7 +176,6 @@ trait SessionIdleCompaction
      * (C-CTX-5.c) — is invisible; a fold whose one-shot alarm under-shot by a
      * rounding and so silently never fired until the next prompt is the bug.
      */
-
     private function armIdleAutoCompaction(): void
     {
         if ($this->idleAutoTimer !== null) {
@@ -225,7 +223,6 @@ trait SessionIdleCompaction
      * existing splice consumes on the next submit, nobody re-billed and no
      * turn ever dispatched unattended.
      */
-
     private function onIdleAutoCompaction(?\DateTimeImmutable $markedAt): void
     {
         // The user returned — a later prompt re-stamped the clock (and
@@ -348,7 +345,6 @@ trait SessionIdleCompaction
      * owns this alarm untouched — this method is reached only from the
      * `!$foldDue` branch above it.
      */
-
     private function keepWarmServed(int $tierTokens, int $windowLimit, ?\DateTimeImmutable $idleAnchor): void
     {
         // One anchor per fire, computed here like the TUI twin: the verdict
