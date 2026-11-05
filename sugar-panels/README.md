@@ -1,11 +1,11 @@
-<img src=".assets/icon.png" alt="sugar-panels" width="160" align="right">
+<img src=".assets/icon.png" alt="" width="160">
 
 <!-- BADGES:BEGIN -->
-[![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-panels)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-panels)
+[![build status](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
+[![test coverage](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-panels)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-panels)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-panels?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-panels)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
+[![PHP version](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 # SugarPanels
