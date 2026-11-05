@@ -20,7 +20,7 @@ namespace SugarCraft\ColorProfile;
  * Mirrors charmbracelet/colorprofile detection logic.
  *
  * Canonical detection precedence (the one numbering every surface follows):
- *  1. CLICOLOR_FORCE=1            → truecolor  (overrides everything)
+ *  1. CLICOLOR_FORCE=1            → truecolor  (overrides every env leg)
  *  2. FORCE_COLOR (non-empty)     → level: true|yes|on|>=3 truecolor, 2 ansi256,
  *                                   1 ansi; any other spelling (0/false/off/…)
  *                                   → ascii (disable color, keep decoration)

@@ -84,7 +84,7 @@ raise, never the ceiling. Measured: `{TERM_PROGRAM: WezTerm, TERM: xterm}`
 answers Ansi on `Palette` but TrueColor on `TerminalProbe` (Phase-3 upgrade).
 `README`, the `DetectionChain` docblock and the tests follow this one numbering:
 
-1. `CLICOLOR_FORCE=1` → TrueColor (overrides everything)
+1. `CLICOLOR_FORCE=1` → TrueColor (overrides every env leg — step 0 can still outrank it)
 2. `FORCE_COLOR` (non-empty) → level: `true|yes|on|>=3` TrueColor, `2` Ansi256, `1` Ansi; any other spelling (`0`/`false`/`off`/…) → `Ascii` (disable color, keep decoration)
 3. `NO_COLOR` (set and **non**-empty; `""` = unset per no-color.org) → none
 4. `CLICOLOR=0` → none
@@ -105,6 +105,21 @@ Interpolated env values that ride in source strings are sanitized via
 `Env::sanitize()` — `TERM` and friends are attacker-influenced over SSH and a
 source string gets printed by downstream diagnostics.
 
+### Step 0 — the output-stream TTY gate
+
+A `Palette` constructed with a **non-null stream that is not a TTY** answers
+`NoTTY` regardless of the whole ladder — including every force override.
+Measured: piped STDOUT with `FORCE_COLOR=3` gives `Palette::detect()` → `NoTTY`
+while `Probe::colorProfile()` → TrueColor. `ProfileWriter::wrap($stream, …)`
+inherits the gate because it delegates to `Palette::detect($stream, …)`, and a
+`NoTTY` answer makes `ProfileWriter::write()` strip the ANSI. So every
+"overrides everything"/"past every suppression leg" claim below means every
+*env* leg: the gate can still outrank them all when the bytes are headed for a
+pipe. Surfaces that gate: `Palette::detect($stream, …)` and `ProfileWriter`
+with a non-TTY stream. Surfaces that never gate: `Probe`, `AsyncProbe` and
+`Probe\TerminalProbe` — they report what the environment *can* do, not where
+the bytes are about to land.
+
 **Phase 2 (infocmp) — `Probe`/`AsyncProbe`/`TerminalProbe` surfaces only:** when
 the ladder answers `Ansi` or `Ansi256`, `infocmp -1` is consulted and `Tc`/`RGB`
 capability *names* (name-position match via `Probe\TerminfoParser`, never a
@@ -117,7 +132,7 @@ The ladder's env legs, one table row per variable, in ladder order:
 
 | Env var | Ladder step | Effect |
 |---------|-------------|--------|
-| `CLICOLOR_FORCE=1` | 1 | force TrueColor past every suppression leg, `NO_COLOR` included (step 1) |
+| `CLICOLOR_FORCE=1` | 1 | force TrueColor past every env suppression leg, `NO_COLOR` included (step 1; the step-0 stream TTY gate still outranks it on stream-taking surfaces) |
 | `FORCE_COLOR` | 2 | non-empty level override honored by **all** surfaces through the chain (step 2): `true/yes/on/>=3` TrueColor, `2` Ansi256, `1` Ansi; falsy spellings (`0/false/off/no`) land on the `Ascii` floor — decoration kept, color dropped. Outranks `NO_COLOR` by design |
 | `NO_COLOR` | 3 | set to a **non-empty** value (`""` = unset per no-color.org) → no color (`NoTTY` rung / `NoColor` capability) |
 | `CLICOLOR=0` | 4 | suppress color |
@@ -338,7 +353,9 @@ Beyond the env ladder above, the library exposes a richer capability surface:
 
 ## Overriding detection
 
-- `CLICOLOR_FORCE=1` forces TrueColor regardless of everything else.
+- `CLICOLOR_FORCE=1` forces TrueColor past every other env variable — but the
+  step-0 stream TTY gate (above) still outranks it: on a non-TTY stream the
+  `Palette`/`ProfileWriter` answer is `NoTTY` regardless of any force.
 - `FORCE_COLOR` picks the level (`3`/`2`/`1`, falsy → `Ascii` floor).
 - Program-side, pin the answer: `(new Palette())->withProfile(ColorProfile::Ansi)`
   (immutable clone) or `ProfileWriter::wrap(STDOUT)->withProfile(...)`.
