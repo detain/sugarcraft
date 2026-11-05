@@ -17,7 +17,7 @@
 
 candy-ssh-launcher — a TUI directory of SSH endpoints for PHP 8.3+. Launch `candy-ssh-launcher`, pick a host, hit Enter, and the current process is replaced with `ssh` connecting to it.
 
-The config schema here is a **flat top-level list** of endpoint objects; another tool's nested `host:`-keyed `wishlist.yml` is deliberately *not* accepted — feeding one in fails loudly (`wishlist yaml: unparseable line`, or a named refusal for inline-flow values), never silently. <!-- @rename-keep -->
+The config schema here is a **flat top-level list** of endpoint objects; charmbracelet/wishlist's nested `host:`-keyed `wishlist.yml` is deliberately *not* accepted — feeding one in fails loudly (`wishlist yaml: unparseable line`, or a named refusal for inline-flow values), never silently. <!-- @rename-keep -->
 
 ```
 ── wishlist ──
@@ -178,7 +178,7 @@ The parser handles:
 
 Keywords accept both `Key Value` and `Key=Value` spacing (ssh_config(5) legal forms), and a repeated `Host` pattern reuses its block instead of duplicating endpoints. Precedence follows `ssh_config(5)`: *for each parameter, the first obtained value will be used.* A `Host *` block wins only where it appears before any matching specific block — conventionally it is written last and therefore acts as a fallback. `IdentityFile` is the documented exception and accumulates in file order. Host patterns are used as the endpoint name (when no `HostName` is specified, the pattern itself becomes the host).
 
-Pattern matching is a deliberate **subset** of ssh_config(5): a block applies to a host only when the host matches a pattern *literally* or the pattern is exactly `*`. Wildcards like `Host web*` therefore contribute nothing to `web1` (they still mint a `web*` entry of their own). This mirrors what `ssh` does **not** do, so treat imports as a starting point and diff against your real config.
+Pattern matching is a deliberate **subset** of ssh_config(5): a block applies to a host only when the host matches a pattern *literally* or the pattern is exactly `*`. Wildcards like `Host web*` therefore contribute nothing to `web1` (they still mint a `web*` entry of their own). Unlike ssh, which expands such patterns when matching config blocks, the importer reads them literally — treat imports as a starting point and diff against your real config.
 
 Import surprises worth knowing: keywords outside the table above are dropped silently; a block whose only pattern is `Host *` mints no endpoint of its own; a multi-pattern block `Host a b c` mints one endpoint **per pattern** (sharing the block's values); and quoted patterns are no exception — patterns split on spaces, so `Host "web 1"` mints a `web` and a `1"` entry.
 
@@ -221,11 +221,11 @@ $sshEndpoints = Config::importFromSshConfig('/home/user/.ssh/config');
 
 ## Shared foundations
 
-candy-ssh-launcher uses [sugar-fuzzy](https://github.com/detain/sugarcraft#sugar-fuzzy) — `SmithWatermanMatcher::matchAll()` replaces ad-hoc `str_contains`-style filtering. The picker now surfaces scored ranking and match-highlight indices (ANSI bold+cyan on matched characters) for ranked, highlighted filter results.
+candy-ssh-launcher uses [sugar-fuzzy](https://github.com/detain/sugarcraft/tree/master/sugar-fuzzy/README.md) — `SmithWatermanMatcher::matchAll()` replaces ad-hoc `str_contains`-style filtering. The picker surfaces scored ranking and match-highlight indices (ANSI bold+cyan on matched characters) for ranked, highlighted filter results.
 
 ## Status
 
-SSH config import (`Host`/`Host=` blocks, both spacing forms) is supported. 300 tests / 1575 assertions. Endpoint, Config (JSON + flat-YAML + SSH config), Picker, Launcher, SshConfigParser are all covered.
+SSH config import (`Host`/`Host=` blocks, both spacing forms) is supported. Endpoint, Config (JSON + flat-YAML + SSH config), Picker, Launcher, SshConfigParser are all covered by the test suite.
 
 ## Credits & inspiration
 
