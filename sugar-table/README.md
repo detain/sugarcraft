@@ -673,12 +673,28 @@ $t = Table::fromColumns([...])
     ->withBorder(Border::rounded());   // ─ │ ╭ ╮ ╰ ╯
     // ->withBorder(Border::thick())  // ━ ┃ ┏ ┓ ┗ ┛
     // ->withBorder(Border::double())  // ═ ║ ╔ ╗ ╚ ╝
+    // ->withBorder(Border::block())  // █ all eight position glyphs
     // ->withBorder(Border::ascii())  // - | + + + +
     // ->withBorder(Border::hidden())  // all spaces
     // ->withBorder(Border::markdownBorder())  // | - | ...
 
 // Or style the default border with ANSI colors:
 $t = $t->withBorderStyle('1;32');       // bold green
+```
+
+Only corner/vertical/horizontal glyphs are ever drawn — sugar-table consumes
+`Border`'s eight position glyphs (top/bottom/left/right + four corners) and
+never its junction glyphs (├/┤/┬/┴/┼): the header separator rule is built from
+the horizontal glyph with the vertical glyph in the inter-column gaps, and the
+inter-column separators are the vertical glyph throughout. Rendered `block()`
+frame:
+
+```
+████████
+█   A█   B█
+████████
+█  xx█  yy█
+████████
 ```
 
 Available border factories: `Border::normal()`, `rounded()`, `thick()`, `double()`, `block()`, `ascii()`, `hidden()`, `markdownBorder()`.
