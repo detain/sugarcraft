@@ -58,7 +58,7 @@ Direct emits for every kind exist too — `$reg->upDownCounter()`, `$reg->asyncC
 
 ## Names on the wire
 
-Metric names and tag keys are *not* free text on every wire, and the folds differ per backend:
+Metric names and tag keys are *not* free text on every wire, and the folds differ per backend. The folds run on the *emit path* only — a registered `Descriptor` name must already be in the exposition charset (its constructor refuses dots, see *Descriptor registration*):
 
 - **StatsD** (`StatsdBackend`): the metric name may keep dots (`http.requests` is idiomatic) but colons are flattened to `_` because `:` separates value from type on the wire. Tag keys keep letters/digits/dots/underscores; everything else the token sweep (below) replaces.
 - **Prometheus textfile** (`PrometheusFileBackend`): metric names keep `:` (a legal Prometheus name character) and fold every other illegal rune (including `.`) to `_`; label names never keep `:` — illegal runes become `_`.
@@ -119,18 +119,18 @@ use SugarCraft\Metrics\Backend\PrometheusFileBackend;
 $reg = new Registry(new PrometheusFileBackend('/var/lib/app/metrics.prom'));
 
 $reg->register(new Descriptor(
-    name: 'http.request.duration',
+    name: 'http_request_duration_seconds',
     help: 'HTTP request duration in seconds',
     type: 'histogram',
     labelKeys: ['route', 'status'],
 ));
 
-$stop = $reg->time('http.request.duration', ['route' => '/api/foo']);
-handleRequest();
+$stop = $reg->time('http_request_duration_seconds', ['route' => '/api/foo']);
+// … do the work …
 $elapsed = $stop();   // emits the duration and returns it (float seconds)
 ```
 
-The constructor validates its input: a non-empty name matching `[a-zA-Z_:][a-zA-Z0-9_:]*`, non-empty help free of control bytes, a type in `counter|gauge|histogram|summary`, and non-empty string label keys — violations throw. `register()` is idempotent *only for identical re-registration*: same type **and** same help is a no-op; anything else throws rather than silently picking a winner. A `summary` descriptor emits only the family's `TYPE`/`HELP` lines; the quantile/`_sum`/`_count` samples remain your responsibility.
+The constructor validates its input: a non-empty name matching `[a-zA-Z_:][a-zA-Z0-9_:]*`, non-empty help free of control bytes, a type in `counter|gauge|histogram|summary`, and non-empty string label keys — violations throw. Because the name is checked RAW, dotted names like `http.request.duration` are refused here even though they are idiomatic on StatsD and legal to *emit* (the backend folds them at write time): register descriptors under the folded name they will occupy in the exposition. `register()` is idempotent *only for identical re-registration*: same type **and** same help is a no-op; anything else throws rather than silently picking a winner. A `summary` descriptor emits only the family's `TYPE`/`HELP` lines; the quantile/`_sum`/`_count` samples remain your responsibility.
 
 `time()` returns a stop-fn that samples exactly once — a second call returns the same elapsed reading without recording a second observation.
 
@@ -146,7 +146,7 @@ $reg->counter('http.requests', 1, ['route' => '/api/foo', 'status' => '200']);
 $reg->gauge  ('queue.depth',   42);
 
 $stop = $reg->time('http.duration', ['route' => '/api/foo']);
-handleRequest();
+// … do the work …
 $stop();
 ```
 
