@@ -63,7 +63,13 @@ further guarantees:
   their registrations the moment the operation settles, so long-lived tokens do not
   accumulate closures.
 - A callback that throws is **logged, never propagated** — teardown paths cannot
-  surprise the canceller. `CancellationToken::none()` is a shared never-cancelled
+  surprise the canceller. "Logged" means `error_log()`: under the default PHP
+  configuration the line lands on stderr, and this library offers no
+  logger-injection seam, so a TUI tearing down mid-frame should expect a stray
+  interleaved line to corrupt the in-progress render. The hook-failure sites are
+  the cancellation callbacks (`CancellationToken`), the `retry` `onRetry:` and
+  `onPending` hooks (`AsyncOps`), and `Subscriptions::disposeAll()`.
+  `CancellationToken::none()` is a shared never-cancelled
   sentinel for "no token here" plumbing: its `onCancel()` hands back an
   already-spent handle and nothing is ever retained.
 
@@ -188,7 +194,8 @@ a stateful coalescing closure. Where a helper takes a `LoopInterface`, passing
     (default) keeps the exact exponential schedule.
   - `onRetry:` — advisory progress hook `(int $retryNumber, float $delaySeconds)`
     fired when each backoff is scheduled (spinner copy, metrics). Hook errors are
-    logged, never propagated.
+    logged via `error_log()` — stderr by default, see the callback note above —
+    and never propagated.
 - `debounce(fn, seconds, ?loop:, source:)` → `Debounced` — only the last call in a
   burst fires. Each call returns a promise: the scheduled call resolves with the
   result (rejects if the work throws), superseded calls resolve `null`. `flush()`
