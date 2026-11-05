@@ -64,15 +64,16 @@ own git config.
 | `u`                      | Undo last operation                                    |
 | `Ctrl+r`                 | Redo last undone operation                             |
 | `D` (branches pane)      | Delete the selected branch (press twice) — refuses to delete the current branch |
-| `M`                      | Merge selected branch into current                     |
-| `r`                      | Open rebase menu (continue / abort / skip / cancel)   |
+| `M`                      | Merge — prompt for a branch/ref to merge into current (free text; the selected row is never read) |
+| `r`                      | Open rebase menu (continue / abort / skip) — when in progress only: opens while a rebase or cherry-pick has stopped; on an idle repo it reports "no rebase in progress" |
 | `S`                      | Open stash manager (list / apply / drop; drop asks twice)   |
 | `V`                      | Cherry-pick — type a commit ref and press Enter       |
 | `w` (branches pane)     | Open worktrees manager (list / add / remove)            |
 | `i`                      | Interactive rebase todo list — preview only; the todo is not yet executed |
 | `R`                      | Refresh from disk                                       |
 | `?`                      | Context-sensitive help                                  |
-| `q`                      | Quit — except while typing in a text buffer, where `q` is just a letter |
+| `q`                      | Quit — while an overlay is open it closes the innermost one (same chain as `Esc`), and while typing in a text buffer `q` is just a letter |
+| `Ctrl+C`                 | Quit — the same chord as `q` |
 | `Esc`                    | Cancel the innermost overlay/collection; quits when nothing is open    |
 
 ### Text-entry keys
@@ -87,11 +88,59 @@ newline-flattened) text, `Enter` confirms, and `Esc` cancels.
 
 | Key              | Action                          |
 |------------------|--------------------------------|
-| `Space`          | Stage current hunk              |
+| `Space`          | Stage the current hunk — then the viewer closes and the status pane refreshes; re-open (`P`) for the next hunk |
 | `↑/↓` or `k/j`   | Navigate between hunks         |
 | `PageUp/PageDown`| Navigate between hunks         |
 | `Home/End`       | First / last hunk              |
 | `Esc`            | Close diff viewer              |
+| `d`              | Close diff viewer (same action as `Esc`) |
+
+### Overlay keys
+
+**Sequencer menu** — opens on `r` while a rebase or cherry-pick has stopped
+on a conflict; the prompt names the armed operation:
+
+| Key              | Action                                          |
+|------------------|--------------------------------------------------|
+| `c`              | Continue the stopped rebase / cherry-pick       |
+| `a`              | Abort it                                        |
+| `s`              | Skip the stopped commit — rebases only; a cherry-pick stop is `c`/`a` only, dropping commits belongs to the interactive-rebase todo |
+| `Esc`            | Close the menu (the operation stays stopped)    |
+
+**Stash manager** (`S`):
+
+| Key              | Action                                          |
+|------------------|--------------------------------------------------|
+| `j/k` or `↑/↓`  | Move between entries                            |
+| `a`              | Apply the selected stash                        |
+| `d`              | Drop the selected stash (press twice)           |
+| `Esc`            | Close                                           |
+
+**Worktrees** (`w`):
+
+| Key              | Action                                          |
+|------------------|--------------------------------------------------|
+| `j/k` or `↑/↓`  | Move between worktrees                          |
+| `a`              | Start adding a worktree — type the path, `Enter` confirms |
+| `d`              | Start removing the selected worktree — `Enter` confirms |
+| `c`              | Cancel a pending add/remove                     |
+| `Esc`            | Close the whole overlay (even mid-add)          |
+
+**Interactive rebase** (`i`) — opens asking for a commit count:
+
+| Key              | Action                                          |
+|------------------|--------------------------------------------------|
+| digits + `Enter` | Choose how many commits to rebase               |
+| `j/k` or `↑/↓`  | Move through the todo                           |
+| `Space` or `l`   | Cycle the entry's action (pick → reword → edit → squash → drop) |
+| `d`              | Drop the selected entry                         |
+| `Esc`            | Close                                           |
+
+**Help (`?`):** context-sensitive — it covers the general keys plus the
+Status and Branches panes, and closes the help overlay itself when pressed
+while help is open. `?` is not delivered to the global handler while another
+overlay (sequencer menu, stash, worktrees, cherry-pick, interactive rebase,
+diff viewer, or a text buffer) is open — close that layer first.
 
 ## Accessibility
 
@@ -158,13 +207,19 @@ file key like `git.timeout` resolves through the core `T` registry as
 `T::translate('git.error')` directly misses the registered key and returns the
 raw string.
 
-**Available keys** (`lang/en.php`):
+**Available keys** (`lang/en.php` — an excerpt; the file is the full roster
+of 137 keys):
 
 | Key                    | Default string                                                    | Parameters  |
 |------------------------|-------------------------------------------------------------------|------------|
 | `git.spawn_failed`      | `git: failed to spawn`                                           | —          |
 | `git.error`            | `git: {stderr}`                                                  | `{stderr}` |
+| `git.timeout`          | `git: command timed out after {seconds}s`                        | `{seconds}` |
+| `git.unsafe_path`      | `git: unsafe worktree path: {path}`                              | `{path}`   |
+| `git.unsafe_merge_driver` | `git: the repository defines a merge driver that cannot be safely disabled; merge refused` | — |
+| `git.unsafe_filter_driver` | `git: the repository defines a filter driver; strict filter mode refused the command` | — |
 | `cli.not_a_repo`       | `candy-git: not a git repository: {cwd}`             | `{cwd}`    |
+| `cli.unknown_flag`     | `candy-git: unknown argument: {flag}`                             | `{flag}`   |
 | `ui.error_prefix`      | `error: `                                                        | —          |
 | `status.clean`          | `clean working tree`                                            | —          |
 | `branches.empty`       | `(no branches)`                                                  | —          |
