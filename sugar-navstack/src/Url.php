@@ -39,6 +39,10 @@ final class Url
      * stacks. The round trip is title-level ONLY: {@see derive()} carries
      * titles and nothing else, so item payloads (data) do not travel and
      * every restored item comes back with `data === null`.
+     *
+     * @throws \InvalidArgumentException When a segment decodes non-blank
+     *                                   but sanitizes to empty (refused by
+     *                                   {@see NavigationItem}'s guards)
      */
     public static function parse(string $path): NavStack
     {
