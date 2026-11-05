@@ -365,6 +365,23 @@ $t = $t->Filter('city', 'ny')     // city must contain "ny"
 // Row 3 (Carol, CHI): city fails, search matches "li" in "Carol" — fails Filter ❌
 ```
 
+## Missing Data Indicator
+
+
+
+
+A cell whose row carries no entry for the column renders the missing-data
+placeholder instead of blank space (an empty string is a value and does NOT
+trigger it):
+
+```php
+$t = $t->withMissingIndicator('(empty)');   // default is a lone '-'
+```
+
+The default `-` is a single hyphen — it reads ambiguously beside real hyphens
+inside data (host names, minus signs), so pick a placeholder that cannot collide
+with your content.
+
 ## Pagination
 
 
