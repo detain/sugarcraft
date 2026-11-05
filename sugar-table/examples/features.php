@@ -40,6 +40,7 @@ $table = Table::fromColumns([
 ])
     ->withRows($rows)
     ->withPageSize(10)
+    ->withFrozenCols([0])
     ->withZebra()
     ->withHeaderStyle('1;37');
 
