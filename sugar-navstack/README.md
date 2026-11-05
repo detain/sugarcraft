@@ -95,7 +95,7 @@ returns a new instance.
 | `setItems(array $items): self` | Replace the whole list (used by `Shell` for its immutable ops) |
 | `clear(): self` | Remove everything |
 | `view(string $separator = ' › '): string` | Plain-text crumb trail; titles sanitized for terminal safety |
-| `viewHtml(): string` | Semantic `<nav>` HTML; last crumb gets `aria-current="page"`, titles HTML-escaped |
+| `viewHtml(?callable $href = null, string $label = 'Breadcrumb'): string` | Semantic `<nav>` HTML; last crumb gets `aria-current="page"`, titles HTML-escaped |
 | `filter(string $term): self` | New stack of items whose title **or** payload matches a case-insensitive substring (array payloads match when any nested scalar/Stringable value does); payloads nested deeper than 64 levels throw |
 
 ### Guards — limits & refusals
@@ -217,6 +217,23 @@ alphabet) so zone ids stay distinct when a host merges the zone enumerations
 of several breadcrumb widgets, and `visibleIndices()` reports the stack
 indices the most recent render actually showed — exactly the ids the current
 zones carry — so a jump target can be checked against elision before use.
+
+### Keyboard & accessible navigation
+
+`viewHtml()`'s anchors exist for a reason: given an `$href` callback, every
+non-current crumb becomes a real `<a href>` — tab-navigable and discoverable
+in a screen reader's link list — while the current crumb stays text bearing
+`aria-current="page"`, and the `$label` argument localizes the landmark's
+visually-hidden heading. Pair it with `Url::derive()` (the natural `$href`)
+after sanitizing the titles yourself, and the same trail serves pointer,
+keyboard, and assistive-technology users without extra state.
+
+The terminal path has a modality-neutral jump story too: `Breadcrumb::
+visibleIndices()` plus `NavStack::popTo()` is the keyboard route to exactly
+the jumps the mouse zones serve — resolve a selected visible index against
+the rendered stack and `popTo()` it, and the guard is automatic (a selection
+past the end is a no-op). Mouse zones and key handling are two transports
+for one navigation operation; neither is privileged.
 
 ## Shell
 
