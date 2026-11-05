@@ -151,10 +151,10 @@ echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: t
 <tr><td>Plot\Braille\DualSampleGraph</td><td>push(...$v) / withData(...$v) / withGradient(stops) / withUnderlay(Color) / render(?profile)</td><td>Append or replace history, colour, underlay, render</td></tr>
 <tr><td>Plot\Braille\DualSampleGraph</td><td>static underlay(family, cells, Color)</td><td>Bare btop <code>graph_bg</code> strip (⣀ ▄ 🬭 ░)</td></tr>
 <tr><td>Plot\Chart\Meter</td><td>withGradient(stops, positionWise) / withGlyph() / withInvert() / withMeterBg()</td><td>btop <code>Draw::Meter</code> position-coloured bar; <code>memoStats()</code> / <code>resetMemo()</code></td></tr>
-<tr><td>Foundation\NetAutoScale</td><td>static new(sync) / offer(down, up) / downloadMax() / uploadMax() / forceRescale()</td><td>btop net-graph ceiling hysteresis</td></tr>
-<tr><td>Foundation\GradientStore</td><td>static fromStops(array) / withGradient(name, start, ?mid, ?end) / at(name, percent)</td><td>Named 101-entry ramps (btop <code>Theme::g</code>)</td></tr>
-<tr><td>Plot\DistanceFade</td><td>ramp() / distance() / fadeColor() / metricColor() / flatMetricColor() / metricValues()</td><td>btop proc-list distance fade</td></tr>
-<tr><td>Plot\ProcRow\ProcRowComposer</td><td>static new(width) / row(ProcRow, row, selected, selectMax, ?graph, followed)</td><td>One btop process-list row; <code>ProcRow</code>, <code>ProcColumns</code>, <code>ProcRowPalette</code>, <code>ProcGraphTracker</code> supply data, layout, colours and mini-graphs</td></tr>
+<tr><td>Foundation\NetAutoScale</td><td>static new(sync) / offer(down, up) / downloadMax() / uploadMax() / maxFor(dir) / counters(dir) / forceRescale() / rescaleNow() / rescalePending()</td><td>btop net-graph ceiling hysteresis; the <code>$sync</code> / <code>$rescaled</code> result flags are public readonly</td></tr>
+<tr><td>Foundation\GradientStore</td><td>static fromStops(array) / static ramp(start, ?mid, ?end) / withGradient(name, start, ?mid, ?end) / at(name, percent) / gradient(name) / has(name) / names()</td><td>Named 101-entry ramps (btop <code>Theme::g</code>)</td></tr>
+<tr><td>Plot\DistanceFade</td><td>ramp() / distance() / fadeIndex() / fadeColor() / metricPosition() / metricColor() / flatMetricColor() / metricValues()</td><td>btop proc-list distance fade</td></tr>
+<tr><td>Plot\ProcRow\ProcRowComposer</td><td>static new(width) / withColumns() / withPalette() / withProcColors() / withProcGradient() / withFamily() / row(ProcRow, row, selected, selectMax, ?graph, followed, ?profile)</td><td>One btop process-list row; <code>ProcRow</code>, <code>ProcColumns</code>, <code>ProcRowPalette</code>, <code>ProcGraphTracker</code> supply data, layout, colours and mini-graphs</td></tr>
 </table>
   </div>
 </section>
