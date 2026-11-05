@@ -310,11 +310,42 @@ final class PrometheusFileBackend implements Backend
 
         // Exposition integrity: a Prometheus text file may not carry the
         // same sample identity (line name + label set) twice, and one
-        // duplicate makes node_exporter reject the ENTIRE file. The write-
-        // path guards below already refuse same-name/different-kind races;
-        // this catches what they cannot see at write time — a histogram's
-        // derived `*_bucket`/`*_count`/`*_sum` lines colliding with real
-        // families of that derived name. Fail loud, publish nothing.
+        // duplicate makes node_exporter reject the ENTIRE file. Two races
+        // need guards with different reach. Name-vs-kind first: a histogram
+        // declares family `x` but emits only the derived lines `x_bucket`,
+        // `x_count` and `x_sum`, so a real metric of the same BASE name
+        // shares no line identity with it — the per-line check below cannot
+        // see that clash, yet the published file puts derived lines under
+        // the other kind's TYPE and Prometheus rejects it. Refuse before
+        // building the body. The per-line check then catches what the
+        // base-name scan cannot: a histogram's derived `*_bucket`/`*_count`/
+        // `*_sum` lines colliding with real families of that derived name.
+        // Fail loud, publish nothing.
+        $nonHistogramKindNames = [];
+        foreach ($this->counters as $key => $_) {
+            $nonHistogramKindNames[self::splitKey($key)[0]] = 'counter';
+        }
+        foreach ($this->upDownCounters as $key => $_) {
+            $nonHistogramKindNames[self::splitKey($key)[0]] = 'up/down counter';
+        }
+        foreach ($this->asyncCounters as $key => $_) {
+            $nonHistogramKindNames[self::splitKey($key)[0]] = 'async counter';
+        }
+        foreach ($this->asyncGauges as $key => $_) {
+            $nonHistogramKindNames[self::splitKey($key)[0]] = 'async gauge';
+        }
+        foreach ($this->gauges as $key => $_) {
+            $nonHistogramKindNames[self::splitKey($key)[0]] = 'gauge';
+        }
+        foreach ($this->histograms as $key => $_) {
+            $family = self::splitKey($key)[0];
+            if (isset($nonHistogramKindNames[$family])) {
+                throw new \RuntimeException(Lang::t('prom.two_kinds', [
+                    'name' => Util::displaySafe($family),
+                    'kind' => $nonHistogramKindNames[$family],
+                ]));
+            }
+        }
         $seen = [];
         $guard = static function (string $lineName, string $labels) use (&$seen): void {
             $id = $lineName . "\1" . $labels;

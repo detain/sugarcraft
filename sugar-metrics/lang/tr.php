@@ -34,6 +34,7 @@ return [
     'prom.max_series'                 => 'maxSeriesPerFamily >= 1 olmalıdır, alınan {limit}',
     'prom.name_collision'             => 'prometheus textfile: "{first}" ve "{second}" aynı metrik adına temizlendi: "{folded}"',
     'prom.reserved_label'             => 'histogram metriği "{name}", çağıranın verdiği "le" etiketini kabul edemez',
+    'prom.two_kinds'                  => 'prometheus textfile: "{name}" hem histogram hem de {kind} olarak yayınlanıyor; bir metrik adı iki tür taşıyamaz',
     'prom.write_incomplete'           => 'prometheus textfile: eksik yazma, {path}: {reason}',
     'registry.cardinality_limit'      => 'cardinalityLimit >= 1 olmalıdır, alınan {limit}',
     'registry.negative_monotonic'     => 'monotonik {kind} "{name}" için negatif değer {value} reddedildi',

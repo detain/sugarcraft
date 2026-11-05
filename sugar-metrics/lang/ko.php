@@ -34,6 +34,7 @@ return [
     'prom.max_series'                 => 'maxSeriesPerFamily는 1 이상이어야 합니다. 받은 값: {limit}',
     'prom.name_collision'             => 'prometheus textfile: "{first}"과(와) "{second}"이(가) 동일한 메트릭 이름 "{folded}"(으)로 정리됩니다',
     'prom.reserved_label'             => '히스토그램 메트릭 "{name}"은(는) 호출자가 제공한 "le" 레이블을 허용하지 않습니다',
+    'prom.two_kinds'                  => 'prometheus textfile: "{name}"이 히스토그램과 {kind} 두 유형으로 모두 출력됩니다; 한 메트릭 이름은 두 유형을 가질 수 없습니다',
     'prom.write_incomplete'           => 'prometheus textfile: {path}에 대한 쓰기가 불완전합니다: {reason}',
     'registry.cardinality_limit'      => 'cardinalityLimit은 1 이상이어야 합니다. 받은 값: {limit}',
     'registry.negative_monotonic'     => '단조 {kind} "{name}"에서 음수 값 {value} 거부됨',

@@ -34,6 +34,7 @@ return [
     'prom.max_series'                 => 'maxSeriesPerFamily deve essere >= 1, ricevuto {limit}',
     'prom.name_collision'             => 'prometheus textfile: "{first}" e "{second}" vengono sanificati nello stesso nome metrica "{folded}"',
     'prom.reserved_label'             => 'la metrica istogramma "{name}" non può ricevere unetichetta "le" dal chiamante',
+    'prom.two_kinds'                  => 'prometheus textfile: "{name}" viene emesso sia come istogramma sia come {kind}; un nome di metrica non può avere due tipi',
     'prom.write_incomplete'           => 'prometheus textfile: scrittura incompleta su {path}: {reason}',
     'registry.cardinality_limit'      => 'cardinalityLimit deve essere >= 1, ricevuto {limit}',
     'registry.negative_monotonic'     => '{kind} monotono "{name}" ha rifiutato il valore negativo {value}',

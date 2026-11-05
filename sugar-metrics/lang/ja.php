@@ -34,6 +34,7 @@ return [
     'prom.max_series'                 => 'maxSeriesPerFamily は 1 以上である必要があります。指定値: {limit}',
     'prom.name_collision'             => 'prometheus textfile: "{first}" と "{second}" は同じメトリクス名 "{folded}" にサニタイズされます',
     'prom.reserved_label'             => 'ヒストグラムメトリクス "{name}" は呼び出し元が提供する "le" ラベルを受け付けられません',
+    'prom.two_kinds'                  => 'prometheus textfile: 「{name}」はヒストグラムと{kind}の両方として出力されています。1つのメトリック名は2種類のタイプを持てません',
     'prom.write_incomplete'           => 'prometheus textfile: {path} への書き込みが不完全です: {reason}',
     'registry.cardinality_limit'      => 'cardinalityLimit は 1 以上である必要があります。指定値: {limit}',
     'registry.negative_monotonic'     => '単調な {kind} "{name}" で負の値 {value} は拒否されました',

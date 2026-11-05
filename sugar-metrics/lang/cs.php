@@ -34,6 +34,7 @@ return [
     'prom.max_series'                 => 'maxSeriesPerFamily musí být >= 1, obdrženo {limit}',
     'prom.name_collision'             => 'prometheus textfile: "{first}" a "{second}" se sanitují na stejný název metriky "{folded}"',
     'prom.reserved_label'             => 'histogramová metrika "{name}" nepřijme štítek "le" zadaný volajícím',
+    'prom.two_kinds'                  => 'prometheus textfile: "{name}" je emitován jako histogram i jako {kind}; jeden název metriky nemůže nést dva druhy',
     'prom.write_incomplete'           => 'prometheus textfile: neúplný zápis do {path}: {reason}',
     'registry.cardinality_limit'      => 'cardinalityLimit musí být >= 1, obdrženo {limit}',
     'registry.negative_monotonic'     => 'monotonická {kind} "{name}" zamítla zápornou hodnotu {value}',

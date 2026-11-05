@@ -51,6 +51,22 @@ final class PrometheusFileBackendTest extends TestCase
         $this->assertSame(1, substr_count($content, 'x{a='));
     }
 
+    public function testNameUsedAsBothHistogramAndCounterIsRefusedEvenUnderDifferentLabels(): void
+    {
+        // A histogram family `x` emits only the derived lines x_bucket/x_count/
+        // x_sum, so a real counter also named x shares no line identity with
+        // it — the per-line flush guard cannot see the clash, yet the file
+        // would carry one base name as two kinds and node_exporter rejects
+        // the whole exposition. flush() must refuse on the name alone.
+        $b = new PrometheusFileBackend($this->path);
+        $b->counter('job_runs', 1.0, ['kind' => 'nightly']);
+        $b->histogram('job_runs', 0.5, ['kind' => 'hourly']);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('cannot carry two kinds');
+        $b->flush();
+    }
+
     public function testEmitsCounterAndGaugeAndHistogram(): void
     {
         $b = new PrometheusFileBackend($this->path);

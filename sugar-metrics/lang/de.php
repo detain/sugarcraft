@@ -34,6 +34,7 @@ return [
     'prom.max_series'                 => 'maxSeriesPerFamily muss >= 1 sein, erhalten: {limit}',
     'prom.name_collision'             => 'Prometheus textfile: "{first}" und "{second}" sanitieren zum selben Metriknamen "{folded}"',
     'prom.reserved_label'             => 'Histogramm-Metrik "{name}" darf kein vom Aufrufer gesetztes "le"-Label erhalten',
+    'prom.two_kinds'                  => 'Prometheus textfile: "{name}" wird als Histogramm und als {kind} ausgegeben; ein Metrikname kann nicht zwei Arten tragen',
     'prom.write_incomplete'           => 'Prometheus textfile: unvollständiger Schreibvorgang auf {path}: {reason}',
     'registry.cardinality_limit'      => 'cardinalityLimit muss >= 1 sein, erhalten: {limit}',
     'registry.negative_monotonic'     => 'monotonisches {kind} "{name}" lehnte negativen Wert {value} ab',

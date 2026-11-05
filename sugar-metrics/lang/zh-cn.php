@@ -34,6 +34,7 @@ return [
     'prom.max_series'                 => 'maxSeriesPerFamily 必须 >= 1，实际为 {limit}',
     'prom.name_collision'             => 'prometheus textfile："{first}" 与 "{second}" 被净化为同一指标名 "{folded}"',
     'prom.reserved_label'             => '直方图指标 "{name}" 不能接受调用方提供的 "le" 标签',
+    'prom.two_kinds'                  => 'prometheus textfile："{name}" 同时作为直方图和 {kind} 输出；一个指标名称不能承载两种类型',
     'prom.write_incomplete'           => 'prometheus textfile：写入 {path} 不完整：{reason}',
     'registry.cardinality_limit'      => 'cardinalityLimit 必须 >= 1，实际为 {limit}',
     'registry.negative_monotonic'     => '单调 {kind} "{name}" 拒绝负值 {value}',

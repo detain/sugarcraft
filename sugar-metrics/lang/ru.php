@@ -34,6 +34,7 @@ return [
     'prom.max_series'                 => 'maxSeriesPerFamily должен быть >= 1, получено {limit}',
     'prom.name_collision'             => 'prometheus textfile: "{first}" и "{second}" после санитизации дают одно имя метрики "{folded}"',
     'prom.reserved_label'             => 'метрика гистограммы "{name}" не может принимать метку "le" от вызывающего кода',
+    'prom.two_kinds'                  => 'prometheus textfile: "{name}" выводится и как гистограмма, и как {kind}; одно имя метрики не может иметь два типа',
     'prom.write_incomplete'           => 'prometheus textfile: неполная запись в {path}: {reason}',
     'registry.cardinality_limit'      => 'cardinalityLimit должен быть >= 1, получено {limit}',
     'registry.negative_monotonic'     => 'монотонный {kind} "{name}" отклонил отрицательное значение {value}',

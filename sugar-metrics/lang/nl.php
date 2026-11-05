@@ -34,6 +34,7 @@ return [
     'prom.max_series'                 => 'maxSeriesPerFamily moet >= 1 zijn, gekregen {limit}',
     'prom.name_collision'             => 'prometheus textfile: "{first}" en "{second}" santizeerden tot dezelfde metriknaam "{folded}"',
     'prom.reserved_label'             => 'histogrammetrik "{name}" kan geen door de aanroeper geleverd "le"-label ontvangen',
+    'prom.two_kinds'                  => 'prometheus textfile: "{name}" wordt als histogram en als {kind} uitgezonden; één metrieknaam kan niet twee soorten dragen',
     'prom.write_incomplete'           => 'prometheus textfile: onvolledige schrijfpoging naar {path}: {reason}',
     'registry.cardinality_limit'      => 'cardinalityLimit moet >= 1 zijn, gekregen {limit}',
     'registry.negative_monotonic'     => 'monotone {kind} "{name}" weigerde negatieve waarde {value}',

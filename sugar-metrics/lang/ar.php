@@ -34,6 +34,7 @@ return [
     'prom.max_series'                 => 'يجب أن يكون maxSeriesPerFamily أكبر من أو يساوي 1، القيمة: {limit}',
     'prom.name_collision'             => 'prometheus textfile: "{first}" و"{second}" ينظَّفان إلى الاسم نفسه "{folded}"',
     'prom.reserved_label'             => 'لا يمكن لمقياس المدرج "{name}" قبول وسم "le" من المستدعي',
+    'prom.two_kinds'                  => 'prometheus textfile: يتم إصدار "{name}" كمدرج وكـ {kind} معًا؛ لا يمكن لاسم مقياس واحد أن يحمل نوعين',
     'prom.write_incomplete'           => 'prometheus textfile: كتابة غير مكتملة إلى {path}: {reason}',
     'registry.cardinality_limit'      => 'يجب أن يكون cardinalityLimit أكبر من أو يساوي 1، القيمة: {limit}',
     'registry.negative_monotonic'     => 'رفضت الأداة الرتيبة {kind} "{name}" قيمة سالبة {value}',

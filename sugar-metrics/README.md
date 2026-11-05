@@ -191,7 +191,7 @@ Type tokens follow the table in *Names on the wire*; notably async counters emit
 
 Atomically rewrites a `.prom` textfile-collector file with the current state of every metric. Pairs with `node_exporter --collector.textfile.directory=…`. Each `flush()` stages a fresh body into a *uniquely named* per-writer temp file (`<path>.tmp.<uniqid>`), fsyncs it, and publishes it with an atomic `rename()` — rename(2) is what carries the atomicity (a reader either sees the old file or the new one, never a half-written body), while the flock guards the staging handle against interleaved writes from the same writer. Simultaneous flushes resolve last-writer-wins; a crashed flush leaves at most one stale `.tmp.*` behind and never corrupts the target. The staged file's mode follows the process umask (as with any `fopen`), so run the collector writer with a umask your node exporter can read. The parent directory of the target must exist and be writable; `flush()` throws a `RuntimeException` naming the staged path if it is not.
 
-Counter values accumulate across `flush()`s; histograms emit the 14 cumulative bucket boundaries (`le="0.005"` … `le="100"` — the classic client_golang set extended with 25/50/100) plus `le="+Inf"`, alongside `_count` and `_sum`. Bucket boundaries passed to the constructor must be finite and strictly increasing. A caller-supplied `le` tag is refused on histograms — it would forge a second bucket label. Series per family are capped (`maxSeriesPerFamily`, default 10 000, oldest dropped FIFO), and `remove()` / `clear()` reclaim accumulated series from memory so a tag flood cannot grow the backend without bound. Exposition integrity is guarded at flush time: two series with identical emitted name+labels (possible only through a sanitizing fold the registry could not see, or one metric name used as two kinds, or a counter colliding with a histogram's derived `_count`/`_sum`) throw a loud `RuntimeException` naming the offender instead of publishing a file Prometheus will reject wholesale.
+Counter values accumulate across `flush()`s; histograms emit the 14 cumulative bucket boundaries (`le="0.005"` … `le="100"` — the classic client_golang set extended with 25/50/100) plus `le="+Inf"`, alongside `_count` and `_sum`. Bucket boundaries passed to the constructor must be finite and strictly increasing. A caller-supplied `le` tag is refused on histograms — it would forge a second bucket label. Series per family are capped (`maxSeriesPerFamily`, default 10 000, oldest dropped FIFO), and `remove()` / `clear()` reclaim accumulated series from memory so a tag flood cannot grow the backend without bound. Exposition integrity is guarded at flush time: a histogram sharing its base name with any other kind of metric throws a loud `RuntimeException` even under different label sets (a histogram emits only derived `_bucket`/`_count`/`_sum` lines, so such a pair would otherwise publish them under the other kind's `# TYPE`), and two series with identical emitted name+labels (possible only through a sanitizing fold the registry could not see, or a counter colliding with a histogram's derived `_count`/`_sum`) likewise throw, naming the offender instead of publishing a file Prometheus will reject wholesale.
 
 **Always call `flush()` explicitly** — e.g. on every scrape-adjacent tick or session close — to guarantee delivery and surface errors; the library arms no timers of its own. The destructor invokes `flush()` automatically, but errors during the atomic rename are silently swallowed in `__destruct`. Explicit calls throw a `RuntimeException` on failure (including a short write, a failed fsync, or staging residue). `clear()` resets accumulated state but does not delete the already-written `.prom` file — the next `flush()` rewrites whatever remains.
 
@@ -272,10 +272,12 @@ silent-loss behaviours; they are now loud:
 - `PrometheusFileBackend` refuses, at write time, two distinct raw names/tag
   keys whose sanitising fold would collide (previously one silently overwrote
   the other, or the fold produced a duplicate label that made the *entire*
-  exposition scrapable-nothing); duplicate emitted series (same name used as
-  two kinds, a metric name clashing with a histogram's derived `_count`/`_sum`,
-  or the old silent `newUpDownCounter` tag-drop replaying as a re-type) now
-  throw at flush instead of poisoning the file.
+  exposition scrapable-nothing); one metric name used as two kinds — a
+  histogram and any other kind sharing the base name, even under different
+  label sets — and duplicate emitted series (a metric name clashing with a
+  histogram's derived `_count`/`_sum`, or the old silent `newUpDownCounter`
+  tag-drop replaying as a re-type) now throw at flush instead of poisoning the
+  file.
 - Histograms reject a caller-supplied `le` tag; bucket-boundary lists must be
   finite and strictly increasing (validated in the constructor).
 - `Registry` cardinality limits below 1 throw at construction; negative values

@@ -34,6 +34,7 @@ return [
     'prom.max_series'                 => 'maxSeriesPerFamily debe ser >= 1, se obtuvo {limit}',
     'prom.name_collision'             => 'prometheus textfile: "{first}" y "{second}" se sanean al mismo nombre de métrica "{folded}"',
     'prom.reserved_label'             => 'la métrica de histograma "{name}" no puede recibir una etiqueta "le" del llamante',
+    'prom.two_kinds'                  => 'prometheus textfile: "{name}" se emite como histograma y como {kind}; un nombre de métrica no puede tener dos tipos',
     'prom.write_incomplete'           => 'prometheus textfile: escritura incompleta en {path}: {reason}',
     'registry.cardinality_limit'      => 'cardinalityLimit debe ser >= 1, se obtuvo {limit}',
     'registry.negative_monotonic'     => '{kind} monótono "{name}" rechazó el valor negativo {value}',
