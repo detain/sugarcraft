@@ -57,9 +57,13 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
 <tr><td>Table</td><td>new()</td><td>Create empty table</td></tr>
 <tr><td>Table</td><td>addColumn(col)</td><td>Add table column</td></tr>
 <tr><td>Table</td><td>addRow(cells)</td><td>Add table row</td></tr>
-<tr><td>Table</td><td>sortBy(col, asc)</td><td>Sort by column</td></tr>
-<tr><td>Table</td><td>sortByNext(col)</td><td>Toggle asc/desc on a column</td></tr>
-<tr><td>Table</td><td>filter(text)</td><td>Rows containing text in any cell</td></tr>
+<tr><td>Table</td><td>sortBy(col, asc)</td><td>Sort by column (resets the cursor to row 0)</td></tr>
+<tr><td>Table</td><td>sortByNext(col)</td><td>Toggle asc/desc on a column (resets the cursor to row 0)</td></tr>
+<tr><td>Table</td><td>filter(text)</td><td>Rows containing text in any cell (resets the cursor to row 0)</td></tr>
+<tr><td>Table</td><td>withCursorStyle(style)</td><td>SGR string for the cursor row (default '' marks nothing)</td></tr>
+<tr><td>Table</td><td>setCursor(row)</td><td>Move the cursor — not clamped; an off-range index falls off the view</td></tr>
+<tr><td>Table</td><td>currentRow()</td><td>Row under the cursor, or null when the cursor is off the view</td></tr>
+<tr><td>Table</td><td>currentCell(col)</td><td>Single cell under the cursor (null when off the view)</td></tr>
 <tr><td>Table</td><td>render()</td><td>Full frame (pure); use TableRenderer for deltas</td></tr>
 <tr><td>TableRenderer</td><td>render(table)</td><td>First/resize frame full, then change-only delta</td></tr>
 <tr><td>Column</td><td>make(title, width)</td><td>Create a column (width in cells)</td></tr>

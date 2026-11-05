@@ -48,9 +48,12 @@ echo "\n";
 // string, so without this the cursor row renders with no marker bytes.
 $table = $table->withCursorStyle('1;36');
 
-// Set cursor to row 2 (0-indexed), toggle sort
-$table = $table->setCursor(2)->sortByNext(0);  // previous sort was column 2; a different column starts ascending
-echo "=== After setCursor(2) then sortByNext() (Name asc) ===\n";
+// Toggle sort on Name, THEN move the cursor: sortBy()/sortByNext()/filter()
+// reset the cursor to row 0 because the view reorders underneath it, so a
+// cursor set before a sort is wiped out. (previous sort was column 2; a
+// different column starts ascending)
+$table = $table->sortByNext(0)->setCursor(2);
+echo "=== After sortByNext() (Name asc) then setCursor(2) ===\n";
 echo $table->render();
 echo "\n";
 

@@ -138,8 +138,19 @@ $table = (new Table())
 $sorted = $table->sortBy(0);      // sort by Name column → new Table
 $filtered = $sorted->filter('a'); // rows containing 'a' → new Table
 
-echo $filtered->render();
+$atCursor = $filtered
+    ->withCursorStyle('1;36')    // the default style ('') marks nothing on screen
+    ->setCursor(0);              // cursor row of the materialized view
+
+echo $atCursor->render();
+echo $atCursor->currentCell(0), "\n";
 ```
+
+Sorting and filtering reset the cursor to row 0 — the view reorders
+underneath it — so move the cursor *after* the last `sortBy()`/`sortByNext()`/
+`filter()` call. `setCursor()` does not clamp: an index past the end simply
+falls off the view, and `currentRow()`/`currentCell()` answer `null` until the
+cursor lands back inside.
 
 ## Viewport Quick Start
 
