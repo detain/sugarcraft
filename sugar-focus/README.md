@@ -70,6 +70,12 @@ $style = $ring->isFocused('sidebar') && $ring->isEnabled('sidebar')
 The `isEnabled()` conjunct matters: focus can legally park on a disabled
 region, so `isFocused()` alone can paint an accent border on a dimmed panel.
 
+Pair the paint with a non-color cue. An accent border is invisible to users
+who cannot distinguish the hue, so `examples/focus-ring.php` prints a text
+status row per panel as well — `> FOCUS`, `> parked`, `idle`, `off` — and a
+footer naming the focused region (WCAG 1.4.1 *Use of Color*; border
+strength itself under 1.4.11 *Non-text Contrast*).
+
 ## Behaviour
 
 - A **non-empty ring always has exactly one focused region**; an empty ring
