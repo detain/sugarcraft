@@ -55,6 +55,7 @@ use SugarCraft\Code\Observability\NullEventSink;
 use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Code\App\PromptSuggestionMsg;
 use SugarCraft\Code\Host\SessionHost\SessionLandings;
+use SugarCraft\Code\Host\SessionHost\SessionClientTools;
 use SugarCraft\Code\Host\Commands\CommandContext;
 use SugarCraft\Code\Host\Commands\CommandEffect;
 use SugarCraft\Code\Host\Commands\CommandEffectKind;
@@ -138,6 +139,7 @@ use SugarCraft\Core\Util\Sanitize;
 final class SessionHost
 {
     use SessionLandings;
+    use SessionClientTools;
 
     /** @var list<Message> */
     private array $history;
@@ -787,29 +789,12 @@ final class SessionHost
      *
      * @param list<ClientToolSpec> $specs
      */
-    public function registerClientTools(string $clientKey, array $specs): string
-    {
-        return $this->clientTools->register($clientKey, $specs);
-    }
-
     /**
      * C-TOOL-6.h: drop $clientKey's registrations (its connection closed —
      * the ruling that kills a client's tools with it) and settle its open
      * calls as errors, so a child blocked on one of them learns the truth
      * instead of waiting out its deadline.
      */
-    public function forgetClientTools(string $clientKey): void
-    {
-        $this->clientTools->forget($clientKey);
-        foreach ($this->pendingClientCalls as $callId => $entry) {
-            if ($entry['clientKey'] !== $clientKey) {
-                continue;
-            }
-            unset($this->pendingClientCalls[$callId]);
-            $entry['pending']->cancel('the client that hosts this tool is gone');
-        }
-    }
-
     /**
      * C-TOOL-6.h: answer the open client call $callId — first answer wins
      * (the same law {@see answer()} keeps for questions). An id not open, a
@@ -818,30 +803,6 @@ final class SessionHost
      * same from here: false. A client re-registered between the call and
      * the answer is exactly the case that id exists to refuse.
      */
-    public function resolveClientCall(string $callId, string $registrationId, string $content, bool $isError): bool
-    {
-        $entry = $this->pendingClientCalls[$callId] ?? null;
-        if ($entry === null) {
-            return false;
-        }
-        // The id must be the one THIS call was opened under: the answerer is
-        // the relay that heard the notification, and nobody else's id — not a
-        // fresh registration of the same client, not a stranger's — spends a
-        // call it was never told about. A refused answer leaves the call
-        // open: the parent's deadline settles that, not this caller.
-        if ($entry['registrationId'] !== $registrationId) {
-            return false;
-        }
-        if ($entry['pending']->isSettled()) {
-            unset($this->pendingClientCalls[$callId]);
-
-            return false;
-        }
-        unset($this->pendingClientCalls[$callId]);
-
-        return $entry['pending']->resolve($content, $isError);
-    }
-
     /**
      * C-TOOL-6.h: bind (or pass null to clear) the listener that hears each
      * freshly opened client call with the client and registration that must
@@ -849,11 +810,6 @@ final class SessionHost
      *
      * @param (\Closure(PendingClientCall, string, string): void)|null $hook
      */
-    public function onClientCall(?\Closure $hook): void
-    {
-        $this->clientCallListener = $hook;
-    }
-
     /**
      * C-TOOL-6.h: the sink {@see \SugarCraft\Code\Backend\EngineBackend::withClientCallSink()}
      * takes — called in the parent when a turn child puts a client-hosted
@@ -864,33 +820,6 @@ final class SessionHost
      * registration owns (the client forgot it mid-turn, after this turn's
      * roster was fixed) is answered as an error at once rather than held.
      */
-    private function clientCallSink(): \Closure
-    {
-        return function (PendingClientCall $pending, \Closure $answer): void {
-            foreach ($this->pendingClientCalls as $callId => $entry) {
-                if ($entry['pending']->isSettled()) {
-                    unset($this->pendingClientCalls[$callId]);
-                }
-            }
-            $clientKey = $this->clientTools->owner($pending->name);
-            if ($clientKey === null) {
-                $answer('the client that hosts this tool is gone', true);
-
-                return;
-            }
-            $registrationId = (string) $this->clientTools->currentRegistrationId($clientKey);
-            $this->pendingClientCalls[$pending->callId] = [
-                'pending' => $pending,
-                'clientKey' => $clientKey,
-                'registrationId' => $registrationId,
-            ];
-            $hook = $this->clientCallListener;
-            if ($hook !== null) {
-                $hook($pending, $clientKey, $registrationId);
-            }
-        };
-    }
-
     /**
      * Ask the running turn to stop at its next step boundary, letting the tool
      * in flight finish (`cancel_soft`, Appendix O §5.1). The turn settles on
