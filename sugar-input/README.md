@@ -178,7 +178,7 @@ never re-surfaced as its own event.
 | Event | Key fields |
 |---|---|
 | `KeyEvent` | `key`, `modifiers`, `raw`, `isRelease()`, `isRepeat` |
-| `MouseEvent` | `x`, `y`, `button`, `action`, `modifiers` — `action` is `press`/`release`/`drag`/`scroll` (refused at the constructor otherwise); `button` is 0/1/2 for left/middle/right press-drag-release; scroll steps report 96 (up), 97 (down), 98 (left/wire 66), 99 (right/wire 67); `x`/`y` are the units the reporting mode measures (cells under 1000/1006, pixels under 1016) |
+| `MouseEvent` | `x`, `y`, `button`, `action`, `modifiers` — `action` is `press`/`release`/`drag`/`scroll` (refused at the constructor otherwise); `button` is 0/1/2 for left/middle/right press-drag-release, and X10 releases report button 3 (`MouseEvent::BUTTON_RELEASE`) — match releases on `action`, not the button index; scroll steps report 96 (up), 97 (down), 98 (left/wire 66), 99 (right/wire 67); `x`/`y` are the units the reporting mode measures (cells under 1000/1006, pixels under 1016) |
 | `FocusEvent` | `gained`, `raw` |
 | `PasteEvent` | `content`, `truncated`, `truncationNotice(): ?string` |
 | `ResizeEvent` | `cols`, `rows` — produced by `SignalResizeDriver` (see [Input drivers](#input-drivers)) |
