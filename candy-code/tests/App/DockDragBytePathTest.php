@@ -113,7 +113,7 @@ final class DockDragBytePathTest extends TestCase
         $zone = TuiRenderer::chromeZoneAt($tabX, $tabY);
         self::assertSame(MenuBar::PANE_TAB_ZONE_PREFIX . Pane::Files->value, $zone?->id);
 
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertNotNull($frame);
 
         $app = $this->driveBytes($app, $this->dragBurst($tabX, $tabY, $frame['centerTo'] + 2, $tabY + 2));
@@ -179,7 +179,7 @@ final class DockDragBytePathTest extends TestCase
         $body = $this->paintBody($app);
         [$tabX, $tabY] = $this->paneRowCell($body, 'Files');
 
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertNotNull($frame);
         $centreX = intdiv($frame['centerFrom'] + $frame['centerTo'], 2) + 1;
 
@@ -207,7 +207,7 @@ final class DockDragBytePathTest extends TestCase
         // A press-drag-release FROM the undocked tab: nothing to move, so no
         // gesture arms and the burst is behaviourally a cancelled click —
         // the dock route stays the plain click (next test), not a drag.
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertNotNull($frame);
         $app = $this->driveBytes($app, $this->dragBurst($tabX, $tabY, $frame['centerTo'] + 2, $tabY + 2));
 
@@ -246,7 +246,7 @@ final class DockDragBytePathTest extends TestCase
         $zone = TuiRenderer::chromeZoneAt($headerX, $headerY);
         self::assertSame(LiveRenderer::PANE_ZONE_PREFIX . Pane::Files->value, $zone?->id, 'the box-title row the user sees must be the row the zone covers');
 
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertNotNull($frame);
 
         $app = $this->driveBytes($app, $this->dragBurst($headerX, $headerY, $frame['centerTo'] + 2, $headerY + 1));
@@ -312,7 +312,7 @@ final class DockDragBytePathTest extends TestCase
         $this->writes = [];
         $body = $this->paintBody($app);
 
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertNotNull($frame);
         self::assertSame(self::BARE_COLS - 1, $frame['centerTo'], 'with no right band the centre reaches the last column');
 
@@ -333,7 +333,7 @@ final class DockDragBytePathTest extends TestCase
     {
         $app = $this->castApp();
         $body = $this->paintBody($app);
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertNotNull($frame);
 
         // The LAST band row, far below the two short stacked boxes, on the
@@ -364,7 +364,7 @@ final class DockDragBytePathTest extends TestCase
     {
         $app = $this->castApp();
         $body = $this->paintBody($app);
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertNotNull($frame);
         [$headerX, $headerY] = $this->paintedHeaderCell($body, Pane::Files->value);
 
@@ -406,7 +406,7 @@ final class DockDragBytePathTest extends TestCase
     {
         $app = $this->castApp();
         $baseline = explode("\n", $this->paintBody($app));
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertNotNull($frame);
         [$headerX, $headerY] = $this->paintedHeaderCell(implode("\n", $baseline), Pane::Files->value);
         $edgeTo = $frame['centerFrom'] + PaneDragController::dropEdgeCols($frame['centerFrom'], $frame['centerTo']) - 1;
@@ -442,7 +442,7 @@ final class DockDragBytePathTest extends TestCase
     {
         $app = $this->castApp();
         $body = $this->paintBody($app);
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertNotNull($frame);
         [$headerX, $headerY] = $this->paintedHeaderCell($body, Pane::Files->value);
         $centreX = intdiv($frame['centerFrom'] + $frame['centerTo'], 2) + 1;

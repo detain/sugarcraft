@@ -170,7 +170,7 @@ final class MenuBarPaneTabClickTest extends TestCase
         // band the renderer recorded spans every column of the frame.
         $body = $this->render($app);
         self::assertNotEmpty($body);
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertNotNull($frame, 'fixture: the cast frame published its dock geometry');
         self::assertSame(0, $frame['centerFrom']);
         self::assertSame($frame['bandCols'] - 1, $frame['centerTo'], 'centre owns the whole band');

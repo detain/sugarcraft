@@ -79,7 +79,7 @@ final class DockDividerZoneTest extends TestCase
         // Fix 2: default dock, Files focused — one pane, the pre-docking flush
         // frame. It now stamps a grabbable `divider:` column so a lone side is
         // resizable, but never a stacked-only `stackdiv:` gap zone.
-        $this->render($this->app()->withPane(Pane::Files));
+        [, $painted] = $this->renderKept($this->app()->withPane(Pane::Files));
 
         $zones = TuiRenderer::chromeScanner()->prefixed(LiveRenderer::DIVIDER_ZONE_PREFIX);
         self::assertNotEmpty($zones, 'a single-pane side must offer a grabbable divider');
@@ -94,7 +94,7 @@ final class DockDividerZoneTest extends TestCase
 
         self::assertSame(array_values(array_unique($rows)), $rows, 'each rendered row carries its OWN divider zone');
 
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $painted->paintedDockFrame();
         self::assertNotNull($frame);
         self::assertCount($frame['paneRows'], $rows, 'the seam is grabbable down the WHOLE band, not just the rows the box fills');
 
@@ -130,8 +130,9 @@ final class DockDividerZoneTest extends TestCase
 
     public function testTheStackedSeamCoversTheThreePaintedBorderColumnsOnEveryBandRow(): void
     {
-        $plain = explode("\n", Ansi::strip($this->render($this->app()->withPane(Pane::Tools))));
-        $frame = TuiRenderer::lastDockFrame();
+        [$body, $painted] = $this->renderKept($this->app()->withPane(Pane::Tools));
+        $plain = explode("\n", Ansi::strip($body));
+        $frame = $painted->paintedDockFrame();
         self::assertNotNull($frame);
 
         $zones = TuiRenderer::chromeScanner()->prefixed(LiveRenderer::DIVIDER_ZONE_PREFIX . 'left:');
@@ -259,6 +260,20 @@ final class DockDividerZoneTest extends TestCase
     private function render(App $app): string
     {
         return TuiRenderer::renderView($app->withChat(new Chat()), 120, 40)->body;
+    }
+
+    /**
+     * Paint the band and KEEP the painted model: phase 2 adopted the frame
+     * onto what renderView painted, and render() wraps its own withChat
+     * clone — a test reading the frame must read THAT instance.
+     *
+     * @return array{0: string, 1: App} body, and the painted model
+     */
+    private function renderKept(App $app): array
+    {
+        $painted = $app->withChat(new Chat());
+
+        return [TuiRenderer::renderView($painted, 120, 40)->body, $painted];
     }
 
     private function app(): App

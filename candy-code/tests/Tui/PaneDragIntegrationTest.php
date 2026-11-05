@@ -232,7 +232,8 @@ final class PaneDragIntegrationTest extends TestCase
 
     /**
      * The one release that cannot measure. Rendering a full-band
-     * dashboard/overlay frame nulls Tui\Renderer::$lastDockFrame; if the
+     * dashboard/overlay frame clears the model's adopted band frame
+     * (App::adoptPaintedDockFrame(null)); if the
      * pointer is mid-divider-drag when that happens, the release lands with no
      * band to re-state against, so `previewColumnResize` hands back the model
      * untouched and persisting would freeze the last previewed width as a
@@ -258,11 +259,11 @@ final class PaneDragIntegrationTest extends TestCase
             $app->dock()->columnShare(Side::Left),
             'fixture: the motion previewed a real width change',
         );
-        self::assertNotNull(TuiRenderer::lastDockFrame(), 'fixture: a dock band frame is live before the mode switch');
+        self::assertNotNull($app->paintedDockFrame(), 'fixture: a dock band frame is live before the mode switch');
 
         // Simulate the mode switch: a dashboard frame renders and drops the
         // dock frame, exactly as Tui\Renderer's dashboard tail does.
-        (new \ReflectionProperty(TuiRenderer::class, 'lastDockFrame'))->setValue(null, null);
+        (new \ReflectionProperty(App::class, 'paintedDockFrame'))->setValue($app, null);
 
         [$app] = $app->update($this->release($divider->startCol + 12, $divider->startRow));
 
@@ -280,7 +281,7 @@ final class PaneDragIntegrationTest extends TestCase
     {
         $app = $this->app();
         $this->render($app);
-        $before = TuiRenderer::lastDockFrame();
+        $before = $app->paintedDockFrame();
         self::assertNotNull($before);
 
         $divider = $this->dividerZone('left');
@@ -290,7 +291,7 @@ final class PaneDragIntegrationTest extends TestCase
         // Nothing but a repaint tick happened between the motion and this
         // render — exactly what the loop does every frame on its own.
         $this->render($app);
-        $after = TuiRenderer::lastDockFrame();
+        $after = $app->paintedDockFrame();
         self::assertNotNull($after);
 
         self::assertSame($before['centerFrom'] + 10, $after['centerFrom'], 'the centre moved with the grabbed divider');
@@ -326,7 +327,7 @@ final class PaneDragIntegrationTest extends TestCase
     {
         $app = $this->app();
         $this->render($app);
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertNotNull($frame);
 
         $header = $this->headerZone('files');
@@ -367,7 +368,7 @@ final class PaneDragIntegrationTest extends TestCase
     {
         $app = $this->app();
         $this->render($app);
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertNotNull($frame);
 
         $header = $this->headerZone('skills');
@@ -400,7 +401,7 @@ final class PaneDragIntegrationTest extends TestCase
     {
         $app = $this->app();
         $this->render($app);
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertNotNull($frame);
 
         $header = $this->headerZone('files');
@@ -426,7 +427,7 @@ final class PaneDragIntegrationTest extends TestCase
     {
         $app = $this->app();
         $this->render($app);
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertNotNull($frame);
 
         $header = $this->headerZone('files');

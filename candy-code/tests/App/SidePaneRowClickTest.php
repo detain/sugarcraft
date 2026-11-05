@@ -198,7 +198,7 @@ final class SidePaneRowClickTest extends TestCase
     {
         $app = $this->splitApp();
         $seam = $this->seam($app);
-        $before = TuiRenderer::lastDockFrame()['agentCols'] ?? 0;
+        $before = $app->paintedDockFrame()['agentCols'] ?? 0;
         $this->assertGreaterThan(0, $before, 'fixture: the live-agent column is on screen');
 
         [$app] = $app->update(new MouseClickMsg($seam->startCol, $seam->startRow, MouseButton::Left, MouseAction::Press));
@@ -209,7 +209,7 @@ final class SidePaneRowClickTest extends TestCase
 
         $this->assertSame($before + 10, $app->agentSplitCols);
         $this->frame($app);
-        $this->assertSame($before + 10, TuiRenderer::lastDockFrame()['agentCols'] ?? 0, 'the next frame paints it');
+        $this->assertSame($before + 10, $app->paintedDockFrame()['agentCols'] ?? 0, 'the next frame paints it');
     }
 
     public function testEscapeMidDragHandsBackTheWidthItHad(): void
@@ -295,7 +295,7 @@ final class SidePaneRowClickTest extends TestCase
     private function seam(App $app): Zone
     {
         $this->frame($app);
-        $bandTop = TuiRenderer::lastDockFrame()['bandTop'] ?? 1;
+        $bandTop = $app->paintedDockFrame()['bandTop'] ?? 1;
         $zone = TuiRenderer::chromeScanner()->get(TuiRenderer::SPLIT_DIVIDER_ZONE_PREFIX . 'r' . ($bandTop + 2));
         self::assertInstanceOf(Zone::class, $zone, 'fixture: the seam is a grab target');
 

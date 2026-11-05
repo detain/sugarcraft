@@ -699,6 +699,21 @@ final class App implements Model
          * {@see FirstRunWizard::markDismissed()} so a later launch stays quiet.
          */
         public readonly ?FirstRunWizard $firstRunWizard = null,
+        /**
+         * TUIARCH-02 phase 2: the dock band as the LAST frame painted onto
+         * this model measured it, or null while no measured frame stands
+         * (headless runs, and the full-band dashboard/overlay frames whose
+         * tails clear it). Deliberately NOT readonly and NOT part of any
+         * public builder: the paint step hands the measurement back through
+         * {@see adoptPaintedDockFrame()} — the single writer — and
+         * {@see mutate()} carries it across rebuilds so a gesture spanning
+         * updates still measures against its painted frame: the retired
+         * `Tui\Renderer::$lastDockFrame` static's lifetime, minus the
+         * cross-instance leak.
+         *
+         * @var ?array{cols: int, bandTop: int, bandCols: int, paneRows: int, centerFrom: int, centerTo: int, agentCols: int}
+         */
+        private ?array $paintedDockFrame = null,
     ) {}
 
     public static function new(ProviderInterface $provider, string $model): self
@@ -3852,17 +3867,43 @@ final class App implements Model
     }
 
     /**
+     * Hand the just-painted dock band back to the model (TUIARCH-02 phase 2).
+     * The paint step is the ONLY caller: {@see \SugarCraft\Code\Tui\Renderer}
+     * adopts the frame it measured every frame, and its full-band
+     * dashboard/overlay tails adopt null. Writing through the painted model
+     * — instead of the retired process static — means the measurement
+     * belongs to the instance it was painted from and travels with its
+     * rebuilds.
+     *
+     * @param ?array{cols: int, bandTop: int, bandCols: int, paneRows: int, centerFrom: int, centerTo: int, agentCols: int} $frame
+     */
+    public function adoptPaintedDockFrame(?array $frame): void
+    {
+        $this->paintedDockFrame = $frame;
+    }
+
+    /**
+     * The band as the last frame painted onto this model measured it, or
+     * null when no measured frame is standing.
+     *
+     * @return ?array{cols: int, bandTop: int, bandCols: int, paneRows: int, centerFrom: int, centerTo: int, agentCols: int}
+     */
+    public function paintedDockFrame(): ?array
+    {
+        return $this->paintedDockFrame;
+    }
+
+    /**
      * The dock band's geometry as the LAST painted frame measured it, or null
      * when no measured frame is standing (headless runs, and the full-band
-     * dashboard/overlay frames whose tails clear the renderer's published
-     * band). TUIARCH-02 phase 1: every model-side read of the renderer's
-     * frame static funnels through this one typed adapter, so phase 2 —
-     * retiring the static behind a model-computed geometry — swaps a single
-     * producer without touching a reader.
+     * dashboard/overlay frames whose tails clear the adopted band).
+     * TUIARCH-02 phase 2: the renderer's frame static retired into
+     * {@see $paintedDockFrame}; every model-side read still funnels through
+     * this one typed adapter, and the paint step is the frame's only writer.
      */
     private function dockGeometry(): ?DockGeometry
     {
-        return DockGeometry::fromFrame(TuiRenderer::lastDockFrame());
+        return DockGeometry::fromFrame($this->paintedDockFrame);
     }
 
     /**
@@ -6936,6 +6977,7 @@ final class App implements Model
             diffReview: array_key_exists('diffReview', $changes) ? $changes['diffReview'] : $this->diffReview,
             messagePicker: array_key_exists('messagePicker', $changes) ? $changes['messagePicker'] : $this->messagePicker,
             firstRunWizard: array_key_exists('firstRunWizard', $changes) ? $changes['firstRunWizard'] : $this->firstRunWizard,
+            paintedDockFrame: array_key_exists('paintedDockFrame', $changes) ? $changes['paintedDockFrame'] : $this->paintedDockFrame,
         );
     }
 }

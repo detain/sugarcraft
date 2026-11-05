@@ -13,9 +13,11 @@ use RuntimeException;
  * (TuiRenderer::lastDockFrame()) directly at five gesture sites, each
  * indexing raw array keys and each null-guarding the whole. This value
  * object is the single typed adapter: App::dockGeometry() funnels every
- * model-side read through it, so phase 2 — retiring the static in favour of
- * geometry the model computes itself — swaps one producer and touches no
- * reader.
+ * model-side read through it, so phase 2 — the retirement that landed since
+ * — swapped one producer and touched no reader. The static is gone; the
+ * paint step adopts the frame onto the model itself
+ * (App::adoptPaintedDockFrame()), and this adapter now reads
+ * App::$paintedDockFrame.
  *
  * The fields mirror the published frame exactly. bandTop/bandCols/paneRows/
  * centerFrom/centerTo are PAINT measurements only the renderer can state

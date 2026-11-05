@@ -83,7 +83,7 @@ final class UntouchedDockWidthSweepTest extends TestCase
         for ($cols = self::SWEEP_FROM; $cols <= self::SWEEP_TO; ++$cols) {
             TuiRenderer::setSize($cols, self::BAND_ROWS);
             $frame = explode("\n", Ansi::strip(TuiRenderer::renderView($app, $cols, self::BAND_ROWS)->body));
-            $band = TuiRenderer::lastDockFrame();
+            $band = $app->paintedDockFrame();
             self::assertNotNull($band, 'renderView publishes its dock frame for the pointer maths');
 
             // Law 0 (the sum, at its source): the centre column ends inside

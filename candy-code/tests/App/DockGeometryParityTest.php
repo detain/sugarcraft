@@ -28,9 +28,11 @@ use SugarCraft\Constraints\Dock\Side;
  * gesture internals). The adapter is only honest while the frame it adapts
  * still says what {@see TuiRenderer::dockBandMeasure()} derives from the
  * model that painted it; this file pins exactly that equality across dock
- * states x terminal widths, so phase 2 — retiring the static and letting the
- * model compute the band itself — inherits a contract that already fails
- * loudly on any drift between derivation and publication.
+ * states x terminal widths, so phase 2 — which has landed: the static is
+ * retired and the paint step adopts the frame onto the model — inherits a
+ * contract that already fails loudly on any drift between derivation and
+ * publication. The retirement itself is pinned by the source arm at the
+ * foot of this file.
  *
  * The pinned law is three-way: the frame must carry the width it was painted
  * at; the renderer's pure band measurement over the SAME model must answer
@@ -81,7 +83,7 @@ final class DockGeometryParityTest extends TestCase
 
         TuiRenderer::renderView($app, $cols, 40);
 
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertIsArray($frame, $state . ' at ' . $cols . ' cells: a docked frame must publish its band');
 
         $measure = TuiRenderer::dockBandMeasure($app, $cols);
@@ -108,7 +110,7 @@ final class DockGeometryParityTest extends TestCase
 
         TuiRenderer::renderView($app, $cols, 40);
 
-        $frame = TuiRenderer::lastDockFrame();
+        $frame = $app->paintedDockFrame();
         self::assertIsArray($frame);
 
         $geometry = (new ReflectionMethod(App::class, 'dockGeometry'))->invoke($app);
@@ -139,8 +141,9 @@ final class DockGeometryParityTest extends TestCase
         $sidedSeen = false;
 
         foreach ([80, 100, 120, 140, 160] as $cols) {
-            TuiRenderer::renderView($this->appInState('agents'), $cols, 40);
-            $frame = TuiRenderer::lastDockFrame();
+            $app = $this->appInState('agents');
+            TuiRenderer::renderView($app, $cols, 40);
+            $frame = $app->paintedDockFrame();
             self::assertIsArray($frame);
             $splitSeen = $splitSeen || $frame['agentCols'] > 0;
             $sidedSeen = $sidedSeen || $frame['bandCols'] < $cols;
@@ -201,5 +204,22 @@ final class DockGeometryParityTest extends TestCase
             ->withPane(Pane::Chat);
 
         return $state === 'agentsDragged' ? $app->withAgentSplitCols(47) : $app;
+    }
+
+    /**
+     * Phase 2 retirement pin: the renderer's process-global frame static is
+     * gone — the paint step adopts the band onto the model
+     * ({@see App::adoptPaintedDockFrame()}) and the model owns it. This arm
+     * fails loudly the day the retired symbol or a hand-rolled assignment
+     * to a painted-frame field reappears in Tui\Renderer's source, which
+     * would fork a second source of truth behind the adapter this file
+     * keeps honest.
+     */
+    public function testTheFrameStaticRetirementHolds(): void
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../../src/Tui/Renderer.php');
+
+        self::assertStringNotContainsString('lastDockFrame', $source, 'the retired static and its accessor must stay retired');
+        self::assertStringNotContainsString('paintedDockFrame =', $source, 'the frame lives on the model; the renderer only hands it over');
     }
 }

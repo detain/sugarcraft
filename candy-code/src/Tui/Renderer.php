@@ -440,28 +440,6 @@ final class Renderer
     }
 
     /**
-     * The dock band exactly as the most recent {@see renderView()} laid it
-     * out — the geometry the phase-3 pointer maths resolve against.
-     *
-     * A drag's release cell must mean the same column the pointer sits on,
-     * and during an agent split or a chrome reflow that column count is NOT
-     * what `App::$cols` holds (the forward pointer on
-     * {@see App::seedSharesFromFrame()} names this as its live-band consumer).
-     * The renderer is the only place that knows what it painted, so it
-     * publishes the snapshot; {@see App::previewColumnResize()} and
-     * {@see App::commitDockDrop()} read it instead of re-deriving band maths
-     * a second way. 0-based columns / rows; `centerFrom`/`centerTo` bound the
-     * centre inclusive, `bandTop` is where pane row 0 paints.
-     *
-     * Null while the Agents dashboard owns the band (no side columns to
-     * resize) and before the first frame — a gesture with no snapshot does
-     * nothing, which is the same answer a click before the first frame gives.
-     *
-     * @var ?array{cols: int, bandTop: int, bandCols: int, paneRows: int, centerFrom: int, centerTo: int}
-     */
-    private static ?array $lastDockFrame = null;
-
-    /**
      * Each docked pane's per-body-line click keys as last painted, by pane
      * id — what {@see renderView()} zones into `siderow:` targets. Written by
      * {@see renderPane()} so the keys always describe the block that was
@@ -511,14 +489,6 @@ final class Renderer
         }
 
         return null;
-    }
-
-    /**
-     * @return ?array{cols: int, bandTop: int, bandCols: int, paneRows: int, centerFrom: int, centerTo: int}
-     */
-    public static function lastDockFrame(): ?array
-    {
-        return self::$lastDockFrame;
     }
 
     /**
@@ -792,15 +762,16 @@ final class Renderer
             'agentCols' => $agentCols,
         ] = self::composeBand($a, $cols, $paneRows);
 
-        // Publish the band the pointer maths resolve against (see
-        // {@see $lastDockFrame}): exactly these widths, this frame, whether
+        // Adopt the band onto the model the pointer maths resolve against
+        // (Tui\Renderer paints, App::adoptPaintedDockFrame owns — phase 2
+        // retired the process static): exactly these widths, this frame, whether
         // or not clicks are on — a read-only snapshot costs nothing and a
         // gesture that begins the frame after clicks flip on still measures
         // against what is painted.
         $bandTop = self::lineCount($menuBar)
             + ($windowStrip === '' ? 0 : self::lineCount($windowStrip))
             + ($notice === '' ? 0 : self::lineCount($notice));
-        self::$lastDockFrame = [
+        $a->adoptPaintedDockFrame([
             'cols' => $cols,
             'bandTop' => $bandTop,
             'bandCols' => $bandCols,
@@ -810,7 +781,7 @@ final class Renderer
             // The live-agent column's width this frame (0 = no split): what a
             // seam drag measures its travel against.
             'agentCols' => $agentCols,
-        ];
+        ]);
 
         $parts = [$menuBar];
         if ($windowStrip !== '') {
@@ -996,7 +967,7 @@ final class Renderer
      * drift from the real frame, because it IS the real frame's band.
      *
      * The caller owns everything that is frame rather than band: the
-     * `$lastDockFrame` publish, the chrome assembly, the zone stamps, and
+     * the model's adopted band frame, the chrome assembly, the zone stamps, and
      * {@see LiveRenderer::setZoneOrigin()}. `images` comes back in the map
      * instead of a View so a caller that dims the band can drop them — a
      * pixel-graphics placement has nothing to be painted onto once the rows
@@ -1120,7 +1091,7 @@ final class Renderer
         LiveRenderer::clearZones();
 
         // No side columns exist to resize or drag in a full-band dashboard.
-        self::$lastDockFrame = null;
+        $a->adoptPaintedDockFrame(null);
 
         // The dashboard drops the hosted chat's zones (above) but keeps the
         // bar's: this frame DOES paint the menu titles, so a click on one has
@@ -1224,7 +1195,7 @@ final class Renderer
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
         LiveRenderer::clearZones();
-        self::$lastDockFrame = null;
+        $a->adoptPaintedDockFrame(null);
         self::$scrollRegions = [];
 
         $bandTop = self::lineCount($menuBar) + ($notice === '' ? 0 : self::lineCount($notice));
@@ -1310,7 +1281,7 @@ final class Renderer
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
         LiveRenderer::clearZones();
-        self::$lastDockFrame = null;
+        $a->adoptPaintedDockFrame(null);
         self::$scrollRegions = [];
 
         self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), self::lineCount($menuBar), []);
@@ -1379,7 +1350,7 @@ final class Renderer
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
         LiveRenderer::clearZones();
-        self::$lastDockFrame = null;
+        $a->adoptPaintedDockFrame(null);
         self::$scrollRegions = [];
 
         self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), self::lineCount($menuBar), []);
@@ -1508,7 +1479,7 @@ final class Renderer
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
         LiveRenderer::clearZones();
-        self::$lastDockFrame = null;
+        $a->adoptPaintedDockFrame(null);
         self::$scrollRegions = [];
 
         self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), self::lineCount($menuBar), []);
@@ -1564,7 +1535,7 @@ final class Renderer
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
         LiveRenderer::clearZones();
-        self::$lastDockFrame = null;
+        $a->adoptPaintedDockFrame(null);
         self::$scrollRegions = [];
 
         self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), self::lineCount($menuBar), []);
@@ -1792,7 +1763,7 @@ final class Renderer
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
         LiveRenderer::clearZones();
-        self::$lastDockFrame = null;
+        $a->adoptPaintedDockFrame(null);
         self::$scrollRegions = [];
 
         self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), $cellGrid ? self::lineCount($menuBar) : null, []);
@@ -1838,7 +1809,7 @@ final class Renderer
         $dropped = self::lineCount($joined) - self::lineCount($frame);
 
         LiveRenderer::clearZones();
-        self::$lastDockFrame = null;
+        $a->adoptPaintedDockFrame(null);
         self::$scrollRegions = [];
 
         $bandTop = self::lineCount($menuBar) + ($notice === '' ? 0 : self::lineCount($notice));
@@ -3008,7 +2979,7 @@ final class Renderer
     private static function overlayDropTarget(App $a, string $frame, int $bandTop, int $paneRows): string
     {
         $drag = App::paneDragController();
-        $geometry = self::$lastDockFrame;
+        $geometry = $a->paintedDockFrame();
 
         if (!$drag->isDockDragging() || !$drag->isArmed() || $geometry === null || $paneRows < 2 || $bandTop < 0) {
             return $frame;
