@@ -475,7 +475,8 @@ through **verbatim** (so this library's own `mark()` zones survive), which
 means text from any source you do not control — network payloads,
 transcripts, other processes — must be swept by you before it enters the
 pipeline. Use sugar-core's sanitizer, which strips control sequences and
-forged zone sentinels while preserving image markers (U+E002 and above):
+sweeps the U+E000/U+E001 zone-sentinel arena — forged and legitimate —
+while preserving image markers (U+E002 and above):
 
 ```php
 <?php
@@ -485,8 +486,9 @@ use SugarCraft\Overlay\{Position, Veil};
 $bg      = str_repeat("..............................\n", 3);
 $hostile = (string) ($_ENV['MODAL_BODY'] ?? "fallback text"); // text from wherever you do NOT trust it
 
-// Direct composite path: sweep payloads, but keep the marker arena —
-// your own mark() zones legitimately ride these bytes.
+// Direct composite path: sweep raw payloads BEFORE marking. This
+// sweep strips every U+E000/U+E001 sentinel — yours included — so
+// hit-test zones must be added by mark() after the sweep, never before.
 echo Veil::new()->composite(Sanitize::untrustedForMarkedFrames($hostile), $bg, Position::CENTER, Position::CENTER) . "\n";
 
 // Content/stack path: sweep AT SET TIME. The stack reads content()
@@ -499,8 +501,10 @@ echo $veil->composite($veil->content(), $bg, Position::CENTER, Position::CENTER)
 The two sweeps differ deliberately:
 
 - `Sanitize::untrustedForMarkedFrames()` serves terminal-bound **marked
-  frames**: it neutralizes control sequences but PRESERVES the U+E000
-  arena so legitimate zone markers survive the trip.
+  frames**: it neutralizes control sequences and sweeps the ENTIRE
+  U+E000 arena — forged sentinels and your legitimate zone markers
+  alike — while leaving sugar-image's U+E002+ image-marker band intact.
+  Order therefore matters: sweep the raw payload first, then `mark()`.
 - `withUntrustedContent()` serves **display content**: it applies
   `Sanitize::untrustedForDisplay()` plus `stripZoneSentinels()` and
   folds TAB to its measured four cells. The frames-channel sanitizer is
@@ -511,17 +515,18 @@ The two sweeps differ deliberately:
   cells, so every clip and anchor computed from the measured width cuts
   the row short or past its end.
 
-The law, exactly: **sweep at the boundary, render the result.** Marked
-frames go through `Sanitize::untrustedForMarkedFrames()`; untrusted
-bodies entering content/stack paths go through `withUntrustedContent()`;
-mark() only text you assembled yourself, never raw payloads (a payload
+The law, exactly: **sweep the raw payload at the boundary, then mark,
+then render.** Marked frames go through
+`Sanitize::untrustedForMarkedFrames()`; untrusted bodies entering
+content/stack paths go through `withUntrustedContent()`; mark() only
+text you swept and assembled yourself, never raw payloads (a payload
 that contains sentinels mints its own zones if you skip the sweep).
 Both sweeps preserve sugar-image's U+E002+ image-marker band.
 
 ## Zone markers and presentation
 
 `mark()` wraps content in `U+E000 id U+E001 … U+E000 /id U+E001`
-envelopes. The C1 fix made these cost ZERO columns everywhere in the
+envelopes. These cost ZERO columns everywhere in the
 compositor — measurement, clipping, and anchoring all account them like
 escape sequences — but they are not invisible: the id characters are
 printable bytes, and a host that forwards a marked frame straight to a
@@ -535,7 +540,10 @@ sat. The split is by consumer:
   fallbacks, paste-through) must strip first:
   `Sanitize::stripZoneSentinels($frame)` removes exactly the
   U+E000/U+E001 pair and leaves everything else — image markers included
-  — byte-for-byte. (The fleet does this today: candy-code's
+  — byte-for-byte, but the id text between a pair survives as printable
+  garbage. To remove whole `U+E000 id U+E001` envelopes (id included),
+  use the tag-aware sweep sugar-mouse ships in its `src/Scan.php`:
+  `Scan::strip($rendered)`. (The fleet does this today: candy-code's
   `src/Tui/Renderer.php` strips marker triples on its own transcript
   path.)
 
