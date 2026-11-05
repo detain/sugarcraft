@@ -103,7 +103,10 @@ Control the maximum number of concurrent alerts with `withMaxConcurrent(int|null
   the next write, but persistent (non-expiring) alerts accumulate until the
   host calls `clear()` or `dismiss()`
 
-When the cap is reached, the configured `Overflow` strategy determines behaviour.
+When the cap is reached, the configured `Overflow` strategy determines
+behaviour. `Enqueue`'s surplus is NOT transient: persistent (non-expiring)
+alerts accumulate in the queue and stay there until the host clears or
+replaces them, so under `Enqueue` the queue length only ever grows.
 
 Per-alert SIZE is bounded too (lib-reviews-1102 M6: one hostile 32 KB string
 measured 14 s inside `view()`): `Toast::MAX_MESSAGE_CELLS` (fixed at 8192)
@@ -132,7 +135,8 @@ message or action row can be visually occluded with no signal in the frame.
 Expiry reflow also MOVES surviving boxes (no stable anchors yet); a
 stable-row/`+N more` badge policy is an open owner-ruling seam (see lane
 PROGRESS), so hosts with accessibility-critical stacks should cap
-`maxConcurrent` or use `Enqueue` deliberately.
+``maxConcurrent` or use `Enqueue` deliberately — its surplus never drains on
+its own.
 
 ## Persistent Alerts
 
