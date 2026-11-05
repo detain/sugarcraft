@@ -364,7 +364,7 @@ Use the non-mutating read API instead (not deprecated):
 | `StandardColors::$brightBlack` | `StandardColors::fromIndex(8)` |
 | enumerating the palette | `StandardColors::all()` (indexed 0–15) · `StandardColors::catalog()` (names) |
 | a private/global override table | build your own `array` from `all()` — the `Color` values are immutable, so a local array is already isolated |
-| constructing fresh standard colors | `new Color(0xcd, 0x00, 0x00)`, `Color::fromHex('#cd0000')` or `Color::fromAnsi256Index(1)` |
+| constructing fresh standard colors | `new Color(0xcd, 0x00, 0x00)`, `Color::parse('#cd0000')` or `Color::fromAnsi256Index(1)` |
 
 `fromIndex(int)` is bounds-checked and throws `OutOfBoundsException` outside
 `0..15`. A structural test pins both halves of the window: every deprecated
