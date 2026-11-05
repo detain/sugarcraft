@@ -467,6 +467,31 @@ foreach ($procs as $row => $p) {
 
 ## Components Namespace
 
+> **Keyboard, focus, mouse and resize contract.** No class under
+> `Components\` reads input itself: nothing in `src/Components/` consumes key,
+> mouse, or resize events. Interactive widgets are pure renderers whose entire
+> input vocabulary is their state setters (`withValue()`, `withActiveIndex()`,
+> `withSelected()`, …), and focus-emphasis is host-driven the same way — a
+> focused `Input` gets its highlight through the border colour passed to it,
+> not through an internal focus bit.
+>
+> What the lib provides is the machinery the host wires together:
+> `Keys\KeyMap::handle(Key)` dispatches a decoded key to its bound `KeyAction`
+> closures (`on()` / `onAny()` / `off()`; `Keys\KeyIdentifier` mints the
+> standard binding ids `quit()`, `help()`, `refresh()`, `focusNext()`,
+> `focusPrev()`); `Layout\FocusManager` holds the ordered set of focusable ids,
+> delegating wrap-around Tab/Shift-Tab traversal to sugar-focus's `FocusRing`
+> and adding a per-id focused-history flag with durable save/restore; and
+> `Layout\Screen::setup()` / `teardown()` emit the session preamble and trailer
+> — alternate screen, hidden cursor, and mouse tracking (`Ansi::mouseAllOn()`)
+> when enabled. Resize arrives as sugar-core's `WindowSizeMsg`. Legacy plugins
+> see none of this traffic — only the tick and the dimensions, per "What a
+> plugin can react to" under Plugin Namespace.
+>
+> `examples/dashboard-live.php` is the worked end-to-end wiring: `q`/`Ctrl-C`
+> quit, `Tab`/`Shift+Tab` and the arrows rotate panel focus through a
+> `FocusManager`, and each panel renders into its `Boxer` layout cell.
+
 ### Components\GridTable (Data Grid)
 
 The flagship interactive table — a full-featured data grid with sort, filter,
