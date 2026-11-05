@@ -33,6 +33,7 @@ candy-code/tests/Host/WebTwoHostCommandsTest.php	12.739	22
 candy-code/tests/Commands/CustomCommandShellAndFileFormsTest.php	12.542	42
 candy-code/tests/Backend/CommandBackendChildAbandonTest.php	12.401	8
 candy-code/tests/Agents/AgentManagerTest.php	12.301	147
+candy-code/tests/Server/TokenScopeTest.php	12.024	43
 candy-code/tests/Support/DescriptorInheritanceGuardTest.php	11.961	15
 candy-code/tests/Session/CheckpointTest.php	11.926	14
 candy-code/tests/Workflows/WorkflowEngineTest.php	11.699	52
@@ -1854,4 +1855,3 @@ candy-code/tests/Context/Pruning/Strategies/SupersededTurnContextStrategyTest.ph
 candy-code/tests/Windows/WindowsBashSmokeTest.php	0.000	2
 candy-code/tests/AssistantMsgTest.php	0.000	2
 candy-code/tests/Windows/WindowsPtyRunSmokeTest.php	0.000	1
-candy-code/tests/Server/TokenScopeTest.php	12.338	38
