@@ -74,10 +74,13 @@ final class Theme
      * never served a stale answer.
      *
      * Mirrors charmbracelet/fang, which renders through
-     * `colorprofile.Detect(w, os.Environ())`: tty-ness is checked before
-     * NO_COLOR, so a non-tty stream resolves to NoTty (no escape bytes at
-     * all) whether or not NO_COLOR is set, and NO_COLOR on a terminal
-     * resolves to Ascii (colour dropped, bold/faint kept).
+     * `colorprofile.Detect(w, os.Environ())`; the ladder order lives in
+     * sugar-core's {@see \SugarCraft\Core\Util\ColorProfile} and is not
+     * re-implemented here: `CLICOLOR_FORCE` / `FORCE_COLOR` resolve first
+     * and outrank tty-ness and `TERM=dumb` (a forced stream keeps full
+     * colour even through a pipe), while `NO_COLOR` outranks the force
+     * vars and resolves to Ascii (colour dropped, bold/faint kept). An
+     * unforced non-tty stream resolves to NoTty (no escape bytes at all).
      *
      * @param array<string,string>|null $env    environment to inspect;
      *                                          null = the process environment
@@ -114,7 +117,8 @@ final class Theme
      * terminal behind it — that is "output is not a tty", so it is detected
      * exactly as any non-tty stream would be, against a throwaway in-memory
      * stream. That keeps sugar-core the sole owner of the convention order
-     * (tty-ness, TERM=dumb, NO_COLOR, CLICOLOR_FORCE / FORCE_COLOR, ...)
+     * (CLICOLOR_FORCE / FORCE_COLOR first, then tty-ness, TERM=dumb,
+     * NO_COLOR, ...)
      * instead of copying it.
      *
      * With no STDOUT constant at all (non-CLI SAPI) there is no stream to

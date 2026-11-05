@@ -50,12 +50,15 @@ echo StatusLine::error('connection refused'), "\n";
   theme by passing styles to the constructor, or chain `Theme::build()` —
   the builder requires all seven slots before `build()` succeeds.
   `Theme::detect()` is the `ansi()` palette downgraded to what the output
-  can show, via sugar-core's `ColorProfile::detect()`: no escape bytes at
-  all when STDOUT is not a tty (`myapp --help | less`), colour dropped but
-  bold kept under `NO_COLOR` on a terminal, full colour forced by
-  `CLICOLOR_FORCE` / `FORCE_COLOR`. As in the `colorprofile` design, tty-ness
-  is checked before `NO_COLOR`, so a pipe gets plain text whether or not
-  `NO_COLOR` is set. **Every presenter called without a theme uses
+  can show, via sugar-core's `ColorProfile::detect()` — its ladder, in
+  order: `CLICOLOR_FORCE` / `FORCE_COLOR` are resolved first and outrank
+  tty-ness and `TERM=dumb`, so a forced stream keeps full colour even
+  through a pipe; otherwise a non-tty STDOUT (`myapp --help | less`) or
+  `TERM=dumb` emits no escape bytes at all; `NO_COLOR` outranks the force
+  vars and drops colour while keeping bold; BSD `CLICOLOR=0` drops colour
+  unless forced. The roster authority is sugar-core's `ColorProfile`
+  docblock — sugar-cli never re-implements the order. **Every presenter
+  called without a theme uses
   `Theme::detect()`**; an explicitly passed theme is rendered as given —
   apply the same downgrade to any preset with
   `$theme->withColorProfile(\SugarCraft\Core\Util\ColorProfile::detect(null, STDOUT))`
