@@ -45,6 +45,7 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
       <div class="feature"><strong>$score: int</strong><span>Readonly match quality score — higher is better; <code>isMatched()</code> is <code>score &gt; 0</code>.</span></div>
       <div class="feature"><strong>indices(): list&lt;int&gt;</strong><span>0-based code-point offsets into the original haystack (UTF-8 safe — indices are at character boundaries, not bytes).</span></div>
       <div class="feature"><strong>$needle / $haystack: string</strong><span>Readonly query and candidate the result was computed for.</span></div>
+      <div class="feature"><strong>$matchedIndices: array</strong><span>Readonly list of 0-based code-point offsets of the matched characters — the same data <code>indices()</code> returns.</span></div>
     </div>
 
     <h3 style="margin-top: 32px;">Algorithms</h3>
@@ -82,10 +83,11 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
 <tr><td>FuzzyMatcher</td><td>match(string $query, string $candidate): ?MatchResult</td><td>Single match or null</td></tr>
 <tr><td>FuzzyMatcher</td><td>matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): list&lt;MatchResult&gt;</td><td>All matches sorted by score desc</td></tr>
 <tr><td>FuzzyMatcher</td><td>matchAllGenerator(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): Generator</td><td>Ranked-order generator; drains and sorts before the first yield (same output as matchAll())</td></tr>
-<tr><td>MatchResult</td><td>$score / $needle / $haystack (readonly)</td><td>Match quality score (higher = better), the query and the candidate</td></tr>
+<tr><td>MatchResult</td><td>$score / $needle / $haystack / $matchedIndices (readonly)</td><td>Match quality score (higher = better), the query and the candidate, and the matched code-point offsets</td></tr>
 <tr><td>MatchResult</td><td>indices(): list&lt;int&gt;</td><td>0-based matched code-point offsets into the original haystack</td></tr>
 <tr><td>MatchResult</td><td>isMatched(): bool / isEmpty(): bool</td><td>score &gt; 0 / no matched indices</td></tr>
-<tr><td>SmithWatermanMatcher</td><td>new(?ScoringProfile $profile = null, int $maxQueryLength = 128, int $maxCandidateLength = 1000, bool $requireFullQuery = false)</td><td>Local sequence alignment; over-cap input is truncated</td></tr>
+<tr><td>SmithWatermanMatcher</td><td>new(?ScoringProfile $profile = null, int $maxQueryLength = 128, int $maxCandidateLength = 1000, bool $requireFullQuery = false)</td><td>Local sequence alignment; over-cap candidates truncate, and under full-query mode an over-cap query is rejected</td></tr>
+<tr><td>SmithWatermanMatcher</td><td>score(string $query, string $candidate): int</td><td>Alignment score without building a full result (0 = no match) — SmithWatermanMatcher only, not part of the FuzzyMatcher contract</td></tr>
 <tr><td>SmithWatermanMatcher</td><td>withRequireFullQuery(bool $require = true): self / requiresFullQuery(): bool</td><td>Full-query mode: every query character must land, in order</td></tr>
 <tr><td>SmithWatermanMatcher</td><td>profile() / maxQueryLength() / maxCandidateLength()</td><td>Configured weights and length caps</td></tr>
 <tr><td>ScoringProfile</td><td>canonical() / strict() / lenient()</td><td>Smith-Waterman weight presets; default() is a deprecated alias of canonical()</td></tr>

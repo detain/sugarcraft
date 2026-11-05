@@ -183,10 +183,14 @@ name) throws `InvalidArgumentException`. `create()` is a deprecated alias.
 ```php
 final class MatchResult
 {
-    public readonly string $needle;      // Search query
-    public readonly string $haystack;   // Matched candidate
-    public readonly int $score;         // Higher = better match
-    public readonly array $matchedIndices; // 0-based char indices of matched chars
+    public readonly string $needle;         // Search query
+    public readonly string $haystack;       // Matched candidate
+    public readonly int $score;             // Higher = better match
+    public readonly array $matchedIndices;  // 0-based CODE-POINT indices into the original haystack (not byte offsets)
+
+    public function indices(): array;       // the same offsets as a list<int> — accessor quickpick-style consumers use
+    public function isMatched(): bool;      // score > 0
+    public function isEmpty(): bool;        // no characters matched
 }
 ```
 
