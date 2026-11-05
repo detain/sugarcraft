@@ -140,8 +140,9 @@ and until then the file is empty and shielded by the `0700` directory. A
 directory or file left loose by an older version is tightened on the next
 write; if that fails, the write aborts rather than storing your data in the
 open. Every `print`/`echo` of a stored project or file name goes through a
-control-byte strip, so a doctored store cannot paint escape sequences into
-your terminal.
+control-byte strip (every C0 byte except TAB, CR and LF included), so a doctored
+store cannot paint escape sequences into your terminal and every name paints as
+a single line.
 The `backup` archive
 under `<dir>-backups/` is held to the same contract: it is created `0700` and
 every copied day file is tightened to `0600`, because an archive of those files

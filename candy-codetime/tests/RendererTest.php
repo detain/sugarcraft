@@ -80,6 +80,32 @@ final class RendererTest extends TestCase
         // Project name should appear as "xy" not "x y" or with embedded control chars
         $this->assertStringContainsString('xy', $out);
     }
+
+    /**
+     * Step 10 (M-3): the clean() sweep used to SKIP CR and LF, so a stored
+     * name could split or shift a rendered frame row. Both bytes now fall to
+     * the sweep — the evil-name frame is byte-identical to the frame of the
+     * same beats carrying the collapsed plain names, proving the strip is
+     * total (no forged row) and the layout is stable.
+     */
+    public function testStoredNewlinesCannotSplitTheFrameTheyPaintIn(): void
+    {
+        $time = (new \DateTimeImmutable('2024-06-07'))->getTimestamp();
+        // Both injections ride the PROJECT leg — the only stored free text
+        // the ranking pane paints — so the pin sees them in the frame.
+        $evil = Renderer::render($this->dashboard([
+            new Heartbeat($time, "AAA\x0aBBB", 'php', 'a.php', 600), // LF in a name
+            new Heartbeat($time, "CCC\x0dDDD", 'php', 'b.php', 700), // CR in a name
+        ]));
+        $plain = Renderer::render($this->dashboard([
+            new Heartbeat($time, 'AAABBB', 'php', 'a.php', 600),
+            new Heartbeat($time, 'CCCDDD', 'php', 'b.php', 700),
+        ]));
+
+        $this->assertSame($plain, $evil, 'control bytes collapse before painting: no extra row, no shifted border');
+        $this->assertStringContainsString('AAABBB', $evil);
+        $this->assertGreaterThan(0, substr_count($plain, '╰'), 'the byte-equality above pins every border row in place');
+    }
     public function testNarrowTerminalDoesNotCrashTheTimeline(): void
     {
         // Pre-fix, width 2 drove the sparkline budget negative and Sparkline

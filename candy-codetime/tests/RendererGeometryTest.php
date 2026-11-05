@@ -207,6 +207,40 @@ final class RendererGeometryTest extends TestCase
     }
 
     /**
+     * Step 10 (M-3): CR and LF used to survive the clean() sweep, so a stored
+     * name could forge a frame row or shift the rounded border. With the
+     * extended sweep the evil-name frame keeps the clean-name row budget and
+     * exactly one bottom border, and every row still fits the terminal.
+     */
+    public function testControlByteNamesForgeNoRowsAndShiftNoBorder(): void
+    {
+        $end = new \DateTimeImmutable(self::END);
+        $evil = [
+            new Heartbeat($end->getTimestamp(), "evil\nFAKE-ROW", 'php', 'a.php', 600),
+            new Heartbeat($end->getTimestamp(), "cr\rinjected", 'php', 'b.php', 700),
+        ];
+        $clean = [
+            new Heartbeat($end->getTimestamp(), 'evilFAKE-ROW', 'php', 'a.php', 600),
+            new Heartbeat($end->getTimestamp(), 'crinjected', 'php', 'b.php', 700),
+        ];
+
+        $frame = self::frame(80, $evil);
+        $this->assertSame(
+            count(self::plain(self::frame(80, $clean))),
+            count(self::plain($frame)),
+            'an injected LF must not grow the frame',
+        );
+        $this->assertSame(
+            substr_count(self::frame(80, $clean), '╰'),
+            substr_count($frame, '╰'),
+            'the set of rounded borders is untouched by name bytes',
+        );
+        foreach (self::plain($frame) as $line) {
+            $this->assertLessThanOrEqual(80, Width::of($line), 'no row outgrows the terminal');
+        }
+    }
+
+    /**
      * @return array{0:string,1:string} the bars row and the weekday row
      */
     public function testTheFrameHeightIsStructurallyBounded(): void

@@ -17,7 +17,7 @@ use SugarCraft\Core\Util\ColorProfile;
 /**
  * Read-only dashboard Model. Loads the last `$days` days of
  * heartbeats once, computes Stats, and renders. `r` reloads from
- * disk, `←/→` shifts the window by one day, `q` quits.
+ * disk, `←/→` shifts the window by one day, `q`/`Esc` quits.
  *
  * Reads through the {@see HeartbeatReader} contract, so the same Model
  * runs over the JSONL store or the SQLite backend — whichever the

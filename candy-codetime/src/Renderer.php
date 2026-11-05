@@ -113,7 +113,7 @@ final class Renderer
         $timeline = self::timeline($d);
 
         $help = self::clip(self::tint(Style::new(), '#7d6e98', $d->colorProfile)
-            ->render('  ←  prev day  ·  →  next day  ·  r  reload  ·  q  quit'), $d->width);
+            ->render('  ←  prev day  ·  →  next day  ·  r  reload  ·  q/Esc  quit'), $d->width);
 
         return self::clipRows($header . "\n" . $top . "\n" . $timeline . "\n" . $help, $d->width) . "\n";
     }
@@ -255,11 +255,15 @@ final class Renderer
 
     /**
      * Control bytes that survive Ansi::strip (it removes escapes, not C0) would
-     * reach the terminal raw from store data the user never typed.
+     * reach the terminal raw from store data the user never typed. The sweep
+     * covers every C0 byte except TAB, plus DEL — CR and LF included — so a
+     * stored name paints exactly one line and cannot forge or shift a border.
+     * Malformed UTF-8 fails closed: the `/u` pass returns false and the `?? ''`
+     * discards the text rather than emitting partial bytes.
      */
     private static function clean(string $text): string
     {
-        return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/u', '', $text) ?? '';
+        return preg_replace('/[\x00-\x08\x0a-\x1f\x7f]/u', '', $text) ?? '';
     }
 
     private static function timeline(Dashboard $d): string
