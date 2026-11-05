@@ -218,9 +218,12 @@ every other byte stays raw: Alt + `0x01` is the raw `"\x01"` with Alt, not the
 ### Key names (the complete vocabulary)
 
 Names are stable strings; the match arms below are the whole space a decoder
-can produce. Anything a release carries gains the `Release` prefix with the
-first letter upper-cased (`ReleaseA`, `ReleaseArrowUp`, `ReleaseEnter`) —
-compare `isRelease()` rather than parsing the prefix.
+can produce. Anything a release carries gains the `Release` prefix, with the
+first letter upper-cased where the name begins with an ASCII letter — digits
+and punctuation keep their character, so a released `0` arrives as `Release0`,
+while a released `a` arrives as `ReleaseA` (`ReleaseArrowUp`, `ReleaseEnter`
+are already initial-capital). Compare `isRelease()` rather than parsing the
+prefix.
 
 | Family | Names |
 |---|---|
