@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\CodeTime\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\CodeTime\Heartbeat;
 use SugarCraft\CodeTime\Milestone;
 
 final class MilestoneTest extends TestCase
@@ -60,5 +61,26 @@ final class MilestoneTest extends TestCase
         $this->assertSame($original->name, $restored->name);
         $this->assertSame($original->time, $restored->time);
         $this->assertSame($original->description, $restored->description);
+    }
+
+    public function testFromArrayClampsAHandEditedFutureTime(): void
+    {
+        // A hand-edited sqlite row used to reach date() uncoerced and print
+        // a year in the fifty-one billion range; the read now rides the same
+        // ceiling as Heartbeat::fromArray().
+        $m = Milestone::fromArray(['name' => 'oops', 'time' => 1e18, 'description' => '']);
+        $this->assertSame(Heartbeat::MAX_TIME_SECONDS, $m->time);
+
+        $stringy = Milestone::fromArray(['name' => 'oops', 'time' => '99999999999999', 'description' => '']);
+        $this->assertSame(Heartbeat::MAX_TIME_SECONDS, $stringy->time);
+    }
+
+    public function testFromArrayClampsNegativeTimesToTheEpoch(): void
+    {
+        $m = Milestone::fromArray(['name' => 'backwards', 'time' => -5, 'description' => '']);
+        $this->assertSame(0, $m->time);
+
+        $float = Milestone::fromArray(['name' => 'backwards', 'time' => -1e15, 'description' => '']);
+        $this->assertSame(0, $float->time);
     }
 }

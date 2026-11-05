@@ -22,7 +22,10 @@ final readonly class Milestone
     {
         return new self(
             name: (string) ($row['name'] ?? ''),
-            time: (int) ($row['time'] ?? 0),
+            // Same coercion law as Heartbeat::fromArray(): a hand-edited row
+            // must not carry a negative or far-future time into the listing,
+            // where date() would render an absurd year.
+            time:     min(Heartbeat::MAX_TIME_SECONDS, max(0, (int)($row['time'] ?? 0))),
             description: (string) ($row['description'] ?? ''),
         );
     }

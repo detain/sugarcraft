@@ -181,11 +181,9 @@ final class SqliteBackend implements HeartbeatReader
         $rows = [];
         try {
             while ($row = $result->fetchArray(\SQLITE3_ASSOC)) {
-                $rows[] = new Milestone(
-                    (string) $row['name'],
-                    (int) $row['time'],
-                    (string) $row['description'],
-                );
+                // fromArray(), not the constructor: the stored row is
+                // hand-editable data and its time leg must be clamped.
+                $rows[] = Milestone::fromArray($row);
             }
         } finally {
             $result->finalize();
