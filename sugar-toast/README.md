@@ -10,7 +10,7 @@
 
 # SugarToast
 
-sugar-toast — a floating alert notification component for terminal UIs, for PHP 8.3+. Alerts float to the top of your TUI like bubbles in soda.
+sugar-toast — a floating alert notification component for terminal UIs, for PHP 8.3+. Alerts composite over the host's background frame at one of nine anchor positions and never block input.
 
 ## Features
 
@@ -18,7 +18,7 @@ sugar-toast — a floating alert notification component for terminal UIs, for PH
 - **4 alert types**: Error, Warning, Info, Success — severity carried by icon + colour (add `withAccessibleText()` for a plain-text word; the chrome itself is identical across types)
 - **Dynamic width**: full `maxWidth` by default; auto-fit to content engages ONLY via `withMinWidth(n>0)` — stacked boxes then anchor at ragged per-message offsets (shrink-to-fit vs stack-alignment trade)
 - **Symbol sets**: NerdFont (icons), Unicode (symbols), Ascii (plain text)
-- **Auto-dismiss**: duration-based expiry support
+- **Auto-dismiss**: time-based expiry, pruned by the host tick
 - **Multiple alerts**: queue of toasts rendered in order
 - **Progress toasts**: inline progress bar (0–100%) beneath the message body
 - **Accessible text mode**: `withAccessibleText()` names the severity in words and prints progress percentages — a text channel beside the frame's colour/glyph language (WCAG 1.4.1)
@@ -26,7 +26,7 @@ sugar-toast — a floating alert notification component for terminal UIs, for PH
 - **Styled alerts**: per-alert background/foreground/border colour overrides
 - **History log**: immutable, bounded record of dismissed alerts (default cap 100)
 - **Pure renderer**: outputs ANSI strings; works with any TUI framework
-- **Accessibility envs**: `REDUCE_MOTION`/`PREFERS_REDUCED_MOTION` drop blink; `NO_COLOR`/`CLICOLOR=0` drop all colour bytes (renderer palette, custom alert colours, inline message SGR); `CLICOLOR_FORCE` overrides. Environment-only checks — sugar-toast composites for its host and never probes a TTY itself
+- **Accessibility environment variables**: `REDUCE_MOTION`/`PREFERS_REDUCED_MOTION` drop blink; `NO_COLOR`/`CLICOLOR=0` drop all colour bytes (renderer palette, custom alert colours, inline message SGR); `CLICOLOR_FORCE` overrides. Environment-only checks — sugar-toast composites for its host and never probes a TTY itself
 
 ## Install
 
@@ -52,7 +52,7 @@ $bg = str_repeat("background content\n", 20);
 echo $toast->view($bg);
 ```
 
-Every default is plain: position `TopLeft`, `maxWidth` 50, `minWidth` 0 (auto-fit
+Nothing surprising in the defaults: position `TopLeft`, `maxWidth` 50, `minWidth` 0 (auto-fit
 off), `duration` `null` (alerts persist until dismissed — persistence is the
 explicit `Alert::$persistent` sentinel, not a magic `null` expiry),
 `allowEscToClose` true, `maxConcurrent` `null` (unbounded), overflow
@@ -106,9 +106,9 @@ Control the maximum number of concurrent alerts with `withMaxConcurrent(int|null
 When the cap is reached, the configured `Overflow` strategy determines behaviour.
 
 Per-alert SIZE is bounded too (lib-reviews-1102 M6: one hostile 32 KB string
-measured 14 s inside `view()`): `Toast::MAX_MESSAGE_CELLS` (default 8192)
+measured 14 s inside `view()`): `Toast::MAX_MESSAGE_CELLS` (fixed at 8192)
 truncates an over-long message with a visible `" …[truncated]"` marker, and
-`Toast::MAX_ACTIONS_PER_ALERT` (default 64) paints only the first 64 buttons
+`Toast::MAX_ACTIONS_PER_ALERT` (fixed at 64) paints only the first 64 buttons
 — the rest fold into a visible `"[+N more]"` row. The caps bind the RENDER
 only: the full message text and the complete action list still ride the
 `Alert` into history and `activeAlerts()`, so nothing is silently lost to a
@@ -197,7 +197,8 @@ if ($delay !== null) {
 ## Internationalization
 
 User-facing strings are internationalized via `SugarCraft\Toast\Lang::t()`.
-All translatable strings live in `lang/en.php` under the `'toast'` namespace.
+All translatable strings live as bare keys in `lang/en.php`; the `toast` lookup
+namespace is baked into `src/Lang.php`, not a nesting level inside the arrays.
 
 **Available keys** (`lang/en.php`):
 
@@ -409,7 +410,7 @@ already over the new cap survive until the next push evicts them.
 | `->actionRects(string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>` | Absolute frame cells of every painted `[Label]` button (the `"[+N more]"` fold row is not clickable) |
 | `->actionAt(int $col, int $row, string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): ?Action` | The dispatch door: which Action (if any) covers a frame position — first match in queue order |
 | `Lang::t(string $key, array $params = []): string` | Translate a known key ('dismiss', 'count', 'type.*') — the inherited sugar-core helper behind `ToastType::label()` |
-| `->view(string $background, int $w, int $h): string` | Render toast layer over background; both dimensions must lie in `1..Toast::MAX_VIEWPORT_DIMENSION` (10 000) or an `InvalidArgumentException` is thrown before any allocation — the frame is a real `width × height` cell grid, so bogus winsizes fail loud instead of exhausting memory. Boxes that cannot fit ellipsize (`…`): the icon and the line indent drop out on very narrow frames, and message/action content degrades instead of vanishing. (the legacy `View()` call sites keep resolving via PHP's case-insensitive method dispatch — there is no alias method) |
+| `->view(string $background, int $w, int $h): string` | Render toast layer over background; both dimensions must lie in `1..Toast::MAX_VIEWPORT_DIMENSION` (10 000) or an `InvalidArgumentException` is thrown before any allocation — the frame is a real `width × height` cell grid, so bogus winsizes fail loud instead of exhausting memory. Boxes that cannot fit ellipsize (`…`): the icon and the line indent drop out on very narrow frames, and message/action content degrades instead of vanishing. |
 
 | Class | Method | Description |
 |-------|--------|-------------|

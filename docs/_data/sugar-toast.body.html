@@ -95,7 +95,7 @@ echo $toast-&gt;view($bg);</code></pre>
     <p>Per-alert render size is bounded too: <code>Toast::MAX_MESSAGE_CELLS</code> truncates over-long messages with a visible marker and <code>Toast::MAX_ACTIONS_PER_ALERT</code> folds surplus buttons into a &quot;[+N more]&quot; row — the full text and action list still ride the Alert into history.</p>
 
     <h3 style="margin-top: 32px;">Internationalization</h3>
-    <p>User-facing strings use <code>SugarCraft\Toast\Lang::t()</code>. All keys are in <code>lang/en.php</code> under the <code>toast</code> namespace.</p>
+    <p>User-facing strings use <code>SugarCraft\Toast\Lang::t()</code>. All keys live as bare entries in <code>lang/en.php</code>; the <code>toast</code> lookup namespace is baked into <code>src/Lang.php</code>, not a nesting level inside the arrays.</p>
     <table class="api-table">
 <tr><th>Key</th><th>Default</th><th>Parameters</th></tr>
 <tr><td>type.info / type.warning / type.error / type.success</td><td>Info / Warning / Error / Success</td><td>—</td></tr>
