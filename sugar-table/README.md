@@ -1173,11 +1173,16 @@ cell style. Prefer `SugarCraft\CellBuffer\Style`.
 Render output is covered by golden-file snapshot tests. Fixture files live
 in `tests/fixtures/` with a `.golden` extension and are compared against
 actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
-To re-record fixtures after intentional output changes:
+The comparator is **create-only**: an existing fixture is never rewritten.
+To re-baseline after intentional output changes, delete the stale
+`tests/fixtures/<name>.golden` first, then recreate it with the update flag:
 
 ```sh
-UPDATE_GOLDENS=1 vendor/bin/phpunit
+SUGAR_TESTING_UPDATE_GOLDENS=1 vendor/bin/phpunit
 ```
+
+(`UPDATE_GOLDENS=1` is the legacy spelling of the same switch; a mismatch
+failure message names the file to delete.)
 
 ## License
 
