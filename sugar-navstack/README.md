@@ -161,12 +161,17 @@ use SugarCraft\Mouse\Scanner;
 $bc = Breadcrumb::new()->withScanner(Scanner::new());
 
 $output = $bc->render($stack);
-// Each crumb is wrapped in a named zone marker keyed by stack position: "crumb-0", "crumb-1", …
+// Each crumb is wrapped in a named zone marker keyed by stack position:
+// "crumb-0", "crumb-1", … The markers are raw U+E000/U+E001 sentinel bytes
+// carried INSIDE the string: hand scan() the untouched output, but STRIP
+// the row (SugarCraft\Mouse\Scan::strip($output)) before painting it to a
+// terminal — or the sentinels leak onto screen as garbage cells.
 
 // Feed the rendered row to the owned scanner. Pass the terminal's viewport
-// width (zones then clamp the way the emulator wraps the row) and the
-// 1-based row the bar is painted on when that is not row 1 — from here on
-// hit()/hitItem() take ABSOLUTE terminal coordinates.
+// width so zones clamp to it: cells past the edge stay UNCLICKABLE even
+// when the emulator visually wraps the row. Pass the 1-based row the bar
+// is painted on when that is not row 1 — from here on hit()/hitItem()
+// take ABSOLUTE terminal coordinates.
 $bc->scan($output, viewportWidth: $cols, row: $row);
 
 // One-call click dispatcher: resolves a clicked cell straight to the stack
@@ -176,26 +181,42 @@ $bc->scan($output, viewportWidth: $cols, row: $row);
 // the crumb on their left, so instinctive mid-gap clicks still route).
 $item = $bc->hitItem($stack, $col, $row);
 if ($item !== null) {
-    // Zone ids carry the FULL-stack position, so the jump cannot misroute
-    // even after setMaxWidth() elided older crumbs:
+    // Zone ids carry positions in the stack THAT WAS RENDERED, so the jump
+    // cannot misroute even after setMaxWidth() elided older crumbs — pass
+    // that same stack here (after filter() the ids are FILTERED positions;
+    // resolving them against the original stack would misroute):
     $index = \array_search($item, $stack->items(), true);
     $stack->popTo($index);
 }
 ```
 
 `hit($col, $row)` stays available when you want the `Zone` itself rather
-than the item. Both throw `LogicException` if a scanner is attached but the
-current render has not been scanned (re-rendering invalidates the geometry —
-hits are never served stale).
+than the item. Failure shapes are asymmetric on purpose: without a scanner,
+`hit()`/`hitItem()` return `null` QUIETLY (every lookup dead-ends), while
+`scan()` throws `LogicException` — a missing `withScanner()` surfaces loudly
+at the scan call, not at the first click. With a scanner attached but the
+current render unscanned, both lookups throw too: every `set*` mutation only
+takes effect on the NEXT `render()`, and each render clears the scanned flag
+— render, then scan, then hit, and never trust zones across a re-render.
 
 Two guarantees make that recipe safe under truncation:
 
 - Zone ids carry the crumb's position in the **full stack**, never a
   renumbered visible-list index — after `"… Settings › Display"`, the left
-  crumb is still `crumb-1`, so `popTo($index)` cannot misroute.
+  crumb is still `crumb-1`, so `popTo($index)` cannot misroute. The
+  qualification is which stack: `filter()` returns a FRESH stack and
+  renumbers, so a filtered bar's ids are positions in the FILTERED stack,
+  and lookups must resolve against it.
 - `withScanner()` **copies** the scanner you pass (it is never aliased), so two
   breadcrumbs seeded from one `Scanner` can't overwrite each other's zones.
   Read the owned copy back with `Breadcrumb::scanner()`.
+
+Two more handles serve multi-bar hosts: `setZonePrefix()` renames the id
+family (`crumb-N` → `<prefix>-N`, restricted to sugar-mouse's zone-id
+alphabet) so zone ids stay distinct when a host merges the zone enumerations
+of several breadcrumb widgets, and `visibleIndices()` reports the stack
+indices the most recent render actually showed — exactly the ids the current
+zones carry — so a jump target can be checked against elision before use.
 
 ## Shell
 

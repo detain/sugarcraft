@@ -255,7 +255,9 @@ final class Breadcrumb
 
     /**
      * Return the zone at the given ABSOLUTE terminal coordinate, or null
-     * if no crumb zone contains that cell.
+     * if no crumb zone contains that cell. Without a scanner attached this
+     * is a QUIET null no-op (every lookup dead-ends); the loud failure for a
+     * missing scanner lives in {@see scan()}.
      *
      * Requires scan() of the current render; {@see render()} and
      * {@see renderTitles()} invalidate the geometry.
