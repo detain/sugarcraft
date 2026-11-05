@@ -2,8 +2,6 @@
 
 # CandyStarter
 
-> Formerly published as `sugarcraft/candy-mold` (renamed 2026-10). <!-- @rename-keep -->
-
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-starter)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-starter)
@@ -13,7 +11,7 @@
 <!-- BADGES:END -->
 
 
-![demo](.vhs/start.gif)
+![Terminal recording: the counter app — Up/Down change the count, q/Esc/Ctrl+C quits](.vhs/start.gif)
 
 Skeleton repo for bootstrapping a SugarCraft TUI app. Start from this template and you've got a working app.
 
@@ -37,26 +35,28 @@ my-app/
 ├── phpunit.xml           # failOnWarning gate; tests scan tests/, coverage covers src/
 ├── LICENSE               # MIT
 ├── README.md             # this walkthrough
-├── CALIBER_LEARNINGS.md  # template gotchas (agent-facing; fine to delete downstream)
-├── .gitignore            # vendor/, composer.lock, phpunit caches, *.gif
+├── CALIBER_LEARNINGS.md  # template gotchas for AI-agent config sync (fine to delete downstream)
+├── .gitignore            # vendor/, composer.lock, phpunit caches, *.gif except !.vhs/start.gif
 ├── .assets/icon.png      # icon for the docs site
-├── bin/start             # entry point — runs Program(new Counter())
+├── bin/start             # entry point — Program(new Counter()) + stopSignal() exit tail (128+N)
 ├── src/
 │   └── Counter.php       # demo Model: up/down/quit, styled border
 ├── tests/
+│   ├── BinStartExitTailTest.php           # pins the bin's stopSignal() exit tail (128+N)
 │   ├── CounterTest.php                    # pinned behavior matrix — the test-shape reference
 │   ├── ModelContractDocumentationTest.php # README fence vs interface drift guard
-│   └── ReadmeSnippetsTest.php             # lint+execute every README php fence
+│   ├── ReadmeSnippetsTest.php             # lint+execute every README php fence
+│   └── SiteBodyTruthTest.php              # docs site body matches the README's claims
 └── .vhs/
     ├── start.tape        # CI gif recording of the running app
-    └── start.gif         # the rendered demo (force-tracked; CI regenerates)
+    └── start.gif         # the rendered demo (kept tracked by .gitignore's !.vhs/start.gif; CI regenerates)
 ```
 
-`bin/start` is a handful of meaningful lines: load the autoloader, instantiate your `Model`, hand it to `Program::run()`, then answer `stopSignal()` so a signal-stopped run exits `128+N` (130 after SIGINT, 143 after `kill`) while cooperative quits keep their 0. The Program harness owns the event loop, render tick, signal installation, raw-mode setup, and alt-screen lifecycle — you only write Models. Inside the monorepo the same script runs as `cd candy-starter && bin/start` once the package-local vendor exists (per-lib `composer install`, or `php ../scripts/refresh-deps.php --mode=linked` from the repo root); it resolves the autoloader relative to its own file — the one `<package>/vendor/autoload.php` candidate — not the working directory.
+`bin/start` is a handful of meaningful lines: load the autoloader, instantiate your `Model`, hand it to `Program::run()`, then answer `stopSignal()` so a signal-stopped run exits `128+N` (130 after SIGINT, 143 after `kill`) while cooperative quits keep their 0. The Program harness owns the event loop, render tick, signal installation, raw-mode setup, and alt-screen lifecycle — you only write Models. Inside the monorepo the same script runs as `cd candy-starter && bin/start` once the package-local vendor exists (per-lib `composer install`, or `php ../scripts/refresh-deps.php --mode=linked` from inside the package — equivalently `php scripts/refresh-deps.php --mode=linked` from the repo root); it resolves the autoloader relative to its own file — the one `<package>/vendor/autoload.php` candidate — not the working directory.
 
 ## Requirements
 
-PHP 8.3+ with `ext-intl` and `ext-ffi` (both arrive transitively via `sugar-core` → `sugar-pty`; the skeleton declares no `ext-*` of its own, and `composer create-project` fails loudly with a platform error if one is missing — enable it with your distro's `php-intl` / `php-ffi` packages or `pecl install ffi`). A TTY-capable, colour terminal is assumed for interactive use — see the `openTty` note under "Forking checklist" for piped-stream setups.
+PHP 8.3+ with `ext-intl` and `ext-mbstring` (both hard-required by `sugar-core`) and `ext-ffi` (required by `sugar-pty`, which arrives transitively via `sugar-core`). The skeleton declares no `ext-*` of its own; `composer` fails loudly with a platform error if one is missing — enable it with your distro's `php-intl` / `php-mbstring` / `php-ffi` packages (`pecl install ffi` where FFI isn't bundled). A TTY-capable terminal is assumed for interactive use — colour is auto-detected and the demo renders monochrome-safe — see the `openTty` note under "Forking checklist" for piped-stream setups.
 
 ## Anatomy of a SugarCraft Model
 
