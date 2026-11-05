@@ -174,7 +174,12 @@ a stateful coalescing closure. Where a helper takes a `LoopInterface`, passing
   exactly once. The wrapper unsubscribes its own token registration at settlement.
 - `singleFlight(keyFn, worker)` — coalescing callable: concurrent calls with the
   same key share ONE worker invocation and the same promise; the slot frees on
-  settle (success, failure, or synchronous throw). The shared flight is deliberately
+  settle (success, failure, or synchronous throw). The partition is the key
+  string alone — the flight is not scoped by caller: any concurrent call whose
+  `keyFn` yields the same key joins the same flight, whoever made it. A worker
+  that consults per-caller authorization (identity, permission set) MUST fold
+  that identity into the key, or a lower-privilege caller rides a
+  higher-privilege caller's fetch. The shared flight is deliberately
   not caller-abandonable — wrap the returned promise with `AsyncOps::cancellable()`
   to give callers an exit without stranding followers.
 - `retry(operation, attempts: 3, baseBackoffSeconds: 0.1, token:, maxTotalSeconds:, jitter: 0.0, ?loop:, now:, onRetry:)`
@@ -253,10 +258,13 @@ per-load timeout stays the caller's concern (compose with `withDeadline`).
 - `fetch(string $key, callable $loader)` — fresh hit resolves immediately; a load
   already in flight for the key is joined (ONE loader run serves all concurrent
   callers); otherwise the loader starts a flight whose result is stored and
-  returned. The loader MUST return a `PromiseInterface` — anything else fails the
-  load with an explicit `InvalidArgumentException` naming the returned type; a
-  loader that throws synchronously counts as a failed load. Either way the flight
-  slot is freed, so the next call retries.
+  returned. The key is the only partition: the cache does not know *which*
+  caller asked, so a load started for one caller answers every caller that
+  shares the key. If the backing load is per-caller authorized, fold the caller
+  identity into the key. The loader MUST return a `PromiseInterface` — anything
+  else fails the load with an explicit `InvalidArgumentException` naming the
+  returned type; a loader that throws synchronously counts as a failed load.
+  Either way the flight slot is freed, so the next call retries.
 - `withTtl()` / `withServeStaleOnError()` / `withMaxEntries()` — return new handles
   viewing the SAME store (configuration is immutable; the data is shared).
 - `peek()` / `has()` / `isFresh()` / `invalidate()` / `clear()` — last-known-value
