@@ -20,7 +20,8 @@ sugar-flexbox — layout building blocks for terminal UIs, for PHP 8.3+. Provide
 ### FlexBox
 - **CSS flexbox-like** responsive grid layout for terminal UIs
 - **Direction**: row (horizontal) or column (vertical)
-- **Align** items: start/center/end/stretch
+- **Align** items with the `Align` enum: `Align::Start` / `Align::Center` /
+  `Align::End` / `Align::Stretch`, set via `withAlign()`
 - **Gap** between items
 - **Ratio-based sizing** — items with grow ratios fill available space
 
@@ -100,6 +101,21 @@ Every dimension is in **cells**, and allocation follows one deterministic model 
 To build a sidebar plus a fill panel: give the sidebar `withBasis(20)` and the panel
 `withRatio(1)`. There is no center-a-dialog primitive in this lib — pad with fixed-ratio
 spacers (`withRatio(1)` on each side, content `withRatio(n)`) instead.
+
+The alignment cases come from the `Align` enum: `FlexBox::withAlign()` takes the enum,
+not a bare string (passing `'center'` is a `TypeError`; the string-taking method is
+`Column::withAlign()`).
+
+```php
+use SugarCraft\Flexbox\Flex\{Align, FlexBox, FlexItem};
+
+$boxes = FlexBox::row(
+    FlexItem::new('ab'),
+    FlexItem::new('cd'),
+)->withAlign(Align::Center);
+
+echo $boxes->render(20, 1);
+```
 
 ## Table Quick Start
 

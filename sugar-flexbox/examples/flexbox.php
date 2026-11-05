@@ -30,4 +30,14 @@ $col = FlexBox::column(
 )->withGap(1);
 
 echo "=== FlexBox Column (ratio 1:2:1, gap=1) ===\n";
-echo $col->render(50, 10) . "\n";
+echo $col->render(50, 10) . "\n\n";
+
+// Row with Align::Center — the enum case centers each item's text inside
+// its allocated cell (Start=left, End=right, Stretch=left-fill full height).
+$centered = FlexBox::row(
+    FlexItem::new("LEFT")->withRatio(1)->withStyle('34'),
+    FlexItem::new("RIGHT")->withRatio(1)->withStyle('32'),
+)->withAlign(Align::Center);
+
+echo "=== FlexBox Row (Align::Center) ===\n";
+echo $centered->render(40, 1) . "\n";
