@@ -908,7 +908,7 @@ final class Game implements Model
             $score->level,
         );
 
-        // MA-13: NAME the earned moment the math above just paid. T-spins
+        // NAME the earned moment the math above just paid. T-spins
         // lead (the difficult input is the story), perfect clears compound
         // with what earned them, and the rarest composites are spelled out
         // rather than flattened into their parts.

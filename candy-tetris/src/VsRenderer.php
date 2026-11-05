@@ -242,7 +242,7 @@ final class VsRenderer
 
     /**
      * The match strip: one full-width card under both boards carrying the
-     * facts MA-9 said VS never showed — both scores, the player's three-
+     * facts the versus view used to hide — both scores, the player's three-
      * piece next preview, the player's hold state (with the exhausted
      * cue), and the key list. Deliberately ONE card: per-panel cards under
      * 23-row boards would overshoot the height budget far worse, and the

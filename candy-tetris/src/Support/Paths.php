@@ -27,8 +27,9 @@ final class Paths
     }
 
     /**
-     * Absolute path of the high-score/onboarding store (findings MA-23 and
-     * MA-24 share one file so one corrupt file costs one honest notice).
+     * Absolute path of the high-score/onboarding store (the scoring record
+     * and the onboarding flag share one file, so one corrupt file costs one
+     * honest notice).
      */
     public static function scores(): ?string
     {

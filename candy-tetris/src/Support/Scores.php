@@ -3,7 +3,7 @@
 /**
  * candy-tetris/src/Support/Scores.php
  *
- * MA-23: the cross-session record. Before this file the README's own words
+ * The cross-session record. Before this file the README's own words
  * were "Nothing survives the exit" — the game-over banner printed a final
  * score with nothing to compare it against. This is a small immutable value
  * object over the same versioned-JSON envelope candy-minesweeper's
@@ -13,7 +13,7 @@
  * Load discipline mirrors the minesweeper precedent exactly:
  *   - missing file (or no resolvable path) → load() answers null, the
  *     launcher treats that as "no record yet" and behavior is byte-identical
- *     to the pre-MA-23 game;
+ *     to the game before records existed;
  *   - a malformed file THROWS naming the path — the launcher announces on
  *     stderr and starts fresh, and the old file is left untouched on disk.
  *     A corrupt record is never silently zeroed away by a save.

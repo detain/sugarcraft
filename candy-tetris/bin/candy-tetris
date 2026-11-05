@@ -16,7 +16,7 @@ use SugarCraft\Tetris\Support\Scores;
 use SugarCraft\Tetris\VsGame;
 
 (static function () {
-    // Guard shape ported from candy-code/candy-top (DST-1, measured on PHP
+    // Guard shape ported from candy-code/candy-top (measured on PHP
     // 8.3.6): when `php candy-tetris.phar` runs, THIS file is the archive's
     // stub and the process is NOT inside the archive — Phar::running()
     // answers '' there, and a bare '/x.phar/entry' path fails
@@ -85,7 +85,7 @@ if ($mode === LaunchMode::HELP) {
     exit(0);
 }
 
-// m27: the live key map. A missing file leaves the shipped table
+// The live key map. A missing file leaves the shipped table
 // byte-identical; an unreadable one is ignored LOUDLY on stderr and the
 // game still launches on defaults — never silently on half a map.
 try {
@@ -95,8 +95,8 @@ try {
     $bindings = Bindings::table();
 }
 
-// MA-23: the cross-session record. A missing file is no record yet
-// (behavior byte-identical to the pre-MA-23 launch); a corrupt one is
+// The cross-session record. A missing file is no record yet
+// (behavior byte-identical to a launch with no record wired); a corrupt one is
 // announced LOUDLY and the game starts fresh without ever zeroing the
 // old file — a save failure refuses, it does not overwrite.
 $scoresPath = Paths::scores();
@@ -113,8 +113,8 @@ if ($scoresPath !== null) {
 $game = match ($mode) {
     LaunchMode::VS => VsGame::start($bindings, $scores, $scoresPath),
     // Single-player enables lock delay so a grounded piece can still be
-    // nudged/rotated for a short window before it locks (W15 / SRS QoL).
-    // MA-24: a solo launch whose record has never seen the on-ramp opens
+    // nudged/rotated for a short window before it locks (SRS lock delay).
+    // A solo launch whose record has never seen the on-ramp opens
     // on the card. Without a resolvable HOME the mark cannot be written,
     // so the card honestly re-shows every launch rather than lying once.
     default => Game::startWithLockDelay(
@@ -125,7 +125,7 @@ $game = match ($mode) {
     ),
 };
 
-// MA-12: one capability profile, probed once at launch, drives BOTH the
+// One capability profile, probed once at launch, drives BOTH the
 // alt-screen contract and the model's colour posture. A NoTty terminal
 // (pipe, TERM=dumb) never gets raw alt-screen/SGR bytes it cannot parse —
 // the renderer answers with a plain refusal instead — and ColorProfile::detect()

@@ -3,7 +3,7 @@
 /**
  * candy-tetris/src/Support/Bindings.php
  *
- * The app-side half of finding m27: the shipped key table candy-tetris
+ * The app-side half of the live-binding layer: the shipped key table candy-tetris
  * dispatches through, and the two help surfaces that used to be static
  * translated cards ("← →  move" / "spc hard  c hold ..."). Those cards are
  * now DERIVED from the live registry, so a remap moves the on-screen help
@@ -12,7 +12,8 @@
  * The lang values keep their key names (help_card, vs_keys) but carry the
  * VERB column only; this class zips the verb lines onto the key column,
  * padded exactly as the hand-written cards were (width 5). With the default
- * table the derivation reproduces the pre-m27 cards byte for byte — pinned
+ * table the derivation reproduces the original hand-written cards byte for
+ * byte — pinned
  * for all sixteen locales by tests/Support/BindingsDerivationTest.
  */
 
