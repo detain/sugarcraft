@@ -105,9 +105,9 @@ $CANDY_CODETIME_DIR/
 
 Each line of a day file is one JSON object:
 `{"time": <unix seconds>, "project": <string>, "language": <string>, "file":
-<absolute path>, "duration": <seconds>, "tags": <array>}`. `tags` is always
-empty for now — no CLI command sets one yet, and readers should ignore
-unknown keys.
+<path as supplied>, "duration": <seconds>, "tags": <array>}`. The CLI never
+sets tags; a plugin-written tag is honored on read and export. Readers should
+ignore unknown keys.
 
 Day files are keyed by the machine's **local** calendar date, so history
 written while crossing time zones stays filed under the date it was tracked.
@@ -124,17 +124,21 @@ backend, open the database with `sqlite3` and fix the row in `heartbeats`.
 ### Privacy
 
 The data directory and every file in it are owner-private: directories are
-`0700`, day files and the database are `0600`, created under a narrowed umask
-so they are never world-readable for an instant — and a directory or file left
-loose by an older version is tightened on the next write (if that fails, the
-write aborts rather than storing your paths in the open — and every
-`print`/`echo` of a stored project or file name goes through a control-byte
-strip, so a doctored store cannot paint escape sequences into your terminal).
+`0700`, day files and the database are `0600`. Directories are created under a
+narrowed umask, so they never exist world-readable; regular files are
+created-then-tightened — mode `0600` is settled before any payload is written,
+and until then the file is empty and shielded by the `0700` directory. A
+directory or file left loose by an older version is tightened on the next
+write; if that fails, the write aborts rather than storing your data in the
+open. Every `print`/`echo` of a stored project or file name goes through a
+control-byte strip, so a doctored store cannot paint escape sequences into
+your terminal.
 The `backup` archive
 under `<dir>-backups/` is held to the same contract: it is created `0700` and
 every copied day file is tightened to `0600`, because an archive of those files
-is the same path map one directory over. Heartbeats carry absolute file paths
-and project names; treat the directory accordingly.
+is the same path map one directory over. Heartbeats carry file paths exactly as
+supplied (editor plugins typically send absolute ones) and project names; treat
+the directory accordingly.
 
 Colour is driven by the detected `ColorProfile` for the terminal: a profile
 below 256-colour (which `NO_COLOR=1`, `CLICOLOR=0` and `TERM=dumb` all land
