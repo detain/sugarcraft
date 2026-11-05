@@ -89,8 +89,13 @@ Every dimension is in **cells**, and allocation follows one deterministic model 
    every flex sibling a cell (3 ratio-1 items across 2 cells yield 1/1/0, never 1/1/1);
    the 1-cell floor is the fallback for ratio-0/basis-0 items and for the no-flex-space
    path, not a per-item minimum. Widths never shrink when the container grows.
-4. **Cross-axis align** (`start`/`center`/`end`/`stretch`) places an item's content within
-   its allocated slice; `render(w, h)` output always fits the requested box.
+4. **Align** (`start`/`center`/`end`/`stretch`) is ONE value that drives BOTH axes — there
+   is no separate cross-axis knob and no CSS `justify-content` counterpart, and rows are
+   always placed top-down. In row mode the case selects the box height (`stretch` fills the
+   declared height, every other case the tallest item) as well as how each item's text
+   sits inside its allocated cell; in column mode it selects the width each item's lines
+   render into plus the same horizontal placement. Content beyond the declared height is
+   clamped, never distributed; `render(w, h)` output always fits the requested box.
 
 To build a sidebar plus a fill panel: give the sidebar `withBasis(20)` and the panel
 `withRatio(1)`. There is no center-a-dialog primitive in this lib — pad with fixed-ratio
