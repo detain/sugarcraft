@@ -88,7 +88,12 @@ final readonly class TerminalReplyEvent implements Event
      * @param list<int>     $params    Numeric CSI parameters, in wire order (private-mode
      *                                 prefixes and intermediate bytes are not params).
      * @param string        $raw       The exact bytes consumed from the stream,
-     *                                 including "ESC ["/"ESC P" introducer and final byte.
+     *                                 including "ESC ["/"ESC P" introducer and final
+     *                                 byte — one exception: a string reply clipped at
+     *                                 the decoder's size cap carries only the
+     *                                 introducer plus the drained head (its
+     *                                 terminator was never seen); {@see $body} is the
+     *                                 authoritative payload slice there.
      * @param string        $body      Decoded payload for string sequences (OSC/DCS/APC/PM):
      *                                 the bytes between introducer and terminator. Empty
      *                                 for CSI-family replies.
