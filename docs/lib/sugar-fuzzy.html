@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarCraft — SugarFuzzy</title>
-<meta name="description" content="SugarFuzzy: Fuzzy string matching with scored matched indices — Smith-Waterman + Sahilm algorithms. Extracted from sugar-forms; enables filter-highlighting UI across the ecosystem.">
+<meta name="description" content="SugarFuzzy: Fuzzy string matching with matched character indices plus the match score — Smith-Waterman + Sahilm algorithms. Extracted from sugar-forms; enables filter-highlighting UIs across the ecosystem.">
 <meta property="og:title" content="SugarCraft — SugarFuzzy">
-<meta property="og:description" content="Fuzzy string matcher that returns which characters matched and their score. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style). Enables filter-highlighting UIs impossible with score-only matchers.">
+<meta property="og:description" content="Fuzzy string matcher that returns matched character indices plus the match score. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style). Enables filter-highlighting UIs impossible with score-only matchers.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-fuzzy.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-fuzzy.html">
 <meta property="og:type" content="website">
@@ -42,7 +42,7 @@
       <img class="detail-icon" src="../img/icons/sugar-fuzzy.png" alt="" aria-hidden="true">
       <div>
         <h2>SugarFuzzy</h2>
-        <p class="detail-sub">Fuzzy string matching with scored matched indices</p>
+        <p class="detail-sub">Fuzzy string matching with matched character indices plus the match score</p>
         <div class="detail-meta">
           <span class="tag-chip accent">foundation-package</span>
           <span class="tag-chip">fuzzy</span>
@@ -52,7 +52,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-fuzzy"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-fuzzy" alt="SugarFuzzy code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Fuzzy string matching that returns <strong>which characters matched and their score</strong>. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style scoring with separator/camel-case bonuses). The matched indices enable filter-highlighting UIs that were impossible with score-only matchers. Extracted from sugar-forms; back-compat shims remain in sugar-forms and sugar-treelist for existing consumers, while new code depends on sugar-fuzzy directly.</p>
+    <p class="lede" style="margin-top: 28px;">Fuzzy string matching that returns <strong>matched character indices plus the match score</strong>. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style scoring with separator/camel-case bonuses). The matched indices enable filter-highlighting UIs that were impossible with score-only matchers. Extracted from sugar-forms; back-compat shims remain in sugar-forms and sugar-treelist for existing consumers, while new code depends on sugar-fuzzy directly.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-fuzzy:@dev</code></pre>

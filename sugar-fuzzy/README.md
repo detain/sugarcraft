@@ -2,7 +2,7 @@
 
 > Formerly published as `sugarcraft/candy-fuzzy` (renamed 2026-10). <!-- @rename-keep -->
 
-Fuzzy string matching library with scored matched character indices — enables filter highlighting UI across the SugarCraft ecosystem.
+Fuzzy string matching library that returns matched character indices plus the match score — enables filter-highlighting UIs across the SugarCraft ecosystem.
 
 ## Installation
 
