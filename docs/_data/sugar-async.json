@@ -1,6 +1,6 @@
 {
     "title": "SugarCraft — SugarAsync",
-    "description": "SugarAsync: Async building blocks for ReactPHP — cancellation tokens, subscriptions, and timeout / retry / debounce / throttle helpers.",
+    "description": "SugarAsync: Async building blocks for ReactPHP — cancellation tokens and sources, disposable subscription handles, timeout / deadline / retry / debounce / throttle / fan-in helpers, in-flight coalescing, and a TTL async cache.",
     "ogTitle": "SugarCraft — SugarAsync",
     "ogDescription": "Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, retry, debounce, throttle). Foundation for ReactPHP usage across the ecosystem.",
     "emoji": "🍬",

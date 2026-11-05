@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarCraft — SugarAsync</title>
-<meta name="description" content="SugarAsync: Async building blocks for ReactPHP — cancellation tokens, subscriptions, and timeout / retry / debounce / throttle helpers.">
+<meta name="description" content="SugarAsync: Async building blocks for ReactPHP — cancellation tokens and sources, disposable subscription handles, timeout / deadline / retry / debounce / throttle / fan-in helpers, in-flight coalescing, and a TTL async cache.">
 <meta property="og:title" content="SugarCraft — SugarAsync">
 <meta property="og:description" content="Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, retry, debounce, throttle). Foundation for ReactPHP usage across the ecosystem.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-async.png">
@@ -91,6 +91,15 @@ $promise = AsyncOps::retry(
       <div class="feature"><strong>AsyncOps::retry()</strong><span>Retry a failed operation up to N times with exponential backoff. Respects CancellationToken — cancelling aborts remaining retries.</span></div>
       <div class="feature"><strong>AsyncOps::debounce()</strong><span>Wrap a callable so only the last call within the window fires, after silence.</span></div>
       <div class="feature"><strong>AsyncOps::throttle()</strong><span>Wrap a callable so it fires at most once per interval, ignoring excess calls.</span></div>
+      <div class="feature"><strong>AsyncOps::withDeadline()</strong><span>Budget-aware ceiling: rejects with TimeoutException on expiry and cancels the inner operation so no late result is ever adopted; the optional onTimeout hook gets one shot at aborting server-side work.</span></div>
+      <div class="feature"><strong>AsyncOps::cancellable()</strong><span>Guards a promise with a token: cancellation rejects the guard with OperationCancelledException and runs the onCancel cleanup hook; the registration un-registers itself when the inner promise settles.</span></div>
+      <div class="feature"><strong>AsyncOps::singleFlight()</strong><span>Coalesces concurrent same-key calls into one in-flight worker — one round-trip per key, every caller receives the outcome. Stateful: never share a singleFlight closure across a pcntl_fork boundary.</span></div>
+      <div class="feature"><strong>AsyncOps::all() / race()</strong><span>Fan-in helpers: all() waits for every promise (empty input resolves to []); race() adopts the first settled outcome (empty input throws InvalidArgumentException at the call site).</span></div>
+      <div class="feature"><strong>AsyncOps::onPending()</strong><span>Fires a progress hook when a promise is still unsettled after N seconds — a spinner signal for slow calls; the promise itself passes through untouched.</span></div>
+      <div class="feature"><strong>AsyncCache</strong><span>TTL'd async memo: fetch(key, loader) coalesces in-flight loads, serves fresh entries instantly, optionally serves stale on loader failure, with an LRU entry cap.</span></div>
+      <div class="feature"><strong>Suspended</strong><span>A paused command as data: a resume closure paired with its state. resume() hands the Cmd closure to the resumer exactly once — a second call yields null, never a double-fire.</span></div>
+      <div class="feature"><strong>CallbackSubscription</strong><span>The disposable handle onCancel() and Subscriptions::of() hand out: unsubscribe() drops a registration that has not fired; handles for work already done are born spent.</span></div>
+      <div class="feature"><strong>Timeout / cancellation exceptions</strong><span>OperationCancelledException and TimeoutException — plain RuntimeException subclasses; TimeoutException carries seconds() and label() context.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
@@ -118,15 +127,41 @@ $promise = AsyncOps::retry(
 <tr><td>CancellationSource</td><td>cancel(): void</td><td>Request cancellation. Idempotent.</td></tr>
 <tr><td>CancellationSource</td><td>isCancelled(): bool</td><td>Returns true if cancel() has been called</td></tr>
 <tr><td>CancellationSource</td><td>onCancel(callable): Subscription</td><td>Registers a cleanup callback on the source's own token (CancellationSource implements Cancellable); same fire-once, handle-un-registers semantics as CancellationToken::onCancel().</td></tr>
+<tr><td>CancellationToken</td><td>none(): self</td><td>Shared never-cancelled sentinel — the safe default for optional token parameters; its onCancel() returns a born-spent handle and retains nothing</td></tr>
 <tr><td>CancellationToken</td><td>isCancelled(): bool</td><td>Returns true if the source has been cancelled</td></tr>
 <tr><td>CancellationToken</td><td>onCancel(callable): Subscription</td><td>Register a callback; fires immediately if already cancelled (the handle is then born spent). Returns a Subscription — unsubscribe() before the token fires un-registers the callback, which is the leak guard when a token outlives the operation that registered on it.</td></tr>
+<tr><td>Cancellable</td><td>isCancelled() · cancel() · onCancel(callable)</td><td>Interface CancellationSource implements — type against it when a component must be cancellable</td></tr>
+<tr><td>Subscription</td><td>unsubscribe(): void</td><td>Interface: disposes the registration; the removal closure runs at most once, from unsubscribe()</td></tr>
+<tr><td>Subscription</td><td>isActive(): bool</td><td>Interface: false once unsubscribed, or born spent</td></tr>
+<tr><td>CallbackSubscription</td><td>of(Closure): self</td><td>Live handle over a removal closure — the concrete Subscription onCancel() returns</td></tr>
+<tr><td>CallbackSubscription</td><td>settled(): self</td><td>Born-spent handle (the callback already fired immediately); unsubscribe() is a no-op</td></tr>
+<tr><td>Subscriptions</td><td>new(): self</td><td>Empty composite collection</td></tr>
+<tr><td>Subscriptions</td><td>of(Closure): Subscription</td><td>Public glue: mints a standalone disposal handle from any cleanup closure (timers, listeners, temp-file owners)</td></tr>
 <tr><td>Subscriptions</td><td>compose(Subscription ...): self</td><td>Combine multiple subscriptions into one atomic handle</td></tr>
 <tr><td>Subscriptions</td><td>unsubscribe(): void</td><td>Dispose all underlying subscriptions</td></tr>
 <tr><td>Subscriptions</td><td>isActive(): bool</td><td>Returns false after unsubscribe()</td></tr>
+<tr><td>Subscriptions</td><td>count(): int · isEmpty(): bool</td><td>Size of the composite</td></tr>
 <tr><td>AsyncOps</td><td>withTimeout(LoopInterface, PromiseInterface, float): PromiseInterface</td><td>Wrap a promise with a timeout; rejects with TimeoutException</td></tr>
-<tr><td>AsyncOps</td><td>retry(callable, int, float, ?CancellationToken): PromiseInterface</td><td>Retry with exponential backoff; respects cancellation</td></tr>
+<tr><td>AsyncOps</td><td>withDeadline(?LoopInterface, PromiseInterface, float, ?callable onTimeout, ?string label): PromiseInterface</td><td>Ceiling on the remaining budget: on expiry rejects with TimeoutException and cancels the inner promise; late results are dropped, never adopted</td></tr>
+<tr><td>AsyncOps</td><td>cancellable(PromiseInterface, ?CancellationToken, ?callable onCancel): PromiseInterface</td><td>Token guard: cancellation rejects with OperationCancelledException and runs the onCancel hook; the registration auto-un-registers when the inner promise settles — no loop parameter</td></tr>
+<tr><td>AsyncOps</td><td>singleFlight(callable keyFn, callable worker): callable</td><td>Coalesces concurrent same-key calls into one in-flight worker; stateful — never share across pcntl_fork</td></tr>
+<tr><td>AsyncOps</td><td>retry(operation, attempts: 3, baseBackoffSeconds: 0.1, token:, maxTotalSeconds:, jitter: 0.0, loop:, now:, onRetry:): PromiseInterface</td><td>Retries a thunk with exponential backoff; a cancelled token stops the remaining attempts (reject OperationCancelledException); maxTotalSeconds rejects with TimeoutException on budget exhaustion; onRetry fires before each backoff sleep and its errors are logged, never propagated</td></tr>
+<tr><td>AsyncOps</td><td>all(iterable): PromiseInterface</td><td>Fan-in on every promise; empty input resolves to []</td></tr>
+<tr><td>AsyncOps</td><td>race(iterable): PromiseInterface</td><td>Adopts the first settled outcome; empty input throws InvalidArgumentException at the call site</td></tr>
+<tr><td>AsyncOps</td><td>onPending(PromiseInterface, float, ?callable onPending, ?LoopInterface, ?string label): PromiseInterface</td><td>Fires the hook if the promise is still unsettled after N seconds; the promise passes through untouched</td></tr>
 <tr><td>AsyncOps</td><td>debounce(callable, float, ?LoopInterface): callable</td><td>Debounce wrapper; only last call fires after window</td></tr>
 <tr><td>AsyncOps</td><td>throttle(callable, float, ?LoopInterface): callable</td><td>Throttle wrapper; fires at most once per interval</td></tr>
+<tr><td>Debounced</td><td>__invoke(...) · flush() · isPending() · unsubscribe() · isActive()</td><td>Handle AsyncOps::debounce() returns: invoke to (re)schedule, flush() runs the pending call now (answers null with nothing pending), unsubscribe() drops it</td></tr>
+<tr><td>Throttled</td><td>__invoke(...) · isPending() · unsubscribe() · isActive()</td><td>Handle AsyncOps::throttle() returns (no flush — trailing behavior is the trailing: flag)</td></tr>
+<tr><td>Suspended</td><td>new(callable resume, mixed state = null) · resume(): ?Closure · state(): mixed</td><td>Paused command as data; resume() yields the Cmd closure exactly once (a second call returns null)</td></tr>
+<tr><td>AsyncCache</td><td>new(ttlSeconds: 60.0, serveStaleOnError: false, ?clock, ?maxEntries): self</td><td>TTL'd async memo; injectable clock for tests; optional stored-key cap with eviction (&gt;= 1 when set)</td></tr>
+<tr><td>AsyncCache</td><td>fetch(string key, callable loader): PromiseInterface</td><td>Fresh entry resolves instantly; otherwise the loader starts — concurrent same-key fetches coalesce; a synchronous throw counts as a failed load</td></tr>
+<tr><td>AsyncCache</td><td>peek(string): mixed · has(string): bool · isFresh(string): bool</td><td>Render-path reads: last stored value (fresh or stale), a value is held, a held value is within TTL</td></tr>
+<tr><td>AsyncCache</td><td>isLoaded(string): bool · ageSeconds(string): ?float</td><td>Fresh OR in-flight (the loading-indicator read); monotonic age of the held value, past the TTL on purpose</td></tr>
+<tr><td>AsyncCache</td><td>invalidate(string): void · clear(): void</td><td>Drop a key / every entry and supersede in-flight loads — displaced arrivals resolve their own callers without adopting into the store</td></tr>
+<tr><td>AsyncCache</td><td>count() · keys() · ttlSeconds() · servesStaleOnError() · maxEntries() · withTtl() · withServeStaleOnError() · withMaxEntries()</td><td>Introspection over stored keys (fresh or stale, insertion order) and settings; the with* setters return new handles over the same store</td></tr>
+<tr><td>OperationCancelledException</td><td>(extends RuntimeException)</td><td>Rejection when a token-guarded operation is cancelled — cancellable(), and a token cancelled mid-retry</td></tr>
+<tr><td>TimeoutException</td><td>seconds(): ?float · label(): ?string</td><td>Rejection from withTimeout(), withDeadline(), and retry()'s maxTotalSeconds budget; carries the budget and optional label for message building</td></tr>
 </table>
   </div>
 </section>
