@@ -64,9 +64,14 @@ final class LogfmtFormatter implements Formatter
 
         // Context keys are namespaced away from the envelope (see RecordKeys):
         // a forged `level=...` context entry may never overwrite the real one.
+        // Keys are sanitized BEFORE the collision walk (JsonFormatter's order)
+        // because escape() below strips control bytes: claimed raw, a key like
+        // "lev\x0bel" would pass the reserved-name test unchanged and then
+        // collapse to a bare `level=` at emission — a last-wins logfmt parser
+        // would read the forged severity as real.
         $used = [];
         foreach ($context as $k => $v) {
-            $key = RecordKeys::claim((string) $k, $used);
+            $key = RecordKeys::claim(Sanitize::untrusted((string) $k), $used);
             $parts[] = $this->escape($key) . '=' . $this->escape($this->formatValue($v));
         }
 

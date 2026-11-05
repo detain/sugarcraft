@@ -218,4 +218,52 @@ final class RecordIntegrityTest extends TestCase
         $this->assertStringContainsString('time=14:33:05', $custom);
         $this->assertStringNotContainsString('+00:00', $custom);
     }
+
+    /**
+     * [C-01] Split-spellings of every reserved envelope name. A context key
+     * holding a control byte that Sanitize::untrusted() strips could pass the
+     * reserved-name test raw, then collapse to the bare reserved name at
+     * emission — forging a second `level=` (last-wins parsers read the forged
+     * severity as real). The key must be sanitized BEFORE RecordKeys::claim
+     * (JsonFormatter's order) so it is namespaced like the name it collapses
+     * to. Each row: hostile key => the ctx_ name it must land under.
+     *
+     * @return array<string,array{string,string}>
+     */
+    public static function reservedNameSplittings(): array
+    {
+        return [
+            'level' => ["lev\x0bel", 'ctx_level'],
+            'msg' => ["ms\x0bg", 'ctx_msg'],
+            'time' => ["\x0ctime", 'ctx_time'],
+            'caller' => ["call\x0ber", 'ctx_caller'],
+            'prefix' => ["pref\x0eix", 'ctx_prefix'],
+            '_encode_error' => ["_encode\x0b_error", 'ctx__encode_error'],
+        ];
+    }
+
+    /**
+     * @dataProvider reservedNameSplittings
+     */
+    public function testSplitSpelledReservedKeysNeverEmitABareEnvelopeToken(string $hostileKey, string $namespaced): void
+    {
+        $parsed = self::parseLogfmt($this->logfmtLine([$hostileKey => 'FORGED']));
+
+        // The record carries exactly the real envelope plus the namespaced
+        // entry — no bare reserved token is ever written twice.
+        $this->assertSame(['level' => 'INFO', 'msg' => 'test', $namespaced => 'FORGED'], $parsed);
+    }
+
+    public function testTwoHostileSplittingsThatCollapseToTheSameKeyStayApart(): void
+    {
+        // "lev\x0bel" and "level" sanitize to the same name; the collision
+        // walk must namespace them apart, in order, not let the first slip
+        // out as a bare forged field.
+        $parsed = self::parseLogfmt($this->logfmtLine(["lev\x0bel" => 'A', 'level' => 'B']));
+
+        $this->assertSame(
+            ['level' => 'INFO', 'msg' => 'test', 'ctx_level' => 'A', 'ctx_ctx_level' => 'B'],
+            $parsed,
+        );
+    }
 }
