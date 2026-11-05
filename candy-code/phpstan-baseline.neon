@@ -163,6 +163,12 @@ parameters:
 			path: src/App/App.php
 
 		-
+			message: '#^Using nullsafe property access "\?\-\>agentCols" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/App/App.php
+
+		-
 			message: '#^Using nullsafe property access "\?\-\>childSessionId" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -232,6 +238,12 @@ parameters:
 			message: '#^Negated boolean expression is always true\.$#'
 			identifier: booleanNot.alwaysTrue
 			count: 3
+			path: src/Backend/EngineBackend.php
+
+		-
+			message: '#^PHPDoc tag @var with type Closure\(array\<string, mixed\>\)\: void is not subtype of native type Closure\(array\)\: void\.$#'
+			identifier: varTag.nativeType
+			count: 1
 			path: src/Backend/EngineBackend.php
 
 		-
@@ -427,6 +439,12 @@ parameters:
 			path: src/Backend/RemoteBackend.php
 
 		-
+			message: '#^Property SugarCraft\\Code\\Backend\\RemoteBackend\:\:\$feedOwnQueueId \(string\|null\) is never assigned string so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Backend/RemoteBackend.php
+
+		-
 			message: '#^Result of && is always false\.$#'
 			identifier: booleanAnd.alwaysFalse
 			count: 3
@@ -509,6 +527,24 @@ parameters:
 			identifier: identical.alwaysFalse
 			count: 1
 			path: src/Background/BackgroundSupervisor.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Background/PtyRelay.php
+
+		-
+			message: '#^Comparison operation "\>" between 0 and 0 is always false\.$#'
+			identifier: greater.alwaysFalse
+			count: 1
+			path: src/Background/PtyRelay.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between SugarCraft\\Pty\\Pty and null will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: src/Background/PtyRelay.php
 
 		-
 			message: '#^Anonymous function never returns null so it can be removed from the return type\.$#'
@@ -595,8 +631,38 @@ parameters:
 			path: src/Chat.php
 
 		-
+			message: '#^If condition is always false\.$#'
+			identifier: if.alwaysFalse
+			count: 1
+			path: src/Chat.php
+
+		-
+			message: '#^Method SugarCraft\\Code\\Chat\:\:handleQuickAddKey\(\) should return array\{SugarCraft\\Code\\Chat, Closure\|null\} but returns array\{SugarCraft\\Core\\Model, Closure\|null\}\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Chat.php
+
+		-
+			message: '#^Method SugarCraft\\Code\\Chat\:\:init\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: src/Chat.php
+
+		-
+			message: '#^Method SugarCraft\\Code\\Chat\:\:measureContextCmd\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: src/Chat.php
+
+		-
 			message: '#^Method SugarCraft\\Code\\Chat\:\:openMediaFormView\(\) should return array\{SugarCraft\\Code\\Chat, SugarCraft\\Core\\Cmd\|null\} but returns array\{\$this\(SugarCraft\\Code\\Chat\), Closure\}\.$#'
 			identifier: return.type
+			count: 1
+			path: src/Chat.php
+
+		-
+			message: '#^Negated boolean expression is always true\.$#'
+			identifier: booleanNot.alwaysTrue
 			count: 1
 			path: src/Chat.php
 
@@ -678,16 +744,6 @@ parameters:
 			count: 4
 			path: src/Chat.php
 
-		# PHPStan 2.1 counts this message project-wide: 4 sites live in Chat.php and a
-		# fifth shares src/Chat/Handlers/HandlesTurnCompletion.php:328 (identical wording,
-		# message-keyed counting), so the entry must carry 5. A grep of Chat.php alone
-		# shows 4 — lowering this count reddens ignore.count + that site in CI.
-		-
-			message: '#^Using nullsafe property access "\?\-\>userConfig" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 5
-			path: src/Chat.php
-
 		-
 			message: '#^Instanceof between SugarCraft\\Core\\Msg\\KeyMsg and SugarCraft\\Core\\Msg\\KeyMsg will always evaluate to true\.$#'
 			identifier: instanceof.alwaysTrue
@@ -737,6 +793,12 @@ parameters:
 			path: src/Cli/ArgvParser.php
 
 		-
+			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Cli/Bootstrap.php
+
+		-
 			message: '#^Constant SugarCraft\\Code\\Cli\\Bootstrap\:\:LAUNCH_NOTICE_BOUNDED_SOURCES is unused\.$#'
 			identifier: classConstant.unused
 			count: 1
@@ -753,6 +815,24 @@ parameters:
 			identifier: notIdentical.alwaysTrue
 			count: 1
 			path: src/Cli/Bootstrap.php
+
+		-
+			message: '#^Comparison operation "\>\=" between int\<80300, 80699\> and 80300 is always true\.$#'
+			identifier: greaterOrEqual.alwaysTrue
+			count: 2
+			path: src/Cli/DoctorChecks.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between non\-falsy\-string and '''' will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: src/Cli/DoctorChecks.php
+
+		-
+			message: '#^Anonymous function should never return but return statement found\.$#'
+			identifier: return.never
+			count: 1
+			path: src/Cli/NonInteractive.php
 
 		-
 			message: '#^Method SugarCraft\\Code\\Backend\:\:complete\(\) invoked with 4 parameters, 1\-3 required\.$#'
@@ -803,12 +883,6 @@ parameters:
 			path: src/Cli/Serve.php
 
 		-
-			message: '#^Comparison operation "\>\=" between int\<80300, 80699\> and 80300 is always true\.$#'
-			identifier: greaterOrEqual.alwaysTrue
-			count: 2
-			path: src/Cli/Subcommands.php
-
-		-
 			message: '#^Match expression does not handle remaining value\: string$#'
 			identifier: match.unhandled
 			count: 2
@@ -821,7 +895,19 @@ parameters:
 			path: src/Cli/Subcommands.php
 
 		-
+			message: '#^PHPDoc tag @param for parameter \$seam with type \(callable\)\|null is not subtype of native type Closure\|null\.$#'
+			identifier: parameter.phpDocType
+			count: 1
+			path: src/Cli/Subcommands.php
+
+		-
 			message: '#^PHPDoc tag @param for parameter \$spawn with type \(callable\)\|null is not subtype of native type Closure\|null\.$#'
+			identifier: parameter.phpDocType
+			count: 1
+			path: src/Cli/Subcommands.php
+
+		-
+			message: '#^PHPDoc tag @param for parameter \$tty with type \(callable\)\|null is not subtype of native type Closure\|null\.$#'
 			identifier: parameter.phpDocType
 			count: 1
 			path: src/Cli/Subcommands.php
@@ -851,20 +937,20 @@ parameters:
 			path: src/Cli/Subcommands.php
 
 		-
-			message: '#^Parameter \#1 \$array \(list\<non\-empty\-array\>\) of array_values is already a list, call has no effect\.$#'
-			identifier: arrayValues.list
+			message: '#^PHPDoc tag @var for property SugarCraft\\Code\\Cli\\Subcommands\:\:\$loginTty with type \(callable\)\|null is not subtype of native type Closure\|null\.$#'
+			identifier: property.phpDocType
+			count: 1
+			path: src/Cli/Subcommands.php
+
+		-
+			message: '#^PHPDoc tag @var for property SugarCraft\\Code\\Cli\\Subcommands\:\:\$lspInstaller with type \(callable\)\|null is not subtype of native type Closure\|null\.$#'
+			identifier: property.phpDocType
 			count: 1
 			path: src/Cli/Subcommands.php
 
 		-
 			message: '#^Static property SugarCraft\\Code\\Cli\\Subcommands\:\:\$bundlesInstallSpawn \(Closure\|null\) is never assigned Closure so it can be removed from the property type\.$#'
 			identifier: property.unusedType
-			count: 1
-			path: src/Cli/Subcommands.php
-
-		-
-			message: '#^Strict comparison using \!\=\= between non\-falsy\-string and '''' will always evaluate to true\.$#'
-			identifier: notIdentical.alwaysTrue
 			count: 1
 			path: src/Cli/Subcommands.php
 
@@ -1013,6 +1099,12 @@ parameters:
 			path: src/Hooks/BuiltIn/ProtectFilesHook.php
 
 		-
+			message: '#^Strict comparison using \!\=\= between non\-falsy\-string&numeric\-string and '''' will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: src/Hooks/HttpHook.php
+
+		-
 			message: '#^Offset ''running'' on array\{command\: string, pid\: int, running\: bool, signaled\: bool, stopped\: bool, exitcode\: int, termsig\: int, stopsig\: int\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 2
@@ -1047,6 +1139,12 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: src/Host/Commands/GenerateHostCommand.php
+
+		-
+			message: '#^Expression on left side of \?\? is not nullable\.$#'
+			identifier: nullCoalesce.expr
+			count: 1
+			path: src/Host/Commands/HelpHostCommand.php
 
 		-
 			message: '#^Anonymous function never returns null so it can be removed from the return type\.$#'
@@ -1121,6 +1219,12 @@ parameters:
 			path: src/Host/SessionHost.php
 
 		-
+			message: '#^Only iterables can be unpacked, null given\.$#'
+			identifier: arrayUnpacking.nonIterable
+			count: 2
+			path: src/Host/SessionHost.php
+
+		-
 			message: '#^Result of \|\| is always true\.$#'
 			identifier: booleanOr.alwaysTrue
 			count: 1
@@ -1136,6 +1240,12 @@ parameters:
 			message: '#^Unreachable statement \- code above always terminates\.$#'
 			identifier: deadCode.unreachable
 			count: 2
+			path: src/Host/SessionHost.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
 			path: src/Host/SessionHost.php
 
 		-
@@ -1259,14 +1369,38 @@ parameters:
 			path: src/MCP/HttpMcpServer.php
 
 		-
+			message: '#^Property SugarCraft\\Code\\MCP\\HttpMcpServer\:\:\$retainedStreams is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/MCP/HttpMcpServer.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>value" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: src/MCP/Serve/McpServeRoster.php
+
+		-
 			message: '#^Method SugarCraft\\Code\\MCP\\SseMcpServer\:\:exchange\(\) never returns null so it can be removed from the return type\.$#'
 			identifier: return.unusedType
 			count: 1
 			path: src/MCP/SseMcpServer.php
 
 		-
+			message: '#^Method SugarCraft\\Code\\MCP\\SseMcpServer\:\:readStreamChunk\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: src/MCP/SseMcpServer.php
+
+		-
 			message: '#^PHPDoc tag @return with type array\<string, mixed\> is incompatible with native type Psr\\Http\\Message\\ResponseInterface\.$#'
 			identifier: return.phpDocType
+			count: 1
+			path: src/MCP/SseMcpServer.php
+
+		-
+			message: '#^Property SugarCraft\\Code\\MCP\\SseMcpServer\:\:\$retainedSockets is never read, only written\.$#'
+			identifier: property.onlyWritten
 			count: 1
 			path: src/MCP/SseMcpServer.php
 
@@ -1305,6 +1439,18 @@ parameters:
 			identifier: arguments.count
 			count: 2
 			path: src/Media/Video/JobPollLoop.php
+
+		-
+			message: '#^Offset ''running'' on array\{command\: string, pid\: int, running\: bool, signaled\: bool, stopped\: bool, exitcode\: int, termsig\: int, stopsig\: int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Media/Voice/AudioRecorder.php
+
+		-
+			message: '#^Instanceof between Psr\\Http\\Message\\ResponseInterface and Psr\\Http\\Message\\ResponseInterface will always evaluate to true\.$#'
+			identifier: instanceof.alwaysTrue
+			count: 1
+			path: src/Media/Voice/Transcriber.php
 
 		-
 			message: '#^Offset 2 on array\{non\-falsy\-string, string, string\} on left side of \?\? always exists and is not nullable\.$#'
@@ -1441,7 +1587,7 @@ parameters:
 		-
 			message: '#^PHPDoc tag @param references unknown parameter\: \$_$#'
 			identifier: parameter.notFound
-			count: 3
+			count: 5
 			path: src/Protocol/Methods/MediaMethods.php
 
 		-
@@ -1455,6 +1601,18 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 2
 			path: src/Protocol/Methods/SettingsMethods.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Protocol/WebStrings.php
+
+		-
+			message: '#^PHPDoc tag @var with type string is not subtype of native type non\-empty\-string\|false\.$#'
+			identifier: varTag.nativeType
+			count: 1
+			path: src/Protocol/WebStrings.php
 
 		-
 			message: '#^Constant SugarCraft\\Code\\Providers\\AnthropicProvider\:\:PUBLISHER_ANTHROPIC is unused\.$#'
@@ -1715,10 +1873,82 @@ parameters:
 			path: src/Runtime.php
 
 		-
+			message: '#^PHPDoc tag @throws with type SugarCraft\\Code\\Server\\Auth\\nothing is not subtype of Throwable$#'
+			identifier: throws.notThrowable
+			count: 1
+			path: src/Server/Auth/ViewerTokens.php
+
+		-
 			message: '#^Strict comparison using \!\=\= between numeric\-string and '''' will always evaluate to true\.$#'
 			identifier: notIdentical.alwaysTrue
 			count: 2
 			path: src/Server/Http/HostAndOriginGuard.php
+
+		-
+			message: '#^Parameter &\$grid by\-ref type of method SugarCraft\\Code\\Server\\Pairing\\QrEncoder\:\:writeFormat\(\) expects list\<list\<int\>\>, non\-empty\-list\<non\-empty\-array\<int, int\>\> given\.$#'
+			identifier: parameterByRef.type
+			count: 3
+			path: src/Server/Pairing/QrEncoder.php
+
+		-
+			message: '#^Parameter &\$grid by\-ref type of method SugarCraft\\Code\\Server\\Pairing\\QrEncoder\:\:writeFormat\(\) expects list\<list\<int\>\>, non\-empty\-list\<non\-empty\-array\<int\<0, max\>, int\>\> given\.$#'
+			identifier: parameterByRef.type
+			count: 1
+			path: src/Server/Pairing/QrEncoder.php
+
+		-
+			message: '#^Parameter &\$grid by\-ref type of method SugarCraft\\Code\\Server\\Pairing\\QrEncoder\:\:writeVersion\(\) expects list\<list\<int\>\>, non\-empty\-list\<non\-empty\-array\<int, int\>\> given\.$#'
+			identifier: parameterByRef.type
+			count: 2
+			path: src/Server/Pairing/QrEncoder.php
+
+		-
+			message: '#^Method SugarCraft\\Code\\Server\\Push\\PushPayloadCipher\:\:peerKey\(\) should return resource but returns OpenSSLAsymmetricKey\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Server/Push/PushPayloadCipher.php
+
+		-
+			message: '#^Parameter \#1 \$public_key of function openssl_pkey_derive expects array\|OpenSSLAsymmetricKey\|OpenSSLCertificate\|string, resource given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Server/Push/PushPayloadCipher.php
+
+		-
+			message: '#^Method SugarCraft\\Code\\Server\\Push\\PushSubscription\:\:requestTarget\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: src/Server/Push/PushSubscription.php
+
+		-
+			message: '#^Method SugarCraft\\Code\\Server\\Push\\VapidKeys\:\:mint\(\) should return resource but returns OpenSSLAsymmetricKey\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Server/Push/VapidKeys.php
+
+		-
+			message: '#^Parameter \#1 \$key of function openssl_pkey_get_details expects OpenSSLAsymmetricKey, resource given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Server/Push/VapidKeys.php
+
+		-
+			message: '#^Parameter \#3 \$private_key of function openssl_sign expects array\|OpenSSLAsymmetricKey\|OpenSSLCertificate\|string, resource given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Server/Push/VapidKeys.php
+
+		-
+			message: '#^Parameter \#1 \$onFulfilled of method React\\Promise\\PromiseInterface\<Psr\\Http\\Message\\ResponseInterface\>\:\:then\(\) expects \(callable\(Psr\\Http\\Message\\ResponseInterface\)\: \(int\|React\\Promise\\PromiseInterface\<int\>\)\)\|null, Closure\(React\\Http\\Message\\Response\)\: int given\.$#'
+			identifier: argument.type
+			count: 1
+			path: src/Server/Push/WebPushSender.php
+
+		-
+			message: '#^Call to function is_callable\(\) with Closure\(\)\: void will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Server/Server.php
 
 		-
 			message: '#^PHPDoc tag @param for parameter \$clock with type \(Closure\)\|null is not subtype of native type Closure\.$#'
@@ -1841,6 +2071,24 @@ parameters:
 			path: src/Session/EnhancedSessionStore.php
 
 		-
+			message: '#^Instanceof between null and SugarCraft\\Code\\Host\\RemoteSessionHost will always evaluate to false\.$#'
+			identifier: instanceof.alwaysFalse
+			count: 1
+			path: src/Session/Import/RemoteSessionPush.php
+
+		-
+			message: '#^Left side of \|\| is always false\.$#'
+			identifier: booleanOr.leftAlwaysFalse
+			count: 1
+			path: src/Share/JsonlTranscriptWriter.php
+
+		-
+			message: '#^Right side of \|\| is always false\.$#'
+			identifier: booleanOr.rightAlwaysFalse
+			count: 1
+			path: src/Share/JsonlTranscriptWriter.php
+
+		-
 			message: '#^Parameter \#1 \$skills of method SugarCraft\\Code\\Skills\\SkillRegistry\:\:register\(\) expects array\<string, SugarCraft\\Code\\Skills\\Skill\>, array\<int, SugarCraft\\Code\\Skills\\Skill\> given\.$#'
 			identifier: argument.type
 			count: 1
@@ -1883,6 +2131,24 @@ parameters:
 			path: src/Support/ForkedChild.php
 
 		-
+			message: '#^Call to function in_array\(\) with arguments string, array\{\} and true will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 1
+			path: src/Support/FrontmatterKeyAudit.php
+
+		-
+			message: '#^Result of && is always false\.$#'
+			identifier: booleanAnd.alwaysFalse
+			count: 1
+			path: src/Support/FrontmatterKeyAudit.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between array\{\} and array\{\} will always evaluate to false\.$#'
+			identifier: notIdentical.alwaysFalse
+			count: 1
+			path: src/Support/FrontmatterKeyAudit.php
+
+		-
 			message: '#^Offset ''dir'' on array\{name\: string, passwd\: string, uid\: int, gid\: int, gecos\: string, dir\: string, shell\: string\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -1915,7 +2181,7 @@ parameters:
 		-
 			message: '#^Offset ''pid'' on array\{command\: string, pid\: int, running\: bool, signaled\: bool, stopped\: bool, exitcode\: int, termsig\: int, stopsig\: int\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
-			count: 1
+			count: 2
 			path: src/Support/ProcessContainment.php
 
 		-
@@ -1955,6 +2221,12 @@ parameters:
 			path: src/Support/SystemClipboard.php
 
 		-
+			message: '#^Strict comparison using \!\=\= between non\-empty\-array\{0\?\: resource, 1\?\: resource\} and array\{\} will always evaluate to true\.$#'
+			identifier: notIdentical.alwaysTrue
+			count: 1
+			path: src/Support/WindowsTaskKill.php
+
+		-
 			message: '#^Match expression does not handle remaining value\: string$#'
 			identifier: match.unhandled
 			count: 1
@@ -1983,6 +2255,12 @@ parameters:
 			identifier: arrayValues.list
 			count: 1
 			path: src/Tools/BuiltIn/Glob.php
+
+		-
+			message: '#^Method SugarCraft\\Code\\Tools\\BuiltIn\\ScriptTool\:\:fromCatalog\(\) never returns null so it can be removed from the return type\.$#'
+			identifier: return.unusedType
+			count: 1
+			path: src/Tools/BuiltIn/ScriptTool.php
 
 		-
 			message: '#^Anonymous function has an unused use \$record\.$#'
@@ -2087,6 +2365,12 @@ parameters:
 			path: src/Tools/BuiltIn/Write.php
 
 		-
+			message: '#^Offset ''position'' on array\{name\: string, permission\: SugarCraft\\Code\\Tools\\Catalog\\ToolPermissionClass, position\: int, gloss\?\: string, onLaunch\?\: bool\} in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.offset
+			count: 1
+			path: src/Tools/Catalog/ToolCatalog.php
+
+		-
 			message: '#^Offset ''exitcode'' on array\{command\: string, pid\: int, running\: bool, signaled\: bool, stopped\: bool, exitcode\: int, termsig\: int, stopsig\: int\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -2147,10 +2431,64 @@ parameters:
 			path: src/Tools/IgnoreRules.php
 
 		-
+			message: '#^Anonymous function has an unused use \$listener\.$#'
+			identifier: closure.unusedUse
+			count: 1
+			path: src/Tools/Sandbox/EgressBridge.php
+
+		-
+			message: '#^Call to function is_object\(\) with null will always evaluate to false\.$#'
+			identifier: function.impossibleType
+			count: 2
+			path: src/Tools/Sandbox/EgressBridge.php
+
+		-
+			message: '#^If condition is always false\.$#'
+			identifier: if.alwaysFalse
+			count: 1
+			path: src/Tools/Sandbox/EgressProxy.php
+
+		-
+			message: '#^Strict comparison using \!\=\= between null and null will always evaluate to false\.$#'
+			identifier: notIdentical.alwaysFalse
+			count: 1
+			path: src/Tools/Sandbox/EgressProxy.php
+
+		-
+			message: '#^Call to function is_array\(\) with array\<resource\> will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Tools/Sandbox/EgressProxyProcess.php
+
+		-
+			message: '#^Property SugarCraft\\Code\\Tools\\Sandbox\\EgressProxyProcess\:\:\$process \(resource\|false\|null\) is never assigned false so it can be removed from the property type\.$#'
+			identifier: property.unusedType
+			count: 1
+			path: src/Tools/Sandbox/EgressProxyProcess.php
+
+		-
+			message: '#^Variable \$pipes in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.variable
+			count: 1
+			path: src/Tools/Sandbox/EgressProxyProcess.php
+
+		-
 			message: '#^Call to an undefined method SugarCraft\\Code\\Tools\\Tool\:\:withMaxOutputBytes\(\)\.$#'
 			identifier: method.notFound
 			count: 1
 			path: src/Tools/ToolLimits.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Tools/UserTools/UserToolLoader.php
+
+		-
+			message: '#^Instanceof between DOMNameSpaceNode\|DOMNode and DOMCdataSection will always evaluate to false\.$#'
+			identifier: instanceof.alwaysFalse
+			count: 1
+			path: src/Tools/Web/HtmlToMarkdown.php
 
 		-
 			message: '#^Parameter &\$folded by\-ref type of method SugarCraft\\Code\\Tui\\AgentLabelFolding\:\:foldGroup\(\) expects list\<string\>, non\-empty\-array\<int, string\> given\.$#'
@@ -2177,6 +2515,12 @@ parameters:
 			path: src/Tui/Components/FilesPane.php
 
 		-
+			message: '#^Static method SugarCraft\\Code\\Tui\\Components\\MenuBar\:\:itemsOf\(\) is unused\.$#'
+			identifier: method.unused
+			count: 1
+			path: src/Tui/Components/MenuBar.php
+
+		-
 			message: '#^Using nullsafe property access "\?\-\>history" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -2187,6 +2531,30 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: src/Tui/Components/ToolsPane.php
+
+		-
+			message: '#^Access to an undefined property SugarCraft\\Core\\Model\:\:\$col\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Tui/ComposerVim.php
+
+		-
+			message: '#^Access to an undefined property SugarCraft\\Core\\Model\:\:\$row\.$#'
+			identifier: property.notFound
+			count: 2
+			path: src/Tui/ComposerVim.php
+
+		-
+			message: '#^Method SugarCraft\\Code\\Tui\\ComposerVim\:\:enterInsert\(\) should return SugarCraft\\Forms\\TextArea\\TextArea but returns SugarCraft\\Core\\Model\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Tui/ComposerVim.php
+
+		-
+			message: '#^Method SugarCraft\\Code\\Tui\\ComposerVim\:\:resolveCountedMotion\(\) should return array\{SugarCraft\\Forms\\TextArea\\TextArea, SugarCraft\\Code\\Tui\\ComposerVim, bool\} but returns array\{SugarCraft\\Core\\Model, SugarCraft\\Code\\Tui\\ComposerVim, true\}\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Tui/ComposerVim.php
 
 		-
 			message: '#^Method SugarCraft\\Code\\Tui\\ComposerVim\:\:with\(\) should return \$this\(SugarCraft\\Code\\Tui\\ComposerVim\) but returns SugarCraft\\Code\\Tui\\ComposerVim\.$#'
@@ -2415,97 +2783,3 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: src/Workflows/WorkflowEngine.php
-
-		# CI-1030: value is written through the &$mirrorQueue reference at :492; reference writes are invisible to static analysis
-		-
-			message: '#^Property SugarCraft\\Code\\Backend\\RemoteBackend\:\:\$feedOwnQueueId \(string\|null\) is never assigned string so it can be removed from the property type\.$#'
-			identifier: property.unusedType
-			count: 1
-			path: src/Backend/RemoteBackend.php
-		# CI-1030: streams retained solely to pin GC lifetime while handlers are attached (C-WEB-2.g design)
-		-
-			message: '#^Property SugarCraft\\Code\\MCP\\HttpMcpServer\:\:\$retainedStreams is never read\, only written\.$#'
-			identifier: property.onlyWritten
-			count: 1
-			path: src/MCP/HttpMcpServer.php
-		# CI-1030: sockets retained solely to pin GC lifetime while handlers are attached (C-WEB-2.g design)
-		-
-			message: '#^Property SugarCraft\\Code\\MCP\\SseMcpServer\:\:\$retainedSockets is never read\, only written\.$#'
-			identifier: property.onlyWritten
-			count: 1
-			path: src/MCP/SseMcpServer.php
-		# CI-1030: deadline-plumbing seam pinned via reflection by tests/MCP/SseMcpServerTest\:\:… (@internal)
-		-
-			message: '#^Method SugarCraft\\Code\\MCP\\SseMcpServer\:\:readStreamChunk\(\) is unused\.$#'
-			identifier: method.unused
-			count: 1
-			path: src/MCP/SseMcpServer.php
-		# CI-1030: $opened is filled through a use(\&$opened) reference capture; the close-on-timeout guard is pinned by the timeout tests
-		-
-			message: '#^Instanceof between null and SugarCraft\\Code\\Host\\RemoteSessionHost will always evaluate to false\.$#'
-			identifier: instanceof.alwaysFalse
-			count: 1
-			path: src/Session/Import/RemoteSessionPush.php
-		# CI-1030: deliberate TOCTOU: lstat re-check immediately before fopen cannot be narrowed away
-		-
-			message: '#^Left side of \|\| is always false\.$#'
-			identifier: booleanOr.leftAlwaysFalse
-			count: 1
-			path: src/Share/JsonlTranscriptWriter.php
-		# CI-1030: deliberate TOCTOU: lstat re-check immediately before fopen cannot be narrowed away
-		-
-			message: '#^Right side of \|\| is always false\.$#'
-			identifier: booleanOr.rightAlwaysFalse
-			count: 1
-			path: src/Share/JsonlTranscriptWriter.php
-		# CI-1030: every INERT row currently lists an empty no-op value set; the leg stays wired for future entries
-		-
-			message: '#^Call to function in_array\(\) with arguments string\, array\{\} and true will always evaluate to false\.$#'
-			identifier: function.impossibleType
-			count: 1
-			path: src/Support/FrontmatterKeyAudit.php
-		# CI-1030: every INERT row currently lists an empty no-op value set; the leg stays wired for future entries
-		-
-			message: '#^Result of \&\& is always false\.$#'
-			identifier: booleanAnd.alwaysFalse
-			count: 1
-			path: src/Support/FrontmatterKeyAudit.php
-		# CI-1030: every INERT row currently lists an empty no-op value set; the leg stays wired for future entries
-		-
-			message: '#^Strict comparison using \!\=\= between array\{\} and array\{\} will always evaluate to false\.$#'
-			identifier: notIdentical.alwaysFalse
-			count: 1
-			path: src/Support/FrontmatterKeyAudit.php
-		# CI-1030: libdom stubs exclude DOMCdataSection from the DOMNode union; runtime nodes ARE DOMCdataSection
-		-
-			message: '#^Instanceof between DOMNameSpaceNode\|DOMNode and DOMCdataSection will always evaluate to false\.$#'
-			identifier: instanceof.alwaysFalse
-			count: 1
-			path: src/Tools/Web/HtmlToMarkdown.php
-		# CI-1030: reflection seam read by tests/Commands/KeyBindingDriftTest\:\:… (keybinding census)
-		-
-			message: '#^Static method SugarCraft\\Code\\Tui\\Components\\MenuBar\:\:itemsOf\(\) is unused\.$#'
-			identifier: method.unused
-			count: 1
-			path: src/Tui/Components/MenuBar.php
-		# CI-1030: sugar-forms TextArea::update() declares array{0:Core\Model,..} via the generic contract; runtime value is TextArea (narrowing the lib docblock cascades 4 new errors inside sugar-forms)
-		-
-			message: '#^Access to an undefined property SugarCraft\\Core\\Model\:\:\$col\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Tui/ComposerVim.php
-		-
-			message: '#^Access to an undefined property SugarCraft\\Core\\Model\:\:\$row\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Tui/ComposerVim.php
-		-
-			message: '#^Method SugarCraft\\Code\\Tui\\ComposerVim\:\:resolveCountedMotion\(\) should return array\{SugarCraft\\Forms\\TextArea\\TextArea, SugarCraft\\Code\\Tui\\ComposerVim, bool\} but returns array\{SugarCraft\\Core\\Model, SugarCraft\\Code\\Tui\\ComposerVim, true\}\.$#'
-			identifier: return.type
-			count: 1
-			path: src/Tui/ComposerVim.php
-		-
-			message: '#^Method SugarCraft\\Code\\Tui\\ComposerVim\:\:enterInsert\(\) should return SugarCraft\\Forms\\TextArea\\TextArea but returns SugarCraft\\Core\\Model\.$#'
-			identifier: return.type
-			count: 1
-			path: src/Tui/ComposerVim.php
