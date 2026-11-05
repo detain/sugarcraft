@@ -4,9 +4,9 @@ Image-to-cell renderer for the terminal — PNG, JPEG, GIF (still and
 animated), APNG, WebP and BMP decoded via ext-gd and rendered via the best
 available protocol:
 
-- **Sixel** — xterm, foot, mlterm, contour
+- **Sixel** — xterm, foot, mlterm, contour, rio
 - **Kitty graphics protocol** — kitty, ghostty, wezterm
-- **iTerm2 inline images** (OSC 1337) — iTerm2, mintty
+- **iTerm2 inline images** (OSC 1337) — iTerm2, mintty, rio (rio and mintty claim sixel too; detection precedence seats them on iTerm2)
 - **Half-block Unicode** (▀ + 24-bit fg/bg) — universal fallback
 - **Quarter-block Unicode** (░▒▓█ 2×2) — higher fidelity than half-block
 - **Symbols** (braille/sextant/octant/block glyph cells) — coverage-class rendering chosen by Hamming-distance candidate search (the chafa symbol engine). `SymbolMap::withSelectors()` applies chafa's `--symbols=` tag grammar over the narrow glyph corpus (ASCII/Latin/misc/legacy tables, the U+1FB80–U+1FB8B eighth-block tier, braille, sextants, octants) — **1,251 glyphs effective** under `all`: the corpus parses to 1,260 entries, but nine misc-narrow glyphs carry chafa's AMBIGUOUS tag (they have emoji variants) and are BAD-vetoed by every selector that does not name ambiguous/ugly/bad, exactly as the C build does (derivation: `Symbol/SymbolSetTables.php`). The default 676-glyph corpus is byte-frozen.
