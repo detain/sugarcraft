@@ -43,6 +43,7 @@ composer require sugarcraft/sugar-mcp-client
 ## Quick start
 
 ```php
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\McpClient\StdioMcpServer;
 
 $server = new StdioMcpServer(
@@ -53,7 +54,8 @@ $server = new StdioMcpServer(
 
 $server->start();                    // initialize → notifications/initialized → tools/list
 foreach ($server->listTools() as $tool) {
-    echo $tool->name, ': ', $tool->description, PHP_EOL;
+    // description is server-authored prose: sanitize before it reaches a terminal
+    echo $tool->name, ': ', Sanitize::untrusted($tool->description), PHP_EOL;
 }
 
 $result = $server->callTool('echo', ['message' => 'hi']);
@@ -115,6 +117,14 @@ $server = new StdioMcpServer(
 where the `ExchangeLock` file lives — useful when `TMPDIR` moves or a janitor
 sweeps it; the directory must exist, and a lock that cannot be created there
 fails `start()` loudly rather than silently sharing less.
+
+**Tool metadata is server output too.** `listTools()` hands back the child's
+self-declared names, descriptions, and input schemas. A control-byte gate
+refuses malformed tool *names* at parse time, but *descriptions* are
+deliberately free-form prose — tabs and newlines are legitimate there, and the
+transport scrubs nothing. Treat them like the diagnostics below: render
+through `SugarCraft\Core\Util\Sanitize::untrusted()` before any terminal
+echo, as the quick start does.
 
 ## Spawn directory
 

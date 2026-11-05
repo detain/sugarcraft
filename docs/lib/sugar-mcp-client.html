@@ -58,7 +58,8 @@
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-mcp-client</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\McpClient\StdioMcpServer;
+    <pre class="code"><code class="language-php">use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\McpClient\StdioMcpServer;
 
 $server = new StdioMcpServer(
     name: 'everything',
@@ -68,7 +69,7 @@ $server = new StdioMcpServer(
 
 $server->start();              // initialize → initialized → tools/list, one 60s clock
 foreach ($server->listTools() as $tool) {
-    echo $tool->name, ' — ', $tool->description, PHP_EOL;
+    echo $tool->name, ' — ', Sanitize::untrusted($tool->description), PHP_EOL;  // server-authored prose
 }
 
 $result = $server->callTool('echo', ['message' => 'hi']);
@@ -81,7 +82,7 @@ $server->stop();               // close pipes first, then TERM→KILL→reap. Ne
     <h3 style="margin-top: 32px;">The model</h3>
     <div class="feature-grid">
       <div class="feature"><strong>McpMessage</strong><span>JSON-RPC 2.0 envelope: parse() / request() / notification() / success() / error(); a resultSet sentinel keeps explicit "result": null representable; toJson() is the wire and fails closed on unencodable payloads, toArray() is inspection.</span></div>
-      <div class="feature"><strong>McpTool / McpServer</strong><span>One tool definition value object with a well-typedness gate that refuses malformed server output — including control bytes in names — plus the start/stop/listTools/callTool interface.</span></div>
+      <div class="feature"><strong>McpTool / McpServer</strong><span>One tool definition value object with a well-typedness gate that refuses malformed server output — control bytes in <em>names</em> are rejected at parse; <em>descriptions</em> are free-form prose that passes through verbatim, so display them through sugar-core Sanitize::untrusted — plus the start/stop/listTools/callTool interface.</span></div>
       <div class="feature"><strong>StdioMcpServer</strong><span>argv-array proc_open child, newline-delimited (NDJSON) framing, 64 KiB rolling stderr tail absorbed on every wait set, one wall clock across the whole handshake, protocol-version negotiation, and a per-second handshake beat via <code>start(onWait:)</code>.</span></div>
       <div class="feature"><strong>ExchangeLock</strong><span>Serialises whole request/response exchanges when forked processes share one stdio connection; records a W/R phase so the next holder resynchronises after a killed one; the file is created at mode 0600, verified before any payload, and a filesystem that refuses the mode fails the open loudly.</span></div>
       <div class="feature"><strong>McpRouter</strong><span>Deny-patterns-then-allowlist narrowing over any set of McpServer instances; fnmatch globs; empty allowlist means allow-all; malformed entries fail loud.</span></div>
