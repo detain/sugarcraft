@@ -54,7 +54,7 @@ echo $ansi;
 ## Examples
 
 - `examples/inline-image.php <path> [width]` prints one image on the terminal's
-  best tier and exits 0/1/2 — the shortest read of the detection path.
+  best tier and exits 0/1/2/3 — the shortest read of the detection path.
 - `examples/fixture-gradient.png` is a committed image, so both the quickstart
   above and that script run against the checkout without hunting for a file.
 

@@ -11,7 +11,7 @@
  *   php inline-image.php screenshot.jpg 80
  *   php inline-image.php diagram.gif 60
  *
- * The script probes the terminal (Mosaic::auto()) and renders through the best
+ * The script probes the terminal (Mosaic::probe()) and renders through the best
  * protocol available: Kitty, then iTerm2, then Sixel, then the text tiers.  The
  * chafa rung is explicit opt-in only (it is the one tier that shells out), and the
  * practical floor is the symbol-map renderer rather than plain half-block, so a
@@ -26,6 +26,7 @@
  *   0 — image rendered successfully
  *   1 — no image path given or file not found
  *   2 — GD is not available
+ *   3 — the file exists but did not load as a supported image
  */
 
 declare(strict_types=1);
@@ -68,8 +69,15 @@ USAGE
         return 1;
     }
 
-    // Load image
-    $image = ImageSource::fromFile($imagePath);
+    // Load image — a present-but-refused file (bad MIME, decode failure,
+    // pixel-guard refusal) must exit with the documented alphabet, not an
+    // uncaught fatal.
+    try {
+        $image = ImageSource::fromFile($imagePath);
+    } catch (\InvalidArgumentException | \RuntimeException $e) {
+        fwrite(STDERR, "inline-image: could not load image: {$e->getMessage()}\n");
+        return 3;
+    }
 
     // Detect terminal and render
     $mosaic = Mosaic::probe();
