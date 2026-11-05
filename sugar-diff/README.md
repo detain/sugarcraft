@@ -125,6 +125,8 @@ foreach (SideBySideFormat::rows($diff) as $row) {
 
 Hunk row text ships exactly what the sides held — the engine never strips control bytes from *content*, because content is the caller's payload. A surface painting diffs of untrusted files should sanitize or escape those bytes for its own output channel (the TUI gutter clips to width; a web view HTML-escapes). The one thing the writer will not do is let a *path label* forge protocol rows: labels containing control bytes, `"` or `\` are C-quoted git-`core.quotePath`-style, so every emitted header stays one physical line.
 
+Colour never has to carry a change alone, and the model refuses to make it carry anything: every row arrives with redundant non-colour channels — a `LineKind` with its column-0 `marker()` (` `, `-`, `+`), and, for scanned patches, a `ScanRowKind` separating hunk headers, annotations and out-of-hunk prose from content. A surface whose add/remove sign is the *only* difference between two rows fails WCAG 1.4.1 (Use of Colour); the reference consumer tints over the kind, never instead of it — candy-code-web's `DiffView.vue` renders a visible `+`/`−` sign column derived from `line.kind` beside its background tint.
+
 ## Fidelity notes
 
 - Default options reproduce `candy-code`'s `BuildsUnifiedDiff` hunk **bodies** and hunk grouping byte-for-byte; the header lines deliberately diverge (GNU-faithful — next bullet), and the `\ No newline` markers and `/dev/null` labels are opt-in GNU affordances the trait never emitted.

@@ -54,7 +54,7 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
-      <li><strong>Patch display in TUIs</strong> — numbered hunks feed gutters, diff panes, and review overlays without re-deriving line numbers.</li>
+      <li><strong>Patch display in TUIs</strong> — numbered hunks feed gutters, diff panes, and review overlays without re-deriving line numbers; every row ships redundant non-colour channels (<code>LineKind::marker()</code>, <code>ScanRowKind</code>), so a viewer can tint with colour without ever making colour carry the change alone (WCAG 1.4.1).</li>
       <li><strong>Editing tools</strong> — the same engine candy-code's Edit/Write tools use to report changes to the model and the user.</li>
       <li><strong>Patch consumers</strong> — UnifiedScan answers "which file line is this row?" for arbitrary incoming diffs, including multi-file git output.</li>
     </ul>
