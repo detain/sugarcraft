@@ -655,7 +655,8 @@ $cassette = (new Compiler())->compile($result['ast'], 'demo.tape');
 | `Env KEY "value"` | ✅ | Adds to cassette header env map. |
 | `Output <path>` | ✅ | Accepted (stored on the OutputDirective AST node for the render step; not encoded as a Cassette event). |
 | `Hide`, `Show` | ✅ | Suppresses/resumes cursor rendering in output GIF from this point. |
-| `Wait <duration>` | ⚠️ | Parsed, no-op (deferred to v2). |
+| `Wait <duration>` | ✅ | Advances the virtual clock (like `Sleep`); emits no output event. |
+| `Wait /pattern/` | ⚠️ | CONDITION wait — upstream blocks until output matches; the record-side compiler has no live stream to poll, so it emits no event, advances no clock, and reports the mismatch (see below). |
 | `Screenshot <path>` | ✅ | Captures current frame to PNG path during render. |
 | `Source <path>` | ✅ | Inlines and compiles another .tape file at this point. |
 
@@ -665,7 +666,7 @@ allowlist; unknown keys raise a `ParseError`:
 | Set key | Effect |
 |---------|--------|
 | `Theme` | Theme name (`TokyoNight`, `TokyoNightLight`, `TokyoNightStorm`, `Dracula`, `SolarizedDark`). Stored on `CassetteHeader::$theme`. |
-| `FontSize` | Default rasterizer font size in pixels (`Renderer` default 14). |
+| `FontSize` | Default rasterizer font size in pixels (tape-path default: `Compiler::DEFAULT_FONT_SIZE` = 22; the standalone `GdRasterizer` constructor default is 14). |
 | `Width` / `Height` | Output IMAGE size in PIXELS (VHS semantics; defaults 1200 / 600). Stored on `CassetteHeader::$widthPx` / `$heightPx`; the terminal `cols` / `rows` are DERIVED from these via the font cell size. |
 | `TypingSpeed` | Inter-character delay for `Type` runs. Accepts `<n>ms` / `<n>s` / `<n>m`. |
 | `FontFamily` | TTF family name (resolved by `FontLoader`). |
@@ -813,9 +814,10 @@ imagedestroy($image);
 
 **Cell metrics.** `Compiler::cellMetrics()` derives the cell box from the font size: `cellW = floor(fontSize * 0.6)`, `cellH = fontSize * 2` (both clamped to ≥ 1).
 ```
-  FontSize 14 → cellW = 8px, cellH = 28px
-  80×24 terminal → 640×672 px
-  120×40 terminal → 960×1120 px
+  FontSize 22 → cellW = 13px, cellH = 44px
+  80×24 terminal → 1040×1056 px
+  120×40 terminal → 1560×1760 px
+  1200×600 px canvas fits a 92×13 terminal
 ```
 
 **Architecture:**
@@ -855,8 +857,9 @@ paths. `load($family, $size, $style = 'regular')` returns the resolved
 path (throws if missing); `resolve($family, $style)` returns
 `?string`; `lastResolvedPath()` returns the most recent hit. Search
 order: bundled `candy-vcr/fonts/` → `$fontDirs` overrides →
-`/usr/share/fonts/{truetype,opentype}` → `~/.fonts/` →
-`~/.local/share/fonts/`.
+`/usr/share/fonts/truetype/` → `/usr/share/fonts/opentype/` →
+`/usr/share/fonts/X11/Type1/` → `/usr/share/fonts/X11/TTF/` →
+`/usr/local/share/fonts/` → `~/.fonts/` → `~/.local/share/fonts/`.
 
 **Glyphs API.** `new Glyphs($cellW, $cellH, $fonts, $fontFamily = 'JetBrainsMono', $fontSize = 14, $theme = null)` (`$fonts` is a `FontLoader`) builds a per-(char, fg, bg, attrs) tile cache. Accessors: `cellWidth()`, `cellHeight()`, `fontFamily()`, `fontSize()`, `theme()`, `cacheStats(): array{hits: int, misses: int, evictions: int}`, `tile($char, $fg, $bg, $bold, $italic, $underline, ?int $fgRgb = null, ?int $bgRgb = null): GdImage`
 (`$fgRgb`/`$bgRgb` are exact 24-bit `0xRRGGBB` truecolor overrides), `tileWide(...)` (same tail,
@@ -881,7 +884,7 @@ $tapeToGif->render('demo.tape', 'demo.gif');
 
 | Encoder | Description |
 |--------|-------------|
-| `FfmpegGifEncoder` | Default; uses ffmpeg with two-pass palette generation. CFR via `-framerate`; VFR via concat demuxer with process substitution. |
+| `FfmpegGifEncoder` | Default; uses ffmpeg with two-pass palette generation. CFR via `-framerate`; VFR via a concat demuxer list file passed as `-i` (no shell process substitution). |
 | `PhpGifEncoder` | Pure-PHP fallback: rasterizes frames with GD and hand-assembles the animated GIF byte stream (header, NETSCAPE looping extension, per-frame LZW) in PHP. Roughly 5–10× slower than ffmpeg, but requires no external binaries. |
 
 **TapeToGif options:**
@@ -897,7 +900,7 @@ $tapeToGif->render($tapePath, $outputPath, [
 ]);
 ```
 
-**VFR (Variable Frame Rate):** When `frameHolds` differ between frames, FfmpegGifEncoder writes a concat demuxer file and pipes it to ffmpeg's stdin:
+**VFR (Variable Frame Rate):** When `frameHolds` differ between frames, FfmpegGifEncoder writes a concat demuxer list to `concat.txt` in its temp dir and passes that file as ffmpeg's `-i` input (nothing is piped on stdin):
 
 ```
 file 'frame00000.png'
@@ -1200,7 +1203,7 @@ Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (
 
 ### Fonts
 
-`candy-vcr/fonts/` ships [JetBrainsMono](https://github.com/JetBrains/JetBrainsMono) (Regular, Bold, Italic, BoldItalic) as the default rasterizer font family. JetBrainsMono is distributed under the [SIL Open Font License, version 1.1](fonts/LICENSE) — the full license text is bundled alongside the TTFs. The default family is `JetBrainsMono` (the `fontFamily:` constructor default on both `Glyphs` and `GdRasterizer`). `DejaVuSansMono` (Regular + Bold, also bundled) is a second selectable family — and the first candidate in `Glyphs`' fallback chain: if the requested family cannot be resolved, `FontLoader::load()` throws `RuntimeException` and `Glyphs` then probes `DejaVuSansMono`, then the system-installed `FreeMono` and `NotoSansMono`. To use a different family pass it to the `Glyphs` constructor or call `GdRasterizer::withFont($family, $fontSize)` (the rasterizer has no `font_family` property); `FontLoader` searches the bundled `fonts/` dir first, then `/usr/share/fonts/{truetype,opentype}`, `~/.fonts/`, and `~/.local/share/fonts/`.
+`candy-vcr/fonts/` ships [JetBrainsMono](https://github.com/JetBrains/JetBrainsMono) (Regular, Bold, Italic, BoldItalic) as the default rasterizer font family. JetBrainsMono is distributed under the [SIL Open Font License, version 1.1](fonts/LICENSE) — the full license text is bundled alongside the TTFs. The default family is `JetBrainsMono` (the `fontFamily:` constructor default on both `Glyphs` and `GdRasterizer`). `DejaVuSansMono` (Regular + Bold, also bundled) is a second selectable family — and the first candidate in `Glyphs`' fallback chain: if the requested family cannot be resolved, `FontLoader::load()` throws `RuntimeException` and `Glyphs` then probes `DejaVuSansMono`, then the system-installed `FreeMono` and `NotoSansMono`. To use a different family pass it to the `Glyphs` constructor or call `GdRasterizer::withFont($family, $fontSize)` (the rasterizer has no `font_family` property); `FontLoader` searches the bundled `fonts/` dir first, then `/usr/share/fonts/truetype/`, `/usr/share/fonts/opentype/`, `/usr/share/fonts/X11/Type1/`, `/usr/share/fonts/X11/TTF/`, `/usr/local/share/fonts/`, `~/.fonts/`, and `~/.local/share/fonts/`.
 
 ## CI integration
 
