@@ -177,7 +177,6 @@ final class DoctorChecksTest extends TestCase
 
     // ---- fixtures -------------------------------------------------------------
 
-    /** @return array<string, \Closure(): array{status: string, detail: string}> */
     /**
      * PHP-m6 (OD-26): the version guard stays, but a FAIL row that only names
      * the problem is not actionable — on a box where 8.2 is the only php on
@@ -244,6 +243,7 @@ final class DoctorChecksTest extends TestCase
      * this file would feed the tree-wide glob-dialect corpus (house law). */
     private const LOCALES = ['de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'pt', 'pt-br', 'ru', 'zh-cn', 'zh-tw'];
 
+    /** @return array<string, \Closure(): array{status: string, detail: string}> */
     private static function probes(): array
     {
         $method = new ReflectionMethod(DoctorChecks::class, 'probes');
