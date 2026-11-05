@@ -260,6 +260,6 @@ It plays the role charmbracelet/bubbles' focus handling and sugar-dashboard's
 `FocusManager` play in their stacks, but as a standalone, dependency-free
 ring, so the attribution above is by analogy only.
 
-Runnable example: [`examples/focus-ring.php`](https://github.com/sugarcraft/sugar-focus/tree/master/examples)
+Runnable example: [`examples/focus-ring.php`](https://github.com/sugarcraft/sugar-focus/tree/master/examples) — run it with `php examples/focus-ring.php`; with no TTY it draws one frame and exits 0.
 
 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-focus/.vhs/focus-ring.gif" alt="sugar-focus demo">
