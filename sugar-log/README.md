@@ -327,9 +327,12 @@ Routing is decided per record when it is emitted; `Fatal` still throws
 streams with an `InvalidArgumentException`. A record that cannot be written
 (closed or unwritable handle) never throws: it is retried once after a flush
 and the loss is announced as a sanitized `[sugar-log] log write failed:`
-notice on STDERR. File streams are buffered by PHP — call `$log->flush()`
-before hard-exit paths (SIGKILL, `posix_kill`, `exit()` under a fatal
-framework) so nothing still in the buffer is lost.
+notice on STDERR — including a sanitized single-line copy of the dropped
+record itself (control bytes swept, line breaks flattened, but payload text
+readable, so a secret carried in a record's message surfaces on STDERR when
+its intended destination fails). File streams are buffered by PHP — call
+`$log->flush()` before hard-exit paths (SIGKILL, `posix_kill`, `exit()` under
+a fatal framework) so nothing still in the buffer is lost.
 
 ## Record integrity
 
