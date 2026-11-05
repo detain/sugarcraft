@@ -32,7 +32,7 @@ $req-&gt;counter('events');</code></pre>
       <div class="feature"><strong>Tagged metrics</strong><span><code>->withTags(['user' => $u])</code> returns a registry that pre-tags every emit.</span></div>
       <div class="feature"><strong>Time helper</strong><span><code>$stop = $reg->time('http.duration'); $stop()</code> — emit a histogram sample on close.</span></div>
       <div class="feature"><strong>Backends</strong><span>InMemoryBackend, JsonStreamBackend, StatsdBackend, PrometheusFileBackend, MultiBackend.</span></div>
-      <div class="feature"><strong>Histogram buckets</strong><span>Prometheus backend emits 14 cumulative le buckets (0.005–100) +Inf for classic Prometheus compatibility.</span></div>
+      <div class="feature"><strong>Histogram buckets</strong><span>Prometheus backend emits 14 cumulative le buckets (0.005–100) plus +Inf — the 11 classic client_golang boundaries extended with 25/50/100.</span></div>
       <div class="feature"><strong>Cardinality tracking</strong><span>FIFO eviction of oldest label combinations when per-metric limit (default 10 000) is exceeded — reclaiming the series on storing backends (InMemory, Prometheus textfile), tracker-only against push-only StatsD/JSON stream arms. Inspect with <code>cardinality()</code>.</span></div>
       <div class="feature"><strong>Descriptor registration</strong><span>Pre-emit <code># TYPE</code> / <code># HELP</code> lines before first sample (Prometheus textfile collector metadata).</span></div>
       <div class="feature"><strong>Untrusted-value trust boundary</strong><span>SSH username/term tags are sanitized to <code>[A-Za-z0-9._:@/-]</code> and clamped to 64 bytes; every backend wire-sweep folds hostile framing tokens (<code>:</code> <code>|</code> <code>,</code>, space, control/DEL/C1) and the Prometheus writer throws loudly on fold-collisions and two-kind families. Treat untrusted strings as label <em>values</em>, never as metric names.</span></div>
@@ -60,7 +60,7 @@ $req-&gt;counter('events');</code></pre>
 <tr><td>Registry</td><td>register(Descriptor)</td><td>Register metric descriptor for early TYPE/HELP emission</td></tr>
 <tr><td>Registry</td><td>counter(name, value, tags)</td><td>Increment counter</td></tr>
 <tr><td>Registry</td><td>gauge(name, value, tags)</td><td>Set gauge value</td></tr>
-<tr><td>Registry</td><td>histogram(name, value, tags)</td><td>Record a histogram sample (14 classic buckets +Inf on Prometheus backend)</td></tr>
+<tr><td>Registry</td><td>histogram(name, value, tags)</td><td>Record a histogram sample (Prometheus backend default: 11 classic client_golang boundaries extended with 25/50/100, plus +Inf)</td></tr>
 <tr><td>Registry</td><td>upDownCounter(name, amount, tags)</td><td>Add positive or negative increment to a synchronous up-down counter</td></tr>
 <tr><td>Registry</td><td>asyncCounter(name, value, tags)</td><td>Record an observation from an asynchronous counter callback</td></tr>
 <tr><td>Registry</td><td>asyncGauge(name, value, tags)</td><td>Record an observation from an asynchronous gauge callback</td></tr>
@@ -81,7 +81,7 @@ $req-&gt;counter('events');</code></pre>
 <tr><td>InMemoryBackend</td><td>new(maxSamplesPerKey, maxSeries)</td><td>In-memory storage: per-key histogram reservoir cap (default 4096) and a global series ceiling evicted oldest-first (0 = unbounded)</td></tr>
 <tr><td>JsonStreamBackend</td><td>new(target, throwOnError)</td><td>One JSON object per line to a stream or path (default php://stderr); throwOnError = false drops partial-write failures silently</td></tr>
 <tr><td>StatsdBackend</td><td>new(host, port, dogstatsd, failSilently, timeout, existingSocket)</td><td>UDP StatsD/DogStatsD; defaults 127.0.0.1:8125, dogstatsd on, failSilently on, 1.0 s open timeout, or pass a pre-made existingSocket</td></tr>
-<tr><td>PrometheusFileBackend</td><td>new(path, buckets, maxSeriesPerFamily)</td><td>Prometheus textfile (atomic write; default 14 bucket boundaries +Inf; per-family FIFO ceiling, default 10 000)</td></tr>
+<tr><td>PrometheusFileBackend</td><td>new(path, buckets, maxSeriesPerFamily)</td><td>Prometheus textfile (atomic write; default 14 bucket boundaries — the 11 classic client_golang ones extended with 25/50/100 — plus +Inf; per-family FIFO ceiling, default 10 000)</td></tr>
 <tr><td>MultiBackend</td><td>new(...backends)</td><td>Fan out to two or more backends in order; a child failure propagates immediately (fail-fast). Zero children is refused at the door</td></tr>
 <tr><td>MultiBackend</td><td>withContinueOnError(...backends)</td><td>Static factory with error isolation: every child gets the emit even if others throw, and the collected failures are rethrown together as one MultiBackendException</td></tr>
 <tr><td>MultiBackendException</td><td>errors()</td><td>The array of Throwables collected during a continue-on-error fanout</td></tr>
@@ -97,7 +97,7 @@ $req-&gt;counter('events');</code></pre>
         <p class="lede">VHS-recorded GIF of the flagship <code>showcase.php</code> example, regenerated by CI on every push that touches the library source. The remaining examples are plain <code>php examples/&lt;name&gt;.php</code> runs — see the <a href="https://github.com/sugarcraft/sugar-metrics/tree/master/examples">examples directory</a>.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-metrics/.vhs/showcase.gif" alt="Counters / gauges / histograms">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-metrics/.vhs/showcase.gif" alt="Terminal recording of php examples/showcase.php: session counters, gauges and latency samples are recorded, then the collected InMemory totals print.">
                 <h3>Counters / gauges / histograms</h3>
                 <span class="demo-caption">Registry → InMemoryBackend totals after a tally pass.</span>
             </div>
