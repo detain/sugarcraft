@@ -58,19 +58,77 @@ $writer->write("\x1b[38;2;107;80;255mFancy text\x1b[0m\n");
 
 ## Profiles
 
-| ColorProfile | Colors    | Description                                     |
-|--------------|-----------|-------------------------------------------------|
-| TrueColor    | 16.7M     | Full 24-bit RGB (24-bit ANSI)                   |
-| Ansi256      | 256       | 216 cube + 24 gray + 16 standard                |
-| Ansi240      | 240       | Fixed palette only — slots 16-255 (chafa INDEXED_240) |
-| Ansi         | 16        | Standard terminal colors                        |
-| Ansi8        | 8         | Basic ANSI, no bright variants                  |
-| Fgbg         | 2         | Two-color fg/bg by brightness (chafa FGBG)      |
-| Ascii        | 2         | Black & white                                   |
-| NoTTY        | 0         | No color (ANSI stripped)                        |
+| ColorProfile | Colors    | Description                                     | Detection emits? |
+|--------------|-----------|-------------------------------------------------|------------------|
+| TrueColor    | 16.7M     | Full 24-bit RGB (24-bit ANSI)                   | yes              |
+| Ansi256      | 256       | 216 cube + 24 gray + 16 standard                | yes              |
+| Ansi240      | 240       | Fixed palette only — slots 16-255 (chafa INDEXED_240) | no — request-only |
+| Ansi         | 16        | Standard terminal colors                        | yes              |
+| Ansi8        | 8         | Basic ANSI, no bright variants                  | no — request-only |
+| Fgbg         | 2         | Two-color fg/bg by brightness (chafa FGBG)      | no — request-only |
+| Ascii        | 2         | Black & white                                   | yes — the falsy-`FORCE_COLOR` floor (ladder step 2) |
+| NoTTY        | 0         | No color (ANSI stripped)                        | yes              |
 
 `Profile` is the deprecated alias of `ColorProfile`; `Profile::ANSI256`
 and `Profile::ANSI` keep resolving through deprecated constant bridges.
+
+## The detection ladder
+
+The color-depth answer comes from one canonical 13-step chain (`DetectionChain`).
+`Probe`, `Palette` and `Probe\TerminalProbe` all consult it, so the same
+environment can never answer differently on two surfaces; `README`, the
+`DetectionChain` docblock and the tests follow this one numbering:
+
+1. `CLICOLOR_FORCE=1` → TrueColor (overrides everything)
+2. `FORCE_COLOR` (non-empty) → level: `true|yes|on|>=3` TrueColor, `2` Ansi256, `1` Ansi; any other spelling (`0`/`false`/`off`/…) → `Ascii` (disable color, keep decoration)
+3. `NO_COLOR` (set and **non**-empty; `""` = unset per no-color.org) → none
+4. `CLICOLOR=0` → none
+5. `TERM=dumb` (case-insensitive) → none
+6. `COLORTERM=24bit|truecolor|yes` → TrueColor
+7. `TERM_PROGRAM=iTerm.app` → TrueColor (inline image + 24-bit history)
+8. `WT_SESSION` (set, non-empty) → TrueColor (Windows Terminal)
+9. `GOOGLE_CLOUD_SHELL` (set, non-empty) → TrueColor
+10. `TMUX` or `STY` set + base TERM begins `screen`/`tmux` → Ansi256
+11. TERM contains `-256color`, or equals `xterm-kitty`/`xterm-ghostty` (case-insensitive) → Ansi256
+12. TERM begins `xterm`/`screen`/`tmux` (case-insensitive) → Ansi
+13. Default → Ansi
+
+Steps 1-2 outrank step 3 **deliberately**: `FORCE_COLOR`/`CLICOLOR_FORCE` are an
+active "give me color anyway" override (the chalk/support-colors convention),
+while `NO_COLOR` is a passive preference. The asymmetry is pinned by tests.
+Interpolated env values that ride in source strings are sanitized via
+`Env::sanitize()` — `TERM` and friends are attacker-influenced over SSH and a
+source string gets printed by downstream diagnostics.
+
+**Phase 2 (infocmp) — `Probe`/`AsyncProbe`/`TerminalProbe` surfaces only:** when
+the ladder answers `Ansi` or `Ansi256`, `infocmp -1` is consulted and `Tc`/`RGB`
+capability *names* (name-position match via `Probe\TerminfoParser`, never a
+whole-output regex) upgrade the answer to TrueColor. A bare `Palette::detect()`
+runs the ladder without this phase.
+
+### Env-var precedence
+
+The ladder's env legs, one table row per variable, in ladder order:
+
+| Env var | Ladder step | Effect |
+|---------|-------------|--------|
+| `CLICOLOR_FORCE=1` | 1 | force TrueColor past every suppression leg, `NO_COLOR` included (step 1) |
+| `FORCE_COLOR` | 2 | non-empty level override honored by **all** surfaces through the chain (step 2): `true/yes/on/>=3` TrueColor, `2` Ansi256, `1` Ansi; falsy spellings (`0/false/off/no`) land on the `Ascii` floor — decoration kept, color dropped. Outranks `NO_COLOR` by design |
+| `NO_COLOR` | 3 | set to a **non-empty** value (`""` = unset per no-color.org) → no color (`NoTTY` rung / `NoColor` capability) |
+| `CLICOLOR=0` | 4 | suppress color |
+| `TERM=dumb` | 5 | case-insensitive; suppresses color — outranks `COLORTERM` (dumb is a promise of minimal capabilities) |
+| `COLORTERM=24bit\|truecolor\|yes` | 6 | TrueColor (exact value match, case-insensitive) |
+| `TERM_PROGRAM` | 7 | `iTerm.app` → TrueColor rung (step 7); phase 3 additionally maps WezTerm/vscode/Ghostty → TrueColor, iTerm.app → ITerm2, Hyper → Hyperlinks |
+| `WT_SESSION` | 8 | set, non-empty → Windows Terminal, TrueColor |
+| `GOOGLE_CLOUD_SHELL` | 9 | set, non-empty (any truthy spelling) → TrueColor |
+| `TMUX` / `STY` | 10 | set + base TERM already begins `screen*`/`tmux*` → Ansi256 (step 10). Under tmux/screen the inner TERM *is* the base — no re-anchoring to the outer terminal happens |
+| `TERM` | 11-12 | ladder levels: `*-256color`/`xterm-kitty`/`xterm-ghostty` → Ansi256; `xterm*`/`screen*`/`tmux*` prefix → Ansi (all case-insensitive) |
+| `REDUCE_MOTION` / `PREFERS_REDUCED_MOTION` | — | non-empty and not `0/false/no/off` → `Probe::reducedMotion()` true (motion preference, outside the color ladder) |
+
+`NoTTY` labels the zero-color rung; suppression vars land there even on a real
+TTY (`Probe::isNoColor()` and the `NoColor` capability name the same decision).
+`ProbeReport::colorDescription()` is report prose; the enum's `label()` and
+`description()` are the canonical vocabulary.
 
 ## Color Degradation
 
@@ -152,40 +210,6 @@ ANSI-16 set, 16-231 the 6×6×6 cube at channel levels 0/95/135/175/215/255, and
 cross-pinned to sugar-core's decoder (`Ansi256TableParityTest`). Earlier
 versions shipped a private even-51-step cube; that table never matched a real
 terminal and is gone.
-
-## The detection ladder
-
-The color-depth answer comes from one canonical 13-step chain (`DetectionChain`).
-`Probe`, `Palette` and `Probe\TerminalProbe` all consult it, so the same
-environment can never answer differently on two surfaces; `README`, the
-`DetectionChain` docblock and the tests follow this one numbering:
-
-1. `CLICOLOR_FORCE=1` → TrueColor (overrides everything)
-2. `FORCE_COLOR` (non-empty) → level: `true|yes|on|>=3` TrueColor, `2` Ansi256, `1` Ansi; any other spelling (`0`/`false`/`off`/…) → `Ascii` (disable color, keep decoration)
-3. `NO_COLOR` (set and **non**-empty; `""` = unset per no-color.org) → none
-4. `CLICOLOR=0` → none
-5. `TERM=dumb` (case-insensitive) → none
-6. `COLORTERM=24bit|truecolor|yes` → TrueColor
-7. `TERM_PROGRAM=iTerm.app` → TrueColor (inline image + 24-bit history)
-8. `WT_SESSION` (set, non-empty) → TrueColor (Windows Terminal)
-9. `GOOGLE_CLOUD_SHELL` (set, non-empty) → TrueColor
-10. `TMUX` or `STY` set + base TERM begins `screen`/`tmux` → Ansi256
-11. TERM contains `-256color`, or equals `xterm-kitty`/`xterm-ghostty` (case-insensitive) → Ansi256
-12. TERM begins `xterm`/`screen`/`tmux` (case-insensitive) → Ansi
-13. Default → Ansi
-
-Steps 1-2 outrank step 3 **deliberately**: `FORCE_COLOR`/`CLICOLOR_FORCE` are an
-active "give me color anyway" override (the chalk/support-colors convention),
-while `NO_COLOR` is a passive preference. The asymmetry is pinned by tests.
-Interpolated env values that ride in source strings are sanitized via
-`Env::sanitize()` — `TERM` and friends are attacker-influenced over SSH and a
-source string gets printed by downstream diagnostics.
-
-**Phase 2 (infocmp) — `Probe`/`AsyncProbe`/`TerminalProbe` surfaces only:** when
-the ladder answers `Ansi` or `Ansi256`, `infocmp -1` is consulted and `Tc`/`RGB`
-capability *names* (name-position match via `Probe\TerminfoParser`, never a
-whole-output regex) upgrade the answer to TrueColor. A bare `Palette::detect()`
-runs the ladder without this phase.
 
 ## Probe — Static Environment Detection
 
@@ -306,26 +330,6 @@ Beyond the env ladder above, the library exposes a richer capability surface:
   is present at all. Env suppression, a missing infocmp binary, an unset or
   `dumb` TERM, the cap being reached, or a timeout/kill all settle to the
   chain's answer. Results are advisory only.
-
-| Env var | Effect |
-|---------|--------|
-| `NO_COLOR` | set to a **non-empty** value (`""` = unset per no-color.org) → no color (`NoTTY` rung / `NoColor` capability) |
-| `CLICOLOR=0` | suppress color |
-| `TERM=dumb` | case-insensitive; suppresses color — outranks `COLORTERM` (dumb is a promise of minimal capabilities) |
-| `CLICOLOR_FORCE=1` | force TrueColor past every suppression leg, `NO_COLOR` included (step 1) |
-| `FORCE_COLOR` | non-empty level override honored by **all** surfaces through the chain (step 2): `true/yes/on/>=3` TrueColor, `2` Ansi256, `1` Ansi; falsy spellings (`0/false/off/no`) land on the `Ascii` floor — decoration kept, color dropped. Outranks `NO_COLOR` by design |
-| `COLORTERM=24bit\|truecolor\|yes` | TrueColor (exact value match, case-insensitive) |
-| `TERM` | ladder levels: `*-256color`/`xterm-kitty`/`xterm-ghostty` → Ansi256; `xterm*`/`screen*`/`tmux*` prefix → Ansi (all case-insensitive) |
-| `TERM_PROGRAM` | `iTerm.app` → TrueColor rung (step 7); phase 3 additionally maps WezTerm/vscode/Ghostty → TrueColor, iTerm.app → ITerm2, Hyper → Hyperlinks |
-| `WT_SESSION` | set, non-empty → Windows Terminal, TrueColor |
-| `GOOGLE_CLOUD_SHELL` | set, non-empty (any truthy spelling) → TrueColor |
-| `TMUX` / `STY` | set + base TERM already begins `screen*`/`tmux*` → Ansi256 (step 10). Under tmux/screen the inner TERM *is* the base — no re-anchoring to the outer terminal happens |
-| `REDUCE_MOTION` / `PREFERS_REDUCED_MOTION` | non-empty and not `0/false/no/off` → `Probe::reducedMotion()` true |
-
-`NoTTY` labels the zero-color rung; suppression vars land there even on a real
-TTY (`Probe::isNoColor()` and the `NoColor` capability name the same decision).
-`ProbeReport::colorDescription()` is report prose; the enum's `label()` and
-`description()` are the canonical vocabulary.
 
 ## Overriding detection
 
