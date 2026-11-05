@@ -330,10 +330,12 @@ per-load timeout stays the caller's concern (compose with `withDeadline`).
 - `peek()` / `has()` / `isFresh()` / `invalidate()` / `clear()` — last-known-value
   reads for render paths that must never block, TTL probe, and scoped drops. A
   cached `null` is *present* (`has` true), disambiguated from *absent*.
-- `count()` / `keys()` / `isLoaded($key)` / `ageSeconds($key)` / `maxEntries()` —
-  introspection: stored-entry census (fresh and stale alike), in-flight-or-fresh
+- `count()` / `keys()` / `isLoaded($key)` / `ageSeconds($key)` / `maxEntries()` /
+  `ttlSeconds()` / `servesStaleOnError()` — introspection: stored-entry census
+  (fresh and stale alike), stored keys in insertion order, in-flight-or-fresh
   loading indicator for spinners, monotonic age of a stored value (`null` when
-  never stored).
+  never stored), and the three configuration reads (entry cap, TTL, stale
+  policy).
 - `serveStaleOnError` — on a failed load with an existing (expired) entry, the
   caller resolves with the stale value WITHOUT re-stamping its age, so a blip
   cannot latch the key and polling keeps retrying every tick. Read that as
