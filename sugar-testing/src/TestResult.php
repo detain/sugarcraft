@@ -21,7 +21,9 @@ final readonly class TestResult
      * @param object         $model            Final model after all messages processed
      * @param string         $view             Last view() output string
      * @param list<\Closure> $cmds             All commands emitted during the run
-     * @param string         $output           Concatenated view() output across steps
+     * @param string         $output           Concatenated view() output across
+     *                                         steps, plus verbatim RawMsg and
+     *                                         PrintMsg side-channel writes
      * @param list<string>   $frames           view() after init-trio updates, each
      *                                         update leg, and the final render —
      *                                         every frame the run produced, in order

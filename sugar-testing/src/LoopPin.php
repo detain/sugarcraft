@@ -107,8 +107,8 @@ final class LoopPin
      * `Program::installSignalHandlers()` returns early under
      * `withoutSignalHandler` or `catchInterrupts: false`, and such a Program
      * never enables async signals at all. A suite built around one of those
-     * does diverge. Recorded rather than worked around — candy-code A/B'd it
-     * over 30 runs with and 30 without and the results were identical. Re-check
+     * does diverge. Recorded rather than worked around: an A/B over 30 runs
+     * with and 30 without the pin came out identical. Re-check
      * it for a suite that leans on `Loop::addSignal()` or does its own
      * `pcntl_signal()` bookkeeping.
      *

@@ -69,7 +69,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Configure (with*) FIRST, then send() on the returned handle — or send
  * everything first and configure the final handle. Mixing the two loses
  * whichever messages were sent to the pre-clone handle (see
- * tests/ProgramSimulatorCloneQueueTest for the pinned semantics).
+ * tests/ControlParitySimulatorTest.php for the pinned semantics).
  *
  * @see Assertions::assertGoldenAnsi() for snapshot assertions
  */
@@ -165,11 +165,11 @@ final class ProgramSimulator
      * Install a fake runner that decides the message injected for each Cmd.
      *
      * The supplied closure receives each captured Cmd (\Closure) and may
-     * return a Msg to inject, or null to skip. Naming caveat discovered by
-     * audit (docs-fix-1023): the fake does NOT stop execution by itself —
-     * the real Cmd closure still runs for its side effects under the
-     * default execute mode. Pair with {@see withRealCmdRunner(false)} for
-     * capture-without-executing determinism.
+     * return a Msg to inject, or null to skip. Naming caveat: the fake does
+     * NOT stop execution by itself — the real Cmd closure still runs for
+     * its side effects under the default execute mode. Pair with
+     * {@see withRealCmdRunner(false)} for capture-without-executing
+     * determinism.
      *
      * Clones: configure BEFORE sending (or run on the returned handle) —
      * see the class docblock's clone discipline.
