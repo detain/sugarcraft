@@ -104,7 +104,8 @@ final class Log
      * On an uncaught exception:
      *  - Restores the terminal from altscreen mode
      *  - Shows the cursor
-     *  - Prints a colorized banner with the exception class + message
+     *  - Prints a banner with the exception class + message (styled only
+     *    when the formatter selected at install time is a pretty one)
      *  - Prints the backtrace with file paths and line numbers
      *  - Collapses repeated stack frames
      *  - Appends a short report footer with filing guidance
@@ -115,18 +116,23 @@ final class Log
      *
      * Mirrors ratatui ecosystem's `color_eyre` handler.
      *
-     * The report goes to STDERR. When $formatter is omitted it is chosen by
-     * destination: {@see PanicFormatter::pretty()} on a terminal (or under
-     * CLICOLOR_FORCE=1), {@see PanicFormatter::plain()} otherwise — file-
-     * captured panic reports never bake ANSI, and neither does a TTY
-     * destination when NO_COLOR is set (m-05).
+     * The report goes to STDERR. When $formatter is omitted it is chosen
+     * ONCE, at install time, from the terminal's capability:
+     * {@see PanicFormatter::pretty()} when STDERR is a TTY (or under
+     * CLICOLOR_FORCE=1), {@see PanicFormatter::plain()} otherwise. NO_COLOR
+     * suppresses pretty() even on a real TTY (m-05). The decision is not
+     * re-evaluated per report: a pretty handler installed while STDERR is a
+     * TTY still bakes ANSI into a report captured to a file after a later
+     * redirect — pass {@see PanicFormatter::plain()} explicitly as $formatter
+     * to keep such a destination ANSI-free (m-09).
      *
      * Re-installing REPLACES the previously installed handler and its
      * shutdown hook (one panic reporter per process at a time); the chained
      * "previous" handler captured at install time still runs afterwards.
      *
-     * @param PanicFormatter|null $formatter  Defaults to pretty()/plain() by STDERR capability; a
-     *                                        NO_COLOR environment suppresses pretty() unless
+     * @param PanicFormatter|null $formatter  Omitted: chosen at install time by STDERR capability
+     *                                        (never revisited per report, m-09); a NO_COLOR
+     *                                        environment suppresses pretty() unless
      *                                        CLICOLOR_FORCE overrides (m-05).
      * @param bool                $showLocals Include local variables in backtrace.
      * @param list<string>        $redactPaths Paths to redact from backtrace.
