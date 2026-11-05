@@ -56,9 +56,7 @@ terminals send for Shift+Tab) into that shape. The ring leg is gated on
 for other bindings — but that holds only on terminals that *report* modifiers
 (kitty keyboard negotiation, or an xterm `modifyOtherKeys`-style decoder).
 On legacy/basic terminals Ctrl+Tab is byte-identical to bare Tab: nothing can
-separate the two there, and those presses move the ring like a plain Tab
-would. (On sugar-core builds predating the `ESC [ Z` decoder arm the shift
-leg never fires at all.)
+separate the two there, and those presses move the ring like a plain Tab would.
 
 …and let each region style itself in `view()`:
 
