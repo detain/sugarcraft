@@ -53,7 +53,7 @@ $layout = $panels->vertical(
 echo $panels->render($layout, 40, 5);
 ```
 
-That prints (styling stripped):
+That prints (protocol and styling stripped — see *Frame protocol*):
 
 ```text
 ╭──────────────────────────────────────╮
