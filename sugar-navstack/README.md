@@ -12,8 +12,13 @@
 
 > Formerly published as `sugarcraft/sugar-crumbs` (renamed 2026-10). <!-- @rename-keep -->
 > Namespace changed: `SugarCraft\Crumbs\` → `SugarCraft\NavStack\`. <!-- @rename-keep -->
+> The eight old `SugarCraft\Crumbs\` classes still resolve through deprecated
+> `class_alias` shims (autoloaded from `aliases/`); they ship as rename grace
+> only — new code should use `SugarCraft\NavStack\`.
 
-sugar-navstack — NavStack (navigation stack) and Breadcrumb components for terminal UIs, for PHP 8.3+.
+sugar-navstack (package and directory; `SugarNavstack` is the title spelling;
+`NavStack` is the stack class) — NavStack (navigation stack) and Breadcrumb
+components for terminal UIs, for PHP 8.3+.
 
 A TUI that drills into nested screens (file trees, menus, settings pages) needs to
 remember *how you got here* so the breadcrumb bar can show it and a click can jump
@@ -26,7 +31,7 @@ string renderer for it.
 - **Breadcrumb renderer** — width-aware rendering of the current path, with left-elision and per-crumb mouse zones
 - **Shell** — combines NavStack + Breadcrumb into one navigation facade
 - **Pure renderer** — breadcrumb output is just strings; works with any TUI framework
-- **Small dependency surface** — built on the SugarCraft foundations only: [sugar-core](../sugar-core/) (untrusted-input sanitization, grapheme width, i18n base) and [sugar-mouse](../sugar-mouse/) (zone markers for click routing). No third-party packages.
+- **Small dependency surface** — built on the SugarCraft foundations only: [sugar-core](../sugar-core/) (untrusted-input sanitization, grapheme width, i18n base — facade ready, glyphs host-fed) and [sugar-mouse](../sugar-mouse/) (zone markers for click routing). No third-party packages.
 
 ## Install
 
@@ -109,8 +114,8 @@ When the trail exceeds `setMaxWidth()`, the OLDEST crumbs are dropped and the
 crumb overflows, it is ellipsis-truncated — `setMaxWidth()` is a hard cap.
 `renderTitles(list<string>)` renders a bare title list without a stack.
 `setItemRenderer(fn(NavigationItem, int): ?string)` customizes each crumb
-(`null` falls back to the plain title). All `set*` methods mutate and return
-`$this`; `withScanner()` is the one clone-returning method.
+(`null` falls back to the SANITIZED title, not the raw one). All `set*` methods
+mutate and return `$this`; `withScanner()` is the one clone-returning method.
 
 ### Click-Region Tracking
 
@@ -166,8 +171,8 @@ immutable operations — every `with*` (and `pushDirectory`) returns a NEW
 `Shell` and never mutates the receiver. The boundary is thinner than
 "immutable" suggests: the new Shell SHARES THE SAME (mutable-by-design)
 `Breadcrumb` instance, and its item list carries the same `NavigationItem`
-objects (titles and payloads are readonly, so sharing is safe to read).
-See the `Shell` class docblock:
+objects (titles and payloads are readonly, so sharing is safe to read) — the
+class docblock spells out the full boundary. Usage:
 
 ```php
 use SugarCraft\NavStack\Shell;
