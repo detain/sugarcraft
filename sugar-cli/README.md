@@ -57,9 +57,11 @@ echo StatusLine::error('connection refused'), "\n";
   can show, via sugar-core's `ColorProfile::detect()` — its ladder, in
   order: `CLICOLOR_FORCE` / `FORCE_COLOR` are resolved first and outrank
   tty-ness and `TERM=dumb`, so a forced stream keeps full colour even
-  through a pipe; otherwise a non-tty STDOUT (`myapp --help | less`) or
-  `TERM=dumb` emits no escape bytes at all; `NO_COLOR` outranks the force
-  vars and drops colour while keeping bold; BSD `CLICOLOR=0` drops colour
+  through a pipe; otherwise a non-tty STDOUT (`myapp --help | less`) and
+  `TERM=dumb` resolve the same way and emit no escape bytes at all —
+  that downgrade drops the bold attribute along with the colour, unlike
+  `NO_COLOR`, which outranks the force vars, drops colour while keeping
+  bold, and resolves to the Ascii profile; BSD `CLICOLOR=0` drops colour
   unless forced. The roster authority is sugar-core's `ColorProfile`
   docblock — sugar-cli never re-implements the order. **Every presenter
   called without a theme uses
