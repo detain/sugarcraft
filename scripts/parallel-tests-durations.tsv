@@ -580,6 +580,7 @@ candy-code/tests/Chat/ChatPostToolUseBlockTest.php	0.460	7
 candy-code/tests/Chat/SessionPickerMouseTest.php	0.457	6
 candy-code/tests/Tui/Settings/SettingsEditorNarrowTest.php	0.457	7
 candy-code/tests/Agents/TeamManagerTest.php	0.455	30
+candy-code/tests/Renderer/SessionActZoneAgreementTest.php	0.455	6
 candy-code/tests/Support/RequirementDirectiveProvenanceTest.php	0.447	18
 candy-code/tests/Support/StartupSummaryTest.php	0.446	18
 candy-code/tests/Cli/SubcommandsMcpServeTest.php	0.445	2
