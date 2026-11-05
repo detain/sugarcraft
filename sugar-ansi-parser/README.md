@@ -10,6 +10,8 @@
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
+The badges above track the upstream monorepo, [`detain/sugarcraft`](https://github.com/detain/sugarcraft), where this library's CI and coverage run; the split package you install from Packagist is [`github.com/sugarcraft/sugar-ansi-parser`](https://github.com/sugarcraft/sugar-ansi-parser) — its issue and source URLs are the `homepage`/`support` fields in `composer.json`.
+
 ## Install
 
 ```sh
