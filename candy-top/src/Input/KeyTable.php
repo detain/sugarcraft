@@ -16,6 +16,10 @@ namespace SugarCraft\Top\Input;
  * adds `x` and `[, ]` (the containers box) right after it. btop PR #1476 adds the proc-width rows after `Selected N`;
  * `O` is candy-top's #1873 extension; the vim_keys rows (btop documents
  * those only in its options text) are listed so the roster is complete.
+ * The `v`, `s, S` and `shift + i` rows have no btop counterpart at all
+ * (btop has no VM dashboard, and its `s` is the signal chooser) — they
+ * carry `candyTopOnly: true` so the generated README table names them as
+ * candy-top's own instead of presenting them under "btop key names".
  * `g, ctrl + g` is btop #1552's gpu-only filter (`ctrl + g` because
  * vim_keys keeps `g` for "top").
  *
@@ -70,10 +74,10 @@ final class KeyTable
             new KeyRow('x', 'help.toggle_ctr', ['x']),
             new KeyRow('[, ]', 'help.select_ctr', ['[', ']']),
             // candy-top's VM dashboard: `v` toggles it, `s`/`S` cycle its card order (arrows/Enter as listed below).
-            new KeyRow('v', 'help.toggle_vms', ['v']),
-            new KeyRow('s, S', 'help.vms_sort', ['s', 'S']),
+            new KeyRow('v', 'help.toggle_vms', ['v'], candyTopOnly: true),
+            new KeyRow('s, S', 'help.vms_sort', ['s', 'S'], candyTopOnly: true),
             // candy-top's BMC box (`i` is io_mode, so shift).
-            new KeyRow('shift + i', 'help.toggle_ipmi', ['I']),
+            new KeyRow('shift + i', 'help.toggle_ipmi', ['I'], candyTopOnly: true),
             new KeyRow('d', 'help.toggle_disks', ['d']),
             new KeyRow('F2, o', 'help.options', ['f2', 'o']),
             new KeyRow('F1, ?, h', 'help.help', ['f1', '?', 'h']),

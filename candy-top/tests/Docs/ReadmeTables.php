@@ -41,7 +41,9 @@ final class ReadmeTables
     /**
      * The key table: one row per {@see KeyTable::keyRows()} row — the key
      * column as the help overlay shows it, the description, and the btop
-     * key names the row documents.
+     * key names the row documents. A row candy-top invented (no btop
+     * counterpart — {@see \SugarCraft\Top\Input\KeyRow::$candyTopOnly})
+     * says so in that column instead of naming btop keys it does not mirror.
      */
     public static function keyTable(): string
     {
@@ -49,7 +51,9 @@ final class ReadmeTables
         foreach (KeyTable::keyRows() as $row) {
             $out .= '| ' . self::code($row->keyLabel())
                 . ' | ' . self::cell($row->description())
-                . ' | ' . implode(', ', array_map(self::code(...), $row->bindings))
+                . ' | ' . ($row->candyTopOnly
+                    ? '— (candy-top only)'
+                    : implode(', ', array_map(self::code(...), $row->bindings)))
                 . " |\n";
         }
 

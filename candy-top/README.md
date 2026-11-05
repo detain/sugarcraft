@@ -324,9 +324,9 @@ Context rules, following btop's input handling:
 | `5, 6, 7, 8, 9, 0` | Toggle GPU box. | `5`, `6`, `7`, `8`, `9`, `0` |
 | `x` | Toggle CTR (containers) box. | `x` |
 | `[, ]` | Select previous/next container in CTR box. | `[`, `]` |
-| `v` | Toggle the VM dashboard (hides mem, net, proc, ctr). | `v` |
-| `s, S` | Next/previous VM card order (VM dashboard). | `s`, `S` |
-| `shift + i` | Toggle the ipmi box (BMC power, fans, temps; root). | `I` |
+| `v` | Toggle the VM dashboard (hides mem, net, proc, ctr). | — (candy-top only) |
+| `s, S` | Next/previous VM card order (VM dashboard). | — (candy-top only) |
+| `shift + i` | Toggle the ipmi box (BMC power, fans, temps; root). | — (candy-top only) |
 | `d` | Toggle disks view in MEM box. | `d` |
 | `F2, o` | Shows options. | `f2`, `o` |
 | `F1, ?, h` | Shows this window. | `f1`, `?`, `h` |
