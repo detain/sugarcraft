@@ -1736,10 +1736,31 @@ final class ModelTest extends TestCase
         $this->assertStringContainsString('alpha', $lines[0]);
         $this->assertStringContainsString('evil', $lines[0]);
         $this->assertStringContainsString('red', $lines[0]);
+
+        // Capture ONCE before the sweep assertions: the first view() renders
+        // the full frame and seeds the row-delta memo, so any LATER view()
+        // returns a delta (empty when nothing changed) — scanning it per byte
+        // would score against the empty string (r2 MINOR-1 vacuity).
+        $frame = $m->view();
+
+        // A full frame legitimately ENDS rows with a bare "\n" (the join plus
+        // trailing terminator documented in the README delta section — hosts
+        // ride ONLCR), so the sweep guarantee is per ROW: explode on the
+        // legitimate terminators, then no forbidden byte may survive inside
+        // any frame row.
+        $frameRows = \explode("\n", $frame);
         foreach (["\x1b", "\x07", "\r", "\n"] as $forbidden) {
             $this->assertStringNotContainsString($forbidden, $lines[0]);
-            $this->assertStringNotContainsString($forbidden, $m->view());
+            foreach ($frameRows as $row) {
+                $this->assertStringNotContainsString($forbidden, $row);
+            }
         }
+        // Shape legs stand in for the "\n" byte where a per-row content scan
+        // is vacuous by construction: the frame is exactly its rows plus
+        // terminators (one smuggled break would add a fragment), and the
+        // trailing-terminator convention is what makes the explode honest.
+        $this->assertCount(2, $frameRows, 'extension returns must never fragment a frame row');
+        $this->assertSame('', $frameRows[1], 'a full frame terminates with a trailing "\n"');
     }
 
     public function testRowBudgetCapsLayoutWorkForPathologicalValues(): void
