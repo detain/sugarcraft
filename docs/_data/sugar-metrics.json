@@ -1,8 +1,8 @@
 {
     "title": "SugarMetrics — SugarCraft",
-    "description": "SugarMetrics: Counters, gauges, and histograms for PHP apps — Prometheus/StatsD/JSON backends, plus SSH session middleware for SugarSshServer.",
+    "description": "SugarMetrics: counters, gauges, histograms, UpDownCounters, AsyncCounters, AsyncGauges — five backends (InMemory, JsonStream, StatsD, Prometheus textfile, Multi fan-out), plus drop-in SSH session middleware for SugarSshServer.",
     "ogTitle": "SugarMetrics — SugarCraft",
-    "ogDescription": "Counters, gauges, and histograms for PHP apps — Prometheus/StatsD/JSON backends, plus SSH session middleware for SugarSshServer.",
+    "ogDescription": "Counters, gauges, histograms, UpDownCounters, AsyncCounters, AsyncGauges — five backends (InMemory, JsonStream, StatsD, Prometheus textfile, Multi fan-out), plus drop-in SSH session middleware for SugarSshServer.",
     "emoji": "📈",
     "displayName": "SugarMetrics",
     "tagline": "Telemetry primitives + SugarSshServer session middleware",
