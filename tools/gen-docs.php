@@ -585,7 +585,7 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
     $plural = $type === 'app' ? 'apps' : 'libraries';
     $count  = $type === 'app' ? $nApp : $nLib;
     $breadcrumb = '<p style="color: var(--ink-2); margin: 0 0 16px 0;">'
-        . '<a href="../#' . $plural . '">← All ' . $count . ' ' . $plural . '</a></p>';
+        . '<a href="../#' . $plural . '"><span aria-hidden="true">←</span> All ' . $count . ' ' . $plural . '</a></p>';
 
     // Decorative emoji is hidden from assistive tech — the heading's accessible
     // name is the package name already (MD-9, sugar-docs-reviews-1104 root drain).
@@ -606,7 +606,7 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
         . "\n\n<section class=\"section\">\n  <div class=\"container\">\n    "
         . $breadcrumb . "\n\n"
         . "    <div class=\"detail-header\">\n"
-        . '      <img class="detail-icon" src="../img/icons/' . $slug . '.png" alt="">' . "\n"
+        . '      <img class="detail-icon" src="../img/icons/' . $slug . '.png" alt="" aria-hidden="true' . "\">\n"
         . "      <div>\n"
         . '        <h2>' . $h2 . "</h2>\n"
         . '        <p class="detail-sub">' . $meta['tagline'] . "</p>\n"
@@ -658,7 +658,7 @@ function build_prefix(string $slug, string $title, string $desc, string $ogTitle
                 <a href="../#demos">Demos</a>
                 <a href="../#quickstart">Quickstart</a>
                 <a href="../compare.html">Compare</a>
-                <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+                <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a>
             </div>
         </div></nav>
         HTML;
