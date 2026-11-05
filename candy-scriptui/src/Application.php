@@ -75,7 +75,6 @@ final class Application extends SymfonyApplication
         'timeout',
         'underline',
         'unselected-prefix',
-        'verbose',
         'width',
     ];
 

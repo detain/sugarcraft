@@ -239,7 +239,7 @@ with non-alphanumeric characters replaced by `_`. The permitted names are
 `align`, `background`, `bold`, `border`, `border-foreground`,
 `cursor-prefix`, `faint`, `foreground`, `height`, `italic`, `prefix`,
 `reverse`, `separator`, `strikethrough`, `timeout`, `underline`,
-`unselected-prefix`, `verbose`, `width`. For example:
+`unselected-prefix`, `width`. For example:
 
 ```sh
 # Equivalent to: candy-scriptui style --foreground=#ff0000 --bold "Hello"
