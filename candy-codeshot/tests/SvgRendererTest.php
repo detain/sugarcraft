@@ -139,4 +139,27 @@ final class SvgRendererTest extends TestCase
         $this->assertStringContainsString('clip-path="url(#frame)"', $svg);
         $this->assertStringNotContainsString('clipPath', SvgRenderer::dark()->render('x'));
     }
+
+    public function testTabbedLineSharesWidthWithItsSpaceExpandedTwin(): void
+    {
+        // SgrStateHandler pads every tab to the next 8-cell stop, so a tabbed
+        // line and its space-expanded twin paint at the same columns and must
+        // be framed the same width. Before the tab-aware measure, the tabbed
+        // line budgeted 4 cells per tab (28 here) against the twin's 40 and
+        // rendered a frame that clipped it.
+        $renderer = SvgRenderer::dark()
+            ->withWindow(false)->withShadow(false)->withLineNumbers(false)->withPadding(0);
+        $tabbedWidth = self::rootWidth($renderer->render("x\tx\tx\tx\tyyyyyyyy"));
+        $twinWidth   = self::rootWidth($renderer->render('x       x       x       x       yyyyyyyy'));
+
+        $this->assertSame($twinWidth, $tabbedWidth);
+    }
+
+    private static function rootWidth(string $svg): string
+    {
+        $count = preg_match('/<svg\b[^>]*\bwidth="([^"]+)"/', $svg, $matches);
+        self::assertSame(1, $count, 'root svg must carry a width attribute');
+
+        return $matches[1];
+    }
 }

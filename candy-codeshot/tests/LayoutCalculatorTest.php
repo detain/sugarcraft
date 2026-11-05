@@ -240,4 +240,50 @@ final class LayoutCalculatorTest extends TestCase
         $this->assertEquals(36, $with[7] - $without[7]);
         $this->assertSame($with[2], $without[2]);
     }
+
+    public function testTabbedLinesAreBudgetedToPaintedColumns(): void
+    {
+        // SgrStateHandler expands every tab to the next 8-cell stop, but the
+        // budget side used to measure the raw line, where sugar-core Width
+        // counts a tab as 4 cells — a tabbed line was under-budgeted and could
+        // be clipped by the frame it justified. "\tend;" paints at column 8
+        // and occupies 12 cells; it used to be budgeted 8.
+        [$maxCols, , $contentWidth] = LayoutCalculator::calculate(
+            lines: ["\tend;"], lineNumbers: false, padding: 0, window: false,
+            shadow: false, cellW: 8.0, cellH: 17.0,
+        );
+
+        $this->assertSame(12, $maxCols);
+        $this->assertEquals(96.0, $contentWidth);
+    }
+
+    public function testRepeatedTabsWalkTheEightCellStops(): void
+    {
+        // Each x lands one cell past a stop, so every tab pads the full 7 to
+        // the next stop: 1 → 8+1 → 16+1 → 24+1 → 32+8 = 40 painted columns.
+        // The old 4-cell tab measure reported 28.
+        [$maxCols, , $contentWidth] = LayoutCalculator::calculate(
+            lines: ["x\tx\tx\tx\tyyyyyyyy"], lineNumbers: false, padding: 0, window: false,
+            shadow: false, cellW: 8.0, cellH: 17.0,
+        );
+
+        $this->assertSame(40, $maxCols);
+        $this->assertEquals(320.0, $contentWidth);
+    }
+
+    public function testTabsBudgetIdenticallyToSpaceAlignment(): void
+    {
+        // The law the paint side enforces: a tab is space-padding to the next
+        // stop, so a tabbed line and its space-expanded twin must agree.
+        $tabbed = LayoutCalculator::calculate(
+            lines: ["\tend;"], lineNumbers: false, padding: 0, window: false,
+            shadow: false, cellW: 8.0, cellH: 17.0,
+        );
+        $spaced = LayoutCalculator::calculate(
+            lines: ['        end;'], lineNumbers: false, padding: 0, window: false,
+            shadow: false, cellW: 8.0, cellH: 17.0,
+        );
+
+        $this->assertSame($spaced[0], $tabbed[0]);
+    }
 }
