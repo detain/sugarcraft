@@ -224,9 +224,9 @@ perceivable (2.4.7 *Focus Visible*).
 
 | Method | Description |
 |---|---|
-| `FocusRing::new()` | An empty ring. |
-| `FocusRing::of(string ...$ids)` | A ring of regions (duplicates dropped), focusing the first. |
-| `FocusRing::ofStrict(string ...$ids)` | Like `of()`, but throws `InvalidArgumentException` on a duplicate id. |
+| `FocusRing::new(): self` | An empty ring. |
+| `FocusRing::of(string ...$ids): self` | A ring of regions (duplicates dropped), focusing the first. |
+| `FocusRing::ofStrict(string ...$ids): self` | Like `of()`, but throws `InvalidArgumentException` on a duplicate id. |
 | `FocusRing::restore(array $snapshot): self` | Inverse of `jsonSerialize()` — clamps stale indices on legacy positional-only snapshots, unknown `focused` ids land on the first region, drops unknown disabled entries. Takes a decoded **array**: guard `json_decode()` with `is_array()` before calling. |
 | `register(string $id): self` | Add an enabled region to the end of the order. |
 | `unregister(string $id): self` | Remove a region, preserving focus where possible. |
