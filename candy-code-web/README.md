@@ -129,7 +129,7 @@ documents the protocol and the UI).
   button does the same on click), the viewport keeps its place as rows
   prepend, and a failed pull says so inline — in the server's own words, not
   translated — instead of retrying silently. Diffs render each row through
-  one highlight pass and paint at most 500 of them until *show more*, so a
+  one highlight pass and paint at most 500 of them until *load more*, so a
   whole-workspace diff stays operable.
   Two toolbar switches are remembered per browser: *Show thinking* opens
   every settled fold, *Expand tool cards* opens every card until a card is
@@ -146,11 +146,13 @@ documents the protocol and the UI).
   offered first is the server's `queueMode` (`server.hello`'s
   `defaults.delivery`; `steer` unless set, as the TUI's Enter does mid-turn);
   Stop or Esc Esc cancels; `/` completes server-runnable commands, `@`
-  completes mentions — files and `@mcp:` resource mentions of connected
-  servers — and a leading `#` is the TUI's todo quick-add. Pasting or
+  completes mentions — files, `@mcp:` resource mentions of connected
+  servers, and `@agent:` delegations from the sub-agent roster — and a
+  leading `#` is the TUI's todo quick-add. Pasting or
   dragging images files them as chips that ride the send, and PDFs/documents
   ride the same surface within the server's per-message document budget.
-  Ctrl+↑ walks the prompt history and Ctrl+G searches it (TUI semantics:
+  Ctrl+↑/↓ walks the prompt history back and forth and Ctrl+G searches it
+  (TUI semantics:
   Enter fills the draft, Esc restores yours); a paste over the TUI's
   collapse thresholds lands as a `[Pasted #n +X lines]` chip that expands at
   submit, so the wire carries the whole text while the draft stays short.
@@ -214,11 +216,14 @@ documents the protocol and the UI).
   a secure context, so there the button rides the server engine or hides:
   the browser refuses both APIs in an insecure page.
 - **Canvas artifacts**: a tool can answer with self-contained HTML, rendered
-  as a CanvasCard in a sandboxed frame served from `POST /api/canvas` (the
+  as a CanvasCard in a sandboxed frame served from `GET /canvas/{token}`, the
+  token minted once by `POST /api/canvas` (the
   containment story is documented in candy-code SERVER.md); generated media
   shows through the matching cards.
-- **Keyboard**: `?` opens the help overlay listing the live chords, and the
-  keymap is rebindable and persisted per browser (`src-web/lib/keymap.ts`).
+- **Keyboard**: `?` opens the help overlay listing the live chords — heard
+  when the composer is empty or focus is outside any editable field — and
+  three actions are rebindable and persisted per browser: palette, help and
+  the tab chord (`src-web/lib/keymap.ts`).
   Chords quoted elsewhere in this README are defaults, not law.
 - **Installable, localized**: a PWA manifest plus a service worker
   (`public/manifest.webmanifest` plus a `/sw.js` built from `src-web/sw.ts`
@@ -246,7 +251,8 @@ documents the protocol and the UI).
   key, and any 401 from the server clears it the same way), so until then
   keep the host page's script surface clean and treat browser storage as
   holding a credential. **Two:** the composer keeps sent prompts in a local
-  ring (`candy-code-web:promptHistory`, capped at 50, this origin only,
+  ring (`candy-code-web:promptHistory`, capped at 50 entries of at most
+  16 Ki characters each, this origin only,
   never sent anywhere beyond the server that answered those very prompts) —
   sign-out clears that key in every open tab of this browser (each tab's
   in-memory copy drops with it, so nothing resurrects on the next send),
@@ -255,7 +261,7 @@ documents the protocol and the UI).
   `clearPromptHistory()` in `src-web/stores/promptHistory.ts`. **Three:**
   Unsent composer drafts persist too (`candy-code-web:drafts`) — this is
   user-typed text, which routinely holds file paths, pasted credentials and
-  proprietary code. Writes are debounced, each entry is clamped to 16 KiB
+  proprietary code. Writes are debounced, each entry is clamped to 16 Ki characters
   (longer text lives in memory for the session, not storage), at most 50
   sessions are kept, and a page-hide flushes before unload; sign-out clears
   the key in every open tab, a session leaving the list drops its own row,
@@ -278,8 +284,8 @@ caches ride a per-login scope bucket, so the sweep is provably complete
 | Key | Contents | Bound | Cleared by |
 | --- | --- | --- | --- |
 | `login-secret` | sign-in secret (a credential) | one | sign-out; any server 401 |
-| `promptHistory` | recent SENT prompts, newest first | 50 | sign-out (all tabs); palette "Clear prompt history" |
-| `drafts` | unsent composer text per session | 50 sessions × 16 KiB | sign-out (all tabs); session leaving the index; FIFO eviction |
+| `promptHistory` | recent SENT prompts, newest first | 50 × 16 Ki chars | sign-out (all tabs); palette "Clear prompt history" |
+| `drafts` | unsent composer text per session | 50 sessions × 16 Ki chars | sign-out (all tabs); session leaving the index; FIFO eviction |
 | `tabs` / `mode` / `focused` / `lastSession` | open tab ids / list vs grid / focused session / last opened id | tabs: 12 | sign-out sweeps tabs/focused/lastSession (OD-28); mode kept (view pref); a vanished session prunes its own rows |
 | `theme` / `notify` / `diffStyle` | UI preferences | enum values | kept |
 | `push` | device-notification consent | boolean | its own Settings toggle |
