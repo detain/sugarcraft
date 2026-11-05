@@ -31,12 +31,44 @@ Dual-pane terminal file manager built on the SugarCraft stack for PHP 8.3+, with
 
 ## Run it
 
+Three channels, same as every SugarCraft app:
+
+**1. Composer consumer** — install the package into a project and run its vendor bin:
+
+```bash
+composer require sugarcraft/candy-files
+vendor/bin/candy-files [LEFT_DIR] [RIGHT_DIR]
+```
+
+**2. Source checkout** — from a clone of this repo:
+
 ```bash
 composer install
 ./bin/candy-files [LEFT_DIR] [RIGHT_DIR]
 ```
 
+**3. Rolling phar** — the self-contained build published on GitHub Releases under
+`candy-files/dev` as `candy-files.phar` (with `.sha256` and `.sig` sidecars);
+stable cuts ride the same release pipeline on `candy-files/v*` tags. The launcher
+detects that it is running from inside a phar and resolves its assets accordingly:
+
+```bash
+wget https://github.com/detain/sugarcraft/releases/download/candy-files/dev/candy-files.phar
+php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
+```
+
+Flags: `--version` (prints the build stamp — phar-aware via `Support\Version::line()`)
+and `--help` / `-h` (usage). Both are answered before the positional directory scan,
+and the scan fail-fasts with `left/right directory does not exist: <dir>` (exit 1)
+rather than opening a mysteriously empty pane. One honest consequence of matching
+flags anywhere in argv: a directory literally named `--version` prints the version —
+flag-before-scan ordering is the documented design.
+
 Default: left pane = current directory, right pane = `$HOME`.
+
+**Requirements:** PHP `^8.3` with `ext-intl` and `ext-mbstring`. Both extensions are
+hard-required transitively by `sugar-core`, whose cell-width math segments through ICU —
+on a bare php-cli machine the step that refuses is `composer install`, naming `sugar-core`.
 
 ## Keys
 
