@@ -66,11 +66,25 @@ Flags:
 - `--pager` / `-p` — open in a fullscreen pager.
 - `--ansi` / `--no-ansi` — force / forbid decorated output.
 
-Color is decided in this order: `--no-ansi`, `--ansi`, then the environment
-(`CLICOLOR_FORCE` / `FORCE_COLOR` force color on; a set `NO_COLOR` — including
-`NO_COLOR=0` per the spec — or `CLICOLOR=0` force it off), then whether
-stdout is a terminal, then a terminfo capability probe (`TERM=dumb` counts as
-colorless). An unparseable environment never throws: the probe decides.
+Two independent chains decide color, and it matters which one you are in:
+
+- **Decoration gate** (does the stream emit ANSI and OSC envelopes at all):
+  `--no-ansi`, then `--ansi`, then the environment (`CLICOLOR_FORCE` /
+  `FORCE_COLOR` force color on when set to any value other than `0`; a
+  non-empty `NO_COLOR` — including `NO_COLOR=0` per the spec — or
+  `CLICOLOR=0` force it off; an empty `NO_COLOR=` takes no position), then
+  whether stdout is a terminal. The terminfo probe is *not* consulted here.
+- **Theme probe** (implicit theme tier only): a terminfo capability probe
+  (`TERM=dumb` counts as colorless) picks between the `ansi` and `ascii`
+  themes.
+
+Two consequences worth knowing: `NO_COLOR` on a terminal selects the ascii
+theme but does not silence OSC 8 link envelopes — the decoration gate is a
+tty check and never reads `NO_COLOR`; and `--no-ansi` on a color-capable
+terminal yields the **plain** theme, not `ascii`. A value `CLICOLOR` or
+`NO_COLOR` cannot act on never throws: it takes no position and the
+terminal/probe chain decides (`FORCE_COLOR=banana` is the different shape —
+any non-`0` value forces color on at the gate).
 
 ## Pager
 
