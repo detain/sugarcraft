@@ -195,6 +195,21 @@ meant to stay out of traversal. A first-class `suspend()` / `ofLayer()`
 primitive is a deliberate omission for now; this disable/enable dance is the
 supported path.
 
+### Non-visual access
+
+SGR borders are invisible *and* inaudible: an Orca-style reader never sees the
+accent paint, so the ring's state must reach the user as text. Announce
+`current()` by name whenever it changes — the demo's footer (`● focused: …`)
+is that contract in miniature. For a "region k of n" position, prefer
+`enabledIndex() + 1` over `enabledCount()` (`FocusRing.php:753, :607`) to the
+raw `index()`/`count()` pair: it reflects what Tab can actually reach.
+`enabledIndex()` is `null` when focus is parked on a disabled region or the
+ring is empty — announce the region name alone in that case, never position
+`0`. Seen this way the trap recipe above is not a dialog hack but the
+keyboard-accessibility pattern itself: the disabled set *is* the focus order
+(WCAG 2.4.3 *Focus Order*), and a ring-driven text marker is how focus stays
+perceivable (2.4.7 *Focus Visible*).
+
 ## API
 
 | Method | Description |
