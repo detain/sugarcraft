@@ -148,6 +148,30 @@ describe('grid', () => {
     expect(wrapper.find('[data-testid="grid-tile"][data-session-id="b"]').attributes('data-focused')).toBe('true')
   })
 
+  it('announces the tail of the focused tile only; narrated rest stay silent', async () => {
+    const { wire, wrapper } = await setUp()
+    useLayoutStore().openTab('b')
+    await wrapper.find('[data-testid="layout-grid"]').trigger('click')
+    await flushPromises()
+    subscribe(wire, 'a')
+    subscribe(wire, 'b', 'busy')
+    await flushPromises()
+
+    // Both tiles carry a tail; the microphone belongs to the focused one.
+    wire.event('a', 'assistant.narration', { partId: 'ta:text', tail: 'front tail', offset: 0 }, false)
+    wire.event('b', 'assistant.narration', { partId: 'tb:text', tail: 'migrating the pool', offset: 0 }, false)
+    await flushPromises()
+    const tileLive = (id: string) => wrapper.find(`[data-testid="grid-tile"][data-session-id="${id}"] [data-testid="tile-live"]`)
+    expect(tileLive('a').attributes('aria-live')).toBe('polite')
+    expect(tileLive('b').attributes('aria-live')).toBe('off')
+
+    // Focusing b hands the microphone over: a falls silent, b speaks.
+    await wrapper.find('[data-testid="grid-tile"][data-session-id="b"]').trigger('mousedown')
+    await flushPromises()
+    expect(tileLive('a').attributes('aria-live')).toBe('off')
+    expect(tileLive('b').attributes('aria-live')).toBe('polite')
+  })
+
   it('answers a tile’s question in place and steers a busy tile', async () => {
     const { wire, wrapper } = await setUp()
     await wrapper.find('[data-testid="layout-grid"]').trigger('click')

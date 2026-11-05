@@ -101,7 +101,8 @@ documents the protocol and the UI).
   to 3×3, each live — status, step, spend, the last few events, its questions
   and a line to prompt or steer it. The focused tile streams in full; the
   others are narrated by the server (a tail every 2 s) and catch up at once
-  when focused. The layout is remembered per browser.
+  when focused. A screen reader is fed only the focused tile's tail — the
+  others show theirs silently. The layout is remembered per browser.
 - **Approvals drawer** (the ⚠ count in the top bar): every question open in
   any session of the server, oldest first, grouped by session and answerable
   in place. A question arrives the moment it is put, whether or not this page

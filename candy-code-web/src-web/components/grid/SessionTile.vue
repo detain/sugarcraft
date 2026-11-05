@@ -128,7 +128,11 @@ async function answer(askId: string, reply: Reply, cascade: boolean, note = '', 
       <ul class="recent">
         <li v-for="item in recent" :key="item.key" :class="item.kind">{{ item.text }}</li>
       </ul>
-      <p v-if="live" class="live" data-testid="tile-live" aria-live="polite">{{ live }}</p>
+      <!-- The transcript law (ISS-108): a polite region fed every streaming
+           delta spams a screen reader, so only what the user is watching is
+           announced. A tile no one has focused is background noise — its
+           narrated tail stays visible but silent. -->
+      <p v-if="live" class="live" data-testid="tile-live" :aria-live="focused ? 'polite' : 'off'">{{ live }}</p>
       <PermissionCard
         v-for="ask in state.asks"
         :key="ask.askId"
