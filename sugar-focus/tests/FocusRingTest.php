@@ -1149,6 +1149,21 @@ final class FocusRingTest extends TestCase
         self::assertCacheConsistent($restored);
     }
 
+    public function testRestoreDegradesNonIterableDisabledFailSoft(): void
+    {
+        // A hand-edited or truncated session file can carry a non-iterable
+        // top-level "disabled". restore() is fail-soft for everything but
+        // malformed ids, so the walk must degrade to "no flags" — never emit
+        // a PHP warning for foreach() over a scalar.
+        foreach (['grid', 42, 3.5, true] as $hostile) {
+            $restored = FocusRing::restore(['ids' => ['a', 'b'], 'focused' => 'b', 'disabled' => $hostile]);
+
+            self::assertSame([], $restored->disabledIds(), 'non-array disabled degrades to the spec');
+            self::assertSame('b', $restored->current());
+            self::assertCacheConsistent($restored);
+        }
+    }
+
     public function testRestoreRejectsMalformedIdLists(): void
     {
         $this->expectException(\InvalidArgumentException::class);

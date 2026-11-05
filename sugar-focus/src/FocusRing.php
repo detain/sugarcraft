@@ -696,9 +696,14 @@ final class FocusRing implements \Countable, \IteratorAggregate, \JsonSerializab
         }
 
         $disabled = [];
-        foreach ($snapshot['disabled'] ?? [] as $id) {
-            if (is_string($id) && in_array($id, $ids, true)) {
-                $disabled[$id] = true;
+        $rawDisabled = $snapshot['disabled'] ?? [];
+        if (is_array($rawDisabled)) {
+            // A non-iterable top-level list is corruption, not a flag set:
+            // degrade to the spec rather than warning out of foreach().
+            foreach ($rawDisabled as $id) {
+                if (is_string($id) && in_array($id, $ids, true)) {
+                    $disabled[$id] = true;
+                }
             }
         }
 
