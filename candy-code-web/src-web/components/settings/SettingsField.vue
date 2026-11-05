@@ -77,7 +77,7 @@ function onCheckbox(event: Event): void {
       <code class="key">{{ row.key }}</code>
       <span class="badge applies" :data-applies="row.applies" :title="t('web.settings.applies_title', {label: appliesLabel(row)})" data-testid="settings-applies">{{ appliesLabel(row) }}</span>
       <span class="badge source" :class="{ lock: effective?.locked }" :title="effective?.sourcePath ?? source" data-testid="settings-source">
-        <template v-if="effective?.locked">&#128274; </template>{{ isDefault ? t('web.settings.badge_default') : source }}
+        <svg v-if="effective?.locked" class="lock-glyph" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 1a3 3 0 0 0-3 3v2H4.5A1.5 1.5 0 0 0 3 7.5v6A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-6A1.5 1.5 0 0 0 11.5 6H11V4a3 3 0 0 0-3-3Zm0 1.5A1.5 1.5 0 0 1 9.5 4v2h-3V4A1.5 1.5 0 0 1 8 2.5Z" /></svg>{{ isDefault ? t('web.settings.badge_default') : source }}
       </span>
     </div>
     <p v-if="row.help" class="help">{{ row.help }}</p>
@@ -186,6 +186,16 @@ function onCheckbox(event: Event): void {
 }
 .source.lock {
   color: var(--warn);
+}
+/* UX-18: inline SVG lock replaces the U+1F512 emoji — currentColor keeps it
+   on the warn tint the badge already commits to, and the em sizing rides the
+   0.7rem badge font. */
+.lock-glyph {
+  width: 0.75em;
+  height: 0.75em;
+  vertical-align: -0.05em;
+  margin-right: 0.15rem;
+  flex: none;
 }
 .help {
   margin: 0.25rem 0 0;
