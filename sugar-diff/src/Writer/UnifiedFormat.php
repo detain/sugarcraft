@@ -73,8 +73,10 @@ final class UnifiedFormat
     }
 
     /**
-     * git's `core.quotePath` treatment for the path tokens: labels are raw
-     * interpolation targets of a line-oriented protocol, so a path carrying a
+     * core.quotePath-style treatment for the path tokens (two deliberate
+     * deviations from git — bytes ≥ 0x80 pass raw, and the `a/`/`b/` prefix
+     * rides inside the quoted string; see the README Fidelity notes). Labels
+     * are raw interpolation targets of a line-oriented protocol, so a path carrying a
      * control byte could otherwise forge its own `+++ ` row, drop a raw CSI
      * sequence into the terminal, or desynchronise a counter-tracking
      * {@see \SugarCraft\Diff\Reader\UnifiedScan}. Clean paths pass through
