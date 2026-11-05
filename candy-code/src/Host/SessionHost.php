@@ -54,6 +54,7 @@ use SugarCraft\Code\Observability\EventSinkFactory;
 use SugarCraft\Code\Observability\NullEventSink;
 use SugarCraft\Code\App\HistoryCompactedMsg;
 use SugarCraft\Code\App\PromptSuggestionMsg;
+use SugarCraft\Code\Host\SessionHost\SessionLandings;
 use SugarCraft\Code\Host\Commands\CommandContext;
 use SugarCraft\Code\Host\Commands\CommandEffect;
 use SugarCraft\Code\Host\Commands\CommandEffectKind;
@@ -136,6 +137,8 @@ use SugarCraft\Core\Util\Sanitize;
  */
 final class SessionHost
 {
+    use SessionLandings;
+
     /** @var list<Message> */
     private array $history;
 
@@ -2996,36 +2999,6 @@ final class SessionHost
      * as conversation on the next turn. An answer arriving late, or after
      * {@see self::release()}, is billed and dropped.
      */
-    private function landPromptSuggestion(mixed $msg): void
-    {
-        if (!$msg instanceof PromptSuggestionMsg) {
-            return;
-        }
-
-        $title = $this->workspace->titleBackend;
-        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $title instanceof EngineBackend ? $title->model() : null, 'aux');
-        if ($this->released) {
-            return;
-        }
-
-        // Chat's staleness test verbatim: any of these means the guess is no
-        // longer about the turn that settled — a new turn moved the
-        // generation, a queued prompt or a landed notice row moved the
-        // history, and an in-flight turn has its own settle coming.
-        $text = TitleService::sanitizeSuggestion($msg->suggestion);
-        $stale = $msg->generation !== $this->generation
-            || $msg->historyCount !== count($this->history)
-            || $msg->sessionId !== $this->sessionId;
-        if ($text === '' || $stale || $this->turn !== null) {
-            return;
-        }
-
-        $this->announce(SessionEvent::new(SessionEvent::PROMPT_SUGGESTED, [
-            'text' => $text,
-            'generation' => $msg->generation,
-        ], $this->sessionId));
-    }
-
     /**
      * Land a consolidation answer (C-CTX-2.c, mirroring Chat's
      * `MemoryConsolidatedMsg` arm): billed FIRST whatever the outcome, on the
@@ -3034,26 +3007,6 @@ final class SessionHost
      * producer's own notice row, or nothing when the run saved nothing.
      * An answer arriving after {@see self::release()} is billed and dropped.
      */
-    private function landConsolidation(mixed $msg): void
-    {
-        if (!$msg instanceof MemoryConsolidatedMsg) {
-            return;
-        }
-
-        $summary = $this->workspace->summaryBackend;
-        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $summary instanceof EngineBackend ? $summary->model() : null, 'compact');
-        if ($this->released) {
-            return;
-        }
-
-        $notice = AutoMemoryConsolidator::notice($msg);
-        if ($notice === null) {
-            return;
-        }
-
-        $this->appendMessageRow(Message::notice($notice));
-    }
-
     /**
      * Land an auto-commit answer (C-CTX-2.c, mirroring Chat's
      * `AutoCommittedMsg` arm): the commit is already made (or refused), so
@@ -3062,21 +3015,6 @@ final class SessionHost
      * ALWAYS shows. An answer arriving after {@see self::release()} is
      * billed and dropped.
      */
-    private function landAutoCommit(mixed $msg): void
-    {
-        if (!$msg instanceof AutoCommittedMsg) {
-            return;
-        }
-
-        $title = $this->workspace->titleBackend;
-        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $title instanceof EngineBackend ? $title->model() : null, 'aux');
-        if ($this->released) {
-            return;
-        }
-
-        $this->appendMessageRow(Message::notice($msg->notice()));
-    }
-
     /**
      * Land a dream-pass answer (C-CTX-2.c, mirroring Chat's
      * `DreamPassCompletedMsg` arm): billed first — the pass ran on the
@@ -3085,25 +3023,6 @@ final class SessionHost
      * nothing when the pass neither saved nor proposed. An answer arriving
      * after {@see self::release()} is billed and dropped.
      */
-    private function landDream(mixed $msg, ?Backend $engine): void
-    {
-        if (!$msg instanceof DreamPassCompletedMsg) {
-            return;
-        }
-
-        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $engine instanceof EngineBackend ? $engine->model() : null, 'aux');
-        if ($this->released) {
-            return;
-        }
-
-        $notice = DreamPass::notice($msg);
-        if ($notice === null) {
-            return;
-        }
-
-        $this->appendMessageRow(Message::notice($notice));
-    }
-
     /**
      * Hold the turn slot and ask the title model to judge the live goal
      * (W7a-3, mirroring {@see Chat::scheduleGoalJudge()} exactly): the bump
@@ -3111,35 +3030,6 @@ final class SessionHost
      * lands through {@see self::landGoalVerdict()} on this promise's own
      * channel — the same shape the ahead-of-need compaction uses.
      */
-    private function scheduleGoalJudge(GoalState $goal): void
-    {
-        $judge = $this->workspace->titleBackend;
-        $stop = GoalLoop::refusalReason($judge, $this->ledger()->capReached($this->spend, $this->workspace->maxCostUsd));
-        if ($stop !== null || $judge === null) {
-            $this->endGoal($goal, GoalState::STOPPED, Lang::t('chat.goal.check_stopped', [
-                'reason' => $stop,
-                'command' => $goal->mode->command(),
-            ]));
-
-            return;
-        }
-
-        $this->generation++;
-        $this->turn = new CancellationToken();
-        // C-CTX-2.a: the judge's fork runs under THIS session's sink, the
-        // same window rule the ahead-of-need request keeps — its records
-        // (a parser warning off the title call, say) are this session's.
-        RuntimeNoticeSink::using($this->notices, fn (): PromiseInterface => GoalJudge::new()->call(
-            $judge,
-            $goal->condition,
-            $this->history,
-            $this->generation,
-            $this->sessionId,
-        )())->then(function (mixed $msg): void {
-            $this->landGoalVerdict($msg);
-        });
-    }
-
     /**
      * Land the `/goal` judge's verdict on a served session (W7a-3): the
      * judge's usage is billed first — stamped with the JUDGE's model, the
@@ -3153,88 +3043,18 @@ final class SessionHost
      * prompt goes out through {@see self::submit()}, so every admission gate
      * applies to it, refusal row and all.
      */
-    private function landGoalVerdict(mixed $msg): void
-    {
-        if (!$msg instanceof GoalJudgedMsg) {
-            return;
-        }
-
-        $judge = $this->workspace->titleBackend;
-        $this->ledger()->account($this->spend, $msg->usage, $this->usageRecordSink(), $judge instanceof EngineBackend ? $judge->model() : null, 'goal');
-        if ($msg->generation !== $this->generation || $this->turn === null || $msg->sessionId !== $this->sessionId) {
-            // A verdict that raced a cancel or a newer turn: billed, never
-            // acted on — the live turn owns the decision now.
-            return;
-        }
-
-        $this->turn = null;
-        $goal = GoalState::activeIn($this->history);
-        if ($goal === null) {
-            // `/goal clear` (or a resume that rewrote the transcript) during
-            // judging: nothing to end, keep the queue moving.
-            $this->releaseQueue();
-
-            return;
-        }
-
-        if ($msg->verdict === null) {
-            $this->endGoal($goal, GoalState::STOPPED, GoalLoop::stopped($goal, $msg->error)->notice);
-
-            return;
-        }
-
-        $outcome = GoalLoop::afterVerdict($goal, $msg->verdict);
-        if ($outcome->kind !== GoalLoop::CONTINUE) {
-            $this->endGoal($goal, $outcome->status, $outcome->notice);
-
-            return;
-        }
-
-        if ($this->queue !== []) {
-            // The user's own message goes first and the goal waits — the
-            // turn it starts is judged when it settles like any other.
-            $this->releaseQueue();
-
-            return;
-        }
-
-        $this->appendMessageRow($outcome->next->toMessage());
-        $ticket = $this->submit($outcome->nextPrompt);
-        if (!$ticket->isAdmitted()) {
-            $this->appendCommandRow((string) $ticket->reason, true);
-        }
-    }
-
     /**
      * End $goal with $status and say so in $notice, then let the queue move —
      * the served twin of {@see Chat::endGoal()}/{@see Chat::goalEnded()}
      * minus the TUI's terminal-notification, which a headless session has no
      * terminal to notify.
      */
-    private function endGoal(GoalState $goal, string $status, string $notice): void
-    {
-        $this->appendMessageRow(Message::notice($notice));
-        $this->appendMessageRow($goal->withStatus($status)->toMessage());
-        $this->releaseQueue();
-    }
-
     /**
      * Roadmap 5.7-2: a plan the user approved through `PlanExit` ends plan
      * mode once its turn is over — the mode the approval names, else
      * `default` — and only while the session is still in `plan`, before a
      * queued prompt starts the next turn ({@see TurnRunner::approvedPlanExit()}).
      */
-    private function applyApprovedPlanExit(): void
-    {
-        if ($this->permissionMode() !== PermissionMode::Plan) {
-            return;
-        }
-        $switch = TurnRunner::approvedPlanExit($this->history);
-        if ($switch !== null) {
-            $this->setPermissionMode($switch->mode ?? PermissionMode::Default);
-        }
-    }
-
     /**
      * Send what is queued, the TUI's release rule: a steer the settled turn
      * delivered is done; the rest go out one at a time until one starts a turn
