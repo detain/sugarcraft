@@ -525,7 +525,7 @@ back-flavoured control points — same honesty rule as `Easing`.
 - **`Spring`** — `__construct($deltaTime, $angularFrequency, $dampingRatio,
   ?bool $reducedMotionOverride = null)` (the classic `$dt`/`ω`/`ζ` triple;
   refuses non-finite inputs, `dt < 0`, `ω < 1e-9`, `ζ <= 0` and coefficient
-  overflow) / `update($pos, $pos, $target)` / `fps(float $fps)` /
+  overflow) / `update($pos, $pos, $target)` / `fps(float $n)` /
   `fromPreset(SpringPreset, ?float $deltaTime = null, ?bool $reducedMotionOverride = null)` /
   static `settled($pos, $vel, $target, $threshold = SETTLING_THRESHOLD)`.
   `const SETTLING_THRESHOLD = 1e-4`. `update()` rejects non-finite state and
