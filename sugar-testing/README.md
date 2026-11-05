@@ -248,11 +248,13 @@ a false pass:
 // cell. This matches a 1-row, 4-column buffer painted "abcd":
 Assertions::assertCellGrid(['abcd'], $buffer);
 
-// Per-cell forms — each row is exactly `buffer->width()` cells long:
+// Per-cell forms. An array row must list exactly `buffer->width()` entries —
+// one entry per column. Auto-claiming the continuation cell happens only in
+// string rows; an array row must state the continuation cell itself after a
+// wide rune. This matches a 2-row, 4-column buffer painted "ok🎉" (row 1 blank):
 Assertions::assertCellGrid([
-    ['ok', ['rune' => '🎉', 'width' => 2], null],  // string cell, array form (wide glyph claims
-                                                   // its continuation cell), wildcard skip
-    [null, null, null, null],                      // fully wildcard row (4 columns wide)
+    ['o', 'k', ['rune' => '🎉', 'width' => 2], ['rune' => '', 'width' => 0]],
+    [null, null, null, null],   // fully wildcard row (all 4 positions skipped)
 ], $buffer);
 ```
 
