@@ -756,6 +756,35 @@ $label = Lang::t('sort');                  // 'Sort'
 $pager = Lang::t('page_of', ['page' => 2, 'total' => 4]); // 'Page 2 of 4'
 ```
 
+## Security & untrusted content
+
+Every cell value, column title and expanded-detail line passes through
+`Sanitize::value()` (`src/Sanitize.php`) on its way to the buffer, so untrusted
+data cannot emit escape sequences:
+
+- Control bytes are neutralised — TAB, every other C0 byte and DEL become `·`,
+  C1 codepoints are replaced, and invalid UTF-8 is repaired to `U+FFFD` rather
+  than silently dropped. Raw ANSI arriving inside a value (a `\x1b[2J` off the
+  network) paints as visible junk (`·[2J`) and is never honored. Newlines
+  collapse to `↵` in single-line cells; `withMultilineMode()` paths keep them
+  as row structure.
+- The sugar-mouse zone sentinels (U+E000/U+E001) are stripped, so a forged
+  click target cannot ride cell data, titles or the missing-value indicator
+  into a host that zones around — or consumes the output of — the table.
+- Trojan-Source bidi overrides and zero-width space render as visible
+  `<U+XXXX>` markers instead of silently reordering or blanking the line a
+  human reads.
+- Style channels are parse-restricted: SGR strings given to `withStyle`,
+  `withHeaderStyle` or a `StyleFunc` are parsed into a structured attribute set
+  (canonicalised to 24-bit at render), never echoed as raw bytes.
+
+This is terminal-injection defence, not HTML escaping — the output is ANSI for
+a terminal. One bypass is deliberate: casting a `StyledCell` to string emits
+its raw value wrapped in its SGR codes **unsanitized** (see the string-cast
+warning under Rows); render untrusted content only through `View()`. Pinned by
+`tests/TableSanitizeTest.php`; see also the fleet-wide
+[`docs/TRUST-BOUNDARY.md`](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md).
+
 ## Border Styling
 
 

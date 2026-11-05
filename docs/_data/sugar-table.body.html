@@ -39,6 +39,9 @@ echo $table-&gt;View();</code></pre>
     <h3 style="margin-top: 32px;">Accessors</h3>
     <p>Property reads are bare: public <code>readonly</code> state (<code>$column-&gt;style</code>, <code>$row-&gt;data</code>, <code>$cell-&gt;value</code>) or bare methods (<code>Table::Columns()</code>, <code>Table::CurrentRow()</code>, <code>Table::scrollY()</code>). No <code>getFoo()</code>-form accessor ships in this lib — under the get*-era ruling (2026-10-24) there was nothing here to deprecate; <code>RowData::get()</code>/<code>::has()</code> and <code>Table::isExpanded()</code> stay ruled as keyed lookups and predicates, pinned by <code>tests/BareAccessorEraTest.php</code>.</p>
 
+    <h3 style="margin-top: 32px;">Security &amp; untrusted content</h3>
+    <p>Every cell value, column title and expanded-detail line passes through <code>Sanitize::value()</code> before reaching the buffer: C0/DEL bytes become <code>·</code>, C1 is replaced, invalid UTF-8 repairs to <code>U+FFFD</code> (raw ANSI in a value paints as visible junk, never honored), sugar-mouse zone sentinels U+E000/U+E001 are stripped so forged click targets cannot ride untrusted data, and bidi overrides / zero-width space render as visible <code>&lt;U+XXXX&gt;</code> markers. Style channels are parse-restricted (SGR strings are parsed into a structured attribute set, canonicalised to 24-bit at render). Casting a <code>StyledCell</code> to string is the one deliberate bypass — it emits its raw value unsanitized; render untrusted content only through <code>View()</code>. See <a href="https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md">docs/TRUST-BOUNDARY.md</a>.</p>
+
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-table">Source on GitHub</a></li>
@@ -67,7 +70,7 @@ echo $table-&gt;View();</code></pre>
 <tr><td>Table</td><td>withViewportHeight(n)</td><td>Render only n visible rows (viewport virtualization)</td></tr>
 <tr><td>Table</td><td>withScrollY(n)</td><td>Set vertical scroll offset (row number)</td></tr>
 <tr><td>Table</td><td>scrollY()</td><td>Get current scroll offset</td></tr>
-<tr><td>Table</td><td>View()</td><td>Render the table to string</td></tr>
+<tr><td>Table</td><td>View()</td><td>Render the table to string — every value passes the <code>Sanitize::value()</code> ingress (see Security &amp; untrusted content)</td></tr>
 <tr><td>Table</td><td>SortBy(colKey, ascending, primary)</td><td>Sort rows by a column — numeric-aware when both values are numeric, case-insensitive otherwise; repeating the sole active sort key with the same direction toggles it</td></tr>
 <tr><td>Table</td><td>ClearSort()</td><td>Remove all sorting</td></tr>
 <tr><td>Table</td><td>Filter(key, text) / ClearFilter(key) / ClearAllFilters()</td><td>Per-column substring filter (filterable-marked columns only once any is marked)</td></tr>
