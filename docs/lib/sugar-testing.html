@@ -146,7 +146,11 @@ echo "Final count: " . $result-&gt;model-&gt;count();</code></pre>
 
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
-<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<caption>sugar-testing public API — every class, method, and constant named above, verified against the shipped source.</caption>
+<thead>
+<tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
+</thead>
+<tbody>
 <tr><td>ProgramSimulator</td><td>for(Model|Program): self</td><td>Factory: wrap a Program or a bare Model</td></tr>
 <tr><td>ProgramSimulator</td><td>send(Msg ...$msgs): self</td><td>Fluent message enqueue</td></tr>
 <tr><td>ProgramSimulator</td><td>withRealCmdRunner(bool): self</td><td>Pass false to capture Cmds without executing them (the default executes)</td></tr>
@@ -194,6 +198,7 @@ echo "Final count: " . $result-&gt;model-&gt;count();</code></pre>
 <tr><td>LoopPin</td><td>pinStableClock(): LoopInterface</td><td>Static: stop and replace the shared loop so arm-time deadlines compute correctly; process-wide (see README caveats)</td></tr>
 <tr><td>LoopPin</td><td>hasStaleClockRisk(LoopInterface): bool</td><td>Static: fail-closed check — StreamSelectLoop is safe; extension-backed and unknown loops are reported at risk</td></tr>
 <tr><td>TemporaryDirectoryTrait</td><td>setUpTemporaryDirectory() / tearDownTemporaryDirectory() / getTempDirSuffix() / removeTreeContents(string)</td><td>Protected trait: a private 0700 scratch directory under the system temp dir, created in setUp and removed in tearDown</td></tr>
+</tbody>
 </table>
   </div>
 </section>
