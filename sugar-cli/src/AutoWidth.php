@@ -10,7 +10,7 @@ namespace SugarCraft\Cli;
  * Most of this library's presenters take an `int|AutoWidth|null` `$width`
  * defaulting to `AutoWidth::Auto`:
  * the render resolves to the terminal width where it is resolvable and to 80
- * cells where it is not (see {@see HelpText::render()} for the precedence
+ * cells where it is not (see {@see Internal\WidthProbe} for the precedence
  * chain). Passing an `int` pins that width explicitly; passing `null` keeps
  * each presenter's own unbounded meaning. `AutoWidth::Auto` may also be
  * passed explicitly — it behaves exactly like omitting the argument, which
