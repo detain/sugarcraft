@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Log;
 
+use SugarCraft\ColorProfile\Probe;
+
 /**
  * Static facade over a process-wide default {@see Logger}.
  *
@@ -76,6 +78,26 @@ final class Log
     }
 
     /**
+     * Default for the panic banner: whether it is rendered with SGR styling.
+     *
+     * The process-global handler never sees the construction-time color probe,
+     * so it re-implements the destination decision with the fleet's detection
+     * precedence (sugar-colorprofile: `CLICOLOR_FORCE` outranks `NO_COLOR`).
+     * m-05: `NO_COLOR=1` must suppress the styled banner even when STDERR is a
+     * real TTY — {@see ColorGate} alone cannot express that (it checks only
+     * whether the destination can render). The isatty answer is a parameter
+     * because {@see \stream_isatty()} cannot be faked under a piped test runner.
+     */
+    private static function panicFormatterPrefersColor(bool $stderrIsTty): bool
+    {
+        if (Probe::isForceColor()) {
+            return true;
+        }
+
+        return $stderrIsTty && !Probe::isNoColor();
+    }
+
+    /**
      * Install a panic handler that catches uncaught exceptions and
      * renders them as a styled panic report.
      *
@@ -96,13 +118,16 @@ final class Log
      * The report goes to STDERR. When $formatter is omitted it is chosen by
      * destination: {@see PanicFormatter::pretty()} on a terminal (or under
      * CLICOLOR_FORCE=1), {@see PanicFormatter::plain()} otherwise — file-
-     * captured panic reports never bake ANSI.
+     * captured panic reports never bake ANSI, and neither does a TTY
+     * destination when NO_COLOR is set (m-05).
      *
      * Re-installing REPLACES the previously installed handler and its
      * shutdown hook (one panic reporter per process at a time); the chained
      * "previous" handler captured at install time still runs afterwards.
      *
-     * @param PanicFormatter|null $formatter  Defaults to pretty()/plain() by STDERR capability.
+     * @param PanicFormatter|null $formatter  Defaults to pretty()/plain() by STDERR capability; a
+     *                                        NO_COLOR environment suppresses pretty() unless
+     *                                        CLICOLOR_FORCE overrides (m-05).
      * @param bool                $showLocals Include local variables in backtrace.
      * @param list<string>        $redactPaths Paths to redact from backtrace.
      */
@@ -111,7 +136,9 @@ final class Log
         bool $showLocals = false,
         array $redactPaths = [],
     ): void {
-        $formatter ??= ColorGate::allowsColor(\STDERR)
+        $formatter ??= self::panicFormatterPrefersColor(
+            \is_resource(\STDERR) && \stream_isatty(\STDERR)
+        )
             ? PanicFormatter::pretty($showLocals, $redactPaths)
             : PanicFormatter::plain($showLocals, $redactPaths);
 

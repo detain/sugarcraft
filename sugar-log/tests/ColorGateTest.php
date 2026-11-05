@@ -198,6 +198,29 @@ final class ColorGateTest extends TestCase
         }
     }
 
+    public function testPanicColourDecisionHonoursNoColorUnderForcePrecedence(): void
+    {
+        // The seam takes the isatty answer as an argument because a piped
+        // test runner can never fake a TTY (m-05): exercising the real
+        // decision matrix directly is the only non-vacuous pin.
+        $decide = new \ReflectionMethod(Log::class, 'panicFormatterPrefersColor');
+
+        \putenv('CLICOLOR_FORCE');
+        \putenv('NO_COLOR');
+        $this->assertTrue($decide->invoke(null, true), 'a TTY destination styles the banner by default');
+        $this->assertFalse($decide->invoke(null, false), 'a piped destination never styles');
+
+        \putenv('NO_COLOR=1');
+        $this->assertFalse($decide->invoke(null, true), 'NO_COLOR must suppress the styled banner even on a real TTY (m-05)');
+        $this->assertFalse($decide->invoke(null, false));
+
+        \putenv('CLICOLOR_FORCE=1');
+        $this->assertTrue($decide->invoke(null, false), 'CLICOLOR_FORCE outranks NO_COLOR, as the detection chain does');
+
+        \putenv('NO_COLOR');
+        $this->assertTrue($decide->invoke(null, false), 'force alone still opts in on a non-TTY destination');
+    }
+
     public function testReinstallReplacesInsteadOfStacking(): void
     {
         $snapshot = $this->snapshotPanicStatics();
