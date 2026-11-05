@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-top",
-    "description": "Terminal system monitor (btop-style) built on SugarCraft charting libs — PHP TUI port inspired by aristocratos/btop.",
+    "description": "Terminal system monitor (btop-style) built on the SugarCraft stack — PHP TUI port inspired by aristocratos/btop.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -41,6 +41,10 @@
     "require-dev": {
         "phpunit/phpunit": "^10.5",
         "sugarcraft/sugar-testing": "@dev"
+    },
+    "suggest": {
+        "ext-posix": "User names in the process list (instead of numeric uids), signal sending (posix_kill) and real-console detection (posix_ttyname).",
+        "ext-pcntl": "Renicing processes (pcntl_setpriority) and saving the config on SIGTERM/SIGHUP."
     },
     "bin": [
         "bin/candy-top"
