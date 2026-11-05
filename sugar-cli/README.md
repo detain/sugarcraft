@@ -149,7 +149,10 @@ echo StatusLine::error('connection refused'), "\n";
   presenters: `AutoWidth::Auto` resolves the terminal width (exported
   `COLUMNS`, else 80 cells; implausibly large advertised values are
   discarded as junk), an `int` means exactly that many cells, and `null`
-  renders without a cap. Most presenters default to `Auto`; the two
+  renders without a cap. The `Auto` resolution reads the exported
+  `COLUMNS` only: bash keeps `COLUMNS` private and never re-exports it on
+  resize, so under bash a stale (or absent) value is expected — zsh and
+  fish export and refresh it. Most presenters default to `Auto`; the two
   opt-outs have different shapes. `Banner::title()` takes a plain `?int`
   (`AutoWidth::Auto` is a `TypeError` there) and `null` sizes the box to
   its content; `HelpText::renderPage()` takes the full
