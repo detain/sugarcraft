@@ -45,7 +45,7 @@ return [
     'undo.rename' => 'إعادة تسمية {count} عناصر',
     'undo.move' => 'نقل {count} عناصر',
     'undo.copy' => 'نسخ {count} عناصر',
-    'keyhelp.default' => 'Tab تبديل · ↑↓ jk حركة · Enter فتح · ← h للأعلى · مسافة تحديد · s ترتيب · . المخفية · c نسخ · m نقل · R إعادة تسمية · d حذف · r تحديث · q خروج · / بحث · t تبويب جديد · ^w إغلاق التبويب · ^tab تنقّل',
+    'keyhelp.default' => 'Tab تبديل · ↑↓ jk حركة · Home/End g/G انتقال · Enter فتح · ← h للأعلى · مسافة تحديد · s ترتيب · . المخفية · c نسخ · m نقل · R إعادة تسمية · d حذف · r تحديث · q خروج · / بحث · Esc مسح · t تبويب مكرر · ^w إغلاق التبويب · ^tab تنقّل · ^PgUp/^PgDn تبويبات · u/^z تراجع · ^y إعادة',
     'search.no_match' => '(لا تطابقات)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[مجلد]',

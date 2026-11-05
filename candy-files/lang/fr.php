@@ -45,7 +45,7 @@ return [
     'undo.rename' => 'renommage de {count} élément(s)',
     'undo.move' => 'déplacement de {count} élément(s)',
     'undo.copy' => 'copie de {count} élément(s)',
-    'keyhelp.default' => 'Tab permuter · ↑↓ jk déplacer · Entrée ouvrir · ← h monter · Espace sélectionner · s trier · . cachés · c copier · m déplacer · R renommer · d supprimer · r rafraîchir · q quitter · / rechercher · t nouvel onglet · ^w fermer l’onglet · ^tab cycler',
+    'keyhelp.default' => 'Tab permuter · ↑↓ jk déplacer · Home/End g/G sauter · Entrée ouvrir · ← h monter · Espace sélectionner · s trier · . cachés · c copier · m déplacer · R renommer · d supprimer · r rafraîchir · q quitter · / rechercher · Esc effacer · t dupliquer l’onglet · ^w fermer l’onglet · ^tab cycler · ^PgUp/^PgDn onglets · u/^z annuler · ^y rétablir',
     'search.no_match' => '(aucune correspondance)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[RÉP]',

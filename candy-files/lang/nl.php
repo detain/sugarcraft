@@ -45,7 +45,7 @@ return [
     'undo.rename' => 'hernoemen van {count} item(s)',
     'undo.move' => 'verplaatsen van {count} item(s)',
     'undo.copy' => 'kopiëren van {count} item(s)',
-    'keyhelp.default' => 'Tab wisselen · ↑↓ jk bewegen · Enter openen · ← h omhoog · spatie selecteren · s sorteren · . verborgen · c kopiëren · m verplaatsen · R hernoemen · d verwijderen · r verversen · q afsluiten · / zoeken · t nieuw tabblad · ^w tabblad sluiten · ^tab cyclen',
+    'keyhelp.default' => 'Tab wisselen · ↑↓ jk bewegen · Home/End g/G springen · Enter openen · ← h omhoog · spatie selecteren · s sorteren · . verborgen · c kopiëren · m verplaatsen · R hernoemen · d verwijderen · r verversen · q afsluiten · / zoeken · Esc wissen · t tabblad dupliceren · ^w tabblad sluiten · ^tab cyclen · ^PgUp/^PgDn tabbladen · u/^z ongedaan · ^y herhalen',
     'search.no_match' => '(geen treffers)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[MAP]',

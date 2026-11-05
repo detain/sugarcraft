@@ -45,7 +45,7 @@ return [
     'undo.rename' => '{count}개 항목 이름 변경',
     'undo.move' => '{count}개 항목 이동',
     'undo.copy' => '{count}개 항목 복사',
-    'keyhelp.default' => 'Tab 전환 · ↑↓ jk 이동 · Enter 열기 · ← h 위로 · Space 선택 · s 정렬 · . 숨김 · c 복사 · m 이동 · R 이름변경 · d 삭제 · r 새로고침 · q 종료 · / 검색 · t 새 탭 · ^w 탭 닫기 · ^tab 순환',
+    'keyhelp.default' => 'Tab 전환 · ↑↓ jk 이동 · Home/End g/G 처음끝 · Enter 열기 · ← h 위로 · Space 선택 · s 정렬 · . 숨김 · c 복사 · m 이동 · R 이름변경 · d 삭제 · r 새로고침 · q 종료 · / 검색 · Esc 해제 · t 탭 복제 · ^w 탭 닫기 · ^tab 순환 · ^PgUp/^PgDn 탭 · u/^z 되돌리기 · ^y 다시하기',
     'search.no_match' => '(일치 없음)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[폴더]',

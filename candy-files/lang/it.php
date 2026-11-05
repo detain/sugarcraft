@@ -45,7 +45,7 @@ return [
     'undo.rename' => 'rinomina di {count} elemento/i',
     'undo.move' => 'spostamento di {count} elemento/i',
     'undo.copy' => 'copia di {count} elemento/i',
-    'keyhelp.default' => 'Tab scambia · ↑↓ jk muovi · Invio apri · ← h su · spazio seleziona · s ordina · . nascosti · c copia · m sposta · R rinomina · d elimina · r aggiorna · q esci · / cerca · t nuova scheda · ^w chiudi scheda · ^tab cicla',
+    'keyhelp.default' => 'Tab scambia · ↑↓ jk muovi · Home/End g/G salta · Invio apri · ← h su · spazio seleziona · s ordina · . nascosti · c copia · m sposta · R rinomina · d elimina · r aggiorna · q esci · / cerca · Esc cancella · t duplica scheda · ^w chiudi scheda · ^tab cicla · ^PgUp/^PgDn schede · u/^z annulla · ^y ripeti',
     'search.no_match' => '(nessuna corrispondenza)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[DIR]',

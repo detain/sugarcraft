@@ -45,7 +45,7 @@ return [
     'undo.rename' => 'zmiana nazwy {count} elementów',
     'undo.move' => 'przeniesienie {count} elementów',
     'undo.copy' => 'skopiowanie {count} elementów',
-    'keyhelp.default' => 'Tab zamień · ↑↓ jk ruch · Enter otwórz · ← h w górę · spacja zaznacz · s sortuj · . ukryte · c kopiuj · m przenieś · R zmień nazwę · d usuń · r odśwież · q wyjdź · / szukaj · t nowa karta · ^w zamknij kartę · ^tab przełączaj',
+    'keyhelp.default' => 'Tab zamień · ↑↓ jk ruch · Home/End g/G skacz · Enter otwórz · ← h w górę · spacja zaznacz · s sortuj · . ukryte · c kopiuj · m przenieś · R zmień nazwę · d usuń · r odśwież · q wyjdź · / szukaj · Esc wyczyść · t duplikuj kartę · ^w zamknij kartę · ^tab przełączaj · ^PgUp/^PgDn karty · u/^z cofnij · ^y ponów',
     'search.no_match' => '(brak dopasowań)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[KAT]',

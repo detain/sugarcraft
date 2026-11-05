@@ -45,7 +45,7 @@ return [
     'undo.rename' => '{count} ögeyi yeniden adlandır',
     'undo.move' => '{count} ögeyi taşı',
     'undo.copy' => '{count} ögeyi kopyala',
-    'keyhelp.default' => 'Tab değiştir · ↑↓ jk hareket · Enter aç · ← h yukarı · space seç · s sırala · . gizli · c kopyala · m taşı · R adlandır · d sil · r yenile · q çık · / ara · t yeni sekme · ^w sekmeyi kapat · ^tab dön',
+    'keyhelp.default' => 'Tab değiştir · ↑↓ jk hareket · Home/End g/G atla · Enter aç · ← h yukarı · space seç · s sırala · . gizli · c kopyala · m taşı · R adlandır · d sil · r yenile · q çık · / ara · Esc temizle · t sekmeyi çoğalt · ^w sekmeyi kapat · ^tab dön · ^PgUp/^PgDn sekmeler · u/^z geri al · ^y yinele',
     'search.no_match' => '(eşleşme yok)',
     'search.counter' => '({current}/{total})',
     'search.type_dir' => '[DİZİN]',
