@@ -58,8 +58,11 @@ Assets::tryDistPath();  // soft probe: null instead of throwing, for callers tha
                         // degrade (a UI-less serve keeps the API + WebSocket up)
 Assets::manifest();     // decoded Vite manifest: entry => {file, css, …}
 Assets::version();      // bundle version, stamped into dist/build-info.json
-Assets::diagnose();     // structured {dist, manifest, version, error} verdict for
-                        // doctor-style surfaces, never an exception
+Assets::diagnose($packageRoot);
+                        // structured {dist, manifest, version, error} verdict for
+                        // doctor-style surfaces, never an exception; the package
+                        // root is the directory holding src/ and dist/ (for the
+                        // package itself, that is just dirname(__DIR__))
 ```
 
 Users need none of this: run `candy-code serve` and open the sign-in URL it
