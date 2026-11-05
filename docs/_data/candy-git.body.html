@@ -73,8 +73,8 @@ $git = new Git(getcwd());
 <tr><td>Git</td><td>stage(path)</td><td>Stage file</td></tr>
 <tr><td>Git</td><td>unstage(path)</td><td>Unstage file</td></tr>
 <tr><td>GitDriver</td><td>interface</td><td>Driver contract the App consumes; tests inject a fixture-backed implementation</td></tr>
-<tr><td>DiffViewer</td><td>view(diff)</td><td>Per-file diff surface with per-hunk stage / unstage</td></tr>
-<tr><td>StashManager</td><td>fuzzyFilter(entries, query)</td><td>Smith-Waterman-ranked stash list via sugar-fuzzy</td></tr>
+<tr><td>DiffViewer</td><td>currentHunkPatch() / hunkCount()</td><td>Per-file diff surface with per-hunk stage / unstage</td></tr>
+<tr><td>StashManager</td><td>fuzzyFilter(query)</td><td>Smith-Waterman-ranked stash list via sugar-fuzzy</td></tr>
 <tr><td>HistoryManager</td><td>push(entry)</td><td>Undo / redo lane, capped at <code>MAX_HISTORY = 100</code></td></tr>
 <tr><td>App</td><td>start(git)</td><td>Create app model</td></tr>
 </table>
