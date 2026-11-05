@@ -231,7 +231,7 @@ The ipmi box (candy-top's own; btop has none) shows the machine's BMC — the ba
 Up to six gpu boxes can be shown at once (btop #1730), one per accelerator: `gpu0`, `gpu1`, ... in `shown_boxes`, numbered GPUs first and then NPUs. Data, collectors and caveats are in [GPU](#gpu).
 
 - **Slots and keys.** The number keys `5`, `6`, `7`, `8`, `9` and `0` toggle gpu box slots 0 to 5, and each box's title shows its slot key (none for `0`). Opening a slot shows the first accelerator, from the slot's index on, that has no box yet. A toggle that would not fit the terminal opens the size-error box instead. Slots are runtime state: they are never saved, and changing `shown_boxes` any other way (options menu, preset, reload) resets them.
-- **Retargeting.** While more than one accelerator exists and the box is wide enough, the title carries a `← gpuN →` selector. Clicking an arrow moves that box to the previous or next accelerator that has no box, keeping its slot. A move that would not fit is ignored.
+- **Retargeting.** While more than one accelerator exists and the box is wide enough, the title carries a `← gpuN →` selector. Clicking an arrow (mouse only — there is no key binding for retargeting) moves that box to the previous or next accelerator that has no box, keeping its slot. A move that would not fit is ignored.
 - **Grid** (btop #1881). Gpu boxes are placed side by side, all one width and height, with one blank column between them. `gpu_box_columns` is `Auto` (as many per row as the terminal fits, a box being at least 34 columns wide) or a number from 1 to 6 to force the columns, still capped by what fits.
 - **Detail levels** (btop #1881). The box width picks how much is drawn. `Full` (56 columns or more) shows everything, `Compact` (44 or more) drops the encoder/decoder and memory sections, and `Minimal` also drops the power row.
 - **Contents.** A utilisation graph (`graph_symbol_gpu`, mirrored with `gpu_mirror_graph`) and meter, temperature, power with P-state, clocks, encoder/decoder use and VRAM used/total with its own graph, each where the device reports it. The stats sub-box is titled with `custom_gpu_nameN` or the model name.
@@ -373,7 +373,7 @@ Context rules, following btop's input handling:
 
 ## Mouse
 
-Mouse reporting is on unless `disable_mouse` is set. The mode is button and motion tracking (`?1002h` + SGR `?1006h`), the same as btop, and flipping the option at runtime turns reporting on or off at once. A terminal that does not implement SGR mouse reporting simply never answers — nothing breaks and no coordinates arrive; every affordance in the table has a key equivalent in the [key table](#key-bindings), and `disable_mouse = true` stops candy-top asking at all.
+Mouse reporting is on unless `disable_mouse` is set. The mode is button and motion tracking (`?1002h` + SGR `?1006h`), the same as btop, and flipping the option at runtime turns reporting on or off at once. A terminal that does not implement SGR mouse reporting simply never answers — nothing breaks and no coordinates arrive; every affordance in the table has a key equivalent in the [key table](#key-bindings) (the gpu-box retarget arrows are the one click-only affordance, and they are not in that table), and `disable_mouse = true` stops candy-top asking at all.
 
 | Where | Action |
 |---|---|
