@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 /**
- * Render a Markdown sample with each stock theme. With GLAMOUR_STYLE or
- * NO_COLOR set, an extra section shows what Theme::fromEnvironment()
- * picks:
+ * Render a Markdown sample with a handful of stock themes. With
+ * GLAMOUR_STYLE or NO_COLOR set, an extra section shows what
+ * Theme::fromEnvironment() picks:
  *
  *   php examples/render.php
  *   GLAMOUR_STYLE=tokyo-night php examples/render.php
