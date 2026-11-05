@@ -958,7 +958,7 @@ $t = Table::fromColumns([
         Row::new(RowData::from([
             'id'   => '2',
             'name' => 'Bob Smith with a very long name',
-            "city: "Los\nAngeles",  // embedded newline
+            'city' => "Los\nAngeles",  // embedded newline
         ])),
     ])
     ->withMultilineMode(true);          // rows expand to max cell height
