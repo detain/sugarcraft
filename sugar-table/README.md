@@ -184,6 +184,10 @@ $t->CurrentRow();                   // selected Row or null (not RowData!)
 $t->CurrentRowData();                // selected RowData or null
 ```
 
+The rendered table carries no sort-direction or filter marker in its output, and
+no public accessor exposes the active sort/filter/search state — hosts that show
+one (sort arrows, filter chips) must track the state they pass in themselves.
+
 ## Keyboard Navigation
 
 
@@ -663,6 +667,9 @@ All translatable strings live in `lang/en.php` under the `'table'` namespace.
 | `showing_rows` | `Showing {from} to {to} of {total} rows` | `{from}`, `{to}`, `{total}` |
 | `sort`         | `Sort`                            | —                     |
 | `filter`       | `Filter`                          | —                     |
+
+The `sort` and `filter` labels are reserved for future UI chrome — no production
+render path uses them today (`lang/en.php` carries the same caveat).
 
 To add a locale, copy `lang/en.php` to `lang/<code>.php` and translate the
 values. The lookup chain follows `SugarCraft\Core\I18n\T`:
