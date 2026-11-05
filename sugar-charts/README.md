@@ -66,9 +66,9 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 >
 > Read accessors follow the house bare-name law (`cell()`, `cellStyle()` on `Canvas`,
 > `circlePoints()` and friends on `Graph`). Where a bare name was already taken by a
-> setter alias — `timeRange()`, `autoValueRange()`, `cellStyle()` on `Heatmap`, the
-> animation pair on `Chart` — the `get*` spelling remains the accessor and is a
-> documented exception, not drift.
+> setter alias — `timeRange()` on `TimeSeries`; `autoValueRange()`, `cellStyle()` and
+> `monoRamp()` on `Heatmap`; the animation pair on `Chart` — the `get*` spelling
+> remains the accessor and is a documented exception, not drift.
 
 ## Components
 
