@@ -336,7 +336,9 @@ final class Registry
     /**
      * Remove a specific metric series from the backend and the
      * cardinality cache. Useful for long-running processes or
-     * testing cleanup.
+     * testing cleanup. Backends that keep no retained state
+     * (StatsD, JSON stream) treat the removal as a no-op; the
+     * tracker entry is always dropped.
      *
      * `$tags` are the call-site tags; the default tags are merged in
      * once here so both the backend key and the tracker key see the

@@ -81,7 +81,7 @@ Kind mapping to wire tokens:
 
 Every unique label-value combination is a distinct time series. High-cardinality labels (e.g. `user_id`, `request_id`) can exhaust memory if left unchecked.
 
-The registry tracks per-metric cardinality and, when the limit (default: 10 000, must be ≥ 1 — anything else throws at construction) is exceeded, evicts the **oldest** combination (FIFO) — dropping it from the tracker *and* reclaiming that series from the backend, so a tag flood cannot grow backend memory without bound. The cardinality key is built from sorted, backslash-escaped `k=v` pairs (see `Util::tagKey()`), so lookalike tag sets such as `['x' => 'a|y=b']` and `['x' => 'a', 'y' => 'b']` stay distinct series. The tracker bounds *series per metric name*; the set of metric names itself is unbounded — treat untrusted strings as label values, never as metric names. A registry cloned with `withTags()` tracks its own budget independently of its parent.
+The registry tracks per-metric cardinality and, when the limit (default: 10 000, must be ≥ 1 — anything else throws at construction) is exceeded, evicts the **oldest** combination (FIFO) — dropping it from the tracker *and* reclaiming that series from the backend, so a tag flood cannot grow backend memory without bound. Precisely: eviction delegates to the backend's `remove()` — storing backends (`InMemoryBackend`, `PrometheusFileBackend`) genuinely release the series, while `StatsdBackend` and `JsonStreamBackend` have nothing to retract once emitted and their `remove()` is a deliberate no-op, so against a push-only arm eviction bounds only the tracker. `MultiBackend` fans the call out to each child. The cardinality key is built from sorted, backslash-escaped `k=v` pairs (see `Util::tagKey()`), so lookalike tag sets such as `['x' => 'a|y=b']` and `['x' => 'a', 'y' => 'b']` stay distinct series. The tracker bounds *series per metric name*; the set of metric names itself is unbounded — treat untrusted strings as label values, never as metric names. A registry cloned with `withTags()` tracks its own budget independently of its parent.
 
 ```php
 // Default limit of 10 000 label combinations per metric
@@ -98,7 +98,7 @@ $reg->cardinalityLimit();                // → int (500)
 // pass just the per-emit tags):
 $reg->deleteLabelValues('http.requests', ['route' => '/logout']);
 
-// Reclaim tracker entry AND the backend series:
+// Reclaim tracker entry AND (on storing backends) the backend series:
 $reg->remove('http.requests', ['route' => '/logout']);
 
 // Push the current state to the backend (textfile durability — see below)
