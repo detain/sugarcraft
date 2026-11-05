@@ -42,9 +42,13 @@ final class FileWatcher
     }
 
     /**
-     * Check if the file has been modified since the given mtime.
-     * Uses "!==" so that a file restored to its exact prior mtime is detected
-     * as a change (covers git checkout restoring an older timestamp).
+     * Check if the file's mtime differs from the given baseline.
+     *
+     * Strict "!==": any differing timestamp reports a change, but a file
+     * restored to its EXACT prior mtime is invisible here — a git checkout
+     * that rewinds the timestamp to the value we already recorded returns
+     * false. That restore case is covered by {@see pollTuple()}, which
+     * compares the full (mtime, size) fingerprint instead of mtime alone.
      */
     public function hasChangedSince(int $mtime): bool
     {
