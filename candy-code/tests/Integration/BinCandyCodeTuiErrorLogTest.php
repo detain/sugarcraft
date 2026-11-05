@@ -158,9 +158,20 @@ final class BinCandyCodeTuiErrorLogTest extends TestCase
 
         $block = trim(substr($code, $install + \strlen(self::INSTALL), $program - $install - \strlen(self::INSTALL)));
         self::assertStringStartsWith('if ($tuiErrorLog !== null) {', $block, 'the TUI display_errors block is gone from bin/candy-code');
-        // '});' since the rv-devops terminal-recovery guard joined the window: the slice
-        // now ends on the shutdown registration, not on the display if-block's brace.
-        self::assertStringEndsWith('});', $block);
+        // X-CORE1 (OD-17): the tail used to be '});' because the hand-rolled rv-devops
+        // terminal-recovery guard had its own shutdown registration inside this window.
+        // That guard is deleted for good and its successor arm lives AFTER the Program
+        // construction anchor (pinned by BinTerminalGuardPidTest), so the window is now
+        // exactly the redirect if-block: the shutdown registration is its last closure,
+        // and nothing follows its '});' but the if-block's own brace.
+        self::assertStringEndsWith('}', $block, 'the window must end at the display_errors block\'s closing brace — the redirect is no longer the last thing armed here');
+        $registration = strrpos($block, '});');
+        self::assertIsInt($registration, 'the fatal-reporting shutdown registration is gone from the display_errors block');
+        self::assertSame(1, substr_count($block, '});'), 'the window must arm exactly one closure — a second registration is the deleted recovery guard growing back');
+        self::assertSame("\n}", substr($block, $registration + \strlen('});')), 'nothing may follow the shutdown registration but the block brace — the rv-devops guard used to live here');
+        foreach (['armTerminalRelease', '$terminalWasRun', '$installPid'] as $residue) {
+            self::assertStringNotContainsString($residue, $block, "the deleted terminal-recovery guard is re-entering the redirect window ({$residue})");
+        }
 
         return $block;
     }
