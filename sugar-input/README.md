@@ -191,7 +191,7 @@ never re-surfaced as its own event.
 |---|---|
 | `KeyEvent` | `key`, `modifiers`, `raw`, `isRelease()`, `isRepeat` |
 | `MouseEvent` | `x`, `y`, `button`, `action`, `modifiers` — `action` is `press`/`release`/`drag`/`scroll` (refused at the constructor otherwise); `button` is 0/1/2 for left/middle/right press-drag-release, and X10 releases report button 3 (`MouseEvent::BUTTON_RELEASE`) — match releases on `action`, not the button index; scroll steps report 96 (up), 97 (down), 98 (left/wire 66), 99 (right/wire 67); `x`/`y` are the units the reporting mode measures (cells under 1000/1006, pixels under 1016) |
-| `FocusEvent` | `gained`, `raw` |
+| `FocusEvent` | `gained`, `raw` (`?string` — the `CSI I`/`CSI O` frame; null on host-synthesized events) |
 | `PasteEvent` | `content`, `truncated`, `truncationNotice(): ?string` |
 | `ResizeEvent` | `cols`, `rows` — produced by `SignalResizeDriver` (see [Input drivers](#input-drivers)) |
 | `TerminalReplyEvent` | `family`, `params` (head-clamped to `MAX_PARAMS`, overflow counted in `paramsDropped`), `raw`, `body`, `truncated` |
@@ -242,13 +242,14 @@ Modifier state arrives **on events** — you read them; you do not build masks
 ```php
 if ($event->modifiers->includes(KeyModifier::CTRL)) { /* ... */ }
 $event->modifiers->value(); // the underlying bitmask, for caching/comparison
+$event->modifiers->equals($other); // exact equality between two KeyModifier values
 ```
 
 The constants `SHIFT`, `ALT`, `CTRL`, `META`, `SUPER`, `HYPER` (plus
 `CAPS_LOCK`, `NUM_LOCK`) document the wire bit layout the decoders map from:
 `KeyModifier::fromKittyInt()` reads Kitty bits 0–5 plus the lock-state bits
 64/128 (which ride only the explicit `:event-type` sub-param form — the
-legacy form masks them off), `fromXtermParam()` converts the legacy
+legacy form's `& 0x1f` mask drops them along with the spec `meta` bit (32)), `fromXtermParam()` converts the legacy
 `1 + bitmask` field, `fromSgrMouse()` extracts mouse-report bits. `all()`
 covers Shift+Alt+Ctrl only — the bits the legacy CSI forms can express — and
 the named factories (`none()`, `alt()`, `ctrl()`, `shift()`, `altShift()`,
@@ -257,6 +258,13 @@ combining API. The xterm legacy `+8` modifier slot is named `META` in this
 library's mapping (the spec calls that bit "meta"; ctlseqs reserves "super"
 for different reporting) — treat legacy `;9A` as Meta+ArrowUp and rely on the
 Kitty path for true Super.
+
+Modifier-field strictness is protocol-split. The Kitty path de-bases
+leniently: an empty or `;0` field lands as modifier-none via
+`max(0, mods − 1)`. The tilde `number ; 0 ~` and modifyOtherKeys
+`27 ; 0 ; keysym ~` forms refuse a `0` field as a counted drop —
+`fromXtermParam()` is 1-based, and a 0 there would compute `-1` and fabricate
+every bit.
 
 Reserved combinations (the legacy wire cannot distinguish these — do not
 design keymaps against the distinction): `Ctrl+I` IS `Tab`, `Ctrl+J`/`Ctrl+M`
@@ -277,7 +285,7 @@ surfaces it as a `TerminalReplyEvent`:
 
 | `family` | Sequence | Meaning |
 |---|---|---|
-| `device-attributes` | `CSI ? Pm c` / `CSI > Pm c` | DA1 / DA2 reply |
+| `device-attributes` | `CSI ? Pm c` / `CSI > Pm c` (bare `CSI Pm c` drains too) | DA1 / DA2 reply |
 | `cursor-position` | `CSI row ; col R` | DSR/CPR report (never a phantom `F3`) |
 | `dsr-status` | `CSI 0 n` / `CSI 3 n` (any `CSI … n` final drains) | DSR ok / not-ok reply — every `n`-final frame is drained so an echoed query can never mis-parse as a key |
 | `window-report` | `CSI Pm t` | XTWINOPS geometry/resize report |
