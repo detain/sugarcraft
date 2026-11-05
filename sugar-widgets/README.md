@@ -23,7 +23,7 @@ composer require sugarcraft/sugar-widgets
 ```
 
 Requires PHP ≥ 8.3. No non-bundled extensions are needed (mbstring is
-core). When you depend on this package standalone, its `sugarcraft/*`
+bundled with PHP). When you depend on this package standalone, its `sugarcraft/*`
 siblings resolve from Packagist.
 
 > The most-used setters have short-form aliases, per class:
@@ -51,6 +51,7 @@ Spinner.
 | `Cursor\Cursor` | Animated text cursor _(deprecated alias — re-exported from `SugarCraft\Forms\Cursor`)_ | `BlinkMsg` |
 | `Help\Help` | Render short / full key-help footer from a `KeyMap`; `Help::updateWithBinding($msg, $toggle)` flips show-all in response to a key. `Help::new(...)` is the house factory (all eight styling params optional; the public constructor stays for BC); gap knobs via `withKeyDescGap()` / `withColumnGap()` / `withWidth()` | — |
 | `Key\Binding` | One key + label + help row; `Binding::new(...)`, `Binding::withDisabled(...)` factories | — |
+| `Key\KeyMap` | Interface — implement it so `Help` can render your bindings: `shortHelp(): list<Binding>` for the inline row, `fullHelp(): list<list<Binding>>` for the expanded pane (one inner list per column); `Tabs\TabsKeyMap` is the shipped example | — |
 | `Spinner\Spinner` | Animated loading glyph — 12 built-in styles _(deprecated alias — re-exported from `SugarCraft\Forms\Spinner` in `sugarcraft/sugar-forms`)_ | `Spinner\TickMsg` |
 | `Progress\Progress` | Static progress bar (gradient fill optional, `withColors(...)` / `withColorFunc(...)` / `withShowValue(...)`) | — |
 | `Progress\AnimatedProgress` | Spring-physics-animated progress bar (powered by `sugarcraft/sugar-spring`); honours `REDUCE_MOTION=1` by jumping straight to the target percent | `SpringTickMsg` |
@@ -63,7 +64,7 @@ Spinner.
 | `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages; items are `ItemList\Item` / `ItemList\StringItem` values (raw strings are not accepted) _(deprecated alias — re-exported from `SugarCraft\Forms\ItemList` — depend on `sugarcraft/sugar-forms` directly)_ | — |
 | `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Roots are `Tree\Node` values (`new Tree\Node($label, $children)` / `Node::leaf($label)`); chrome glyphs and prefixes are immutable via `withStyle(...)` (labels and knobs are sanitised single-line at ingress). | — |
 | `Table\Table` | Selectable data table with `Column` struct + nav + multi-column sort | — |
-| `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow. Mouse *zones* are opt-in: labels are only advertised to `sugar-mouse` when you attach a supplied manager with `withZoneManager()` (passing `null` detaches); until then clicks find nothing. `focus()` renders the active tab underlined so keyboard focus is visible, not just audible | — |
+| `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow. Mouse *zones* are opt-in: labels are only advertised to `sugar-mouse` when you attach a supplied manager with `withZoneManager()` (passing `null` detaches); until then clicks find nothing. `focus()` renders the active tab underlined — before the M9 fix (Tabs.php source comment) the focused and blurred frames were byte-identical, so keyboard focus was invisible in the render bytes | — |
 | `FilePicker\FilePicker` | Directory browser with icons / size / sort modes _(deprecated alias — re-exported from `SugarCraft\Forms\FilePicker`)_ | — |
 | `Scrollbar\Scrollbar` | Scrollbar indicator for scrollable viewports _(deprecated alias — re-exported from `SugarCraft\Forms\Scrollbar`)_ | — |
 | `Input\TextEdit` | Inline single-line editor value object with an underline caret (no hardware cursor), grapheme-cluster caret, cell-budget windowing, digits-only mode — btop `Draw::TextEdit` | — |
@@ -278,7 +279,7 @@ Immutable list of sort criteria — each entry is a `(column index, direction)` 
 
 Sorting throws `\InvalidArgumentException` when a column name is not
 found; the message comes from the `table.sort_unknown_column` locale key
-(English: `sort column not found: <name>`). See Localization below.
+(English: `sort column not found: {column}`). See Localization below.
 
 ## Table — filtering
 
@@ -288,7 +289,7 @@ use SugarCraft\Widgets\Table\Table;
 // Enable the filter feature (opt-in)
 $t = $table->withFilterable(true);
 
-// Set a query string — default: case-insensitive substring match across all visible columns
+// Set a query string — default: case-insensitive substring match across every cell of every row
 $t = $table->withFilter('foo');
 
 // Custom filter: receives a row (list<string>), returns true to keep
@@ -315,7 +316,7 @@ When `withFilterPredicate()` is set, it overrides the default substring-match be
 | `filter(): string` | Return the current filter query string |
 | `filterPredicate(): ?Closure` | Return the current custom predicate |
 
-The default filter applies case-insensitive substring matching across all visible columns.
+The default filter applies case-insensitive substring matching across every cell of every row (hidden columns are a future feature — there is no visibility filtering today).
 
 ## Table — pagination
 
@@ -495,7 +496,9 @@ echo Progress::new()
 ```
 
 This gives btop's *colouring*, not its fill count (Progress fills
-`round(percent * width)` cells). For an exact btop meter use sugar-dashboard
+`round(percent * barWidth)` cells, where `barWidth` is the total width less the
+measured percent-suffix when the `%` label fits — see the `computeBarLayout()`
+reserved-suffix maths). For an exact btop meter use sugar-dashboard
 `Meter::withGradient($stops, positionWise: true)`.
 
 ## Localization
@@ -578,7 +581,7 @@ cd sugar-widgets && composer install && vendor/bin/phpunit
 
 ### Text input (enhanced)
 
-![text-input](.vhs/text-input-enhanced.gif)
+![text-input-enhanced](.vhs/text-input-enhanced.gif)
 
 ### Timer
 
