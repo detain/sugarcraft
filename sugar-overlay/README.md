@@ -131,9 +131,13 @@ outside the overlay footprint: each non-empty background line is wrapped in
 `\e[38;2;v;v;v…\e[39m` with `v = round(255 × (1 − opacity/100))`. Lines that
 arrive pre-styled are no longer skipped — the wrap dims them too, though any
 SGR inside the line that sets its own color afterwards still overrides the
-pen for its span. The pen is a **darkening** convention: it assumes a dark
-terminal background, so on a light theme a dimmed canvas brightens toward
-gray instead. During an animation the scrim ramps with the transition —
+pen for its span. The wrap sets only the foreground: text carrying its own
+explicit background (SGR 48) keeps that background at full brightness under
+the scrim, so pre-styled rows degrade unevenly rather than dimming as one.
+The pen is a **darkening** convention that assumes a light default
+foreground: on a terminal that renders dark text (the usual light-theme
+setup) the gray pen brightens that text instead of dimming it. During an
+animation the scrim ramps with the transition —
 the first frames are partially dimmed, full strength lands only with the
 settled frame (see [Animations](#animations)).
 
@@ -141,7 +145,10 @@ settled frame (see [Animations](#animations)).
 **not** clamped, so an overlay wider than the canvas at `LEFT` keeps its
 left cells and loses its right edge (the reverse at `RIGHT`). A
 "shrink-to-fit-the-canvas" mode is a design decision this library does not
-make for you.
+make for you. Vertically there is one clamp: `baseY` is floored at `0`, so
+an overlay taller than the canvas and anchored `BOTTOM` is pinned to the
+top row — the anchor tells you where the overlay wanted to sit, not which
+of its edges survives.
 
 ## Animations
 
@@ -149,8 +156,10 @@ make for you.
 the settled overlay. Values outside `0.0–1.0` saturate (they are clamped,
 never extrapolated). Pick a kind with `withAnimation()`; each kind applies
 its default easing. At `0.0`, `FADE` and `SCALE` render no foreground at
-all and the scrim is fully transparent; `SLIDE` sits one column-step off
-the anchored edge.
+all and the scrim is fully transparent; `SLIDE` parks the block's full
+extent outside the anchored edge — a whole foreground-width of columns at
+`LEFT`/`RIGHT`, a whole foreground-height of rows at `TOP`/`BOTTOM` — so
+clipping paints nothing but the backdrop, never a sliver.
 
 | Kind | Default easing | Motion |
 |---|---|---|
@@ -209,7 +218,7 @@ use SugarCraft\Spring\Easing\CubicBezier;
 $bg    = str_repeat("..............................\n", 3);
 $fg    = "[dialog box]";
 $slide = new Slide(CubicBezier::easeInOutQuad());
-$step  = $slide->apply($fg, 0.5, Position::TOP, Position::LEFT);
+$step  = $slide->apply($fg, 0.8, Position::TOP, Position::LEFT);
 
 echo Veil::new()->composite(
     $step['foreground'],
@@ -224,6 +233,9 @@ echo Veil::new()->composite(
 `Slide::apply()` returns `array{foreground, verticalOffset,
 horizontalOffset}`; `Fade` and `Scale` return the transformed foreground
 string directly (their `apply()` takes `($foreground, $progress)`).
+The example steps to `0.8` deliberately: at low progress the offsets still
+place the whole block off-canvas, so a `composite()` of an early step
+paints nothing but the backdrop.
 
 ## Z-Index and Stacking Order
 
