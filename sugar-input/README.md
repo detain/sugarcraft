@@ -114,7 +114,7 @@ $events = $decoder->flushDeferredEscape();
 // Observability counters (all zeroed by reset())
 $decoder->drainedReplyCount();    // replies surfaced as TerminalReplyEvent
 $decoder->droppedUnknownCount();  // complete sequences consumed with no event
-$decoder->discardedPasteBytes();  // bytes dropped by the paste cap (C2)
+$decoder->discardedPasteBytes();  // bytes dropped past the paste cap
 
 // Clear every buffer, flag and counter — the documented recovery lever
 $decoder->reset();
@@ -202,8 +202,8 @@ bytes with no letter to pair with — NUL (0x00) and the four separators
 0x1C–0x1F (FS/GS/RS/US) — carry the RAW byte itself as the key name, so
 `match ($event->key)` arms test for `"\0"` / `"\x1c"`…`"\x1f"` rather than an
 invented mnemonic. Alt-modified control chords share the bare vocabulary:
-`ESC` + `0x0D` names `Enter` (with Alt), not a raw `\r` (a legacy quirk fixed
-in the C-round — if you matched on `"\r"`, match on `'Enter'` plus Alt now).
+`ESC` + `0x0D` names `Enter` (with Alt), not a raw `\r` (a decoder quirk fixed
+long ago — if you matched on `"\r"`, match on `'Enter'` plus Alt now).
 
 ### Key names (the complete vocabulary)
 
@@ -318,12 +318,16 @@ $decoder->discardedPasteBytes();  // paste body bytes dropped past the 1 MiB cap
 
 A rising `drainedReplyCount()` is normal terminal chatter; a rising
 `droppedUnknownCount()` means bytes were consumed but produced no event. That
-includes genuinely unrecognized sequences (unknown private CSIs, unmapped SS3
-finals, malformed or non-numeric mouse reports, Kitty `u`-frames below the
-functional block such as `11u`) **and** recognized-but-filtered ones — a Kitty
-event frame when the progressive protocol is disabled, or a stray `CSI 201~`
-paste-end marker with no paste open — so a non-zero count is not necessarily a
-terminal this decoder fails to model. `reset()` zeroes all counters along with
+includes genuinely unrecognized sequences — private CSIs whose lead parameter
+byte routes nowhere (`<` with mouse reporting off, `=`, `!`), unmapped SS3
+finals, malformed or non-numeric mouse reports, and Kitty `u`-frames carrying an
+unnamed codepoint (a control-range number such as `11u`, or a lone surrogate).
+It **also** covers recognized-but-filtered frames — a Kitty event frame when the
+progressive protocol is disabled, a disabled family's mouse report, or a stray
+`CSI 201~` paste-end marker with no paste open. What never lands in this counter
+is a complete `?`- or `>`-prefixed private report: those drain as
+`TerminalReplyEvent`s. So a non-zero count is not necessarily a terminal this
+decoder fails to model. `reset()` zeroes all counters along with
 the buffers.
 
 ### Deferred trailing escape (opt-in)
