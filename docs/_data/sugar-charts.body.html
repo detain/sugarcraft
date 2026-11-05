@@ -81,6 +81,7 @@ echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)
 <tr><td>Heatmap</td><td>new(grid, width, height)</td><td>Create heatmap</td></tr>
 <tr><td>Canvas</td><td>new(width, height) (constructor)</td><td>Create chart canvas</td></tr>
 </table>
+    <p style="margin-top: 16px;"><strong>Untrusted labels.</strong> Every string the library can echo passes through <code>SugarCraft\Charts\Support\UntrustedText</code>: static labels are swept at their setters, and formatter closures (<code>withXLabelFormatter()</code>, <code>withYLabelFormatter()</code>, BarChart's <code>withDataLabelFormatter()</code>) are swept at the resolve and render sites, so hostile data cannot bypass the boundary. The Canvas and Graph layers that compose the frame are trusted internals and stay unguarded by design. Full story: <a href="https://github.com/sugarcraft/sugar-charts/blob/master/README.md#untrusted-labels">README — Untrusted labels</a>.</p>
   </div>
 </section>
 
