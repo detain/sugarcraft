@@ -15,7 +15,11 @@ sugar-table — a customizable data table component for PHP 8.3+ terminal UIs: p
 ## Features
 
 - **Column definitions**: key (the caller owns uniqueness — nothing in the table enforces it), title, width (fixed or flexible), optional style
-- **Row data**: key-value map (`RowData`), arbitrary values rendered via `fmt.Sprintf("%v")`
+- **Row data**: each `Row` carries a key-value map (`RowData`); `withRows()` takes
+  `Row` objects only (passing a raw key-map array is a `TypeError`). A value renders
+  as text when it is scalar or `__toString`-able (booleans print as `1` or nothing),
+  and as an empty string otherwise — arrays and resources included; a key the row
+  omits shows the missing-data placeholder (see Missing Data Indicator)
 - **Styled cells**: `StyledCell` wraps value + ANSI style, overrides row/column/base styles (never string-cast one directly — see Rows)
 - **Row styles**: zebra striping, bold rows, per-row ANSI styling
 - **Selection**: single-row cursor via `SelectNext()`/`SelectPrevious()`/`withSelectedIndex()`; row 0 carries the highlight on first render (use `withSelectable(false)` for a cursorless table); `handleKey()` scrolls
