@@ -113,7 +113,9 @@ function onKey(event: KeyboardEvent): void {
 <style scoped>
 .opener {
   position: fixed;
-  top: 3.4rem;
+  /* UX-11: one token with the tab strip's right reserve (tokens.css) — the
+     opener floats over that row, so its offset must track the chrome height. */
+  top: var(--chrome-height);
   right: 0.75rem;
   z-index: 20;
   font-size: 0.8125rem;
