@@ -711,7 +711,7 @@ $t = Table::fromColumns([...])
     // ->withBorder(Border::block())  // █ all eight position glyphs
     // ->withBorder(Border::ascii())  // - | + + + +
     // ->withBorder(Border::hidden())  // all spaces
-    // ->withBorder(Border::markdownBorder())  // | - | ...
+    // ->withBorder(Border::markdownBorder())  // | - | ... visual style only
 
 // Or style the default border with ANSI colors:
 $t = $t->withBorderStyle('1;32');       // bold green
@@ -733,6 +733,10 @@ frame:
 ```
 
 Available border factories: `Border::normal()`, `rounded()`, `thick()`, `double()`, `block()`, `ascii()`, `hidden()`, `markdownBorder()`.
+
+Note: `Border::markdownBorder()` is a visual style only — rendered tables are NOT
+parseable as GitHub-flavoured markdown (the rules are full-width single-cell
+separators, not pipe rows). Do not route `View()` output into markdown renderers.
 
 ## Cell Padding Control
 
