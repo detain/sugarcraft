@@ -39,10 +39,11 @@ $ echo $?
 
 The bare command refuses loudly (non-zero exit, honest stderr) rather than
 printing a startup banner while serving nothing — the ssh and git-daemon
-transports remain scaffold until their phases land. On the live listener
+transports remain unwired libraries. On the live listener
 push is served: authorization runs before a single ref byte or pack body
 is touched, and hook declines ride back in-band in the report-status
-stream. Nothing forks.
+stream. Nothing forks per connection — but every served request spawns
+bounded, reaped `git` children.
 
 **What is implemented:**
 
@@ -110,6 +111,7 @@ candy-git-server/
 │   ├── Repo.php                    Bare Git repo (init at <path>/.git, refs, metadata)
 │   ├── Visibility.php              Repo visibility enum (public/collaborator-only/private)
 │   ├── User.php                    User model + SSH public-key matching (no persistence)
+│   │   ├── UserStore.php             Accounts persisted to <data_path>/users.json (atomic writes)
 │   ├── AccessControl.php           Permissions (admin/read/write)
 │   ├── Stats.php                   Counters (connections, packs, LFS)
 │   ├── StatsServer.php             JSON stats endpoint class (needs a host to start it)
@@ -123,6 +125,7 @@ candy-git-server/
 │   │   ├── GitDaemon.php           Socket daemon class (un-assembled; see Known gaps)
 │   │   ├── PktLine.php             The pkt-line codec (spec framing, flush, tolerant decode)
 │   │   ├── StatelessRpc.php        git --stateless-rpc children for the HTTP read path
+│   │   ├── StdioPipe.php           Bounded client<->git-child stdio pump (daemon path)
 │   │   ├── UploadPack.php          git-upload-pack handler (daemon/CGI shape)
 │   │   └── ReceivePack.php         git-receive-pack handler (daemon/CGI shape)
 │   ├── HttpSmartProtocol/
@@ -135,7 +138,8 @@ candy-git-server/
 │   │   ├── LocalStorageBackend.php aa/bb/oid object store
 │   │   └── LFSStorageBackendInterface.php
 │   └── Support/
-│       ├── PromisePool.php         Bounded-concurrency helper
+│       ├── BoundedCommand.php      argv-only subprocess runner: caps, deadline, reaping
+│       │   ├── PromisePool.php         Bounded-concurrency helper
 │       └── Version.php             Phar build-stamp resolver
 ├── examples/                       config.php, repo.php (library usage)
 ├── tools/build-phar.php            phar build script
@@ -145,13 +149,27 @@ candy-git-server/
 ## Install
 
 ```bash
+git clone https://github.com/sugarcraft/candy-git-server
+cd candy-git-server
 composer install
+bin/candy-git-server help
 ```
 
-The smart-HTTP read path delegates advertisement, negotiation and pack
-building to the **system `git` binary** (tested against git 2.43); without
-a `git` on `PATH`, `serve --http` starts but every read request answers
-500 and the read-path pins skip loudly.
+As a library consumer: `composer require sugarcraft/candy-git-server`.
+The shipped single-file build (rebuilt and published on every push to
+master) needs only PHP:
+
+```bash
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-git-server/dev/candy-git-server.phar
+chmod +x candy-git-server.phar
+php candy-git-server.phar serve --http --repo-root /srv/git/repositories
+```
+
+Both the read and the push paths delegate to the **system `git` binary**
+(tested against git 2.43): advertisement, negotiation, pack building, the
+receive-pack relay child and its post-receive hooks all run through it.
+Without a `git` on `PATH`, `serve --http` starts but every request answers
+500 and the protocol pins skip loudly.
 
 ## Configuration
 
@@ -223,12 +241,23 @@ git clone http://localhost:23232/myrepo.git
 `<dir>/.git` under it is registered under its basename), `--http-port N`
 (default `23232`), `--http-host H` (default `127.0.0.1`), `--config F`
 (the YAML config, defaults applied when absent). Exit codes: `1` for a
-flag or bind error, `0` after SIGINT/SIGTERM shutdown. Anonymous reads
+flag or bind error, `0` after SIGINT/SIGTERM shutdown (the graceful exit
+requires ext-pcntl — without it the terminal's default signal action kills
+the process and the shell sees 130/143). Anonymous reads
 are served only when `git.allow_anonymous_read: true` is configured
 (default off — fail-closed); unauthenticated requests for gated content
 answer 401 with a `WWW-Authenticate: Basic` challenge so git prompts for
-credentials. Push requires an account with write access. The CLI pieces
-that work without any listener operate on the local data directory:
+credentials. Push requires an account with write access — every account
+the CLI creates is an admin (`user add` sets `User::withAdmin(true)`; admin
+passes every check, so collaborator-only and `allowPush` scoping is not
+reachable through the CLI yet). Accounts and the anonymous-read lever are
+taken from the config file: `--config F` makes the data path `dirname(F)`
+and `users.json` is read from there; without `--config` the default data
+path applies (`CANDY_GIT_SERVER_DATA_PATH`, else
+`sys_get_temp_dir()/candy-git-server`), so serving an initialized tree
+without `--config` starts a listener with zero accounts and the lever
+off. The CLI pieces that work without any listener operate on the local
+data directory:
 
 ```bash
 candy-git-server init /var/lib/candy-git-server   # writes config skeleton + dirs
@@ -247,7 +276,8 @@ off) — both are required. The
 data path resolves as: explicit argument → `CANDY_GIT_SERVER_DATA_PATH`
 → `sys_get_temp_dir()/candy-git-server`; the `/tmp` default is a
 convenience for trials, not a deploy location — set a real data path in
-production.
+production. CLI message locale comes from `CANDY_GIT_SERVER_LANG`
+(unknown values fall through to English).
 
 ## SSH Access (not shipped)
 
@@ -287,6 +317,11 @@ run `serve --http`:
    child; oversized bodies answer 413, stalls answer 504, and hook
    declines ride back in-band in the report-status stream
 
+Routes are matched by their final segment: `/alice/repo.git/...` and
+`/repo.git/...` reach the same registered repo (`Server::findRepo` falls
+back to the basename) — an owner prefix is namespacing sugar, not an
+identity boundary.
+
 Both advertisement routes are gated **before** a single ref byte is
 built: `git-upload-pack` requires `canRead` (anonymous passes only for
 public repos AND only while `git.allow_anonymous_read` is on — default
@@ -317,17 +352,19 @@ dispatch by design. The descriptions below document the class surface for
 whoever wires it, not a promise of working `git://` clones.
 
 **Class behavior:**
-- Runs synchronously in the calling process — it never forks or detaches;
-  daemonize with systemd/supervisord if you host it
+- Runs synchronously in the calling process — no fork-per-connection
+  accept loop, but each served request spawns bounded, reaped `git`
+  children; daemonize with systemd/supervisord if you host it
 - Listens on `git.listen_addr` from `config.yaml` (default `:9418`)
-- Writes PID to the given file (or a caller-chosen default)
+- Writes a PID file only when `serve()`/`serveAsync()` is passed one
+  (the argument defaults to the empty string = no PID file is written)
 - Handles `SIGTERM`, `SIGINT` (graceful shutdown) and `SIGHUP`
 - Cleans up PID file and closes all connections on exit
 
 **Signal handling:**
 - `SIGTERM` / `SIGINT` — graceful shutdown (closes connections, removes PID file)
-- `SIGHUP` — **also shutdown** (GitDaemon.php:1156-1158: all three signals
-  route to the same `handleSignal()`; config reload is not implemented)
+- `SIGHUP` — **also shutdown** (`registerSignalHandlers()` routes all
+  three signals to one `handleSignal()`; config reload is not implemented)
 
 ### Async daemon mode (ReactPHP, opt-in, library-level)
 
@@ -342,6 +379,7 @@ use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\Git\GitDaemon;
 
 $daemon = new GitDaemon(Config::load('/var/lib/candy-git-server/config.yaml'));
+$repos = [Repo::new('demo', '/var/lib/candy-git-server/repositories/demo')];
 $daemon->registerRepos($repos);
 
 // Returns a promise that resolves with exit code 0 on graceful stop.
@@ -352,7 +390,7 @@ Loop::addTimer(3600, fn () => $daemon->shutdown());  // graceful stop from loop 
 Loop::run();
 ```
 
-Both modes share the same protocol code; `stop()` / `stopAsync()` (or a
+Both modes share the same protocol code; `shutdown()` (or a
 `SIGTERM`/`SIGINT`) tears down every loop registration — server stream,
 per-client streams, housekeeping timer — unsubscribes sugar-async
 `Subscriptions`, closes connections, and removes the PID file. The
@@ -433,9 +471,12 @@ Each due mirror is refreshed with
 refspec, so refs deleted upstream prune locally). The `jobs.mirror_pull`
 schedule accepts `@every <duration>` with Go-style durations (`30s`,
 `10m`, `8h`, `1h30m`) and the aliases `@hourly`, `@daily`, `@midnight`,
-`@weekly`, `@monthly`, `@yearly` — full cron expressions are not
-supported and throw. Failed pulls are logged and re-attempted on the
-next interval. As with everything server-shaped, no scheduler host ships:
+`@weekly`, `@monthly`, `@yearly`/`@annually` — full cron expressions are
+not supported and throw. Aliases are interval shorthand, not wall-clock
+anchors: `@daily` means every 24 h measured from when the schedule was
+attached (`@midnight` is the same interval), and every job is due on its
+first pass. Failed pulls are logged and re-attempted on the next
+interval. As with everything server-shaped, no scheduler host ships:
 you call `runOnce()` (cron) or `attach()` (your loop).
 
 ## Stats endpoint (class-level)
@@ -556,6 +597,10 @@ everywhere, and the extension manifest. What remains open:
 7. **Locale coverage of CLI help copy** — the en strings are the reference
    and every key exists in all 16 locales, but a few translated help
    lines lag en wording changes.
+8. **Every CLI account is an admin.** `user add` mints `withAdmin(true)`
+   accounts only; non-admin (collaborator-scoped) account creation is
+   open work, so the per-repo collaborator/allowPush model is currently
+   reachable only by library callers persisting their own users.json.
 
 ## Shared foundations
 
