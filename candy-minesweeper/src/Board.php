@@ -307,7 +307,7 @@ final class Board
      *  - exploded ⇔ a revealed mine exists (explosions reveal their mine;
      *    a revealed mine sets exploded), and exploded implies placement;
      *  - a cell is never simultaneously revealed and flagged (Cell::reveal
-     *    clears flags; toggleFlag no-ops on revealed).
+     *    no-ops on flagged; toggleFlag no-ops on revealed).
      *
      * revealed/flagged counts are recomputed from cells, never trusted
      * from disk. Coherence is the guarantee: a hand-crafted but fully
@@ -488,8 +488,9 @@ final class Board
      * Chord click — reveal all unflagged neighbors of a "satisfied" number.
      *
      * A cell is satisfied when its (positive) adjacent count equals the number
-     * of flagged neighbors. Chord-clicking it is safe because the player
-     * has correctly identified all mines around that cell.
+     * of flagged neighbours. The chord then reveals every unflagged neighbour
+     * — safe ONLY while those flags are correct: a wrong flag leaves its mine
+     * unflagged, and the reveal flood detonates on it.
      *
      * A zero-adjacent cell can satisfy the letter of that definition vacuously
      * (0 flagged neighbours around a 0), but it is deliberately NOT chordable:

@@ -13,7 +13,6 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseMsg;
-use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Minesweeper\Stats\DifficultyStats;
 
@@ -23,8 +22,9 @@ use SugarCraft\Minesweeper\Stats\DifficultyStats;
  *   - space / enter        → reveal
  *   - f                    → toggle flag
  *   - c                    → chord
- *   - S                    → save the live game (single slot under
- *                            $HOME/.config/candy-minesweeper/, 0600)
+ *   - S                    → save the live game (single slot, 0600, under
+ *                            $XDG_CONFIG_HOME/candy-minesweeper/ when that
+ *                            env is set, else $HOME/.config/candy-minesweeper/)
  *   - L                    → load that save — works even after game over,
  *                            so a lost board can step back to the saved one
  *   - r                    → restart
