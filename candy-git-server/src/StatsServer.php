@@ -8,7 +8,7 @@ use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 
 /**
- * Minimal HTTP stats endpoint on `stats.listen_addr` (plan item 7.6).
+ * Minimal HTTP stats endpoint on `stats.listen_addr`.
  *
  * Serves the {@see Stats} counters as JSON: `GET /` or `GET /stats`
  * returns `{"uptime_seconds": …, "connections": …, …}`. Runs on a

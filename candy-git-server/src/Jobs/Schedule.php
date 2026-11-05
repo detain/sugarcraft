@@ -7,7 +7,7 @@ namespace SugarCraft\GitServer\Jobs;
 use SugarCraft\GitServer\Lang;
 
 /**
- * Background-job schedule parsed from config (plan item 7.5).
+ * Background-job schedule parsed from config.
  *
  * Mirrors the subset of robfig/cron descriptors charmbracelet/soft-serve
  * actually uses for `jobs.mirror_pull` (default `@every 10m`):

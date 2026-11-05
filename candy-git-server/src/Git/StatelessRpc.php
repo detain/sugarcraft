@@ -16,10 +16,11 @@ namespace SugarCraft\GitServer\Git;
  * repo path is trusted server config (docs/TRUST-BOUNDARY.md doctrine for
  * this package), never client input.
  *
- * Child-lifetime discipline (E721 / ChafaRenderer pattern): every spawn
+ * Child-lifetime discipline: every spawn
  * function carries its own request-scoped reap — a bounded stdin write and
- * a bounded drain sharing ONE wall-clock deadline, stderr drained to null
- * so the child can never block on a full error pipe, and on any undrained
+ * a bounded drain sharing ONE wall-clock deadline, stderr collected into a
+ * bounded STDERR_TAIL_BYTES tail (reported on failure) so the child can
+ * never block on a full error pipe, and on any undrained
  * outcome a TERM that escalates to KILL after a short grace, then
  * proc_close. No git child outlives the call that spawned it.
  *
@@ -390,7 +391,9 @@ final class StatelessRpc
      *
      * @param resource $stdoutPipe
      * @param resource $stderrPipe
-     * @param \Iterator-returning shape: bytes + verdict reason
+     * @param int $deadlineNs absolute hrtime deadline in nanoseconds
+     * @param int $maxBytes stdout collection cap
+     * @param string $stderrTail bounded stderr tail, collected by reference
      * @return array{bytes: string, reason: string}
      */
     private static function drainBounded($stdoutPipe, $stderrPipe, int $deadlineNs, int $maxBytes, string &$stderrTail): array

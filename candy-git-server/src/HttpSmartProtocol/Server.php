@@ -23,7 +23,7 @@ use SugarCraft\GitServer\LFS\LFSHandler;
  * 2. Client POSTs /git-upload-pack with wants           → exchanges pack data
  * 3. For push: Client POSTs /git-receive-pack          → sends pack, receives status
  *
- * CHILD-PROCESS LIFETIME (E721): the live smart-HTTP children are spawned
+ * CHILD-PROCESS LIFETIME: the live smart-HTTP children are spawned
  * inside Git\StatelessRpc (advertise + negotiate), whose bounded read +
  * TERM/KILL escalation ladder releases pipes and handle in a `finally` per
  * spawn site. This class keeps exactly one further `proc_open` — the DORMANT
@@ -276,8 +276,11 @@ final class Server
         // with no valid identity is challenged (401 + WWW-Authenticate)
         // rather than told yes/no about the repo's policy — one uniform
         // answer for "who are you", so an anonymous probe cannot use the
-        // 403-versus-advertisement difference to map push policy (or even
-        // existence rules) across repos. A known identity that lacks the
+        // 403-versus-advertisement difference to map push policy across
+        // repos. Repo EXISTENCE is not hidden here: the router answers 404
+        // for an unregistered repo earlier in this method — a disclosed
+        // existence oracle (timing alignment is open work). A known
+        // identity that lacks the
         // right gets 403. Read advertisement rides canRead, push
         // advertisement rides canWrite and always requires an identity.
         // The access matrix is consulted through AccessControl. The

@@ -22,7 +22,7 @@ final class Repo
     /** Human-readable description. */
     public readonly string $description;
 
-    /** Repo visibility (public / collaborator-only / private) — plan item 7.8. */
+    /** Repo visibility (public / collaborator-only / private). */
     public readonly Visibility $visibility;
 
     /** BC accessor for the old boolean model: true iff visibility is Public. */

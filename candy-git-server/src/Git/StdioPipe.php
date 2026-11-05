@@ -18,7 +18,7 @@ namespace SugarCraft\GitServer\Git;
  * client, and the child's stderr is collected (tail only) for honest
  * failure reporting.
  *
- * CHILD-PROCESS LIFETIME (E721): the child is REQUEST-scoped. Every
+ * CHILD-PROCESS LIFETIME: the child is REQUEST-scoped. Every
  * exit path — normal drain, idle give-up, hard deadline, or an
  * unwinding exception — funnels through one `finally` that terminates
  * (SIGTERM, then SIGKILL after a grace poll) and closes the handle, so

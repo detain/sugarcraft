@@ -301,7 +301,7 @@ final class Config
     }
 
     /**
-     * Parse a YAML config document via symfony/yaml (plan item 7.7).
+     * Parse a YAML config document via symfony/yaml.
      *
      * The previous hand-rolled parser silently IGNORED indented nested
      * keys (only inline `key: { a: b }` maps nested); with a real YAML

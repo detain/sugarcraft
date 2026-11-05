@@ -30,11 +30,10 @@ use SugarCraft\GitServer\{AccessControl, Config, Repo, Stats, User};
  * `socket_select()` loop (the default); {@see serveAsync()} is the
  * opt-in ReactPHP path that accepts and reads connections through the
  * event loop so a host application can multiplex the daemon with
- * timers, other sockets, and loop work (plan item 6.1,
- * findings/plan_candy-git-server.md). Both modes share the same protocol
+ * timers, other sockets, and loop work. Both modes share the same protocol
  * code — only the transport/readiness layer differs.
  *
- * CHILD-PROCESS LIFETIME (E721). Every protocol request is delegated
+ * CHILD-PROCESS LIFETIME. Every protocol request is delegated
  * to the real `git upload-pack --advertise-refs` binary through the
  * bounded stdio pump {@see StdioPipe::run()}: the pump carries its own reap ladder
  * (terminate, bounded poll, kill, bounded poll, close) on every exit
@@ -154,7 +153,7 @@ final class GitDaemon
         // a PUBLIC registration persists its visibility marker (idempotent
         // write), so the repo stays published for the next boot's scan
         // instead of silently reverting to fail-closed private (
-        // the same control-plane-theater family as the CLI's user add).
+        // the same visibility marker the CLI's `repo create --public` writes).
         // Private/collaborator-only registrations must NOT write a marker
         // (fail-closed reads need no on-disk declaration). The exists()
         // gate keeps in-process registrations at placeholder paths

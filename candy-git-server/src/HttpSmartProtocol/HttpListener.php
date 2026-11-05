@@ -84,8 +84,8 @@ final class HttpListener
     /**
      * Bind and start accepting. Port 0 asks the kernel for an ephemeral
      * one — read it back through listenAddress(). Throws on bind failure
-     * (fail-fast; a half-listening server is the scaffold sin this whole
-     * lane exists to keep out).
+     * (fail-fast; a half-listening server is the scaffold sin this listener
+     * exists to keep out).
      */
     public function start(): void
     {

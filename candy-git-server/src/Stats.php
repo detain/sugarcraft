@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer;
 
 /**
- * In-process counters for the stats collection server (plan item 7.6).
+ * In-process counters for the stats collection server.
  *
  * A tiny mutable collector — the one deliberately non-immutable service
  * next to {@see AccessControl}, and it follows the same

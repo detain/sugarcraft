@@ -8,7 +8,7 @@ declare(strict_types=1);
  *
  * Usage:
  *   candy-git-server serve [--config path]        Refuses: server assembly not implemented
- *   candy-git-server serve --http --repo-root DIR  Smart-HTTP READ listener (phase 1; --http-port N)
+ *   candy-git-server serve --http --repo-root DIR  Smart-HTTP clone/fetch/push + LFS listener (--http-port N [--http-host H] [--config path])
  *   candy-git-server init                          Initialize a new data directory
  *   candy-git-server user add <username>           Add a user
  *   candy-git-server user key <username> <keyfile> Add an SSH key
@@ -134,13 +134,13 @@ function cmdServe(array $args): int
     // refused the same way because nothing forks or binds here. The class
     // pieces (Config, Repo, GitDaemon, HttpSmartProtocol\Server, SSHServer)
     // exist and are individually tested; nobody has wired them into a
-    // running host. Inventory: README "Known gaps — must fix before any
-    // server wiring".
+    // running host. Inventory: README "Known gaps — open work".
     //
     // Exception: the explicit --http flag
-    // assembles ONLY the smart-HTTP read listener, which is now real. The
-    // bare refusal below stays byte-identical for every other invocation —
-    // ssh/git-daemon listeners and push remain unwired scaffold.
+    // assembles ONLY the smart-HTTP listener (read, write and LFS), which
+    // is now real. The bare refusal below stays byte-identical for every
+    // other invocation — the ssh/git-daemon listeners remain unwired
+    // scaffold.
     if (\in_array('--http', $args, true)) {
         return cmdServeHttp($args);
     }
@@ -156,10 +156,13 @@ function cmdServe(array $args): int
 /**
  * serve --http --repo-root DIR [--http-port N] [--http-host H] [--config path]
  *
- * Phase 1 of the smart-HTTP transport: a READ-only listener (info/refs
- * advertisement + upload-pack negotiation) over the synchronous router.
- * Anonymous reads are allowed only for public repos; private repos answer
- * 403. Push (git-receive-pack POST) answers 501.
+ * Serves the smart-HTTP transport: clone, fetch, push and LFS over the
+ * synchronous router, behind per-repo authorization. Anonymous reads pass
+ * only when git.allow_anonymous_read is on AND the repo carries a public
+ * visibility marker; unauthenticated requests for gated content answer
+ * 401 with a WWW-Authenticate: Basic challenge, authenticated-but-refused
+ * requests answer 403, and writes (git-receive-pack, LFS upload) require
+ * an account with write access.
  *
  * Exit codes: 1 flag error (missing --repo-root / bad port) or bind failure,
  * 0 after a signal shutdown (SIGINT/SIGTERM when pcntl is loaded).

@@ -217,6 +217,10 @@ final class LFSHandler
      *     }
      *   ]
      * }
+     *
+     * Href schemes follow the configured http.public_url (https appears only
+     * when the deployment sits behind an external TLS terminator — this
+     * server refuses to terminate TLS itself).
      */
     public function handleBatch(array $request): array
     {

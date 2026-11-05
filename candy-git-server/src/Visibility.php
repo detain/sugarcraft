@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer;
 
 /**
- * Repository visibility (plan item 7.8).
+ * Repository visibility.
  *
  * Replaces the paired `bool $isPublic` + `bool $private` flags on
  * {@see Repo} with one explicit tri-state. Mirrors
