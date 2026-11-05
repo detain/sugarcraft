@@ -144,8 +144,14 @@ accessibility-daemon channel, and the value is consulted per call: flipping
 the env var mid-session changes behaviour on the next frame. When the host
 sets one of the variables this supports the [WCAG 2.3.3 (Animation from
 Interactions) reduced-motion
-guideline](https://www.w3.org/WAI/WCAG21/Understanding/animate-from-interactions.html)
-— a math library can support conformance, not satisfy it for your whole app.
+guideline](https://www.w3.org/WAI/WCAG21/Understanding/animate-from-interactions.html);
+for the auto-running uses advertised above, [WCAG 2.2.2 (Pause, Stop, Hide),
+Level A](https://www.w3.org/WAI/WCAG22/Understanding/pause-stop-hide.html)
+still applies to anything that moves for longer than five seconds — a math
+library can support conformance, not satisfy it for your whole app.
+Snap-to-target is an accessible substitute only when the end state carries
+the information of the movement; where motion itself carries information,
+pin the spring to keep animating (override below).
 
 `Projectile`, the `Easing` curves and `CubicBezier` deliberately ignore the
 signal: they are pure functions of time with no target to snap *to*. Gate
@@ -176,7 +182,8 @@ putenv('REDUCE_MOTION=1');
 $spring = new Spring(deltaTime: Spring::fps(60), angularFrequency: 6.0, dampingRatio: 1.0);
 [$pos, $vel] = $spring->update(0.0, 0.0, 100.0);  // returns [100.0, 0.0]
 
-// Pin one spring to ignore the environment (e.g. a required progress cue):
+// Pin one spring to ignore the environment (e.g. a required progress cue —
+// motion whose information is not in the end state):
 $alwaysAnimates = new Spring(
     deltaTime: Spring::fps(60),
     angularFrequency: 6.0,
