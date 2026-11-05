@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Code\App\App;
@@ -22,6 +23,7 @@ use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Tui\FirstRunWizard\FirstRunWizard;
 use SugarCraft\Code\Tui\FirstRunWizard\OpenFirstRunWizardMsg;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
+use SugarCraft\Forms\Field\RadioPills;
 
 /**
  * C-TUI-5.e: the wiring around the first-run wizard shell slot.
@@ -84,6 +86,39 @@ final class FirstRunWizardWiringTest extends TestCase
         return $this->app()
             ->withChat($this->chat())
             ->withFirstRunWizard(FirstRunWizard::open(['openai', 'anthropic', 'gemini'], $seedKey ?? ''));
+    }
+
+    /**
+     * NN-01 wiring: opening the wizard through the model seeds the pill row
+     * with the frame's current width, so the eleven-provider roster windows
+     * inside the band instead of overrunning the renderer's clip.
+     */
+    public function testOpeningTheWizardFromASizedAppSeedsThePillBudget(): void
+    {
+        [$sized] = $this->app()->update(new WindowSizeMsg(110, 40));
+
+        $wizard = $sized->openFirstRunWizard()->firstRunWizard;
+
+        self::assertNotNull($wizard);
+        self::assertSame(110, self::reflectedPillWidth($wizard));
+    }
+
+    /** The headless twin: no measured frame, so the legacy unwindowed row. */
+    public function testOpeningTheWizardHeadlessKeepsTheLegacyUnwindowedRow(): void
+    {
+        $wizard = $this->app()->openFirstRunWizard()->firstRunWizard;
+
+        self::assertNotNull($wizard);
+        self::assertNull(self::reflectedPillWidth($wizard));
+    }
+
+    /** The budget riding the wizard's provider pill row. */
+    private static function reflectedPillWidth(FirstRunWizard $wizard): ?int
+    {
+        $pills = (new \ReflectionProperty(FirstRunWizard::class, 'providers'))->getValue($wizard);
+        \assert($pills instanceof RadioPills);
+
+        return $pills->width;
     }
 
     /**

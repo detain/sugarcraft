@@ -73,18 +73,25 @@ final class FirstRunWizard
      * {@see ProviderFactory::availableTypes()}. `$seedKey` pre-types the
      * step-2 field (pins, and any later headless prefilled offer); an empty
      * value — the only value the interactive launch ever passes — leaves the
-     * field blank.
+     * field blank. `$availableCols` is the cell budget the pill row gets on
+     * screen (NN-01: the host passes the frame width its wizard renderer
+     * clips at); the {@see RadioPills} row then windows around the selection
+     * instead of overrunning the clip. Null — and any nonsense non-positive
+     * value, which degrades to null rather than throwing: a decorative fit
+     * knob must never brick the first launch — keeps the legacy full
+     * unwindowed row.
      *
      * @param list<string>|null $providerTypes
      */
-    public static function open(?array $providerTypes = null, string $seedKey = ''): self
+    public static function open(?array $providerTypes = null, string $seedKey = '', ?int $availableCols = null): self
     {
         $types = $providerTypes ?? (new ProviderFactory())->availableTypes();
+        $width = $availableCols !== null && $availableCols >= 1 ? $availableCols : null;
 
-        [$pills] = RadioPills::new('provider', $types)
+        [$pills] = self::providerRow($types, $width)
             ->withTitle(Lang::t('tui.wizard.step_provider'))
             ->focus();
-        $pills = $pills instanceof RadioPills ? $pills : RadioPills::new('provider', $types);
+        $pills = $pills instanceof RadioPills ? $pills : self::providerRow($types, $width);
 
         $key = Input::new('api_key')
             ->withTitle(Lang::t('tui.wizard.step_key', ['provider' => '']))
@@ -92,6 +99,20 @@ final class FirstRunWizard
             ->withValue($seedKey);
 
         return new self($pills, $key, self::STEP_PROVIDER, '');
+    }
+
+    /**
+     * The provider pill row at its construction seat: the width thread is
+     * applied once here so the focused leg and the defense-in-depth
+     * fallback leg of {@see open()} can never drift apart.
+     *
+     * @param list<string> $types
+     */
+    private static function providerRow(array $types, ?int $width): RadioPills
+    {
+        $row = RadioPills::new('provider', $types);
+
+        return $width === null ? $row : $row->withWidth($width);
     }
 
     // ── state ───────────────────────────────────────────────────────────

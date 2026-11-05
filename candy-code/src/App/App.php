@@ -1990,7 +1990,10 @@ final class App implements Model
      * {@see openDiffReview()}: the launch command asks
      * {@see FirstRunWizard::shouldOffer()} and answers an
      * {@see OpenFirstRunWizardMsg}; this only closes the menu and takes the
-     * slot with a fresh model. Already open → unchanged, so a doubled msg
+     * slot with a fresh model, seeded with the current column count so the
+     * provider pill row windows inside the band the renderer clips at
+     * (NN-01 — null cols on a headless build keeps the legacy unwindowed
+     * row). Already open → unchanged, so a doubled msg
      * never re-seeds the form under the user's keys.
      */
     public function openFirstRunWizard(): self
@@ -2001,7 +2004,7 @@ final class App implements Model
 
         MenuBar::closeMenu();
 
-        return $this->mutate(firstRunWizard: FirstRunWizard::open());
+        return $this->mutate(firstRunWizard: FirstRunWizard::open(null, '', $this->cols));
     }
 
     /** Drop the first-run wizard if one stands (C-TUI-5.e); idempotent. */

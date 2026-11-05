@@ -7,11 +7,13 @@ namespace SugarCraft\Code\Tests\Tui\FirstRunWizard;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tui\FirstRunWizard\FirstRunWizard;
 use SugarCraft\Code\Tui\FirstRunWizard\FirstRunWizardActionKind;
+use SugarCraft\Forms\Field\RadioPills;
 
 /**
  * C-TUI-5.d: the first-run provider wizard as a pure sugar-forms model.
@@ -25,6 +27,9 @@ use SugarCraft\Code\Tui\FirstRunWizard\FirstRunWizardActionKind;
 final class FirstRunWizardTest extends TestCase
 {
     use HomeSandboxTrait;
+
+    /** RadioPills' windowing marker (U+2026) — the shape NN-01 rows carry. */
+    private const ELLIPSIS = "\u{2026}";
 
     private string $tmpRoot = '';
 
@@ -54,6 +59,60 @@ final class FirstRunWizardTest extends TestCase
         self::assertSame('openai', $wizard->selectedProvider());
         self::assertNull($wizard->notice());
         self::assertStringContainsString(Lang::t('tui.wizard.hint_provider'), $wizard->view());
+    }
+
+    /**
+     * NN-01: the host hands the pill row its cell budget, and a roster that
+     * cannot fit renders as a window around the selection — ellipsis markers
+     * on the clipped sides — instead of overrunning the host's frame clip
+     * where the trailing pills were simply cut off. The unthreaded legacy
+     * shape stays byte-untouched: null budget = the whole roster on one row.
+     */
+    public function testThePillRowWindowsInsideItsColumnBudget(): void
+    {
+        $roster = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot',
+            'golf', 'hotel', 'india', 'juliet', 'kilo'];
+
+        $unbounded = FirstRunWizard::open($roster);
+        $bounded = FirstRunWizard::open($roster, '', 30);
+
+        self::assertNull(self::pillWidth($unbounded), 'fixture: a budget-less open keeps the legacy unwindowed row');
+        self::assertStringNotContainsString(self::ELLIPSIS, self::pillRow($unbounded->view(), 'alpha'));
+        self::assertStringContainsString('kilo', self::pillRow($unbounded->view(), 'alpha'));
+
+        self::assertSame(30, self::pillWidth($bounded));
+        $row = self::pillRow($bounded->view(), 'alpha');
+        self::assertLessThanOrEqual(30, Width::of($row), 'the windowed row never exceeds its budget');
+        self::assertStringContainsString('alpha', $row, 'the selection is always inside the window');
+        self::assertStringContainsString(self::ELLIPSIS, $row, 'a clipped side carries the marker');
+        self::assertStringNotContainsString('kilo', $row);
+    }
+
+    /**
+     * A nonsense budget degrades to the legacy unwindowed row rather than
+     * throwing: a decorative fit knob must never brick the first launch.
+     */
+    public function testANonPositiveBudgetDegradesToTheUnwindowedRow(): void
+    {
+        self::assertNull(self::pillWidth(FirstRunWizard::open(['openai'], '', 0)));
+        self::assertNull(self::pillWidth(FirstRunWizard::open(['openai'], '', -40)));
+    }
+
+    public function testTheSelectionWindowTravelsWithThePill(): void
+    {
+        $roster = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot',
+            'golf', 'hotel', 'india', 'juliet', 'kilo'];
+        $wizard = FirstRunWizard::open($roster, '', 30);
+
+        for ($i = 0; $i < 8; $i++) {
+            [$wizard] = $wizard->update(new KeyMsg(KeyType::Char, 'l'));
+        }
+
+        self::assertSame('india', $wizard->selectedProvider());
+        $row = self::pillRow($wizard->view(), 'india');
+        self::assertLessThanOrEqual(30, Width::of($row));
+        self::assertStringContainsString('india', $row, 'the window followed the selection');
+        self::assertStringContainsString(self::ELLIPSIS, $row);
     }
 
     public function testTheDefaultRosterIsTheLiveProviderFactory(): void
@@ -326,6 +385,29 @@ final class FirstRunWizardTest extends TestCase
 
         self::assertTrue(FirstRunWizard::isDismissed());
         self::assertFileExists($this->tmpRoot . '/home/.candy-code/cache/' . FirstRunWizard::STAMP_FILE);
+    }
+
+    /** The width budget threaded onto the wizard's provider pill row. */
+    private static function pillWidth(FirstRunWizard $wizard): ?int
+    {
+        $pills = (new \ReflectionProperty(FirstRunWizard::class, 'providers'))->getValue($wizard);
+        \assert($pills instanceof RadioPills);
+
+        return $pills->width;
+    }
+
+    /**
+     * The pill row view() emits: the one line carrying the selected label —
+     * always inside the window, so a sound anchor under every budget.
+     */
+    private static function pillRow(string $view, string $anchor): string
+    {
+        foreach (explode("\n", $view) as $line) {
+            if (str_contains($line, $anchor)) {
+                return $line;
+            }
+        }
+        self::fail("no painted row carries the anchor: {$anchor}");
     }
 
     private function removeTree(string $path): void
