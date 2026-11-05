@@ -187,6 +187,11 @@ function filter(FuzzyMatcher $matcher, string $query, array $candidates): array
 }
 ```
 
+The interface is shared, the **behavior is not interchangeable**: Sahilm matches
+only when the whole query appears in order — equivalent to Smith-Waterman
+full-query mode permanently on — so a call-site swap silently changes scattered
+partial queries from a scored hit to `null`.
+
 ## Algorithm Differences
 
 | Feature | SmithWaterman | Sahilm |
@@ -196,6 +201,7 @@ function filter(FuzzyMatcher $matcher, string $query, array $candidates): array
 | Separator bonus | ❌ | ✅ (10) |
 | CamelCase bonus | ❌ | ✅ (10) |
 | First-char bonus | ❌ | ✅ (15) |
+| Whole query must land | ❌ (opt-in via `withRequireFullQuery()`) | ✅ (always) |
 | Case sensitive | ❌ | Optional |
 | Matching style | Best-alignment | Greedy first-occurrence |
 
