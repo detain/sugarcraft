@@ -194,6 +194,20 @@ The rendered table carries no sort-direction or filter marker in its output, and
 no public accessor exposes the active sort/filter/search state — hosts that show
 one (sort arrows, filter chips) must track the state they pass in themselves.
 
+`SortBy()` has the full signature `SortBy(string $colKey, bool $ascending = true, bool $primary = true)`:
+
+```php
+// Multi-column: city ascending, then age descending within each city.
+// Secondary sorts require primary: false.
+$t = $t->SortBy('city')
+        ->SortBy('age', ascending: false, primary: false);
+```
+
+- Repeating `SortBy()` on the sole active sort key with the SAME direction
+  silently flips that column's direction (the header-toggle behaviour)
+- An unknown column key throws `InvalidArgumentException`
+- `ClearSort()` removes all sorting
+
 ## Keyboard Navigation
 
 
