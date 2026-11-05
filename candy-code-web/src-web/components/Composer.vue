@@ -1046,6 +1046,7 @@ defineExpose({ focus: () => input.value?.focus() });
             <li
                 v-for="(command, i) in suggestions"
                 :key="command.name"
+                :id="`composer-opt-${i}`"
                 role="option"
                 :aria-selected="i === selected"
                 :class="{ on: i === selected }"
@@ -1067,6 +1068,7 @@ defineExpose({ focus: () => input.value?.focus() });
             <li
                 v-for="(mention, i) in mcpMentions"
                 :key="`${mention.server}:${mention.uri}`"
+                :id="`composer-opt-${i}`"
                 role="option"
                 :aria-selected="i === selected"
                 :class="{ on: i === selected }"
@@ -1085,6 +1087,7 @@ defineExpose({ focus: () => input.value?.focus() });
             <li
                 v-for="(name, i) in agentMentions"
                 :key="name"
+                :id="`composer-opt-${i}`"
                 role="option"
                 :aria-selected="i === selected"
                 :class="{ on: i === selected }"
@@ -1103,6 +1106,7 @@ defineExpose({ focus: () => input.value?.focus() });
             <li
                 v-for="(file, i) in files"
                 :key="file"
+                :id="`composer-opt-${i}`"
                 role="option"
                 :aria-selected="i === selected"
                 :class="{ on: i === selected }"
@@ -1164,6 +1168,23 @@ defineExpose({ focus: () => input.value?.focus() });
                 :value="modelValue"
                 rows="3"
                 :disabled="disabled"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-haspopup="listbox"
+                :aria-expanded="
+                    suggestions.length > 0 ||
+                    mcpMentions.length > 0 ||
+                    agentMentions.length > 0 ||
+                    files.length > 0
+                "
+                :aria-activedescendant="
+                    suggestions.length > 0 ||
+                    mcpMentions.length > 0 ||
+                    agentMentions.length > 0 ||
+                    files.length > 0
+                        ? `composer-opt-${selected}`
+                        : undefined
+                "
                 :placeholder="
                     busy
                         ? t('web.composer.placeholder_busy')
