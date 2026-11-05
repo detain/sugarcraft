@@ -84,12 +84,12 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><td>Toast</td><td>actionAt(int $col, int $row, string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): ?Action</td><td>Which Action covers a frame position (first match in queue order)</td></tr>
 <tr><td>Toast</td><td>nextExpiry(): ?float / secondsUntilNextExpiry(): ?float</td><td>Absolute epoch / seconds of the soonest live expiry (null when none)</td></tr>
 <tr><td>Toast</td><td>withAccessibleText(bool $on = true) / accessibleText(): bool</td><td>Opt-in plain-text severity word + progress percentages beside the colour/glyph channel</td></tr>
-<tr><td>ToastType</td><td>Error, Warning, Info, Success</td><td>Toast type constants</td></tr>
+<tr><td>ToastType</td><td>Error, Warning, Info, Success</td><td>PHP enum cases — toast severity types</td></tr>
 <tr><td>ToastType</td><td>label() / icon(SymbolSet) / nerdIcon() / unicodeIcon() / asciiPrefix() / color()</td><td>Translated label via Lang::t() (i18n-aware); per-set glyphs and the default ANSI colour</td></tr>
 <tr><td>Position</td><td>xOffset(int $alertWidth, int $viewportWidth): int / yOffset(int $alertHeight, int $frameHeight, int $stackedBefore = 0): int</td><td>Placement maths — xOffset can go negative when the box outgrows the viewport (view() clamps to 0)</td></tr>
-<tr><td>Position</td><td>TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight, MiddleLeft, MiddleCenter, MiddleRight</td><td>9 screen positions</td></tr>
-<tr><td>Overflow</td><td>DropOldest, DropNewest, Enqueue</td><td>Overflow strategy when maxConcurrent is exceeded</td></tr>
-<tr><td>SymbolSet</td><td>NerdFont, Unicode, Ascii</td><td>Symbol set for alert icons</td></tr>
+<tr><td>Position</td><td>TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight, MiddleLeft, MiddleCenter, MiddleRight</td><td>PHP enum cases — the 9 screen positions</td></tr>
+<tr><td>Overflow</td><td>DropOldest, DropNewest, Enqueue</td><td>PHP enum cases — strategy when maxConcurrent is exceeded</td></tr>
+<tr><td>SymbolSet</td><td>NerdFont, Unicode, Ascii</td><td>PHP enum cases — symbol set for alert icons</td></tr>
 <tr><td>Lang</td><td>t(key, params)</td><td>Translate a string: 'dismiss', 'count', 'type.*'</td></tr>
 </table>
     <p>Per-alert render size is bounded too: <code>Toast::MAX_MESSAGE_CELLS</code> truncates over-long messages with a visible marker and <code>Toast::MAX_ACTIONS_PER_ALERT</code> folds surplus buttons into a &quot;[+N more]&quot; row — the full text and action list still ride the Alert into history.</p>
