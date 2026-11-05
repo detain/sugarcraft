@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-datepicker",
-    "description": "Interactive date picker component for terminal UIs. Supports month/year navigation with min/max selection constraints, single and range selection via a TEA-ready model wrapper, keyboard navigation with a visible cursor, i18n month/day names, and customizable styling. Design antecedent: EthanEFung/bubble-datepicker, implemented natively in PHP.",
+    "description": "Interactive month-grid date picker for terminal UIs. Supports month/year navigation with min/max selection constraints, single and range selection via a model wrapper implementing the MVC-style Model-Update-View (TEA) loop, keyboard navigation with a visible cursor, i18n month/day names, and customizable styling. Design antecedent: EthanEFung/bubble-datepicker, implemented natively in PHP.",
     "type": "library",
     "license": "MIT",
     "keywords": [

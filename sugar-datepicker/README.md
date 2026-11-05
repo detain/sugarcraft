@@ -27,7 +27,7 @@ sugar-datepicker — an interactive date picker component for terminal UIs, for 
   and Enter silently refuses a selection outside it (the receiver comes back
   unchanged); the cursor can still rest on out-of-bounds days, which the grid
   renders dimmed
-- **TEA integration** — a `Model` wrapper implementing the sugar-core
+- **Model–Update–View (TEA) integration** — a `Model` wrapper implementing the sugar-core
   `Model` contract (`init()`/`update(Msg)`/`view()`), recording picker events
   into an optional `EventStore`
 - **Today highlight** — show the reference "today" distinctly; `withoutToday()`
@@ -178,10 +178,10 @@ days selectable), so the rendered width is never below the natural grid.
 
 Seven style setters accept bare SGR digit strings (e.g. `'7'`, `'1;31'`,
 `'4;35'`) up to `SGR_MAX_LEN` (32 characters); escape sequences, dangling
-delimiters and the extended-colour introducers `38`/`48` are rejected with an
-`InvalidArgumentException`. Note the introducer `58` (underline-colour) is NOT
+delimiters and the extended-color introducers `38`/`48` are rejected with an
+`InvalidArgumentException`. Note the introducer `58` (underline-color) is NOT
 rejected — it decodes as unrelated attributes, so avoid it. Only part of the
-SGR space decodes: attributes `1,2,3,4,5,6,7,9` and colours `30-37`/`40-47`/
+SGR space decodes: attributes `1,2,3,4,5,6,7,9` and colors `30-37`/`40-47`/
 `90-97`; other well-formed codes (`0`, `21`-`29`, `39`, `49`, `53`) are
 silently dropped, so `WithTodayStyle('39')` suppresses the today marker rather
 than resetting its style:
@@ -254,7 +254,7 @@ set.
 
 - **[sugar-cellbuffer](https://github.com/sugarcraft/sugar-cellbuffer)** — month grid
   rendered as a 7-column × N-row `Buffer`; the day cells are laid out by
-  `DatePicker`, and `Buffer::toAnsi()` serialises them to canonical ANSI SGR output.
+  `DatePicker`, and `Buffer::toAnsi()` serializes them to canonical ANSI SGR output.
 - **[sugar-core](https://github.com/sugarcraft/sugar-core)** — `Util\Width` is the
   canonical display-width oracle (the picker delegates its cell placement
   widths to it); `I18n\Lang` powers the translations above.
