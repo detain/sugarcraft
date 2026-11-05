@@ -325,8 +325,15 @@ if ($cmd === 'milestone') {
 
 if ($cmd === 'export') {
     $format = $positional[1] ?? null;
+    // Same law as the push duration door: a non-numeric count is refused, not
+    // silently coerced to 0 (which the clamp would then round up to one day).
+    $daysRaw = $positional[2] ?? null;
+    if ($daysRaw !== null && !ctype_digit($daysRaw)) {
+        fwrite(STDERR, Lang::t('cli.invalid_days', ['value' => Sanitize::untrusted($daysRaw)]) . "\n");
+        exit(1);
+    }
     // Clamp to a sane ceiling so a huge $days can't walk a century of empty days.
-    $days = isset($positional[2]) ? Store::clampRangeDays((int)$positional[2]) : 7;
+    $days = $daysRaw === null ? 7 : Store::clampRangeDays((int)$daysRaw);
 
     if ($format === null || !in_array($format, ['csv', 'json', 'ics'], true)) {
         fwrite(STDERR, Lang::t('cli.export_invalid_format') . "\n");
@@ -361,8 +368,15 @@ if ($cmd === 'export') {
 }
 
 if ($cmd === 'gaps') {
+    // Same law as the push duration door: a non-numeric count is refused, not
+    // silently coerced to 0 (which the clamp would then round up to one day).
+    $daysRaw = $positional[1] ?? null;
+    if ($daysRaw !== null && !ctype_digit($daysRaw)) {
+        fwrite(STDERR, Lang::t('cli.invalid_days', ['value' => Sanitize::untrusted($daysRaw)]) . "\n");
+        exit(1);
+    }
     // Clamp to a sane ceiling so a huge $days can't walk a century of empty days.
-    $days = isset($positional[1]) ? Store::clampRangeDays((int)$positional[1]) : 7;
+    $days = $daysRaw === null ? 7 : Store::clampRangeDays((int)$daysRaw);
 
     $endDay = new \DateTimeImmutable('today');
     $fromDay = $endDay->modify('-' . ($days - 1) . ' days');

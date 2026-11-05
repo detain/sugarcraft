@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} correspondeu a .sugartrackignore — ignorado",
     'cli.push_ignored_wholesale' => 'push: {file} ignorado por um padrão TOTAL em {ignore_file} ({patterns} padrões) — corresponde a qualquer nome de arquivo, então o projeto "{project}" não registra NADA; exclua ou restrinja esse arquivo',
     'cli.push_invalid_duration' => "push: a duração deve ser um inteiro não negativo de segundos, recebido \"{value}\"",
+    'cli.invalid_days' => "os dias devem ser um número inteiro, recebido \"{value}\"",
     'cli.backend_invalid' => "backend inválido (use file ou sqlite)",
     'cli.backend_unavailable' => "backend sqlite indisponível: a extensão PHP sqlite3 não está carregada",
     'cli.storage_error' => "candy-codetime: erro de armazenamento: {message}",

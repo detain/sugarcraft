@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} entsprach .sugartrackignore — übersprungen",
     'cli.push_ignored_wholesale' => 'push: {file} durch ein GESAMT-Muster in {ignore_file} übersprungen ({patterns} Muster) — passt auf jeden Dateinamen, das Projekt "{project}" zeichnet NICHTS auf; diese Datei löschen oder einschränken',
     'cli.push_invalid_duration' => "push: die Dauer muss eine nicht negative Ganzzahl in Sekunden sein, erhalten: \"{value}\"",
+    'cli.invalid_days' => "die Anzahl der Tage muss eine ganze Zahl sein, erhalten: \"{value}\"",
     'cli.backend_invalid' => "ungültiges Backend (file oder sqlite verwenden)",
     'cli.backend_unavailable' => "sqlite-Backend nicht verfügbar: die PHP-Erweiterung sqlite3 ist nicht geladen",
     'cli.storage_error' => "candy-codetime: Speicherfehler: {message}",

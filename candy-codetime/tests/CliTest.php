@@ -492,4 +492,21 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('backup', $res['stderr']);
         $this->assertStringNotContainsString(chr(27), $res['stderr'], 'backup failure lines must not carry raw ESC bytes');
     }
+
+    public function testANonNumericDaysCountIsRefusedNotCoerced(): void
+    {
+        // (int) "banana" used to be 0, which the clamp rounded up to one
+        // silent day; the push duration door's law must cover [days] too.
+        $export = $this->runCli(['export', 'json', 'banana']);
+        $this->assertSame(1, $export['exit'], $export['stdout'] . $export['stderr']);
+        $this->assertStringContainsString('whole number', $export['stderr']);
+        $this->assertStringContainsString('banana', $export['stderr']);
+        $this->assertSame('', $export['stdout'], 'a refused count must export nothing');
+
+        $gaps = $this->runCli(['gaps', 'banana']);
+        $this->assertSame(1, $gaps['exit'], $gaps['stdout'] . $gaps['stderr']);
+        $this->assertStringContainsString('whole number', $gaps['stderr']);
+        $this->assertStringContainsString('banana', $gaps['stderr']);
+        $this->assertSame('', $gaps['stdout'], 'a refused count must print no report');
+    }
 }

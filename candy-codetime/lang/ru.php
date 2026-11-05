@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} совпал с .sugartrackignore — пропущено",
     'cli.push_ignored_wholesale' => 'push: {file} пропущен из-за ШАБЛОНА-ВСЕПОДРЯД в {ignore_file} ({patterns} шаблонов) — совпадает с любым именем файла, проект "{project}" ничего не записывает; удалите этот файл или сузьте его',
     'cli.push_invalid_duration' => "push: длительность — целое неотрицательное число секунд, получено \"{value}\"",
+    'cli.invalid_days' => "количество дней — целое число, получено \"{value}\"",
     'cli.backend_invalid' => "недопустимый backend (используйте file или sqlite)",
     'cli.backend_unavailable' => "backend sqlite недоступен: расширение PHP sqlite3 не загружено",
     'cli.storage_error' => "candy-codetime: ошибка хранилища: {message}",

@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} 이 .sugartrackignore 와 일치하여 건너뛰었습니다",
     'cli.push_ignored_wholesale' => 'push: {ignore_file}의 전체 일치 패턴({patterns}개)으로 {file} 건너뜀 — 모든 파일 이름과 일치하므로 "{project}" 프로젝트는 아무것도 기록되지 않습니다. 파일을 삭제하거나 좁히십시오',
     'cli.push_invalid_duration' => "push: 지속 시간은 초 단위의 음이 아닌 정수여야 합니다. 입력값: \"{value}\"",
+    'cli.invalid_days' => "일수는 정수여야 합니다. 입력값: \"{value}\"",
     'cli.backend_invalid' => "잘못된 백엔드 (file 또는 sqlite 사용)",
     'cli.backend_unavailable' => "sqlite 백엔드를 사용할 수 없습니다: PHP 확장 sqlite3 이 로드되지 않았습니다",
     'cli.storage_error' => "candy-codetime: 저장소 오류: {message}",

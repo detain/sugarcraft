@@ -16,6 +16,7 @@ return [
     'cli.push_ignored' => "push: {file} odpovídá .sugartrackignore — přeskočeno",
     'cli.push_ignored_wholesale' => 'push: {file} přeskočen ZCELA OBUJNÝM vzorem v {ignore_file} ({patterns} vzorů) — odpovídá každému názvu souboru, projekt "{project}" tedy nezaznamenává NIC; soubor smažte nebo zúžte',
     'cli.push_invalid_duration' => "push: doba trvání musí být nezáporné celé číslo v sekundách, obdrženo \"{value}\"",
+    'cli.invalid_days' => "počet dní musí být celé číslo, obdrženo \"{value}\"",
     'cli.backend_invalid' => "neplatný backend (použijte file nebo sqlite)",
     'cli.backend_unavailable' => "backend sqlite není dostupný: rozšíření PHP sqlite3 není načteno",
     'cli.storage_error' => "candy-codetime: chyba úložiště: {message}",
