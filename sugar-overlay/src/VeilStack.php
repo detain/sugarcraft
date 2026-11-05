@@ -164,6 +164,11 @@ final class VeilStack implements \Countable
     /**
      * Return veils sorted by z-index ascending.
      *
+     * Ties keep INSERTION order: usort has been STABLE since PHP 8.0, so
+     * equal-z veils stay in the order add() received them. Both composite
+     * passes paint in sorted order (later on top), so the LAST-ADDED tied
+     * veil wins any shared cell. Programs may rely on this tie-break.
+     *
      * @return list<Veil>
      */
     public function sorted(): array

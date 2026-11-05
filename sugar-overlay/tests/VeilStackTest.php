@@ -487,4 +487,36 @@ final class VeilStackTest extends TestCase
             'per-veil withUntrustedContent() strips the forgery before stacking — no phantom zone'
         );
     }
+
+    /**
+     * Equal-z ties sort stably into insertion order (PHP >= 8.0 usort is
+     * stable), and composite() paints in sorted order — the LAST-ADDED
+     * tied layer wins the shared cell. Both insertion orders are checked,
+     * so the winner is proven to follow order, not content.
+     */
+    public function testEqualZTiesPaintInInsertionOrder(): void
+    {
+        $bg = str_repeat('.', 10) . "\n" . str_repeat('.', 10);
+
+        $alpha = Veil::new()->withContent('A')->withZIndex(7);
+        $beta  = Veil::new()->withContent('B')->withZIndex(7);
+
+        $result = VeilStack::new()->add($alpha)->add($beta)
+            ->composite($bg, Position::TOP, Position::LEFT);
+        $this->assertSame(
+            'B',
+            \mb_substr(Veil::new()->splitLines($result)[0], 0, 1),
+            'the tied layer added last paints over the one added first',
+        );
+        $this->assertStringNotContainsString('A', $result, 'the earlier tied glyph is overwritten');
+
+        $swapped = VeilStack::new()->add($beta)->add($alpha)
+            ->composite($bg, Position::TOP, Position::LEFT);
+        $this->assertSame(
+            'A',
+            \mb_substr(Veil::new()->splitLines($swapped)[0], 0, 1),
+            'reversing insertion order reverses the winner',
+        );
+        $this->assertStringNotContainsString('B', $swapped);
+    }
 }

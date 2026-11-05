@@ -285,7 +285,9 @@ return `null` only for an empty stack.)
 `VeilStack` is an immutable ordered collection of veils. Each veil paints
 its own `withContent()` foreground onto the accumulated canvas in
 z-index order; a veil with **no content** is a backdrop-only layer (its
-`withBackdrop()` dims whatever is beneath it).
+`withBackdrop()` dims whatever is beneath it). Layers whose z-index ties
+keep insertion order — `sorted()` relies on PHP's stable `usort` — so the
+last-added tied layer paints last and lands on top.
 
 ```php
 <?php
