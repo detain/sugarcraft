@@ -60,7 +60,7 @@ final class Renderer
 
     /**
      * Test/host seam pinning whether the minefield may paint colour,
-     * independent of the ambient environment (M12 hermeticity): null consults
+     * independent of the ambient environment (hermeticity): null consults
      * the fleet authority {@see ColorProfile}, true/false forces the answer.
      * The suite arms TRUE from tests/bootstrap.php so the goldens and every
      * colour-substring pin see the same bytes on any runner, while
@@ -96,7 +96,7 @@ final class Renderer
         $b = $g->board;
         $boardBuf = Buffer::new($b->width, $b->height);
 
-        // M12: the board's colours ride CellBuffer styles, which know nothing
+        // The board's colours ride CellBuffer styles, which know nothing
         // about capability — gate them here on the fleet authority's answer
         // (or the test seam). NO_COLOR/CLICOLOR=0/TERM=dumb strip the fg/bg
         // (no-color.org asks for colour OFF, decorations may stay); a capable
@@ -135,8 +135,8 @@ final class Renderer
         // ship translated in all 16 locales, and every locale's lines fit
         // an 80-column terminal — FooterWidthGuardTest enforces that budget
         // across the whole set so a translation can never silently overflow
-        // it again (the M16 finding: fr sat at 78-79 BEFORE this indent).
-        // M13: the rules line leads the footer so a first-timer reads the
+        // it again (the French lines sat at 78-79 before this indent).
+        // The rules line leads the footer so a first-timer reads the
         // win condition before the key legend — TeachToPlayTest pins that
         // this copy reaches every frame via this call site.
         $help = implode("\n" . $indent, [
@@ -145,7 +145,7 @@ final class Renderer
             Lang::t('ui.help_board'),
             Lang::t('ui.help_session'),
         ]);
-        // M05 toast: save/load/restart outcomes (and the boot resume hint)
+        // Toast: save/load/restart outcomes (and the boot resume hint)
         // ride their own line ABOVE the status, so a load that lands on a
         // lost board still shows the boom/cleared banner underneath it.
         $toast = $g->notice === null
@@ -163,7 +163,7 @@ final class Renderer
      * Mark::zone("cell:$row:$col", $glyph) so Scanner::hit() can map
      * mouse coordinates back to a cell.
      *
-     * $canColor=false (M12: NO_COLOR / CLICOLOR=0 / TERM=dumb) drops the
+     * $canColor=false (NO_COLOR / CLICOLOR=0 / TERM=dumb) drops the
      * fg/bg to the buffer default while keeping the ATTR_* decorations —
      * bold/reverse are not colour.
      */
@@ -302,7 +302,7 @@ final class Renderer
     {
         $b = $g->board;
         if ($b->exploded || $b->isWon()) {
-            // M06: the verdict line carries the frozen final time — the
+            // The verdict line carries the frozen final time — the
             // clock stops at the transition frame, so elapsedSeconds is the
             // result — and a preset win that beats the stored best wears a
             // NEW BEST badge. A board with no frozen time (a hand-built or

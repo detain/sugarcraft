@@ -8,7 +8,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Locale parity guard for the audit M2 finding: the 15 non-en locales once
+ * Locale parity guard: the 15 non-en locales once
  * shipped only the two board.* keys while the six custom.* keys silently
  * fell back to English. en.php is the source of truth — every locale must
  * carry exactly its key set.
@@ -63,7 +63,7 @@ final class LocaleParityTest extends TestCase
     }
 
     /**
-     * Roster-count arm (review R1 §3): the data provider above can only
+     * Roster-count arm: the data provider above can only
      * compare files that exist — deleting a whole locale would silently
      * shrink the shipped set to 15 and every leg would stay green. The
      * shipped count is pinned HERE so a removed (or added) locale file goes

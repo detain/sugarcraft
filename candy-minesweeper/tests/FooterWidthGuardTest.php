@@ -14,7 +14,7 @@ use SugarCraft\Minesweeper\Renderer;
 use SugarCraft\Core\Util\Width;
 
 /**
- * M16 (lib-reviews-1102): the frame's footer promised "each line stays under
+ * The frame's footer promised "each line stays under
  * 80 cells" while the French help lines measured 78-79 BEFORE the two-cell
  * indent — a claim no test checked. This guard renders the frame in every
  * shipped locale and fails loudly on any line that would wrap on an 80-column

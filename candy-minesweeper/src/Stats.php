@@ -34,7 +34,7 @@ final class Stats
      * Fold one finished game into the tally for its preset bucket.
      *
      * The three per-difficulty fields (games/wins/best) are addressed by a
-     * name prefix, so all four presets share a single mutate() path (M10) —
+     * name prefix, so all four presets share a single mutate() path —
      * the previous per-case duplication had twelve untouched-field copies to
      * drift. Fields for the other three presets ride get_object_vars carry.
      */

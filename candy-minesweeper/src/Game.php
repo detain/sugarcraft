@@ -158,7 +158,7 @@ final class Game implements Model
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
-        // M04: Ctrl/Alt-modified characters are never gameplay commands. The
+        // Ctrl/Alt-modified characters are never gameplay commands. The
         // decoder reports Ctrl+R as Char with rune 'r', so without this gate
         // the browser's reload chord silently hard-restarts the board,
         // Ctrl+S/Ctrl+L collide with the save/load keys, and Ctrl+H/I/J/K
@@ -341,7 +341,7 @@ final class Game implements Model
     }
 
     /**
-     * Attach a one-shot toast to the current state (M05). The renderer shows
+     * Attach a one-shot toast to the current state. The renderer shows
      * it as its own line and {@see afterAction()} clears it on the next
      * action; the game state itself is untouched either way.
      */

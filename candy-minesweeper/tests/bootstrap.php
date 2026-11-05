@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 // Suite bootstrap: autoload + colour hermeticity.
 //
-// M12 routed the board's colours through the fleet colour authority, which
+// The board's colours route through the fleet colour authority, which
 // answers from the ambient environment (TERM / NO_COLOR / CI markers). The
 // goldens and the colour-substring pins compare 24-bit SGR bytes, so the
 // suite pins the capable answer ONCE here: every run sees identical bytes

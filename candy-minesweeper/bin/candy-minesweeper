@@ -4,7 +4,7 @@
 declare(strict_types=1);
 
 (static function () {
-    // Guard shape ported from candy-code/candy-top (DST-1, measured on PHP
+    // Guard shape ported from candy-code/candy-top (measured on PHP
     // 8.3.6): when `php candy-minesweeper.phar` runs, THIS file is the archive's
     // stub and the process is NOT inside the archive — Phar::running()
     // answers '' there, and a bare '/x.phar/entry' path fails
@@ -151,7 +151,7 @@ function cliVisible(string $raw): string
 }
 
 /**
- * M08: positional board sizes are PLAIN digit strings or nothing — the old
+ * Positional board sizes are PLAIN digit strings or nothing — the old
  * (int) cast happily booted '10x10', '9.5' and '10abc' as 10/9/10. Null means
  * the slot was absent (the caller applies its default).
  *
@@ -226,7 +226,7 @@ if ($statsPath !== null && is_file($statsPath)) {
     try {
         $stats = DifficultyStats::load($statsPath)?->stats();
     } catch (\Throwable $e) {
-        // m1 (review R1): the message interpolates FILE CONTENT (the refused
+        // The message interpolates FILE CONTENT (the refused
         // persistence version), so the stats file's own bytes must not reach
         // the terminal raw — same scrub the argv echoes use: control bytes
         // become '?' before the line is written to stderr.
@@ -234,7 +234,7 @@ if ($statsPath !== null && is_file($statsPath)) {
     }
 }
 
-// M05 boot announcement: if a savegame sits in the slot, say so on frame
+// Boot announcement: if a savegame sits in the slot, say so on frame
 // one — the player no longer has to remember that L exists.
 $slot = Game::savePath();
 $resumeNotice = ($slot !== null && is_file($slot)) ? Lang::t('ui.resume') : null;
