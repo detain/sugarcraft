@@ -117,8 +117,9 @@ $promise = AsyncOps::retry(
 <tr><td>CancellationSource</td><td>token(): CancellationToken</td><td>Returns the read-only token for this source</td></tr>
 <tr><td>CancellationSource</td><td>cancel(): void</td><td>Request cancellation. Idempotent.</td></tr>
 <tr><td>CancellationSource</td><td>isCancelled(): bool</td><td>Returns true if cancel() has been called</td></tr>
+<tr><td>CancellationSource</td><td>onCancel(callable): Subscription</td><td>Registers a cleanup callback on the source's own token (CancellationSource implements Cancellable); same fire-once, handle-un-registers semantics as CancellationToken::onCancel().</td></tr>
 <tr><td>CancellationToken</td><td>isCancelled(): bool</td><td>Returns true if the source has been cancelled</td></tr>
-<tr><td>CancellationToken</td><td>onCancel(callable): void</td><td>Register a callback; fires immediately if already cancelled</td></tr>
+<tr><td>CancellationToken</td><td>onCancel(callable): Subscription</td><td>Register a callback; fires immediately if already cancelled (the handle is then born spent). Returns a Subscription — unsubscribe() before the token fires un-registers the callback, which is the leak guard when a token outlives the operation that registered on it.</td></tr>
 <tr><td>Subscriptions</td><td>compose(Subscription ...): self</td><td>Combine multiple subscriptions into one atomic handle</td></tr>
 <tr><td>Subscriptions</td><td>unsubscribe(): void</td><td>Dispose all underlying subscriptions</td></tr>
 <tr><td>Subscriptions</td><td>isActive(): bool</td><td>Returns false after unsubscribe()</td></tr>
