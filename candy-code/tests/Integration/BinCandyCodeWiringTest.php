@@ -987,6 +987,33 @@ final class BinCandyCodeWiringTest extends TestCase
     }
 
     /**
+     * CC-QA-3: the boot capability probe reads the tty in 8 KiB slurps long
+     * before raw mode is installed, so a keystroke typed during the heavy boot
+     * rode home inside a reply buffer and died with the cooked-mode echo. The
+     * launcher hands the preserved surplus to the pump's own decoder before
+     * run(), so it replays from the pending queue instead. The order is the
+     * load-bearing fact: the take must sit AFTER the Program construction
+     * (whose Bootstrap::app() runs the probe) and BEFORE run() drains.
+     */
+    public function testEarlyStrayKeystrokesAreReplayedBeforeRun(): void
+    {
+        $code = (string) file_get_contents(\dirname(__DIR__, 2) . '/bin/candy-code');
+
+        $construct = strpos($code, '$program = new Program(Bootstrap::app(');
+        $replay = strpos($code, 'Detect::takeStrayInputBytes()');
+        $run = strpos($code, '$program->run();');
+
+        self::assertIsInt($construct);
+        self::assertIsInt($replay, 'the stray-input replay seam is gone from the entrypoint');
+        self::assertIsInt($run);
+        self::assertGreaterThan($construct, $replay, 'the replay must read the store the boot probe fills');
+        self::assertLessThan($run, $replay, 'the replay must land before run() drains the queue');
+
+        self::assertSame(1, substr_count($code, 'takeStrayInputBytes'), 'exactly one take — a second reader could double-replay');
+        self::assertSame(1, substr_count($code, '$program->send('), 'the pending queue must keep exactly one feeder');
+    }
+
+    /**
      * A dead working directory (deleted out from under the process) must
      * produce a clear error naming --root, not a TypeError from whichever
      * `string`-typed constructor `false` happened to reach first.

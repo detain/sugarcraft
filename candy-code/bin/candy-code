@@ -271,6 +271,7 @@ ini_set('display_errors', 'stderr');
     exit(2);
 })();
 
+use SugarCraft\Core\InputReader;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Code\Chat;
@@ -286,6 +287,7 @@ use SugarCraft\Code\Diagnostics\TuiErrorLog;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\SessionRelaunch;
+use SugarCraft\Image\Detect;
 
 // Pre-rename compatibility (plan_rename.md 8A): fold SUGARCRUSH_*/SUGAR_CRUSH_* // @rename-keep
 // env vars into CANDY_CODE_* and move ~/.sugar-crush (and the other legacy   // @rename-keep
@@ -664,6 +666,15 @@ if ($tuiErrorLog !== null) {
 // redirect above and Program — and the hosted Chat submits them from init().
 $program = new Program(Bootstrap::app($args->root, tuiErrorLog: $tuiErrorLog, initialPrompt: $args->initialPrompt), Chat::programOptions());
 $program->armTerminalRelease();
+// CC-QA-3: the image-capability probe during Bootstrap::app() above slurps the
+// tty with 8 KiB reads, and anything typed while its queries were in flight —
+// before raw mode and before the first paint — rode home inside a reply buffer
+// and died there. sugar-image keeps those non-reply bytes; decode them with the
+// same reader the pump will use and hand them to send(), whose pending queue
+// run() drains before it watches stdin, so the early keystrokes replay in order.
+foreach ((new InputReader())->parse(Detect::takeStrayInputBytes()) as $earlyMsg) {
+    $program->send($earlyMsg);
+}
 $finalModel = $program->run();
 
 // E705: the Kitty keyboard push rides App::init() as a Cmd; the pop cannot.
