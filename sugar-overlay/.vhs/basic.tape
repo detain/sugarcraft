@@ -1,4 +1,5 @@
-# Render with: vhs sugar-overlay/.vhs/basic.tape
+# Render with: cd sugar-overlay && vhs .vhs/basic.tape
+#   (CI renders from the lib dir; the typed command below resolves examples/ there)
 Output .vhs/basic.gif
 
 Set FontSize 14
