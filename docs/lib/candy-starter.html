@@ -58,7 +58,7 @@
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer create-project sugarcraft/candy-starter my-app --stability=dev</code></pre>
     <p>Packagist carries only <code>dev-master</code> today, so <code>create-project</code> needs <code>--stability=dev</code> (or pinning the package as <code>sugarcraft/candy-starter:"@dev"</code>) until a <code>candy-starter/*</code> release tag exists.</p>
-    <p>This package is <code>type: project</code> — <code>composer create-project</code> is the only install path. <code>composer require</code> refuses a project-type package, and would merge the skeleton's <code>App\</code> autoloader map into your host app anyway.</p>
+    <p>This package is <code>type: project</code> — <code>composer create-project</code> is the only install verb that works the way you mean it to. Composer does not refuse a <code>composer require</code> of a project-type package — it is simply the wrong tool: the skeleton would land in <code>vendor/</code> and merge its <code>App\</code> autoload map into your host app.</p>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell">composer create-project sugarcraft/candy-starter my-app --stability=dev

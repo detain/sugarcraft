@@ -42,7 +42,7 @@ final class SiteBodyTruthTest extends TestCase
         $this->assertStringNotContainsString(
             'composer require sugarcraft/candy-starter',
             $body,
-            '"composer require" is refused for project-type packages — the site must not teach it',
+            'Composer does not refuse a project-type require — the site must still teach create-project: a require drops the skeleton into vendor/ and merges its App\\ autoload map',
         );
         $this->assertStringContainsString(
             'stopSignal()',
