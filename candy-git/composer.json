@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-git",
-    "description": "Terminal Git client \u2014 port of jesseduffield/lazygit on the SugarCraft stack.",
+    "description": "Terminal Git client \u2014 a TUI for staging, branching, log, diff, stash, worktrees and rebase on the SugarCraft stack.",
     "type": "library",
     "license": "MIT",
     "keywords": [
