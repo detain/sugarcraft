@@ -31,6 +31,7 @@ candy-code/tests/LSP/LspConnectionTest.php	12.978	17
 candy-code/tests/Support/ChildWallClockBudgetTest.php	12.819	11
 candy-code/tests/Host/WebTwoHostCommandsTest.php	12.739	22
 candy-code/tests/Commands/CustomCommandShellAndFileFormsTest.php	12.542	42
+candy-code/tests/Backend/CommandBackendChildAbandonTest.php	12.401	8
 candy-code/tests/Agents/AgentManagerTest.php	12.301	147
 candy-code/tests/Support/DescriptorInheritanceGuardTest.php	11.961	15
 candy-code/tests/Session/CheckpointTest.php	11.926	14
