@@ -37,9 +37,13 @@ composer require sugarcraft/candy-tetris
 ```
 
 A rolling development phar is published on GitHub Releases under
-`candy-tetris/dev` as `candy-tetris.phar` (with `.sha256` and `.sig`
-sidecars); stable cuts ride the same release pipeline on `candy-tetris/v*`
-tags. The launcher detects that it is running from inside a phar and loads
+`candy-tetris/dev` as `candy-tetris.phar` together with the
+`candy-tetris.phar.sha256`, `candy-tetris.phar.commit` and
+`candy-tetris.phar.pins.json` companions every build carries; a run with
+the sugarcraft signing key configured adds the three signing assets
+(`candy-tetris.phar.sha256.sig`, `candy-tetris.phar.minisig`,
+`candy-tetris.phar.minisig.sha256`). Stable cuts ride the same release
+pipeline on `candy-tetris/v*` tags. The launcher detects that it is running from inside a phar and loads
 the autoloader bundled in the archive, so the downloaded file needs nothing
 else installed.
 
@@ -47,6 +51,11 @@ Requirements: `php-cli` 8.3+ with `ext-intl` and `ext-mbstring`. Both are
 hard-required transitively by [sugar-core](https://packagist.org/packages/sugarcraft/sugar-core),
 whose cell-width math segments through ICU — on a bare php-cli machine
 `composer install` is the step that refuses, naming sugar-core.
+
+The interface is localized: sixteen catalogues ship (ar, cs, de, en, es,
+fr, it, ja, ko, nl, pl, pt, pt-br, ru, tr, zh-cn) and the launcher picks
+one from `$LC_ALL` / `$LANG` at start-up; an unset or unknown environment
+falls back to English.
 
 `--version` short-circuits wherever it appears in the argv — even alongside a
 bogus flag — and exits 0. Any *other* unrecognised flag is refused with a usage
@@ -154,8 +163,10 @@ every launch rather than pretending the visit was remembered.
 
 ### Game over
 
-The game ends when the next piece has no room to spawn, the stack reaches the
-ceiling, or garbage crushes a piece into the board — the banner painted across
+The game ends when the next piece has no room to spawn or the stack reaches
+the ceiling; in versus mode, incoming garbage can additionally crush a piece
+into the board or push locked content off the top (solo play never receives
+garbage rows — they arrive only from the opponent). The banner painted across
 the playfield names the reason and the final score. Press **r** to
 start a completely new game — the score does not carry over (it embeds the
 level, so a restarted board falls at level-0 gravity again). **q** quits.
@@ -230,8 +241,8 @@ awards are applied in `src/Game.php` (`softDrop()` / `hardDrop()`) through
 
 ### T-Spin scoring
 
-When the **last successful input before a T piece locks was a rotation** (moves
-and drops clear that flag; gravity's fall neither sets nor clears it, so a
+When the **last successful input before a T piece locks was a rotation** (moves,
+drops and holds clear that flag; gravity's fall neither sets nor clears it, so a
 rotate-then-settle spin is legal) and the guideline **three-corner rule** holds
 — at least three of the four cells diagonal to the T's centre are filled, walls
 and floor counting as filled — it scores as a **T-Spin**:
@@ -270,7 +281,7 @@ a clear: no-clear spins can never start a B2B run.
 
 ### Combo bonus
 
-Consecutive line clears (regardless of type) build a **combo counter** — each combo step adds `combo × 10 × (level + 1)` bonus points. The counter resets to 0 on any clean (zero-line) piece placement.
+Consecutive line clears (regardless of type) build a **combo counter** — each combo step adds `combo × 10 × (level + 1)` bonus points. The counter resets to 0 on any clean (zero-line) piece placement. The first clear of a chain already scores at combo 1; the sidebar's combo row is gated to appear only from combo 2 up.
 
 ### Perfect clear bonus
 
@@ -283,7 +294,11 @@ When all lines are cleared at once and the board becomes completely empty, an ad
   deterministic replay tool) pin the sequence.
 - **Kick table**: `src/Rotation/SrsKickTable.php` transcribes the published
   SRS offsets verbatim (spec `+y` = up); the only sign conversion to
-  board coordinates lives at `Piece::rotationsWithKicks`.
+  board coordinates lives at `Piece::rotationsWithKicks`. Two tables ship,
+  JLSTZ and I; the O answers the JLSTZ list through the match's default
+  arm, which is behaviourally silent — every O rotation state is identical,
+  so the first candidate `(0, 0)` always fits and no kick is ever applied,
+  matching the spec's no-kick O.
 - **Scoring**: `src/Scoring/TSpin.php` and `src/Score.php` are pure
   value logic, independent of the renderer.
 - **Modes**: VS is a second Model (`VsGame`) wrapping two `Game` instances —

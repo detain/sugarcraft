@@ -22,8 +22,9 @@ use SugarCraft\Tetris\Tetromino;
  * as filled (walls/floor), as the guideline requires.
  *
  * A T-Spin is active when a T piece is locked AND:
- *   - $lastActionWasRotation is true (a slide, soft drop, or hard drop
- *     into the slot is NOT a spin; gravity steps never clear the flag), AND
+ *   - $lastActionWasRotation is true (a slide, soft drop, hard drop or
+ *     hold into the slot is NOT a spin; gravity steps never clear the
+ *     flag), AND
  *   - at least 3 of the 4 centre diagonals are filled → full T-Spin; or
  *     exactly 2 are filled and at least one of them is a FRONT corner
  *     (the nub side for the current rotation) → T-Spin Mini.
