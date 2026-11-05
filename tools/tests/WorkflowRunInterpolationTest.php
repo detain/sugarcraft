@@ -9,9 +9,10 @@ require_once __DIR__ . '/_bootstrap.php';
 use PHPUnit\Framework\TestCase;
 
 /**
- * Guards C-SES-9.d: the three phar-release workflows must move every
- * tag/input value across into the shell through step `env:` bindings, never
- * by pasting `${{ ... }}` into the text of a `run:` script.
+ * Guards C-SES-9.d: the three phar-release workflows (plus, since reviews-1103
+ * G6-P, the two publisher workflows phar-dev.yml and sync-sugarcraft.yml)
+ * must move every tag/input value across into the shell through step `env:`
+ * bindings, never by pasting `${{ ... }}` into the text of a `run:` script.
  *
  * WHY THIS FILE EXISTS AT ALL. GitHub evaluates `${{ }}` textually BEFORE
  * bash ever sees the script: `${{ github.event.inputs.tag }}` and
@@ -66,6 +67,21 @@ final class WorkflowRunInterpolationTest extends TestCase
         '.github/workflows/release-phar.yml',
         '.github/workflows/release-app-phar.yml',
         '.github/workflows/release-candy-top-phar.yml',
+        '.github/workflows/phar-dev.yml',
+        '.github/workflows/sync-sugarcraft.yml',
+    ];
+
+    /**
+     * The three stable release pipelines whose binding arms are spelled per
+     * file (EVENT/TAG/APP); the publisher pair joined the scope in G6-P and
+     * carries its own binding set below.
+     *
+     * @var list<string>
+     */
+    private const TRIO_WORKFLOWS = [
+        '.github/workflows/release-phar.yml',
+        '.github/workflows/release-app-phar.yml',
+        '.github/workflows/release-candy-top-phar.yml',
     ];
 
     /**
@@ -79,6 +95,8 @@ final class WorkflowRunInterpolationTest extends TestCase
         '.github/workflows/release-phar.yml' => 10,
         '.github/workflows/release-app-phar.yml' => 8,
         '.github/workflows/release-candy-top-phar.yml' => 8,
+        '.github/workflows/phar-dev.yml' => 10,
+        '.github/workflows/sync-sugarcraft.yml' => 5,
     ];
 
     /**
@@ -232,7 +250,7 @@ final class WorkflowRunInterpolationTest extends TestCase
         ];
         $appStepOutput = '/APP:\s*\$\{\{\s*steps\.scope\.outputs\.app\s*\}\}/';
 
-        foreach (self::WORKFLOWS as $rel) {
+        foreach (self::TRIO_WORKFLOWS as $rel) {
             $raw = self::read($rel);
             self::assertMatchesRegularExpression($eventName, $raw, $rel . ': no EVENT env binding — the dispatch branch would read nothing');
             self::assertMatchesRegularExpression($inputTag, $raw, $rel . ': no TAG env binding for the dispatch input — the headline arm must be satisfied by relocation, not deletion');
@@ -246,12 +264,43 @@ final class WorkflowRunInterpolationTest extends TestCase
         // And the scripts must actually reference the variables (quoted) —
         // the bindings alone would leave the steps reading nothing.
         $tagRef = 'git checkout -B phar-build "$TAG"';
-        foreach (self::WORKFLOWS as $rel) {
+        foreach (self::TRIO_WORKFLOWS as $rel) {
             $joined = \implode("\n", self::runBodies($rel));
             self::assertStringContainsString($tagRef, $joined, $rel . ': no run body reads the TAG env binding where the checkout leg used to interpolate the step output');
         }
         $appJoined = \implode("\n", self::runBodies('.github/workflows/release-app-phar.yml'));
         self::assertStringContainsString('app="$APP"', $appJoined, 'release-app-phar.yml: no run body reads the APP env binding');
         self::assertStringContainsString('tag="$TAG"', $appJoined, 'release-app-phar.yml: no run body reads the TAG env binding in the fleet steps');
+
+        // G6-P: the publisher pair moved under this guard when phar-dev and
+        // sync gained their gate jobs. Same law, their own variable set: the
+        // dispatch input there is the boolean `all` (phar-dev only), the CI
+        // poller's commit arrives as TARGET_SHA, and the affected-range legs
+        // read github.event.before/sha through env - never pasted inline.
+        $publisherBindings = [
+            '.github/workflows/phar-dev.yml' => [
+                '/EVENT_NAME:\s*\$\{\{\s*github\.event_name\s*\}\}/',
+                '/DISPATCH_ALL:\s*\$\{\{\s*github\.event\.inputs\.all\s*\}\}/',
+                '/TARGET_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/',
+            ],
+            '.github/workflows/sync-sugarcraft.yml' => [
+                '/TARGET_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/',
+                '/BEFORE_SHA:\s*\$\{\{\s*github\.event\.before\s*\}\}/',
+                '/HEAD_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/',
+            ],
+        ];
+        foreach ($publisherBindings as $rel => $patterns) {
+            $raw = self::read($rel);
+            foreach ($patterns as $pattern) {
+                self::assertMatchesRegularExpression($pattern, $raw, $rel . ': missing env binding ' . $pattern);
+            }
+            $joined = \implode("\n", self::runBodies($rel));
+            self::assertStringContainsString('$TARGET_SHA', $joined, $rel . ': no run body reads the TARGET_SHA env binding');
+        }
+        $devJoined = \implode("\n", self::runBodies('.github/workflows/phar-dev.yml'));
+        self::assertStringContainsString('${DISPATCH_ALL', $devJoined, 'phar-dev.yml: no run body reads the DISPATCH_ALL env binding');
+        self::assertStringContainsString('"$EVENT_NAME"', $devJoined, 'phar-dev.yml: no run body reads the EVENT_NAME env binding');
+        $syncJoined = \implode("\n", self::runBodies('.github/workflows/sync-sugarcraft.yml'));
+        self::assertStringContainsString('${BEFORE_SHA', $syncJoined, 'sync-sugarcraft.yml: no run body reads the BEFORE_SHA env binding');
     }
 }

@@ -1,0 +1,222 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Tools\Tests;
+
+require_once __DIR__ . '/_bootstrap.php';
+
+use PHPUnit\Framework\TestCase;
+
+/**
+ * Release-posture guard (reviews-1103 G6-P, owner rulings OD-5/6/7/8 + the
+ * OD-14 pinning half).
+ *
+ * WHY: every publisher in this repo used to fire from untested bytes - the
+ * stable phar trio built HEAD of a tag with no CI verdict, sync split-pushed
+ * every master push before CI had spoken, phar-dev published rolling dev
+ * prereleases the same way, and the Packagist/GHCR route consumed a bundle
+ * that CI never built. The ruled posture is: nothing publishes unless CI is
+ * green at the exact commit, tags must be ancestors of master, releases are
+ * built at the tagged SHA with an explicit target, and sugarcraft/* siblings
+ * pin to those tested bytes instead of floating dev-master. This guard is
+ * the fail-closed tripwire that the workflow files keep saying so - text
+ * scans by design (the tools-guards job runs a bare phpunit phar with no
+ * composer autoload and no YAML library).
+ */
+final class ReleasePublishPostureTest extends TestCase
+{
+    private const TRIO = [
+        'release-phar.yml',
+        'release-app-phar.yml',
+        'release-candy-top-phar.yml',
+    ];
+
+    private function read(string $rel): string
+    {
+        $path = \dirname(__DIR__, 2) . '/' . $rel;
+        self::assertFileExists($path);
+
+        return (string) file_get_contents($path);
+    }
+
+    private function workflow(string $name): string
+    {
+        return $this->read('.github/workflows/' . $name);
+    }
+
+    /**
+     * Extract one job's block: from its two-space `  <job>:` key to the next
+     * two-space key. Fail-closed: the job header must exist exactly once.
+     */
+    private function jobSection(string $text, string $job): string
+    {
+        $header = "\n  " . $job . ":\n";
+        self::assertSame(1, substr_count($text, $header), "job header for '$job'");
+        $start = strpos($text, $header) + strlen($header);
+        $rest = substr($text, $start);
+        if (!preg_match('/^  [A-Za-z0-9_.-]+:/m', $rest, $m, PREG_OFFSET_CAPTURE)) {
+            // The final job in a workflow has no following top-level key.
+            return $rest;
+        }
+
+        return substr($rest, 0, (int) $m[0][1]);
+    }
+
+    private function assertOnce(string $needle, string $haystack, string $where): void
+    {
+        self::assertSame(1, substr_count($haystack, $needle), "$where: '$needle'");
+    }
+
+    public function testTheReleaseTrioGatesOnTagAncestryAndCiGreen(): void
+    {
+        foreach (self::TRIO as $file) {
+            $gate = $this->jobSection($this->workflow($file), 'gate');
+            self::assertStringContainsString(
+                'git merge-base --is-ancestor "$tag_sha" origin/master',
+                $gate,
+                "$file gate carries the OD-5 ancestry door"
+            );
+            self::assertSame(
+                1,
+                substr_count($gate, 'gh run list --workflow CI --branch master --commit'),
+                "$file gate polls CI at the tagged SHA exactly once (OD-7)"
+            );
+        }
+    }
+
+    public function testTheReleaseJobsSerializePerAppAndNeedTheGate(): void
+    {
+        $appOutputs = [
+            'release-phar.yml' => 'app: candy-code',
+            'release-candy-top-phar.yml' => 'app: candy-top',
+            'release-app-phar.yml' => 'app: ${{ steps.scope.outputs.app }}',
+        ];
+        foreach ($appOutputs as $file => $binding) {
+            $text = $this->workflow($file);
+            $slug = basename($file, '.yml');
+            $gate = $this->jobSection($text, 'gate');
+            self::assertStringContainsString($binding, $gate, "$file gate publishes an app identity");
+            self::assertStringContainsString(
+                'group: ' . $slug . '-${{ github.ref_name }}',
+                $text,
+                "$file workflow-level same-ref belt lock"
+            );
+            $release = $this->jobSection($text, 'release');
+            self::assertStringContainsString('    needs: gate', $release, "$file release needs gate");
+            self::assertStringContainsString(
+                'group: ' . $slug . '-${{ needs.gate.outputs.app }}',
+                $release,
+                "$file per-app OD-5 lock on the release job"
+            );
+            self::assertStringNotContainsString(
+                '--target master',
+                $release,
+                "$file release never targets a branch name"
+            );
+        }
+    }
+
+    public function testEveryStableReleaseBuildsAtTheTaggedCommit(): void
+    {
+        foreach (self::TRIO as $file) {
+            $release = $this->jobSection($this->workflow($file), 'release');
+            self::assertStringContainsString(
+                'ref: ${{ needs.gate.outputs.tag_sha }}',
+                $release,
+                "$file OD-8 build-at-SHA checkout"
+            );
+            self::assertStringContainsString('--target "$TAG_SHA"', $release, "$file explicit OD-8 target");
+        }
+    }
+
+    public function testTheReleasePipelinePinsSiblingsBeforeInstallAndChecksAfter(): void
+    {
+        foreach (self::TRIO as $file) {
+            $text = $this->workflow($file);
+            $inject = strpos($text, 'php scripts/pin-siblings.php inject');
+            $install = strpos($text, 'composer install --no-dev');
+            $verify = strpos($text, 'php scripts/pin-siblings.php verify');
+            self::assertIsInt($inject, "$file carries the OD-14 inject step");
+            self::assertIsInt($install, "$file carries the install step");
+            self::assertIsInt($verify, "$file carries the OD-14 verify step");
+            self::assertLessThan($install, $inject, "$file injects pins before installing");
+            self::assertLessThan($verify, $install, "$file verifies after installing");
+        }
+    }
+
+    public function testTheStableReleasesShipProvenanceSidecars(): void
+    {
+        $assets = [
+            'release-phar.yml' => 'dist/candy-code.phar.commit dist/candy-code.phar.pins.json',
+            'release-app-phar.yml' => '"dist/$app.phar.commit" "dist/$app.phar.pins.json"',
+            'release-candy-top-phar.yml' => 'dist/candy-top.phar.commit dist/candy-top.phar.pins.json',
+        ];
+        foreach ($assets as $file => $row) {
+            $text = $this->workflow($file);
+            self::assertMatchesRegularExpression(
+                '/printf .*"\$TAG_SHA" > (?:dist\/[\w-]+|"dist\/\$app)\.phar\.commit/',
+                $text,
+                "$file stamps the build SHA into a .phar.commit sidecar"
+            );
+            self::assertStringContainsString($row, $text, "$file uploads the sidecars as release assets");
+        }
+    }
+
+    public function testTheDevChannelWaitsForCiAndPinsSiblings(): void
+    {
+        $text = $this->workflow('phar-dev.yml');
+        $gate = $this->jobSection($text, 'ci-gate');
+        self::assertStringContainsString(
+            'gh run list --workflow CI --branch master --commit "$TARGET_SHA"',
+            $gate,
+            'phar-dev polls CI at the pushed SHA (OD-7)'
+        );
+        $build = $this->jobSection($text, 'build');
+        self::assertStringContainsString('needs: [detect, ci-gate]', $build, 'phar-dev build needs the gate');
+        $inject = strpos($text, 'php scripts/pin-siblings.php inject "$APP" --root . --sha "$SHA"');
+        $install = strpos($text, 'composer install --no-dev');
+        $verify = strpos($text, 'php scripts/pin-siblings.php verify "$APP"');
+        self::assertIsInt($inject, 'dev builds pin siblings too');
+        self::assertLessThan($install, $inject, 'dev injects before install');
+        self::assertLessThan($verify, $install, 'dev verifies after install');
+        self::assertStringContainsString(
+            'assets=("dist/$app.phar" "dist/$app.phar.sha256" "dist/$app.phar.commit" "dist/$app.phar.pins.json")',
+            $text,
+            'the rolling channel publishes provenance sidecars (OD-8)'
+        );
+    }
+
+    public function testTheSyncPublishersWaitForCi(): void
+    {
+        $text = $this->workflow('sync-sugarcraft.yml');
+        $gate = $this->jobSection($text, 'ci-gate');
+        self::assertStringContainsString(
+            'gh run list --workflow CI --branch master --commit "$TARGET_SHA"',
+            $gate,
+            'sync gates on CI at the pushed commit (OD-7)'
+        );
+        self::assertSame(2, substr_count($text, 'needs: ci-gate'), 'both sync publishers wait (OD-6/7)');
+    }
+
+    public function testCiCarriesTheWebBundleLegThePublishersVouchFor(): void
+    {
+        $text = $this->workflow('ci.yml');
+        self::assertSame(0, strpos($text, "name: CI\n"), 'pollers query the workflow by this name');
+        $job = $this->jobSection($text, 'web-bundle');
+        self::assertStringContainsString('working-directory: candy-code-web', $job, 'bundle legs run in the web dir');
+        self::assertStringContainsString('actions/setup-node@', $job, 'node setup pinned');
+        self::assertStringContainsString('run: npm run build', $job, 'CI builds the bundle (OD-6)');
+        self::assertStringContainsString('git diff --exit-code -- dist/', $job, 'CI proves dist parity');
+    }
+
+    public function testEveryGatePollsInsideABoundedTimeout(): void
+    {
+        $pollers = array_merge(self::TRIO, ['phar-dev.yml', 'sync-sugarcraft.yml']);
+        foreach ($pollers as $file) {
+            $text = $this->workflow($file);
+            self::assertStringContainsString('timeout-minutes: 250', $text, "$file bounds the gate job");
+            self::assertSame(1, substr_count($text, 'for attempt in $(seq 1 240)'), "$file has one bounded poll (fail-closed)");
+        }
+    }
+}
