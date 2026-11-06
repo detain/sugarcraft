@@ -73,8 +73,12 @@ final class Counter implements Model
 - `sugarcraft/sugar-pty` `dev-master` (the spelling this lib's committed manifest uses) — the runtime's raw-mode/termios backend. sugar-core and
   sugar-pty hard-require each other (sugar-pty consumes core's primitives); CI injects the
   path-repo closure so the cycle resolves inside the monorepo, and standalone installs take
-  both from Packagist. `Util\Tty\Termios` therefore appears in a public constructor type
-  (`ProgramOptions::$termios`).
+  both from Packagist. The sugar-pty interface `SugarCraft\Pty\Contract\Termios` therefore
+  appears in a public constructor type: `ProgramOptions::$termios` is typed
+  `?Termios` (imported at `src/ProgramOptions.php:8`). There is no
+  `SugarCraft\Core\Util\Tty\Termios` — core's own `src/Util/Tty/` tree provides the
+  raw-mode backends (`PosixBackend`, `WindowsBackend`), and the Termios contract
+  lives on the sugar-pty side.
 - Windows 10 version 1809+ (for `ENABLE_VIRTUAL_TERMINAL_PROCESSING`)
 
 > Install note: sibling `sugarcraft/*` packages track `@dev` and the monorepo sets
