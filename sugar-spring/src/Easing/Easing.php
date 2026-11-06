@@ -46,6 +46,10 @@ enum Easing implements EasingFunction
      * anticipation legs) — that swing IS the effect. Mapping an eased value
      * onto discrete cells (indices, widths) requires your own clamp or
      * rounding gate; `round(ease($t) * 40)` can be a negative cell.
+     * Non-finite $t flows through unguarded here: NAN answers NAN from every
+     * case, ±INF survives the polynomial curves and flips to NAN inside the
+     * Elastic/Back trig — clamp upstream. Contrast CubicBezier::evaluate(),
+     * which refuses a non-finite t outright.
      *
      * @param float $t Normalized time, designed for [0.0, 1.0]
      * @return float Eased value (may exceed [0,1] for Elastic/Back curves due to intentional overshoot)

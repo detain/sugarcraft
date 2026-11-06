@@ -473,7 +473,12 @@ from the canonical Penner tables. Six of the sixteen cases exit `[0, 1]`
 somewhere, by
 design. If you map an eased value to cells (`(int) round($eased * $cols)`),
 clamp before indexing — a rubber-band curve is one frame away from a negative
-index.
+index. Non-finite `t` flows through `ease()` unguarded: `NAN` returns `NAN`
+from every case, `INF` survives the polynomial curves (answering `+INF` or
+`-INF` depending on the term signs) but flips to `NAN` inside the trig of
+every `Elastic*` and `Back*` case — clamp upstream. The solver-backed
+`CubicBezier::evaluate()` takes the opposite policy: it refuses a non-finite
+`t` outright, because a Newton iteration has nothing honest to answer with.
 
 Curves implement `SugarCraft\Spring\Easing\EasingFunction`, the extension
 seam: write your own `ease()` and pass it anywhere an easing function is
