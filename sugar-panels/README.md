@@ -371,6 +371,11 @@ content and titles as they enter a `Node`:
   `ESC` is the feature, `LF` is the line break, and `BEL` cannot be told apart
   from the terminator of a preceding OSC sequence — sweeping it would turn a
   terminated sequence into an unterminated one.
+- C1 controls (`U+0080`–`U+009F`) are removed. They are the 8-bit twins of the
+  spared vocabulary's introducers — xterm, VTE and kitty honour 8-bit CSI as
+  `ESC [`, 8-bit OSC as `ESC ]` and DCS as `ESC P` — so one smuggled C1
+  codepoint would reach the host's parser with full escape authority, and even
+  an inert C1 charges a column the painter never advances.
 - In a title, `LF` becomes a space: titles paint on one row of the border, and a
   newline there moves the cursor mid-frame.
 

@@ -52,6 +52,15 @@ use SugarCraft\Core\Util\Width;
  *   OSC string — deleting it would leave the sequence unterminated, and an
  *   unterminated OSC swallows the rest of the row, so a "harmless" beep byte
  *   removal quietly erases the text that followed it.
+ * - **C1 (U+0080-U+009F) is removed too.** It is not spared like its ASCII
+ *   relatives, because sparing it would spare the *commands* they introduce:
+ *   xterm, VTE and kitty honour 8-bit CSI (U+009B) exactly as `ESC [`, 8-bit
+ *   OSC (U+009D) as `ESC ]`, and DCS (U+0090) as `ESC P` — one smuggled
+ *   codepoint reaches the host's parser with full escape authority. Even an
+ *   C1 that no emulator honours charges a column the painter never advances,
+ *   so it lies about width. The core `Sanitize::untrusted()` helper strips C1
+ *   for the same reason; this sweep is the floor the README's trust boundary
+ *   mandates, so it must not be weaker than the helper it points at.
  *
  * This is a *boundary*, not a policy: an escape sequence the host put in the
  * content on purpose is still an escape sequence by the time it reaches the
@@ -63,15 +72,19 @@ use SugarCraft\Core\Util\Width;
 final class Sanitize
 {
     /**
-     * C0 control bytes with no meaning inside a cell, plus DEL.
+     * C0 control bytes with no meaning inside a cell, plus DEL, plus the C1
+     * block (U+0080-U+009F).
      *
      * Excluded: ESC (\x1b, opens the styling sequences the library renders),
      * LF (\x0a, the content line separator) and BEL (\x07, the OSC terminator —
      * see the pin that an OSC closed by BEL still reaches the grid whole).
+     * The C1 codepoints are the 8-bit twins of that vocabulary's introducers —
+     * xterm, VTE and kitty honour U+009B as ESC [ — so they can never be
+     * spared; see their bullet in the class docblock.
      * CR and TAB are normalised by their own legs above, before this sweep
      * runs, so they never reach it.
      */
-    private const UNPAINTABLE_CONTROLS = '/[\x00-\x06\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f]/u';
+    private const UNPAINTABLE_CONTROLS = '/[\x00-\x06\x08\x0b\x0c\x0e-\x1a\x1c-\x1f\x7f\x{80}-\x{9f}]/u';
 
     private function __construct()
     {

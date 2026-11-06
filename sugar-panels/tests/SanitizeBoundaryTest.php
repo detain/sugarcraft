@@ -148,6 +148,27 @@ final class SanitizeBoundaryTest extends TestCase
         $this->assertSame('ok', Sanitize::painted($hostile));
     }
 
+    public function testC1ControlsAreRemovedBecauseTheyAreSmuggledEscapes(): void
+    {
+        // U+0080-U+009F are the 8-bit twins of C0: xterm, VTE and kitty honour
+        // U+009B exactly as ESC [ , so a surviving 8-bit CSI is a styling
+        // command smuggled past a "control-free" guarantee — and even an inert
+        // C1 charges a column it never paints. The core untrusted() helper
+        // strips C1, and the README makes this sweep the mandated floor, so it
+        // must strip C1 too.
+        $this->assertSame('31mred', Sanitize::painted("\u{9B}31mred"));
+        $this->assertSame('0;http://eviltail', Sanitize::painted("\u{9D}0;http://evil\u{9C}tail"));
+        $this->assertSame(3, Width::string(Sanitize::painted("\u{9B}red")));
+    }
+
+    public function testTheC1SweepStopsWhereTheLatinOneSupplementBegins(): void
+    {
+        // Control semantics, not block snobbery: U+00A0 is ordinary printable
+        // text and rides on; U+009F, the last C1 codepoint, does not.
+        $this->assertSame("\u{A0}ok", Sanitize::painted("\u{A0}ok"));
+        $this->assertSame('ok', Sanitize::painted("\u{9F}ok"));
+    }
+
     public function testABelTerminatedOscSurvivesIngestWhole(): void
     {
         // BEL is spared for a reason: it closes the OSC. Sweeping the beep byte
