@@ -294,8 +294,9 @@ its own state survives the prompt's immutable cloning.
   Ctrl+T (transpose), Ctrl+P/N (history), Ctrl+R/Ctrl+S (incremental
   search), Ctrl+K/U (kill to end/start). Ctrl+L reaches the mode as a
   no-op: screen clearing is the `Readline` pump's job. Escape arms the meta
-  prefix; a second Escape cancels it. The mode never aborts the prompt —
-  leave it detached if Escape-quit is what you want.
+  prefix; a second Escape cancels it. The mode never aborts the prompt on its
+  own — Escape only arms the prefix, while Ctrl+C still falls through to the
+  prompt's abort binding; leave it detached if Escape-quit is what you want.
 - **`ViMode`** is a modal state machine (starts in insert; Escape → normal;
   `v` → a visual mode that tracks motion only — selection is not yet rendered
   or operated on). Pending motions like `dd`/`yy`/`cc` are supported. In
