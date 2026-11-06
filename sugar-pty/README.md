@@ -663,9 +663,13 @@ Darwin build), the code falls back to the standard POSIX quartet:
 `posix_openpt + grantpt + unlockpt + ptsname_r`.
 
 On Linux, the quartet is used directly. The `openpty` symbol on Linux
-lives in `libutil.so.1` rather than `libc.so.6`; `Libc::libutil()` loads
-it as a fallback specifically for this symbol. Most Linux systems have
-both, so the Darwin-first path is not normally exercised on Linux.
+lives in `libutil.so.1` rather than `libc.so.6` — which is why
+`Libc::libutil()` exists — but no production path calls it: the
+Darwin-first `openpty()` attempt rides the plain `lib()` cdef and is
+exercised on macOS, while Linux opens through the quartet without ever
+touching the symbol. `Libc::libutil()` is a test-only helper (its only
+callers are in `tests/LibcExtendedTest.php`), so the Darwin-first path
+is not normally exercised on Linux.
 
 This behaviour is internal to `PosixPtySystem` and requires no consumer
 action — `$system->open()` abstracts it away completely.
