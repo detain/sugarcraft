@@ -73,6 +73,7 @@ The model delegates by calling `Task`:
 | `model` | Optional. Overrides the agent's model and the session's; a model the provider cannot serve runs on the session's model instead, and the result says so |
 | `resume` | Optional. A resume id from an earlier result: continues that run's conversation with `prompt` as the next instruction |
 | `background` | Optional. `true` runs it in the background; `false` keeps it in the foreground even when the preset says `background: true` |
+| `fork` | Optional. `true` starts the child with the tail of this conversation (the last 30 persisted messages, text turns only) inherited into its context — billed as input tokens to the child; the `prompt` must still stand on its own. Not available to background launches, and ignored when resuming |
 
 The model a run uses is the call's `model`, else the preset's (unless it says
 `inherit`), else the `subagentModel` setting, else the session's own model.

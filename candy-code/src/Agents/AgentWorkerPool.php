@@ -662,6 +662,10 @@ final class AgentWorkerPool
                 $agentRequest = new CompleteRequest(
                     model: $request->model,
                     messages: [
+                        // A fork's inherited rows ride ahead of the delegated
+                        // prompt; an empty list leaves the request literally
+                        // the pre-fork shape.
+                        ...$agent->inheritedContext,
                         ['role' => 'user', 'content' => $agent->task],
                     ],
                     tools: $agentTools,

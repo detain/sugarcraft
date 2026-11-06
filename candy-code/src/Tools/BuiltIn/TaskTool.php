@@ -9,6 +9,7 @@ use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\BlankReturnResume;
+use SugarCraft\Code\Agents\ConversationFork;
 use SugarCraft\Code\Agents\Effort;
 use SugarCraft\Code\Agents\Live\ActivityItem;
 use SugarCraft\Code\Agents\Live\SubAgentActivityBuffer;
@@ -880,6 +881,15 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                         . ' new message, so do NOT sleep or poll for it. false runs it in the foreground even when'
                         . ' the agent\'s preset says `background: true`; omit it to follow the preset',
                 ],
+                'fork' => [
+                    'type' => 'boolean',
+                    'description' => 'Optional. true starts the sub-agent with the tail of this conversation'
+                        . ' inherited into its context: the last ' . ConversationFork::MAX_INHERITED_MESSAGES
+                        . ' persisted messages (text turns only, no system prompt copy), billed as input tokens to'
+                        . ' the child. The `prompt` must still stand on its own — inheritance is a convenience, not'
+                        . ' a substitute for it. Not available to background launches, and ignored when resuming;'
+                        . ' omit it for the usual self-contained delegation',
+                ],
             ],
             'required' => ['description', 'prompt', 'agent'],
         ];
@@ -962,12 +972,26 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         $wantsBackground = is_bool($args['background'] ?? null)
             ? $args['background']
             : ($this->agentManager->get($agentName)?->background ?? false);
+        // The fork inherits the parent conversation (ConversationFork); it
+        // is launch-only by design — no preset sets it, because a preset
+        // silently widening every child's input bill is a cost trap, not
+        // a feature.
+        $wantsFork = is_bool($args['fork'] ?? null) && $args['fork'];
+        $forkNote = null;
         if ($wantsBackground) {
-            if ($this->backgroundSupervisor !== null && $this->engine !== null && $this->delegationDepth === 0) {
+            if ($wantsFork) {
+                // A background session is minted detached, in a fresh
+                // process with no store binding — it can carry nothing
+                // inherited. The foreground run it degrades to can.
+                $forkNote = '[fork inheritance was requested together with background, but a background'
+                    . ' session runs detached from this conversation and cannot inherit it, so the'
+                    . ' sub-agent was started in the foreground instead]';
+            } elseif ($this->backgroundSupervisor !== null && $this->engine !== null && $this->delegationDepth === 0) {
                 return $this->startInBackground($toolCallId, $agentName, $prompt, $args, $resumeId, $startedAt);
+            } else {
+                $backgroundNote = '[background was requested, but this launch cannot start background sessions,'
+                    . ' so the sub-agent ran in the foreground and this is its result]';
             }
-            $backgroundNote = '[background was requested, but this launch cannot start background sessions,'
-                . ' so the sub-agent ran in the foreground and this is its result]';
         }
 
         try {
@@ -986,6 +1010,21 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // Roadmap 4.1-1: the call's own model, when it names one.
         $requestedModel = is_string($args['model'] ?? null) ? trim($args['model']) : '';
 
+        if ($wantsFork) {
+            if ($suspension !== null) {
+                // A resumed delegation carries its own saved transcript —
+                // inheritance is deliberately not layered on top of it.
+            } elseif ($this->engine !== null) {
+                $inherited = ConversationFork::inheritedContext($this->agentManager, $this->engine->sessionId());
+                if ($inherited !== []) {
+                    $subAgent->inheritedContext = $inherited;
+                }
+            } elseif ($forkNote === null) {
+                $forkNote = '[fork inheritance was requested, but this launch has no session engine to read'
+                    . ' the parent conversation from, so the sub-agent ran without it]';
+            }
+        }
+
         if ($this->engine !== null) {
             $result = $this->runOnEngine(
                 $this->engine,
@@ -998,7 +1037,9 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $requestedModel,
             );
 
-            return $backgroundNote === null ? $result : $result->withContent($backgroundNote . "\n\n" . $result->content());
+            $lead = array_values(array_filter([$backgroundNote, $forkNote], static fn (?string $note): bool => $note !== null));
+
+            return $lead === [] ? $result : $result->withContent(implode("\n\n", $lead) . "\n\n" . $result->content());
         }
 
         $request = new CompleteRequest(
@@ -1056,9 +1097,15 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             ), $durationMs, $spent);
         }
 
+        $fenced = \SugarCraft\Code\Context\DelegatedOutputFence::wrap(trim($result->output));
+        // A note set on the way here says what the call asked for that could
+        // not happen, and belongs at the head of the result on this path too
+        // — no notes, byte-identical to the pre-fork return.
+        $lead = array_values(array_filter([$backgroundNote, $forkNote], static fn (?string $note): bool => $note !== null));
+
         return new ToolResult(
             toolCallId: $toolCallId,
-            content: \SugarCraft\Code\Context\DelegatedOutputFence::wrap(trim($result->output)),
+            content: $lead === [] ? $fenced : implode("\n\n", $lead) . "\n\n" . $fenced,
             isError: false,
             durationMs: $durationMs,
             usage: $spent,
@@ -1601,6 +1648,13 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
             )];
         } else {
             $messages = trim($systemPrompt) === '' ? [] : [new SystemMessage($systemPrompt)];
+            // A fork's inherited rows sit between the child's system turn
+            // and its own delegated prompt — the delegated task stays the
+            // child's last word, exactly as in a plain launch (empty list,
+            // byte-identical shape).
+            foreach ($subAgent->inheritedContext as $inheritedRow) {
+                $messages[] = $inheritedRow;
+            }
             $messages[] = new UserMessage($subAgent->task);
         }
         $resumes = $suspension === null ? 0 : $suspension['resumes'] + 1;
