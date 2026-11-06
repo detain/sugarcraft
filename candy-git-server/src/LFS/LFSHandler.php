@@ -254,9 +254,10 @@ final class LFSHandler
      * {@see PromisePool}), and the resolved payload is byte-identical to
      * what the sequential path returns, including per-object error
      * entries (400 malformed, 404 missing). A storage-backend exception
-     * on one object never sinks the batch: it is captured as that
-     * object's `error` entry (code 500) and the remaining objects still
-     * resolve.
+     * on one object never sinks the batch: it is captured as a GENERIC
+     * code-500 error entry for that object (the exception detail goes to
+     * the server error log, never onto the wire) and the remaining
+     * objects still resolve.
      *
      * What is and is not concurrent: per-object storage work
      * (`exists()`/`size()`) is synchronous file I/O that executes inside
@@ -320,19 +321,32 @@ final class LFSHandler
 
     /**
      * handleObject with per-object failure isolation: a storage-backend
-     * exception answers with a code-500 error entry for that object, never
-     * a thrown walk (the async batch is promise-resolved, the sync one must
-     * not throw either).
+     * exception answers with a GENERIC code-500 error entry for that
+     * object, never a thrown walk (the async batch is promise-resolved,
+     * the sync one must not throw either) and never the raw exception
+     * text — the detail goes to the server error log only, since a
+     * backend message can carry an absolute filesystem path.
      */
     private function safeObject(string $operation, string $oid, int $size): array
     {
         try {
             return $this->handleObject($operation, $oid, $size);
         } catch (\Throwable $e) {
+            // The exception detail (which may embed an absolute object
+            // directory) is a server-side diagnostic; it never crosses
+            // the wire, where clients get only the generic 500.
+            \error_log(\sprintf(
+                'candy-git-server: LFS %s object %s failed: %s: %s',
+                $operation,
+                $oid,
+                \get_class($e),
+                $e->getMessage(),
+            ));
+
             return [
                 'oid'   => $oid,
                 'size'  => $size,
-                'error' => ['code' => 500, 'message' => $e->getMessage()],
+                'error' => ['code' => 500, 'message' => 'Internal storage error'],
             ];
         }
     }

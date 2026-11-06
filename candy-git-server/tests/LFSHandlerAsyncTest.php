@@ -193,11 +193,90 @@ final class LFSHandlerAsyncTest extends TestCase
         // Failed object reported in place, not thrown at the batch level.
         $this->assertSame(\str_repeat('e', 64), $result['objects'][0]['oid']);
         $this->assertSame(500, $result['objects'][0]['error']['code']);
-        $this->assertSame('backend exploded', $result['objects'][0]['error']['message']);
+        $this->assertSame('Internal storage error', $result['objects'][0]['error']['message']);
+        // Step 20: the backend exception text — which in production can
+        // embed absolute filesystem paths — must not surface anywhere in
+        // the wire payload.
+        $this->assertStringNotContainsString('backend exploded', \json_encode($result));
 
         // The other object still processed and reported like sequential would.
         $this->assertSame(\str_repeat('f', 64), $result['objects'][1]['oid']);
         $this->assertSame(404, $result['objects'][1]['error']['code']);
+    }
+
+    /**
+     * Step 20: the storage-backend exception detail on BOTH batch paths
+     * (the sync walk and the async walk share safeObject as their one
+     * choke) is logged server-side — where a real failure's absolute
+     * directory is legitimate diagnostics — and the wire payload carries
+     * only the generic 500.
+     */
+    public function testStorageDetailIsLoggedServerSideAndNeverEchoedOnTheWire(): void
+    {
+        $repo = $this->createRepo();
+        $canary = 'Cannot create LFS directory: ' . $this->tmpDir . '/lfs/objects/c4';
+        $backend = new class($canary) implements LFSStorageBackendInterface {
+            public function __construct(private string $failureMessage)
+            {
+            }
+
+            public function exists(string $oid): bool
+            {
+                throw new \RuntimeException($this->failureMessage);
+            }
+
+            public function size(string $oid): int
+            {
+                return 0;
+            }
+
+            public function read(string $oid)
+            {
+                throw new \RuntimeException('unused');
+            }
+
+            public function write(string $oid, $stream): void
+            {
+            }
+
+            public function delete(string $oid): void
+            {
+            }
+
+            public function path(string $oid): ?string
+            {
+                return null;
+            }
+        };
+        $handler = new LFSHandler($repo, null, $this->tmpDir . '/lfs', $backend, 2, publicBaseUrl: '');
+
+        $oid = \str_repeat('a', 64);
+        $logFile = $this->tmpDir . '/error.log';
+        $previous = \ini_get('error_log');
+        \ini_set('error_log', $logFile);
+        try {
+            $sync = $handler->handleBatch([
+                'operation' => 'download',
+                'objects'   => [['oid' => $oid, 'size' => 1]],
+            ]);
+            $async = $this->awaitBatch($handler, [
+                'operation' => 'download',
+                'objects'   => [['oid' => $oid, 'size' => 1]],
+            ]);
+        } finally {
+            \ini_set('error_log', \is_string($previous) ? $previous : '');
+        }
+
+        foreach (['sync' => $sync, 'async' => $async] as $label => $result) {
+            $this->assertSame(500, $result['objects'][0]['error']['code'], $label);
+            $this->assertSame('Internal storage error', $result['objects'][0]['error']['message'], $label);
+            $this->assertStringNotContainsString($canary, \json_encode($result), $label);
+        }
+
+        $this->assertFileExists($logFile);
+        $logged = (string) \file_get_contents($logFile);
+        $this->assertSame(2, \substr_count($logged, $canary), 'both batch paths must log the detail');
+        $this->assertStringContainsString($oid, $logged);
     }
 
     // -------------------------------------------------------------------------
