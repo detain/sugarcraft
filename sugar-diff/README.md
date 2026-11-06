@@ -1,6 +1,6 @@
 # SugarDiff
 
-Unified-diff engine — LCS line diffing, context hunks, a GNU `diff -u` writer, and a line-number scanner. First-party (there is no 1:1 Go counterpart): the engine and the scanner were extracted from `candy-code`, whose `Tools\Concerns\BuildsUnifiedDiff` trait now delegates here. `candy-code`'s `Tui\DiffGutter` is a port of this scanner's region model and still keeps its own copy today — delegating it here is an open seam whose landing side is now published: `UnifiedScan::isHunkHeader()` and the `lines()` walk.
+Unified-diff engine — LCS line diffing, context hunks, a GNU `diff -u` writer, and a line-number scanner. First-party (there is no 1:1 Go counterpart): the engine and the scanner were extracted from `candy-code`, whose `Tools\Concerns\BuildsUnifiedDiff` trait now delegates here. `candy-code`'s `Tui\DiffGutter` delegates its scan half here (D1a fold landed): the gutter's numbering, file-header verdicts and hunk recognition ride `UnifiedScan::lines()`, `UnifiedScan::fileHeaders()` and `UnifiedScan::isHunkHeader()`; only the fixed-width gutter formatting stays app-side.
 
 ## Installation
 
@@ -72,7 +72,7 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 | Class | Purpose |
 |-------|---------|
 | `Diff` | `compute()` entry point; `lines`, `hunks`, `options`, `beforeCount`/`afterCount`, `beforeHasFinalNewline`/`afterHasFinalNewline`, `degraded`; `isEmpty()`, `addedLines()`, `removedLines()`, `unified($oldPath, ?$newPath = null)` (second argument names the new side only — the before side uses the first), `hunkText()` |
-| `DiffOptions` | `new()`; `withContextLines(int)` (negative clamps to 0; `DEFAULT_CONTEXT_LINES` = 3), `withMaxLcsCells(int)` (0 = every comparison falls back degraded; `DEFAULT_MAX_LCS_CELLS` = 250 000), `withIgnoreWhitespace(bool $ignore = true)`, `withIgnoreCase(bool $ignore = true)`, `withNoNewlineMarker(bool $on = true)`, `withDevNullOnEmptySide(bool $on = true)` |
+| `DiffOptions` | `new()`; `withContextLines(int)` (negative clamps to 0; `DEFAULT_CONTEXT_LINES` = 3), `withMaxLcsCells(int)` (0 = a middle with rows on both sides falls back degraded; a one-sided middle is linear work and stays exact; `DEFAULT_MAX_LCS_CELLS` = 250 000), `withIgnoreWhitespace(bool $ignore = true)`, `withIgnoreCase(bool $ignore = true)`, `withNoNewlineMarker(bool $on = true)`, `withDevNullOnEmptySide(bool $on = true)` |
 | `Hunk` | `header()`, `lines()`, `removedCount()`/`addedCount()` (`-`/`+` rows only), the `oldStart`/`oldLines`/`newStart`/`newLines` anchors |
 | `Line` / `LineKind` | One numbered row (verbatim text, side numbers, `marker()`, `toUnifiedRow()`); `eq`/`del`/`ins` vocabulary |
 | `Writer\UnifiedFormat` | `write()` / `hunksOnly()` statics behind `Diff::unified()` / `Diff::hunkText()`; `NO_NEWLINE_ROW` |

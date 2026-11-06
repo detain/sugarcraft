@@ -23,7 +23,7 @@ final class DocsTruthTest extends TestCase
     /** The shape the library NEVER emits: GNU and git both drop a `,1` count. */
     private const FALSE_ELISION_LITERAL = '@@ -1,1 +1,1 @@';
 
-    /** The overclaim the docs-fix era deleted (the gutter keeps its own copy). */
+    /** The overclaim the docs-fix era deleted (only the scan half unifies; the gutter view stays app-side). */
     private const FALSE_SHARED_CLAIM = 'shares one faithful implementation';
 
     /** M1: the Fidelity bullet's generalisation the scanner does not honour. */
@@ -64,12 +64,18 @@ final class DocsTruthTest extends TestCase
     public function test_the_docs_do_not_claim_one_shared_surface_implementation(): void
     {
         self::assertStringNotContainsString(self::FALSE_SHARED_CLAIM, self::readme());
-        // …and both docs disclose the gap (the gutter's own copy / the
-        // delegation seam) instead of papering over it.
+        // …and both docs now state the D1a fold as LANDED: the gutter
+        // delegates, so the old own-copy disclosure must be gone while
+        // delegation wording is present in every doc surface.
         foreach ([self::readme(), self::siteBody()] as $document) {
+            self::assertStringNotContainsString(
+                'keeps its own copy',
+                $document,
+                'the pre-fold own-copy disclosure must not survive the landed D1a fold',
+            );
             self::assertTrue(
-                stripos($document, 'seam') !== false || stripos($document, 'own copy') !== false,
-                'the DiffGutter delegation gap must stay disclosed in every doc surface',
+                stripos($document, 'delegat') !== false,
+                'the docs must state the DiffGutter delegation as landed',
             );
         }
     }

@@ -18,13 +18,11 @@ namespace SugarCraft\Diff\Reader;
  * passes the derived kind, so a row scanned from real text never reports
  * the default it does not mean.
  *
- * Mirrors the `[$old, $new, $isFileHeader]` tuples computed by
- * candy-code/src/Tui/DiffGutter.php `number()` — the gutter keeps its own
- * copy today and adds no kind; the landing side of that owed delegation is
- * published: {@see UnifiedScan::lines()} for the region model and
- * {@see UnifiedScan::isHunkHeader()} for the header predicate (D1a: the
- * consumer delegation rides the candy-code wave; the row kind is the
- * lib-side half of that seam).
+ * The `[$old, $new, $isFileHeader]` shape mirrors what candy-code's
+ * `Tui\DiffGutter.php` used to compute with its private `number()` — the
+ * D1a fold deleted that copy, so the gutter consumes {@see UnifiedScan::lines()}
+ * directly now; the row kind carries what the tuples never could (the
+ * gutter adds no kind of its own, it reads these).
  */
 final class ScannedLine
 {

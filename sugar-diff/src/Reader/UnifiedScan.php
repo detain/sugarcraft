@@ -8,12 +8,11 @@ namespace SugarCraft\Diff\Reader;
  * Walks an already-rendered unified diff and tells a viewer which line of
  * which file each row points at — the region/hunk model any renderer (or
  * patch tool) can use to number rows without owning the counting rules.
- * The candy-code gutter mirrors these rules today but keeps its own copy
- * ({@see ScannedLine}); delegating that copy to this scanner's published
- * doors — {@see self::lines()} for the region model and
- * {@see self::isHunkHeader()} for the header predicate — is the remaining
- * seam (D1a fold: the lib-side half is landed here, the consumer
- * delegation rides the candy-code wave).
+ * The candy-code gutter mirrors these rules and now delegates its scan
+ * half here ({@see ScannedLine}): numbering, file-header verdicts and
+ * hunk recognition ride {@see self::lines()} and
+ * {@see self::isHunkHeader()}; only the fixed-width gutter formatting
+ * stays app-side (D1a fold — landed on both sides).
  *
  * Counters come from each `@@ -a,b +c,d @@` header and advance the way
  * `diff -u` counts: context advances both sides, `-` advances old, `+`
@@ -65,9 +64,10 @@ namespace SugarCraft\Diff\Reader;
  * has no re-emit path, so a host that prints scanned text owns sanitising
  * its own channel.
  *
- * Mirrors candy-code/src/Tui/DiffGutter.php `number()` / `isFileHeader()` /
- * `numberable()` (which predate the count tracking above — see the
- * delegation seam note on {@see ScannedLine}).
+ * This walk is what candy-code's `Tui\DiffGutter.php` used to carry as
+ * `number()` / `isFileHeader()` / `numberable()` — the D1a fold deleted
+ * that private copy and points the gutter here instead (see the
+ * delegation note on {@see ScannedLine}).
  */
 final class UnifiedScan
 {
@@ -268,9 +268,8 @@ final class UnifiedScan
      * be numbered off the previous counters. The walk matches the same
      * pattern this method exposes, so a consumer that gates rows on this
      * predicate cannot drift from what `lines()` reports. candy-code's
-     * `Tui\DiffGutter` keeps its own copy today — delegating it here (and
-     * to {@see self::lines()}) is the D1a seam; the consumer leg rides the
-     * candy-code wave.
+     * `Tui\DiffGutter` delegates here — the D1a consumer leg is
+     * landed; the gutter's own pattern copy was deleted at the fold.
      */
     public static function isHunkHeader(string $row): bool
     {
