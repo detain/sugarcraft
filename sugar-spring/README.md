@@ -33,7 +33,7 @@ composer require sugarcraft/sugar-spring
 | Use physical units (tension/friction/mass) | `SpringConfig` |
 | Arcs, bouncing balls, particles | `Projectile` + `Vector` / `Point` |
 | CSS-compatible timing curves | `CubicBezier` |
-| Named Penner curves without control points | `Easing` enum |
+| Named easing curves without control points | `Easing` enum |
 | Honour reduced-motion | automatic for spring-driven types (see [Reduced motion](#reduced-motion)) |
 
 ## Spring
@@ -454,7 +454,11 @@ for ($f = 0; $f <= 60; $f++) {
 Honesty about the range: `ease()` assumes `t` in `[0, 1]` but does not
 enforce it (out-of-domain `t` extrapolates), and several curves intentionally
 leave `[0, 1]` in the *output* — `Elastic*` and `Back*` overshoot,
-`Bounce*` stays inside. Six of the sixteen cases exit `[0, 1]` somewhere, by
+`Bounce*` stays inside. One naming caveat: the shipped `BackIn`/`BackOut`/`BackInOut`
+are the sin-modulated family (`t³ ∓ sin` shaping), not Penner's classic
+`c1 = 1.70158` polynomial — the overshoot is real, but the dip shape differs
+from the canonical Penner tables. Six of the sixteen cases exit `[0, 1]`
+somewhere, by
 design. If you map an eased value to cells (`(int) round($eased * $cols)`),
 clamp before indexing — a rubber-band curve is one frame away from a negative
 index.
