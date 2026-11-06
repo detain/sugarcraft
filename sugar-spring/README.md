@@ -157,6 +157,13 @@ Snap-to-target is an accessible substitute only when the end state carries
 the information of the movement; where motion itself carries information,
 pin the spring to keep animating (override below).
 
+No terminal, desktop environment or accessibility tooling populates these
+variables on its own — they are opt-in conventions — so host apps are
+expected to expose their own reduce-motion toggle and gate it through
+`Probe::reducedMotion()` as the single read point; the fleet-wide hub for
+these variables is
+[docs/GETTING-STARTED.md § Accessibility & reduced motion](../docs/GETTING-STARTED.md#accessibility--reduced-motion).
+
 `Projectile`, the `Easing` curves and `CubicBezier` deliberately ignore the
 signal: they are pure functions of time with no target to snap *to*. Gate
 them app-side by short-circuiting normalized time to the end of the motion:
