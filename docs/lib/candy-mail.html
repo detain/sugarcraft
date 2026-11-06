@@ -60,6 +60,7 @@
     <pre class="code"><code class="language-php">use SugarCraft\Mail\{Email, ResendTransport, SmtpTransport};
 
 // Immutable: every with*() returns a new Email
+// Same headers as named arguments — new Email(from: ..., to: ..., subject: ..., body: ...) — read better when headers are optional
 $email = Email::new('noreply@example.com', 'user@example.com', 'Deployment complete', 'Your app was deployed successfully.')
     -&gt;withHtmlBody('&lt;p&gt;Your app was deployed &lt;strong&gt;successfully&lt;/strong&gt;.&lt;/p&gt;')
     -&gt;withCc('ops@example.com')
