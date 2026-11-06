@@ -91,6 +91,7 @@ $prompt-&gt;isSubmitted();                          // false (pending) on Esc/Ct
             <div class="feature"><strong>SelectionPrompt</strong><span>Arrow-key selection with filter-as-you-type and pagination.</span></div>
             <div class="feature"><strong>MultiSelectPrompt</strong><span>Multi-item selection with min/max enforcement, marker (◉/○), pagination.</span></div>
             <div class="feature"><strong>TextareaPrompt</strong><span>Multi-line editor with cursor movement, line count display.</span></div>
+            <div class="feature"><strong>Untrusted content</strong><span>Every emission choke sanitises displayed content (C0/DEL stripped, CR included) so choices and candidates cannot inject escape sequences; returned values keep raw bytes and are the host's to sanitise before printing.</span></div>
             
     </div>
 

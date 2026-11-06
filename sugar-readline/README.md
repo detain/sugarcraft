@@ -200,6 +200,22 @@ never forge a submit or replay editor commands. TAB survives on **both**
 surfaces, so a host relying on the strip to vet a secret or URL field must
 still reject tabs itself.
 
+### Untrusted content
+
+Prompt material routinely derives from data the program did not author —
+completion candidates from the filesystem, choices fetched over the
+network, git branch names, history left by an earlier session. Every
+emission choke runs that content through `Ansi::sanitize()`: C0 control
+bytes and DEL are stripped (CR included; TAB and LF survive because they
+have legitimate display roles), so hostile text cannot inject escape
+sequences into the frame a prompt paints.
+
+The guarantee is **display-only**. Values returned by `value()`,
+`selectedValue()` / `selectedValues()` and entries pushed into history
+keep their raw bytes — the library sanitises what *it* renders, not what
+it hands back. Printing a prompt's result somewhere else is the host's
+responsibility: sanitise or re-encode it before you emit it.
+
 ### Long lines and repaint
 
 `view()` returns one logical row; painting that row wider than the terminal
