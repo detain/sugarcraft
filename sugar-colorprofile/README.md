@@ -139,7 +139,9 @@ drift pin guards this genre yet):
 
 Steps 1-2 outrank step 3 **deliberately**: `FORCE_COLOR`/`CLICOLOR_FORCE` are an
 active "give me color anyway" override (the chalk/support-colors convention),
-while `NO_COLOR` is a passive preference. The asymmetry is pinned by tests.
+while `NO_COLOR` is a passive preference. The asymmetry is pinned by tests — and
+carries an accessibility cost, spelled out under the env-var precedence table
+below.
 Interpolated env values that ride in source strings are sanitized via
 `Env::sanitize()` — `TERM` and friends are attacker-influenced over SSH and a
 source string gets printed by downstream diagnostics.
@@ -177,8 +179,8 @@ The ladder's env legs, one table row per variable, in ladder order:
 
 | Env var | Ladder step | Effect |
 |---------|-------------|--------|
-| `CLICOLOR_FORCE=1` | 1 | force TrueColor past every env suppression leg, `NO_COLOR` included (step 1; the step-0 stream TTY gate still outranks it on stream-taking surfaces) |
-| `FORCE_COLOR` | 2 | non-empty level override honored by **all** surfaces through the chain (step 2): `true/yes/on/>=3` TrueColor, `2` Ansi256, `1` Ansi; falsy spellings (`0/false/off/no`) land on the `Ascii` floor — decoration kept, color reduced to the black/white pair. Outranks `NO_COLOR` by design |
+| `CLICOLOR_FORCE=1` | 1 | force TrueColor past every env suppression leg, `NO_COLOR` included (step 1; the step-0 stream TTY gate still outranks it on stream-taking surfaces). Silently re-enables color over `NO_COLOR` — see the a11y caveat under this table |
+| `FORCE_COLOR` | 2 | non-empty level override honored by **all** surfaces through the chain (step 2): numeric 3+ → TrueColor (as do `true`/`yes`/`on` in any case), `2` → Ansi256, `1` → Ansi; every other spelling (`0`/`false`/`off`/`no`/…) lands on the `Ascii` floor — decoration kept, color reduced to the black/white pair. Outranks `NO_COLOR` by design — see the a11y caveat under this table |
 | `NO_COLOR` | 3 | set to a **non-empty** value (`""` = unset — the supports-color convention, NO_COLOR's own text is presence-based) → no color via the `NoTTY` rung / `NoColor` capability — `stripAnsi()` drops **all** ANSI including decoration (`\x1b[1m`/`\x1b[4m` gone). Contrast: falsy `FORCE_COLOR` lands the `Ascii` floor (step 2) which keeps decoration and reduces color to the black/white pair. Want NO_COLOR to keep bold/underline? Pin `Palette::withProfile(ColorProfile::Ascii)` |
 | `CLICOLOR=0` | 4 | suppress color |
 | `TERM=dumb` | 5 | case-insensitive; suppresses color — outranks `COLORTERM` (dumb is a promise of minimal capabilities) |
@@ -189,6 +191,13 @@ The ladder's env legs, one table row per variable, in ladder order:
 | `TMUX` / `STY` | 10 | set + base TERM already begins `screen*`/`tmux*` → Ansi256 (step 10). Under tmux/screen the inner TERM *is* the base — no re-anchoring to the outer terminal happens |
 | `TERM` | 11-12 | ladder levels: `*-256color`/`xterm-kitty`/`xterm-ghostty` → Ansi256; `xterm*`/`screen*`/`tmux*` prefix → Ansi (all case-insensitive) |
 | `REDUCE_MOTION` / `PREFERS_REDUCED_MOTION` | — | non-empty and not `0/false/no/off` → `Probe::reducedMotion()` true (motion preference, outside the color ladder) |
+
+**Accessibility caveat for the force rows.** An exported `FORCE_COLOR`/
+`CLICOLOR_FORCE` — from a shell alias, a dotfile, or a CI image — silently
+re-enables color for users who set `NO_COLOR` as an accessibility signal,
+because steps 1-2 outrank step 3. Integrators honoring `NO_COLOR` as an
+accessibility contract should check `Probe::isNoColor()` explicitly before
+honoring any force override.
 
 `NoTTY` labels the zero-color rung; suppression vars land there even on a real
 TTY. The two names that surface it are not synonyms: `Probe::isNoColor()` names
