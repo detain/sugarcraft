@@ -146,14 +146,14 @@ these tables.
 | File              | Role                                                                                          |
 |-------------------|----------------------------------------------------------------------------------------------|
 | `ExplainView`     | Renders `EXPLAIN` output as a colour-coded ANSI tree. Uses strategy pattern — delegates to driver-specific `ExplainProviderInterface` based on `Flavor`. |
-| `Explain\ExplainProviderInterface` | Interface for driver-specific EXPLAIN parsing. Implement `explain(pdo, sql)` returning a list of explain rows. |
-| `Explain\SqliteExplainProvider` | `ExplainProviderInterface` via `EXPLAIN QUERY PLAN`. Parses tree prefixes (`|--`, `` `-- ``) for depth. |
+| `Explain\ExplainProviderInterface` | Interface for driver-specific EXPLAIN parsing. Implement `explain(string $sql): array` returning a list of explain rows; the connection handle is constructor-injected on the provider, never a parameter. |
+| `Explain\SqliteExplainProvider` | `ExplainProviderInterface` via `EXPLAIN QUERY PLAN`. Returns raw rows; tree-prefix (`|--`, `` `-- ``) depth parsing lives in `ExplainView::depthFromDetail()`. |
 | `Explain\MysqlExplainProvider` | `ExplainProviderInterface` via `EXPLAIN`. Returns `EXPLAIN` formatted rows with tag/parent/detail/indent. |
 | `Explain\PostgresExplainProvider` | `ExplainProviderInterface` via `EXPLAIN (ANALYZE, FORMAT JSON)`. Parses JSON structure for tree hierarchy. |
 | `Admin\AdminProviderInterface` | Flavor-agnostic admin-data port: `flavor()`, `fetchStatusVariables()`, `fetchServerVariables()`, `fetchProcesslist()`, `maxConnections()`, `statusVariablesTs()`, `wasReset()`, `refresh()`. Bridges to `ServerContextInterface` and `ServerContext`. |
 | `Admin\Providers\MysqlAdminProvider` | `AdminProviderInterface` via MySQL `SHOW GLOBAL STATUS/VARIABLES`, `SHOW ENGINE INNODB STATUS`, `SHOW REPLICA STATUS`, and `fetchProcesslist()` (prefers Performance Schema `performance_schema.threads` with graceful fallback to `SHOW FULL PROCESSLIST` on permission errors). |
 | `Admin\Providers\PostgresAdminProvider` | `AdminProviderInterface` via `pg_stat_database`, `pg_settings`, `pg_stat_activity`. Dashboard/connections implemented via `PostgresWidgetCatalog`. |
-| `Admin\Dashboard\PostgresWidgetCatalog` | Provides `io()` (10 widgets: tuple metrics) and `cache()` (4 widgets: Shared Buffers) panels. Includes `parseSharedBuffers()` for byte conversion. |
+| `Admin\Dashboard\PostgresWidgetCatalog` | Provides `io()` (10 widgets: tuple metrics) and `cache()` (4 widgets: Shared Buffers) panels. The Shared Buffers byte conversion `parseSharedBuffers()` is a private method of `Admin\Providers\PostgresAdminProvider`, not of this catalog. |
 | `ResultTable`    | Renders SQL result sets with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. `scrollLeft()`/`scrollRight()` builders. |
 | `Admin\ServerStatus\ServerStatusPage` | 2-column admin page: info/features/directories/SSL/replication/firewall panels on left, `SidebarGaugeSet` on right. Gauges poll ServerContext and optional Sampler for per-second rate calculations. `r` refresh, `q` quit. |
 | `Admin\ServerStatus\ServerInfoCard`    | Info card with host, socket, port, version, uptime (computed to running-since). |
@@ -321,7 +321,7 @@ print_r($view->toArray());   // JSON-serialisable structure
 Each detail line is classified by op type: `SEARCH` (cyan), `SCAN` (yellow), `USING` (green), `JOIN` (purple), `SUBQUERY` (pink), `COMPOUND` (orange).
 
 Available providers:
-- **`SqliteExplainProvider`** — `EXPLAIN QUERY PLAN`, parses tree prefixes (`|--`, `` `-- ``) for depth
+- **`SqliteExplainProvider`** — `EXPLAIN QUERY PLAN`; raw rows only — the tree-prefix (`|--`, `` `-- ``) depth parsing happens in `ExplainView::depthFromDetail()`
 - **`MysqlExplainProvider`** — `EXPLAIN` formatted rows with tag/parent/detail/indent
 - **`PostgresExplainProvider`** — `EXPLAIN (ANALYZE, FORMAT JSON)`, parses JSON structure for tree hierarchy
 
