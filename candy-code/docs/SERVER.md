@@ -929,7 +929,7 @@ path stays open by design: a spawn that predates the minted-answer protocol —
 an older daemon adopted across a server upgrade, whose index record carries no
 `answerPath` at all — falls back on both sides to the legacy fixed
 `<session>.answer` path (`BackgroundSessionRunner::withPermissionRelay` and
-`BackgroundSupervisor::channel`), whose name is derivable from the buffer path
+`BackgroundSupervisor::permissionAskChannel`), whose name is derivable from the buffer path
 and so readable in same-uid process arguments; that is the exposure the minted
 nonce removes, and every spawn from a minting server carries the nonce. Every asking
 carries a per-ask token, and an answer row settles only the asking whose
