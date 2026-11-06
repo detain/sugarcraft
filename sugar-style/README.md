@@ -16,7 +16,7 @@
 > The badges and demo GIFs above point at the **monorepo host** (`github.com/detain/sugarcraft`), where CI runs; the package itself is published standalone as `sugarcraft/sugar-style` on Packagist (its split-repo host is `github.com/sugarcraft/sugar-style`, the target of the composer/support/homepage links). Two hosts by design — the link kinds are not interchangeable.
 
 
-![demo](.vhs/dashboard.gif)
+![An animated multi-panel terminal dashboard built with the layout helpers](.vhs/dashboard.gif)
 
 **SugarStyle** — declarative styling and layout for terminal UIs. Requires PHP 8.3+.
 
@@ -883,35 +883,35 @@ measurement, not a live-pinned number).
 
 ### Border styles
 
-![border](.vhs/border.gif)
+![The same text block rendered under every built-in border style](.vhs/border.gif)
 
 ### Canvas (multi-layer compositor)
 
-![canvas](.vhs/canvas.gif)
+![A styled popover layer composited over a base layer](.vhs/canvas.gif)
 
 ### Layout dashboard
 
-![dashboard](.vhs/dashboard.gif)
+![A dashboard assembled from horizontal and vertical joins with placed panes](.vhs/dashboard.gif)
 
 ### Constraint-based layout dashboard
 
-![constraint-dashboard](.vhs/constraint-dashboard.gif)
+![Panels sized live by Length, Min, Max, and Percentage constraints](.vhs/constraint-dashboard.gif)
 
 ### List
 
-![list](.vhs/list.gif)
+![Three list flavours with default, custom, and nested enumerators](.vhs/list.gif)
 
 ### Style
 
-![style](.vhs/style.gif)
+![Foreground, background, bold, italic, underline, strikethrough, and adaptive colour on headline text](.vhs/style.gif)
 
 ### Table
 
-![table](.vhs/table.gif)
+![A rounded-border table with custom alignment and alternate-row shading](.vhs/table.gif)
 
 ### Tree
 
-![tree](.vhs/tree.gif)
+![A project structure rendered under three enumerator styles](.vhs/tree.gif)
 
 ## Credits & inspiration
 
