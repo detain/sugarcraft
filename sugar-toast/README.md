@@ -408,7 +408,7 @@ already over the new cap survive until the next push evicts them.
 | `->push(Alert $alert): self` | Enqueue a pre-built `Alert` (styled/actioned) |
 | `->cancelAlert(int $index): self` | Make a queued alert persistent (never auto-dismisses) |
 | `->removeAlert(string $id): self` | Retire the queued alert with this id, unrecorded (companion of id updates) |
-| `->extendAlert(int $index, float $additionalSeconds): self` | Push one alert's expiry later |
+| `->extendAlert(int $index, float $additionalSeconds): self` | Push one queued alert's expiry later |
 | `->extendAll(float $additionalSeconds): self` | Push every expiring alert's expiry later |
 | `->allowEscToClose(): bool` | Read the Escape-dismiss preference flag (host consumes it; the renderer handles no input) |
 | `->accessibleText(): bool` | Read the accessible-text preference flag |
