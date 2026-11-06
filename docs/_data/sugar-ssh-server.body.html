@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">Build TUIs anyone can <code>ssh user@host</code> to run. Leans on the host's OpenSSH daemon (ForceCommand) rather than re-implementing the SSH wire protocol. sshd handles auth, ciphers, host keys, fail2ban, audit logs.</p>
+<p class="lede" style="margin-top: 28px;">Build TUIs anyone can <code>ssh user@host</code> to run. Leans on the host's OpenSSH daemon (ForceCommand) rather than re-implementing the SSH wire protocol. sshd handles auth, ciphers, host keys, audit logs; blocking brute-forcers stays fail2ban's separate job.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-ssh-server</code></pre>
