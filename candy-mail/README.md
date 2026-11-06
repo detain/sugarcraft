@@ -189,8 +189,10 @@ export CANDY_MAIL_SMTP_CA_FILE=/path/ca.pem   # custom CA bundle for TLS verific
 export CANDY_MAIL_SMTP_TIMEOUT=30             # connect + per-response seconds budget, 1..3600 (default 30)
 export CANDY_MAIL_FROM=me@example.com         # Sender default — REQUIRED unless --from passed (never fabricated)
 export CANDY_MAIL_SIGNATURE="Sent with CandyMail"  # Appended to body
-# Pre-rename POP_* exports map onto the 11 known CANDY_MAIL_* names only;
-# off-roster POP_* vars stay silent (their mapped name is read by nothing). // @rename-keep
+# Pre-rename POP_* exports are imported onto CANDY_MAIL_* equivalents whole-prefix
+# (an already-set CANDY_MAIL_* wins); the 11 names this program reads also emit a
+# one-time deprecation warning — off-roster POP_* vars map to names nothing consumes,
+# staying inert and silent. // @rename-keep
 ```
 
 Error **messages** follow the standard `LC_ALL`/`LC_MESSAGES`/`LANG` environment (16
