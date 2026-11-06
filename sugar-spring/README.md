@@ -469,8 +469,8 @@ consumed.
 (Newton-Raphson root-finding with a bounded binary-search fallback). Construct
 via static factory methods: 26 named presets in total — the five CSS
 `transition-timing-function` keywords (`linear`, `ease`, `ease-in`,
-`ease-out`, `ease-in-out`, which subsume the arbitrary `cubic-bezier()`
-form) plus 21 Penner-style curves (Sine/Quad/Cubic/Quart/Quint/Expo/Circ in
+`ease-out`, `ease-in-out`, each expressible as `cubic-bezier()`, which
+generalizes them) plus 21 Penner-style curves (Sine/Quad/Cubic/Quart/Quint/Expo/Circ in
 In/Out/InOut) approximated with the
 [easings.net](https://easings.net/) table expressed as bezier control points.
 The Penner rows are named for the easing family, not for a CSS standard list:
