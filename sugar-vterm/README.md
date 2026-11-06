@@ -407,6 +407,19 @@ Attribute bitfield exposed as `Cell::ATTR_*` constants:
 `ATTR_BOLD`, `ATTR_ITALIC`, `ATTR_UNDERLINE`, `ATTR_INVERSE`,
 `ATTR_STRIKETHROUGH`.
 
+### Accessibility (blink and motion)
+
+SGR `5` and `6` (slow/rapid blink) fold onto ONE `Sgr::$blink` bit, and
+only the emulator tracks it — the renderer path's cell attribute model
+carries no blink bit at all. DECSCUSR (`CSI <n> SP q`) records the
+blinking-versus-steady cursor shapes verbatim in the `CursorShape`
+enum. Nothing in vterm animates; it only records. A host that lights a
+blink or a blinking cursor from that record should honour the user's
+no-blink preference and `prefers-reduced-motion` (WCAG 2.2.2 Pause,
+Stop, Hide): suppress the animation and render the steady form. The
+sugarcraft site's reduced-motion chrome covers page transitions only —
+the VHS demo GIF loops regardless of viewer settings.
+
 ## Background Color Erase (BCE)
 
 When BCE mode is enabled (`CSI ?12 h`), erase operations (`CSI K`, `CSI J`,
