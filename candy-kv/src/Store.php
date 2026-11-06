@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * CandyKv — a personal key/value store with multi-database support.
  *
- * Port of charmbracelet/skate providing:
+ * A native PHP project inspired by charmbracelet/skate (Go), providing:
  * - Set / get / delete operations on named keys
  * - Multiple independent databases (named with @dbname suffix or explicit db arg)
  * - Binary data storage (base64-encoded internally)

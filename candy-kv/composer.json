@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-kv",
-    "description": "PHP port of charmbracelet/skate \u2014 a personal key/value store with multi-database support, binary data, and glob/list filtering.",
+    "description": "Personal key/value store — a native PHP project inspired by charmbracelet/skate (Go), with multi-database support, binary-safe values, and glob/list filtering.",
     "type": "library",
     "license": "MIT",
     "keywords": [
