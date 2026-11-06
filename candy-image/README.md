@@ -33,6 +33,15 @@ Composer's `vendor/bin` is not on your `PATH` by default, so the bare
 entry point is `php bin/candy-image …` — the spelling the demo tape runs — and
 a rolling dev phar is published too (see Install).
 
+**Input formats.** Still rendering accepts PNG, JPEG, GIF (87a/89a) and
+*static* WebP, recognised by magic bytes; BMP and other formats a built GD
+decodes but the magic list does not name ride the `getimagesize()` fallback.
+Refused before any decode — exit 2 with a named reason, never a silent blank —
+are animated WebP (refused on its VP8X/ANMF structure, host-independently) and
+exotic containers (AVIF/HEIF-family `ftyp` brands, JPEG XL codestream, TIFF).
+`--animate` plays animated **GIF** only: the sugar-animation decoder rejects
+non-GIF bytes outright.
+
 ## Install
 
 **Requirements.** PHP 8.3+ and the `gd` extension (`ext-gd`). The `gd`
