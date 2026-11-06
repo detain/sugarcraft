@@ -67,7 +67,7 @@ the asset for verification.
 
 | Option                  | Meaning                                                          |
 |-------------------------|------------------------------------------------------------------|
-| `--format=F`            | Force a protocol: `auto` `sixel` `kitty` `iterm2` `half` (`halfblock`) `quarter` (`quarterblock`) `ascii` `ansi16` `ansi256` `truecolor` `symbols`. |
+| `--format=F`            | Force a protocol: `auto` `sixel` `kitty` `iterm2` `half` (`halfblock`) `quarter` (`quarterblock`) `ascii` `ansi16` `ansi256` `truecolor` `symbols` (`symbol`/`sym`). |
 | `--symbols=CLASS[+CLASS…]` | Select the symbol tier's glyph corpus with chafa's tag-selector grammar (`all`, `block`, `border`, `braille`, `ascii`, `latin`, `legacy`, `sextant`, `octant`, `technical`, `geometric`, `stipple`, `wedge`, `wide`, …; `+` adds, `-` removes, a leading sign is relative to the default corpus). Default: sugar-image's byte-frozen 676-glyph corpus; `wide` carries the opt-in double-width kana tier (rendered by the double-width wide-glyph engine). |
 | `--canvas=MODE`         | Colour canvas for the text tiers: `truecolor` (default) `ansi256` `ansi16` `fgbg`. A no-op on backends without the dial. |
 | `--work=N`              | Candidate-search effort: chafa's integer `1`–`9`, config float `(N−1)/8` — `1` is the cheapest render, `9` runs the exhaustive path. |
@@ -78,7 +78,7 @@ the asset for verification.
 | `--passthrough=V`       | tmux `allow-passthrough` transaction: `auto` (default) or `none`. |
 | `--polite`              | Accepted no-op for chafa muscle-memory — this viewer always renders inline and synchronously. |
 | `--dump-detect`         | Print the resolved terminal state: env table, TermDb chain + claims, Detect capability, cell pixel size, default fg/bg, DA1 reply, `auto()` selection, palette report. Exits 0. |
-| `--version` / `--help`  | Print the version / usage and exit 0.                             |
+| `--version` / `--help` (`-h`) | Print the version / usage and exit 0.         |
 
 ## Chafa flag-compat map (what this base honors and why)
 
