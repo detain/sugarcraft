@@ -563,19 +563,18 @@ var_dump($mode->cursorShape);  // int (0–6)
 $bar = $mode->withCursorShape(CursorShape::SteadyBar->toInt());
 ```
 
-`CursorShape` values map to VT sequences:
+The DECSCUSR parameter (`CSI <n> SP q`) maps to `CursorShape` cases. In VT
+vocabulary `0` means "default appearance" and is a blinking block, and
+`CursorShape::fromInt()` folds both `0` and `1` onto `BlinkingBlock`:
 
-| Enum value          | Value | CSI sequence | Description           |
-|---------------------|-------|--------------|-----------------------|
-| `BlinkingBlock`     | 0/1   | `CSI 0 SP q` | Blinking block        |
-| `SteadyBlock`       | 2     | `CSI 2 SP q` | Steady block          |
-| `BlinkingUnderline` | 3     | `CSI 3 SP q` | Blinking underline    |
-| `SteadyUnderline`   | 4     | `CSI 4 SP q` | Steady underline      |
-| `BlinkingBar`       | 5     | `CSI 5 SP q` | Blinking vertical bar |
-| `SteadyBar`         | 6     | `CSI 6 SP q` | Steady vertical bar   |
-
-`CursorShape::fromInt()` normalises both `0` and `1` to `BlinkingBlock`
-to match the VT spec.
+| Enum value          | CSI param    | Sequence        | Description           |
+|---------------------|--------------|-----------------|-----------------------|
+| `BlinkingBlock`     | `0` or `1`   | `CSI 0/1 SP q`  | Blinking block        |
+| `SteadyBlock`       | `2`          | `CSI 2 SP q`    | Steady block          |
+| `BlinkingUnderline` | `3`          | `CSI 3 SP q`    | Blinking underline    |
+| `SteadyUnderline`   | `4`          | `CSI 4 SP q`    | Steady underline      |
+| `BlinkingBar`       | `5`          | `CSI 5 SP q`    | Blinking vertical bar |
+| `SteadyBar`         | `6`          | `CSI 6 SP q`    | Steady vertical bar   |
 
 Across the reset and screen-swap paths the shape follows xterm-411: RIS
 (`ESC c`) and DECSTR (`CSI ! p`) reset it to `0` on both fields, while DECALN
