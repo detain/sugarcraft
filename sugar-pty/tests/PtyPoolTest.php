@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Pty\Contract\PtyPair;
 use SugarCraft\Pty\Contract\PtySystem;
 use SugarCraft\Pty\Exception\PoolExhaustedException;
+use SugarCraft\Pty\Exception\UnsupportedPlatformException;
 use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\PtyException;
 use SugarCraft\Pty\PtyPool;
@@ -51,6 +52,69 @@ final class PtyPoolTest extends TestCase
         $this->assertSame(0, $pool->inFlight());
         $this->assertSame(PtyPool::DEFAULT_MAX_SIZE, $pool->available());
         $this->assertSame(0, $pool->totalAcquired());
+    }
+
+    /**
+     * m13 (docs-reviews-1104, S36): a null `$system` must resolve through
+     * `PtySystemFactory::new()` — the platform default, env selection and
+     * refusal semantics included. Before the fix the constructor hard-wired
+     * `new PosixPtySystem()`: dead on arrival on Windows and deaf to
+     * `SUGARCRAFT_PTY_BACKEND`.
+     */
+    public function testNullSystemResolvesThroughTheFactoryPlatformDefault(): void
+    {
+        $system = (new \ReflectionProperty(PtyPool::class, 'system'))
+            ->getValue(new PtyPool());
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->assertInstanceOf(\SugarCraft\Pty\Windows\ConPtySystem::class, $system);
+
+            return;
+        }
+
+        $this->assertInstanceOf(PosixPtySystem::class, $system);
+    }
+
+    public function testNullSystemHonoursBackendSelectionEnv(): void
+    {
+        \putenv('SUGARCRAFT_PTY_BACKEND=junk-value');
+        try {
+            new PtyPool();
+            $this->fail('null $system must route through PtySystemFactory, which rejects unknown SUGARCRAFT_PTY_BACKEND values');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('SUGARCRAFT_PTY_BACKEND', $e->getMessage());
+        } finally {
+            \putenv('SUGARCRAFT_PTY_BACKEND');
+        }
+    }
+
+    public function testNullSystemAppliesConptyRefusalOnPosixHosts(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('conpty is a valid resolution on Windows; the refusal is the POSIX-side behaviour');
+        }
+        \putenv('SUGARCRAFT_PTY_BACKEND=conpty');
+        try {
+            new PtyPool();
+            $this->fail('selecting conpty through the pool ctor on a POSIX host must raise the factory refusal, not build a silent POSIX system');
+        } catch (UnsupportedPlatformException $e) {
+            $this->assertStringContainsString('ConPTY', $e->getMessage());
+        } finally {
+            \putenv('SUGARCRAFT_PTY_BACKEND');
+        }
+    }
+
+    public function testExplicitSystemBypassesTheFactoryEntirely(): void
+    {
+        $fake = $this->fakeSystem(opens: 0);
+        \putenv('SUGARCRAFT_PTY_BACKEND=junk-value');
+        try {
+            $pool = new PtyPool(system: $fake);
+        } finally {
+            \putenv('SUGARCRAFT_PTY_BACKEND');
+        }
+
+        $this->assertSame($fake, (new \ReflectionProperty(PtyPool::class, 'system'))->getValue($pool));
     }
 
     public function testAcquireThrowsAtCapacityWithFakeSystem(): void

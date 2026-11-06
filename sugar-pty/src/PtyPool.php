@@ -7,7 +7,6 @@ namespace SugarCraft\Pty;
 use SugarCraft\Pty\Contract\PtyPair;
 use SugarCraft\Pty\Contract\PtySystem;
 use SugarCraft\Pty\Exception\PoolExhaustedException;
-use SugarCraft\Pty\Posix\PosixPtySystem;
 
 /**
  * Bounded-concurrency wrapper around {@see PtySystem} for high-churn
@@ -42,6 +41,13 @@ use SugarCraft\Pty\Posix\PosixPtySystem;
  * until process end even though its slot frees. `release()` (or
  * `drain()` at shutdown) remains the contract for closing masters.
  * Dead slots are swept at the head of every bookkeeping call.
+ *
+ * A null `$system` resolves through {@see PtySystemFactory::new()}, so
+ * `SUGARCRAFT_PTY_BACKEND` and the platform default (ConPTY on Windows)
+ * are honoured exactly as everywhere else (m13, round docs-reviews-1104
+ * — before this the constructor hard-wired `PosixPtySystem`, dead on
+ * arrival on Windows and deaf to the env). An explicit `$system` always
+ * wins and never consults the factory.
  */
 final class PtyPool
 {
@@ -76,7 +82,7 @@ final class PtyPool
                 "PtyPool maxSize must be >= 1, got {$maxSize}",
             );
         }
-        $this->system = $system ?? new PosixPtySystem();
+        $this->system = $system ?? PtySystemFactory::new();
         $this->maxSize = $maxSize;
     }
 

@@ -269,7 +269,10 @@ bytes the master refuses to accept for the whole `SEND_STALL_BUDGET_SEC`
 
 `new(?PtySystem = null, int $maxSize = self::DEFAULT_MAX_SIZE)` —
 `DEFAULT_MAX_SIZE` is 50 and a `maxSize < 1` throws
-`\InvalidArgumentException`. `acquire($cols = 80, $rows = 24): PtyPair`
+`\InvalidArgumentException`. A null `$system` resolves through
+`PtySystemFactory::new()`, so `SUGARCRAFT_PTY_BACKEND` and the platform
+default (ConPTY on Windows) are honoured; an explicit `$system` always
+wins and never consults the factory. `acquire($cols = 80, $rows = 24): PtyPair`
 opens a *fresh* pair (PTY pairs are 1:1 with their slave path and
 cannot be reused once a child has been spawned against the slave —
 and `open()` costs tens of microseconds anyway once the FFI bindings
