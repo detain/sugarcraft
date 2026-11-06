@@ -367,4 +367,40 @@ final class StorageContractTest extends TestCase
             \umask($umask);
         }
     }
+
+    /**
+     * The connection posture, pinned by read-back through the live handle:
+     * the page-cache cap answers -64000 (64MiB ceiling per connection, not an
+     * allocation) and synchronous answers 2 — SQLite's FULL. The second pin
+     * is the deliberate decline: WAL's usual companion synchronous=NORMAL is
+     * refused on this secrets store because writes land once per command, so
+     * the speed win is worth nothing while the power-loss tail-loss window is.
+     */
+    public function testConnectionPragmasAnswerThePinnedPosture(): void
+    {
+        $db = new Database($this->tmpDir . '/pragma.db', 'pragma');
+        $handle = $this->sqliteHandle($db);
+
+        $this->assertSame(
+            -64000,
+            (int) $handle->querySingle('PRAGMA cache_size'),
+            'the 64MiB page-cache cap must answer on the connection that opens the store'
+        );
+        $this->assertSame(
+            2,
+            (int) $handle->querySingle('PRAGMA synchronous'),
+            'synchronous stays FULL (2): the NORMAL WAL companion is deliberately declined'
+        );
+
+        $db->close();
+    }
+
+    /** Reaches the private live handle; pragma posture is per-connection, so it can only be read through it. */
+    private function sqliteHandle(Database $db): \SQLite3
+    {
+        $property = (new \ReflectionClass($db))->getProperty('db');
+        $property->setAccessible(true);
+
+        return $property->getValue($db);
+    }
 }
