@@ -159,7 +159,7 @@ $email2 = new Email(
 candy-mail --from "me@example.com" --to "you@example.com" --subject "Hello"
 # Body read from STDIN. Both --flag value and --flag=value work.
 
-candy-mail --to you@example.com --render < message.txt
+candy-mail --from "me@example.com" --to you@example.com --render < message.txt
 # Offline preview: prints the composed MIME message (with a declared-boundary,
 # RFC 2046-valid structure) and sends nothing — no transport env required.
 ```
