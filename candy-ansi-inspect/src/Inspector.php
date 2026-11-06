@@ -630,9 +630,13 @@ final class Inspector
      * is tokenised. Without this, neutralising injection would mangle every
      * non-English OSC window title, trading a security fix for a fidelity bug.
      *
+     * Public since M1-fresh: the CLI refusal paths echo user-controlled argv
+     * through this seam, so a planted escape sequence is shown tokenised rather
+     * than replayed at the terminal.
+     *
      * @param string $s Raw payload string interpolated into a human-readable label.
      */
-    private static function sanitizeLabelBytes(string $s): string
+    public static function sanitizeLabelBytes(string $s): string
     {
         return preg_replace_callback(
             '/(?:[\x20-\x7E]|[\xC2-\xDF][\x80-\xBF]|[\xE0-\xEF][\x80-\xBF]{2}|[\xF0-\xF4][\x80-\xBF]{3})(*SKIP)(*FAIL)|[\x00-\x1F\x7F-\x9F]/',

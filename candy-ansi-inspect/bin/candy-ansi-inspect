@@ -29,7 +29,7 @@ if (!empty($argv[1])) {
     // is false for every wrapper scheme and for non-existent paths. The '@' is
     // dropped so a genuine read error (e.g. unreadable file) surfaces as a warning.
     if (!is_file($argv[1])) {
-        fwrite(STDERR, Lang::t('cli.not_a_file', ['path' => (string) $argv[1]]) . "\n");
+        fwrite(STDERR, Lang::t('cli.not_a_file', ['path' => Inspector::sanitizeLabelBytes((string) $argv[1])]) . "\n");
         exit(1);
     }
     $sawSource = true;

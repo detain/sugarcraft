@@ -62,6 +62,22 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('not a readable file', $stderr);
     }
 
+    public function testRefusalTokenizesControlBytesInThePathArgument(): void
+    {
+        // M1-fresh: the refusal echoes the path argument. Without the
+        // sanitizeLabelBytes() wrap an OSC plant (`ESC ] 0 ; … BEL`) rides
+        // through the stderr line and re-arms the caller's terminal. The pin
+        // asserts the TOKENISED arms are shown (a mere-absence pin would stay
+        // green under a deleting sanitizer too), and the refusal still exits 1.
+        [$code, $stdout, $stderr] = self::runCli("x\x1b]0;pwn\x07x");
+        $this->assertSame(1, $code, $stderr);
+        $this->assertStringNotContainsString("\x1b", $stderr);
+        $this->assertStringNotContainsString("\x07", $stderr);
+        $this->assertStringContainsString('ESC', $stderr);
+        $this->assertStringContainsString('BEL', $stderr);
+        $this->assertSame('', $stdout);
+    }
+
     /**
      * Run the CLI with piped stdin (never a TTY) and optional file argument.
      *
