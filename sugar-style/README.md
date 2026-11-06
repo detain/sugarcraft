@@ -128,14 +128,16 @@ Available constraints:
 | `Constraint::fill($weight)` | Fills all remaining space; weight controls distribution |
 
 Each wrapper exposes its payload through dynamic property reads
-(`ReadsConstraintPayload`) — `n` on `length`/`min`/`max`/`percentage`,
+implemented via `__get` forwarding to the wrapped value — see the trait
+`Layout\ReadsConstraintPayload` — `n` on `length`/`min`/`max`/`percentage`,
 `weight` on `fill` — e.g. `Constraint::length(20)->n`. Internally the value
-lives in a private constraints-library object and a shared dynamic-read arm
-(trait `Layout\ReadsConstraintPayload`, reached through `__get`) forwards the
-solver's per-class field reads and carries the ONE unknown-name rejection;
-that magic is why reflection-based tooling must not treat the wrappers as
-plain property bags. Constraint-layer error strings are hard-coded English
-— this sub-namespace is deliberately not routed through `Lang`.
+lives in a private constraints-library object and the trait (reached
+through `__get`) forwards the solver's per-class field reads and carries the
+one unknown-name rejection; that magic is why reflection-based tooling must
+not treat the wrappers as plain property bags.
+
+Constraint-layer error strings are hard-coded English — this sub-namespace
+is deliberately not routed through `Lang`.
 
 The solver partitions any combination of constraints with a greedy
 re-distribution pass (fixed sizes first, then caps, then minimum floors,
