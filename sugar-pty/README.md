@@ -634,7 +634,7 @@ environment variable to select which PTY backend to use:
 | Value | Behaviour |
 |---|---|
 | _(unset)_ / `auto` | Platform-appropriate default — `posix-ffi` on the POSIX families, `conpty` on Windows |
-| `posix-ffi` | `PosixPtySystem` — FFI into libc `posix_openpt` etc. (Linux / macOS). FFI-backed: distro PHP with `ffi.enable=0` fails at first bind — see [Install](#install). |
+| `posix-ffi` | `PosixPtySystem` — FFI into libc `posix_openpt` etc. (Linux / macOS). Note this value resolves *platform-wise*, it is not a hard pin: selecting it on Windows is not refused — the factory silently answers `ConPtySystem`, so a caller asking for POSIX FFI gets ConPTY semantics instead (no `fd()`/`stream()`, `kill(2)` collapse, empty-`$env` full-parent inversion — see [Known limitations](#known-limitations)). The asymmetry with `conpty` (which throws on a POSIX host) is one-directional. FFI-backed: distro PHP with `ffi.enable=0` fails at first bind — see [Install](#install). |
 | `conpty` | `Windows\ConPtySystem` — FFI into the kernel32 pseudo-console APIs (Windows 10 1809+ / PHP 8.4+). On a non-Windows host it throws `UnsupportedPlatformException` naming the probe's reason; the FFI load itself is deferred to `open()`. FFI-backed: same `ffi.enable` dependency. |
 | `sidecar` | Not implemented in this release — throws `UnsupportedPlatformException` |
 | `pecl` | Not implemented in this release — throws `UnsupportedPlatformException` |
