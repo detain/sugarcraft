@@ -136,7 +136,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
       <div class="feature"><strong>Audio companion</strong><span>AudioPlayer shells out to ffplay or mpv as the audio output companion (the Player keeps the master clock); pausing terminates and re-spawns the companion so no silent zombie burns CPU, and degrades gracefully when no audio track is present.</span></div>
       <div class="feature"><strong>Remote sources with headers</strong><span><code>Reel::openUrl()</code> forwards an SSRF guard (<code>allowedHosts</code>; a bare URL logs a warning and allows any host) and redacts URL credentials from every log and error; request headers ride onto ffmpeg for signed CDN URLs, and audio re-presents the same headers.</span></div>
       <div class="feature"><strong>Loop playback</strong><span>Reel::new()-&gt;withLoop(true)-&gt;play() loops from end back to start automatically.</span></div>
-      <div class="feature"><strong>Delta repaint</strong><span>Only changed cells are re-rendered each frame, dramatically reducing output for static scenes.</span></div>
+      <div class="feature"><strong>Delta repaint</strong><span>Only changed ROWS are re-rendered each frame unless the host opts into cell-granularity diffing (<code>cellDiffRenderer</code>), dramatically reducing output for static scenes.</span></div>
       <div class="feature"><strong>SGR run-length coalescing</strong><span>On the text rungs the Player composes frames inline (frameToBuffer()) and the cell buffer's ANSI writer emits color SGR codes only on color transitions, collapsing runs on static-ish scenes; the factory-built Ascii/HalfBlock/QuarterBlock renderers themselves are not reached by the Player runtime.</span></div>
     </div>
 

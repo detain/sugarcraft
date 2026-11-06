@@ -395,6 +395,8 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
 
 ## Known limitations
 
+- **Repaint granularity is rows, not cells.** The Player returns the full frame from `view()` on every tick and sugar-core's default renderer re-sends each changed ROW, so one dirty cell costs a row of output on otherwise-static frames. Cell-granularity diffing exists but is opt-in via `ProgramOptions::$cellDiffRenderer`.
+
 - **Audio plays at 1.0× regardless of playback speed.** Changing speed with `[`/`]` only affects video pacing. The audio companion (ffplay/mpv) always plays at normal speed. A/V will diverge noticeably when using speeds other than 1.0×.
 
 - **An option-shaped audio source is refused silently.** A video path that begins with `-` is never handed to ffplay/mpv: both parse leading-dash arguments as command-line options, and `mpv --script=` executes arbitrary Lua. The audio companion simply stays off for such a source (video playback is unaffected) — the route speaks only plain local paths and http(s) URLs, so a `-`-prefixed source is never legitimate anyway. Announcing the refusal is a possible future code leg, pending owner ruling.
