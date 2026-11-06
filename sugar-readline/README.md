@@ -200,14 +200,25 @@ multi-key chords cannot reach the prompt. For the full editing experience put
 the terminal in non-canonical mode around the loop and restore it afterwards:
 
 ```php
-$saved = trim((string) shell_exec('stty -g'));
-shell_exec('stty -icanon -echo -isig min 1 time 0');
+$isTty = stream_isatty(STDIN);
+$saved = $isTty ? trim((string) shell_exec('stty -g')) : '';
+if ($isTty) {
+    shell_exec('stty -icanon -echo -isig min 1 time 0');
+}
 try {
     $prompt = Readline::fromStdin()->run(TextPrompt::new('> '), STDOUT);
 } finally {
-    shell_exec('stty ' . escapeshellarg($saved));
+    if ($isTty && $saved !== '') {
+        shell_exec('stty ' . escapeshellarg($saved));
+    }
 }
 ```
+
+The `stream_isatty(STDIN)` guard is load-bearing, not ceremony: run the
+unguarded recipe with piped stdin and `stty` errors "Inappropriate ioctl for
+device" on every call — the captured state is empty and the restore degrades
+to a usage dump (this is the shape `examples/interactive.php` carries). `stty`
+is also POSIX-only — there is no such command on Windows.
 
 `-isig` matters: with signals left enabled, Ctrl+C raises SIGINT, which
 kills the process **before** the `finally` restore runs — the shell is then
