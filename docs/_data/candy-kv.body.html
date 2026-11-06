@@ -30,7 +30,7 @@ candy-kv list 'user-*'               # key&ltTAB&gtvalue rows; binary values sho
 candy-kv delete 'tmp-*' --dry-run    # preview the match count without writing
 candy-kv prune                       # remove expired residue
 candy-kv export json &gt; backup.json
-candy-kv import json backup.json     # atomic across databases by default</code></pre>
+candy-kv import json backup.json     # atomic within a database; a file spanning databases needs --no-atomic</code></pre>
     <p style="margin-top: 12px;">Exit codes: <code>0</code> success, <code>1</code> miss / no match / runtime failure, <code>2</code> usage errors (unknown flags and commands are refused before anything is written). Run <code>candy-kv --help</code> for the full flag list.</p>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
