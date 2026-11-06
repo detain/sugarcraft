@@ -32,9 +32,9 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is FORTY-EIGHT:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is FORTY-NINE:
  *
- *  - {@see \SugarCraft\Code\Cli\NonInteractive}, fifteen —
+ *  - {@see \SugarCraft\Code\Cli\NonInteractive}, sixteen —
  *    `run()` four times (a thrown backend error, an answer that would not encode
  *    as JSON, and the two AUT-2 session-degrade lines), `failUsage()`, `failUnusableProvider()`,
  *    and — added by AUT-4 — `failJsonSchemaUnsupported()`, the refusal line for a
@@ -54,7 +54,11 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  *    C-AGT-7.b — the `json_schema_unapplied` report line, stderr-alone like
  *    every other answer-shaping note beside it: stdout carries the answer (or
  *    the document) on all three formats, and the document itself reports the
- *    fact through `json_schema_applied: false`.
+ *    fact through `json_schema_applied: false`. And — added by D2 RS-DRIVER.b
+ *    2026-11-06 — the stream-json ignored-lines notice inside `run()`, one
+ *    line naming how many stdin lines were not usable `{"type":"user"}`
+ *    input events, stderr-alone because the run continues past the shapes it
+ *    counts (a note about input the run chose to skip, not a refusal).
  *  - {@see \SugarCraft\Code\Cli\ArgvParser}, one — added by 1021 INFO-4 —
  *    `noticePromptOverride()`, the once-per-parse line saying a second
  *    `-p`/`--prompt` value replaced the first. The parser's only write, and
