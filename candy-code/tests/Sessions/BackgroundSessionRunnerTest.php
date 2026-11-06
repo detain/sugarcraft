@@ -322,6 +322,105 @@ final class BackgroundSessionRunnerTest extends TestCase
     }
 
     // =========================================================================
+    // A7 — the daemon capability handshake. The greeter and the gate agreed
+    // on a shape with no version field, so a protocol change could not tell
+    // an OLD daemon from a FUTURE one: both reached the parser as "shape I
+    // do not know, refuse quietly". The greeting now carries an explicit
+    // major. This pin drives the real run() and reads the wire bytes off the
+    // supervisor socket, because a constant copied twice is not an
+    // agreement — only the bytes are.
+    // =========================================================================
+
+    public function testTheDaemonGreetsTheSupervisorWithTheVersionedHandshake(): void
+    {
+        $run = $this->markerRun($this->handshakeWireScript());
+
+        self::assertSame(0, $run['rc'], 'the handshake listener exited nonzero');
+        self::assertSame(1, preg_match('/^WIRE=(.*)$/m', $run['out'], $m), "no WIRE line in child output:\n" . $run['out']);
+        $wire = $m[1];
+
+        $this->assertStringStartsWith(
+            'HELLO:v2:',
+            $wire,
+            'the greeting does not open with the versioned handshake major',
+        );
+        self::assertSame(
+            1,
+            preg_match('/^HELLO:v2:sess_test_1:([1-9]\d*):abcdef0123456789$/', $wire),
+            "the greeting does not carry the session id, a live pid and the token bytes after the major:\n" . $wire,
+        );
+    }
+
+    /**
+     * A child that owns the supervisor socket and lets the real run() greet
+     * it. run() connects, writes its line and exits; the connection sits on
+     * the listen backlog, so the child accepts AFTER run() returned and
+     * reads exactly what a supervisor would.
+     */
+    private function handshakeWireScript(): string
+    {
+        $autoload = $this->export(\dirname(__DIR__, 2) . '/vendor/autoload.php');
+        $buffer = $this->export($this->bufferPath());
+        $tokenPath = $this->export($this->authTokenFile('abcdef0123456789'));
+
+        return <<<PHP
+        <?php
+        declare(strict_types=1);
+
+        require {$autoload};
+
+        final class HandshakeAnswerBackend implements \SugarCraft\Code\Backend
+        {
+            public function complete(array \$history, callable \$onToken = null, ?callable \$onEvent = null): \SugarCraft\Code\Message
+            {
+                return \SugarCraft\Code\Message::assistant('answer');
+            }
+
+            public function completeAsync(array \$history, callable \$onToken = null, ?\SugarCraft\Code\Backend\CancellationToken \$cancellation = null, ?callable \$onEvent = null): \React\Promise\PromiseInterface
+            {
+                throw new \LogicException('the synchronous path is the one this child takes');
+            }
+        }
+
+        \$socket = {$buffer} . '.sock';
+        \$server = @stream_socket_server('unix://' . \$socket, \$errno, \$error);
+        if (false === \$server) {
+            // Stale-socket unlink-then-retry, exactly once.
+            @unlink(\$socket);
+            \$server = @stream_socket_server('unix://' . \$socket, \$errno, \$error);
+        }
+        if (false === \$server) {
+            echo 'WIRE=LISTEN-FAILED:' . \$error . PHP_EOL;
+            echo 'RC=1' . PHP_EOL;
+            exit(0);
+        }
+
+        \$runner = new \SugarCraft\Code\Background\BackgroundSessionRunner(
+            sessionId: 'sess_test_1',
+            socketPath: \$socket,
+            bufferPath: {$buffer},
+            task: 'greet the gate',
+            tokenPath: {$tokenPath},
+            timeoutSeconds: 20,
+        );
+        \$rc = \$runner->run(new HandshakeAnswerBackend());
+
+        \$client = @stream_socket_accept(\$server, 2.0);
+        \$wire = false === \$client ? 'NO-CONNECTION' : rtrim((string) @fgets(\$client), "\\r\\n");
+        if (false !== \$client) {
+            fclose(\$client);
+        }
+        fclose(\$server);
+        @unlink(\$socket);
+
+        echo 'WIRE=' . \$wire . PHP_EOL;
+        echo 'RC=' . \$rc . PHP_EOL;
+        exit(0);
+
+        PHP;
+    }
+
+    // =========================================================================
     // E229 — a forked child's plain exit() republishes the parent's OUTPUT
     // BUFFER. It is the one consequence of a plain exit that nothing in this
     // tree defuses, and run()'s worker was the last plain exit in src/ that
@@ -445,7 +544,11 @@ final class BackgroundSessionRunnerTest extends TestCase
      * the marker is what {@see markerRun()} counts, so a script and its
      * counter disagreeing about the spelling is a silent 0.
      *
-     * @return array{markers: int, rc: int}
+     * The raw output rides along for pins that judge a wire line rather
+     * than a marker count (the A7 handshake pin reads the greeting the
+     * child's supervisor socket received).
+     *
+     * @return array{markers: int, rc: int, out: string}
      */
     private function markerRun(string $script): array
     {
@@ -472,7 +575,7 @@ final class BackgroundSessionRunnerTest extends TestCase
 
         self::assertSame(1, preg_match('/^RC=(-?\d+)$/m', $out, $m), "no RC line in child output:\n" . $out);
 
-        return ['markers' => substr_count($out, self::MARKER), 'rc' => (int) $m[1]];
+        return ['markers' => substr_count($out, self::MARKER), 'rc' => (int) $m[1], 'out' => $out];
     }
 
     // =========================================================================

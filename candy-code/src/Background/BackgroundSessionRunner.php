@@ -33,7 +33,7 @@ use SugarCraft\Code\Usage;
  * Process shape, and why:
  *
  *  - The daemon connects back to the supervisor's Unix socket and sends
- *    `HELLO:<sessionId>:<pid>`. The PID matters: `spawnSession()` otherwise
+ *    `HELLO:v2:<sessionId>:<pid>:<token>`. The PID matters: `spawnSession()` otherwise
  *    only knows the PID of the short-lived `php -r` launcher, which exits
  *    during the double fork, so {@see BackgroundSupervisor::reconnect()}
  *    would see a dead process and declare every session Completed the
@@ -83,6 +83,19 @@ final class BackgroundSessionRunner
 {
     /** Handshake prefix the supervisor authenticates on spawn (audit M5). */
     public const HANDSHAKE_PREFIX = 'HELLO:';
+
+    /**
+     * Major handshake version this greeter speaks (A7).
+     *
+     * The version rides the wire so the gate can tell an OLD daemon (an
+     * unversioned line, understood forever as legacy) from a peer speaking
+     * some protocol not yet invented — a shape-only parser cannot tell the
+     * two apart, and folding "not from here yet" into "malformed" is the
+     * silent-fallback class the audit M5 rationale refuses. One spelling
+     * serves greeter and gate alike: a respelling can never desync the two
+     * sides, mirroring the AUTH_PREFIX doctrine.
+     */
+    public const HANDSHAKE_MAJOR = 'v2';
 
     /**
      * Command-line auth prefix (audit M5).
@@ -369,19 +382,22 @@ final class BackgroundSessionRunner
         }
 
         \stream_set_timeout($supervisor, 1);
-        // Audit M5: the handshake carries the per-spawn secret as a fourth
+        // Audit M5: the handshake carries the per-spawn secret as a final
         // field. The token bytes live only in the 0600 file the supervisor
         // minted — never in argv, which every local user can read through
         // /proc for the daemon's whole life. An unreadable/empty token file
-        // still sends the (empty) field rather than the legacy 3-field form:
-        // the supervisor's parse rejects both shapes identically, so a lost
-        // secret costs this spawn its registration instead of silently
-        // downgrading it to un-authenticated trust.
+        // still sends the full (empty-token) form rather than a shorter
+        // line: the supervisor's parse rejects both shapes identically, so
+        // a lost secret costs this spawn its registration instead of
+        // silently downgrading it to un-authenticated trust.
+        // A7: the major rides immediately after HELLO:, so a peer from
+        // another era of this protocol announces itself instead of relying
+        // on the gate guessing its mood from the field count.
         $token = $this->tokenPath === '' ? '' : \trim((string) @file_get_contents($this->tokenPath));
         if ($token === '') {
             $this->log('[session:auth:no-token] handshake will be refused');
         }
-        \fwrite($supervisor, self::HANDSHAKE_PREFIX . $this->sessionId . ':' . \getmypid() . ':' . $token . "\n");
+        \fwrite($supervisor, self::HANDSHAKE_PREFIX . self::HANDSHAKE_MAJOR . ':' . $this->sessionId . ':' . \getmypid() . ':' . $token . "\n");
         \fflush($supervisor);
         // The supervisor reads the handshake and drops this connection; the
         // daemon owns the socket path from here on (see class docblock).
