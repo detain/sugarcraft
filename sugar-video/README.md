@@ -44,10 +44,15 @@ composer require sugarcraft/sugar-video
 Requires:
 - PHP 8.3+
 - `ffmpeg` and `ffprobe` in `$PATH` for `mp4`/`avi`/`webm` playback
-- `ext-gd` for `.gif` playback (pure-PHP fallback, no ffmpeg needed)
+- `ext-gd` for `.gif` playback (pure-PHP fallback, no ffmpeg needed — for
+  *local* files; a remote `.gif` URL routes through `ffmpeg` because the pure-PHP
+  decoder has no network transport)
 - `ext-gd` built with WebP for animated `.webp` playback (pure-PHP container
   walk + per-frame GD decode — no ffmpeg needed, and no ffmpeg on a stock host
-  can decode animated WebP, so this is the route, not a fallback)
+  can decode animated WebP, so this is the route, not a fallback). The same
+  local-only caveat applies to remote `.webp`: animated sniffing never touches
+  the network, so those sources go through `ffmpeg` too, and on an ffmpeg-less
+  host both remote routes fail loudly with the `decoder.ffmpeg_missing` message.
 - A terminal with at least 256-color support for ANSI modes
 
 ## Usage
