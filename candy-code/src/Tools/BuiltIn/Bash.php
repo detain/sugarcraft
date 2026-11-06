@@ -832,13 +832,17 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
 
     /**
      * The `timeout` parameter's bounds (item 0.4-a). The default is the
-     * figure a model would otherwise have to guess, and the ceiling stops
-     * one call from holding a turn for longer than any build here takes; a
+     * figure a model would otherwise have to guess. The ceiling is a
+     * backstop against a pathological ask, not a bound on real work:
+     * hour-scale batteries (test suites, builds, fleet gates) are
+     * legitimate one-call jobs, and a call this long still holds no turn
+     * hostage — Bash beats the turn's idle watchdog while it waits. A
      * value outside the range is CLAMPED rather than refused, because a
-     * model asking for 900 s wants "as long as allowed", not an error.
+     * model asking for more than the ceiling wants "as long as allowed",
+     * not an error.
      */
     public const DEFAULT_TIMEOUT_SECONDS = 120;
-    public const MAX_TIMEOUT_SECONDS = 600;
+    public const MAX_TIMEOUT_SECONDS = 21600;
 
     /**
      * The live tail's frame budget and cadence (WEB-4). 4 KiB is the newest

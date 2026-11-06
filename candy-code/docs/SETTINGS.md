@@ -1352,7 +1352,7 @@ project-settable.
 | `webSearchBackend` | Tools | enum | `searxng` | U C | — | restart | egress |
 | `bashInteractiveIdleSeconds` | Tools | number | `8` | P U C | — | next turn | tuning |
 | `bashTimeoutSeconds` | Tools | int | `120` | P U C | — | next turn | tuning |
-| `bashMaxTimeoutSeconds` | Tools | int | `600` | P U C | — | next turn | tuning |
+| `bashMaxTimeoutSeconds` | Tools | int | `21600` | P U C | — | next turn | tuning |
 | `chatToolTimeoutSeconds` | Tools | int | `30` | P U C | — | next turn | tuning |
 | `grepTimeoutSeconds` | Tools | int | `60` | P U C | — | next turn | tuning |
 | `requireReadBeforeWrite` | Tools | bool | `false` | U C | — | next turn | narrowing |

@@ -30,14 +30,14 @@ final class BashTimeoutTest extends TestCase
         self::assertSame('integer', $schema['properties']['timeout']['type']);
         self::assertSame(Bash::MAX_TIMEOUT_SECONDS, $schema['properties']['timeout']['maximum']);
         self::assertNotContains('timeout', $schema['required']);
-        self::assertStringContainsString('Default 120, maximum 600', $schema['properties']['timeout']['description']);
+        self::assertStringContainsString('Default 120, maximum 21600', $schema['properties']['timeout']['description']);
     }
 
     public function testDescriptionStatesTheDefaultAndTheCeiling(): void
     {
         $description = (new Bash())->description();
 
-        self::assertStringContainsString('`timeout` seconds (default 120, max 600)', $description);
+        self::assertStringContainsString('`timeout` seconds (default 120, max 21600)', $description);
     }
 
     /**
@@ -49,8 +49,11 @@ final class BashTimeoutTest extends TestCase
         yield 'integer' => [30, 30];
         yield 'fraction rounds up' => [2.1, 3];
         yield 'numeric string' => ['45', 45];
-        yield 'over the ceiling clamps' => [900, 600];
-        yield 'infinity clamps' => [INF, 600];
+        yield 'above the old ceiling stands' => [900, 900];
+        yield 'the ceiling itself stands' => [21600, 21600];
+        yield 'over the ceiling clamps' => [21601, 21600];
+        yield 'absurd asks clamp, never overflow' => [999999999, 21600];
+        yield 'infinity clamps' => [INF, 21600];
         yield 'zero is the default, never unbounded' => [0, 120];
         yield 'negative is the default' => [-5, 120];
         yield 'garbage is the default' => ['soon', 120];
@@ -85,7 +88,24 @@ final class BashTimeoutTest extends TestCase
 
         $lowered = (new Bash())->withTimeoutBounds(null, 60);
         self::assertSame(['default' => 60, 'max' => 60], $lowered->timeoutBounds(), 'a default above the ceiling is the ceiling');
-        self::assertSame(['default' => 120, 'max' => 600], \SugarCraft\Code\Tools\ToolLimits::fromConfig([])->applyTo(new Bash())->timeoutBounds());
+        self::assertSame(['default' => 120, 'max' => 21600], \SugarCraft\Code\Tools\ToolLimits::fromConfig([])->applyTo(new Bash())->timeoutBounds());
+    }
+
+    /**
+     * The settings may raise the ceiling to any hour-scale figure — the schema
+     * range tracks Bash::MAX_TIMEOUT_SECONDS, so a 2-hour bashMaxTimeoutSeconds
+     * is honoured rather than discarded as out-of-range (which would silently
+     * fall back to the keep-as-built bound).
+     */
+    public function testACeilingAboveTheOldSettingsRangeIsHonoured(): void
+    {
+        $bash = \SugarCraft\Code\Tools\ToolLimits::fromConfig([
+            \SugarCraft\Code\Tools\ToolLimits::BASH_MAX_TIMEOUT_KEY => 7200,
+        ])->applyTo(new Bash());
+        self::assertInstanceOf(Bash::class, $bash);
+
+        self::assertSame(7200, $bash->timeoutBounds()['max'], 'a two-hour ceiling settings-asks-for is honoured');
+        self::assertSame(7200, (new \ReflectionMethod(Bash::class, 'timeoutSeconds'))->invoke($bash, 9000), 'and it clamps at the configured ceiling, not the class one');
     }
 
     public function testAFastCommandIsUntouchedByTheDefaultBound(): void

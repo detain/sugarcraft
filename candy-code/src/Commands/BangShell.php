@@ -19,6 +19,7 @@ use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ToolIpcFiles;
 use SugarCraft\Code\ToolCall;
+use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 
@@ -70,10 +71,10 @@ final class BangShell
 
     /**
      * How long a command may run before it and its process group are killed:
-     * the `Bash` tool's ceiling ({@see \SugarCraft\Code\Tools\BuiltIn\Bash::MAX_TIMEOUT_SECONDS}),
+     * the `Bash` tool's ceiling ({@see Bash::MAX_TIMEOUT_SECONDS}),
      * because the user chose to run it and nothing else is waiting on it.
      */
-    public const TIMEOUT_SECONDS = 600;
+    public const TIMEOUT_SECONDS = Bash::MAX_TIMEOUT_SECONDS;
 
     /** How often the parent looks for the child's result. */
     private const POLL_SECONDS = 0.05;
