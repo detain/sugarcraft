@@ -1831,7 +1831,7 @@ All of it is in [`docs/HOOKS.md`](docs/HOOKS.md).
   splices into every following prompt — and `enabledSkills` makes one standing.
   See [`docs/SKILLS.md`](docs/SKILLS.md).
 - **MCP** — the servers a trusted project's `.mcp.json` declares become `mcp__<server>__<tool>` tools; `/mcp` lists the servers and manages
-  their auth, and `candy-code mcp list|trust|import|serve` work from the shell. See [`docs/MCP.md`](docs/MCP.md).
+  their auth, and `candy-code mcp list|auth|trust|import|serve` work from the shell. See [`docs/MCP.md`](docs/MCP.md).
 - **Workflows** — staged multi-agent pipelines in YAML or PHP, run with
   `/workflow run` or written by the model itself through the `Workflow` tool.
   See [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md).
@@ -2477,6 +2477,10 @@ candy-code session rename <target> <title…>
 candy-code session delete <target>   # sub-agent children go too; [--with-children] takes branches
 candy-code session pin|unpin|archive|unarchive <target>
 candy-code mcp list                  # what .mcp.json declares — without starting anything
+candy-code mcp auth list|add|remove|login|reconnect|enable|disable
+                                     # the stored OAuth tokens: list them, add or remove one, print
+                                     #   how to log a server in (the TUI's /mcp panel runs the live
+                                     #   flow), reconnect one, or toggle a server for the session
 candy-code mcp trust                 # approve .mcp.json as it is now (command/args/env pinned per server)
 candy-code mcp import claude|opencode|claude-project <path> [--write user]
                                      # translate a foreign MCP config and print the block — the verb
