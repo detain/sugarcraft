@@ -313,8 +313,9 @@ The default `OscHandlerImpl` (renderer path) implements:
 
 | Sequence | Method | Behavior |
 |----------|--------|----------|
-| `OSC 0;<title> BEL/ST` | `title($title)` | Set window title (and icon name). |
-| `OSC 2;<title> BEL/ST` | `title($title)` | Set window title only. |
+| `OSC 0;<title> BEL/ST` | `title($title)` | Set window title. |
+| `OSC 1;<name> BEL/ST` | `title($name)` | Set icon name — folded onto the same title channel; both engines route 0/1/2 into one slot and store no separate icon name. |
+| `OSC 2;<title> BEL/ST` | `title($title)` | Set window title. |
 | `OSC 8;<id>;<uri> BEL/ST` | `hyperlink($uri, $id)` | Begin/end hyperlink (OSC 8). Empty URI ends the link. |
 | `lastTitle()` | accessor | Most recent title set during the stream. |
 
