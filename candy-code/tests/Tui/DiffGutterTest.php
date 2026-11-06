@@ -370,4 +370,60 @@ final class DiffGutterTest extends TestCase
         $this->assertFalse(DiffGutter::isNumberableHunk('@@ -99999999999,3 +99999999999,3 @@'), 'past MAX_LINE_NUMBER_DIGITS the hunk cannot be numbered');
         $this->assertFalse(DiffGutter::isNumberableHunk('--- a/x'));
     }
+
+    /**
+     * D1a rule swap: the scan half now rides sugar-diff's UnifiedScan, whose
+     * file-header rule accepts any `diff ` flavour — so a plain GNU
+     * `diff -u a b` opens the file the git-only twin missed — while the
+     * numbers the walk produces below stay byte-identical to what the twin
+     * painted.
+     */
+    public function testAGnuFlavourFileHeaderIsRecognisedWithoutChangingTheNumbers(): void
+    {
+        $lines = [
+            'diff -u old/new.txt new/new.txt',
+            '--- old/new.txt',
+            '+++ new/new.txt',
+            '@@ -1,3 +1,3 @@',
+            ' ctx',
+            '-gone',
+            '+added',
+            ' tail',
+        ];
+
+        $this->assertSame(
+            ['   │ ', '   │ ', '   │ ', '   │ ', '1 1│ ', '2  │ ', '  2│ ', '3 3│ '],
+            $this->prefixes($lines),
+            'a `diff -u ` header must not shift the numbering the git-only twin produced',
+        );
+
+        $this->assertSame(
+            [true, true, true, false, false, false, false, false],
+            DiffGutter::fileHeaders($lines),
+            'the GNU flavour is a file boundary the git-only rule read as ordinary rows',
+        );
+    }
+
+    /**
+     * D1a refuse-earlier: a row inside an open hunk that carries none of the
+     * `' '`, `'-'`, `'+'` or `'\'` markers is corruption. The shared scanner
+     * ends the hunk there; the git-era twin numbered straight through it, so
+     * everything below the corruption rode confident wrong numbers.
+     */
+    public function testACorruptRowEndsTheHunkInsteadOfBeingNumberedAsContext(): void
+    {
+        $lines = ['@@ -1,1 +1,2 @@', ' ok', 'xcorrupt', ' under'];
+
+        $this->assertSame(
+            ['   │ ', '1 1│ ', '   │ ', '   │ '],
+            $this->prefixes($lines),
+            'the declared old side is spent by the first context row, and the unmarked row closes the hunk',
+        );
+
+        $this->assertSame(
+            [false, false, false, false],
+            DiffGutter::fileHeaders($lines),
+            'a corrupt row is never reinterpreted as a file boundary',
+        );
+    }
 }

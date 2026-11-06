@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tui;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Diff\Reader\UnifiedScan;
 
 /**
  * The old-file/new-file line-number gutter for a unified diff — the column
@@ -18,6 +19,13 @@ use SugarCraft\Core\Util\Width;
  * nothing about colour — the renderer styles the prefix itself so the diff
  * body's own {@see \SugarCraft\Code\Renderer::styleDiffLine()} bytes stay
  * byte-identical to what they were before a gutter existed.
+ *
+ * The scan half rides the sugar-diff library: hunk recognition, per-side row
+ * budgets, file-header adjudication and the digit cap all live in
+ * {@see UnifiedScan} (D1a fold — this class used to keep its own copy of those
+ * rules, which is exactly how a twin and its scanner drift). What stays
+ * app-side is only the gutter formatting: the fixed-width prefix columns and
+ * the separator this frame can afford.
  *
  * The formatting convention is sugar-markdown's
  * ({@see \SugarCraft\Markdown\SyntaxHighlighter::highlight()} with `lineNumbers:
@@ -51,20 +59,6 @@ final class DiffGutter
     public const SEPARATOR = '│ ';
 
     /**
-     * Largest `@@` start line this will number. A hunk claiming to begin past
-     * this is not a real file — it is malformed or hostile input — and the two
-     * honest ways to fail are both worse than declining: `(int)` clamps such a
-     * literal to `PHP_INT_MAX`, after which the first `++` promotes the counter
-     * to float and {@see format()}'s `?int` parameter rejects it with a
-     * TypeError, thrown from inside {@see \SugarCraft\Code\Chat::view()} — i.e.
-     * the Program dies with the terminal still in raw mode. Clamping instead
-     * would keep the frame alive but print a number that is simply wrong, which
-     * is the one thing a line-number gutter must never do. So an out-of-range
-     * hunk is recognised as a hunk and left unnumbered.
-     */
-    private const MAX_LINE_NUMBER_DIGITS = 9;
-
-    /**
      * @param list<string> $prefixes One per input row, all {@see $width} wide.
      * @param string       $blank    A row-width prefix carrying no numbers, for
      *                               rows the renderer adds itself (the overflow
@@ -83,11 +77,11 @@ final class DiffGutter
      */
     public static function forDiff(array $lines): self
     {
-        $numbers = self::number($lines);
+        $rows = UnifiedScan::lines($lines);
 
         $highest = 0;
-        foreach ($numbers as [$old, $new]) {
-            $highest = max($highest, $old ?? 0, $new ?? 0);
+        foreach ($rows as $row) {
+            $highest = max($highest, $row->old ?? 0, $row->new ?? 0);
         }
 
         // Nothing was numberable (no hunk header, or a diff that is pure
@@ -101,8 +95,8 @@ final class DiffGutter
         $blank = self::format(null, null, $digits);
 
         $prefixes = [];
-        foreach ($numbers as [$old, $new]) {
-            $prefixes[] = self::format($old, $new, $digits);
+        foreach ($rows as $row) {
+            $prefixes[] = self::format($row->old, $row->new, $digits);
         }
 
         return new self($digits * 2 + 1 + Width::string(self::SEPARATOR), $prefixes, $blank);
@@ -120,62 +114,62 @@ final class DiffGutter
 
     /**
      * Which rows are file headers rather than diff content, under exactly the
-     * rule {@see isFileHeader()} documents.
+     * rule sugar-diff's {@see UnifiedScan} documents (`diff `/`index ` are
+     * unambiguous; `--- `/`+++ ` count only while no hunk is open, because a
+     * deleted SQL comment arrives here as `--- users table`).
      *
      * Exposed because {@see \SugarCraft\Code\Renderer::styleDiffLine()} has to
      * answer the same `--- `/`+++ ` question to pick a colour, and it sees one
      * row at a time with no idea whether a hunk is open. Left to itself it
      * paints a deleted `-- users table` row as a bold file header instead of a
-     * red removal — the same ambiguity this class fixed for the numbers. Sharing
-     * the verdict is what keeps the gutter and the colour from disagreeing about
-     * what a row *is*, which would be worse than both being wrong together.
+     * red removal — the same ambiguity the scan rules fix for the numbers.
+     * Sharing the verdict is what keeps the gutter and the colour from
+     * disagreeing about what a row *is*, which would be worse than both being
+     * wrong together.
      *
      * @param list<string> $lines
      * @return list<bool> One per input row.
      */
     public static function fileHeaders(array $lines): array
     {
-        return array_map(
-            static fn (array $row): bool => $row[2],
-            self::number($lines),
-        );
+        return UnifiedScan::fileHeaders($lines);
     }
 
     /**
-     * The raw start-line digits of a `@@ ... @@` hunk header, or null when the
-     * row is not one. Shared by the numbering walk and the split layout so the
-     * two cannot disagree about where a hunk starts — and so an oversized
-     * header is still RECOGNISED (numbering itself only opts out via
-     * {@see numberable()}, for the float-promotion reason at
-     * {@see MAX_LINE_NUMBER_DIGITS}).
-     *
-     * @return ?array{0:string,1:string}
+     * Whether this row is a hunk header at all, numberable or not — the one
+     * pattern lives in {@see UnifiedScan::isHunkHeader()}, so the gutter and
+     * the scan can never disagree about where a hunk starts.
      */
-    private static function hunkStarts(string $line): ?array
-    {
-        if (preg_match('/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/', $line, $m) === 1) {
-            return [$m[1], $m[2]];
-        }
-
-        return null;
-    }
-
-    /** Whether this row is a hunk header at all, numberable or not. */
     public static function isHunkHeader(string $line): bool
     {
-        return self::hunkStarts($line) !== null;
+        return UnifiedScan::isHunkHeader($line);
     }
 
     /**
      * Whether this row is a hunk header whose numbers may be trusted — the
      * precondition the split layout needs before it derives two line-number
      * columns from {@see \SugarCraft\Diff\Writer\SideBySideFormat}.
+     *
+     * Probed through the shared scan: a one-line body sample of each side is
+     * numbered only when that side's start field is inside the scanner's digit
+     * cap AND the header declared budget for it, so an oversized header closes
+     * the hunk in the scanner and both probes come back null (see
+     * {@see UnifiedScan::MAX_LINE_NUMBER_DIGITS} for the float-promotion
+     * reason). A valid-but-empty `@@ -0,0 +0,0 @@` declares no rows for either
+     * side and so probes as unnumberable; no real producer emits one, and the
+     * split then falls back to the unified paint, which would itself have
+     * drawn nothing but the header.
      */
     public static function isNumberableHunk(string $line): bool
     {
-        $starts = self::hunkStarts($line);
+        foreach (['+', '-'] as $marker) {
+            $sample = UnifiedScan::lines([$line, $marker . ' probe'])[1] ?? null;
+            if ($sample !== null && ($sample->old !== null || $sample->new !== null)) {
+                return true;
+            }
+        }
 
-        return $starts !== null && self::numberable($starts[0]) && self::numberable($starts[1]);
+        return false;
     }
 
     /**
@@ -213,119 +207,5 @@ final class DiffGutter
             . ' '
             . str_pad((string) $new, $digits, ' ', STR_PAD_LEFT)
             . self::SEPARATOR;
-    }
-
-    /**
-     * Walk the diff assigning each row its old-file and new-file line number,
-     * either of which is null when that side has no line there (`+` rows have
-     * no old line, `-` rows have no new line, headers have neither).
-     *
-     * Counters come from the `@@ -a,b +c,d @@` header and advance per row the
-     * way `diff -u` counts: context advances both, `-` advances old, `+`
-     * advances new. Rows before the first hunk header — and any file header
-     * ({@see isFileHeader()}), which is how a second file starts inside a
-     * multi-file diff — reset the walk, otherwise the leading `-`/`+` of a file
-     * header would be counted as a deletion and an insertion and every number
-     * after it would be off by one.
-     *
-     * The third element of each row records whether the row was read as a file
-     * header, so {@see fileHeaders()} can hand the renderer the same verdict
-     * this numbering used rather than re-deciding it from the row in isolation.
-     *
-     * @param list<string> $lines
-     * @return list<array{0:?int,1:?int,2:bool}>
-     */
-    private static function number(array $lines): array
-    {
-        $inHunk = false;
-        $old = 0;
-        $new = 0;
-        $out = [];
-
-        foreach ($lines as $line) {
-            // Recognised with an unbounded \d+ on purpose: the header has to
-            // be RECOGNISED even when its numbers are absurd, or the rows
-            // after it get counted as context and a previous hunk's
-            // numbering silently continues through them. Only the
-            // numbering opts out. See MAX_LINE_NUMBER_DIGITS.
-            if (($starts = self::hunkStarts($line)) !== null) {
-                $inHunk = self::numberable($starts[0]) && self::numberable($starts[1]);
-                $old = $inHunk ? (int) $starts[0] : 0;
-                $new = $inHunk ? (int) $starts[1] : 0;
-                $out[] = [null, null, false];
-                continue;
-            }
-
-            if (self::isFileHeader($line, $inHunk)) {
-                $inHunk = false;
-                $out[] = [null, null, true];
-                continue;
-            }
-
-            if (!$inHunk) {
-                $out[] = [null, null, false];
-                continue;
-            }
-
-            // "\ No newline at end of file" annotates the line above it and
-            // occupies no line of either file.
-            if (str_starts_with($line, '\\')) {
-                $out[] = [null, null, false];
-                continue;
-            }
-
-            $marker = $line === '' ? ' ' : $line[0];
-            if ($marker === '+') {
-                $out[] = [null, $new, false];
-                $new++;
-            } elseif ($marker === '-') {
-                $out[] = [$old, null, false];
-                $old++;
-            } else {
-                // ' ' is context; an empty row is a context line whose single
-                // trailing space was stripped in transit, which is common
-                // enough that treating it as anything else desynchronises the
-                // rest of the hunk.
-                $out[] = [$old, $new, false];
-                $old++;
-                $new++;
-            }
-        }
-
-        return $out;
-    }
-
-    /**
-     * Whether this row starts a new file rather than carrying diff content.
-     *
-     * `diff --git `/`index ` are unambiguous — nothing else emits them.
-     * `--- `/`+++ ` are not: they are also exactly what a deleted or added
-     * source line reads as once the diff marker is prepended, because `--` is
-     * the line-comment token in SQL, Lua, Haskell and Ada (`-- users table` in
-     * a deleted row arrives here as `--- users table`), and `++ ` opens plenty
-     * of added C/Java/PHP lines. Read as a header, such a row closed the hunk
-     * and every remaining row of it lost its numbers — number *loss*, not wrong
-     * numbers, but still the gutter failing at its one job.
-     *
-     * Inside a hunk the content reading is therefore the right one. That is
-     * safe for multi-file diffs because git emits `diff --git `/`index ` ahead
-     * of the real `--- ` of every file, and both of those close the hunk
-     * unconditionally, so a genuine file header is never seen with $inHunk
-     * still true.
-     */
-    private static function isFileHeader(string $line, bool $inHunk): bool
-    {
-        if (str_starts_with($line, 'diff --git ') || str_starts_with($line, 'index ')) {
-            return true;
-        }
-
-        return !$inHunk
-            && (str_starts_with($line, '--- ') || str_starts_with($line, '+++ '));
-    }
-
-    /** Whether a `@@` header's start line is small enough to count from safely. */
-    private static function numberable(string $raw): bool
-    {
-        return strlen(ltrim($raw, '0')) <= self::MAX_LINE_NUMBER_DIGITS;
     }
 }
