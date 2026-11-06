@@ -18,7 +18,7 @@ sugar-colorprofile — terminal color profile detection and color degradation fo
 ## Features
 
 - **Detect terminal color profile** from environment variables and TTY info
-- **ColorProfile enum**: the single shared color-depth vocabulary (8 levels, `TrueColor` 24-bit → `Ansi256` 256-color → `Ansi240` fixed slots 16-255 → `Ansi` 16-color → `Ansi8` basic 8 → `Fgbg` two-color fg/bg → `Ascii` black/white → `NoTTY`); the former renderer-facing `Profile` enum is now a deprecated `class_alias` façade over it — every old `Profile::X` spelling still resolves
+- **ColorProfile enum**: the color-depth vocabulary shared by every surface of this library (8 levels, `TrueColor` 24-bit → `Ansi256` 256-color → `Ansi240` fixed slots 16-255 → `Ansi` 16-color → `Ansi8` basic 8 → `Fgbg` two-color fg/bg → `Ascii` black/white → `NoTTY`); the former renderer-facing `Profile` enum is now a deprecated `class_alias` façade over it — every old `Profile::X` spelling still resolves
 - **Color conversion**: downsample RGBA colors to any target profile
 - **ProfileWriter**: wrap a stream and automatically degrade color codes to match the terminal
 - **ANSI stripping**: `NoTTY` output runs through `Palette::stripAnsi()`, which
@@ -78,7 +78,9 @@ and `Profile::ANSI` keep resolving through deprecated constant bridges.
 
 ## The detection ladder
 
-The color-depth answer comes from one canonical 13-step chain (`DetectionChain`).
+The color-depth answer comes from one canonical 13-step chain (`DetectionChain`) —
+canonical across every surface of this library; `sugar-core` carries a separate
+fork with its own ladder, see Fleet integration below.
 `Probe`, `Palette` and `Probe\TerminalProbe` all consult it, so the same
 environment never answers differently **at the env-ladder rung**; the final
 surface answers may still diverge, because `Probe` layers an opt-in terminfo
@@ -299,7 +301,7 @@ the trust level of whoever controls the process environment.
 
 ## ColorProfile Enum
 
-`ColorProfile` is the single shared color-depth vocabulary: the detection chain speaks it, `Palette`/`ProfileWriter` degrade against it, and libs that need the raw profile value consume it directly (live roster, derived from `use SugarCraft\ColorProfile\` imports: sugar-log, sugar-image, sugar-spring, sugar-video, candy-mdview). `Profile` remains only as a deprecated `class_alias` façade over it. Five of the arms are detection-emittable (`TrueColor`/`Ansi256`/`Ansi`/`Ascii`/`NoTTY` — `Ascii` lands from a falsy `FORCE_COLOR` spelling, step 2 of the ladder); `Ansi240`, `Ansi8` and `Fgbg` are request-side vocabulary only.
+`ColorProfile` is this library's color-depth vocabulary, shared by every surface of it: the detection chain speaks it, `Palette`/`ProfileWriter` degrade against it, and libs that need the raw profile value consume it directly (live roster, derived from `use SugarCraft\ColorProfile\` imports: sugar-log, sugar-image, sugar-spring, sugar-video, candy-mdview). `Profile` remains only as a deprecated `class_alias` façade over it. Five of the arms are detection-emittable (`TrueColor`/`Ansi256`/`Ansi`/`Ascii`/`NoTTY` — `Ascii` lands from a falsy `FORCE_COLOR` spelling, step 2 of the ladder); `Ansi240`, `Ansi8` and `Fgbg` are request-side vocabulary only.
 
 ```php
 use SugarCraft\ColorProfile\ColorProfile;
@@ -325,6 +327,38 @@ $writer = ProfileWriter::wrap(STDOUT)->withProfile(ColorProfile::Ansi240); // ne
 | `Fgbg`   | `'fgbg'`     | FGBG         |
 | `Ascii`  | `'ascii'`    | ASCII        |
 | `NoTTY`  | `'notty'`    | No TTY       |
+
+## Fleet integration
+
+`sugar-core` carries a **second, parallel color-depth enum** —
+`SugarCraft\Core\Util\ColorProfile` — with its own `detect()` implementation.
+It is a distinct type (int-backed, five cases `NoTty=0`/`Ascii=1`/`Ansi=2`/
+`Ansi256=3`/`TrueColor=4`, against this library's string-backed eight-case
+enum), and its consumers do not require this library: `sugar-style` and
+`candy-top` resolve their color depth through the Core fork. The
+"canonical chain"/"shared vocabulary" language in this README is scoped to
+this library's surfaces (`DetectionChain`/`Probe`/`Palette`/`ProfileWriter`);
+it never held across the two forks, and the forks answer the same environment
+differently. Measured divergences (fresh process, `TERM=xterm-256color`, no
+stream argument):
+
+| Env | Core `ColorProfile::detect()` | This library (ladder) |
+|-----|-------------------------------|------------------------|
+| `NO_COLOR=1` | `Ascii` — suppression floors at the black/white pair, decoration kept | `NoTTY` rung (source `env:NO_COLOR`) — full-strip behavior |
+| `FORCE_COLOR=1` | `TrueColor` — any truthy force var jumps straight to full color | `Ansi` — the level table is honored (`1` → 16 colors) |
+
+The structural roots of those flips: the Core fork has no level table and no
+full-strip rung for suppression — any truthy `FORCE_COLOR` is `TrueColor`, and
+`Ascii` is its suppression floor (`NoTty` arises there only from a non-TTY
+stream or `TERM=dumb`, never from `NO_COLOR`/`CLICOLOR=0`); it answers from the
+environment alone, with no terminfo phase. This library keeps Chalk's level
+semantics, floors a *falsy* `FORCE_COLOR` at `Ascii`, and floors suppression at
+the `NoTTY` rung, with `Probe` adding the opt-in terminfo phase on top. Neither
+is wrong on its own terms — but anything that can observe both enums must not
+assume agreement, and should pin which ladder produced a given value.
+Reconciling the forks (a single enum, or a documented bridge between the two)
+is an owner-level ruling, recorded as follow-up #26 in
+`findings/plan_sugar-colorprofile.md`.
 
 ## Architecture
 

@@ -133,3 +133,4 @@ Address all 24 code review findings in sugar-colorprofile, consolidating duplica
 | 23 | Redundant null checks | Deferred — defensive checks are harmless; removal would be cosmetic with no functional benefit |
 | 24 | testConvertToAnsiIsReducedPalette fragile assertion | 4.2 |
 | 25 (Async) | Completely synchronous library | 3.1 |
+| 26 (CP-6, 2026-11-06) | `SugarCraft\Core\Util\ColorProfile` is a second parallel color-depth enum (own `detect()`, no level table, `Ascii` suppression floor) — same env can answer differently; measured divergences tabled in README "Fleet integration"; convergence/bridge ruling owed (owner-level) | — |
