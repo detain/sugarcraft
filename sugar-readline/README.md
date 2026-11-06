@@ -19,8 +19,8 @@ sugar-readline — an interactive line-editing prompt library for terminal UIs, 
 - **MultiSelectPrompt** — filtered multi-choice with min/max enforcement and FIFO rollover at the cap
 - **ConfirmationPrompt** — yes/no with customizable labels, decoupled select-vs-submit
 - **TextareaPrompt** — multi-line text input with line/column cursor and optional max-line cap; Enter submits, Shift+Enter and Ctrl+J break lines
-- **Immutable state** — every handling method returns a new instance; `view()` returns the ANSI string and `value()` the data, while the `Readline` pump owns all terminal writes
-- **Vim keybindings** — vi-mode (Insert/Normal, plus a motion-only Visual scaffold) handled by the shared `sugar-forms` `VimKeyHandler` — the same handler backing `sugar-forms` and `sugar-widgets`; new bindings in `VimAction` enum benefit all three libs. Includes text objects: `ci"`, `di(`, `da{`, `yiw` and friends, with a working unnamed register (`x`/`dd`/`yy`/text-object yanks feed `p`)
+- **Immutable state** — every input-handling method returns a new instance; `view()` returns the ANSI string while each prompt exposes its own data accessor (`value()` on TextPrompt/TextareaPrompt, `selectedValue()` on SelectionPrompt, `selectedValues()` on MultiSelectPrompt, `result()` on ConfirmationPrompt), and the `Readline` pump owns all terminal writes
+- **Vim keybindings** — vi-mode (Insert/Normal, plus a motion-only Visual scaffold); `ViMode` delegates its key-to-operation mapping to `VimKeyHandler` in `sugar-forms` — the same handler that the `sugar-forms` widgets drive and that `sugar-widgets` re-exports through its `class_alias` facade; new bindings in the `VimAction` enum land in `sugar-forms` and benefit all three libs. Includes text objects: `ci"`, `di(`, `da{`, `yiw` and friends, with a working unnamed register (`x`/`dd`/`yy`/text-object yanks feed `p`)
 - **NO_COLOR respected** — when the `NO_COLOR` environment variable is set to a non-empty value, every decoration (colour and style alike) falls away and prompts print as plain text
 
 ## Install
