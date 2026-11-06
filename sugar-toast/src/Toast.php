@@ -1027,13 +1027,21 @@ final class Toast
     }
 
     /**
-     * Which Action (if any) covers frame position ($col, $row)? First match
-     * in queue order wins; a position with no button returns null. This is
-     * the dispatch door the README's host-side mouse/keyboard recipe calls.
+     * Which Action (if any) covers frame position ($col, $row)? Where two
+     * boxes share rows, the top-most one wins; a position with no button
+     * returns null. This is the dispatch door the README's host-side
+     * mouse/keyboard recipe calls.
      */
     public function actionAt(int $col, int $row, string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): ?Action
     {
-        foreach ($this->actionRects($background, $viewportWidth, $viewportHeight) as $rect) {
+        // Walk from the back of the stack: layout() emits boxes in queue
+        // order and view() composites them in that order, so a later box
+        // paints OVER an earlier one. On a clamped stack two boxes can land
+        // on the SAME rows; the visible — and therefore hittable — button is
+        // the one added last. Matching in queue order would fire a callback
+        // for a button hidden beneath a newer box, breaking the contract
+        // that the clickable set is exactly what is on screen.
+        foreach (\array_reverse($this->actionRects($background, $viewportWidth, $viewportHeight)) as $rect) {
             if ($rect['row'] === $row && $col >= $rect['col'] && $col < $rect['col'] + $rect['width']) {
                 return $rect['action'];
             }
