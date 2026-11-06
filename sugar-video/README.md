@@ -87,13 +87,16 @@ These demos resolve the autoloader from a repo checkout (the library's own `vend
 | `halfblock` | 24-bit `▀` half-blocks, 2× vertical resolution | 24-bit color |
 | `quarterblock` | 24-bit quarter-block characters, 2×2 sub-cell resolution | 24-bit color |
 | `sixel` | Sixel graphics protocol (DEC) | Sixel-capable |
-| `kitty` | Kitty graphics protocol (APC `\x1b_G`) | Kitty-compatible |
+| `kitty` | Kitty graphics protocol (APC `\x1b_G`) | Kitty-compatible — recognised via the `TERM=xterm-kitty` environment surrogate, no protocol handshake |
 | `iterm2` | iTerm2 inline image (OSC 1337) | iTerm2 / WezTerm |
 | `auto` | Selector, not a ninth mode: probes the terminal at open and picks the best mode it can render. There is no `Mode::Auto` case — `Mode::from('auto')` throws a `ValueError` | — |
 
 Auto mode probes the terminal using `Mosaic::diagnose()` (for sixel/kitty/
 iTerm2) and falls back to `SugarCraft\ColorProfile\Probe::colorProfile()` for
-ANSI modes.
+ANSI modes. The kitty rung is environment-driven: `RendererFactory::supports()`
+consults sugar-colorprofile's `Capability::KittyKeyboard`, which its probe sets
+only when `TERM` equals `xterm-kitty` — the player never negotiates the Kitty
+graphics protocol itself.
 
 ### Luminance ramp selection
 
