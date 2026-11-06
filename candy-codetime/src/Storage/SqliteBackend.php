@@ -51,10 +51,10 @@ final class SqliteBackend implements HeartbeatReader
             // and every bin call-site already fail-softs a Throwable.
             $this->db->exec('PRAGMA synchronous = NORMAL');
         }
-        // A negative cache_size is kibibytes: a 64 MB page cache keeps the
-        // range scans over idx_heartbeats_time in memory even at full
-        // history. The database itself stays far below that, so this is
-        // headroom, not pressure.
+        // A negative cache_size is kibibytes: a 64,000 KiB (62.5 MiB) page
+        // cache keeps the range scans over idx_heartbeats_time in memory even
+        // at full history. The database itself stays far below that, so this
+        // is headroom, not pressure.
         $this->db->exec('PRAGMA cache_size = -64000');
         // No PRAGMA foreign_keys: heartbeats and milestones are standalone
         // tables, so enabling it would be dead configuration implying
