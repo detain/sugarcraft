@@ -223,10 +223,14 @@ public function withBorder(?\SugarCraft\Style\Border $border): self
 // Apply a sugar-style Style to the overlay window
 public function withStyle(?\SugarCraft\Style\Style $style): self
 
-// Attach a HelpBar (keyboard shortcut summary) below the filter list
+// Attach a HelpBar (keyboard shortcut summary) below the filter list. Its
+// rendered line is hard-clipped to the overlay width (no ellipsis), so a
+// wide legend under-reports its own keys at narrow widths — size the
+// overlay to fit the legend or keep the legend short.
 public function withHelpBar(?HelpBar $helpBar): self
 
-// Attach a StatusBar (status message line) at the bottom of the overlay
+// Attach a StatusBar (status message line) at the bottom of the overlay;
+// the same hard clip to the overlay width applies.
 public function withStatusBar(?StatusBar $statusBar): self
 
 // Register a callback invoked after SIGWINCH resize events (cols, rows)
