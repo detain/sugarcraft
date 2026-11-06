@@ -512,8 +512,10 @@ preserved underneath, and `Cmd::quit()` restores it. Best for
 fullscreen TUIs.
 
 Pass `useAltScreen: false` + `inlineMode: true` for a program that
-shares scrollback with the surrounding shell. The runtime saves the
-cursor on first frame and restores it after each repaint, so
+shares scrollback with the surrounding shell. A save/restore pair
+brackets the region: the first frame emits `ESC 7` (save cursor) before
+its lines, and every repaint after that emits `ESC 8` (restore cursor)
+plus an erase-to-end-of-screen **before** drawing the new frame — so
 preceding shell output stays visible. Pair with `Cmd::println()` to
 emit lines that scroll above the program region.
 
