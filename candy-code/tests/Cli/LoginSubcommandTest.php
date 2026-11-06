@@ -9,6 +9,7 @@ use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Cli\Subcommands;
+use SugarCraft\Code\Support\ProcessContainment;
 
 /**
  * PRV-4 tier 2: `candy-code login <provider>`.
@@ -39,6 +40,16 @@ final class LoginSubcommandTest extends TestCase
     {
         Subcommands::resetLoginSeamsForTesting();
         Bootstrap::useConfigPath(null);
+
+        // The PATH-window passthrough test strips PATH before a real spawn, so
+        // ProcessContainment probes its detach candidates with setsid
+        // unresolvable and MEMOIZES the php -r stub prefix process-wide —
+        // surviving the env restore. That wrapper forks a whole interpreter per
+        // later spawn (~90 ms extra), which starved budget-sensitive co-run
+        // suites (Workflows\StageModelSelectionTest lost its model pin across
+        // the timeout-ceil rebuild). Nulling the memo re-derives from the
+        // restored environment on the next resolution.
+        ProcessContainment::setDetachedSpawnCandidatesForTesting(null);
 
         foreach (glob($this->dir . '/*') ?: [] as $file) {
             @unlink($file);
