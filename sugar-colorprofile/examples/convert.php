@@ -17,7 +17,7 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\ColorProfile\Color;
-use SugarCraft\ColorProfile\Profile;
+use SugarCraft\ColorProfile\ColorProfile; // (The old deprecated Profile:: facade still resolves via class_alias; new code names the real enum.)
 
 echo "=== Color Conversion Demo ===\n\n";
 
@@ -32,17 +32,17 @@ echo "Original color: {$original->toHex()} (RGBA: {$original->r}, {$original->g}
 // TrueColor keeps the full RGB triple, ANSI 256 re-indexes it into the 256
 // palette, the 16-colour rungs collapse to SGR 30-37/90-97, and a NoTTY
 // writer emits no escape at all (degrade() strips every sequence).
-$encode = static fn (Color $converted, Profile $profile): string => match (true) {
-    $profile === Profile::TrueColor => $converted->toAnsiForeground(),
-    $profile === Profile::ANSI256 => $converted->toAnsi256Foreground(),
-    $profile === Profile::ANSI, $profile === Profile::Ascii => $converted->toAnsi16Foreground(),
+$encode = static fn (Color $converted, ColorProfile $profile): string => match (true) {
+    $profile === ColorProfile::TrueColor => $converted->toAnsiForeground(),
+    $profile === ColorProfile::Ansi256 => $converted->toAnsi256Foreground(),
+    $profile === ColorProfile::Ansi, $profile === ColorProfile::Ascii => $converted->toAnsi16Foreground(),
     default => '',
 };
 
 echo "| Profile    | Result  | ANSI escape               |\n";
 echo "|------------|---------|---------------------------|\n";
 
-foreach ([Profile::TrueColor, Profile::ANSI256, Profile::ANSI, Profile::Ascii, Profile::NoTTY] as $profile) {
+foreach ([ColorProfile::TrueColor, ColorProfile::Ansi256, ColorProfile::Ansi, ColorProfile::Ascii, ColorProfile::NoTTY] as $profile) {
     $converted = $original->convert($profile);
     $fg = $encode($converted, $profile);
     // Show the escape readably: the real 0x1B byte becomes the two-character
@@ -53,7 +53,7 @@ foreach ([Profile::TrueColor, Profile::ANSI256, Profile::ANSI, Profile::Ascii, P
 
 echo "\n--- Rendered (your terminal may not show all correctly) ---\n";
 echo "The escape bytes differ per rung — this is the degradation, live:\n";
-foreach ([Profile::TrueColor, Profile::ANSI256, Profile::ANSI, Profile::Ascii, Profile::NoTTY] as $profile) {
+foreach ([ColorProfile::TrueColor, ColorProfile::Ansi256, ColorProfile::Ansi, ColorProfile::Ascii, ColorProfile::NoTTY] as $profile) {
     $converted = $original->convert($profile);
     $fg = $encode($converted, $profile);
     echo $fg . "[{$profile->label()}] This is #6b50ff converted to {$profile->label()} \x1b[0m\n";
@@ -70,7 +70,7 @@ $rainbow = [
     Color::parse('#ff00ff'),
 ];
 foreach ($rainbow as $c) {
-    $fg = $c->convert(Profile::ANSI256)->toAnsi256Foreground();
+    $fg = $c->convert(ColorProfile::Ansi256)->toAnsi256Foreground();
     echo $fg . '█' . "\x1b[0m";
 }
 echo "\n";

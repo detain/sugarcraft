@@ -17,7 +17,7 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\ColorProfile\ProfileWriter;
 use SugarCraft\ColorProfile\Palette;
-use SugarCraft\ColorProfile\Profile;
+use SugarCraft\ColorProfile\ColorProfile;
 
 echo "=== ProfileWriter Degradation Demo ===\n\n";
 
@@ -32,7 +32,7 @@ $trueColorText = "\x1b[38;2;255;100;50mOrange text\x1b[0m "
     . "\x1b[38;2;200;50;255mPurple text\x1b[0m\n";
 
 echo "TrueColor input (what we write):\n";
-foreach ([Profile::TrueColor, Profile::ANSI256, Profile::ANSI, Profile::Ascii] as $forceProfile) {
+foreach ([ColorProfile::TrueColor, ColorProfile::Ansi256, ColorProfile::Ansi, ColorProfile::Ascii] as $forceProfile) {
     $degraded = (clone $writer)->withProfile($forceProfile);
     echo "  As {$forceProfile->label()}: ";
     // For demo clarity we print a description of what would be written
@@ -46,7 +46,7 @@ $input = "\x1b[38;2;255;100;50m[Orange]\x1b[0m "
     . "\x1b[38;2;0;200;100m[Teal]\x1b[0m "
     . "\x1b[38;2;200;50;255m[Purple]\x1b[0m\n";
 
-foreach ([Profile::TrueColor, Profile::ANSI256, Profile::ANSI, Profile::Ascii, Profile::NoTTY] as $p) {
+foreach ([ColorProfile::TrueColor, ColorProfile::Ansi256, ColorProfile::Ansi, ColorProfile::Ascii, ColorProfile::NoTTY] as $p) {
     $degraded = (clone $writer)->withProfile($p);
     echo "Profile {$p->label()}: ";
     $degraded->write($input);
