@@ -196,6 +196,12 @@ the render-time sweep replaces control characters. Control bytes inside
 content therefore still consume measured cells even though the printed frame
 carries the swept text.
 
+The cursor reads break the sweep the other way: `Table::currentRow()` and
+`Table::currentCell()` answer with the stored strings **as given** — the
+sanitize pass belongs to `render()`, not to the accessors — so a value that
+came from an untrusted row must be cleaned by you before it is echoed or
+logged.
+
 ## Buffer diffing (TableRenderer)
 
 `Table::render()` is pure — it always returns a full frame. `TableRenderer` is the stateful

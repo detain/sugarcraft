@@ -242,6 +242,12 @@ final class Table
      * show, not about the stale last-settled frame. Null when the cursor
      * falls off the view entirely (empty table, or an index left past
      * the end by a filter).
+     *
+     * The cells are returned RAW — exactly the strings addRow() stored,
+     * before the render-time sanitize sweep (which lives inside
+     * Column::padded(), reached only through render()) — so echoing them
+     * bypasses every guard the table owns. Clean untrusted values first;
+     * the README "Trust boundary" section carries the user-facing rule.
      */
     public function currentRow(): ?array
     {
@@ -253,6 +259,11 @@ final class Table
         return $this->rows[$idx];
     }
 
+    /**
+     * One cell under the cursor, RAW like {@see self::currentRow()} —
+     * the stored string with no sweep applied — or null when the cursor
+     * is off the view or the column index is out of range.
+     */
     public function currentCell(int $colIndex): ?string
     {
         $row = $this->currentRow();
