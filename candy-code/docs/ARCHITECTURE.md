@@ -1199,6 +1199,7 @@ written against; the zone names are the live `*_ZONE_PREFIX` constants):
 │ transcript / active pane      │ docked side panes `pane:`     │  ← content band
 │ (chat, tool rows `toolcall:`,│ dividers `divider:`           │    when ≥80 cols
 │  agent tiles `agent-line:`)   │ `stackdiv:` `splitdiv:`       │    and agents live
+│                               │ their rows `siderow:`         │
 ├───────────────────────────────┴──────────────────────────────┤
 │ agent strip — live sub-agent one-liners                       │
 │ input line (caret; palette `picker-item:` opens over it)      │
