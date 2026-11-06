@@ -123,7 +123,10 @@ candy-kv --version
   (exit 2) rather than silently ignored — a typo'd `--ttl300` never becomes a
   forever secret.
 - `-d` accepts the delimiter attached (`-d,`) or spaced (`-d ,`); the printed
-  delimiter is the raw bytes you asked for.
+  delimiter is the raw bytes you asked for. A bare trailing `-d` (`list -d`)
+  is not an error either — it keeps the tab default, unlike the
+  value-hungry flags, which refuse a missing or flag-like next token loudly
+  (exit 2).
 
 ### Exit codes
 
