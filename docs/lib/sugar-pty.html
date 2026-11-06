@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarCraft — SugarPty</title>
-<meta name="description" content="SugarPty: Pseudo-terminals in PHP — spawn and drive child processes under a real tty, with resizing (Linux + macOS, and Windows via ConPTY on PHP 8.4+).">
+<meta name="description" content="SugarPty: Pseudo-terminals in PHP — spawn and drive child processes under a real tty, with resizing (Linux + macOS, best-effort BSD/Solaris, and Windows via ConPTY on PHP 8.4+).">
 <meta property="og:title" content="SugarCraft — SugarPty">
 <meta property="og:description" content="Pseudo-terminal primitives — spawn child processes wired to a controlled PTY, with resize forwarding and non-blocking I/O.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-pty.png">
@@ -45,7 +45,7 @@
         <p class="detail-sub">Pseudo-terminal primitives — open / spawn / read / write / resize</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/x/tree/main/xpty" style="color: inherit;">charmbracelet/x/xpty</a></span>
-          <span class="tag-chip">linux + macos + windows (ConPTY)</span>
+          <span class="tag-chip">linux + macos + bsd/solaris (best-effort) + windows (ConPTY)</span>
           <span class="tag-chip">ext-ffi</span>
           <span class="tag-chip">posix_openpt</span>
           <span class="tag-chip">tiocswinsz</span>
