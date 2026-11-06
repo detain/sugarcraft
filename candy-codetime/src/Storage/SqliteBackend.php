@@ -38,10 +38,19 @@ final class SqliteBackend implements HeartbeatReader
         // while a dashboard reads it, and under the rollback journal every
         // commit locked all readers out until it finished.
         $this->db->exec('PRAGMA journal_mode = WAL');
-        // WAL's companion. FULL buys nothing here: heartbeat telemetry that
-        // loses its last transaction to a power cut costs one minute of
-        // history, and every bin call-site already fail-softs a Throwable.
-        $this->db->exec('PRAGMA synchronous = NORMAL');
+        // WAL's companion, armed ONLY on a confirmed migration. exec() is not
+        // a receipt: a refused migration (read-only filesystem, locking-
+        // protocol clash) answers with the OLD mode, and synchronous=NORMAL
+        // on a ROLLBACK journal is the corruption-prone combination — commits
+        // acknowledge before the journal lands. Read the mode back; when it
+        // is not 'wal', synchronous stays at SQLite's safe FULL default,
+        // which is exactly what is correct for the journal in use.
+        if (strtolower((string) $this->db->querySingle('PRAGMA journal_mode')) === 'wal') {
+            // FULL buys nothing under WAL: heartbeat telemetry that loses its
+            // last transaction to a power cut costs one minute of history,
+            // and every bin call-site already fail-softs a Throwable.
+            $this->db->exec('PRAGMA synchronous = NORMAL');
+        }
         // A negative cache_size is kibibytes: a 64 MB page cache keeps the
         // range scans over idx_heartbeats_time in memory even at full
         // history. The database itself stays far below that, so this is
