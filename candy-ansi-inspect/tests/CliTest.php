@@ -21,9 +21,12 @@ final class CliTest extends TestCase
     }
 
     /**
+     * @param array<string, string>|null $env Full replacement environment for the
+     *                                        child (null = inherit the parent's)
+     *
      * @return array{0: int, 1: string, 2: string} [exitCode, stdout, stderr]
      */
-    private static function runCli(string $arg): array
+    private static function runCli(string $arg, ?array $env = null): array
     {
         $cmd = escapeshellarg(PHP_BINARY) . ' '
             . escapeshellarg(self::bin()) . ' '
@@ -33,6 +36,8 @@ final class CliTest extends TestCase
             $cmd,
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
+            null,
+            $env,
         );
         self::assertIsResource($proc);
         fclose($pipes[0]);
@@ -104,6 +109,34 @@ final class CliTest extends TestCase
             chmod($tmp, 0o600);
             unlink($tmp);
         }
+    }
+
+    public function testRefusalLanguageFollowsTheDetectedLocale(): void
+    {
+        // m3: the bin entry calls T::setLocale(T::detect()), so the refusal
+        // answers the caller's locale (LC_ALL → LC_MESSAGES → LANG). The German
+        // string is read from lang/de.php rather than hardcoded, so the pin
+        // tracks the catalogue instead of fossilising prose. The env array
+        // fully replaces the child environment — a stray LC_ALL on the runner
+        // cannot flip either leg.
+        $catalogue = require dirname(__DIR__) . '/lang/de.php';
+        $this->assertIsArray($catalogue);
+        $german = str_replace(
+            '{path}',
+            '/no/such/de-locale-probe',
+            (string) $catalogue['cli.not_a_file'],
+        );
+
+        [$code, $stdout, $stderr] = self::runCli('/no/such/de-locale-probe', ['LANG' => 'de']);
+        $this->assertSame(1, $code, $stderr);
+        $this->assertStringContainsString($german, $stderr);
+        $this->assertStringNotContainsString('not a readable file', $stderr);
+        $this->assertSame('', $stdout);
+
+        // Polarity: with no locale env at all the same refusal stays English.
+        [, , $english] = self::runCli('/no/such/de-locale-probe', ['PATH' => '/usr/bin:/bin']);
+        $this->assertStringContainsString('not a readable file', $english);
+        $this->assertStringNotContainsString($german, $english);
     }
 
     /**

@@ -209,7 +209,8 @@ named test rather than hidden — anything *else* that loses a byte is a bug:
    item 7's vanished sequence) and the cancel byte itself is consumed as the
    terminator, never echoed. `ESC]0;a CAN b BEL` therefore arrives as a truncated
    `ESC]0;a BEL` segment, the text `b`, and the ground-state BEL echo — the CAN
-   byte appears nowhere in the report. Since sugar-ansi-parser `35dda61c0`
+   byte appears nowhere in the report. This dispatch-on-cancel behaviour landed
+   in sugar-ansi-parser `35dda61c0`
    (2026-10-23); before it the entire in-flight sequence vanished instead — one
    more byte accounted for, one byte (the cancel) still not.
    (`testCancelByteInsideStringStateDispatchesTheTruncatedPayload`)
@@ -224,16 +225,17 @@ pick one. What *is* new here is what the inspector reports afterwards:
 before this branch a truncated tail simply vanished, which is why item 7's
 cancelled prelude can now reappear inside one.
 
-## Localisation
+## Localization
 
 Sixteen locale files ship in `lang/`, and the two messages the tool prints
-itself (usage, the not-a-file refusal) route through `Lang::t()` — the decoded
-labels inside a report are English-built in `Inspector` — but locale
-*selection* is dormant: neither `bin/` nor `src/` calls `T::setLocale()`, and
-the lookup defaults hard to `en`, so `LANG=de.UTF-8 candy-ansi-inspect` still
-answers English. Turning detection on (a `T::setLocale(T::detect())` call at
-bin entry) is an owner-gated decision tracked in
-`prompt_kit/findings/docs-reviews-1104/candy-ansi-inspect-owner-gate.md`.
+itself (usage, the not-a-file refusal) route through `Lang::t()`. The bin
+entry calls `T::setLocale(T::detect())`, so locale *selection* is live
+(`LC_ALL` → `LC_MESSAGES` → `LANG`, `fr_FR.UTF-8` normalises to `fr`, fallback
+`en`): `LANG=de.UTF-8 candy-ansi-inspect` answers German. The decoded labels
+inside a report are English-built in `Inspector`, so report bytes never depend
+on the caller's locale. Activating detection was an owner-gated decision,
+executed 2026-11-06; the decision record lives at
+`prompt_kit/findings/docs-reviews-1104/plan-review/candy-ansi-inspect-owner-gate.md`.
 
 ## Test
 
