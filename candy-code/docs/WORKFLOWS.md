@@ -572,15 +572,61 @@ Semantics, precisely:
   if the PCRE will not compile. A task constructed directly (bypassing the
   builder) with a broken pattern cannot pass *or* silently skip its gate: the
   scan reports `verdict scan failed closed` and the stage fails.
-- **Absent ⇒ untouched.** With no `reject()` the verification stage is
-  byte-for-byte the old engine path: one verifier dispatch, combined
-  `task + "\n" + verifier` output.
+- **Absent ⇒ the verdict path is skipped, the question scan is not.** With no
+  `reject()` the stage never re-dispatches on a verdict: one verifier dispatch,
+  combined `task + "\n" + verifier` output, byte-for-byte the old engine path.
+  The completed output is still read for the `ESCALATE:` marker described
+  below — that scan answers "did a human get asked?", not "did the rule fire",
+  so it changes outcomes only when the marker is actually present.
 
 This is what makes a review→fix→re-review loop an engine feature rather than an
 operator habit: the fixer task runs, the verifier judges, a rejecting verdict
 consumes a retry (or stops the run for `/workflow resume` after you act on the
 reason), and stage tokens and cost already fold every attempt into the run
 totals.
+
+### `ESCALATE:` stops the run for a human — retries never burn
+
+A verdict says *no, try again*. A question says *stop and get a person* — and
+the two must not share a mechanism. When a verifier's **completed** output
+contains a line that starts with the literal `ESCALATE:` (leading spaces or
+tabs allowed, case-sensitive, any line of the output), the engine fails the
+stage as `escalated`:
+
+```php
+->withVerification(
+    'review',
+    Tasks::agent('coder')->prompt('Fix the finding.'),
+    Tasks::agent('reviewer')
+        ->prompt('Review the fix. If scope is unclear, start a line with "ESCALATE: <question>".')
+        ->reject('/\bREJECT\b/i')
+        ->retries(2),
+)
+```
+
+Semantics, precisely:
+
+- **The marker is always read, `reject()` or not.** Escalation is a property of
+  what the verifier *said*, not of a pattern you configured, so a verification
+  stage without `reject()` still stops on the marker. (The scan runs only on a
+  `Completed` verifier result — mechanical failures keep their verbatim paths.)
+- **A question outranks a verdict.** If the output both matches the `reject()`
+  pattern and carries an `ESCALATE:` line, the stage fails as `escalated` —
+  retrying something a human needs to answer would waste the budget.
+- **Zero retries consumed.** Unlike a reject match (which re-dispatches until
+  the shared `retries` budget is spent), an escalation fails on the **first**
+  completed attempt: no re-dispatch, `retries(N)` untouched, and the reason
+  says `[not retried — the run stops for a person]`. The run then stops exactly
+  like any failed stage.
+- **The question survives the failure.** The escalated verifier's raw output is
+  carried on the stage result, and the engine writes it into the run context
+  (`<stage>.output`) before the failure check — so a `/workflow pause` record
+  for the run shows the human *what is being asked*. Honest boundary: the
+  stage's failure reason itself is not persisted in the pause record's
+  `stageResults` list (that list carries the successful prefix only); the
+  question is what survives, which is the part a person needs.
+- **Resume answers it.** Act on the question, `/workflow resume` re-runs the
+  stage with the successful prefix kept — the same machinery every failure uses.
 
 `Workflow` itself is immutable; `withStatus()` returns a new instance.
 

@@ -617,6 +617,129 @@ YAML;
         $this->assertCount(2, $this->prompts, 'an invalid threshold must not burn a retry loop');
     }
 
+    // ------------------------------------------------------------- escalation
+
+    public function testAnEscalateLineStopsTheStageWithoutTouchingTheRetryBudget(): void
+    {
+        $this->registerRejectingVerification(verifierRetries: 2);
+        $this->scriptVerdict('review', static fn (int $n): string => "notes\nESCALATE: approve v2 or v3?\nend");
+
+        $run = $this->engine->run('verdict');
+
+        $this->assertSame(WorkflowStatus::Failed, $run->status);
+        $this->assertSame(
+            ['do the work', 'review OUT[do the work]'],
+            $this->prompts,
+            'an escalation is a deliberate stop — the two spare retries must NOT burn',
+        );
+        $error = (string) $run->stageResults[0]->error;
+        $this->assertStringContainsString('asked for a human decision', $error);
+        $this->assertStringContainsString('ESCALATE: approve v2 or v3?', $error, 'the reason quotes the question line');
+        $this->assertStringContainsString('[not retried', $error);
+        $this->assertStringNotContainsString('[failed on all', $error, 'the budget was never spent');
+    }
+
+    public function testAnEscalationOutranksARejectingVerdictInOneDispatch(): void
+    {
+        $this->registerRejectingVerification();
+        $this->scriptVerdict('review', static fn (int $n): string => "REJECT: the rename drifts\nESCALATE: is the rename in scope?");
+
+        $run = $this->engine->run('verdict');
+
+        $this->assertSame(WorkflowStatus::Failed, $run->status);
+        $error = (string) $run->stageResults[0]->error;
+        $this->assertStringContainsString('asked for a human decision', $error);
+        $this->assertStringNotContainsString('verdict rejected', $error, 'the question outranks the verdict');
+        $this->assertCount(2, $this->prompts, 'one dispatch, escalated, done');
+    }
+
+    public function testTheMarkerOnlyCountsAtLineStartWithOptionalIndentation(): void
+    {
+        $this->registerRejectingVerification();
+        $this->scriptVerdict('review', static fn (int $n): string => "this will escalate: later\nand ESCALATE: midline stays prose");
+
+        $run = $this->engine->run('verdict');
+
+        $this->assertSame(WorkflowStatus::Completed, $run->status, 'lowercase and mid-line shapes are not the marker');
+        $this->assertStringContainsString('escalate', (string) $run->stageResults[0]->output);
+
+        $indented = "notes\n \tESCALATE: tab-indent is allowed\nend";
+        $this->scriptVerdict('review', static fn (int $n): string => $indented);
+        $second = $this->engine->run('verdict');
+
+        $this->assertSame(WorkflowStatus::Failed, $second->status);
+        $this->assertStringContainsString('ESCALATE: tab-indent is allowed', (string) $second->stageResults[0]->error);
+    }
+
+    public function testTheEscalationScanIsAlwaysOnEvenWithoutAnyRejectPattern(): void
+    {
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('plain-verify')
+                ->description('verification with no verdict rule')
+                ->withVerification(
+                    'check',
+                    Tasks::agent('coder')->prompt('do the work'),
+                    Tasks::agent('reviewer')->prompt('review {{prevResult}}'),
+                )
+                ->build(),
+        );
+        $this->scriptVerdict('review', static fn (int $n): string => 'ESCALATE: need the deploy window');
+
+        $run = $this->engine->run('plain-verify');
+
+        $this->assertSame(WorkflowStatus::Failed, $run->status);
+        $this->assertCount(2, $this->prompts);
+        $this->assertStringContainsString('asked for a human decision', (string) $run->stageResults[0]->error);
+        $this->assertStringContainsString('ESCALATE: need the deploy window', (string) $run->stageResults[0]->error);
+    }
+
+    public function testAnEscalatedQuestionSurvivesIntoThePauseRecordAndResumes(): void
+    {
+        $this->registerRejectingVerification(verifierRetries: 2);
+        $this->scriptVerdict('review', static fn (int $n): string => "ESCALATE: approve v2 or v3?");
+
+        $run = $this->engine->run('verdict');
+        $this->assertSame(WorkflowStatus::Failed, $run->status);
+
+        $this->engine->pause($run->workflowId);
+        $record = json_decode(
+            (string) file_get_contents($this->tempDir . '/workflows/.running/verdict.json'),
+            true,
+            flags: JSON_THROW_ON_ERROR,
+        );
+
+        $this->assertStringContainsString(
+            'ESCALATE: approve v2 or v3?',
+            (string) $record['context']['check.output'],
+            'the human reading the pause record must see WHAT is being asked',
+        );
+        $this->assertSame(0, $record['stagesCompleted']);
+
+        $this->script = [];
+        $resumed = $this->engine->resume($run->workflowId);
+
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status);
+        $this->assertFileDoesNotExist($this->tempDir . '/workflows/.running/verdict.json');
+    }
+
+    public function testAnEscalatedLineIsSanitizedLikeEveryMatchedLine(): void
+    {
+        $line = 'ESCALATE: "ask" ' . "\x07" . str_repeat('x', 300);
+        $this->registerRejectingVerification();
+        $this->scriptVerdict('review', static fn (int $n): string => "intro\n" . $line);
+
+        $run = $this->engine->run('verdict');
+
+        $this->assertSame(WorkflowStatus::Failed, $run->status);
+        $error = (string) $run->stageResults[0]->error;
+        $this->assertStringNotContainsString("\x07", $error, 'control bytes never reach the reason');
+        $this->assertStringContainsString('ESCALATE: \\"ask\\"', $error, 'quotes are escaped and the marker rides the quoted line');
+        $this->assertStringContainsString('...', $error, 'the 300-char line is clipped');
+        $this->assertStringNotContainsString(str_repeat('x', 200), $error);
+        $this->assertStringNotContainsString('intro', $error, 'only the matched line, never the whole output');
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {

@@ -95,6 +95,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private const VERDICT_CLEAN = 'clean';
     /** Scan outcome: the pattern could not compile — fail CLOSED, never clean. */
     private const VERDICT_INVALID = 'invalid';
+    /** Scan outcome: the verifier asked a human — stop for a person, never re-dispatch. */
+    private const VERDICT_ESCALATED = 'escalated';
+
+    /**
+     * The documented escalation marker: a line of the verifier's output that
+     * starts (leading spaces/tabs allowed) with `ESCALATE:`. A question, not a
+     * verdict — unlike a reject match it consumes no retries and re-dispatches
+     * nothing; the stage fails once and the run stops for a human.
+     */
+    private const ESCALATION_PATTERN = '/^[ \t]*ESCALATE:/m';
 
     /**
      * Finished (or interrupted) runs this engine can still pause, keyed by the
@@ -2103,9 +2113,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // every attempt counts against retries: N once, whether the pool
         // re-ran it mechanically or the engine re-dispatched after a rejected
         // verdict. A non-completed dispatch has no verdict to read (a dead
-        // verifier speaks nothing), and with reject unset this loop runs a
-        // single legacy dispatch whose result feeds the pre-verdict branches
-        // byte-identically.
+        // verifier speaks nothing), and with no reject pattern and no
+        // ESCALATE: marker the scan reads CLEAN and the result feeds the
+        // pre-verdict branches with a byte-identical outcome.
         $maxAttempts = 1 + ($verifier->retries ?? 0);
         $verifierAttempts = [];
         $attemptsUsed = 0;
@@ -2137,7 +2147,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // the documented law for pool retries carried to verdict rounds.
             $dispatched[] = ['key' => self::resultKey($verifier->name, $stageName . '_verifier'), 'result' => $verifierResult];
 
-            if ($verifierResult->status !== AgentStatus::Completed || $verifier->reject === null) {
+            if ($verifierResult->status !== AgentStatus::Completed) {
+                // A dead verifier speaks nothing: no verdict, no question —
+                // the mechanical branches below handle it verbatim.
                 $verdict = null;
                 break;
             }
@@ -2150,6 +2162,25 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // such patterns at set time) fails CLOSED: a rule that never ran must
         // not read as a clean verdict.
         if ($verdict !== null && $verdict['kind'] === self::VERDICT_INVALID) {
+            return new StageResult(
+                stageName: $stageName,
+                status: WorkflowStatus::Failed,
+                output: $verifierResult->output,
+                error: $verdict['reason'],
+                agents: [$taskResult, ...$verifierAttempts],
+                startedAt: $taskResult->startedAt ?? $stageStartedAt,
+                completedAt: new \DateTimeImmutable(),
+            );
+        }
+
+        // The verifier asked a human. Same failure channel, one deliberate
+        // mechanical difference: the verdict loop exits after THIS dispatch
+        // (the while-condition continues only on VERDICT_REJECTED), so no
+        // retry budget is consumed and nothing re-dispatches. The question
+        // text rides StageResult->output, which the run records into its
+        // context before checking for failure — so an escalated question
+        // survives verbatim into the pause record a human will read.
+        if ($verdict !== null && $verdict['kind'] === self::VERDICT_ESCALATED) {
             return new StageResult(
                 stageName: $stageName,
                 status: WorkflowStatus::Failed,
@@ -2873,11 +2904,34 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * times. 1 — the default — is the match-once behavior, reason string
      * byte-identical.
      *
+     * ESCALATION OVERRIDES VERDICTS. An `ESCALATE:` line makes this report
+     * VERDICT_ESCALATED BEFORE any reject rule is consulted — a question
+     * outranks a verdict, and unlike a rejection it must never re-dispatch
+     * (retrying a question only asks it again). A null $pattern means no
+     * reject rule is set: the scan then checks for the marker and otherwise
+     * reports CLEAN.
+     *
      * @return array{kind: string, reason: string}
      */
-    private static function scanVerdict(string $pattern, ?string $output, int $attemptsUsed, int $atLeast = 1): array
+    private static function scanVerdict(?string $pattern, ?string $output, int $attemptsUsed, int $atLeast = 1): array
     {
         $text = $output ?? '';
+
+        if (preg_match(self::ESCALATION_PATTERN, $text, $asked, PREG_OFFSET_CAPTURE) === 1) {
+            $line = self::matchedLine($text, (int) ($asked[0][1] ?? 0));
+            $after = $attemptsUsed > 1 ? " [after {$attemptsUsed} attempts]" : '';
+
+            return [
+                'kind' => self::VERDICT_ESCALATED,
+                'reason' => "escalated: verifier asked for a human decision on: \"{$line}\""
+                    . ' [not retried — the run stops for a person; answer it, then /workflow resume'
+                    . ' re-runs this stage]' . $after,
+            ];
+        }
+
+        if ($pattern === null) {
+            return ['kind' => self::VERDICT_CLEAN, 'reason' => ''];
+        }
 
         if ($atLeast < 1) {
             return [
