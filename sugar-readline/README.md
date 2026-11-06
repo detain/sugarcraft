@@ -418,7 +418,8 @@ refine the query, repeated Ctrl+R/Ctrl+S steps through older/newer matches,
 Enter accepts the match into the buffer (without submitting), and
 Escape/Ctrl+G cancels back to the original line. The prompt renders a
 `(reverse-i-search)`query': match` indicator, switching to `(failed
-reverse-i-search)` when nothing matches (including empty history).
+reverse-i-search)` when nothing matches (including empty history). On a
+hidden prompt the line masks query and match alike, in the same idiom.
 
 ## History
 
@@ -479,7 +480,11 @@ can still lose the most recent writes.
 
 Hidden prompts (`withHidden()`) never push their value: a secret stays out of
 both in-memory and on-disk history, and it never enters an attached
-`UndoManager` chain either.
+`UndoManager` chain either. Incremental history search is the one surface
+hidden mode does not suppress — Ctrl+R/Ctrl+S still open a search on a hidden
+prompt with a history attached — so the search line masks the typed query
+exactly like the buffer, character for character, with the same mask glyph;
+what you type as a query never appears in clear text.
 
 ## Submit / Abort Semantics
 

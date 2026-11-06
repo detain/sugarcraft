@@ -894,6 +894,9 @@ final class TextPrompt
     /**
      * Render the readline-style incremental-search line, e.g.
      * `(reverse-i-search)`git': git status` with the cursor after the match.
+     * On a hidden prompt the query is masked with the same idiom as the
+     * buffer: search still works (matches are found), but neither the typed
+     * query nor the matched entry ever reaches the frame in clear text.
      */
     private function searchView(): string
     {
@@ -902,9 +905,12 @@ final class TextPrompt
         $display = $this->hidden
             ? str_repeat($this->hideMask, self::charCount($this->buffer))
             : Ansi::sanitize($this->buffer);
+        $query = $this->hidden
+            ? str_repeat($this->hideMask, self::charCount($this->searchQuery))
+            : Ansi::sanitize($this->searchQuery);
 
         return Ansi::wrap(Ansi::sanitize($this->label), $this->labelStyle)
-            . '(' . $indicator . ')`' . Ansi::sanitize($this->searchQuery) . "': "
+            . '(' . $indicator . ')`' . $query . "': "
             . $display
             . Ansi::wrap(' ', $this->cursorStyle);
     }

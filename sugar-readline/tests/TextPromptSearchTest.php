@@ -284,6 +284,27 @@ final class TextPromptSearchTest extends TestCase
         $this->assertStringContainsString("(reverse-i-search)`g': git status", $p->view());
     }
 
+    public function testHiddenPromptMasksSearchQueryInView(): void
+    {
+        // A hidden prompt opens incremental search too (Ctrl+R/Ctrl+S carry
+        // no hidden gate) — the only way that surface stays secret is masking
+        // the typed QUERY like the buffer, not just the buffer. The match
+        // state itself still works; the mask is render-layer only.
+        $p = TextPrompt::new('secret> ')
+            ->withHistory($this->history('hunter2'))
+            ->withHidden()
+            ->handleKey(Key::CtrlR)
+            ->handleChar('h')->handleChar('u');
+
+        $this->assertTrue($p->isSearching());
+        $this->assertSame('hu', $p->searchQuery()); // state keeps the raw query
+        $view = $p->view();
+        $this->assertStringNotContainsString('hunter2', $view); // no matched entry
+        $this->assertStringNotContainsString('hu', $view);      // no query plaintext
+        $this->assertStringContainsString("**': ", $view);      // masked query rendered
+        $this->assertStringContainsString('*******', $view);    // masked match rendered
+    }
+
     // =========================================================================
     // Mode integration
     // =========================================================================
