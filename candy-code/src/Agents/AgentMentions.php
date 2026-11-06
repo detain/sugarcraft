@@ -150,6 +150,34 @@ final class AgentMentions
     }
 
     /**
+     * Whether $name is an address the run will NEVER route: not a reserved
+     * keyword head (those keep their channel meaning whatever the roster
+     * says — the keyword leg answers for them) and not a preset the roster
+     * holds. This is the ONE shared predicate behind both doors: draft()
+     * rewrites exactly what routes() accepts, the refusal fires exactly on
+     * what refuses() answers true for, and a name can never be both.
+     *
+     * @param \Closure(string): bool $roster
+     */
+    public static function refuses(string $name, \Closure $roster): bool
+    {
+        if (self::isReservedHead($name)) {
+            return false;
+        }
+
+        try {
+            return $roster($name) !== true;
+        } catch (\Throwable) {
+            // A throwing roster is an unanswerable door: refusing on it
+            // would silence a line the prose path could have carried. The
+            // rewrite side already declined (routes() failed closed) — so
+            // this name now travels as text, the same answer a null roster
+            // gives, and the keyword leg may still add its own notice.
+            return false;
+        }
+    }
+
+    /**
      * The bare name ONLY a line-initial address token carries; null whenever
      * the first token of the line is not `@`-plus-a-name — mid-line mentions,
      * reserved keyword colons, domains and emails, a bare `@`, and a token

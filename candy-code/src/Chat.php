@@ -12315,7 +12315,7 @@ final class Chat implements Model
 
         $name = AgentMentions::addressedName($text);
 
-        if ($name === null || AgentMentions::routes($name, static fn (string $n): bool => $manager->get($n) !== null)) {
+        if ($name === null || !AgentMentions::refuses($name, static fn (string $n): bool => $manager->get($n) !== null)) {
             return null;
         }
 
