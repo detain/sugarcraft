@@ -1449,6 +1449,7 @@ candy-code/tests/Tools/BuiltIn/EditMaxBytesTest.php	0.007	3
 candy-code/tests/Context/Triggers/TriggerTest.php	0.007	33
 candy-code/tests/Automation/OutboundWebhookConfigTest.php	0.007	32
 candy-code/tests/App/DockSeedTest.php	0.007	15
+candy-code/tests/Config/RootSurfaceDriftTest.php	0.007	4
 candy-code/tests/Server/ApiErrorShapeTest.php	0.006	2
 candy-code/tests/Permissions/PermissionGateReadOnlyInspectionTest.php	0.006	11
 candy-code/tests/Tools/Web/HtmlToMarkdownTest.php	0.006	29
