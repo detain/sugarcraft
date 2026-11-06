@@ -1,0 +1,234 @@
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Runnable interactive path for sugar-datepicker.
+ *
+ * Unlike basic.php (imperative View() walk) and constraints.php (min/max
+ * bounds), this example mounts the TEA Model inside a real sugar-core
+ * Program loop and feeds it a fixed script of KeyMsgs — the only place a
+ * reader can see how a live keystroke travels through update(), which
+ * transitions the EventStore records, and how the host quits itself when
+ * the script is exhausted. The renderer is disabled and no cursor/unicode
+ * escapes are emitted, so the run is byte-deterministic even piped to a
+ * file; the drained EventStore transcript and the final grid are printed
+ * once the loop has stopped.
+ *
+ * Determinism: fixed seed date 2026-05-01 (also pinned as the "today"
+ * reference so no wall-clock cell can drift) and a fixed EventStore clock.
+ *
+ * Run: php examples/interactive.php
+ */
+require __DIR__ . '/../vendor/autoload.php';
+
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Model as CoreModel;
+use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\QuitMsg;
+use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Subscriptions;
+use SugarCraft\DatePicker\DatePicker;
+use SugarCraft\DatePicker\EventStore;
+use SugarCraft\DatePicker\Model as DatePickerModel;
+
+/**
+ * Host-side command: flip the wrapped picker into range mode between the
+ * single-mode and range-mode legs of the script. Not a KeyMsg, so the
+ * picker itself ignores it; the demo model acts on it.
+ */
+final class SwitchToRangeMsg implements Msg
+{
+}
+
+/**
+ * TEA host program for the demo: holds the DatePicker model, walks a
+ * fixed message script through the real Program event loop, collects one
+ * transcript line per EventStore event (or per no-event step), and quits
+ * the loop itself when the script is done.
+ */
+final class InteractiveDemo implements CoreModel
+{
+    /** Fixed clock shared by the EventStore and the transcript display. */
+    public const FIXED_CLOCK = 1_777_636_800; // 2026-05-01 12:00:00 UTC
+
+    /** Fixed seed: the picker always opens on May 2026 aimed at the 1st. */
+    public const SEED_DATE = '2026-05-01';
+
+    /** @var list<array{label: string, msg: Msg}> */
+    private readonly array $script;
+
+    /**
+     * @param list<array{label: string, msg: Msg}>|null $script
+     * @param list<string> $transcript
+     */
+    public function __construct(
+        private readonly DatePickerModel $dp,
+        private readonly EventStore $store,
+        private readonly int $step = 0,
+        private readonly array $transcript = [],
+        ?array $script = null,
+    ) {
+        $this->script = $script ?? self::buildScript();
+    }
+
+    public static function create(): self
+    {
+        $store = new EventStore(clock: static fn (): int => self::FIXED_CLOCK);
+        $picker = DatePicker::new(new DateTimeImmutable(self::SEED_DATE))
+            ->withToday(new DateTimeImmutable(self::SEED_DATE));
+
+        return new self(new DatePickerModel($picker, $store), $store);
+    }
+
+    /**
+     * The script: three single-mode legs (two cursor moves, a selection),
+     * Escape clearing it, a range-mode flip, then a range leg that produces
+     * range_started and a completed date_selected — all four wire events.
+     *
+     * @return list<array{label: string, msg: Msg}>
+     */
+    private static function buildScript(): array
+    {
+        return [
+            ['label' => 'Down',       'msg' => new KeyMsg(KeyType::Down)],
+            ['label' => 'Right',      'msg' => new KeyMsg(KeyType::Right)],
+            ['label' => 'Enter',      'msg' => new KeyMsg(KeyType::Enter)],
+            ['label' => 'Escape',     'msg' => new KeyMsg(KeyType::Escape)],
+            ['label' => 'range-mode', 'msg' => new SwitchToRangeMsg()],
+            ['label' => 'Enter',      'msg' => new KeyMsg(KeyType::Enter)],
+            ['label' => 'Right',      'msg' => new KeyMsg(KeyType::Right)],
+            ['label' => 'Enter',      'msg' => new KeyMsg(KeyType::Enter)],
+        ];
+    }
+
+    /**
+     * Kick the loop: the Program defers this Cmd, so the first scripted
+     * message arrives through the same dispatch path as a live keystroke.
+     */
+    public function init(): ?\Closure
+    {
+        return fn (): Msg => $this->script[0]['msg'];
+    }
+
+    /**
+     * @return array{0: CoreModel, 1: ?\Closure}
+     */
+    public function update(Msg $msg): array
+    {
+        // Startup messages the Program injects (window size, env, colour
+        // profile) are not script steps: pass through without advancing.
+        if (!$msg instanceof KeyMsg && !$msg instanceof SwitchToRangeMsg) {
+            return [$this, null];
+        }
+
+        // Identity gate: only the exact message scheduled for the current
+        // step advances the demo. The Program keeps reading STDIN even with
+        // the renderer disabled, so a stray keystroke typed into a live TTY
+        // (or a late echo arriving after the final step) would otherwise be
+        // consumed as if it were scripted and desynchronise the transcript.
+        if ($this->step >= count($this->script) || $msg !== $this->script[$this->step]['msg']) {
+            return [$this, null];
+        }
+
+        if ($msg instanceof SwitchToRangeMsg) {
+            $switched = new DatePickerModel($this->dp->picker()->withRangeMode(true), $this->store);
+
+            return [$this->withState($switched, [sprintf('%-12s -> %-14s {}', 'range-mode', 'mode')]), $this->nextCmd()];
+        }
+
+        [$next, ] = $this->dp->update($msg);
+        $events = $this->store->release();
+
+        $lines = [];
+        if ($events === []) {
+            $lines[] = sprintf('%-12s -> %-14s {}', $this->script[$this->step]['label'], 'no-event');
+        }
+        foreach ($events as $event) {
+            $payload = $event['payload'] === [] ? '{}' : json_encode($event['payload']);
+            $lines[] = sprintf(
+                '%-12s -> %-14s %s',
+                $this->script[$this->step]['label'],
+                $event['type'],
+                $payload,
+            );
+        }
+
+        return [$this->withState($next, $lines), $this->nextCmd()];
+    }
+
+    public function view(): string
+    {
+        $picker = $this->dp->picker();
+        $mode = $picker->isRangeMode() ? 'range' : 'single';
+
+        return implode("\n", [
+            'sugar-datepicker — interactive demo (fixed script, self-exiting)',
+            'seed ' . self::SEED_DATE . ' · clock ' . gmdate('Y-m-d H:i:s', self::FIXED_CLOCK) . ' UTC · mode ' . $mode,
+            '',
+            $this->dp->view(),
+        ]);
+    }
+
+    public function subscriptions(): ?Subscriptions
+    {
+        return null;
+    }
+
+    /** @return list<string> */
+    public function transcript(): array
+    {
+        return $this->transcript;
+    }
+
+    public function scriptLength(): int
+    {
+        return count($this->script);
+    }
+
+    /**
+     * @param list<string> $lines
+     */
+    private function withState(DatePickerModel $dp, array $lines): self
+    {
+        return new self(
+            $dp,
+            $this->store,
+            $this->step + 1,
+            [...$this->transcript, ...$lines],
+            $this->script,
+        );
+    }
+
+    private function nextCmd(): \Closure
+    {
+        if ($this->step + 1 < count($this->script)) {
+            $next = $this->script[$this->step + 1]['msg'];
+
+            return static fn (): Msg => $next;
+        }
+
+        return static fn (): Msg => new QuitMsg();
+    }
+}
+
+$demo = InteractiveDemo::create();
+
+$program = new Program(
+    $demo,
+    new ProgramOptions(withoutRenderer: true, hideCursor: false, unicodeMode: false),
+);
+
+$final = $program->run();
+assert($final instanceof InteractiveDemo);
+
+echo "\n";
+echo $final->view(), "\n";
+echo "\n";
+echo "EventStore transcript (", count($final->transcript()), " lines from ",
+    $final->scriptLength(), " scripted messages):\n";
+foreach ($final->transcript() as $line) {
+    echo '  ', $line, "\n";
+}

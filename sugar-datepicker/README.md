@@ -307,7 +307,15 @@ set.
 ```sh
 php examples/basic.php         # single-mode walk: navigate, move, select
 php examples/constraints.php   # min/max bounds: refused and accepted Enter legs
+php examples/interactive.php   # real Program loop: scripted KeyMsgs through update(), EventStore transcript
 ```
+
+The third example, `examples/interactive.php`, mounts `Model` inside a
+sugar-core `Program` loop and feeds it a fixed script of `KeyMsg`s — the
+runnable reference for how a live keystroke travels through `update()`. It
+ends by printing the drained `EventStore` transcript (`cursor_moved`,
+`range_started`, `date_selected`, `date_cleared`) plus the final grid, so the
+event wiring is verifiable without a TTY.
 
 Run them from the lib root; from a standalone clone of the split repo, run
 `composer install` first so the sibling `sugarcraft/*` packages resolve.
