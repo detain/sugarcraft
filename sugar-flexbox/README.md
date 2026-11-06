@@ -225,8 +225,9 @@ Call `reset()` to force the next `render()` to emit a full frame (e.g. after the
 was cleared externally).
 
 **SSH bandwidth + flicker win:** a one-character change emits only the ops for
-the affected cells instead of a full repaint — for an 80×24 screen (~1.9 KB of
-styled cells) that is orders of magnitude less per-frame data on the wire, and
+the affected cells instead of a full repaint — on an 80×24 screen the
+full-frame ceiling is 1,920 cell ops (one per cell), so a delta that touches a
+handful of cells sends orders of magnitude less per-frame data on the wire, and
 it avoids the flicker of rewrite-based terminals. The first render
 after startup or a resize still emits a full Buffer (no diff possible), so
 behaviour is always correct.

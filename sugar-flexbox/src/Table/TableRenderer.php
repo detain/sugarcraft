@@ -14,8 +14,11 @@ use SugarCraft\Core\Util\Width;
  * Stateful diff renderer for Table.
  *
  * Holds the mutable diff state (previousFrame, prevWidth, prevHeight) and
- * produces either a full frame or a delta-encoded frame depending on
- * whether dimensions have changed since the last render.
+ * produces either a full frame or a delta-encoded frame. A frame is FULL
+ * whenever there is nothing to diff against: the first render after
+ * construction, after reset(), or after any change to the emitted width or
+ * height (the dimension watch clears the stored buffer). Every same-size
+ * later frame goes out delta-encoded.
  *
  * Construct one instance per logical table and call render() each frame
  * to get bandwidth-efficient delta output for stable dimensions.
