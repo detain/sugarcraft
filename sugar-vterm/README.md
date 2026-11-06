@@ -79,7 +79,7 @@ output anywhere.
 | Layer | Class | Role |
 |---|---|---|
 | Facade | `Terminal\Terminal` | Owns a Parser + ScreenHandler; `feed()` drives bytes in |
-| Parser | `AnsiParser\Parser\Parser` | VT500 state machine (owned by **sugar-ansi-parser**; consumed via `src/Terminal/Terminal.php`) — Paul-Williams algorithm, handles partial input, parses subparameters (`:`) |
+| Parser | `AnsiParser\Parser\Parser` | VT500 state machine (owned by **sugar-ansi-parser**; consumed via both facades — `src/Terminal/Terminal.php` and `src/Terminal.php`) — Paul-Williams algorithm, handles partial input, parses subparameters (`:`) |
 | Handler | `AnsiParser\Parser\CsiHandler` | CSI sequence handler contract (owned by sugar-ansi-parser) — vterm's `Parser\CsiHandlerImpl` implements it |
 | Handler | `AnsiParser\Parser\OscHandler` | OSC sequence handler contract (owned by sugar-ansi-parser) — vterm's `Parser\OscHandlerImpl` implements it |
 | Handler | `Handler\ScreenHandler` | Dispatches parser actions to Buffer / Cursor / Sgr / Mode |
