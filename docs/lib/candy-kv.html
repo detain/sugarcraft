@@ -110,7 +110,7 @@ candy-kv import json backup.json     # atomic across databases by default</code>
 <tr><td>Store</td><td>__construct(?string $dataDir = null, string $defaultDb = 'default')</td><td>Key-value store over per-database SQLite files; construction touches nothing on disk</td></tr>
 <tr><td>Store</td><td>set(key, value, bool $binary = false, ?int $ttlSeconds = null) / setWithTtl(key, value, ttl)</td><td>Write a key; <code>key@db</code> routes to a named database</td></tr>
 <tr><td>Store</td><td>get(key, fallback = '') / entry(key) / suggestionFor(key)</td><td>Read a value, or the full Entry, or a close-existing key for a typo</td></tr>
-<tr><td>Store</td><td>list(?pattern, ?dbName, reverse, mode) / fuzzyFilter(query) / pruneExpired()</td><td>Glob listing; reclaim expired rows</td></tr>
+<tr><td>Store</td><td>list(?pattern, ?dbName, reverse, mode) / fuzzyFilter(query) / pruneExpired()</td><td>Glob listing; fuzzy key ranking by local-alignment score against a query; reclaim expired rows</td></tr>
 <tr><td>Store</td><td>delete(key) / setFile(key, path) / saveTo(key, path)</td><td>Delete; binary values from and to files (<code>0600</code>)</td></tr>
 <tr><td>Store</td><td>listDatabases() / deleteDatabase(name) / transaction(dbName, callable)</td><td>Database management</td></tr>
 <tr><td>Database</td><td>get / raw / set / delete / deleteMany / list / allKeys / count / pruneExpired / transaction / close</td><td>One SQLite database; <code>raw()</code> also sees expired rows</td></tr>
