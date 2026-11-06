@@ -402,6 +402,14 @@ the sidecar `<path>.lock` persists by design: it is never written to (only
 its inode is `flock`ed) and never unlinked, because an unlink/rename rotation
 would reintroduce the very race the lock closes.
 
+History is a trust boundary of its own: the file records what was typed, so
+it can contain secrets. The constructor therefore insists on `0600` — a
+pre-existing file whose mode cannot be tightened (typically foreign-owned) is
+refused loudly rather than loaded and appended under someone else's
+permissions. Keep the history in a private directory: `0600` protects the
+**content**, not the filename listing, so the mere name of the file is
+visible to anyone who can read its directory.
+
 Entries are stored one per line with backslash escapes (`\\`, `\n`, `\r`)
 applied at the write choke and undone on load — a value that somehow
 contains a raw newline survives a save/reload round-trip as **one** entry
