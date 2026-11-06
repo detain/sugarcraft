@@ -98,7 +98,7 @@ ships as `App\` — called out in the table below.
 | **CandyMinesweeper** (`candy-minesweeper/`) | 🟢 ready | Minesweeper — first-click safety / flood-fill. |
 | **CandyGifView** (`candy-gifview/`) | 🟢 ready | Terminal GIF viewer CLI (ext-gd via sugar-animation) — sugar-animation's viewer; antecedent: gifterm. |
 | **CandyImage** (`candy-image/`) | 🟡 in progress | Terminal image viewer CLI — chafa-independent front end on sugar-image: auto/sixel/kitty/iterm2/half/quarter/ascii formats, --size/--scale, --dump-detect. |
-| **CandyTop** (`candy-top/`) | 🟢 ready | Terminal system monitor — cpu / mem+disks / net / process boxes, battery + NVIDIA GPU readouts, braille, block and sextant graphs, menus, presets, 43 themes, btop-compatible config with save/reload; Linux `/proc`+`/sys` and FreeBSD collectors; container/VM tags; adopted btop upstream PRs. |
+| **CandyTop** (`candy-top/`) | 🟢 ready | Terminal system monitor — cpu / mem+disks / net / process boxes with braille, block and sextant graphs, up to six multi-vendor GPU/NPU boxes, an ipmi BMC band and a VM dashboard, battery readouts, menus, presets, 43 themes (42 ported from btop plus candy-top's own pastel), btop-compatible config with save/reload; Linux `/proc`+`/sys` and FreeBSD collectors; container/VM tags; adopted btop upstream PRs. |
 | **CandyFlappy** (`candy-flappy/`) | 🟢 ready | Flappy Bird clone — the bird is a SugarSpring projectile. |
 
 <!-- Windows ConPTY backend for sugar-pty: landed (sugar-pty/src/Windows, C-TUI-6.b/C-TUI-6.c). -->
