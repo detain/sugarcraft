@@ -486,10 +486,12 @@ final class Toast
     }
 
     /**
-     * Stop rendering and move the live alerts into the history log.
+     * Stop rendering and file EVERY queued alert into the history log.
      *
-     * Dismiss is a MOVE, not a copy: queued alerts leave the queue (expired
-     * ones are dropped, never recorded), so a second dismiss() can neither
+     * Dismiss is a MOVE, not a copy: queued alerts leave the queue —
+     * including ones that expired but had not been pruned yet (they were
+     * live from the host's point of view, and dismiss() is the recovery
+     * door; lib-reviews-1102 a11y M3) — so a second dismiss() can neither
      * double-count history nor find leftovers. Rendering stays stopped until
      * the host calls {@see clear()} — alert() refuses meanwhile — and clear()
      * resets the flag.

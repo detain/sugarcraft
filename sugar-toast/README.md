@@ -170,7 +170,8 @@ sentinel (asking for a timer is asking for a timer). `Toast::cancelAlert()`
 routes through the same sentinel.
 
 Persistent alerts never expire, so `pruneExpired()` cannot remove them — take
-them down with `dismiss()` (moves live alerts into the history log and stops
+them down with `dismiss()` (files EVERY queued alert into the history log —
+including ones already expired but not yet pruned — and stops
 rendering until you `clear()`) or `clear()` (drops the queue without
 recording). While dismissed, the queueing doors `alert()`, `progressToast()`
 and `push()` throw; call `clear()` first. The queue-editing doors do not
@@ -425,7 +426,7 @@ already over the new cap survive until the next push evicts them.
 | `->actionRects(string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>` | Absolute frame cells of every painted `[Label]` button (the `"[+N more]"` fold row is not clickable) |
 | `->actionAt(int $col, int $row, string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): ?Action` | The dispatch door: which Action (if any) covers a frame position — first match in queue order |
 | `Lang::t(string $key, array $params = []): string` | Translate a known key ('dismiss', 'count', 'type.*') — the inherited sugar-core helper behind `ToastType::label()` |
-| `->view(string $background, int $w, int $h): string` | Render toast layer over background; both dimensions must lie in `1..Toast::MAX_VIEWPORT_DIMENSION` (10 000) or an `InvalidArgumentException` is thrown before any allocation — the frame is a real `width × height` cell grid, so bogus winsizes fail loud instead of exhausting memory. Boxes that cannot fit ellipsize (`…`): the icon and the line indent drop out on very narrow frames, and message/action content degrades instead of vanishing. |
+| `->view(string $background, int $viewportWidth = 80, int $viewportHeight = 24): string` | Render toast layer over background; both dimensions must lie in `1..Toast::MAX_VIEWPORT_DIMENSION` (10 000) or an `InvalidArgumentException` is thrown before any allocation — the frame is a real `width × height` cell grid, so bogus winsizes fail loud instead of exhausting memory. Boxes that cannot fit ellipsize (`…`): on very narrow frames the drop clears the whole styled prefix — icon and the accessible severity word (`withAccessibleText()`) go together, with the line indent — and message/action content degrades instead of vanishing. |
 
 | Class | Method | Description |
 |-------|--------|-------------|
