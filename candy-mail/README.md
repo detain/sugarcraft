@@ -162,6 +162,8 @@ candy-mail --to you@example.com --render < message.txt
 
 `--version` prints the package version, `--help` the usage, repeat `--to/--cc/--bcc/--attach`
 to accumulate, and a bare `--` ends option parsing (later addresses are positional recipients).
+Positional recipients fill `--to` only when `--to` is absent — if you also pass `--to`, the
+positional addresses after `--` are silently dropped (mixing is not additive).
 Unknown options are rejected loudly, with a did-you-mean hint when a known flag is a
 near miss.
 
