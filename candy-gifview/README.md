@@ -32,7 +32,7 @@ A rolling development phar is published on GitHub Releases under
 The viewer paints with pure SGR background blocks rather than a terminal
 graphics protocol (kitty/sixel/iTerm2), so it runs anywhere 24-bit colour
 works — inline-protocol rendering is a different route, offered by
-`sugar-image`/`candy-mosaic`.
+`sugar-image`.
 
 ## Options
 

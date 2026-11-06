@@ -54,14 +54,18 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-gifview"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-gifview" alt="CandyGifView code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">The terminal GIF viewer: point it at a <code>.gif</code> and it sizes to your viewport, decodes via <a href="sugar-animation.html">sugar-animation</a> (which needs <code>ext-gd</code>), and plays the animation in the alternate screen — full-cell 24-bit blocks or an ASCII luminance-density ramp, toggled live. This is the command that used to ship as <code>bin/sugar-animation</code>, split into its own app package.</p>
+    <p class="lede" style="margin-top: 28px;">The terminal GIF viewer: point it at a <code>.gif</code> and it sizes to your viewport, decodes via <a href="sugar-animation.html">sugar-animation</a> (which needs <code>ext-gd</code>), and plays the animation in the alternate screen — full-cell 24-bit blocks or an ASCII luminance-density ramp, toggled live. This is the command split out of the animation package into its own app.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-gifview</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell">candy-gifview my-animation.gif         # solid 24-bit blocks (default)
-candy-gifview my-animation.gif density # luminance-density ramp
+    <pre class="code"><code class="language-shell"># with a project-local install, invoke the binary as ./vendor/bin/candy-gifview
+./vendor/bin/candy-gifview my-animation.gif         # solid 24-bit blocks (default)
+./vendor/bin/candy-gifview my-animation.gif density # luminance-density ramp
+
+# flags
+#   --fps=N   --speed=N|Nfps|max   --duration=SECONDS   --watch   --paused
 
 # keys while playing
 #   Space   pause / resume
@@ -72,11 +76,11 @@ candy-gifview my-animation.gif density # luminance-density ramp
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>One-command viewer</strong><span><code>candy-gifview file.gif</code> — no flags to learn; an optional second argument picks the render preset.</span></div>
-      <div class="feature"><strong>Viewport-sized</strong><span>Queries the TTY size behind a core <code>stream_isatty</code> gate (descriptor 1, never the cast resource id) and reserves a row, so output never overflows the screen; off a TTY it falls back to a 60×24 cell grid.</span></div>
+      <div class="feature"><strong>Viewport-sized</strong><span>Queries the TTY size behind a core <code>stream_isatty</code> gate and reserves two rows (status line + trailing newline), so output never overflows the screen; off a TTY it falls back to a 60×24 cell grid.</span></div>
       <div class="feature"><strong>Alternate screen</strong><span>Runs the sugar-animation <code>Player</code> inside a sugar-core <code>Program</code> with <code>useAltScreen</code>, so your shell buffer is untouched when you quit.</span></div>
-      <div class="feature"><strong>Live preset toggle</strong><span><code>d</code> swaps solid blocks ↔ the <code>` .:-=+*#%@`</code> density ramp without losing your frame position.</span></div>
+      <div class="feature"><strong>Live preset toggle</strong><span><code>d</code> swaps solid blocks ↔ the <code>&#183; .:-=+*#%@</code> density ramp (<code>&#183;</code> marks the ramp's leading space) without losing your frame position.</span></div>
       <div class="feature"><strong>Helpable</strong><span><code>--help</code> / <code>-h</code> print the localized usage line and exit 0; missing or unreadable files exit non-zero with the decoder's error on stderr.</span></div>
-      <div class="feature"><strong>Testable core</strong><span>All argument handling lives in <code>SugarCraft\GifView\Cli</code> — the bin is a two-line shim, and a closure seam lets tests drive the wired <code>Player</code> without a terminal.</span></div>
+      <div class="feature"><strong>Testable core</strong><span>All argument handling lives in <code>SugarCraft\GifView\Cli</code> — the bin is a thin shim (autoload probe with phar-identity resolution, locale wiring, then the <code>Cli::main()</code> hand-off), and a closure seam lets tests drive the wired <code>Player</code> without a terminal.</span></div>
       <div class="feature"><strong>Localized</strong><span>CLI usage and refusal messages ship in sixteen locales via the sugar-core i18n lookup.</span></div>
     </div>
 
@@ -94,8 +98,8 @@ candy-gifview my-animation.gif density # luminance-density ramp
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Cli</td><td>main(argv, stdout, stderr, play)</td><td>Parse args, decode, wire the Player, run the Program; returns the exit code</td></tr>
-<tr><td>Cli</td><td>viewportCells()</td><td>TTY-sized cell grid (cols, rows-1) behind a stream_isatty gate, 60×24 fallback</td></tr>
+<tr><td>Cli</td><td>main(argv, stdout, stderr, play, watchStat, decode)</td><td>Parse args, decode, wire the Player, run the Program; returns the exit code</td></tr>
+<tr><td>Cli</td><td>viewportCells()</td><td>TTY-sized cell grid (cols, rows-2) behind a stream_isatty gate, 60×24 fallback</td></tr>
 <tr><td>Lang</td><td>t(key, params)</td><td>Localized CLI messages (namespace <code>gifview</code>)</td></tr>
 </table>
   </div>
@@ -107,7 +111,7 @@ candy-gifview my-animation.gif density # luminance-density ramp
         <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-gifview/.vhs/view.gif" alt="View" onerror="this.parentElement.style.display='none'">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-gifview/.vhs/view.gif" alt="VHS recording: candy-gifview playing a synthetic GIF — solid 24-bit blocks, then the ASCII density ramp" onerror="this.parentElement.style.display='none'">
                 <h3>View</h3>
                 <span class="demo-caption">Synthetic gif played through the viewer CLI, both presets.</span>
             </div>
