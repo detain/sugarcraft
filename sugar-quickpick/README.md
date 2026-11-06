@@ -200,7 +200,9 @@ public function setOffset(int $x, int $y): self
 public function setItemFormatter(\Closure $fn): self
 
 // Custom filter predicate: Closure(Item $item): bool
-// Applied after text-based fuzzy filtering; return false to exclude item
+// Applied in addition to the built-in filter (contiguous substring match by
+// default; fuzzy scoring only when setRanker() is active); return false to
+// exclude the item
 public function setFilterFn(\Closure $fn): self
 
 // Plug in a sugar-fuzzy ranker (null restores the default substring filter).
