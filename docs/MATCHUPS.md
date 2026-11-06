@@ -33,7 +33,7 @@ ships as `App\` — called out in the table below.
 
 | Library | Status | Notes |
 |---|:---:|---|
-| **SugarAsync** (`sugar-async/`) | 🟢 ready | Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps (withTimeout, retry, debounce, throttle). The foundation for ReactPHP usage across the monorepo. |
+| **SugarAsync** (`sugar-async/`) | 🟢 ready | Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps (withTimeout, withDeadline, cancellable, retry, debounce, throttle, all/race, onPending, singleFlight), TTL async cache. Dependents: sugar-forms, sugar-vterm, candy-sql, candy-mail, candy-git-server, candy-codetime. |
 | **SugarCraft** (`sugar-core/`) | 🟢 ready | MVC-style Model–Update–View runtime — Model / Msg / Cmd / Program. Namespace follows the suffix rule (`sugar-core` → `SugarCraft\Core\`). |
 | **SugarStyle** (`sugar-style/`) | 🟢 ready | Declarative styling + layout. |
 | **SugarSpring** (`sugar-spring/`) | 🟢 ready | Spring physics + Newtonian projectile sim. |
