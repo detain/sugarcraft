@@ -6,6 +6,7 @@ namespace SugarCraft\Video\Decode;
 
 use SugarCraft\Animation\Decoder as AnimationDecoder;
 use SugarCraft\Animation\Frame as AnimationFrame;
+use SugarCraft\Video\AudioPlayer;
 use SugarCraft\Video\Lang;
 use SugarCraft\Video\Render\Mode;
 
@@ -133,7 +134,7 @@ final class GifDecoder implements Decoder
         if ($headers !== []) {
             error_log(Lang::t('header.ignored_local_source', [
                 'count' => count($headers),
-                'source' => $source,
+                'source' => AudioPlayer::redactCredentials($source),
             ]));
         }
 
@@ -481,14 +482,14 @@ final class GifDecoder implements Decoder
         $stat = @stat($source);
         if ($stat === false) {
             throw new \RuntimeException(Lang::t('gif.source_unreadable', [
-                'path' => $source,
+                'path' => AudioPlayer::redactCredentials($source),
                 'reason' => 'no such file or directory',
             ]));
         }
 
         if (($stat['mode'] & self::STAT_TYPE_MASK) !== self::STAT_REGULAR_BIT) {
             throw new \RuntimeException(Lang::t('gif.source_unreadable', [
-                'path' => $source,
+                'path' => AudioPlayer::redactCredentials($source),
                 'reason' => 'not a regular file',
             ]));
         }
@@ -496,7 +497,7 @@ final class GifDecoder implements Decoder
         $handle = @fopen($source, 'rb');
         if ($handle === false) {
             throw new \RuntimeException(Lang::t('gif.source_unreadable', [
-                'path' => $source,
+                'path' => AudioPlayer::redactCredentials($source),
                 'reason' => 'unreadable before open',
             ]));
         }
@@ -505,7 +506,7 @@ final class GifDecoder implements Decoder
             $afterOpen = fstat($handle);
             if (!is_array($afterOpen) || (($afterOpen['mode'] & self::STAT_TYPE_MASK) !== self::STAT_REGULAR_BIT)) {
                 throw new \RuntimeException(Lang::t('gif.source_unreadable', [
-                    'path' => $source,
+                    'path' => AudioPlayer::redactCredentials($source),
                     'reason' => 'not a regular file after open',
                 ]));
             }
@@ -520,7 +521,7 @@ final class GifDecoder implements Decoder
             $bytes = stream_get_contents($handle, self::MAX_SOURCE_BYTES + 1);
             if ($bytes === false) {
                 throw new \RuntimeException(Lang::t('gif.source_unreadable', [
-                    'path' => $source,
+                    'path' => AudioPlayer::redactCredentials($source),
                     'reason' => 'read failed',
                 ]));
             }
@@ -712,7 +713,7 @@ final class GifDecoder implements Decoder
             if ($headers !== []) {
                 error_log(Lang::t('header.ignored_local_source', [
                     'count' => count($headers),
-                    'source' => $source,
+                    'source' => AudioPlayer::redactCredentials($source),
                 ]));
             }
 

@@ -156,7 +156,9 @@ final class Reel
     public static function openUrl(string $url, array $headers = [], ?array $allowedHosts = null): self
     {
         if (preg_match('#^https?://#i', $url) !== 1) {
-            throw new \InvalidArgumentException("Not an http(s) URL: {$url}");
+            // Same credential-redaction law as every other surfaced source:
+            // a rejected URL must never echo its userinfo in the exception.
+            throw new \InvalidArgumentException("Not an http(s) URL: " . AudioPlayer::redactCredentials($url));
         }
 
         // Shape guard BEFORE parsing: an old call `openUrl($u, ['cdn.example'])`
@@ -401,7 +403,7 @@ final class Reel
      */
     private static function readSubtitleFile(string $path): ?string
     {
-        $describe = static fn(): string => mb_strcut(trim(Sanitize::cellValue($path)), 0, 160);
+        $describe = static fn(): string => mb_strcut(trim(Sanitize::cellValue(AudioPlayer::redactCredentials($path))), 0, 160);
 
         if (!is_file($path)) {
             error_log(Lang::t('subtitle.unreadable', ['path' => $describe()]));

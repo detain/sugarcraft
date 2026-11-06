@@ -261,7 +261,7 @@ final class FfmpegDecoder implements Decoder
             // playlist, a CLI argument) about to be interpolated into an
             // exception the TUI may paint — sweep control/escape bytes and
             // bound it, same discipline as the caption row.
-            throw new \RuntimeException('video source not found: ' . self::describePath($source));
+            throw new \RuntimeException('video source not found: ' . self::describePath(AudioPlayer::redactCredentials($source)));
         }
 
         // Aspect-correct letterbox box. The on-screen display area for cellsW × cellsH

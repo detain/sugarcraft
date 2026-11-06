@@ -525,4 +525,15 @@ final class GifDecoderTest extends TestCase
         }
     }
 
+    public function testTheUnreadableSourceRefusalNeverEchoesUrlCredentials(): void
+    {
+        try {
+            (new GifDecoder())->open('gif://user:pass@example.invalid/missing.gif', 8, 4, 10.0);
+            self::fail('the refusal was expected');
+        } catch (\RuntimeException $e) {
+            self::assertStringNotContainsString('user:pass', $e->getMessage());
+            self::assertStringContainsString('gif://***@example.invalid/missing.gif', $e->getMessage());
+        }
+    }
+
 }

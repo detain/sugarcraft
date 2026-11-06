@@ -7,6 +7,7 @@ namespace SugarCraft\Video\Source;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Video\Support\FfmpegCommandBuilder;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Video\AudioPlayer;
 use SugarCraft\Video\Lang;
 
 /**
@@ -235,7 +236,7 @@ final class VideoSource
                 if ($salvaged->width === 0) {
                     throw new \RuntimeException(Lang::t('source.unparseable', [
                         'code' => (string) $exitCode,
-                        'source' => mb_strcut(trim(Sanitize::cellValue($path)), 0, 160),
+                        'source' => mb_strcut(trim(Sanitize::cellValue(AudioPlayer::redactCredentials($path))), 0, 160),
                     ]));
                 }
             }

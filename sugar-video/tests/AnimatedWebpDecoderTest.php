@@ -470,4 +470,16 @@ final class AnimatedWebpDecoderTest extends TestCase
 
         (new AnimatedWebpDecoder())->open($this->file($bytes, 'short-anmf.webp'), 4, 4, 10.0);
     }
+
+    public function testTheMissingSourceRefusalNeverEchoesUrlCredentials(): void
+    {
+        AnimatedWebpDecoder::setWebpCapableForTesting(true);
+        try {
+            (new AnimatedWebpDecoder())->open('file://user:pass@example.invalid/missing.webp', 4, 4, 10.0);
+            self::fail('the refusal was expected');
+        } catch (\RuntimeException $e) {
+            self::assertStringNotContainsString('user:pass', $e->getMessage());
+            self::assertStringContainsString('file://***@example.invalid/missing.webp', $e->getMessage());
+        }
+    }
 }

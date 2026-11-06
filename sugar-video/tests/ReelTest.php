@@ -493,4 +493,15 @@ final class ReelTest extends TestCase
         $this->assertGreaterThanOrEqual(2, substr_count($src, '$player->withAudio(false)'),
             'both build paths (toPlayer and play) apply the opt-out');
     }
+
+    public function testTheNonHttpRefusalNeverEchoesUrlCredentials(): void
+    {
+        try {
+            Reel::openUrl('ftp://user:pass@example.invalid/clip.mp4');
+            self::fail('the refusal was expected');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringNotContainsString('user:pass', $e->getMessage());
+            self::assertStringContainsString('ftp://***@example.invalid/clip.mp4', $e->getMessage());
+        }
+    }
 }

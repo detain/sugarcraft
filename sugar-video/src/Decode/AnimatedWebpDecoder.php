@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Video\Decode;
 
+use SugarCraft\Video\AudioPlayer;
 use SugarCraft\Video\Lang;
 use SugarCraft\Video\Render\Mode;
 
@@ -219,7 +220,7 @@ final class AnimatedWebpDecoder implements Decoder
         if ($headers !== [] && !FfmpegDecoder::isNetworkSource($source)) {
             error_log(Lang::t('header.ignored_local_source', [
                 'count' => count($headers),
-                'source' => $source,
+                'source' => AudioPlayer::redactCredentials($source),
             ]));
         }
 
@@ -228,7 +229,7 @@ final class AnimatedWebpDecoder implements Decoder
         }
 
         if (!is_file($source)) {
-            throw new \RuntimeException("video source not found: {$source}");
+            throw new \RuntimeException('video source not found: ' . AudioPlayer::redactCredentials($source));
         }
 
         // Sibling capture gate: refuse above-ceiling sources before the read.
@@ -241,32 +242,32 @@ final class AnimatedWebpDecoder implements Decoder
                 'animated WebP source is %d bytes, above the %d byte ceiling: %s',
                 (int) $size['size'],
                 self::MAX_SOURCE_BYTES,
-                $source,
+                AudioPlayer::redactCredentials($source),
             ));
         }
 
         $bytes = @file_get_contents($source, false, null, 0, self::MAX_SOURCE_BYTES + 1);
         if ($bytes === false) {
-            throw new \RuntimeException("could not read animated WebP source: {$source}");
+            throw new \RuntimeException('could not read animated WebP source: ' . AudioPlayer::redactCredentials($source));
         }
         if (strlen($bytes) > self::MAX_SOURCE_BYTES) {
             throw new \RuntimeException(sprintf(
                 'animated WebP source is %d bytes, above the %d byte ceiling: %s',
                 strlen($bytes),
                 self::MAX_SOURCE_BYTES,
-                $source,
+                AudioPlayer::redactCredentials($source),
             ));
         }
 
         $frames = self::parseContainer($bytes, $canvasW, $canvasH, $this->loopCount);
         if ($frames === []) {
-            throw new \RuntimeException("not an animated WebP (no ANMF frames): {$source}");
+            throw new \RuntimeException('not an animated WebP (no ANMF frames): ' . AudioPlayer::redactCredentials($source));
         }
         if (count($frames) > self::MAX_FRAMES) {
             throw new \RuntimeException(sprintf(
                 'animated WebP exceeds the %d frame ceiling: %s',
                 self::MAX_FRAMES,
-                $source,
+                AudioPlayer::redactCredentials($source),
             ));
         }
         if ($canvasW * $canvasH > self::MAX_CANVAS_PIXELS || count($frames) * $canvasW * $canvasH > self::MAX_TOTAL_PIXELS) {
@@ -275,7 +276,7 @@ final class AnimatedWebpDecoder implements Decoder
                 $canvasW,
                 $canvasH,
                 count($frames),
-                $source,
+                AudioPlayer::redactCredentials($source),
             ));
         }
 

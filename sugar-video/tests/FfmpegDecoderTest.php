@@ -1380,4 +1380,28 @@ PHP;
             @rmdir($dir);
         }
     }
+
+    public function testTheMissingSourceRefusalNeverEchoesUrlCredentials(): void
+    {
+        $dir = sys_get_temp_dir() . '/sugar-video-cred-' . bin2hex(random_bytes(6));
+        mkdir($dir);
+        file_put_contents($dir . '/ffmpeg', "#!/bin/sh\nexit 0\n");
+        chmod($dir . '/ffmpeg', 0755);
+        $savedPath = getenv('PATH');
+        putenv('PATH=' . $dir);
+        Probe::clearBinaryCacheForTesting();
+        try {
+            (new FfmpegDecoder())->open('file://user:pass@example.invalid/missing.mp4', 8, 6, 10.0);
+            self::fail('the refusal was expected');
+        } catch (\RuntimeException $e) {
+            self::assertStringNotContainsString('user:pass', $e->getMessage());
+            self::assertStringContainsString('video source not found:', $e->getMessage());
+            self::assertStringContainsString('***@', $e->getMessage());
+        } finally {
+            putenv($savedPath === false ? 'PATH' : 'PATH=' . $savedPath);
+            Probe::clearBinaryCacheForTesting();
+            @unlink($dir . '/ffmpeg');
+            @rmdir($dir);
+        }
+    }
 }
