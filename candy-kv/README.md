@@ -144,8 +144,8 @@ $ candy-kv set color blue
 $ candy-kv get greeting
 Hello, World!                                  # exact bytes, no trailing newline
 $ candy-kv list
-color   blue                                   # key, TAB, value; rows newline-terminated
-greeting        Hello, World!
+color	blue                                   # key, TAB, value; rows newline-terminated
+greeting	Hello, World!
 $ candy-kv get colar
 key not found; did you mean 'color'?           # stderr; exit 1
 $ candy-kv delete 'user-*' --dry-run
@@ -269,12 +269,15 @@ emitting unreadable files.
 ### CLI surface vs library surface
 
 The CLI covers `set`, `get`, `list`, `delete`, `list-dbs`, `prune`, `import`
-and `export`. Everything else is library-only, by design: `Store::entry()`,
-`suggestionFor()`, `setWithTtl()`, `fuzzyFilter()`, `setFile()`, `saveTo()`,
-`transaction()`, `deleteDatabase()`, `listDatabases()`, and the whole
-single-file surface (`Database::count()`, `raw()`, `allKeys()`,
-`pruneExpired()`, `close()`) have no CLI verbs — the binary stays a thin
-front end for the everyday loop. Key-bearing commands route to a named
+and `export` — `list-dbs` is a thin loop over `Store::listDatabases()` and
+`prune` calls `Store::pruneExpired()` (default database), so those two
+library twins do have CLI verbs. Everything else is library-only, by
+design: `Store::entry()`, `suggestionFor()`, `setWithTtl()`,
+`fuzzyFilter()`, `setFile()`, `saveTo()`, `transaction()`,
+`deleteDatabase()`, and the whole single-file surface (`Database::count()`,
+`raw()`, `allKeys()`, `pruneExpired()` on any database other than the
+default, `close()`) have no CLI verbs — the binary stays a thin front end
+for the everyday loop. Key-bearing commands route to a named
 database through the `key@dbname` suffix; `list` alone always scans the
 default database (patterns cannot select a db), while `export <format> [db]`
 takes an explicit database name.
