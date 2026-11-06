@@ -33,8 +33,8 @@ final class ToastTrustBoundaryTest extends TestCase
      * BEL terminator variant), an erase-screen CSI, a bare-ESC 7-bit escape,
      * and forged sugar-mouse zone sentinels (REAL U+E000/U+E001 codepoints —
      * written as \u{...}; the "\x{...}" spelling is an 8-char ASCII literal
-     * and was the exact vacuity this file shipped with, lib-reviews-1102
-     * M13) wrapped around a label.
+     * and was the exact vacuity this file shipped with) wrapped around a
+     * label.
      */
     private const HOSTILE = "\x1b]8;;http://evil.invalid\x1b\\CLICK"
         . "\x1b[2J"
@@ -99,9 +99,9 @@ final class ToastTrustBoundaryTest extends TestCase
         // This pin reddens if the renderer ever starts dropping them (a
         // behavior change worth a documented flip, not a silent drift).
         //
-        // Real codepoints this time (lib-reviews-1102 M13: the previous legs
+        // Real codepoints this time: the previous legs
         // fed the ASCII literal "\x{e000}" — 8 printable characters, zero
-        // sentinel bytes — so the whole pin could never redden). Assertions
+        // sentinel bytes — so the whole pin could never redden. Assertions
         // are byte-level: the raw EE 80 80 / EE 80 81 sequences must arrive
         // exactly once and paired, not just "somewhere in the string".
         $out = $this->render("pre \u{e000}ZONE\u{e001} post");
@@ -128,8 +128,8 @@ final class ToastTrustBoundaryTest extends TestCase
     public function testActionLabelsCarryTheSameSentinelPassThrough(): void
     {
         // The label channel must obey the same documented law as the message
-        // channel (lib-reviews-1102 A2a: security's "pinned in both channels"
-        // claim was pinned in NEITHER — the label leg never existed).
+        // channel — the earlier claim that the law was "pinned in both
+        // channels" was pinned in NEITHER: the label leg never existed.
         $action = Action::new("\u{e000}GO\u{e001}", static function () {});
         $toast = Toast::new(60)
             ->withPosition(Position::TopLeft)

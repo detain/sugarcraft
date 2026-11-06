@@ -15,14 +15,14 @@ namespace SugarCraft\Toast;
  * Actions (and therefore Alerts and Toasts carrying them) are NOT
  * serializable and are fork-hostile in the sense that a child process
  * inherits a detached copy of the scope — host persistence layers must
- * store labels, not Action objects (lib-reviews-1102 m11).
+ * store labels, not Action objects.
  *
  * The label is normalised at construction — the single ingress point the
  * whole label channel flows through. Inline CSI-SGR styling survives (a
  * red "Delete" is a legitimate design ask, and the message channel already
  * honours it); every other control construct is stripped, so a label sourced
  * from hostile text can never emit raw TAB/LF bytes, OSC framing, or
- * non-styling escapes onto the wire (lib-reviews-1102 M2/M3). sugar-mouse
+ * non-styling escapes onto the wire. sugar-mouse
  * zone sentinels U+E000/U+E001 are ordinary printable PUA glyphs here and
  * pass through by the same documented law as the message channel
  * (README "Security & trust boundary").
@@ -36,7 +36,7 @@ final class Action
      * @param string $label  User-visible button label; must retain at least
      *                       one printable character after control/escape
      *                       normalisation (psalm's non-empty-string made
-     *                       literal, lib-reviews-1102 n2)
+     *                       literal)
      * @param \Closure(): void $callback  Invoked when action is triggered
      */
     public function __construct(string $label, public readonly \Closure $callback)
@@ -70,9 +70,9 @@ final class Action
     {
         // One ordered pass. Alternatives compete left-to-right, so SGR is
         // kept before generic CSI dies, and a non-SGR escape can never be
-        // mistaken for a kept sequence by a later stage (the staged version
-        // of this function ate the ESC bytes of the sequences it promised
-        // to keep — lib-reviews-1102 M2's fix must not itself break m7).
+        // mistaken for a kept sequence by a later stage — an earlier staged
+        // version of this function ate the ESC bytes of the sequences it
+        // promised to keep.
         $out = \preg_replace_callback(
             '/\x1b\[(?<sgr>[0-9;?]*)(?<si>[ -\/]*)m'            // kept: CSI SGR (canonical rewrite)
             . '|\x1b\][\s\S]*?(?:\x07|\x1b\\\\)'                // OSC terminated (BEL or ST): framing+payload die, following text lives

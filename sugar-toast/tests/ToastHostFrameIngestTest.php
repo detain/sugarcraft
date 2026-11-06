@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Toast\{Position, Toast, ToastType};
 
 /**
- * Pins the host-frame escape ingestion (lib-reviews-1102 M1).
+ * Pins the host-frame escape ingestion.
  *
  * placeAnsiStringAt() used to recognise only CSI. A background row carrying
  * an OSC-8 hyperlink came back with the ESCs dropped by the control-byte

@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Toast\{Action, Position, Toast, ToastType};
 
 /**
- * Pins the label ingress normalisation (lib-reviews-1102 M2/M3/m7/n2).
+ * Pins the label ingress normalisation.
  *
  * Before this law held, a TAB inside an action label was charged one cell by
  * graphemeWidth() and emitted VERBATIM onto the wire (hex proof was

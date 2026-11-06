@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
  * The examples ARE the shipped documentation surface (README demos + the VHS
  * tapes drive exactly these files), yet nothing in CI ever EXECUTED them:
  * the vhs job swallows the exit code, so a fataling example shipped a green
- * suite with a broken GIF at worst (lib-reviews-1102 devops MINOR-2).
+ * suite with a broken GIF at worst.
  *
  * This is the hard execution gate. It shells out with exec() — not
  * proc_open() — deliberately: tools/check-child-lifetimes.php censuses

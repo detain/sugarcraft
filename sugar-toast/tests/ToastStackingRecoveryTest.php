@@ -9,7 +9,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Toast\{Action, Alert, Overflow, Position, Toast, ToastType};
 
 /**
- * Stacking truth + recovery-account pins (lib-reviews-1102 M7/M8/M9 + m1).
+ * Stacking truth + recovery-account pins.
  *
  * The deep-stack legs are POLICY pins: they pin the CURRENTLY DOCUMENTED
  * behaviour (README "Stacking & the frame") so any future change to growth,

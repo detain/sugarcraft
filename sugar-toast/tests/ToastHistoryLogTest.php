@@ -45,7 +45,7 @@ final class ToastHistoryLogTest extends TestCase
 
     public function testExpiredAlertsAreRecordedOnDismiss(): void
     {
-        // In-step flip (lib-reviews-1102 M9 / a11y M3, WCAG 2.2.1, 2026-11-03):
+        // In-step flip (WCAG 2.2.1 recovery accounting, 2026-11-03):
         // dismiss() used to SILENTLY DISCARD expired-but-unpruned alerts — a
         // transient error could expire unseen and leave no recovery trace.
         // Dismissal is an explicit host act, so every queued survivor —

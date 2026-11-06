@@ -61,7 +61,7 @@ final class ToastDocApiCensusTest extends TestCase
     }
 
     /**
-     * REVERSE arm (lib-reviews-1102 minor-16): every PUBLIC method the code
+     * REVERSE arm: every PUBLIC method the code
      * DECLARES must carry a row on BOTH doc surfaces. The forward arm above
      * catches docs->code phantoms; this closes the code->docs direction —
      * how nextExpiry/secondsUntilNextExpiry and the WELD-K accessors silently

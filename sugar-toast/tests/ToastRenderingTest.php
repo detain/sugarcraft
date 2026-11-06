@@ -333,8 +333,8 @@ final class ToastRenderingTest extends TestCase
         yield 'truncated rgb' => ['38;2;10;20', null];
         yield '256 truncated' => ['48;5', null];
         // Out-of-range values SATURATE, they do not stop the walk —
-        // parity with sugar-cellbuffer's channel() (lib-reviews-1102 M16;
-        // these two rows previously pinned the divergent null-break).
+        // parity with sugar-cellbuffer's channel() — these two rows
+        // previously pinned the divergent null-break.
         yield '256 out of range clamps to slot 255' => ['38;5;300', ['fg' => 0xEEEEEE, 'bg' => null, 'attrs' => 0]];
         yield 'truecolor components clamp 0-255' => ['38;2;300;0;0' , ['fg' => 0xFF0000, 'bg' => null, 'attrs' => 0]];
         yield 'bare reset' => ['0', null];
@@ -451,7 +451,7 @@ final class ToastRenderingTest extends TestCase
 
     public function testGraphemeWidthSkipsControlBytes(): void
     {
-        // lib-reviews-1102 M2 flip (2026-11-03): the old pin charged a TAB
+        // 2026-11-03 flip: the old pin charged a TAB
         // ONE cell, which put raw 0x09 on the wire — the terminal then
         // expanded it to its own tab stops and desynced every later column
         // (label "a\tb" measured 83 cells on an 80-col frame). Cell grids

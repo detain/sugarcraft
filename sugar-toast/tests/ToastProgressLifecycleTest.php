@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Toast\{Alert, Position, Toast, ToastType};
 
 /**
- * Pins the alert lifecycle the lib-reviews-1102 CRITICAL C3 said did not
+ * Pins the alert lifecycle that once did not
  * exist: a progress toast previously had no update door at all — the README's
  * own "re-render as progress updates" pattern literally queued a SECOND box
  * per tick (and with the default unlimited concurrency, leaked one more

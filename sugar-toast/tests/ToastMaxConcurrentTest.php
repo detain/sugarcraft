@@ -128,7 +128,7 @@ final class ToastMaxConcurrentTest extends TestCase
 
     public function testDropOldestAtZeroCapDiscardsIncomingInsteadOfExceedingCap(): void
     {
-        // 2026-11-03 flip (lib-reviews-1102 minor-4): a zero cap silenced the
+        // 2026-11-03 flip: a zero cap silenced the
         // whole notification system with no error — withMaxConcurrent() now
         // REFUSES caps below 1, fail-fast like withHistoryLimit()'s negatives.
         $this->expectException(\InvalidArgumentException::class);

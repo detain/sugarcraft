@@ -15,10 +15,10 @@ final class HistoryLog implements \Countable
 {
     /**
      * @param list<Alert> $entries  Dismissed alerts in chronological order
-     * @throws \InvalidArgumentException when $entries is not a list of Alerts
-     *         (lib-reviews-1102 minor-5: the documented shape was enforced by
-     *         nothing — a string-keyed or garbage payload rode through until a
-     *         consumer loop warned/Error'd far from here)
+     * @throws \InvalidArgumentException when $entries is not a list of Alerts:
+     *         the documented shape was once enforced by nothing — a
+     *         string-keyed or garbage payload rode through until a
+     *         consumer loop warned/Error'd far from here
      */
     public function __construct(
         private readonly array $entries = [],

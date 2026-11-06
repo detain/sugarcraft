@@ -10,7 +10,7 @@ use SugarCraft\Core\Util\{Ansi, Width};
 use SugarCraft\Toast\{Action, Position, Toast, ToastType};
 
 /**
- * The bounds cluster (lib-reviews-1102 M5/M4/m8): the frame Buffer allocates
+ * The bounds cluster: the frame Buffer allocates
  * width*height cells eagerly, so viewport dimensions are now refused outside
  * 1..Toast::MAX_VIEWPORT_DIMENSION instead of OOM-killing the host (an
  * h=30000 winsize previously hit "Allowed memory size exhausted" — an Error

@@ -38,8 +38,8 @@ final class Toast
     private const ZONE_CLOSE = "\u{e001}";
 
     /**
-     * Hard ceiling for view()/actionRects()/actionAt() viewport dimensions
-     * (lib-reviews-1102 M5). The frame Buffer allocates width*height cells
+     * Hard ceiling for view()/actionRects()/actionAt() viewport dimensions.
+     * The frame Buffer allocates width*height cells
      * eagerly, and a mis-parsed winsize used to reach Buffer::new unbounded —
      * an OOM Error a host cannot even catch. Out-of-range dimensions now fail
      * loud with a descriptive InvalidArgumentException instead of allocating.
@@ -47,7 +47,7 @@ final class Toast
     public const MAX_VIEWPORT_DIMENSION = 10000;
 
     /**
-     * Display-cell ceiling for a single alert message (lib-reviews-1102 M6).
+     * Display-cell ceiling for a single alert message.
      * The README used to sell "arbitrary length, word-wrapped" and the queue
      * caveat only bounded alert COUNT — a remote string 100x longer than any
      * viewport was an amplifier for the (now-linear) renderer and for the
@@ -60,7 +60,7 @@ final class Toast
     public const MAX_MESSAGE_CELLS = 8192;
 
     /**
-     * Action buttons rendered per alert (lib-reviews-1102 M6 family). Extra
+     * Action buttons rendered per alert. Extra
      * buttons fold into a visible '+N more' row instead of growing the box
      * without bound; hidden actions stay reachable via the Alert in
      * history()/activeAlerts(), just not clickable.
@@ -88,7 +88,7 @@ final class Toast
     /** Host-consumed flag: whether the host should dismiss on Escape key press. The renderer stores this preference; it does not handle input itself. */
     private bool $allowEscToClose = true;
 
-    /** Opt-in accessible chrome (M11): severity word in the header + numeric percentage on progress rows. Default OFF keeps every existing frame byte-identical. */
+    /** Opt-in accessible chrome: severity word in the header + numeric percentage on progress rows. Default OFF keeps every existing frame byte-identical. */
     private bool $accessibleText = false;
 
     /**
@@ -172,7 +172,7 @@ final class Toast
 
     /**
      * Opt into a text channel for information the frame otherwise carries
-     * ONLY as colour, glyph, or block-run length (lib-reviews-1102 M11):
+     * ONLY as colour, glyph, or block-run length:
      * the severity word (`Warning`, `Error`, … via `ToastType::label()`, so
      * it follows the active locale) joins the header, and progress rows
      * print the numeric percentage beside the bar. Default OFF — the plain
@@ -205,8 +205,8 @@ final class Toast
      * Pass null for unlimited.
      *
      * A cap below 1 is refused: it would silence the entire notification
-     * system with no error (lib-reviews-1102 minor-4, the fail-fast asymmetry
-     * against withHistoryLimit()'s negative throw).
+     * system with no error — the fail-fast counterpart
+     * of withHistoryLimit()'s negative-argument throw.
      *
      * @throws \InvalidArgumentException when $max is set but smaller than 1
      */
@@ -273,7 +273,7 @@ final class Toast
      * "use the default", not "never expire". For a persistent alert keep the
      * toast's duration unset (the default, or withDuration(null)), queue a
      * ->withoutExpiry() Alert via push() (that sets the explicit persistent
-     * sentinel, which the inheritance door honours — lib-reviews-1102 M15),
+     * sentinel, which the inheritance door honours),
      * or call cancelAlert() on a queued alert.
      *
      * @param string|null $id  Stable identity: re-queuing with the same id
@@ -295,7 +295,7 @@ final class Toast
      * @param list<Action>|null $actions  Clickable action buttons to render beneath the message
      * @throws \InvalidArgumentException when $expiresAt is a number below the
      *         epoch floor — a relative duration typed into the wrong slot is a
-     *         silently invisible alert otherwise (lib-reviews-1102 minor-2)
+     *         silently invisible alert otherwise.
      * @throws \LogicException when the toast has been dismissed — call clear() to resume
      */
     public function alert(ToastType|string $type, string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null): self
@@ -417,7 +417,7 @@ final class Toast
             \array_filter($queue, fn(Alert $a): bool => !$a->isExpired())
         );
 
-        // Update-in-place door (lib-reviews-1102 C3): an alert carrying an
+        // Update-in-place door: an alert carrying an
         // id REPLACES the live alert with the same id, at that position —
         // progress ticks must not leak a new box per frame, and a replacement
         // must not consume (or evict) a maxConcurrent slot. It rides no
@@ -442,9 +442,9 @@ final class Toast
                 $victim = \array_shift($queue);
                 // The evicted alert was live (queued, possibly rendered) and
                 // dies silently at the cap — file it in history like any
-                // dismissal so a host can still recover its text
-                // (lib-reviews-1102 M9: architect 'the evicted victim is
-                // never recorded; only dismiss() records').
+                // dismissal so a host can still recover its text — before
+                // this, only dismiss() recorded and a cap eviction
+                // vanished unfiled.
                 $this->historyLog = $this->historyLog->push($victim, $this->historyLimit);
             }
             // Enqueue: fall through, allow exceeding max
@@ -491,7 +491,7 @@ final class Toast
      * Dismiss is a MOVE, not a copy: queued alerts leave the queue —
      * including ones that expired but had not been pruned yet (they were
      * live from the host's point of view, and dismiss() is the recovery
-     * door; lib-reviews-1102 a11y M3) — so a second dismiss() can neither
+     * door) — so a second dismiss() can neither
      * double-count history nor find leftovers. Rendering stays stopped until
      * the host calls {@see clear()} — alert() refuses meanwhile — and clear()
      * resets the flag.
@@ -507,9 +507,9 @@ final class Toast
         // Move EVERY queued alert to history, then empty the queue —
         // including alerts that expired but had not been pruned yet: they
         // were live from the host's point of view (queued, possibly rendered)
-        // and dismiss() is the recovery door (lib-reviews-1102 a11y M3: the
-        // old filter gave transient info ZERO recovery on the default path,
-        // a WCAG 2.2.1 by-default failure).
+        // and dismiss() is the recovery door — the old expired filter gave
+        // transient info ZERO recovery on the default path, a WCAG 2.2.1
+        // by-default failure.
         foreach ($clone->queue as $alert) {
             $clone->historyLog = $clone->historyLog->push($alert, $clone->historyLimit);
         }
@@ -552,7 +552,7 @@ final class Toast
      * it in history — this is the lifecycle door for updates and cancellations
      * the host performs deliberately (a finished download's progress box
      * disappearing is not a dismissal). The companion of the replace-by-id
-     * leg in {@see appendBounded()} (lib-reviews-1102 C3: before this, the
+     * leg in {@see appendBounded()}: before it existed, the
      * only way to retire an alert before expiry was dismiss(), which nukes
      * the whole queue and files every survivor under history).
      *
@@ -737,7 +737,7 @@ final class Toast
      * @return string  The composited output
      *
      * @throws \InvalidArgumentException when either viewport dimension is
-     *         outside 1..self::MAX_VIEWPORT_DIMENSION (M5 fail-fast: the
+     *         outside 1..self::MAX_VIEWPORT_DIMENSION (fail-fast: the
      *         frame allocates width*height cells eagerly)
      */
     public function view(string $background, int $viewportWidth = 80, int $viewportHeight = 24): string
@@ -770,9 +770,8 @@ final class Toast
      * A marked-frame host (zones marked U+E000 OPEN .. payload .. U+E001
      * CLOSE) previously lost every marker the box covered — and, worse, lost
      * ONE half of a pair, tearing the frame: an open-without-close row makes
-     * every later zone on that row mis-route (lib-reviews-1102 C2: the
-     * consolidator sweep lost a marker in 8/27 geometries and left 5 rows
-     * unpaired; qa's wider sweep counted 45).
+     * every later zone on that row mis-route — tearing a marked host frame
+     * was the common path, not an edge case.
      *
      * The rule is row-local and pairing-first: on each box row, ORIGINAL
      * background cells inside every OPEN..CLOSE span (payload included) are
@@ -848,7 +847,7 @@ final class Toast
     }
 
     /**
-     * WCAG 2.2.2 reduced-motion preference (lib-reviews-1102 M10). Read per
+     * WCAG 2.2.2 reduced-motion preference. Read per
      * render, not cached: like sugar-spring's Spring.php the environment is
      * the living contract and a host may flip it between frames.
      */
@@ -858,7 +857,7 @@ final class Toast
     }
 
     /**
-     * Colour-suppression request (lib-reviews-1102 M12a; fleet NO_COLOR /
+     * Colour-suppression request (the fleet-wide NO_COLOR /
      * CLICOLOR family). Checked ENV-ONLY, never against a TTY: sugar-toast
      * is a compositing library — it does not print, its HOST does, so probing
      * this process's own stdout would query the wrong terminal entirely.
@@ -879,9 +878,9 @@ final class Toast
     /**
      * Shared geometry pass behind {@see view()}, {@see actionRects()} and
      * {@see actionAt()} — the ONE place the box stack is computed, so the
-     * pixels and the hit-test can never disagree (lib-reviews-1102 C1:
-     * actions shipped as label+closure only, with no exported geometry to
-     * dispatch ON, while the README told hosts to wire them).
+     * pixels and the hit-test can never disagree — actions are dispatchable
+     * at all only because this exports their geometry; they once shipped as
+     * label+closure with nothing for a host to hit-test against.
      *
      * Layout ONCE: each box is rendered straight to its Buffer and its
      * height feeds both the frame growth and the placement pass, so the two
@@ -959,9 +958,9 @@ final class Toast
 
     /**
      * The live queue exactly as {@see view()} sees it: queue order, expired
-     * alerts filtered (lib-reviews-1102 m1/m3 — before this accessor,
-     * cancelAlert()/extendAlert() indexed a RAW queue the host could not
-     * observe, so a stale expired entry silently shifted every later index).
+     * alerts filtered: before this accessor existed, cancelAlert() and
+     * extendAlert() indexed a RAW queue the host could not observe, so a
+     * stale expired entry silently shifted every later index.
      *
      * @return list<Alert>
      */
@@ -1103,7 +1102,7 @@ final class Toast
      */
     private function fillViewportFromString(Buffer $buf, array $lines): Buffer
     {
-        // M6: the host frame arrives as one flat grid built from single
+        // The host frame arrives as one flat grid built from single
         // scanLine passes — the old row-by-row place chain was the same
         // cell-clone amplifier as the alert box.
         $width = $buf->width();
@@ -1148,7 +1147,7 @@ final class Toast
 
         // SGR prefix routed through sugar-core Ansi so the icon's colour
         // is emitted byte-identically to a hand-built CSI sequence. Under
-        // NO_COLOR/CLICOLOR=0 the icon rides plain (M12a) — Width::string
+        // NO_COLOR/CLICOLOR=0 the icon rides plain — Width::string
         // of the prefix therefore also collapses, giving the message one
         // extra cell of budget instead of dead SGR padding.
         $prefix = $this->coloursSuppressed()
@@ -1156,7 +1155,7 @@ final class Toast
             : Ansi::CSI . $color . 'm' . $icon . Ansi::reset() . ' ';
 
         if ($this->accessibleText) {
-            // M11: meaning must survive colour-blindness, a palette-less
+            // Meaning must survive colour-blindness, a palette-less
             // terminal, and text-only extraction. The word rides AFTER the
             // icon's reset — plain cells, never styled chrome — and the
             // icon-drop degrade below can remove it along with the icon at
@@ -1196,7 +1195,7 @@ final class Toast
         foreach ($headerWrap as $wl) {
             // One-cell indent — dropped on the same degrade path as the
             // icon: at inner<=2 the indent would itself truncate a chunk's
-            // last character (M4: delete, not ellipsize).
+            // last character (delete, not ellipsize).
             $body = ($inner <= 2 ? '' : ' ') . $wl;
             $middleLines[] = '│' . Width::padRight(Width::truncateAnsi($body, $inner), $inner) . '│';
         }
@@ -1216,7 +1215,7 @@ final class Toast
         foreach ($actions as $action) {
             $label = '[' . $action->label . ']';
             if (Width::string(Ansi::strip($label)) > $inner) {
-                // Same ellipsize-never-delete law as the header (M4): a
+                // Same ellipsize-never-delete law as the header: a
                 // button that cannot fit shows '…', not silence. Styling is
                 // dropped on this edge path — a truncated button is already
                 // degraded, and cell-exact width beats colour there.
@@ -1241,7 +1240,7 @@ final class Toast
 
     /**
      * Truncate an over-long message to {@see MAX_MESSAGE_CELLS} display cells
-     * with a visible marker (M6). The Alert itself keeps the full text —
+     * with a visible marker. The Alert itself keeps the full text —
      * history()/activeAlerts() hosts never lose data to a render-time budget.
      */
     private function boundMessage(?string $message): ?string
@@ -1289,7 +1288,7 @@ final class Toast
         $height = \count($lines);
         $boxWidth = max(1, Width::string($lines[0] ?? ''));
 
-        // M6: one scanLine pass per row into a flat grid, ONE immutable
+        // One scanLine pass per row into a flat grid, ONE immutable
         // build — no per-cell clone anywhere on the production path.
         $grid = [];
         $blank = Cell::new();
@@ -1322,8 +1321,8 @@ final class Toast
      * severity-coloured icon and any inline-SGR message spans — keep it.
      * sugar-dashboard's Toast adapter DELEGATES to this renderer — the
      * styled box originates here (PR #1289 folded dashboard's rendering
-     * into this lib; the earlier 'mirrors sugar-dashboard' cite was the
-     * direction inverted, lib-reviews-1102 m12).
+     * into this lib; an earlier 'mirrors sugar-dashboard' cite had the
+     * direction inverted).
      *
      * @param list<string> $lines The rendered alert rows, used to bound the
      *                            styled columns to each row's box width so a
@@ -1342,7 +1341,7 @@ final class Toast
     }
 
     /**
-     * Grid-native colour pass (M6) — the single truth the production build
+     * Grid-native colour pass — the single truth the production build
      * calls directly; the Buffer-shaped method above keeps the
      * reflection-pinned seam.
      *
@@ -1352,7 +1351,7 @@ final class Toast
     private function colorAlertGrid(array $grid, int $bufWidth, Alert $alert, array $lines): array
     {
         if ($this->coloursSuppressed()) {
-            // M12a: custom background/foreground/border colours are colour
+            // Custom background/foreground/border colours are colour
             // output too — under NO_COLOR the alert keeps its glyphs, layout
             // and (non-colour) attributes, the palette stays off the wire.
             return $grid;
@@ -1413,7 +1412,7 @@ final class Toast
      * SGR sequences and applying corresponding Buffer Style objects.
      */
     /**
-     * Scan one string into its sequence of display cells (the M6 linear
+     * Scan one string into its sequence of display cells (the linear
      * build path: rows are scanned once into a flat grid and committed with
      * a single Buffer::fromGrid, instead of the old one immutable
      * withCellAt clone PER CELL — O(cells²) on the whole frame, which made a
@@ -1438,7 +1437,7 @@ final class Toast
             $b = $s[$i];
 
             // OSC / DCS / other string sequences and 2-char escapes are
-            // consumed HERE, never printed (lib-reviews-1102 M1: the walker
+            // consumed HERE, never printed: an earlier walker recognised
             // recognised only CSI, so a host frame carrying an OSC-8 link
             // came back as printable "]8;;url \\ CLICKY" garbage — the ESCs
             // dropped by the width guard while the framing survived). On the
@@ -1582,10 +1581,10 @@ final class Toast
      * means SGR 0 (reset) per spec; a STRUCTURALLY malformed extended-colour
      * payload (missing components) stops the walk fail-soft like a real
      * terminal; an out-of-range component SATURATES to 0-255 in parity with
-     * sugar-cellbuffer's decoder (M16). Unknown codes are skipped without
+     * sugar-cellbuffer's decoder. Unknown codes are skipped without
      * disturbing the state.
      *
-     * NOTE (seam row, lib-reviews-1102 M16): this decoder is one of three
+     * NOTE (seam row): this decoder is one of three
      * fleet forks (here, sugar-cellbuffer styleFromSgr, sugar-overlay
      * penFromSgr); colour-value parity is pinned against cellbuffer, but the
      * fleet still owes ONE public decoder boundary (candy-ansi-parser or a
@@ -1608,7 +1607,7 @@ final class Toast
         for ($k = 0; $k < $count; $k++) {
             $code = $params[$k];
 
-            // NO_COLOR legs (M12a): extended-colour payloads must still be
+            // NO_COLOR legs: extended-colour payloads must still be
             // CONSUMED so later codes stay aligned; the 16/256 colour sets
             // are skipped outright; 39/49 resets no-op on already-null
             // facets and fall through untouched.
@@ -1649,7 +1648,7 @@ final class Toast
             } elseif ($code === 4) {
                 $attrs |= Style::ATTR_UNDERLINE;
             } elseif ($code === 5) {
-                // Reduced motion (M10): blink is the only CARRIED animation
+                // Reduced motion: blink is the only CARRIED animation
                 // this renderer emits, and it can arrive via UNTRUSTED
                 // message text — WCAG 2.2.2 says honour the user's flag.
                 // 25 (blink off) stays unconditional; nothing else is motion.
@@ -1720,9 +1719,9 @@ final class Toast
             }
             $k += 2;
             // Out-of-range saturates into 0-255 exactly like sugar-cellbuffer's
-            // channel() (lib-reviews-1102 M16: the old NULL return BROKE the
-            // decode walk, so the same bytes styled differently depending on
-            // which layer parsed them).
+            // channel(): the old NULL return BROKE the decode walk, so the
+            // same bytes styled differently depending on which layer parsed
+            // them.
             return $this->ansi256ToRgb(max(0, min(255, $idx)));
         }
         if ($selector === 2) {
@@ -1786,8 +1785,8 @@ final class Toast
         if ($g === '') return 0;
         // C0 controls (TAB included), DEL, and C1 never occupy a cell —
         // they are skipped at placement instead of being charged a cell and
-        // emitted (lib-reviews-1102 M2: the old one-cell TAB special-case
-        // put raw 0x09 on the wire, desyncing the terminal's own tab stops).
+        // emitted: the old one-cell TAB special-case put raw 0x09 on
+        // the wire, desyncing the terminal's own tab stops.
         // Action labels are normalised at construction, so this guard is
         // the second door shared with the message channel.
         if (\strlen($g) === 1 && (\ord($g) < 0x20 || \ord($g) === 0x7f)) return 0;
@@ -1801,19 +1800,19 @@ final class Toast
      * @param float $progress  0.0 to 1.0
      * @param int $width  Available width in cells
      * @param string $percent  '' (bar only) or a ready-printed numeric label
-     *                         like '80%' (accessible mode, M11)
+     *                         like '80%' (accessible mode)
      */
     private function renderProgressBar(float $progress, int $width, string $percent = ''): string
     {
         // $width is the inner cell width (between the vertical borders) —
         // the bar fills EXACTLY that budget. It used to floor at 4 cells,
         // so a narrow box got a row longer than its own interior and the
-        // right border fell off mid-box (lib-reviews-1102 m8).
+        // right border fell off mid-box.
         $width = \max(1, $width);
         $progress = \max(0.0, \min(1.0, $progress));
 
         if ($percent !== '' && Width::string($percent) + 2 <= $width) {
-            // M11 numeric read-out: the percentage label plus one space is
+            // Accessible numeric read-out: the percentage label plus one space is
             // carved out of the bar's budget. Below that floor the number
             // would only survive mangled ('10' for '100%'), so the honest
             // degrade is the plain bar — every cell the box has is content.

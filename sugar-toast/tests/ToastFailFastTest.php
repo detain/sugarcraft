@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Toast\{Alert, Action, HistoryLog, Toast, ToastType};
 
 /**
- * Fail-fast refusals landed with lib-reviews-1102 minor-2/4/5/6: bad config
+ * Fail-fast refusals: bad config
  * and bad data must die at the door with a descriptive error instead of
  * producing a silently dead notification system, an epoch-1970 invisible
  * alert, a NAN-full progress bar, or a HistoryLog that only explodes later

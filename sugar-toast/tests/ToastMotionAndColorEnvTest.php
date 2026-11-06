@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Toast\{Alert, Position, Toast, ToastType};
 
 /**
- * Pins the accessibility environment doors (lib-reviews-1102 M10 + M12a).
+ * Pins the accessibility environment doors.
  *
  * Before this pass REDUCE_MOTION changed nothing — an SGR 5 smuggled in via
  * untrusted message text reached the wire as blink — and NO_COLOR / CLICOLOR

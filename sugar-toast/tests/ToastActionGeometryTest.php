@@ -9,9 +9,9 @@ use SugarCraft\Core\Util\{Ansi, Width};
 use SugarCraft\Toast\{Action, Alert, Position, Toast, ToastType};
 
 /**
- * Pins the action hit-test surface (lib-reviews-1102 C1, convergence of 9
- * lanes: "an overlay either marks its own controls or must not claim them
- * clickable" — resolved by exporting real geometry, zone-neutral).
+ * Pins the action hit-test surface. The law it holds: "an overlay either
+ * marks its own controls or must not claim them clickable" — resolved by
+ * exporting real geometry, zone-neutral.
  *
  * The rectangles must describe the ACTUAL composited frame: a rect is only
  * worth its pin if walking the rendered row at [col, col+width) lands on

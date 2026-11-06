@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Toast\{Action, Alert, Position, Toast, ToastType};
 
 /**
- * Caps on hostile-length input (lib-reviews-1102 M6 / uxd-N1).
+ * Caps on hostile-length input.
  *
  * The security lane measured the old renderer at ~O(n^2) in message length
  * with NO size limit: 16KB took 3.7s, 32KB took 14.4s, and 262KB was killed

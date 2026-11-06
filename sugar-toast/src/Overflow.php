@@ -18,7 +18,7 @@ enum Overflow
     /**
      * Allow the queue to exceed maxConcurrent. The surplus is NOT transient:
      * with persistent alerts accumulating it is permanent until the host
-     * clears or replaces them (lib-reviews-1102 n12).
+     * clears or replaces them.
      */
     case Enqueue;
 }

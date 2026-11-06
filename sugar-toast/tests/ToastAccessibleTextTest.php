@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Toast\{Action, Position, Toast, ToastType};
 
 /**
- * Pins the opt-in accessible text channel (lib-reviews-1102 M11): severity
+ * Pins the opt-in accessible text channel: severity
  * lived ONLY as icon colour+glyph (four identical-shaped boxes to a
  * colour-blind or text-extracting reader), and the "inline progress bar
  * (0-100%)" promise never printed a number. withAccessibleText() adds the

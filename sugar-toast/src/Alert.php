@@ -19,7 +19,7 @@ final class Alert
      *        progressToast() and push() arm the configured withDuration()
      *        timer when one is set; a truly never-expiring alert is expressed
      *        by $persistent (via withoutExpiry()/withCancelledExpiry() or
-     *        Toast::cancelAlert()), not by null alone (lib-reviews-1102 M15).
+     *        Toast::cancelAlert()), not by null alone.
      * @param float|null $progress  Progress 0.0–1.0 (non-finite throws; the constructor stores the value as given — withProgress() clamps on attach and render clamps again); null = no progress bar
      * @param list<Action> $actions  Clickable action buttons
      * @param Color|null $backgroundColor  Optional box background fill (null = no fill, plain render)
@@ -31,12 +31,12 @@ final class Alert
      *        for); withoutExpiry() sets it. The constructor accepts it
      *        alongside an explicit $expiresAt, but isExpired() short-circuits
      *        on the sentinel — the companion timestamp is stored and unread
-     *        while persistence stands (lib-reviews-1102 n24).
+     *        while persistence stands.
      * @param string|null $id  Stable identity for update-in-place. Re-queuing
      *        an alert with the same id through alert()/progressToast()/push()
      *        REPLACES the live alert at its queue position instead of
-     *        appending a second box (lib-reviews-1102 C3 — progress toasts
-     *        previously had no lifecycle at all). null = anonymous, always
+     *        appending a second box — progress toasts once had no
+     *        lifecycle at all. null = anonymous, always
      *        appends.
      */
     public function __construct(
@@ -54,15 +54,14 @@ final class Alert
         if ($progress !== null && !\is_finite($progress)) {
             throw new \InvalidArgumentException(
                 'Alert progress must be a finite 0.0-1.0 float (out-of-range values '
-                . 'clamp); NAN/INF have no honest bar to render (lib-reviews-1102 minor-6: '
-                . 'NAN-as-full-bar was the worst possible fallback)'
+                . 'clamp); NAN/INF have no honest bar to render'
             );
         }
     }
 
     /**
-     * Factory mirroring Action::new() / Toast::new() (lib-reviews-1102 n4:
-     * Alert had only the bare ctor while its siblings led with ::new()).
+     * Factory mirroring Action::new() / Toast::new() — Alert once had only
+     * the bare ctor while its siblings led with ::new().
      * Arguments and defaults mirror the constructor exactly.
      */
     public static function new(
@@ -83,8 +82,7 @@ final class Alert
     /**
      * Expiry reads CLOCK_REALTIME (microtime) — an NTP step can shorten or
      * lengthen how long a live alert stays on screen. A monotonic-clock
-     * injection seam is a recorded future API candidate (lib-reviews-1102
-     * m10); no rate assumption here is load-bearing beyond display timing.
+     * injection seam is a recorded future API candidate; no rate assumption here is load-bearing beyond display timing.
      */
     public function isExpired(): bool
     {
@@ -96,9 +94,9 @@ final class Alert
      * Alias for {@see withCancelledExpiry()} — makes the alert explicitly
      * persistent (sets the $persistent sentinel, so the queueing doors will
      * not re-inherit a duration). The two spellings are the same door and
-     * are documented as aliases (lib-reviews-1102 M15: they used to be
-     * undisclosed, and push() re-inherited an expiry precisely because no
-     * sentinel distinguished "never" from "not stated").
+     * are documented as aliases: the sentinel once did not exist, and push()
+     * re-inherited an expiry precisely because no state distinguished
+     * "never" from "not stated".
      */
     public function withoutExpiry(): self
     {

@@ -8,11 +8,10 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Toast\{Position, Toast, ToastType};
 
 /**
- * Pins the host zone-marker carry-through (lib-reviews-1102 C2 — the frame
- * tearing defect, reproduced independently by ux-a11y and qa and re-derived
- * by the consolidator sweep: 8/27 geometries lost a host marker and 5 rows
- * came back with UNPAIRED sentinels; a TopLeft box fully erased an
- * OPEN..payload..CLOSE span on row 0).
+ * Pins the host zone-marker carry-through — the frame tearing defect:
+ * of 27 sweep geometries 8 lost a host marker and 5 rows came back
+ * with UNPAIRED sentinels; a TopLeft box fully erased an
+ * OPEN..payload..CLOSE span on row 0.
  *
  * sugar-toast is structurally zone-NEUTRAL: it neither forges markers nor
  * depends on sugar-mouse. What it must not do is DAMAGE the host's own
