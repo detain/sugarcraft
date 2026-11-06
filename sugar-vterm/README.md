@@ -324,8 +324,8 @@ implements the superset.
 | `l` | DECRST (private, `?`-prefixed only) | `decrst($mode, $prefix)` | Reset mode (mirror of `h`; bare RM without the prefix is inert). |
 | `m` | SGR | `sgr($params)` | Set graphic rendition. Subparam colons (`4:1`..`4:5`) parsed. |
 | `r` | DECSTBM | `decstbm($top, $bottom)` | Set scroll region rows (1-indexed). |
-| `s` | DECSC | `scosc()` | Save cursor + Sgr + origin mode (emulator); the renderer saves the cursor position only. |
-| `u` | DECRC | `scorc()` | Restore cursor + Sgr + origin mode (emulator); the renderer restores the position only. |
+| `s` | DECSC | `scosc()` | Save cursor + pen; the renderer's snapshot is the position plus its foreground/background/attributes triple (truecolor included), while the emulator additionally saves origin mode, charset designations and GL. |
+| `u` | DECRC | `scorc()` | Restore cursor + pen; the renderer restores that position and pen triple when all three saved rendition parts are present, while the emulator additionally restores origin mode, charset designations and GL whenever its general saved-rendition slot is populated. |
 | `<n> SP q` | DECSCUSR | (Handler) | Cursor shape; the 0–6 vocabulary maps to block/underline/bar × blink, out-of-vocabulary values are stored verbatim (unclamped). |
 | `I` / `O` | Focus | (Handler) | Focus-in / focus-out recorded on the params-less `CSI I` / `CSI O` form real terminals emit under `?1004 h`. While that mode is set the intercept runs before tab handling, so a parameterised `CSI Ps I` is consumed as focus-in and CHT is unreachable on the emulator path. |
 
