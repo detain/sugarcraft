@@ -35,7 +35,7 @@ pane build one on top of `Store::list()`.
 - **Import/Export** — JSON and YAML (`yml` accepted), fail-fast: a bad document or an unround-trippable value refuses before writing anything
 - **Atomic transactions** — `transaction()` wraps a callback in BEGIN IMMEDIATE/COMMIT/ROLLBACK
 - **Bounded lock waits** — every SQLite connection opens with a 5-second busy timeout (`Database.php:67`), so two candy-kv processes racing on one database queue on each other's write locks instead of failing instantly with SQLITE_BUSY
-- **Plain text output** — no color, no escapes ever, script-friendly by contract
+- **Plain text output** — the CLI emits no color and no escapes of its own; `get` echoes the stored value untouched, so bytes riding in with data reach the terminal verbatim. `--sanitize` collapses a value to one line with C0 controls, ESC and DEL stripped — a UTF-8-encoded C1 introducer (e.g. `\xC2\x9B`) survives that scrub by design (see `Store::sanitizeForTty`), script-friendly by contract
 
 ## Install
 
@@ -115,7 +115,10 @@ candy-kv --version
   `--text` forbids it.
 - `get` prints the exact stored bytes (no added newline, no scrubbing) so
   round-trips and `$(candy-kv get k)` stay honest. `--sanitize` collapses the
-  value to one control-free line for terminal printing.
+  value to one line with C0 controls, ESC and DEL stripped for terminal
+  printing — it is a line-collapse preview, not a terminal neutraliser: a
+  well-formed UTF-8 encoding of a C1 control (e.g. `\xC2\x9B`) passes it
+  untouched.
 - `--dry-run` reports how many entries `delete` would touch and writes nothing.
 - `--` ends option processing: `set backup -- --ttl=60` stores the literal
   value `--ttl=60`. Only the first `--` ends option processing — a second one
