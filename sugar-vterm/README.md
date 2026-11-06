@@ -100,7 +100,9 @@ output anywhere.
 | Buffer | `Buffer\Buffer` | Cell grid — `rows × cols` of styled grapheme cells |
 | Cursor | `Cursor\Cursor` | Position + visibility + origin mode tracking |
 | SGR | `Sgr\Sgr` | Current graphics rendition: foreground / background / attributes |
-| Mode | `Mode\Mode` | DEC private mode flags (`DECSET`/`DECRST`) including DECAWM auto-wrap |
+| Rendition | `Rendition` | Double-height / double-width line rendition (`ESC # 3`–`ESC # 6`), stamped on cells |
+| Charset | `Charset\Charsets` | SCS character-set tables — G0–G3 designations, SO/SI locking shifts, SS2/SS3 single shifts |
+| Mode | `Mode\Mode` | DEC private mode flags (`DECSET`/`DECRST`) including DECAWM auto-wrap; `altScreenVariant` separates the four-way `47`/`1047`/`1048`/`1049` alt-screen semantics |
 | Hyperlink | `Hyperlink\Hyperlink` | OSC 8 URL + id tracker |
 | Scrollback | `Screen\Scrollback` | Ring buffer — stores rows that scroll off the top (default 1000) |
 | Msg | `Msg\FocusInMsg / FocusOutMsg` | Focus-in / focus-out event records (CSI I and CSI O, mode 1004) |
@@ -319,6 +321,38 @@ adapter — printable bytes call `CsiHandlerImpl::printable()` (writes
 the cell and defers the wrap at the right margin, exactly like the
 emulator's `ScreenHandler`), and C0 controls (`\b \t \n
 \r`) call the corresponding cursor handler.
+
+### Line rendition and character sets (`ESC` forms)
+
+CSI sequences are only half the picture; two `ESC` families change how
+glyphs are drawn and which glyphs a byte means:
+
+| Sequence | Name | Effect. |
+|---|---|---|
+| `ESC # 3` | DECDHL top | Line renders as the top half of a double-height line. |
+| `ESC # 4` | DECDHL bottom | Line renders as the bottom half of a double-height line. |
+| `ESC # 5` | DECSWL | Line returns to single width/height (rendition `None`). |
+| `ESC # 6` | DECDWL | Line renders double-width (a continuation cell follows each printed graphic, when there is room). |
+| `ESC ( <b>` / `ESC ) <b>` / `ESC * <b>` / `ESC + <b>` | SCS | Designate charset `<b>` into slot G0/G1/G2/G3. |
+| `SO` (0x0E) / `SI` (0x0F) | LS1 / LS0 | Lock G1 (or back to G0) into the GL position for subsequent graphics. |
+| `SS2` / `SS3` (C1 0x8E/0x8F) | Single shift | Use G2/G3 for exactly the next graphic. |
+
+Line rendition is not a pen state — it is stamped on the cells
+(`Cell::$rendition`), so it scrolls with the content and rides every
+diff payload. Both engines implement `ESC #` (the emulator in
+`Handler/ScreenHandler`, the renderer path via `RendererHandler` into
+`CsiHandlerImpl::escLineRendition`); the designation and shift
+machinery is emulator-side only — `ScreenHandler` holds the four
+designatable slots (`$charsets`) plus the GL selection and pending
+SS2/SS3, and restores all four slots to ASCII on `RIS`, `DECSTR`, and
+`DECALN`. Only the GL-reachable designation translates 7-bit runes;
+multi-byte UTF-8 always passes through untranslated.
+`Charset\Charsets` carries the tables (ASCII `B`, DEC Special Graphics
+`0`, UK `A`, No-Break Space `U`) and the `translate()` entry point.
+`Mode::$altScreenVariant` (see Subsystems) is the third
+previously-undocumented surface: DECSET `47`/`1047` swap buffers
+without saving, `1048` saves only the cursor, and `1049` saves buffer +
+cursor + SGR with a full restore.
 
 ## OSC coverage
 
@@ -758,7 +792,9 @@ Each subdirectory of `src/` owns a small piece of VT state:
 | `Cursor\Cursor` | Position + visibility + shape + saved-state. | `withRow($r)`, `withCol($c)`, `withVisible($v)`, `withShape($s)`, `save()`, `restore()`, `equals()`. |
 | `Sgr\Sgr` | Pen state (fg, bg, attrs bitfield, underline style). | `empty()`, `withBold/Italic/Underline/Strikethrough/Blink/Reverse/Dim/Hidden($v)`, `withUnderlineStyle($style)`, `withForeground(?$color)`, `withBackground(?$color)`, `equals()`. |
 | `Sgr\UnderlineStyle` | Enum: `None`/`Single`/`Double`/`Curly`/`Dotted`/`Dashed`. | Backed int enum (`None`=0 … `Dashed`=5); `->value` is the CSI code (no `fromInt()`). |
-| `Mode\Mode` | DEC private modes. | `withAltScreen/AltScreenVariant/CursorVisible/MouseEncoding/MouseHighlights/MouseAny/MouseCellMotion/MouseExtended/BracketedPaste/SyncUpdate/AutoWrap/OriginMode/CursorShape/ReportFocusEvents`, `isAltScreen()`, `isMouseReporting()`, `equals()`. |
+| `Rendition` (root enum) | Double-height/width line rendition (`ESC # 3`–`ESC # 6`), stamped on every cell of the line so it scrolls with content and rides each diff payload. | `None` (0) / `DoubleTop` (1) / `DoubleBottom` (2) / `DoubleWidth` (3), `isDoubleHeight()`. |
+| `Charset\Charsets` | SCS character-set tables — G0–G3 designations (`ESC ( ) * +`), locking SO/SI, single-shift SS2/SS3; emulator-side only, 7-bit runes translate through the GL-reachable set, UTF-8 never. | `ASCII` ('B'), `DEC_SPECIAL` ('0'), `UK` ('A'), `NO_BREAK_SPACE` ('U'), `translate($charset, $rune)`. |
+| `Mode\Mode` | DEC private modes. `altScreenVariant` (consts `ALT_NONE`/`ALT_NO_SAVE`/`ALT_CURSOR_ONLY`/`ALT_FULL`) records which of the four alt-screen meanings (`47`/`1047` swap only, `1048` cursor save only, `1049` full save+restore) a switch came from; `withAltScreen(bool)` maps to `ALT_FULL`/`ALT_NONE`. | `withAltScreen/AltScreenVariant/CursorVisible/MouseEncoding/MouseHighlights/MouseAny/MouseCellMotion/MouseExtended/BracketedPaste/SyncUpdate/AutoWrap/OriginMode/CursorShape/ReportFocusEvents`, `isAltScreen()`, `isMouseReporting()`, `equals()`. |
 | `Hyperlink\Hyperlink` | OSC 8 URI + id state. | `fromRaw($id, $uri)`, `equals()`. |
 | `Msg\FocusInMsg` / `FocusOutMsg` | Focus event records — land in the emulator's bounded focus ring (DEC mode `1004`) and drain via `Terminal::focusEvents()`. | Plain DTOs. |
 | `Color\Color` | Color value object — palette index or truecolor RGB. | `default()`, `indexed16($i)`, `indexed256($i)`, `truecolor($r,$g,$b)`, `fromInt($kind,$v)`, `red()`, `green()`, `blue()`, `equals()`. |
