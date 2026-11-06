@@ -267,10 +267,10 @@ alt, 16 ctrl; 32 marks a held-drag motion) before comparing button numbers,
 and fold xterm's wheel pair (64 = up, 65 = down) into one wheel event.
 Consequence: the hover tracker reacts to press and motion reports —
 enter/exit fire on a plain `1000` press — but wheel reports are inert for
-all three `Zones` trackers and for `ClickCounter` (a scroll is not a press;
-see `MouseWheelMsg` gates). Press-free hover needs motion reporting
-(`1003`); the drag tracker's cross-boundary moves need at least `1002`;
-click trackers work on plain `1000` reporting alone.
+all three `Zones` trackers — hover, drag and `ClickCounter` alike (a scroll
+is not a press; see `MouseWheelMsg` gates). Press-free hover needs motion
+reporting (`1003`); the drag tracker's cross-boundary moves need at least
+`1002`; click trackers work on plain `1000` reporting alone.
 
 One caveat on that last sentence: "`1000` alone" means the terminal sends
 `1000`-style press/release/wheel reports, not that `?1000h` by itself is
