@@ -80,8 +80,12 @@ final class SubAgent
     public array $recentCalls = [];
 
     /**
-     * Where the run works (roadmap 4.9): {@see Isolation::Worktree} gives it
-     * a git worktree of its own ({@see \SugarCraft\Code\Tools\BuiltIn\TaskTool}).
+     * Where the run works (roadmap 4.9; honored by workflow stages since 4.10):
+     * {@see Isolation::Worktree} gives it a git worktree of its own —
+     * {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool} for delegated runs and
+     * {@see EngineExecutor} for workflow stage runs, both through the shared
+     * {@see WorktreeIsolation} machinery: refusal-not-degrade, and the result
+     * text names the tree (and branch) when work was kept.
      * The constructor's argument when one is given, else the agent's preset
      * `isolation:`, else {@see Isolation::None} — so a roster row built from
      * an `isolation: worktree` preset is isolated wherever it is turned into

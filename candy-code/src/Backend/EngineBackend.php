@@ -1672,10 +1672,11 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * and every hook context's `cwd` name the worktree rather than the main
      * checkout the parent session runs in.
      *
-     * Wired by {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool} for an
-     * agent whose preset says `isolation: worktree` (crush_report Part II
-     * #23), on a tree {@see \SugarCraft\Code\Agents\WorktreeManager}
-     * created for that run.
+     * Wired by {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool} for a delegated
+     * run whose preset says `isolation: worktree` (crush_report Part II #23),
+     * and by {@see \SugarCraft\Code\Agents\EngineExecutor} for a workflow
+     * stage run whose task says the same (roadmap 4.10) — both on a tree
+     * {@see \SugarCraft\Code\Agents\WorktreeManager} created for that run.
      *
      * @see \SugarCraft\Code\Hooks\BuiltIn\BashEscapeDenyHook
      */

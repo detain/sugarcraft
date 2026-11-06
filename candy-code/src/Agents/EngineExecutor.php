@@ -116,11 +116,16 @@ final class EngineExecutor implements ExecutorInterface
      *        `Workflow` tool's, which runs its stages inside the turn child
      *        whose parent measures silence on the turn socket. Null on the
      *        TUI's forking `/workflow` path, which has no such deadline.
+     * @param ?WorktreeManager $worktreeManager the tree pool an
+     *        `isolation: worktree` stage borrows (G2); null builds one lazily
+     *        for the stage's own environment root, exactly as TaskTool's
+     *        session does for a delegated run.
      */
     public function __construct(
         private ?EngineBackend $engine = null,
         private ?AgentManager $grantManager = null,
         private ?\Closure $heartbeat = null,
+        private ?WorktreeManager $worktreeManager = null,
     ) {}
 
     /**
@@ -324,6 +329,26 @@ final class EngineExecutor implements ExecutorInterface
 
         $messages = self::messages($agent, $request);
 
+        // G2 (wf-g2g3): an `isolation: worktree` stage runs in its OWN git
+        // worktree, through the same WorktreeIsolation machinery a delegated
+        // Task run uses — refuse, never degrade: a stage that cannot be
+        // isolated fails with the why instead of editing the shared checkout.
+        // The manager is the session's when one was injected (TaskTool's
+        // wiring hands one over); a bare executor builds one lazily for the
+        // agent's environment root, falling back to the process cwd exactly
+        // like LaunchContext does for Task.
+        $worktree = null;
+        $manager = $this->worktreeManager;
+        if ($agent->isolation === Isolation::Worktree) {
+            if ($manager === null) {
+                $manager = WorktreeManager::new($agent->agent->environmentRoot ?? (getcwd() ?: '.'));
+            }
+            [$worktree, $why] = WorktreeIsolation::enter($manager, $agent->agent->name, $agent->id, null);
+            if ($worktree === null) {
+                return self::failed($agent, $startedAt, $why);
+            }
+        }
+
         // The stage's OWN declaration binds every call it makes (W2-g, the
         // workflow half of step 4.2): the request's tools are narrowed by
         // NAME only, so `tools: ['Bash(git *)']` puts the whole Bash tool on
@@ -335,6 +360,14 @@ final class EngineExecutor implements ExecutorInterface
         $engine = $this->engine
             ->withTools($tools)
             ->withMaxSteps($maxTurns);
+
+        // G2: re-jail the engine's tool set onto the stage's worktree —
+        // withWorktreeRoot maps every current tool through its own worktree
+        // jail (path jail + Bash escape deny) exactly as TaskTool's chain
+        // does; ahead of the schema leg so both ride the re-jailed engine.
+        if ($worktree !== null) {
+            $engine = $engine->withWorktreeRoot($worktree['path']);
+        }
 
         // G3: the decoded document rides the SAME leg as the headless
         // `--json-schema` flag — EngineBackend stamps it onto requests and
@@ -376,22 +409,36 @@ final class EngineExecutor implements ExecutorInterface
                 }
             }
 
+            // G2: a stage interrupted mid-run leaves its worktree the way
+            // Task leaves it — released when clean, disclosed by path (and
+            // branch) in the failure text when work was kept.
+            [$treeNote,] = WorktreeIsolation::leave($manager, $worktree, $agent->agent->name);
+
             return self::failed(
                 $agent,
                 $startedAt,
-                $failure->getMessage(),
+                $failure->getMessage() . $treeNote,
                 Usage::sum($usages),
                 $expired ? AgentStatus::TimedOut : AgentStatus::Failed,
             );
         }
 
         $output = trim($turn->reply->content);
+
+        // G2: release the stage's worktree exactly as Task leaves it — a clean
+        // tree is removed and nothing says so; kept work is disclosed by path
+        // and branch, riding the tail of the text the driver reads (and of the
+        // failure text when the run reported nothing).
+        [$treeNote,] = WorktreeIsolation::leave($manager, $worktree, $agent->agent->name);
+
         if ($output === '') {
             return self::failed($agent, $startedAt, sprintf(
                 'the agent ended without a final report (step cap %d); any work it did is in the tree but was not summarised',
                 $maxTurns,
-            ), $turn->reply->usage);
+            ) . $treeNote, $turn->reply->usage);
         }
+
+        $output .= $treeNote;
 
         // G3 honesty mirror of headless json_schema_unapplied: the stage
         // channel has no stderr for the driver, so the disclosure rides the

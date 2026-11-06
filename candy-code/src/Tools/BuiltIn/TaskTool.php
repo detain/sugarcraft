@@ -2430,47 +2430,14 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * The git worktree an `isolation: worktree` run works in (roadmap 4.9):
      * the one its suspension kept when it is still there, else a new one for
      * this run. Answers it, or null and why the run cannot be isolated.
+     * G2 (wf-g2g3): the body lives in {@see WorktreeIsolation} — the one
+     * copy that workflow stages run through too; this is the Task seam.
      *
      * @return array{0: array{id: string, path: string}|null, 1: string}
      */
     private function enterWorktree(SubAgent $subAgent, mixed $kept): array
     {
-        $manager = $this->worktreeManager;
-        if ($manager === null) {
-            return [null, sprintf(
-                'agent "%s" declares `isolation: worktree`, but this session has no worktree manager, so the run'
-                . ' cannot be isolated and was not started; remove `isolation:` from the preset, or delegate from'
-                . ' a session launched in a git checkout',
-                $subAgent->agent->name,
-            )];
-        }
-        if (\is_string($kept) && $kept !== '') {
-            try {
-                $path = $manager->worktreePath($kept);
-                if (is_dir($path)) {
-                    return [['id' => $kept, 'path' => $path], ''];
-                }
-            } catch (\RuntimeException) {
-                // Swept or removed since: the resumed run starts a fresh tree.
-            }
-        }
-
-        try {
-            // A cheap, rate-limited sweep of stale trees that hold no work.
-            $manager->sweepIfDue();
-        } catch (\RuntimeException) {
-            // A sweep that failed has already said so; it never blocks a run.
-        }
-        try {
-            return [['id' => $subAgent->id, 'path' => $manager->createWorktree($subAgent->id)], ''];
-        } catch (\RuntimeException|\InvalidArgumentException $failure) {
-            return [null, sprintf(
-                'agent "%s" declares `isolation: worktree`, but its worktree could not be created (%s), so the'
-                . ' run was not started',
-                $subAgent->agent->name,
-                $failure->getMessage(),
-            )];
-        }
+        return \SugarCraft\Code\Agents\WorktreeIsolation::enter($this->worktreeManager, $subAgent->agent->name, $subAgent->id, $kept);
     }
 
     /**
@@ -2478,38 +2445,15 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * its branch when it holds no work, and kept otherwise — never deleted
      * with changes in it. Answers the note the result carries (empty when
      * nothing remains) and the id of a kept tree, for the suspension.
+     * G2 (wf-g2g3): the body lives in {@see WorktreeIsolation} — the one
+     * copy that workflow stages run through too; this is the Task seam.
      *
      * @param array{id: string, path: string}|null $worktree
      * @return array{0: string, 1: ?string}
      */
     private function leaveWorktree(?array $worktree, string $agentName): array
     {
-        $manager = $this->worktreeManager;
-        if ($worktree === null || $manager === null) {
-            return ['', null];
-        }
-        try {
-            if ($manager->releaseIfUnused($worktree['id'])) {
-                return ['', null];
-            }
-        } catch (\RuntimeException $failure) {
-            return [sprintf(
-                "\n\n[sub-agent \"%s\" worked in its own git worktree at %s, which made no changes but could not be"
-                . ' removed: %s]',
-                $agentName,
-                $worktree['path'],
-                $failure->getMessage(),
-            ), $worktree['id']];
-        }
-        $branch = $manager->branchOf($worktree['id']);
-
-        return [sprintf(
-            "\n\n[sub-agent \"%s\" worked in its own git worktree; its changes were kept there, not in this checkout:"
-            . ' %s%s. Review them and merge what you want (a resume continues in the same tree).]',
-            $agentName,
-            $worktree['path'],
-            $branch === null ? '' : ' on branch ' . $branch,
-        ), $worktree['id']];
+        return \SugarCraft\Code\Agents\WorktreeIsolation::leave($this->worktreeManager, $worktree, $agentName);
     }
 
     /**

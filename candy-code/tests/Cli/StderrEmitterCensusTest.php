@@ -1697,6 +1697,11 @@ final class StderrEmitterCensusTest extends TestCase
         // count is 4 because this scanner reports the file's WorktreeManager
         // calls one by one — mainAgentId, ::new, and mainBranchName twice —
         // not one per construction.
+        // CAND-5 (wf-g2g3, G2): +EngineExecutor — a workflow stage task that
+        // asks isolation: worktree builds one lazily for its own environment
+        // root when no session pool was injected. That is the stage twin of
+        // LaunchContext's per-session site, and it is why the seam must stay
+        // live from the pool too.
         self::assertSame(
             // W5-C (v4:F5): the runner's path changed, so ksort() lands it first.
             // W7-E (2026-10-21, S1b composition split): tools()'s body — the
@@ -1704,7 +1709,7 @@ final class StderrEmitterCensusTest extends TestCase
             // LaunchContext, so the construction site lands there now; the
             // Bootstrap::tools() public delegate keeps the doc-blocks' claim
             // about which door builds it true.
-            ['src/Background/BackgroundSessionRunner.php' => 1, 'src/Cli/LaunchContext.php' => 1, 'src/Cli/MainWorktree.php' => 4, 'src/Host/Commands/BackgroundCommand.php' => 1],
+            ['src/Agents/EngineExecutor.php' => 1, 'src/Background/BackgroundSessionRunner.php' => 1, 'src/Cli/LaunchContext.php' => 1, 'src/Cli/MainWorktree.php' => 4, 'src/Host/Commands/BackgroundCommand.php' => 1],
             $built,
             'the set of files that construct — or statically call — a WorktreeManager moved. Its five '
                 . 'seam sites fire wherever it is built: re-read WorktreeManager\'s class doc-block (which '

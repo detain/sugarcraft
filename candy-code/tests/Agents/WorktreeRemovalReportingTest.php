@@ -452,6 +452,12 @@ final class WorktreeRemovalReportingTest extends TestCase
             // W5-C (v4:F5): the runner's directory renamed, so the walk's
             // ascending order lands src/Background/ ahead of src/Cli/.
             [
+                // CAND-5 (wf-g2g3, G2): the fifth builder, lazy — EngineExecutor
+                // constructs one only for a workflow stage that declares
+                // isolation: worktree when no session pool was handed it, on the
+                // stage's own environment root. The roster's walk order lands
+                // src/Agents/ first.
+                'src/Agents/EngineExecutor.php: new',
                 'src/Background/BackgroundSessionRunner.php: new',
                 // W7-E C1 (v4:S1b, 2026-10-21): tools() construction moved with
                 // the body onto Cli/LaunchContext.php — same builder, new file.

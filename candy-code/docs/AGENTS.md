@@ -183,8 +183,12 @@ automatically. Resuming the run continues in the same tree. A run that cannot
 be isolated (no git checkout, `git worktree add` fails) is refused rather than
 run in your checkout.
 
-Worktree isolation applies to `Task` runs and to `/bg` and `/fork` sessions
-whose agent asks for it. Workflow stages ignore the field. Details:
+Worktree isolation applies to `Task` runs, to `/bg` and `/fork` sessions whose
+agent asks for it, and to workflow stages whose task says `isolation:
+worktree` — an isolated stage gets its own tree through the same machinery,
+and is refused rather than degraded when no checkout can supply one (see
+[`WORKFLOWS.md`](WORKFLOWS.md#isolation-runs-a-stage-agent-in-its-own-git-worktree)).
+Details:
 [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#teams-and-worktrees).
 
 ## Teams

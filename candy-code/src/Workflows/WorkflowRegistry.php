@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Workflows;
 
+use SugarCraft\Code\Agents\Isolation;
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\JsonSchemaArgument;
@@ -1574,6 +1575,9 @@ final class WorkflowRegistry
                 if (array_key_exists('outputSchema', $agent)) {
                     $b = $b->outputSchema($this->requireSchema($agent['outputSchema'], "{$where} agent #{$agentIndex}"));
                 }
+                if (array_key_exists('isolation', $agent)) {
+                    $b = $b->isolation($this->requireIsolation($agent['isolation'], "{$where} agent #{$agentIndex}"));
+                }
                 $builders[] = $b;
             }
             return $builders;
@@ -1597,6 +1601,10 @@ final class WorkflowRegistry
             $b = $b->outputSchema($this->requireSchema($stage['outputSchema'], $where));
         }
 
+        if (array_key_exists('isolation', $stage)) {
+            $b = $b->isolation($this->requireIsolation($stage['isolation'], $where));
+        }
+
         return $b;
     }
 
@@ -1615,7 +1623,7 @@ final class WorkflowRegistry
      */
     private function parseYamlTaskList(array $stage, string $where): array
     {
-        foreach (['agent', 'prompt', 'tools', 'retries', 'outputSchema'] as $key) {
+        foreach (['agent', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation'] as $key) {
             if (array_key_exists($key, $stage)) {
                 throw new WorkflowLoadException(
                     "{$where} lists \"tasks\", so \"{$key}\" belongs on each task, not on the stage"
@@ -1655,6 +1663,9 @@ final class WorkflowRegistry
             }
             if (array_key_exists('outputSchema', $task)) {
                 $b = $b->outputSchema($this->requireSchema($task['outputSchema'], $at));
+            }
+            if (array_key_exists('isolation', $task)) {
+                $b = $b->isolation($this->requireIsolation($task['isolation'], $at));
             }
             $builders[] = $b;
         }
@@ -1743,6 +1754,39 @@ final class WorkflowRegistry
             "{$where} \"outputSchema\" must be a schema map or a string (inline JSON or a file path), got "
             . get_debug_type($value)
         );
+    }
+
+    /**
+     * A task's `isolation:` (G2) — where the stage agent runs: 'none' for the
+     * shared checkout (the default), 'worktree' for its own git worktree.
+     *
+     * The ONE spelling check for the YAML form, mirroring the agent-preset
+     * parser (SubagentSettingsTest): the same spellings, the same trim- and
+     * case-insensitivity, the same refusal — an author who writes `isolation:
+     * sandbox` means something specific, and quietly running in the shared
+     * checkout (or quietly not isolating) is the one outcome worse than an
+     * error. Parse-don't-validate: downstream sees the trusted enum or nothing.
+     *
+     * @throws WorkflowLoadException When the value is not a string, or names
+     *                               a mode that does not exist.
+     */
+    private function requireIsolation(mixed $value, string $where): Isolation
+    {
+        if (!is_string($value)) {
+            throw new WorkflowLoadException(
+                "{$where} \"isolation\" must be a string ('none' or 'worktree'), got " . get_debug_type($value)
+            );
+        }
+
+        $raw = strtolower(trim($value));
+
+        return match ($raw) {
+            'none' => Isolation::None,
+            'worktree' => Isolation::Worktree,
+            default => throw new WorkflowLoadException(
+                "{$where} declares isolation: {$raw}; supported spellings are 'none' and 'worktree'"
+            ),
+        };
     }
 
     /**

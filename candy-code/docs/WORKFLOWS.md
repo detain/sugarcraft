@@ -89,6 +89,7 @@ stages:                          # a LIST, never a map
     retries: 1                   # whole number >= 0; default 0
     outputSchema:                # optional; map, inline JSON string, or file path
       type: object
+    isolation: worktree          # optional; own git worktree for this task (or none)
 
   - name: fix
     parallel: true
@@ -199,6 +200,35 @@ unreadable path — is refused at load or build time, never coerced.
   `outputSchema` are independent features that stack — give the verifier a
   schema and its verdict arrives machine-readable, not pattern-matched prose.
 
+### `isolation` runs a stage agent in its own git worktree
+
+`isolation: worktree` on a stage (or on one agent of a parallel stage, or on
+one task in a `tasks:` list) — or `->isolation(Isolation::Worktree)` on a PHP
+task — gives that agent **a git worktree of its own** to work in, on a branch
+`agent-<id>-<time>` cut from the run's checkout. It is the same machinery
+behind the Task tool's like-named preset option — one shared copy — so an
+isolated stage's paths are jailed to its tree and the shared checkout is
+never edited by an isolated run.
+
+- **What the stage reports:** if the tree holds work when the stage ends, it
+  is kept, and the stage output carries the same note a Task result carries,
+  naming the tree's path (and branch) — later stages and `{{name.output}}`
+  readers can find the work there. Nothing merges automatically; you review
+  and merge by hand from the named tree.
+- **A clean tree vanishes:** a stage that changed nothing removes its worktree
+  and its branch at the end, without a note. Silence is the expected shape of
+  a read-only isolated stage.
+- **No checkout, no run:** a stage that cannot be isolated — the working
+  directory is not a git checkout, or `git worktree add` fails — FAILS with
+  the reason, before the model is dialed. An isolated stage never quietly
+  degrades into the shared checkout; the refusal is the result.
+- **In parallel, every tree is its own:** two isolated agents of the same
+  stage get distinct trees and distinct branches — parallel work never
+  collides in one tree.
+- **And it composes:** `isolation` and `outputSchema` are independent options
+  that stack — a schema-constrained verifier can work in its own tree, and
+  its machine-readable verdict arrives beside the note naming that tree.
+
 ### Everything malformed is refused, not coerced
 
 `WorkflowRegistry::parseYamlWorkflow()` raises `WorkflowLoadException` for each
@@ -219,6 +249,10 @@ of these rather than loading a workflow that quietly does less:
   at load; the same refusals fire at `build()` for `->outputSchema('…')` strings),
   and writing it on a stage that already carries a `tasks:` list is refused
   (`belongs on each task`) rather than silently ignored.
+- `isolation:` is not a string, or a string that says anything other than
+  `none` and `worktree` (trim- and case-insensitive): the load fails naming
+  the supported spellings, and writing it on a stage that already carries a
+  `tasks:` list is refused (`belongs on each task`) like its sibling keys.
 - `parallel: true` with `agents:` that is not a list.
 - any key present but of the wrong type. The check is `array_key_exists()`, not
   `isset()`, so `prompt: ~` is refused as the wrong shape rather than silently
@@ -457,7 +491,7 @@ error result.
 **1. A stage's tasks run one after another, never at once.** A regular stage
 may hold several tasks — a list in PHP, `->stage('work', [Tasks::agent('architect')->name('plan'), Tasks::agent('coder')])`,
 or a `tasks:` list in YAML, whose entries take the one-task stage's keys
-(`agent`, `name`, `prompt`, `tools`, `retries`):
+(`agent`, `name`, `prompt`, `tools`, `retries`, `outputSchema`, `isolation`):
 
 ```yaml
 - name: fix
@@ -534,9 +568,11 @@ return (new WorkflowBuilder())
 ```
 
 `TaskBuilder` carries `agent()`, `prompt()`, `tools()`, `timeout()`,
-`retries()`, `isolation()`, `name()`, `outputSchema()` and `reject()`. `timeout`, `isolation` and
-`reject` have **no YAML spelling**, so a YAML-declared task never carries them;
-`retries` and `outputSchema` are the `retries:` and `outputSchema:` keys above. `WorkflowEngine` substitutes defaults for whatever a task
+`retries()`, `isolation()`, `name()`, `outputSchema()` and `reject()`. `timeout` and `reject` have
+**no
+YAML spelling**, so a YAML-declared task never carries them; `retries`,
+`outputSchema` and `isolation` are the `retries:`, `outputSchema:` and
+`isolation:` keys above. `WorkflowEngine` substitutes defaults for whatever a task
 leaves unset when it builds the `SubAgent`:
 `$task->timeout ?? config.timeout` seconds, `$task->retries ?? 0`,
 `$task->isolation ?? Isolation::None`. A task without its own `timeout()` is
@@ -549,6 +585,13 @@ seconds); see [`timeout` is a per-stage wall-clock budget](#timeout-is-a-per-sta
 `SubAgent::$outputSchema` decoded, and `EngineExecutor` puts it on the engine
 exactly as `-p --json-schema` does, as
 [`outputSchema` gives a stage a structured verdict](#outputschema-gives-a-stage-a-structured-verdict)
+describes.
+`isolation()` — spelled `isolation:` in YAML — reaches `SubAgent::$isolation`,
+and `EngineExecutor` honors it for the stage run through the same
+WorktreeIsolation machinery `TaskTool` uses for a delegated run: own tree per
+stage agent, a refusal (never the shared checkout) when a tree cannot be
+made, and the stage text names the tree and branch when work was kept, as
+[`isolation` runs a stage agent in its own git worktree](#isolation-runs-a-stage-agent-in-its-own-git-worktree)
 describes.
 
 ### `reject()` fails a stage on the verifier verdict
