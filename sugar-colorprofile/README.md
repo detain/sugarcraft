@@ -241,7 +241,9 @@ $plain = $matcher->withError(new Color(12, 34, 56), $none);  // null === plain a
 The 256-entry and 16-entry palette Lab tables are memoized statically (fingerprint-guarded
 against `StandardColors` reassignments, so the cache can never freeze a stale table), so a warm
 CIEDE2000 search costs ~1 ms on a stock laptop; recomputing the 256 sRGB→Lab
-conversions per search would add ≈40 % on top (see `NearestColorTest`).
+conversions per search would add an estimated ≈40 % on top — the figure is the
+`NearestColor` header note, while `NearestColorTest` pins the absolute warm-search
+cost and the memoization itself, not the ratio.
 
 The matcher's 256-entry table is the canonical xterm palette: slots 0-15 are the
 ANSI-16 set, 16-231 the 6×6×6 cube at channel levels 0/95/135/175/215/255, and
