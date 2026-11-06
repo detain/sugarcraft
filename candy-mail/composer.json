@@ -21,7 +21,8 @@
     ],
     "support": {
         "issues": "https://github.com/sugarcraft/candy-mail/issues",
-        "source": "https://github.com/sugarcraft/candy-mail"
+        "source": "https://github.com/sugarcraft/candy-mail",
+        "docs": "https://sugarcraft.github.io/lib/candy-mail.html"
     },
     "require": {
         "php": "^8.3",
