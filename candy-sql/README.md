@@ -112,7 +112,7 @@ The admin sidebar is split into two sections (Management, then Performance). Dig
 | `4`   | Debug              | `8`   | Performance Schema   |
 
 Digit `4` selects **Debug** (a Management-section page); digit `8` selects **Performance Schema**. Display order and digit selection are both derived from `AdminPane::orderedCases()` — any code needing the mapping should call that method rather than hard-coding indices.
->
+
 > **Page state survival** — Admin pages (Variables, Dashboard, Connections, etc.) preserve their in-memory state (active tab, cursor position, pending edits) across the admin poll cycle (1.0s tick, 1.0s fetch window — `CacheTtl::DASHBOARD`). Fresh server data is read from the shared `AdminQueryCache` on each render; only switching panes (digits `1`–`8`) rebuilds the page from scratch.
 
 ## Architecture
@@ -137,6 +137,8 @@ Digit `4` selects **Debug** (a Management-section page); digit `8` selects **Per
 | `MysqlSchemaProvider` | `SchemaProviderInterface` via `INFORMATION_SCHEMA` queries. |
 | `PostgresSchemaProvider` | `SchemaProviderInterface` via `pg_catalog` + `information_schema` queries. |
 
+| File              | Role                                                                                          |
+|-------------------|----------------------------------------------------------------------------------------------|
 | `ExplainView`     | Renders `EXPLAIN` output as a colour-coded ANSI tree. Uses strategy pattern — delegates to driver-specific `ExplainProviderInterface` based on `Flavor`. |
 | `ExplainProviderInterface` | Interface for driver-specific EXPLAIN parsing. Implement `explain(pdo, sql)` returning a list of explain rows. |
 | `SqliteExplainProvider` | `ExplainProviderInterface` via `EXPLAIN QUERY PLAN`. Parses tree prefixes (`|--`, `` `-- ``) for depth. |
@@ -163,7 +165,6 @@ Digit `4` selects **Debug** (a Management-section page); digit `8` selects **Per
 | `ReplicaStatusProvider` | Fetches replica status via `SHOW REPLICA STATUS` (MySQL 8+) or `SHOW SLAVE STATUS` (MySQL 5.x/MariaDB), graceful 1227 handling. |
 | `SidebarGauge` | Single metric gauge with threshold coloring (green/yellow/red). Uses horizontal Gauge for all metric types. |
 | `SidebarGaugeSet` | Collection of 5 gauges: Connections, Traffic, Key Efficiency, QPS, InnoDB. Polls ServerContext and optional `Sampler` for per-second rate calculations. Traffic gauge uses Sampler delta (Bytes_received/Bytes_sent) for baseline-corrected per-second ratio; key-efficiency uses `Key_reads / (Key_reads + Key_read_requests)`. Sampler advances on each `withRefresh()` call via `ServerStatusSnapshotAdapter` bridging `ServerContextInterface` to `StatusSnapshotProviderInterface`. |
-
 | `Reports\Catalog` | Loads `data/sys_reports.json` (report widget definitions). Provides `get()`, `all()`, `byCategory()`, `categories()`. Categories are sorted by a curated `CATEGORY_ORDER` constant (problems first, matching MySQL Workbench Appendix B) rather than alphabetically. Unknown categories fall through to alphabetical ordering after the curated set. Uses `ColumnType::tryFrom()` to gracefully handle unknown column type strings rather than throwing a fatal. |
 | `ReportsPage` | Performance Reports admin page: left category/report tree + right sortable/exportable grid. `validate()` only loads `Catalog` (file I/O) — no DB queries on the render path. Navigation methods `withSelectPrevCategory()` / `withSelectNextCategory()` / `withSelectPrevReport()` / `withSelectNextReport()` cycle through the catalog with wrap-around. `selectedColumnIndex` tracks the focused column for unit display targeting (future work). Footer shows keybindings `[j/k] nav rows  [h/l] category  [/] report  [c] unit toggle  [q] quit`. |
 | `ReportRunner` | Executes `SELECT * FROM sys.<view>` for report views. Uses prepared statements with backtick-quoted view names. `run()` applies time/byte unit formatting; `runRaw()` returns unformatted values. |
