@@ -146,9 +146,12 @@ own explicit sentinel on `Alert`. To get a persistent alert that never expires
 automatically, either keep the toast's duration unset (the default, or
 `withDuration(null)`) so queued alerts inherit nothing, or mark the alert
 itself persistent — `withoutExpiry()` and its alias `withCancelledExpiry()`
-set the sentinel, and every queueing door (`alert()`, `progressToast()`,
-`push()`) honours it, so the escape hatch works even on a toast that has
-`withDuration()` configured:
+set the sentinel. The sentinel reaches the queue through `push()` alone:
+`alert()` and `progressToast()` build fresh non-persistent alerts, so on a
+toast with `withDuration()` configured they inherit an expiry whatever the
+intent — cancel one after the fact with `cancelAlert()`. `push()` skips
+duration inheritance for a sentinel-carrying alert, so the escape hatch works
+even on a toast that has `withDuration()` configured:
 
 ```php
 $toast = Toast::new(50)->withPosition(Position::TopRight);  // no duration set
@@ -159,6 +162,12 @@ $toast = $toast->alert(ToastType::Info, 'Connected');       // never expires
 $alert = (new Alert(ToastType::Info, 'Connected'))->withoutExpiry();
 $toast = $toast->push($alert);
 ```
+
+Note the trap the recipe sidesteps: its first line keeps the toast's duration
+unset. On a toast that has `withDuration()` armed, a plain `alert()` inherits
+an expiry the moment it queues — the sticky box quietly self-destructs on the
+inherited timer unless you take the sentinel path above or release the
+duration with `withDuration(null)`.
 
 The `Alert` constructor itself accepts a `persistent` flag alongside an
 explicit `$expiresAt`: it takes the pair without complaint, but the
@@ -399,7 +408,7 @@ already over the new cap survive until the next push evicts them.
 |--------|-------------|
 | `Toast::new(int $maxWidth = 50)` | Factory |
 | `->withPosition(Position)` | Screen position (9 positions) |
-| `->withDuration(?float $seconds)` | Auto-dismiss after N seconds; `null` disables |
+| `->withDuration(?float $seconds)` | Auto-dismiss after N seconds; `null` disables. The value is not range-checked (contrast `withMaxConcurrent`): `0`/negative is accepted, and alerts queued behind it are born expired — never rendered, and `secondsUntilNextExpiry()` answers `0.0` for them, so a host ticking on that value spins until the next write prunes them |
 | `->withMaxWidth(int)` | Maximum alert width in cells. Non-positive values are not rejected — the renderer floors the effective cap to 1 cell (same for a `Toast::new(0)` width) |
 | `->withMinWidth(int)` | Minimum alert width in cells |
 | `->withSymbolSet(SymbolSet)` | NerdFont, Unicode, or Ascii symbols |
@@ -407,7 +416,7 @@ already over the new cap survive until the next push evicts them.
 | `->withAccessibleText(bool $on = true)` | Opt-in text channel: severity word in the header + numeric percentage on progress rows; default off keeps every frame byte-identical |
 | `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited; `< 1` throws `InvalidArgumentException`) |
 | `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
-| `->withHistoryLimit(?int $n)` | Cap history log, oldest evicted first (default 100; `null` = unbounded) |
+| `->withHistoryLimit(?int $n)` | Cap history log, oldest evicted first (default 100; `null` = unbounded; `0` is accepted as a no-history sentinel — negatives alone throw, unlike `withMaxConcurrent`, which refuses anything below 1) |
 | `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert (string type = case-insensitive; `null` expiry inherits `withDuration()`; `id` updates a live alert in place; `$expiresAt` is an absolute epoch — duration-shaped values throw, durations belong in `withDuration()`) |
 | `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert with progress bar (0.0–1.0, finite — NAN/INF throw); same `id` = same box; wrong-slot `$expiresAt` throws |
 | `->push(Alert $alert): self` | Enqueue a pre-built `Alert` (styled/actioned) |
