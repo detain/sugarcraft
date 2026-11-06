@@ -47,7 +47,10 @@ bin/candy-sql app.sqlite --history=/var/tmp/my-history.db
 ```
 
 Supported drivers are `sqlite`, `mysql` and `pgsql` (`ConnectionFactory::SUPPORTED_DRIVERS`); anything else — including
-`sqlsrv://` DSNs — throws at parse time.
+`sqlsrv://` DSNs — throws at parse time. For SQLite, the bare path must name an **existing** file: `SqliteDatabase::open()`
+hard-refuses nonexistent paths rather than silently creating an empty database that loses every write at exit
+(src/Db/SqliteDatabase.php:31; `ConnectionFactory::fromPath()` inherits the refusal at :315) — point at a real file or
+import first (e.g. `sqlite3 fresh.sqlite < dump.sql`).
 
 `App::start($db, Flavor $flavor = Flavor::Sqlite, ?HistoryRecorder $historyRecorder = null, ?string $sslMode = null)` accepts an
 optional `$flavor` override, an optional history recorder (the launcher builds one itself — see Status-Snapshot History), and an optional
@@ -255,6 +258,7 @@ driver://[user][:pass]@host[:port]/dbname[?query]
 >
 > | Mode | Effect |
 > |------|--------|
+> | unconfigured | The effective default is `prefer` — `ConnectionFactory::fromDsn()` seeds `sslMode = 'prefer'` when the query string names no mode (src/Db/ConnectionFactory.php:151) and `fromArgv()`/`fromArgs()` apply `?? 'prefer'` (:238). So a plain `mysql://` DSN or flag set already rides the opportunistic-TLS row below; the empty cell applies only to a hand-built `ConnectionConfig`. |
 > | `` (empty) / `disable` | Plain TCP, no TLS options. |
 > | `allow` / `prefer` / `preferred` | Opportunistic TLS: `MYSQL_ATTR_SSL_CA=null`, `SSL_VERIFY_SERVER_CERT=false` — encrypts when the server supports it, verifies nothing (a downgraded connection is not reported). |
 > | `require` / `required` / `verify_ca` / `verify_identity` | TLS enforced with `SSL_VERIFY_SERVER_CERT=true`. Because no client CA is configured, verification runs against the server's system CA trust store. |
@@ -262,7 +266,7 @@ driver://[user][:pass]@host[:port]/dbname[?query]
 >
 > **Async policy (TLS gate)** — the ReactPHP transport (`ReactMysqlConnection`) builds a `mysql://` URI that carries no TLS material. Rather than let `--ssl-mode=require`/`verify_*` silently run background status/processlist fetches over plaintext, the app **refuses that transport** in any TLS-verifying mode (one predicate, `MysqlDatabase::requiresVerifiedTls()`, mirroring the sync-path table above): queries and table loads fall back to the synchronous TLS-speaking PDO connection, the admin live-refresh tick stands down, and both a one-time launcher notice (stderr, before the alt screen) and a standing in-app status line say so. The plaintext-by-agreement modes (empty / `disable` / `allow` / `prefer` / `preferred`) keep the async path exactly as before — opportunistic TLS there is the mode the caller chose.
 
-> **PostgreSQL SSL** — the `sslmode=` DSN parameter is appended for pgsql connections when `sslMode` is set (`disable`, `allow`, `prefer`, `require`, `verify-ca`, `verify-full`; MySQL-flavoured spellings `required`/`verify_identity`/`verify_full` map onto it). Unknown or empty values omit the parameter and inherit libpq's default (`prefer`). The async admin transport honours the same setting: `ReactPostgresConnection` threads the DSN's `sslmode` into PgAsync's `tls` parameter, and PgAsync refuses the connection (rather than downgrading to plaintext) when `require`/`verify-ca`/`verify-full` cannot negotiate TLS — so unlike the MySQL gate above, PostgreSQL needs no sync-only stand-down. Two parity notes: pgsql `require` means "encrypted, certificate unchecked" (libpq semantics), where MySQL `require` escalates to system-store verification; and pgasync's `verify-ca` does not actually verify the CA chain (only `verify-full` enables peer verification) — see `ReactPostgresConnection`'s class docblock.
+> **PostgreSQL SSL** — the `sslmode=` DSN parameter is appended for pgsql connections when `sslMode` is set (`disable`, `allow`, `prefer`, `require`, `verify-ca`, `verify-full`; MySQL-flavoured spellings `required`/`verify_identity`/`verify_full` map onto it). Unknown or empty values omit the parameter and inherit libpq's default (`prefer`) — though via the factory paths an empty `sslMode` never arises anyway: `fromDsn()`/`fromArgv()` seed `prefer` (src/Db/ConnectionFactory.php:151, :238), so the parameter reaches the DSN explicitly. The async admin transport honours the same setting: `ReactPostgresConnection` threads the DSN's `sslmode` into PgAsync's `tls` parameter, and PgAsync refuses the connection (rather than downgrading to plaintext) when `require`/`verify-ca`/`verify-full` cannot negotiate TLS — so unlike the MySQL gate above, PostgreSQL needs no sync-only stand-down. Two parity notes: pgsql `require` means "encrypted, certificate unchecked" (libpq semantics), where MySQL `require` escalates to system-store verification; and pgasync's `verify-ca` does not actually verify the CA chain (only `verify-full` enables peer verification) — see `ReactPostgresConnection`'s class docblock.
 
 ### DSN parsing: `parse_url()` over manual `explode()`
 
@@ -654,7 +658,9 @@ When `pcntl` is unavailable, `StatementTimeout::execute()` runs the statement wi
 The launcher records the admin poll snapshots to SQLite — on by default, opt out with `--no-history`. Default location is
 `$HOME/.candy-sql/history.db` (created with dir 0700 / file 0600; if `HOME` is unset the recorder stays disabled);
 `--history=<path>` relocates it. The recorded unit is a `StatusSnapshot` (a timestamped map of server status variables) —
-SQL statement text is never persisted. The in-memory query history (`App::runQuery()` result rows) is session-scoped only.
+SQL statement text is never persisted. The in-memory query history stores SQL statement TEXT — trimmed, with consecutive
+repeats de-duped at the record site (`App::runQuery()`, src/App.php:479-483; the second record site at :575-578 shares the law) —
+never result rows, and it is session-scoped only.
 The store speaks through the core `SQLite3` class, so `ext-sqlite3` is a hard requirement alongside `ext-pdo_sqlite`; a corrupt
 or unwritable history file now degrades loudly (`history recording DISABLED` on stderr at launch) instead of bricking the session.
 
