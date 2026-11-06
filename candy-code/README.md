@@ -2890,6 +2890,7 @@ final class MyProvider implements ProviderInterface
     public function supportsStreaming(): bool { return false; }
     public function supportsFunctionCalling(): bool { return true; }
     public function supportsVision(): bool { return false; }
+    public function supportsDocuments(): bool { return false; } // docs/ADDING_A_PROVIDER.md:13,:30
     public function supportsJsonSchema(): bool { return false; }
     public function contextWindow(): int { return 128_000; }
     public function costPer1kTokens(string $model, string $direction): float { return 0.0; }
