@@ -187,20 +187,23 @@ final class WorkflowCommand implements HostCommand
      */
     public static function start(WorkflowEngineInterface $engine, string $inputText, string $args): CommandResult
     {
-        $argParts = preg_split('/\s+/', $args);
-        $workflowName = $argParts[0] ?? '';
+        [$workflowName, $context, $problems] = self::parseRunArguments($args);
+
+        if ($problems !== []) {
+            // Loud refusal, not silent drop: the old whitespace split quietly
+            // ran the plan without any pair it could not parse, and gave values
+            // no way to carry a space.
+            return self::respond(
+                $inputText,
+                Lang::t('host.workflow.error', ['error' => 'Malformed run arguments: '
+                    . implode('; ', $problems)
+                    . '. Quote values that contain spaces (key="two words").']),
+                true,
+            );
+        }
 
         if ($workflowName === '') {
             return self::help($inputText, Lang::t('host.workflow.usage.run'));
-        }
-
-        // Parse key=val context pairs
-        $context = [];
-        foreach (array_slice($argParts, 1) as $pair) {
-            if (str_contains($pair, '=')) {
-                [$k, $v] = explode('=', $pair, 2);
-                $context[trim($k)] = trim($v);
-            }
         }
 
         // The run's Esc Esc: held as this turn's inFlightCancellation, so the
@@ -231,6 +234,87 @@ final class WorkflowCommand implements HostCommand
         return CommandResult::echo($inputText)->withEffect(
             CommandEffect::occupyTurn(static fn (): PromiseInterface => self::drive($fiber), $cancellation),
         );
+    }
+
+    /**
+     * Split a `/workflow run` argument line into [name, context, problems].
+     *
+     * Quote-aware: a value may carry spaces by wrapping it in single or double
+     * quotes (`msg="two words"`), which the old whitespace split made
+     * impossible. Every token that is not a well-formed key=value pair is
+     * REPORTED by name instead of dropped — the previous loop ran the plan
+     * without any pair it could not parse, silently. '@'-prefixed keys are
+     * refused here as well, mirroring WorkflowEngine's own run-entry rule: the
+     * engine rejects them, so accepting them at the keyboard is a lie.
+     *
+     * @return array{0: string, 1: array<string, string>, 2: list<string>}
+     */
+    public static function parseRunArguments(string $args): array
+    {
+        $tokens = [];
+        $current = '';
+        $has = false;
+        $quote = null;
+        $length = strlen($args);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $args[$i];
+            if ($quote !== null) {
+                if ($char === $quote) {
+                    $quote = null;
+                } else {
+                    $current .= $char;
+                    $has = true;
+                }
+                continue;
+            }
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+                $has = true;
+                continue;
+            }
+            if ($char === ' ' || $char === "\t") {
+                if ($has) {
+                    $tokens[] = $current;
+                    $current = '';
+                    $has = false;
+                }
+                continue;
+            }
+            $current .= $char;
+            $has = true;
+        }
+
+        if ($quote !== null) {
+            return ['', [], ['unterminated quote in `' . $current . '`']];
+        }
+        if ($has) {
+            $tokens[] = $current;
+        }
+
+        $name = $tokens[0] ?? '';
+        $context = [];
+        $problems = [];
+
+        foreach (array_slice($tokens, 1) as $pair) {
+            $at = strpos($pair, '=');
+            if ($at === false) {
+                $problems[] = 'expected key=value, got `' . $pair . '`';
+                continue;
+            }
+            $key = substr($pair, 0, $at);
+            if ($key === '') {
+                $problems[] = 'empty key in `' . $pair . '`';
+                continue;
+            }
+            if ($key[0] === '@') {
+                $problems[] = '`' . $key . '` is a reserved run-context key — the engine refuses \'@\'' . "-prefixed names at run entry";
+                continue;
+            }
+            $context[$key] = substr($pair, $at + 1);
+        }
+
+        return [$name, $context, $problems];
     }
 
     /**
