@@ -384,11 +384,14 @@ manager.
 `ZoneHoverTracker` wraps a `Manager` and tracks which zone the cursor
 is in across `MouseMsg` events. It emits `ZoneEnterMsg` when the cursor
 crosses into a zone and `ZoneExitMsg` when it leaves — ideal for
-tooltips, highlights, or data-fetch-on-hover. `update()` gates press and
-motion but refuses wheel reports (`MouseWheelMsg`): a plain mode-`1000`
-press inside a zone fires `ZoneEnterMsg`, scrolling does not, and
-press-free hover tracking needs the terminal to report motion (mode
-`1003`, see
+tooltips, highlights, or data-fetch-on-hover. `update()` refuses wheel
+reports (`MouseWheelMsg` — filtered by type, not by action) and hit-tests
+everything else: press, release AND motion all count. A plain mode-`1000`
+press inside a zone fires `ZoneEnterMsg`, scrolling does not; and because
+entry is triggered by any in-zone event arriving with no hovered zone
+current, a release inside a zone that was never entered fires
+`ZoneEnterMsg` too. Press-free hover tracking needs the terminal to report
+motion (mode `1003`, see
 [Mouse-tracking modes](#mouse-tracking-modes)):
 
 ```php
