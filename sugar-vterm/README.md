@@ -851,7 +851,7 @@ content — all-or-nothing is surrendered only under hostile pressure.
 use SugarCraft\Vterm\Theme;
 use SugarCraft\Vterm\Themes;
 
-// Tokyo Night — the standard theme of the monorepo's 305 .tape demo files
+// Tokyo Night — the standard theme of the monorepo's .tape demos
 $theme = Theme::tokyoNight();
 
 // Index into the 256-color palette
@@ -881,7 +881,7 @@ Available themes:
 
 | Theme | Status | Description |
 |---|---|---|
-| `TokyoNight` | ✅ v1 | Dark theme — the standard of the 305 monorepo tapes |
+| `TokyoNight` | ✅ v1 | Dark theme — the standard of the monorepo's VHS demos |
 | `TokyoNightLight` | ✅ v1 | Light variant of TokyoNight |
 | `TokyoNightStorm` | ✅ v1 | Storm variant of TokyoNight |
 | `Dracula` | ✅ v1 | Full Dracula palette |
