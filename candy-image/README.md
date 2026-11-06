@@ -15,9 +15,9 @@
 Terminal image viewer for PHP 8.3+ — the **chafa-independent** front end
 built on [`sugarcraft/sugar-image`](../sugar-image/). Point it at an image
 file and it detects your terminal, picks the best protocol, and writes the
-rendered bytes to stdout. This is the candy-image surface: 45 chafa CLI flags
-distilled to the ones the SugarCraft core can actually honor — and no
-shell-out to `chafa`, ever.
+rendered bytes to stdout. This is the candy-image surface: the usable core of
+chafa's flag spellings, distilled to the ones the SugarCraft core can actually
+honor — and no shell-out to `chafa`, ever.
 
 ```bash
 composer require "sugarcraft/candy-image:@dev"   # no stable release yet — see Install
