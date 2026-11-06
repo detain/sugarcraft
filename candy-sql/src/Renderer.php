@@ -393,8 +393,9 @@ final class Renderer
         $combined = Layout::joinHorizontal(Position::TOP, $sidebarText, '  ', $pageContent);
 
         // Wrap the combined output in a single frame; the title rides in the border.
-        $st = Style::new()->border(Border::rounded()->withTitle(' admin '))->padding(0, 1)->width($innerWidth);
-        $st = $a->ui->pane === Pane::Admin
+        $focused = $a->ui->pane === Pane::Admin;
+        $st = Style::new()->border(Border::rounded()->withTitle($focused ? self::focusedTitle(' admin ') : ' admin '))->padding(0, 1)->width($innerWidth);
+        $st = $focused
             ? $st->borderForeground(Color::hex('#00ffaa'))
             : $st->borderForeground(Color::hex('#ff66aa'));
 
@@ -405,10 +406,25 @@ final class Renderer
     {
         // The pane title rides in the rounded border itself (a first-class
         // Sprinkles\Border feature) instead of a hand-drawn bold line inside it.
-        $st = Style::new()->border(Border::rounded()->withTitle($title))->padding(0, 1)->width($width);
-        $st = $a->ui->pane === $p
+        // Focus carries two legs: the border hue swap (colour) and a bold ▶
+        // marker on the focused frame's title (text). The marker is what the
+        // reduced profile (NO_COLOR → Ascii) keeps — colour collapses there,
+        // decoration survives — so focus stays legible monochrome.
+        $focused = $a->ui->pane === $p;
+        $st = Style::new()->border(Border::rounded()->withTitle($focused ? self::focusedTitle($title) : $title))->padding(0, 1)->width($width);
+        $st = $focused
             ? $st->borderForeground(Color::hex('#00ffaa'))
             : $st->borderForeground(Color::hex('#ff66aa'));
         return $st->render($body);
+    }
+
+    /**
+     * Prefix a border title with the focus marker, bolded. Mirrors the admin
+     * sidebar's active-row ▶ glyph. Bold is an attribute, not a colour, so
+     * the marker reads on the Ascii profile exactly as on TrueColor.
+     */
+    private static function focusedTitle(string $title): string
+    {
+        return Style::new()->bold()->render('▶' . $title);
     }
 }

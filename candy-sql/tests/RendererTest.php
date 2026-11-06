@@ -6,11 +6,14 @@ namespace SugarCraft\Sql\Tests;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sql\App;
 use SugarCraft\Sql\Database;
 use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Pane;
 use SugarCraft\Sql\Renderer;
+use SugarCraft\Style\Style;
 use PHPUnit\Framework\TestCase;
 
 final class RendererTest extends TestCase
@@ -211,5 +214,56 @@ final class RendererTest extends TestCase
         // Every term clamps at a tiny width, so the result floors at 10.
         $this->assertSame(10, Renderer::adminContentWidth(24));
         $this->assertSame(10, Renderer::adminContentWidth(1));
+    }
+
+    /**
+     * Focus is not colour-only: the focused frame's border title carries a
+     * bold ▶ marker and it is the ONLY marker in the standard 3-pane view
+     * (tables + rows + query frames render together).
+     */
+    public function testFocusedFrameCarriesTheOnlyGlyphMarker(): void
+    {
+        $out = Renderer::render(App::start($this->db()));
+        $this->assertSame(1, substr_count($out, '▶'), 'exactly the focused frame gets a marker');
+        $this->assertStringContainsString('▶ tables ', $out, 'default focus is the Tables pane and its title carries the marker');
+    }
+
+    public function testMarkerFollowsTheFocusedFrame(): void
+    {
+        $queryFocused = Renderer::render(
+            App::builder()
+                ->withDb(new Database(new \PDO('sqlite::memory:')))
+                ->withFlavor(Flavor::Sqlite)
+                ->withPane(Pane::Query)
+                ->build()
+        );
+        $this->assertSame(1, substr_count($queryFocused, '▶'));
+        $this->assertStringContainsString('▶ query ', $queryFocused);
+        $this->assertStringNotContainsString('▶ tables ', $queryFocused);
+    }
+
+    /**
+     * The accessibility keystone: on the NO_COLOR-reduced Ascii profile the
+     * border hues collapse to nothing (colour is stripped, decoration is
+     * kept), so the ▶ marker must still single out the focused pane — where
+     * the old hue-only law rendered every frame identical.
+     */
+    public function testMarkerSurvivesTheAsciiProfile(): void
+    {
+        Style::setDefaultProfile(ColorProfile::Ascii);
+        try {
+            $out = Renderer::render(
+                App::builder()
+                    ->withDb(new Database(new \PDO('sqlite::memory:')))
+                    ->withFlavor(Flavor::Sqlite)
+                    ->withPane(Pane::Query)
+                    ->build()
+            );
+        } finally {
+            Style::setDefaultProfile(null);
+        }
+        $this->assertStringNotContainsString('38;2;', $out, 'Ascii profile must carry no truecolour bytes at all');
+        $this->assertSame(1, substr_count($out, '▶'));
+        $this->assertStringContainsString('▶ query ', $out);
     }
 }

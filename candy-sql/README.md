@@ -151,7 +151,7 @@ these tables.
 | `Db\PdoPreparedStatement` | `PreparedStatementInterface` via PDOStatement. Wraps any PDO driver statement in the neutral interface. All implementations (`MysqlDatabase`, `PostgresDatabase`, `SqliteDatabase`) return this wrapper from `prepare()`. |
 | `Pane`            | Enum for pane focus + `next()`.                                                              |
 | `App` (Model)      | Tables list, rows pane, in-progress SQL editor buffer, error string, status string.         |
-| `Renderer`        | Three rounded-border panes — tables, rows, query — with the focused pane getting a brighter accent. |
+| `Renderer`        | Three rounded-border panes — tables, rows, query — with the focused pane's border hue swapped (#ff66aa → #00ffaa) and a bold ▶ marker on its frame title; the glyph is the colour-independent focus leg, surviving the NO_COLOR reduced profile where the hue swap collapses. |
 | `SchemaBrowser`   | Schema introspection via strategy pattern — delegates to driver-specific `SchemaProviderInterface` implementation based on `Flavor`. |
 | `Schema\SchemaProviderInterface` | Interface for driver-specific schema introspection. Implement `tables()`, `columns()`, `indexes()`, `foreignKeys()`. |
 | `Schema\SqliteSchemaProvider` | `SchemaProviderInterface` via PRAGMA queries (tables, columns, indexes, foreign keys). |
