@@ -10,6 +10,7 @@
         "input",
         "selection",
         "interactive",
+        "promptkit",
         "sugarcraft"
     ],
     "homepage": "https://github.com/sugarcraft/sugar-readline",
