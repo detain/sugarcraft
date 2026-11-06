@@ -2,6 +2,7 @@
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-quickpick</code></pre>
+    <p><strong>Requirements:</strong> PHP 8.3+ with <code>ext-ffi</code> — the package hard-requires sugar-pty, which hard-requires FFI at install time even though only the opt-in <code>attachSigwinch()</code> path touches it (via <code>SignalForwarder</code>). <code>ext-pcntl</code> is needed only for that same attach; without it <code>attachSigwinch()</code> returns <code>false</code> and everything else works.</p>
 
     <h3 style="margin-top: 32px;">Quickstart — plain strings</h3>
     <pre class="code"><code class="language-php">use SugarCraft\QuickPick\QuickPick;

@@ -20,6 +20,22 @@ sugar-quickpick — a fuzzy finder / quick-pick overlay for terminal UIs (PHP 8.
 composer require sugarcraft/sugar-quickpick
 ```
 
+## Requirements
+
+- **PHP 8.3+** and **ext-ffi — required at install time.** The library
+  hard-requires `sugarcraft/sugar-pty`, whose own manifest hard-requires
+  `ext-ffi`, so `composer require` fails on an FFI-less PHP build even
+  though quickpick touches exactly one sugar-pty symbol,
+  `SignalForwarder`, and only when you call `attachSigwinch()`. An ordinary
+  `view()`-only integration never executes FFI — the floor is a packaging
+  fact, not a runtime behavior of the renderer.
+- **ext-pcntl** — only for `attachSigwinch()`, the opt-in SIGWINCH
+  re-render attach. Without it `attachSigwinch()` returns `false` and
+  everything else keeps working. On a resized terminal the auto width then
+  re-probes only when some width-affecting mutation (`setPrompt`,
+  `withItems`, `type()`, …) drops the memoized computed width — force a
+  re-measure by applying one, or build a fresh instance.
+
 ## Quick Start — string items
 
 The simplest use case with plain string items:
