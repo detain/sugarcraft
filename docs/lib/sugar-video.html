@@ -100,9 +100,14 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
     <tr><td>0-9</td><td>Seek to 0-90% of video duration</td></tr>
     <tr><td>m</td><td>Cycle to next rendering mode</td></tr>
     <tr><td>q / Esc / Ctrl-C</td><td>Quit</td></tr>
+    </table>
+    <h4 style="margin-top: 24px;">Behaviour (no keyboard shortcut)</h4>
+    <table class="api-table">
+    <tr><th>Setting</th><th>Behaviour</th></tr>
     <tr><td>resize</td><td>Terminal resize (SIGWINCH) re-scales video automatically</td></tr>
     <tr><td>loop</td><td>Loop is set at open time via <code>Reel::new()-&gt;withLoop(true)-&gt;play()</code> (no keyboard shortcut)</td></tr>
     <tr><td>subtitles</td><td>Attached at open time via <code>Reel::withSubtitles()</code> (no keyboard shortcut)</td></tr>
+    <tr><td>audio</td><td>No key toggles audio: <code>Reel::withAudio()</code> decides at open time; <code>AudioPlayer::pause()</code> / <code>resume()</code> (or <code>mute()</code> / <code>unmute()</code>) are the only levers</td></tr>
     </table>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>

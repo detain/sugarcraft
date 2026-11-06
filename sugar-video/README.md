@@ -278,11 +278,16 @@ into your own view.
 | `]` | Increase playback speed (+0.25×, max 4.0×) |
 | `0`–`9` | Seek to 0–90% of video duration |
 | `m` | Cycle to next rendering mode — the cycle walks only the modes this terminal can actually receive (graphics rungs gated by `RendererFactory::supports()`; text rungs always cycle) |
-| `audio` | No key toggles audio: on/off is chosen at open time via `Reel::withAudio()`, and `AudioPlayer::pause()` / `resume()` (or `mute()` / `unmute()`) are the only levers, never bound to a key |
 | `q` / `Esc` / `Ctrl-C` | Quit |
+
+### Behaviour (no keyboard shortcut)
+
+| Setting | Behaviour |
+| --- | --- |
 | `resize` | Terminal resize (SIGWINCH) re-scales video automatically |
 | `loop` | Loop is set at open time via `Reel::new()->withLoop(true)->play()` (no keyboard shortcut) |
 | `subtitles` | Attached at open time via `Reel::withSubtitles()` (no keyboard shortcut) |
+| `audio` | No key toggles audio: on/off is chosen at open time via `Reel::withAudio()`, and `AudioPlayer::pause()` / `resume()` (or `mute()` / `unmute()`) are the only levers, never bound to a key |
 
 ## Architecture
 
