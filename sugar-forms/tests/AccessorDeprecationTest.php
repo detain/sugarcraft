@@ -40,9 +40,9 @@ use SugarCraft\Forms\Viewport\Viewport;
  *    TextArea::getRowOffset); the era added the marker, not the delegation.
  *  - 19 are NAME-BLOCKED documented exceptions (COLLISION_EXCEPTIONS): the
  *    bare twin is a live fluent setter (title()/nextLabel()/width()/
- *    height()/styles()) — PHP admits one method per name — or, for
- *    RadioPills and the interface itself, the contract binding keeps the
- *    family prefix-spelled. The per-exception legs assert the in-source
+ *    height()/styles()) — PHP admits one method per name — or, for the
+ *    interface itself, the contract binding keeps the family
+ *    prefix-spelled. The per-exception legs assert the in-source
  *    NOTE (accessor era) and that the bare twin is still a live setter;
  *    the bidirectional census leg names any roster row that leaves the
  *    source. A rename or "fix" therefore fails this guard loudly — the
@@ -101,8 +101,9 @@ final class AccessorDeprecationTest extends TestCase
     /**
      * Accessors whose bare name is taken: [bare, kind] where kind is
      * 'setter' (bare() is a live fluent setter on this class),
-     * 'contract' (RadioPills: local bare free, interface binding blocks the
-     * family) or 'interface' (the Field declaration itself).
+     * 'contract' (local bare slot free, interface binding blocks the
+     * family — no row uses it since RadioPills gained its own short-form
+     * title() setter) or 'interface' (the Field declaration itself).
      */
     private const COLLISION_EXCEPTIONS = [
         'Field::getTitle'       => ['title', 'interface'],
@@ -114,7 +115,7 @@ final class AccessorDeprecationTest extends TestCase
         'MultiSelect::getTitle' => ['title', 'setter'],
         'Note::getTitle'        => ['title', 'setter'],
         'NumberField::getTitle' => ['title', 'setter'],
-        'RadioPills::getTitle'  => ['title', 'contract'],
+        'RadioPills::getTitle'  => ['title', 'setter'],
         'Select::getTitle'      => ['title', 'setter'],
         'Slider::getTitle'      => ['title', 'setter'],
         'Text::getTitle'        => ['title', 'setter'],
