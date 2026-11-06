@@ -78,6 +78,7 @@ Claude Code, OpenCode and OpenClaw.
 | [Scripting and automation](#scripting-and-automation) | `-p`/`run`, flags, exit codes, the JSON document, subcommands, shell-out backends |
 | [Server mode, web UI and attach](#server-mode-web-ui-and-attach) | `candy-code serve`, the browser UI, `candy-code attach`, editors through `candy-code acp` |
 | [The agent loop](#the-agent-loop) · [Capabilities](#capabilities) · [Architecture](#architecture) | How a turn runs and what ships |
+| [Custom provider](#custom-provider) · [Accessor deprecation](#accessor-deprecation) | Writing a `ProviderInterface` class in PHP; the bare-accessor rename and its `get*` forwarders |
 | [Limitations](#limitations) · [Tests](#tests) | What is not finished; how the suite is run |
 | [Credits & inspiration](#credits--inspiration) | Where the design came from |
 
