@@ -59,6 +59,13 @@ hard-refuses nonexistent paths rather than silently creating an empty database t
 (src/Db/SqliteDatabase.php:31; `ConnectionFactory::fromPath()` inherits the refusal at :315) — point at a real file or
 import first (e.g. `sqlite3 fresh.sqlite < dump.sql`).
 
+**Extensions.** The composer manifest hard-requires `ext-pdo_sqlite` and `ext-sqlite3`, while `ext-pdo_mysql` and
+`ext-pdo_pgsql` are only *suggested* — they are optional per-server features a plain install may not need. In practice:
+every SQLite shape above works out of the box, but a MySQL or PostgreSQL target requires the matching PDO driver
+installed in the runtime first (`pdo_mysql` for `--driver=mysql` / `mysql://` DSNs, `pdo_pgsql` for
+`--driver=pgsql` / `pgsql://` DSNs); when it is missing, the connect fails with PDO's `could not find driver` before
+any of the app's own gates run.
+
 `App::start($db, Flavor $flavor = Flavor::Sqlite, ?HistoryRecorder $historyRecorder = null, ?string $sslMode = null)` accepts an
 optional `$flavor` override, an optional history recorder (the launcher builds one itself — see Status-Snapshot History), and an optional
 `$sslMode` override: unset, the MySQL ssl-mode is derived from a real `MysqlDatabase` handle to feed the TLS gate (see MySQL SSL
