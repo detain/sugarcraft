@@ -142,8 +142,8 @@ Overlapping stacks (the pile-up case: more box rows than the anchor has
 room for) composite NEWER alerts over older ones — an older sibling's
 message or action row can be visually occluded with no signal in the frame.
 Expiry reflow also MOVES surviving boxes (no stable anchors yet); a
-stable-row/`+N more` badge policy is an open owner-ruling seam (see lane
-PROGRESS), so hosts with accessibility-critical stacks should cap
+stable-row/`+N more` badge policy is still an open question and may change,
+so hosts with accessibility-critical stacks should cap
 `maxConcurrent` or use `Enqueue` deliberately — its surplus never drains on
 its own.
 
