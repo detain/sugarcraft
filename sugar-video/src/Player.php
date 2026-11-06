@@ -969,8 +969,10 @@ final class Player implements Model
      * OUTPUT, and a partial view() string would desync that comparison and
      * corrupt the screen.
      *
-     * Ascii/TrueColor/HalfBlock render through a sugar-cellbuffer Buffer (the
-     * cell grid the plan calls for); Ansi256/Sixel/Kitty/Iterm2 render
+     * Ascii/TrueColor/HalfBlock/QuarterBlock render through a sugar-cellbuffer
+     * Buffer (the cell grid the plan calls for; the quadrant compositor inside
+     * frameToBuffer() folds each 2x2 pixel group into one quadrant-glyph cell);
+     * Ansi256/Sixel/Kitty/Iterm2 render
      * directly through their FrameRenderer.
      *
      * @return string
@@ -1063,6 +1065,10 @@ final class Player implements Model
      * For HalfBlock: each pair of vertically-adjacent pixels maps to
      * one Buffer cell with the upper pixel color as foreground and
      * lower pixel as background (via the ▀ character).
+     *
+     * For QuarterBlock: each 2x2 pixel group maps to one Buffer cell, the
+     * four quadrant colors split into two groups drawn with a quadrant glyph
+     * (fg = brighter group, bg = the other).
      */
     private function frameToBuffer(RgbFrame $frame, Mode $mode): Buffer
     {
@@ -1070,7 +1076,7 @@ final class Player implements Model
         $h = $frame->h;
 
         // Use cell dimensions from the frame's native size.
-        // For HalfBlock, h is doubled (2 rows per cell).
+        // For HalfBlock/QuarterBlock, each cell spans 2 source rows.
         $cellDims = $this->detectCellDimensions();
         $cellW = $cellDims['w'];
         $cellH = $cellDims['h'];
