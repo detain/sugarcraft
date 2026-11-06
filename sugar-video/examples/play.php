@@ -53,7 +53,7 @@ Arguments:
   mode          Rendering mode (optional, default: auto-detect terminal capability)
                ascii      — grayscale luminance ramp (no color)
                ansi256    — 256-color cube + grey ramp
-               truecolor  — 24-bit RGB truecolor (default if supported)
+               truecolor  — 24-bit RGB truecolor (explicit mode; auto never selects it)
                halfblock  — 24-bit half-block characters, 2× vertical resolution
                quarterblock  — 24-bit quarter-block characters, 2×2 sub-cell resolution
                sixel     — sixel graphics protocol
