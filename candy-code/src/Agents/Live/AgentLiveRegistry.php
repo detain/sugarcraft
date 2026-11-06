@@ -84,6 +84,17 @@ final class AgentLiveRegistry
     private array $byCall = [];
 
     /**
+     * Run id → the clock as of that run's last ACCEPTED fold (stamped where
+     * {@see apply()} writes a state, so stale and no-move frames refresh
+     * nothing). Recorded state, never a clock read: this is what
+     * {@see \SugarCraft\Code\Agents\Live\RunLiveness::idleSeconds()} measures
+     * against {@see now()} without a timer of its own (A1).
+     *
+     * @var array<string, float>
+     */
+    private array $lastBeatAt = [];
+
+    /**
      * The workspace's preset-colour resolver (P-AGENT.a): a run name → the
      * colour word its preset declares, or null when the name is off-roster
      * or declares none. Seeded once at build time
@@ -165,6 +176,7 @@ final class AgentLiveRegistry
         }
 
         $this->states[$activity->id] = $next;
+        $this->lastBeatAt[$activity->id] = $this->now;
         if ($next->parentCallId !== '') {
             $ids = $this->byCall[$next->parentCallId] ?? [];
             // A Task call runs one delegation. A NEW run under a call whose
@@ -181,6 +193,7 @@ final class AgentLiveRegistry
                 $queued = SubAgentActivity::queuedId($next->parentCallId);
                 if ($queued !== $activity->id && isset($this->states[$queued])) {
                     unset($this->states[$queued]);
+                    unset($this->lastBeatAt[$queued]);
                     $ids = array_values(array_filter($ids, static fn (string $id): bool => $id !== $queued));
                 }
             }
@@ -281,6 +294,18 @@ final class AgentLiveRegistry
         return $this->now;
     }
 
+    /**
+     * The clock as of the run's last ACCEPTED fold — the stamp
+     * {@see \SugarCraft\Code\Agents\Live\RunLiveness::idleSeconds()} measures
+     * against — or null for an unknown or evicted run. A stale or replayed
+     * frame does NOT refresh it: the fold that writes no state records no
+     * beat, exactly the semantics the state map already keeps.
+     */
+    public function lastBeatAt(string $id): ?float
+    {
+        return $this->lastBeatAt[$id] ?? null;
+    }
+
     /** Index into {@see SPINNER} as of the last {@see advance()}. */
     public function spinnerFrame(): int
     {
@@ -372,6 +397,7 @@ final class AgentLiveRegistry
             $id = $finished[$i];
             $call = $this->states[$id]->parentCallId;
             unset($this->states[$id]);
+            unset($this->lastBeatAt[$id]);
             if (isset($this->byCall[$call])) {
                 $left = array_values(array_filter($this->byCall[$call], static fn (string $other): bool => $other !== $id));
                 if ($left === []) {
