@@ -313,9 +313,9 @@ final class SizeIoctl
      *   fail to load. See [gotcha:macos-tcsetwinsize-missing]
      *   (PR #475 CI, same evidence as `tcsetwinsize`).
      *
-     * Unlike the SET fallback's 20 ms rate limit this read is NOT
-     * cached: a size query is ground truth refreshed on every SIGWINCH
-     * and a read after a resize must observe the NEW geometry (pinned
+     * This read is NOT cached: a size query is ground truth refreshed
+     * on every SIGWINCH and a read after a resize must observe the NEW
+     * geometry (pinned
      * by `SizeIoctlExtendedTest::testSetSizeViaLibcRoundTrip`). The
      * subprocess therefore only ever runs where the answer used to be
      * an exception.
