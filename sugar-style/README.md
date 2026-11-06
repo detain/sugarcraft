@@ -13,6 +13,8 @@
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
+> The badges and demo GIFs above point at the **monorepo host** (`github.com/detain/sugarcraft`), where CI runs; the package itself is published standalone as `sugarcraft/sugar-style` on Packagist (its split-repo host is `github.com/sugarcraft/sugar-style`, the target of the composer/support/homepage links). Two hosts by design — the link kinds are not interchangeable.
+
 
 ![demo](.vhs/dashboard.gif)
 
