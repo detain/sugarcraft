@@ -641,7 +641,8 @@ use SugarCraft\Vterm\Terminal\Terminal;
 // Set at construction.
 $vt = Terminal::new(cols: 80, rows: 24, scrollbackSize: 5000);
 
-// Retrospective change — existing scrollback is replaced.
+// Retrospective change — the ring is replaced with a fresh one:
+// ALL accumulated history is dropped, on grow and on shrink alike.
 $vt = $vt->withScrollbackSize(5000);
 ```
 
@@ -925,7 +926,10 @@ unbounded channel is capped and nothing leaves the grid unsanitised:
   queue partially replays to the grid. Atomicity is surrendered only under
   adversarial pressure, never silently dropped.
 - **Scrollback** — bounded ring (default 1000 rows); `withScrollbackSize()`
-  drops oldest rows when shrinking. The renderer path keeps no scrollback.
+  swaps in a FRESH ring on any size change, growing or shrinking — history
+  accumulated before the call is dropped, not trimmed (pinned by
+  `ScrollbackTest::testWithScrollbackSizeReplacesRing`). The renderer path
+  keeps no scrollback.
 - **Stored strings are attacker text** — window titles, OSC 8 hyperlinks and
   OSC 52 payloads are kept VERBATIM; consumers must sanitise before display
   or onward propagation (`Sanitize::untrusted()` upstream).
