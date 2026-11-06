@@ -210,4 +210,23 @@ final class SqliteHistoryStoreTest extends TestCase
         @\rmdir($dir);
         @\rmdir(\dirname($dir));
     }
+
+    /**
+     * WAL companion (owner ruling): synchronous=NORMAL rides the store's own
+     * connection. The read-back must come from that connection — synchronous
+     * is per-connection and persists nowhere, so a second handle would answer
+     * the FULL default and prove nothing. Reflection reaches the private
+     * handle deliberately: no public accessor is grown for a test.
+     */
+    public function testStoreConnectionRunsSynchronousNormalUnderWal(): void
+    {
+        $handle = (new \ReflectionProperty(SqliteHistoryStore::class, 'db'))->getValue($this->store);
+        $this->assertInstanceOf(\SQLite3::class, $handle);
+
+        $synchronous = $handle->query('PRAGMA synchronous')->fetchArray(\SQLITE3_ASSOC);
+        $this->assertSame(1, (int) $synchronous['synchronous'], 'NORMAL = 1 (OFF = 0, FULL = 2)');
+
+        $journal = $handle->query('PRAGMA journal_mode')->fetchArray(\SQLITE3_ASSOC);
+        $this->assertSame('wal', $journal['journal_mode'], 'NORMAL is the WAL companion — the store keeps WAL');
+    }
 }

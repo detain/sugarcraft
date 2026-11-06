@@ -21,6 +21,12 @@ final class SqliteDatabase implements DatabaseInterface
         $this->pdo = $pdo;
         $this->path = $path;
         $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        // The constructor is the single chokepoint for every SQLite handle we
+        // wrap: ::open(), ConnectionFactory::createSqlite() and the deprecated
+        // Database alias all arrive here, so the client posture below rides
+        // every user connection exactly once (re-arming an already-armed PDO
+        // is idempotent — both pragmas are per-connection set-and-forget).
+        self::armClientPragmas($this->pdo);
     }
 
     /**
@@ -33,6 +39,28 @@ final class SqliteDatabase implements DatabaseInterface
         }
         $pdo = new \PDO('sqlite:' . $path);
         return new self($pdo, $path);
+    }
+
+    /**
+     * Per-connection posture for a database this client does NOT own.
+     *
+     * busy_timeout=5000: browsing a file another process holds in a
+     * transaction currently errors instantly; five seconds of patience lets a
+     * transient lock pass instead (the same figure the history store uses).
+     * cache_size=-64000: negative means KiB — a 64 MiB page cache for the
+     * browse-heavy reader, living only in this connection's memory.
+     *
+     * Deliberately NOT sent here: journal_mode (WAL is persistent — it is
+     * written into the FILE header, and opening someone's database must not
+     * rewrite it), synchronous (would silently change the durability of the
+     * user's own writes), foreign_keys (turning it ON starts rejecting
+     * statements the user already runs; SQLite and the sqlite3 CLI both
+     * default it OFF). User databases stay neutral.
+     */
+    private static function armClientPragmas(\PDO $pdo): void
+    {
+        $pdo->exec('PRAGMA busy_timeout = 5000');
+        $pdo->exec('PRAGMA cache_size = -64000');
     }
 
     /** @return list<string> */

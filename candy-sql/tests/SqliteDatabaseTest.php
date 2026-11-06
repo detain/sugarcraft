@@ -182,4 +182,50 @@ final class SqliteDatabaseTest extends TestCase
         $db->close();
         $this->assertFalse($db->ping());
     }
+
+    // ── client pragmas (user-database neutrality) ────────────────────────────
+
+    public function testOpenArmsThePerConnectionClientPragmas(): void
+    {
+        $tmpPath = '/tmp/candy_sql_pragma_' . uniqid() . '.db';
+        (new \PDO('sqlite:' . $tmpPath))->exec('CREATE TABLE t (x INTEGER)');
+        $db = SqliteDatabase::open($tmpPath);
+        try {
+            $busy = $db->query('PRAGMA busy_timeout');
+            $cache = $db->query('PRAGMA cache_size');
+            $journal = $db->query('PRAGMA journal_mode');
+            $foreign = $db->query('PRAGMA foreign_keys');
+            $this->assertSame(5000, $busy[0]['timeout']);
+            $this->assertSame(-64000, $cache[0]['cache_size']);
+            // The negative pins: a fresh file database answers the header
+            // default 'delete' — the instant the client set WAL it would
+            // answer 'wal'; foreign_keys stays 0, the SQLite and sqlite3 CLI
+            // default this client refuses to override.
+            $this->assertSame('delete', $journal[0]['journal_mode']);
+            $this->assertSame(0, $foreign[0]['foreign_keys']);
+        } finally {
+            $db->close();
+        }
+        // The file-header law, pinned on disk: a bare re-open of the SAME file
+        // still answers 'delete' — opening through this client rewrote nothing
+        // persistent.
+        $bare = new \PDO('sqlite:' . $tmpPath);
+        $reopened = $bare->query('PRAGMA journal_mode')->fetchAll(\PDO::FETCH_ASSOC);
+        $this->assertSame('delete', $reopened[0]['journal_mode']);
+        @\unlink($tmpPath);
+    }
+
+    public function testDeprecatedAliasArmsTheSamePostureThroughItsDelegate(): void
+    {
+        $tmpPath = '/tmp/candy_sql_pragma_alias_' . uniqid() . '.db';
+        (new \PDO('sqlite:' . $tmpPath))->exec('CREATE TABLE t (x INTEGER)');
+        $db = \SugarCraft\Sql\Database::open($tmpPath);
+        try {
+            $busy = $db->query('PRAGMA busy_timeout');
+            $this->assertSame(5000, $busy[0]['timeout'], 'the alias forwards to the same armed delegate — no second copy of the posture');
+        } finally {
+            $db->close();
+            @\unlink($tmpPath);
+        }
+    }
 }

@@ -257,6 +257,15 @@ $db = ConnectionFactory::fromArgv($argv);        // -> DatabaseInterface
 $db = ConnectionFactory::fromPath('app.sqlite');   // -> SqliteDatabase
 ```
 
+> **Performance posture (user databases)** — every SQLite connection candy-sql opens on a database it does not own arms
+> exactly two per-connection pragmas at the one chokepoint every handle passes through (`SqliteDatabase::__construct`):
+> `busy_timeout=5000` (browsing a file locked elsewhere waits five seconds instead of erroring instantly) and
+> `cache_size=-64000` (a 64 MiB page cache living only in this connection's memory). It deliberately sends **no**
+> `journal_mode`, `synchronous`, or `foreign_keys`: WAL is persistent in the file header and opening someone's database
+> must not rewrite it; `synchronous` would silently change the durability of the user's own writes; and turning
+> `foreign_keys` ON starts rejecting statements the user already runs (SQLite and the sqlite3 CLI both default it OFF).
+> The library's own history store — the one database it owns — is the exception; see Status-Snapshot History below.
+
 ### DSN format
 
 ```
@@ -705,13 +714,19 @@ DISABLED`, bin/candy-sql:86-101) and the session runs history-less; a persist th
 log instead (`HistoryRecorder::record()` catches the store failure and logs it via `QueryLogger`, so the live dashboard and
 in-memory snapshots stay authoritative — src/Admin/History/HistoryRecorder.php:43-46).
 
+> **History-store posture** — this is the one database the library owns, so it chooses beyond the neutral client set:
+> WAL plus its companion `PRAGMA synchronous = NORMAL` (commits stay durable into the WAL; only the checkpoint window
+> could be re-lost, on a fail-soft ~1-INSERT/3s poll snapshot log of transient server-variable shapes). `NORMAL` is
+> per-connection like `busy_timeout` and creates no new sidecar files, so the chmod-after-WAL mode-settling sweep in
+> `SqliteHistoryStore::__construct` is unaffected.
+
 ```php
 use SugarCraft\Sql\Admin\History\SqliteHistoryStore;
 use SugarCraft\Sql\Admin\History\HistoryRecorder;
 use SugarCraft\Sql\Admin\History\HistoryQuery;
 
 $historyPath = sys_get_temp_dir() . '/candy-sql-doc-history-' . getmypid() . '.sqlite';
-$store    = new SqliteHistoryStore($historyPath);  // WAL, busy timeout 5s
+$store    = new SqliteHistoryStore($historyPath);  // WAL + synchronous=NORMAL, busy timeout 5s
 $recorder = new HistoryRecorder($store);
 
 // One snapshot per admin poll tick; the recorder never writes on its own initiative

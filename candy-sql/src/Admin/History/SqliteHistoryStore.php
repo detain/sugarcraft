@@ -45,6 +45,15 @@ final class SqliteHistoryStore implements HistoryStoreInterface
         $this->db = new \SQLite3($dbPath);
         $this->db->busyTimeout(5000);
         $this->db->exec('PRAGMA journal_mode = WAL');
+        // WAL companion pragma (owner ruling): NORMAL keeps commits durable
+        // into the WAL itself — only the checkpoint window could be lost —
+        // trading the per-commit fsync of FULL for speed on a store that is a
+        // ~1-INSERT/3s poll snapshot log, fail-soft by design, whose rows are
+        // transient server-variable shapes rather than irreplaceable data.
+        // This one is ours to choose: unlike journal_mode it persists nowhere
+        // on disk (per-connection, like busy_timeout), and it creates no new
+        // sidecar files, so the mode-settling sweep below is unaffected.
+        $this->db->exec('PRAGMA synchronous = NORMAL');
 
         // Modes are settled AFTER the WAL pragma (D-M9, 2026-11-03): WAL
         // creates the -wal and -shm sidecars, and a chmod that ran before
