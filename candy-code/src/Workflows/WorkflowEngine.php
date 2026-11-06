@@ -89,6 +89,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
      */
     public const RESULTS_CONTEXT_KEY = '@results';
 
+    /** Scan outcome of {@see scanVerdict()}: the pattern matched — reject. */
+    private const VERDICT_REJECTED = 'rejected';
+    /** Scan outcome: no match — the verdict stands. */
+    private const VERDICT_CLEAN = 'clean';
+    /** Scan outcome: the pattern could not compile — fail CLOSED, never clean. */
+    private const VERDICT_INVALID = 'invalid';
+
     /**
      * Finished (or interrupted) runs this engine can still pause, keyed by the
      * NAME {@see run()} was called with — which is also the name
@@ -1443,12 +1450,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // Whole-workflow pre-flight: a stage 5 that declares a refused tool
         // must not cost four stages of real agent work first. See
         // firstDeclarationRefusal() for why the per-stage checks stay as well.
+        // firstRejectMisuse() rides the same channel but is gate-independent:
+        // a mis-anchored reject() is a placement bug, not a permission call,
+        // and it must refuse under every configuration (firstDeclarationRefusal
+        // abstains when there is no permission gate).
         // Reported as that stage's failure rather than thrown, so the shape a
         // caller sees is the same one a refusal discovered inside the stage
         // produces -- a Failed WorkflowResult carrying the message on the
         // stage it belongs to. Nothing ran, so there are no agents on it and
         // no tokens or cost.
-        $refusal = $this->firstDeclarationRefusal($workflow);
+        $refusal = $this->firstDeclarationRefusal($workflow) ?? $this->firstRejectMisuse($workflow);
         if ($refusal !== null) {
             [$refusedStageName, $refusalMessage] = $refusal;
 
@@ -2002,6 +2013,19 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $this->refuseDeniedTools($task, "Verification stage '{$stageName}' task");
         $this->refuseDeniedTools($verifier, "Verification stage '{$stageName}' verifier");
 
+        // Belt past the whole-workflow pre-flight: the task half produces work,
+        // not a verdict, so a reject() anchored there is a placement bug that
+        // must never cost a dispatch.
+        if ($task->reject !== null) {
+            return new StageResult(
+                stageName: $stageName,
+                status: WorkflowStatus::Failed,
+                error: self::rejectMisuseMessage("Verification stage '{$stageName}' task slot"),
+                startedAt: $stageStartedAt,
+                completedAt: new \DateTimeImmutable(),
+            );
+        }
+
         // --- Run the task ---
         $taskPrompt = $this->interpolateContext($task->prompt, $context);
 
@@ -2063,16 +2087,6 @@ final class WorkflowEngine implements WorkflowEngineInterface
             environmentRoot: $this->environmentRoot,
         );
 
-        $verifierSubAgent = new SubAgent(
-            id: $stageName . '-verifier-' . uniqid(getmypid() . '_', true),
-            agent: $verifierAgent,
-            task: $verifierPrompt,
-            timeout: $verifier->timeout ?? $stageTimeout,
-            maxRetries: $verifier->retries ?? 0,
-            isolation: $verifier->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
-            permissionGate: $this->permissionGate,
-        );
-
         $verifierRequest = new CompleteRequest(
             model: $verifierAgent->model,
             messages: [['role' => 'user', 'content' => $verifierPrompt]],
@@ -2080,11 +2094,76 @@ final class WorkflowEngine implements WorkflowEngineInterface
             systemPrompt: $verifierAgent->systemPrompt(),
         );
 
-        $verifierResult = $this->dispatchOne($verifierSubAgent, $verifierRequest, $this->stagePool($stageTimeout, $stageClock));
-        $dispatched[] = ['key' => self::resultKey($verifier->name, $stageName . '_verifier'), 'result' => $verifierResult];
+        // --- Verdict-aware verifier loop ---
+        //
+        // A verifier's reject() pattern makes its own words actionable: after
+        // a COMPLETED dispatch the output is scanned, and a MATCH rejects the
+        // verdict — the stage then fails through the exact resume/retry
+        // machinery a mechanical failure uses. The retry budget is shared:
+        // every attempt counts against retries: N once, whether the pool
+        // re-ran it mechanically or the engine re-dispatched after a rejected
+        // verdict. A non-completed dispatch has no verdict to read (a dead
+        // verifier speaks nothing), and with reject unset this loop runs a
+        // single legacy dispatch whose result feeds the pre-verdict branches
+        // byte-identically.
+        $maxAttempts = 1 + ($verifier->retries ?? 0);
+        $verifierAttempts = [];
+        $attemptsUsed = 0;
+        // First round carries the legacy `$verifier->retries ?? 0` verbatim;
+        // later rounds may only spend what no attempt has spent yet, so
+        // 1 + retries stays the ceiling across verdict and mechanical rounds.
+        $maxRetriesForAttempt = $verifier->retries ?? 0;
+        /** @var array{kind: string, reason: string}|null $verdict last scan */
+        $verdict = null;
 
-        // Verifier failure marks the whole stage as failed. The task's agent
-        // stays on the result: it ran, and its spend is real.
+        do {
+            // One construction site for every round: a fresh SubAgent id per
+            // dispatch (attempt state is keyed by id), same task and gate.
+            $verifierSubAgent = new SubAgent(
+                id: $stageName . '-verifier-' . uniqid(getmypid() . '_', true),
+                agent: $verifierAgent,
+                task: $verifierPrompt,
+                timeout: $verifier->timeout ?? $stageTimeout,
+                maxRetries: $maxRetriesForAttempt,
+                isolation: $verifier->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
+                permissionGate: $this->permissionGate,
+            );
+            $maxRetriesForAttempt = max(0, $maxAttempts - 1 - $attemptsUsed);
+
+            $verifierResult = $this->dispatchOne($verifierSubAgent, $verifierRequest, $this->stagePool($stageTimeout, $stageClock));
+            $attemptsUsed += $verifierResult->attempts;
+            $verifierAttempts[] = $verifierResult;
+            // Same key per attempt: the last settles into the results context,
+            // the documented law for pool retries carried to verdict rounds.
+            $dispatched[] = ['key' => self::resultKey($verifier->name, $stageName . '_verifier'), 'result' => $verifierResult];
+
+            if ($verifierResult->status !== AgentStatus::Completed || $verifier->reject === null) {
+                $verdict = null;
+                break;
+            }
+
+            $verdict = self::scanVerdict($verifier->reject, $verifierResult->output, $attemptsUsed);
+        } while ($verdict['kind'] === self::VERDICT_REJECTED && $attemptsUsed < $maxAttempts);
+
+        // A pattern that reaches the scan unable to compile (only possible
+        // through a hand-built WorkflowTask — TaskBuilder::reject() refuses
+        // such patterns at set time) fails CLOSED: a rule that never ran must
+        // not read as a clean verdict.
+        if ($verdict !== null && $verdict['kind'] === self::VERDICT_INVALID) {
+            return new StageResult(
+                stageName: $stageName,
+                status: WorkflowStatus::Failed,
+                output: $verifierResult->output,
+                error: $verdict['reason'],
+                agents: [$taskResult, ...$verifierAttempts],
+                startedAt: $taskResult->startedAt ?? $stageStartedAt,
+                completedAt: new \DateTimeImmutable(),
+            );
+        }
+
+        // Verifier mechanically failed or timed out — the existing path, with
+        // the task's agent kept on the result (it ran, its spend is real) and
+        // now every verifier attempt's spend kept too.
         if ($verifierResult->status === AgentStatus::Failed || $verifierResult->status === AgentStatus::TimedOut) {
             $failed = $this->buildStageResult($stageName, $verifierResult, $stageStartedAt);
 
@@ -2093,15 +2172,30 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 status: $failed->status,
                 output: $failed->output,
                 error: $failed->error,
-                agents: [$taskResult, $verifierResult],
+                agents: [$taskResult, ...$verifierAttempts],
                 startedAt: $taskResult->startedAt ?? $stageStartedAt,
                 completedAt: $failed->completedAt,
             );
         }
 
+        // The last scan rejected the verdict and no attempt budget is left —
+        // a failure like any other: the run stops, /workflow resume re-runs
+        // this stage from scratch.
+        if ($verdict !== null && $verdict['kind'] === self::VERDICT_REJECTED) {
+            return new StageResult(
+                stageName: $stageName,
+                status: WorkflowStatus::Failed,
+                output: $verifierResult->output,
+                error: $verdict['reason'],
+                agents: [$taskResult, ...$verifierAttempts],
+                startedAt: $taskResult->startedAt ?? $stageStartedAt,
+                completedAt: new \DateTimeImmutable(),
+            );
+        }
+
         // Both succeeded — return combined output
         $combinedOutput = ($taskResult->output ?? '') . "\n" . ($verifierResult->output ?? '');
-        $allAgents = [$taskResult, $verifierResult];
+        $allAgents = [$taskResult, ...$verifierAttempts];
 
         return new StageResult(
             stageName: $stageName,
@@ -2703,6 +2797,124 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         return null;
+    }
+
+    /**
+     * Whole-workflow pre-flight for reject() placement — gate-independent by
+     * design ({@see firstDeclarationRefusal()} abstains without a permission
+     * gate; a mis-anchored reject is a declaration bug, not a permission call).
+     *
+     * reject() rejects a VERDICT, and only a verification stage's verifier
+     * produces one, so it is legal exactly there. A [stage name, message]
+     * pair in the shape firstDeclarationRefusal() reports, folded into the
+     * same refusal channel by the run pre-flight.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    private function firstRejectMisuse(Workflow $workflow): ?array
+    {
+        foreach ($workflow->stages as $stage) {
+            $stageName = $stage['name'] ?? 'unknown';
+            $stageType = $stage['type'] ?? '';
+
+            if ($stageType === 'verification') {
+                $task = $stage['task'] ?? null;
+                if ($task instanceof WorkflowTask && $task->reject !== null) {
+                    return [$stageName, self::rejectMisuseMessage("Verification stage '{$stageName}' task slot")];
+                }
+
+                continue;
+            }
+
+            $declared = [];
+            if ($stageType === 'stage' || $stageType === 'parallel') {
+                $declared = $stage['tasks'] ?? [];
+            } elseif ($stageType === 'pipeline') {
+                foreach ($stage['stages'] ?? [] as $nested) {
+                    foreach ($nested['tasks'] ?? [] as $nestedTask) {
+                        $declared[] = $nestedTask;
+                    }
+                }
+            }
+
+            foreach ($declared as $task) {
+                if ($task instanceof WorkflowTask && $task->reject !== null) {
+                    return [$stageName, self::rejectMisuseMessage("Stage '{$stageName}' (type '{$stageType}')")];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /** One refusal sentence for every illegal reject() anchor. */
+    private static function rejectMisuseMessage(string $label): string
+    {
+        return "{$label}: reject() rejects a verifier VERDICT and belongs on the verifier slot of a verification stage";
+    }
+
+    /**
+     * Scan a verifier's completed output against its reject() pattern.
+     *
+     * POLARITY: a MATCH rejects — the pattern names the text that means
+     * "not good enough" (e.g. '/REJECT/', '/\bNEEDS-FIX\b/i'). The reason
+     * carries the pattern and the matched line so the operator sees WHY the
+     * verdict was refused, in the same error field a mechanical failure uses.
+     *
+     * A pattern that cannot compile at scan time reports INVALID, never
+     * CLEAN: a rule that did not run must not read as a pass. (The common
+     * path cannot reach here with such a pattern — TaskBuilder::reject()
+     * refuses it at set time; a hand-built DTO cannot slip silently.)
+     *
+     * @return array{kind: string, reason: string}
+     */
+    private static function scanVerdict(string $pattern, ?string $output, int $attemptsUsed): array
+    {
+        $text = $output ?? '';
+        $matched = @preg_match($pattern, $text, $hits, PREG_OFFSET_CAPTURE);
+
+        if ($matched === false) {
+            return [
+                'kind' => self::VERDICT_INVALID,
+                'reason' => "verdict scan failed closed: reject pattern '{$pattern}' is not a valid PCRE: "
+                    . TaskBuilder::pcreErrorText() . ' [the stage cannot pass under a rule that never ran]',
+            ];
+        }
+
+        if ($matched !== 1) {
+            return ['kind' => self::VERDICT_CLEAN, 'reason' => ''];
+        }
+
+        $line = self::matchedLine($text, (int) ($hits[0][1] ?? 0));
+        $attempts = $attemptsUsed > 1 ? " [failed on all {$attemptsUsed} attempts]" : '';
+
+        return [
+            'kind' => self::VERDICT_REJECTED,
+            'reason' => "verdict rejected: verifier output matched {$pattern} on: \"{$line}\"{$attempts}",
+        ];
+    }
+
+    /**
+     * The control-char-free, length-clipped line of $output that contains
+     * the match at $offset — safe to embed in a one-line stage error.
+     */
+    private static function matchedLine(string $text, int $offset): string
+    {
+        $lineStart = strrpos(substr($text, 0, max(0, $offset)), "\n");
+        $rest = substr($text, $lineStart === false ? 0 : $lineStart + 1);
+        $newline = strpos($rest, "\n");
+        $line = $newline === false ? $rest : substr($rest, 0, $newline);
+
+        // Control bytes (including the CR of CRLF pairs and terminal escapes'
+        // own ESC) would corrupt the error line; they read as spaces here.
+        $line = trim((string) preg_replace('/[\x00-\x1F\x7F]/', ' ', $line));
+        $line = str_replace('"', '\\"', $line);
+
+        if (mb_strlen($line) > 160) {
+            $line = mb_substr($line, 0, 157) . '...';
+        }
+
+        return $line === '' ? '(blank line)' : $line;
     }
 
     /**
