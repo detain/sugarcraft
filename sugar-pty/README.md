@@ -320,6 +320,15 @@ caps its undrained transition ring at `MAX_EVENTS` = 1024 and drops
 the OLDEST transition when full — slow consumers lose history head,
 never the tail.
 
+Note the collapse: both readers map the master's `null` (timeout) and
+`''` (confirmed EOF) to the SAME empty answer — `readChunk()` yields
+`''` and `readChunkWithTransitions()` yields `[]` either way — so an
+inspection loop cannot tell "the child exited" from "quiet" and will
+keep spinning after the child is gone. Unlike `PtyInputDecoder`, this
+parser has no latched EOF signal; surfacing the distinction would mean
+widening the return types (code seam left for the lib owner — docs
+here only disclose the hazard).
+
 ### `SignalForwarder::attachSigchld` — push-style reaping (opt-in)
 
 `attachSigchld(callable $reaper, bool $async = true): bool` routes
