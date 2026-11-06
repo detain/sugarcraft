@@ -371,7 +371,7 @@ $rows     = $provider->fetchProcesslist();      // performance_schema.threads, S
 
 Available providers:
 - **`MysqlAdminProvider`** — adapter over `ServerContext`: `SHOW GLOBAL STATUS`, `SHOW GLOBAL VARIABLES`, and `SHOW PLUGINS` are issued by the context; the provider adds `fetchProcesslist()` (Performance Schema `performance_schema.threads`, falling back to `SHOW FULL PROCESSLIST`)
-- **`PostgresAdminProvider`** — `pg_stat_database`, `pg_settings`, `pg_stat_activity`. Implements `checkAllMetrics()` with computed PostgreSQL metrics (connection usage, cache hit rate, transaction rates, throughput) and `checkConnectionUsage()` with threshold alerts. `serverInfo()` maps `pg_stat_database` fields (`numbackends`, `xact_commit`, `xact_rollback`, `blks_read`, `blks_hit`, `tup_returned`, `tup_fetched`, `tup_inserted`, `tup_updated`, `tup_deleted`, `max_connections`, `shared_buffers`).
+- **`PostgresAdminProvider`** — `pg_stat_database`, `pg_settings`, `pg_stat_activity`. `fetchStatusVariables()` maps `pg_stat_database` fields (`numbackends`, `xact_commit`, `xact_rollback`, `blks_read`, `blks_hit`, `tup_returned`, `tup_fetched`, `tup_inserted`, `tup_updated`, `tup_deleted`) into prefixed keys alongside a derived `pg_settings.shared_buffers` byte count. Implements `checkAllMetrics()` with computed PostgreSQL metrics (connection usage, cache hit rate, transaction rates, throughput) and `checkConnectionUsage()` with threshold alerts.
 
 ## Result table
 
