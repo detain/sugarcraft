@@ -289,8 +289,8 @@ mismatch `-3`, gap open `-5`, gap extend `-1`, adjacent bonus `+5`).
 
 `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` (alias
 `async()`) fetches `list<string>` suggestions off the keystroke path with a
-debounce; `SuggestionsReadyMsg` arrives via the event loop when fresh
-results land.
+debounce; `SugarCraft\Core\Msg\SuggestionsReadyMsg` (defined in sugar-core)
+arrives via the event loop when fresh results land.
 
 ### ActionSpinner
 
