@@ -510,7 +510,7 @@ Built-in `Msg` classes under `SugarCraft\Core\Msg\` (all implement the
 | Focus | `FocusGainedMsg`, `FocusLostMsg` |
 | Screen stack | `ScreenStackPushedMsg`, `ScreenStackPoppedMsg` |
 | Composition | `AddComponentMsg`, `RemoveComponentMsg`, `ComponentAddressedMsg` (interface) |
-| Async / infra | `ExceptionMsg`, `ExecMsg`, `EnvMsg`, `PrintMsg`, `RawMsg`, `BatchMsg`, `SequenceMsg`, `SubscriptionsMsg`, `SuggestionsReadyMsg`, `TickRequest` (Msg-shaped request), `WorkerResultMsg` |
+| Async / infra | `ExceptionMsg`, `ExecMsg`, `EnvMsg`, `PrintMsg`, `RawMsg`, `BatchMsg`, `SequenceMsg`, `SubscriptionsMsg`, `SuggestionsReadyMsg`, `TickRequest` (`@internal` request shape — no BC promise, do not construct in user code), `ExecRequest` (the `Cmd::exec` request the Program intercepts), `WorkerResultMsg` |
 
 ## Alt-screen vs inline mode
 
