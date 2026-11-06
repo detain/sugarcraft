@@ -80,7 +80,12 @@ $prompt = Readline::fromStdin()->run(
 ```
 
 The remaining prompt surface (all fluent, all returning new instances):
-`withValidator(callable)` gates `submit()` on a rule, `withCharLimit(int)`
+`withValidator(callable)` gates `submit()` on a rule — the gate is
+falsy-only: `withValidator(fn (string $v): bool => $v !== '')` rejects the
+empty buffer, but any truthy return accepts, even an error string, and a
+throwing validator is never caught, so its exception escapes `submit()`,
+`handleKey()` and `run()` — signal rejection by returning `false`, `''` or
+`null`, never by throwing — `withCharLimit(int)`
 caps the buffer, `withHidden()` masks input (secrets) and disables history
 pushes and completion echoes — the masked frame renders one glyph per typed
 character (`*` by default; the setter's `$mask` argument changes the glyph),
