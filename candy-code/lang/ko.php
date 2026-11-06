@@ -294,6 +294,7 @@ return [
     'cli.gc.unknown_action' => 'gc: 알 수 없는 작업: {action}',
     'cli.gc.usage' => '사용법: candy-code gc status [--format text|json] | sessions [--sort size|age|name] [--limit N] [--archived] [--children] [--format text|json] | analyze [--top N] [--format text|json] | vacuum [--check] [--incremental] [--force]',
     'cli.gc.vacuum.done' => 'vacuum ({mode}): 실행 전 {before} → 실행 후 {after}, {pages}개 빈 페이지 해제',
+    'cli.gc.vacuum.flags_conflict' => '--check과 --force는 서로 모순됩니다: --check는 보기만 하고 --force는 다시 쓰기만 합니다 — 하나만 선택하세요',
     'cli.gc.vacuum.flipped' => 'auto_vacuum을 {from}에서 {to}로 변경했습니다: 한 번의 재쓰기 이후부터 증분 해제가 가능해집니다',
     'cli.gc.vacuum.headroom' => '재쓰기에는 약 {needed}의 임시 디스크 공간이 필요합니다 (사용 가능 {free})',
     'cli.gc.vacuum.locked' => '저장소가 실행 중인 세션에 의해 잠겨 있습니다 ({holders}개 활성 잠금) — 실행 중인 candy-code 세션을 닫고 다시 시도하세요',

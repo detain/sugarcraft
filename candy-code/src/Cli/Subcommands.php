@@ -1758,6 +1758,9 @@ final class Subcommands
      * and the attempt is never refused on the estimate alone. A store held
      * by a running session answers with the lock advice line whose holder
      * count is the flock ground truth — never a process-name guess.
+     * `--check` together with `--force` is a usage error (exit 2): one spells
+     * "only look", the other "only change", and silently preferring either
+     * over the other would make the flag pair a coin toss.
      */
     private static function gcVacuum(ParsedArgs $args): int
     {
@@ -1766,6 +1769,14 @@ final class Subcommands
         $incremental = isset($args->subcommandFlags['--incremental']);
         $force = isset($args->subcommandFlags['--force']) || isset($args->subcommandFlags['-f']);
         $dbPath = self::gcStorePath();
+
+        if ($check && $force) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.gc.vacuum.flags_conflict'),
+                $args->outputFormat,
+                self::gcUsage(),
+            );
+        }
 
         if (!$force) {
             try {

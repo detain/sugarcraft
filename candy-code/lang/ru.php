@@ -294,6 +294,7 @@ return [
     'cli.gc.unknown_action' => 'gc: неизвестное действие: {action}',
     'cli.gc.usage' => 'Использование: candy-code gc status [--format text|json] | sessions [--sort size|age|name] [--limit N] [--archived] [--children] [--format text|json] | analyze [--top N] [--format text|json] | vacuum [--check] [--incremental] [--force]',
     'cli.gc.vacuum.done' => 'vacuum ({mode}): было {before} → стало {after}, освобождено {pages} свободных страниц',
+    'cli.gc.vacuum.flags_conflict' => '--check вместе с --force противоречивы: --check только смотрит, --force только переписывает — выберите одно',
     'cli.gc.vacuum.flipped' => 'auto_vacuum изменен с {from} на {to}: однократная перезапись теперь включает инкрементальную очистку',
     'cli.gc.vacuum.headroom' => 'для перезаписи нужно около {needed} временного места на диске (свободно {free})',
     'cli.gc.vacuum.locked' => 'хранилище заблокировано запущенной сессией ({holders} активных блокировок) — закройте запущенные сессии candy-code и повторите',

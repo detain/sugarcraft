@@ -332,6 +332,7 @@ return [
     'cli.gc.unknown_action' => 'gc: unknown action: {action}',
     'cli.gc.usage' => 'Usage: candy-code gc status [--format text|json] | sessions [--sort size|age|name] [--limit N] [--archived] [--children] [--format text|json] | analyze [--top N] [--format text|json] | vacuum [--check] [--incremental] [--force]',
     'cli.gc.vacuum.done' => 'vacuum ({mode}): before {before} → after {after}, {pages} free pages released',
+    'cli.gc.vacuum.flags_conflict' => '--check together with --force is a contradiction: --check only looks, --force only rewrites — pick one',
     'cli.gc.vacuum.flipped' => 'auto_vacuum flipped {from} -> {to}: the one-time rewrite now enables incremental drains',
     'cli.gc.vacuum.headroom' => 'a rewrite needs about {needed} of transient disk space ({free} free)',
     'cli.gc.vacuum.locked' => 'the store is locked by a running session ({holders} live locks) — close running candy-code sessions and retry',

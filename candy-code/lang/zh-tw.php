@@ -294,6 +294,7 @@ return [
     'cli.gc.unknown_action' => 'gc：未知操作：{action}',
     'cli.gc.usage' => '用法：candy-code gc status [--format text|json] | sessions [--sort size|age|name] [--limit N] [--archived] [--children] [--format text|json] | analyze [--top N] [--format text|json] | vacuum [--check] [--incremental] [--force]',
     'cli.gc.vacuum.done' => 'vacuum ({mode})：之前 {before} → 之後 {after}，釋放 {pages} 個空閒頁',
+    'cli.gc.vacuum.flags_conflict' => '--check 與 --force 相互矛盾：--check 只檢視，--force 只重寫——請二選一',
     'cli.gc.vacuum.flipped' => 'auto_vacuum 已從 {from} 改為 {to}：一次性重寫後現已支援增量回收',
     'cli.gc.vacuum.headroom' => '一次重寫約需 {needed} 暫存磁碟空間 (可用 {free})',
     'cli.gc.vacuum.locked' => '儲存正被執行中的會話鎖定（{holders} 個活動鎖）— 請關閉執行中的 candy-code 會話後重試',

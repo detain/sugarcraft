@@ -294,6 +294,7 @@ return [
     'cli.gc.unknown_action' => 'gc: 不明なアクション: {action}',
     'cli.gc.usage' => '使用法: candy-code gc status [--format text|json] | sessions [--sort size|age|name] [--limit N] [--archived] [--children] [--format text|json] | analyze [--top N] [--format text|json] | vacuum [--check] [--incremental] [--force]',
     'cli.gc.vacuum.done' => 'vacuum ({mode}): 実行前 {before} → 実行後 {after}、{pages} 個の空きページを解放',
+    'cli.gc.vacuum.flags_conflict' => '--check と --force は矛盾します: --check は見るだけ、--force は書き換えるだけ — どちらか一方を選んでください',
     'cli.gc.vacuum.flipped' => 'auto_vacuum を {from} から {to} に変更しました: 一度きりの書き換えで今後の増分解放が可能になります',
     'cli.gc.vacuum.headroom' => '書き換えには約 {needed} の一時ディスク領域が必要です (空き {free})',
     'cli.gc.vacuum.locked' => 'ストアは実行中のセッションにロックされています ({holders} 個のアクティブロック) — 実行中の candy-code セッションを閉じて再試行してください',

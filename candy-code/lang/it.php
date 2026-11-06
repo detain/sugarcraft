@@ -294,6 +294,7 @@ return [
     'cli.gc.unknown_action' => 'gc: azione sconosciuta: {action}',
     'cli.gc.usage' => 'Uso: candy-code gc status [--format text|json] | sessions [--sort size|age|name] [--limit N] [--archived] [--children] [--format text|json] | analyze [--top N] [--format text|json] | vacuum [--check] [--incremental] [--force]',
     'cli.gc.vacuum.done' => 'vacuum ({mode}): prima {before} → dopo {after}, {pages} pagine libere rilasciate',
+    'cli.gc.vacuum.flags_conflict' => '--check insieme a --force è una contraddizione: --check guarda soltanto, --force riscrive soltanto — sceglietene una',
     'cli.gc.vacuum.flipped' => 'auto_vacuum portato da {from} a {to}: la riscrittura unica abilita ora gli svuotamenti incrementali',
     'cli.gc.vacuum.headroom' => 'una riscrittura richiede circa {needed} di spazio transitorio ({free} disponibile)',
     'cli.gc.vacuum.locked' => 'l’archivio è bloccato da una sessione in esecuzione ({holders} blocchi attivi) — chiudi le sessioni candy-code in esecuzione e riprova',

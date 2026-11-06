@@ -138,7 +138,11 @@ final class GcSubcommandTest extends TestCase
         self::assertIsInt($result['reclaimable_bytes']);
         self::assertSame(0, $result['pragma']['auto_vacuum']);
         self::assertSame('NONE', $result['pragma']['auto_vacuum_label']);
-        self::assertIsBool($result['flags']['events_exceed_transcripts']);
+        // M2 (B1 review): the absence leg must be able to fail. The clean
+        // seeded store carries transcript bytes and zero event bytes, so the
+        // red flag is FALSE here — assertIsBool let an always-true mutation
+        // survive. testStatusJsonFlagsTheEventsHeavyStore owns true polarity.
+        self::assertFalse($result['flags']['events_exceed_transcripts']);
         self::assertSame(30, $result['bar_cells']);
         self::assertSame(0, $result['retention_days']);
     }
@@ -594,6 +598,27 @@ final class GcSubcommandTest extends TestCase
         [$afterIno, $afterSize] = $this->gcStat();
         self::assertSame($ino, $afterIno);
         self::assertSame($size, $afterSize);
+    }
+
+    public function testVacuumCheckAndForceTogetherIsAUsageError(): void
+    {
+        // M1 (B1 review): the pair used to let --force silently win — the
+        // flag order decided nothing and the code path decided everything.
+        // It is now a usage error naming both spellings.
+        $this->gcSeedStore();
+        [$ino, $size] = $this->gcStat();
+
+        [$rc, $doc] = $this->gcJsonDoor(['vacuum', '--check', '--force']);
+
+        self::assertSame(NonInteractive::EXIT_CONFIG, $rc);
+        self::assertIsArray($doc);
+        self::assertSame('usage', $doc['error']['type']);
+        self::assertStringContainsString('--check', $doc['error']['message']);
+        self::assertStringContainsString('--force', $doc['error']['message']);
+
+        [$afterIno, $afterSize] = $this->gcStat();
+        self::assertSame($ino, $afterIno, 'a refused flag pair must not replace the store file');
+        self::assertSame($size, $afterSize, 'a refused flag pair must not rewrite the store');
     }
 
     // ── gc vacuum: the rewrites ───────────────────────────────────────────
