@@ -196,7 +196,7 @@ Form::groups(
 | `withShowErrors(bool)` | **Stored, not consumed**: fields render their `! error` line whenever an error is stored (`Field/Input.php:668` and siblings, unconditional at render) — no render path reads this flag, so today it suppresses nothing. Implementing consumption in field render vs deprecating the flag is an open owner decision; the row states the shipped truth. |
 | `withWidth(int)`, `withHeight(int)` | Pin the rendered geometry. |
 | `withTimeout(int $ms)` | Stores a wall-clock budget (ms) for the host runtime to consult; the `Form` model itself starts no timer. |
-| `withKeyMap(KeyMap)` (or the `Form` constructor's `$keyMap` prop) | Override the bindings for `Next` / `Prev` / `Submit` / `Quit` (and per-field nav) on a single form. |
+| `withKeyMap(?KeyMap)` | Override the bindings for `Next` / `Prev` / `Submit` / `Abort` on a single form. |
 | `validateAll(): array<string,string>` | Run all field validators and return `[fieldKey => errorMessage]` for fields that failed. Use at the Program-run boundary (once the `Program` ends) to collect cross-field validation failures that cannot be expressed per-field. |
 
 ### Reading values after submit
