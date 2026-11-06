@@ -745,7 +745,8 @@ downgrade or `Renderer::fromEnvironment()` to auto-detect from
 `NO_COLOR` / `CLICOLOR` / `CLICOLOR_FORCE` / `FORCE_COLOR` / `TERM` /
 `COLORTERM` / `TERM_PROGRAM` / `WT_SESSION` / CI markers. `CLICOLOR=0`
 (the BSD-family colour opt-out) is honoured: it downgrades to `Ascii`,
-ranked below `NO_COLOR` and the two force variables but above `TERM`.
+ranked below `NO_COLOR`, the two force variables, the non-tty check and
+`TERM=dumb`, but above the `TERM`/`COLORTERM` capability reads.
 `CLICOLOR=1` asserts no extra capability — detection still reads
 `TERM`/`COLORTERM` behind it.
 
