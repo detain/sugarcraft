@@ -741,10 +741,14 @@ So `PosixPump`, `ReactPump` and
   rest of the suite is POSIX-pinned (libc FFI, `/dev/ptmx`, signals) and
   cannot pass on a Windows cell; `tests\Windows` carries the ConPTY
   primitives and adapter arms, and its live legs skip below PHP 8.4.
-- **ext-ffi is required but disabled by default.** `ext-ffi` is loaded eagerly
-  because `FFI::cdef()` must resolve symbols at script startup. Many Linux
+- **ext-ffi is required — and distro PHP often ships it switched off.**
+  Whether `ext-ffi` loads at all is php.ini policy; sugar-pty binds libc
+  lazily — `Libc::lib()` builds the FFI handle on first use, and
+  `FFI::cdef()` resolves symbols at that call, not at script startup. The
+  `ffi.enable` *directive* is what gets in the way: many Linux
   distributions ship PHP with `ffi.enable=0` in `php.ini` (a security hardening
-  measure) which causes sugar-pty to throw `PtyException: Failed to load libc`.
+  measure; PHP's own default is `preload`) which causes sugar-pty to throw
+  `PtyException: Failed to load libc`.
   To fix: set `ffi.enable=1` in `php.ini` and restart the web server or
   PHP-FPM pool, or inline at process start: `php -d ffi.enable=1
   your-script.php`. `ffi.enable` is `PHP_INI_SYSTEM` — `ini_set()` at runtime
