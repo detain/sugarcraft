@@ -131,7 +131,7 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($click)) {
 <tr><td>Manager</td><td>mark(id, content)</td><td>Wrap output with zone marker</td></tr>
 <tr><td>Manager</td><td>scan(rendered, ?width)</td><td>Record this namespace's positions, strip markers (delegates to <code>Scan::strip</code>); zones merge by id and persist until replaced or cleared</td></tr>
 <tr><td>Manager</td><td>zoneAt(col, row)</td><td>Geometric smallest-area hit without a MouseMsg</td></tr>
-<tr><td>Manager</td><td>anyInBounds(msg) / allInBounds(msg)</td><td>Smallest-area zone under the event (ties: first recorded); every covering zone</td></tr>
+<tr><td>Manager</td><td>anyInBounds(msg) / allInBounds(msg)</td><td><code>anyInBounds</code>: smallest-area zone under the event, ties to the first recorded; <code>allInBounds</code>: every covering zone, smallest area first</td></tr>
 <tr><td>Manager</td><td>anyInBoundsAndUpdate(model, msg)</td><td>Route the hit into a Model — the sole emitter of <code>MsgZoneInBounds</code>, dispatched into <code>update()</code> when a zone matches, the raw event forwarded otherwise</td></tr>
 <tr><td>Manager</td><td>all() / clear(?id) / close() / setEnabled(bool)</td><td>Every zone, reset one or all, disable</td></tr>
 <tr><td>Manager</td><td>get(name)</td><td>Get zone by name</td></tr>
