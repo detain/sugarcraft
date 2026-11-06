@@ -112,6 +112,13 @@ Claude Code, OpenCode and OpenClaw.
 | [`docs/ADDING_A_PROVIDER.md`](docs/ADDING_A_PROVIDER.md) | The provider contract end to end: capabilities, the response fields the engine consumes, registration, and the behaviour laws |
 | [`candy-code-web`](https://github.com/sugarcraft/candy-code-web) | The browser UI that `candy-code serve` hosts |
 
+**Canonical repository.** Development, issues, and the `candy-code/v*` phar
+releases live in the [`detain/sugarcraft`](https://github.com/detain/sugarcraft)
+monorepo; [`sugarcraft/candy-code`](https://github.com/sugarcraft/candy-code)
+is an automated subtree-split mirror of this directory (synced by
+`.github/workflows/sync-sugarcraft.yml`) that serves Composer and GitHub-Action
+consumers — clone and file issues against the monorepo.
+
 ## Install
 
 Run the single-file phar — no Composer, no `vendor/`: download
