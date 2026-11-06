@@ -1327,6 +1327,7 @@ candy-code/tests/Hooks/ProtectFilesCredentialStoresTest.php	0.012	46
 candy-code/tests/Chat/WebSearchCommandTest.php	0.012	28
 candy-code/tests/Backend/EngineBackendWorktreeJailTest.php	0.012	6
 candy-code/tests/Agents/AgentPresetDirContainmentTest.php	0.012	11
+candy-code/tests/Tools/TaskToolSchemaDriftTest.php	0.012	8
 candy-code/tests/Renderer/EllipsisPolicyTest.php	0.011	6
 candy-code/tests/App/Tabs/TabScopeTest.php	0.011	15
 candy-code/tests/App/WindowTitleTest.php	0.011	4
