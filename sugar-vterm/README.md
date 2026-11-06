@@ -511,6 +511,7 @@ $scrollback->count();     // int — rows currently stored
 $scrollback->maxSize();   // int — configured capacity
 $scrollback->at(0);       // array<int, Cell>|null — row offset N from oldest
 $scrollback->all();       // array<int, array<int, Cell>> — all rows oldest→newest
+$scrollback->clear();     // void — drop every stored row (ED mode 3, `CSI 3 J`)
 ```
 
 The scrollback is consumed by `ScreenHandler`'s scroll-up and scroll-down
