@@ -1203,6 +1203,7 @@ candy-code/tests/Tools/BuiltIn/ReadNotebookTest.php	0.021	7
 candy-code/tests/Agents/Live/RunLivenessTest.php	0.021	9
 candy-code/tests/Chat/ChatHookInputEncodingTest.php	0.021	5
 candy-code/tests/Config/ThemePersistenceFramingTest.php	0.021	9
+candy-code/tests/Agents/PoolQueueFifoTest.php	0.021	2
 candy-code/tests/Cli/ArgvParserPositionalTest.php	0.020	37
 candy-code/tests/Tui/MessagePicker/MessagePickerTest.php	0.020	9
 candy-code/tests/Tools/BuiltIn/EditMultiEditTest.php	0.020	9
@@ -1440,6 +1441,7 @@ candy-code/tests/Commands/AgentsCommandTest.php	0.008	24
 candy-code/tests/Providers/ClaudeCodeProviderTest.php	0.008	39
 candy-code/tests/Agents/AgentManagerDelegationAccessorsTest.php	0.008	5
 candy-code/tests/Chat/ToolTailFoldTest.php	0.008	7
+candy-code/tests/Agents/PoolQueueRefusalEdgeTest.php	0.008	5
 candy-code/tests/Server/RouterThrowableTest.php	0.007	5
 candy-code/tests/Media/MediaJobTest.php	0.007	31
 candy-code/tests/Providers/ProviderUsageCarriersTest.php	0.007	11
