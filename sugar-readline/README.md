@@ -263,6 +263,12 @@ sequence a terminal can send.
 - `Key::PageUp` / `Key::PageDown` — jump the selection list by one page
 - `Key::Escape` / `Key::CtrlC` — abort. Inside an attached `EmacsMode`, Escape is the meta prefix instead (a second Escape cancels it); use Ctrl+C to abort there.
 
+Not every `Ctrl+X` shown has a matching `Key::` constant — there is no
+`Key::CtrlD`, `CtrlL`, `CtrlZ` or `CtrlY`, for example. Those bindings are
+implemented under the canonical string spelling instead: `Readline::onKey()`
+and every prompt's key path accept all of `'ctrl_a'` through `'ctrl_z'`,
+which is what `Key::normalize()` turns a raw control byte into.
+
 Ctrl+[ is an ESC on every terminal and behaves as `esc`, not as Ctrl+C.
 
 ## Editing modes (Vi vs Emacs)
