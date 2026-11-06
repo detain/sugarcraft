@@ -511,8 +511,10 @@ $opts = (new PumpOptions())
 
 ## Internationalization
 
-User-facing exception strings (`spawn.*`, `libc.*`, `pty.*` keys) route
-through `Lang::t()` (`src/Lang.php`, catalog `lang/en.php`). Lookup is
+User-facing exception strings route through `Lang::t()` (`src/Lang.php`,
+catalog `lang/en.php`, TEN key namespaces — `close.*`, `libc.*`, `open.*`,
+`process.*`, `read.*`, `resize.*`, `size.*`, `spawn.*`, `stream.*`,
+`write.*`, 23 keys total). Lookup is
 exact key → base language → `en` → the raw key, so an untranslated
 string still renders English rather than throwing. Contributing a
 locale means adding `lang/<code>.php` with the same key tree — no code
