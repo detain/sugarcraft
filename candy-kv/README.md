@@ -138,6 +138,14 @@ Nothing is written on exit 2 paths. The "pattern passed to `get`" refusal
 inspects the raw key bytes (`bin/candy-kv`: `strpbrk($key, '*?')`), so it fires
 on escaped spellings too — see Glob patterns above.
 
+Two edges complete the table. A bare `candy-kv` (no arguments at all) prints
+the help and exits **0** — asking for guidance is not a usage error; exit 2
+starts where a command was named but its arguments are wrong or missing.
+And `prune` with nothing expired is a success (`No expired entries to
+remove.`, stdout, exit 0) while a `delete` that matches nothing exits 1:
+the asymmetry is deliberate — a failed lookup is an error, an empty sweep
+is nothing to fail on.
+
 ### Output format
 
 Real transcript (sandboxed `$XDG_CONFIG_HOME`; `#` annotations are not part of
