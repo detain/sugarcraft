@@ -74,7 +74,7 @@ the asset for verification.
 | `--size=WxH`            | Render box in terminal cells (chafa spelling).                    |
 | `--width=N` / `--height=N` | Individual box legs; cannot be mixed with `--size`. Defaults: viewport columns × aspect-derived rows. |
 | `--scale=S`             | Fit policy: `fit` `shrink` `fill` `stretch` `none` `crop` (maps onto `SugarCraft\Image\Scale`). |
-| `--animate`             | Animated-GIF pass-through into sugar-animation's `Player` (alternate screen). Full playback controls live in `candy-gifview`. |
+| `--animate`             | Animated-GIF pass-through into sugar-animation's `Player` (alternate screen). Pause, frame-stepping and the solid/density preset toggle ride this viewer's wired `Player` (Keys below); frame-rate, speed and watch-mode flags (`--fps`/`--speed`/`--duration`/`--watch`) live in `candy-gifview`. |
 | `--passthrough=V`       | tmux `allow-passthrough` transaction: `auto` (default) or `none`. |
 | `--polite`              | Accepted no-op for chafa muscle-memory — this viewer always renders inline and synchronously. |
 | `--dump-detect`         | Print the resolved terminal state: env table, TermDb chain + claims, Detect capability, cell pixel size, default fg/bg, DA1 reply, `auto()` selection, palette report. Exits 0. |
@@ -115,9 +115,16 @@ because the latter is sugar-image's own — a ruling recorded in
 
 ## Keys (while `--animate` plays)
 
-| Key    | Action |
-|--------|--------|
-| `q` / `Esc` / `Ctrl+C` | quit |
+| Key         | Action |
+|-------------|--------|
+| `Space`     | pause / resume (resuming re-anchors the frame clock) |
+| `←` / `→`   | step one frame back / forward — works paused **or** playing, wrapping |
+| `d`         | toggle the render preset: solid ↔ density |
+| `q` / `Esc` | quit |
+| `Ctrl+C`    | quit — handled as a key by the player loop, and the SIGINT teardown path also stops playback |
+
+The player paints its own status footer with the same set, abbreviated:
+`space pause ←/→ step d preset q quit`.
 
 ## Localized
 
