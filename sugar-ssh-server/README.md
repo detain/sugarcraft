@@ -336,7 +336,7 @@ when left alone.
 | `RateLimit` | `new RateLimit($statePath, $burst = 5, $ratePerSec = 0.5, $stderr, $failClosed = false, $userBurst = null, $userRatePerSec = null)` | **`$failClosed = false`**: a lock or decode problem lets the connection through with a notice. State serialises on a `<state>.lock` sidecar; idle refilled buckets are pruned; `$userBurst` adds a per-username bucket. |
 | `Keepalive` | `new Keepalive($intervalSeconds = 60)` | Idle `\0` into the child's stdin, not an SSH keepalive; no-op under `HostSshdTransport`. Installed for you by `Server::withKeepalive($seconds)`. |
 | `Spawn` | `new Spawn($factory)` where `fn (Session): array{cmd: list<string>, env?: array}` returns the child command | Terminal. The factory's `cmd` is argv -- no shell is involved, and nothing here vetoes it. |
-| `BubbleTea` | `new BubbleTea($factory)` where `fn (Session): object` builds the `Program` | Mounts a `Program` on the supervisor's own stdio, which is only sound under `HostSshdTransport`. Under the default `InProcessTransport` it throws `bubbletea.requires_host_sshd` -- there is no override flag; the alternatives are `Spawn` plus a wrapper script (`examples/run-program.php`) or the legacy transport. |
+| `BubbleTea` | `new BubbleTea($factory)` where `fn (Session): object` builds the `Program` | The returned object must expose a `run()` method — anything else raises `RuntimeException` with the Lang key `bubbletea.bad_factory` when the middleware handles the session. Mounts a `Program` on the supervisor's own stdio, which is only sound under `HostSshdTransport`. Under the default `InProcessTransport` it throws `bubbletea.requires_host_sshd` -- there is no override flag; the alternatives are `Spawn` plus a wrapper script (`examples/run-program.php`) or the legacy transport. |
 | `Subsystem` | `new Subsystem()` then `->register($name, $handler)` | Terminal for registered names. An **unregistered** name falls through on purpose, so `subsystem sftp` reaches `Spawn` and lands in a shell unless you register the name (or a rejecting handler). |
 | `AsyncMiddleware` | abstract; subclass and implement `protected handleAsync($ctx, $session, $next): PromiseInterface` | The transport's single settle point drives your promise to completion -- never call `PromiseAwait::settle()` yourself, and never await from inside a loop you already run. |
 
@@ -752,7 +752,7 @@ the forced script, and `Session::$command` is the field that carries it.
 | `ExecMsg` | `command` (raw string — decoded by the public `DefaultChannelHandler::decodeCommandString()`, the same entry point to use for `SSH_ORIGINAL_COMMAND`) |
 | `SignalMsg` | `signalName` |
 | `EnvMsg` | `name`, `value` |
-| `BreakMsg` | Break request (no fields) |
+| `BreakMsg` | Break request — carries `breakLengthMs` (int, defaults to `0` when the wire frame omits a length) |
 
 ### Exec policy: the program comes from the peer
 

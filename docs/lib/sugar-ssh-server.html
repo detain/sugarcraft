@@ -139,7 +139,7 @@ exit(Server::new()
 <tr><td>Middleware</td><td>handle(Context, Session, callable): void|PromiseInterface</td><td>All middleware receive Context first, Session second; may return void (sync) or PromiseInterface (async — transport awaits before continuing chain)</td></tr>
 <tr><td>AsyncMiddleware</td><td>extends Middleware</td><td>Abstract base for promise-returning middleware — override handleAsync() to perform async I/O (LDAP, OAuth, database auth); the transport settles the promise through PromiseAwait, which enforces a 30-second ceiling and ends its own loop spin at the decision — do not await from inside a loop you already run</td></tr>
 <tr><td>Spawn</td><td>new(callable)</td><td>Terminal middleware for subprocess spawning (InProcess only)</td></tr>
-<tr><td>BubbleTea</td><td>new(callable)</td><td>Terminal middleware for Program mount (HostSshd only)</td></tr>
+<tr><td>BubbleTea</td><td>new(callable(Session): object)</td><td>Terminal middleware for Program mount (HostSshd only). The factory's return must expose a <code>run()</code> method; any other value raises <code>RuntimeException</code> with the Lang key <code>bubbletea.bad_factory</code> at handle time.</td></tr>
 <tr><td>Auth</td><td>new(array $users, array $keyFingerprints, ?resource $stderr, ?callable $fingerprintValidator, array $userKeys)</td><td>Allowlist gate. <code>users</code> and <code>keyFingerprints</code> are independent (a cross product, not a pairing) — bob with alice's key is admitted as alice. <code>userKeys</code> (name =&gt; that name's keys, or <code>[Auth::ANY_KEY]</code>) is the authoritative pairing. Empty lists arm nothing.</td></tr>
 <tr><td>PasswordAuth</td><td>new(callable, ?resource)</td><td>Validates (user, password) against a callback. The password arrives through <code>SSH_PASSWORD</code>, which <strong>nothing in OpenSSH ever sets</strong>: your wrapper must supply it out of band, and an <code>AcceptEnv SSH_PASSWORD</code> would make it peer-supplied. A session that delivered no variable at all is refused before the callback runs; an explicitly empty one still reaches it.</td></tr>
 <tr><td>CertificateAuth</td><td>new(callable, bool $required = true, $stderr = null)</td><td>Reads a client certificate from <code>CertificateAuth::ENV_KEYS</code> (nothing in stock OpenSSH exports them &mdash; your wrapper must). Refuses when <code>$required</code> and announces &ldquo;checked nothing&rdquo; on either path, so a silent no-op cannot masquerade as a gate.</td></tr>
@@ -162,7 +162,7 @@ exit(Server::new()
 <tr><td>ExecMsg</td><td>command</td><td>Exec request — raw command string</td></tr>
 <tr><td>SignalMsg</td><td>signalName</td><td>Signal delivery (SIGINT, SIGTERM, etc.)</td></tr>
 <tr><td>EnvMsg</td><td>name, value</td><td>Environment variable request</td></tr>
-<tr><td>BreakMsg</td><td>(empty)</td><td>Break request</td></tr>
+<tr><td>BreakMsg</td><td>breakLengthMs</td><td>Break request — duration in milliseconds (<code>int</code>, defaults to <code>0</code>)</td></tr>
 <tr><td>CancellationException</td><td>extends RuntimeException</td><td>Thrown when Context is cancelled</td></tr>
 <tr><td>DeadlineExceededException</td><td>extends RuntimeException</td><td>Thrown when Context deadline passes</td></tr>
 </table>
