@@ -116,7 +116,7 @@ $allItems = $history->all();</code></pre>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>QuickPick</td><td>new(array $items, ?Closure $itemFormatter)</td><td>Create fuzzy finder (items: string[] or Item[])</td></tr>
-<tr><td>QuickPick</td><td>withItems(array $items)</td><td>Replace items and reset filter state</td></tr>
+<tr><td>QuickPick</td><td>withItems(array $items)</td><td>Replace items; the filter text is kept and re-applied (cursor resets)</td></tr>
 <tr><td>QuickPick</td><td>setPrompt(string)</td><td>Set filter prompt string</td></tr>
 <tr><td>QuickPick</td><td>setFilterFn(Closure)</td><td>Set custom filter predicate: Closure(Item): bool</td></tr>
 <tr><td>QuickPick</td><td>setItemFormatter(Closure)</td><td>Set item formatter: Closure(value: string, isSelected: bool, number: int): string</td></tr>
