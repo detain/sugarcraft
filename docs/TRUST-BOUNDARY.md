@@ -88,8 +88,10 @@ documentation and isolation**, not pretending config is data:
 - **MCP stdio servers** (`.mcp.json`): a `command` entry is arbitrary
   code execution at startup. `candy-code` mitigates by *not* handing
   the stdio child its inherited credentials —
-  `candy-code/src/MCP/McpClient.php` (:333/:363) strips
-  credential-shaped environment variables; a server that needs a
+  `candy-code/src/MCP/McpClient.php` strips credential-shaped environment
+  variables in `resolveEnv()` (:1734), collects them in
+  `recordStrippedSecretEnv()` (:891), and answers the accessor and
+  one-sentence launch notice at :501/:522; a server that needs a
   secret declares `${VAR}` in its `env` block (or is named in
   `secretEnvAllowlist`).
 - **Git repository configuration**: cloning a hostile repo is not
