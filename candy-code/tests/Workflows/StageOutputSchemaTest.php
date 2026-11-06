@@ -365,6 +365,27 @@ final class StageOutputSchemaTest extends TestCase
         (new WorkflowRegistry($this->tempDir . '/workflows'))->fromYamlString($yaml, 'collide');
     }
 
+    public function testTheEmptyMapSchemaPassesThroughBothBoundaries(): void
+    {
+        // NIT-2 (wf-g2g3-r1): the headless `{}` pass-through is pinned in the
+        // Cli family; this pins the SAME empty map through the two workflow
+        // boundaries — an inline JSON string at build(), a quoted YAML scalar
+        // at load(). An empty schema object is a legal ask, never a missing one.
+        $task = (new TaskBuilder())->agent('coder')->prompt('say it small')->outputSchema('{}')->build();
+        self::assertSame([], $task->outputSchema, 'the inline "{}" decodes to the empty map at build()');
+
+        $workflow = (new WorkflowRegistry($this->tempDir . '/workflows'))->fromYamlString(
+            "name: empty-map\n"
+            . "stages:\n"
+            . "  - name: verdict\n"
+            . "    agent: coder\n"
+            . "    prompt: answer\n"
+            . "    outputSchema: '{}'\n",
+            'empty-map',
+        );
+        self::assertSame([], $this->taskAt($workflow, 0, 0)->outputSchema, 'the quoted YAML string decodes to the same empty map');
+    }
+
     // ------------------------------------------------------------------ helpers
 
     /** @internal the fake executor's body; public only so the anonymous class can reach it */

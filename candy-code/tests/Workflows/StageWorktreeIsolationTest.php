@@ -17,6 +17,8 @@ use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Tests\Support\RosterAgent;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
+use SugarCraft\Code\Tools\BuiltIn\Read;
+use SugarCraft\Code\Tools\ToolCall;
 use SugarCraft\Code\Workflows\Tasks;
 use SugarCraft\Code\Workflows\Workflow;
 use SugarCraft\Code\Workflows\WorkflowBuilder;
@@ -355,6 +357,53 @@ final class StageWorktreeIsolationTest extends TestCase
         self::assertStringContainsString('kept there, not in this checkout:', $output, 'the engine path runs the same leave() disclosure');
         self::assertStringContainsString(' on branch agent-work-', $output, 'the stage id names the branch');
         self::assertSame("clean\n", file_get_contents($this->repo . '/work.txt'), 'the pool ran the work in the tree, not the checkout');
+    }
+
+    public function testTheIsolatedStageReadsThroughTheJailRootedByItsOwnTree(): void
+    {
+        // MAJOR-1 (wf-g2g3-r1): the re-jail leg is load-bearing containment —
+        // this dial drives a REAL tool call through the engine the isolation
+        // wrapper builds, so the Read answers from the worktree, not the
+        // process cwd. Remove the withWorktreeRoot call and the planted bytes
+        // never reach the tool result: this pin goes red alone.
+        //
+        // Two hardenings the mutation itself taught: the secret is a RUNTIME
+        // random token (a fixed marker leaks — the turn-context block embeds
+        // the process repo's live diff, and an edited test file used to carry
+        // the literal), and the assert scans ONLY the tool-role answers (the
+        // turn context of a jail-rooted run names the tree too; only the Read
+        // RESULT proves the tool answered from inside it).
+        $treesDir = $this->trees;
+        $token = bin2hex(random_bytes(8));
+        $provider = new ScriptedProvider([
+            static function (CompleteRequest $request) use ($treesDir, $token): CompleteResponse {
+                file_put_contents($treesDir . '/iso-jail-1/tree-secret.txt', $token);
+
+                return new CompleteResponse(
+                    content: '',
+                    toolCalls: [new ToolCall('call_1', 'Read', ['file_path' => 'tree-secret.txt'])],
+                );
+            },
+            new CompleteResponse(content: 'tree read'),
+        ]);
+
+        $result = (new EngineExecutor(EngineBackend::new($provider, 'm')->withTools([new Read()])))
+            ->execute($this->isolatedAgent('iso-jail-1'), $this->stageWire());
+
+        self::assertSame(AgentStatus::Completed, $result->status, (string) $result->error?->getMessage());
+
+        $answers = '';
+        foreach ($provider->requests[1]->messages ?? [] as $message) {
+            if (is_array($message) ? ($message['role'] ?? '') === 'tool' : $message->role() === 'tool') {
+                $answers .= (string) (is_array($message) ? ($message['content'] ?? '') : $message->content());
+            }
+        }
+        self::assertStringContainsString(
+            $token,
+            $answers,
+            'the jailed Read resolved the relative path inside the stage tree — the re-jail leg carried it',
+        );
+        self::assertSame("clean\n", file_get_contents($this->repo . '/work.txt'), 'and the shared checkout stayed untouched');
     }
 
     // ------------------------------------------------------------------ helpers
