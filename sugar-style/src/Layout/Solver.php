@@ -17,7 +17,7 @@ use SugarCraft\Constraints\Region;
  * {@see SugarCraft\Constraints\Constraint*} before delegation, then converts
  * results back to {@see Rect[]}.
  *
- * Mirrors ratatui's layout solver (charmbracelet/bubbletea).
+ * Mirrors ratatui's layout solver (ratatui/ratatui).
  */
 final class Solver
 {
