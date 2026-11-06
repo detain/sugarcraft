@@ -10,7 +10,10 @@ zone markers, scan the frame to discover each zone's bounding box, then ask whic
 zone a mouse event landed in. One package, two layers:
 
 - **Primitive layer (`SugarCraft\Mouse`)** — self-contained Mark/Scan/Get
-  hit-testing, `Scanner`, `ZoneClickTracker` press/release dedup, and the
+  hit-testing (the three verbs name three collaborators: `Mark` emits the
+  sentinel tags, `Scan` decodes them — usually driven through `Scanner` —
+  and `get()` answers "where is this id", with `hit()` answering "which zone
+  is under this cell"), `Scanner`, `ZoneClickTracker` press/release dedup, and the
   `Selection` / `SelectionRange` text-selection machine. No Manager wiring
   needed; each consumer owns its own `Scanner` instance.
 - **Zones façade (`SugarCraft\Mouse\Zones`)** — the app-facing bubblezone
