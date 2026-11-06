@@ -114,9 +114,9 @@ library's full surface.
 | `VISUAL` | `Util\Editor` (discovery: explicit override → `VISUAL` → `EDITOR` → platform default) | falls to `EDITOR` |
 | `EDITOR` | `Util\Editor` | falls to the platform default editor |
 | `TMPDIR` | PHP's `sys_get_temp_dir()`, consumed by `Util\Editor`'s temp-file scaffold | system temp (`/tmp`) |
-| `LC_ALL` | `I18n\T::detect()` (chain `LC_ALL` → `LC_MESSAGES` → `LANG`; `$_SERVER` first, then `getenv()`) | falls to `LC_MESSAGES` |
-| `LC_MESSAGES` | `I18n\T::detect()` | falls to `LANG` |
-| `LANG` | `I18n\T::detect()` | locale `en` |
+| `LC_ALL` | `I18n\T::detect()` (chain `LC_ALL` → `LC_MESSAGES` → `LANG`; `$_SERVER` first, then `getenv()`; `''`, `C` and `POSIX` are treated as unusable and fall through) | falls to `LC_MESSAGES` |
+| `LC_MESSAGES` | `I18n\T::detect()` (`''`/`C`/`POSIX` unusable here too) | falls to `LANG` |
+| `LANG` | `I18n\T::detect()` (`LANG=C` is common in minimal, screen-reader and CI shells — it is unusable, not "use English") | locale `en` |
 | `TMUX` | `Util\Clipboard` (backend plan) | not inside tmux |
 | `DISPLAY` | `Util\Clipboard` (X11 backend plan) | no X11 clipboard candidate |
 | `WAYLAND_DISPLAY` | `Util\Clipboard` (Wayland backend plan) | no Wayland clipboard candidate |
