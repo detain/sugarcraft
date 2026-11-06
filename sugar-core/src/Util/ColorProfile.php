@@ -68,12 +68,14 @@ enum ColorProfile: int
             return self::Ascii;
         }
 
-        // BSD-family colour opt-out (lib-reviews-1102 M34): CLICOLOR=0
-        // means "colour off", and sugar-pty already short-circuits it —
-        // until now this fleet-wide colour authority did not, so the two
-        // answers split per library. Unlike NO_COLOR it does NOT outrank
-        // an explicit force variable: CLICOLOR=0 + CLICOLOR_FORCE=1
-        // publishes colour.
+        // BSD-family colour opt-out: CLICOLOR=0 means "colour off", and
+        // sugar-pty already short-circuits it — until this rung landed the
+        // fleet-wide colour authority did not, so the two answers split per
+        // library. Unlike NO_COLOR it does NOT outrank an explicit force
+        // variable: CLICOLOR=0 + CLICOLOR_FORCE=1 publishes colour. The
+        // defaultEnv() roster below collects CLICOLOR so the rung fires on
+        // the no-argument default path, not only for callers that pass an
+        // explicit env array.
         if (!$force && ($env['CLICOLOR'] ?? '') === '0') {
             return self::Ascii;
         }
@@ -152,7 +154,7 @@ enum ColorProfile: int
     {
         $out = [];
         foreach ([
-            'NO_COLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR',
+            'NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR',
             'TERM', 'COLORTERM', 'TERM_PROGRAM',
             'WT_SESSION',
             'CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE',

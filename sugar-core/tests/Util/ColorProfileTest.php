@@ -72,10 +72,10 @@ final class ColorProfileTest extends TestCase
     }
 
     /**
-     * M34 (lib-reviews-1102): CLICOLOR=0 is the BSD colour opt-out.
-     * sugar-pty already honoured it; the fleet's colour authority did
-     * not, so the same env answered two tiers. It must yield to an
-     * explicit force (unlike NO_COLOR, which outranks force).
+     * CLICOLOR=0 is the BSD colour opt-out. sugar-pty already honoured
+     * it; the fleet's colour authority did not, so the same env answered
+     * two tiers. It must yield to an explicit force (unlike NO_COLOR,
+     * which outranks force).
      */
     public function testClicolorZeroDisablesColour(): void
     {
@@ -94,6 +94,54 @@ final class ColorProfileTest extends TestCase
             ColorProfile::detect(['CLICOLOR' => '1', 'TERM' => 'xterm-256color']),
             'CLICOLOR=1 (enabled) changes nothing',
         );
+    }
+
+    /**
+     * The rung above passes an explicit env array. This one drives the
+     * no-argument default path, which reads getenv() through defaultEnv():
+     * if the roster omits CLICOLOR the documented `CLICOLOR=0 → Ascii`
+     * rung silently never fires for real callers (measured pre-fix: the
+     * env answered Ansi256 on a 256-colour TERM), and CLICOLOR=1 must
+     * still mean colour-on on that same path.
+     */
+    public function testClicolorRungFiresOnTheDefaultEnvPath(): void
+    {
+        $keys = [
+            'NO_COLOR', 'CLICOLOR', 'CLICOLOR_FORCE', 'FORCE_COLOR',
+            'TERM', 'COLORTERM', 'TERM_PROGRAM', 'WT_SESSION',
+            'CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE',
+        ];
+        $saved = [];
+        foreach ($keys as $k) {
+            $v = getenv($k);
+            if ($v !== false) {
+                $saved[$k] = $v;
+            }
+            putenv($k);
+        }
+        try {
+            putenv('TERM=xterm-256color');
+            putenv('CLICOLOR=0');
+            $this->assertSame(
+                ColorProfile::Ascii,
+                ColorProfile::detect(),
+                'CLICOLOR=0 reaches the Ascii rung via defaultEnv()',
+            );
+            putenv('CLICOLOR=1');
+            $this->assertSame(
+                ColorProfile::Ansi256,
+                ColorProfile::detect(),
+                'CLICOLOR=1 keeps colour on via defaultEnv()',
+            );
+        } finally {
+            foreach ($keys as $k) {
+                if (array_key_exists($k, $saved)) {
+                    putenv($k . '=' . $saved[$k]);
+                } else {
+                    putenv($k);
+                }
+            }
+        }
     }
 
     public function testColorTermTruecolor(): void
