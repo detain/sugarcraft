@@ -126,7 +126,7 @@ these tables.
 | File              | Role                                                                                          |
 |-------------------|----------------------------------------------------------------------------------------------|
 | `Db\ConnectionConfig`| Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn. Pass never echoed. |
-| `Db\ConnectionFactory`| Static factory: `fromDsn()`, `fromConfig()`, `fromArgv()`. Builds configured connections.    |
+| `Db\ConnectionFactory`| Static factory — four entries: `fromDsn()` parses a DSN into a `ConnectionConfig` without connecting; `fromConfig()` and `fromArgv()` connect and return a `DatabaseInterface`; `fromPath()` opens a bare SQLite file path.    |
 | `Db\Flavor`          | Enum: `MySQL`, `MariaDB`, `Percona`, `Postgres`, `Sqlite`. Used to identify database flavor. `Flavor::detectFromDriver()` detects flavor from a PDO driver name + optional version string. |
 | `Db\Version`         | Parser for server version strings. Handles MariaDB `5.5.5-` prefix. `isAtLeast(Version)` compares versions. |
 | `Database`        | ⚠️ Deprecated thin alias to `SqliteDatabase`. Use `DatabaseInterface` for driver-agnostic code.   |
@@ -207,16 +207,16 @@ Multi-driver support is now available via `DatabaseInterface`. `CsvExporter` and
 
 ## Connection factory
 
-`ConnectionFactory` provides three static methods that turn connection parameters into a usable connection:
+`ConnectionFactory` provides four static methods for turning connection parameters into a usable connection — or into a value object that describes one:
 
 ```php
 use SugarCraft\Sql\Db\ConnectionFactory;
 use SugarCraft\Sql\Db\ConnectionConfig;
 
-// From a DSN string -> a ConnectionConfig value object
+// From a DSN string -> a ConnectionConfig value object (parsing only; nothing is dialed)
 $config = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname?ssl-mode=REQUIRED');
 
-// From a ConnectionConfig (all eight constructor args are required; ::new() supplies defaults)
+// From a ConnectionConfig (the constructor requires all eight fields; ::new() takes seven and computes the dsn itself)
 $config = ConnectionConfig::new(
     driver: 'mysql',
     host: 'localhost',
@@ -230,6 +230,9 @@ $db = ConnectionFactory::fromConfig($config);   // -> DatabaseInterface
 
 // From command-line arguments (--driver, --host, --port, --user, --pass, --db, --ssl-mode, --dsn; --key=value form only)
 $db = ConnectionFactory::fromArgv($argv);        // -> DatabaseInterface
+
+// From a bare SQLite file path (the CLI's default argument shape) -> connects immediately
+$db = ConnectionFactory::fromPath('app.sqlite');   // -> SqliteDatabase
 ```
 
 ### DSN format
@@ -276,12 +279,13 @@ driver://[user][:pass]@host[:port]/dbname[?query]
 
 ```php
 use SugarCraft\Sql\SchemaBrowser;
+use SugarCraft\Sql\Db\ConnectionFactory;
 use SugarCraft\Sql\Db\DatabaseInterface;
 use SugarCraft\Sql\Db\Flavor;
 
 // The browser needs a DatabaseInterface (any driver impl) and the flavor
-// $db = ConnectionFactory::fromDsn('sqlite:///var/data/app.sqlite');  // -> ConnectionConfig
-$db = new \SugarCraft\Sql\Db\SqliteDatabase(new \PDO('sqlite:' . $path), $path);
+$config = ConnectionFactory::fromDsn('sqlite:///var/data/app.sqlite');  // -> ConnectionConfig (no connect)
+$db = ConnectionFactory::fromConfig($config);                           // -> DatabaseInterface
 
 $browser = SchemaBrowser::new($db, Flavor::Sqlite)->refresh();
 
