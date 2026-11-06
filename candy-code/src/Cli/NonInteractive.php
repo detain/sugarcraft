@@ -2903,6 +2903,14 @@ final class NonInteractive
      * wording that keeps them apart exists once. A re-spelling here would be
      * the drift this method's whole `host.spend.mid_turn` choice refuses.
      *
+     * The lookup runs pinned to English (RS-DRIVER c, machine-stability law):
+     * the refusal envelope is a driver protocol surface, so its entries must
+     * answer identically whatever locale the operator's `LANG` selected —
+     * the same contract the frozen denial prefixes and `DenialKind` tokens
+     * already keep. The TUI ledger sentence this row mirrors stays
+     * locale-following; both render the identical bytes under `en`, which is
+     * where the shared-wording ruling above is observed.
+     *
      * @return array{tool: string, kind: string, reason: string}
      */
     private static function spendCapRow(SpendCapBreached $event): array
@@ -2910,11 +2918,11 @@ final class NonInteractive
         return [
             'tool' => self::SPEND_CAP_ROW_TOOL,
             'kind' => self::SPEND_CAP_ROW_KIND,
-            'reason' => Lang::t('host.spend.mid_turn', [
+            'reason' => Lang::inLocale('en', static fn(): string => Lang::t('host.spend.mid_turn', [
                 'calls' => $event->completedCalls,
                 'spent' => SpendLedger::boundUsd($event->unpriced, $event->spentUsd),
                 'cap' => \sprintf('%.4f', $event->capUsd),
-            ]),
+            ])),
         ];
     }
 
