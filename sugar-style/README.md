@@ -752,6 +752,10 @@ Untrusted strings (tool output, prompts, file names) must be sanitized
 by e.g. sugar-navstack (`NavStack` / `Breadcrumb`), sugar-overlay (`Veil`),
 sugar-gallery, sugar-quickpick and sugar-readline, which route ingress
 through `Sanitize::untrusted()` / `Sanitize::untrustedForMarkedFrames()`.
+The same applies one layer out: refusal messages quote the offending value
+verbatim (e.g. `Color::hex` echoes the bad string into
+`invalid hex color: {hex}`) — treat caught throw text as untrusted if you
+render it.
 
 ## Accessibility
 
