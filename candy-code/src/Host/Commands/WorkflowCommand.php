@@ -62,7 +62,7 @@ final class WorkflowCommand implements HostCommand
             'run' => self::start($engine, $inputText, $args),
             'pause' => self::pause($engine, $inputText, $args),
             'resume' => self::resume($engine, $inputText, $args),
-            'status' => self::status($engine, $inputText, $args),
+            'status' => self::status($engine, $inputText, $args, $context),
             'list' => self::list($engine, $inputText),
             'lint' => self::lintCommand($inputText, $args, $context),
             default => self::help($inputText, Lang::t('host.workflow.unknown_command', ['command' => $command])),
@@ -600,7 +600,7 @@ final class WorkflowCommand implements HostCommand
      * Handle /workflow status command.
      *
      */
-    public static function status(WorkflowEngineInterface $engine, string $inputText, string $args): CommandResult
+    public static function status(WorkflowEngineInterface $engine, string $inputText, string $args, ?CommandContext $context = null): CommandResult
     {
         $workflowId = trim($args);
 
@@ -611,7 +611,30 @@ final class WorkflowCommand implements HostCommand
         try {
             $status = $engine->status($workflowId);
 
-            return self::respond($inputText, Lang::t('host.workflow.status', ['id' => $workflowId, 'status' => $status->value]));
+            $text = Lang::t('host.workflow.status', ['id' => $workflowId, 'status' => $status->value]);
+
+            // C14: a PAUSED run's own ledger file carries the per-stage plan
+            // the enum line hides — durations, spend, tokens, attempts. The
+            // engine's interface only answers the enum, and live runs keep
+            // their stage detail in a private map, so the pause plane is what
+            // is reachable from here; when there is no ledger the plain row
+            // stands exactly as before. The whole leg is fail-soft: a status
+            // line must never break because its garnish could not be read.
+            if ($context !== null) {
+                try {
+                    $ledger = WorkflowLinter::readPauseLedger(self::registryFor($context)->workflowsPath(), $workflowId);
+                } catch (\Throwable) {
+                    $ledger = null;
+                }
+                if ($ledger !== null) {
+                    $detail = WorkflowLinter::renderStageLedger($ledger);
+                    if ($detail !== '') {
+                        $text .= "\n\n" . $detail;
+                    }
+                }
+            }
+
+            return self::respond($inputText, $text);
         } catch (\Throwable $e) {
             return self::respond($inputText, Lang::t('host.workflow.error', ['error' => $e->getMessage()]), true);
         }
