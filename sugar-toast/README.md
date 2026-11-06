@@ -409,8 +409,9 @@ else repeats their three `view()` arguments verbatim.
 
 ## Styled Alerts
 
-Each alert accepts explicit background, foreground, and border colours,
-falling back to the type's default palette when unset (`null`):
+Each alert accepts explicit background, foreground, and border colours; an unset
+(`null`) override means UNSTYLED — no fill, terminal-default text and border —
+not the type palette: the type's colour reaches only the icon:
 
 ```php
 use SugarCraft\Core\Util\Color;
@@ -518,9 +519,9 @@ already over the new cap survive until the next push evicts them.
 | `Alert` | `withoutExpiry()` | Make this alert persistent (never auto-dismisses) — alias of `withCancelledExpiry()`, sets the explicit sentinel |
 | `Alert` | `withCancelledExpiry()` | Set the persistent sentinel + clear the expiry (used by `Toast::cancelAlert()`) |
 | `Alert` | `withExtendedExpiry(float)` | Reset the expiry to N seconds from NOW |
-| `Alert` | `withBackgroundColor(?Color)` | Override box background (`null` = type default) |
-| `Alert` | `withForegroundColor(?Color)` | Override text colour (`null` = type default) |
-| `Alert` | `withBorderColor(?Color)` | Override border colour (`null` = type default) |
+| `Alert` | `withBackgroundColor(?Color)` | Override box background (`null` = no fill, plain render) |
+| `Alert` | `withForegroundColor(?Color)` | Override text colour (`null` = terminal default, not the type colour) |
+| `Alert` | `withBorderColor(?Color)` | Override border colour (`null` = terminal default, not the type colour) |
 | `Action` | `new(string $label, \Closure(): void $callback)` | Factory |
 | `Action` | `->label: non-empty-string` | Button label (readonly; normalised at construction — inline SGR kept, other control/escape constructs stripped, printable-empty refused) |
 | `Action` | `->callback: \Closure(): void` | Callback (readonly) |
