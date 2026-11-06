@@ -87,7 +87,8 @@ These demos resolve the autoloader from a repo checkout (the library's own `vend
 | `auto` | Selector, not a ninth mode: probes the terminal at open and picks the best mode it can render. There is no `Mode::Auto` case — `Mode::from('auto')` throws a `ValueError` | — |
 
 Auto mode probes the terminal using `Mosaic::diagnose()` (for sixel/kitty/
-iTerm2) and falls back to `Probe::colorProfile()` for ANSI modes.
+iTerm2) and falls back to `SugarCraft\ColorProfile\Probe::colorProfile()` for
+ANSI modes.
 
 ### Luminance ramp selection
 
@@ -403,7 +404,7 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
 
 ## Public API
 
-The entry points worth knowing: `Reel` (open/openUrl/play/toPlayer + `withMode/withAutoMode/withFps/withLoop/withRamp/withSize/withSubtitles/withAudio/withAllowedHosts/withHeaders/withCellPx`), `Player` (open/fromDecoder + pause/play/stop/isStopped/withSeek/withSubtitles/withAudio/frameAt/seekToSeconds/position/duration), `AudioPlayer` (start/stop/pause/resume/mute/unmute/isMuted/isPlaying/hasStarted/position/exitCode), `Synthetic::generate` (path defaults to `Synthetic::DEFAULT_PATH`; the returned path is the source of truth — a refused target yields a private stand-in path), `WebVtt::parse`, `VideoSource::probe`, `HttpHeaders::parse`, `Probe`, `DecoderFactory::new`, and `RendererFactory` (`auto`/`autoMode`/`supports`/`supportedModes`/`diagnose`).
+The entry points worth knowing: `Reel` (open/openUrl/play/toPlayer + `withMode/withAutoMode/withFps/withLoop/withRamp/withSize/withSubtitles/withAudio/withAllowedHosts/withHeaders/withCellPx`), `Player` (open/fromDecoder + pause/play/stop/isStopped/withSeek/withSubtitles/withAudio/frameAt/seekToSeconds/position/duration), `AudioPlayer` (start/stop/pause/resume/mute/unmute/isMuted/isPlaying/hasStarted/position/exitCode), `Synthetic::generate` (path defaults to `Synthetic::DEFAULT_PATH`; the returned path is the source of truth — a refused target yields a private stand-in path), `WebVtt::parse`, `VideoSource::probe`, `HttpHeaders::parse`, `Probe`, `DecoderFactory::new`, and `RendererFactory` (`auto`/`autoMode`/`supports`/`supportedModes`/`diagnose`). Two `Probe` classes share the short name: the roster entry here is `SugarCraft\Video\Source\Probe` (external-binary presence checks for ffmpeg/ffprobe/ffplay/mpv), while the auto-mode fallback above is `SugarCraft\ColorProfile\Probe`.
 
 Ceilings that shape what plays: source capture is capped at 64 MiB per file (`GifDecoder::MAX_SOURCE_BYTES`, `AnimatedWebpDecoder::MAX_SOURCE_BYTES`); animated WebP at `MAX_FRAMES` 4096 frames, `MAX_CANVAS_PIXELS` 2048² per canvas and `MAX_TOTAL_PIXELS` 33,554,432 pixels summed across the file; GIF residency at an internal `GifDecoder` cap of 8 000 000 decoded pixels per playthrough; subtitles at 4 MiB (`Reel::MAX_SUBTITLE_BYTES`) and 10 000 cues (`WebVtt::MAX_CUES`, announced when truncated); the terminal geometry clamps to 10-200 columns and 5-80 rows (`Player::MIN/MAX_COLS`, `MIN/MAX_ROWS`). ffprobe output drains under an 8 MiB ceiling and a 10 s deadline; each ffmpeg frame read is bounded by a per-fill timeout.
 
