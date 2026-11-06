@@ -188,7 +188,7 @@ final class CheckChildLifetimes
                 . 'bounded life and stands for candy-top to own.',
         ],
         'candy-git-server/src/Git/StatelessRpc.php::advertise' => [
-            'count' => 2,
+            'count' => 1,
             'reason' => 'smart-HTTP advertisement child (git upload-pack --advertise-refs), '
                 . 'request-scoped. The scanner stops at self::reapBounded, which TERMinates, '
                 . 'polls 1 s, escalates to an EXPLICIT SIGKILL for TERM-immune children, polls '
@@ -197,16 +197,16 @@ final class CheckChildLifetimes
                 . 'or throw in between (E721). candy-git-server/tests/ChildProcessLifetimeCensusTest '
                 . 'pins the ladder behaviorally, KILL rung included under a trap-""-TERM child '
                 . 'on a bounded wall, plus a /proc survivor census with a known-positive arm. '
-                . 'Count 2 is not two spawns: the lib\'s nested psr-4 prefixes walk the same '
-                . 'file twice, so this one site derives twice.',
+                . 'Count was 2 while nested psr-4 prefixes made the walk visit the file twice; '
+                . 'the single-prefix manifest derives the one spawn site once.',
         ],
         'candy-git-server/src/Git/StatelessRpc.php::negotiate' => [
-            'count' => 2,
+            'count' => 1,
             'reason' => 'the same request-scoped reap story for the negotiation child (git '
                 . 'upload-pack / git receive-pack): stdin is written by writeBounded under the '
                 . 'same deadline discipline before the finally hands off to reapBounded — '
                 . 'TERM→SIGKILL ladder, bounded polls, proc_close on every path. Pinned by the '
-                . 'same census test. Count 2 = the nested-psr-4 double walk of one spawn site.',
+                . 'same census test; one spawn site, derived once by the single-prefix walk.',
         ],
     ];
 
