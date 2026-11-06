@@ -33,6 +33,36 @@ Composer's `vendor/bin` is not on your `PATH` by default, so the bare
 entry point is `php bin/candy-image …` — the spelling the demo tape runs — and
 a rolling dev phar is published too (see Install).
 
+## Install
+
+**Requirements.** PHP 8.3+ and the `gd` extension (`ext-gd`). The `gd`
+requirement is a hard requirement of this app: composer consumers get the
+platform check transitively through `sugar-image`, but a downloaded phar
+carries no platform check at all — so this sentence is the guardrail.
+
+**No released version yet.** Packagist serves `dev-master` only — there is
+no tag and no branch-alias — so under a default `minimum-stability: stable`
+project a bare `composer require sugarcraft/candy-image` cannot resolve.
+Ask for the dev package explicitly (the Packagist version badge above
+renders nothing until the first tag, for the same reason):
+
+```bash
+composer require "sugarcraft/candy-image:@dev"
+```
+
+**Phar channel.** CI rebuilds and republishes a rolling prerelease on every
+push to master:
+
+```bash
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-image/dev/candy-image.phar
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-image/dev/candy-image.phar.sha256
+php candy-image.phar photo.png
+```
+
+`--version` prints the `dev-<shortsha>` stamp of the commit the phar was
+built from; the `.sha256` (plus `.commit`/`.pins.json`) sidecars sit beside
+the asset for verification.
+
 ## Options
 
 | Option                  | Meaning                                                          |
