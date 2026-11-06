@@ -17,6 +17,8 @@ $rendered = Mark::zone('btn-ok', '  OK  ')
 // 2. Scan after rendering to populate the zone registry.
 $scanner = Scanner::new()->scan($rendered);
 
+// Never echo marked bytes — print the stripped frame: echo Scan::strip($rendered);
+
 // 3. Reverse-lookup on mouse events ('  OK  ' spans cols 1-6 on row 1).
 $zone = $scanner->hit(4, 1); // Zone 'btn-ok'
 
