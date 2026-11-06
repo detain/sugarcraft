@@ -334,7 +334,8 @@ solarizedDark/Light) sets them explicitly; consumers must NOT assume
   `4:N` form is emitted only when `underline()` is also set.
 - **`Hsl`** — CSS-style HSL factory: `Hsl::color($h, $s, $l)` (hue 0-360,
   saturation/lightness 0-100) and `Hsl::parse('hsl(200,80%,50%)')` for
-  string input.
+  string input. Note the scale split with `Color::hsl()`, whose `s`/`l`
+  take fractions 0-1 — see [HSL colour factory](#hsl-colour-factory) below.
 - **`Markup`** — Rich-style `[tag]text[/]` parser returning `list<Cell>`.
   Distinct from `StyleParser` (which uses `[text](fg:red,bold)` syntax).
   Supports color names, fg:/bg: shortcuts, and bold/dim/italic/
@@ -444,7 +445,7 @@ Style::setDefaultProfile($had); // always, e.g. in tearDown
 | `Color::ansi(13)` | named ANSI slot |
 | `Color::ansi256(213)` | xterm-256 |
 | `Color::parse('cyan')` / `Color::parse('bright-red')` | lookup by CSS/ANSI name |
-| `Color::hsl($h, $s, $l)` | from HSL (0-360, 0-1, 0-1) |
+| `Color::hsl($h, $s, $l)` | from HSL (0-360, 0-1, 0-1) — unlike `Hsl::color()` (percentages 0-100), `s`/`l` here are fractions 0-1; out-of-range values are normalized (hue wraps mod 360, s/l clamp), never throws |
 | `$c->blend($other, $t)` | linear LERP, t ∈ [0, 1] |
 | `$a->blend1d($b, $steps)` | list of N stops from $a to $b |
 | `$tl->blend2d($tr, $bl, $br, $rows, $cols)` | 2D gradient grid |
@@ -473,6 +474,12 @@ $sky = Hsl::color(200.0, 80.0, 50.0);
 $teal = Hsl::parse('hsl(174, 70%, 40%)');
 $blue = Hsl::parse('hsl(240, 100%, 50%)');
 ```
+
+`Hsl::color()` normalizes rather than rejects: hue wraps modulo 360 and
+saturation/lightness clamp to 0-100 — it never throws. This is the
+percentage counterpart of `Color::hsl()`, whose `s`/`l` take fractions
+0-1 (see the blending table above). `Hsl::parse()` returns **null** on
+malformed input — guard before use (the example assigns unguarded).
 
 ## Inline markup parser
 
