@@ -108,7 +108,8 @@ final class Column
 
     /**
      * Set the SGR style applied to every data cell of this column at render
-     * (wrapped outside the cursor style, so a cursor row stays dominant).
+     * (the cursor style is painted OVER this one on a cursor row — see
+     * Table::buildLines() — so the selected row stays visually dominant).
      *
      * @param string $ansiStyle bare SGR parameter string ('' clears the style)
      */
