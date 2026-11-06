@@ -16,7 +16,7 @@ candy-gifview my-animation.gif density # luminance-density ramp
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>One-command viewer</strong><span><code>candy-gifview file.gif</code> — no flags to learn; an optional second argument picks the render preset.</span></div>
-      <div class="feature"><strong>Viewport-sized</strong><span>Queries the TTY size behind a core <code>stream_isatty</code> gate (descriptor 1, never the cast resource id) and reserves a row, so output never overflows the screen; off a TTY it falls back to a 60×24 cell grid.</span></div>
+      <div class="feature"><strong>Viewport-sized</strong><span>Queries the TTY size behind a core <code>stream_isatty</code> gate (descriptor 1, never the cast resource id) and reserves two rows (status line + trailing newline), so output never overflows the screen; off a TTY it falls back to a 60×24 cell grid.</span></div>
       <div class="feature"><strong>Alternate screen</strong><span>Runs the sugar-animation <code>Player</code> inside a sugar-core <code>Program</code> with <code>useAltScreen</code>, so your shell buffer is untouched when you quit.</span></div>
       <div class="feature"><strong>Live preset toggle</strong><span><code>d</code> swaps solid blocks ↔ the <code>` .:-=+*#%@`</code> density ramp without losing your frame position.</span></div>
       <div class="feature"><strong>Helpable</strong><span><code>--help</code> / <code>-h</code> print the localized usage line and exit 0; missing or unreadable files exit non-zero with the decoder's error on stderr.</span></div>
@@ -39,7 +39,7 @@ candy-gifview my-animation.gif density # luminance-density ramp
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Cli</td><td>main(argv, stdout, stderr, play)</td><td>Parse args, decode, wire the Player, run the Program; returns the exit code</td></tr>
-<tr><td>Cli</td><td>viewportCells()</td><td>TTY-sized cell grid (cols, rows-1) behind a stream_isatty gate, 60×24 fallback</td></tr>
+<tr><td>Cli</td><td>viewportCells()</td><td>TTY-sized cell grid (cols, rows-2) behind a stream_isatty gate, 60×24 fallback</td></tr>
 <tr><td>Lang</td><td>t(key, params)</td><td>Localized CLI messages (namespace <code>gifview</code>)</td></tr>
 </table>
   </div>
