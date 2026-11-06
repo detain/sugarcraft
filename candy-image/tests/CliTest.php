@@ -259,24 +259,40 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('not available on this base', $err);
     }
 
-    public function testPassthroughNoneDisablesTheTmuxTransaction(): void
+    public function testPassthroughNoneDisablesTheTransactionForItsRunOnly(): void
     {
-        // The refusal surface exits before apply; a valid value applies even
-        // though the missing-file usage exit follows right after.
-        [$exit] = self::drive(['--passthrough=none']);
+        // m19 — the decision applies during the run (observed via the dump
+        // surface) and the process-global is restored when main() returns.
+        Detect::setAutoPassthrough(true);
+        [$exit, $out] = self::drive(['--dump-detect', '--passthrough=none']);
 
-        $this->assertSame(Cli::EXIT_USAGE, $exit);
-        $this->assertFalse(Detect::autoPassthrough());
+        $this->assertSame(Cli::EXIT_OK, $exit);
+        $this->assertStringContainsString('tmux-transaction: disabled', $out);
+        $this->assertTrue(Detect::autoPassthrough(), 'a completed run must restore the ambient default');
     }
 
-    public function testPassthroughAutoKeepsTheTmuxTransaction(): void
+    public function testPassthroughAutoEnablesTheTransactionForItsRunOnly(): void
     {
         Detect::setAutoPassthrough(false);
+        [$exit, $out] = self::drive(['--dump-detect', '--passthrough=auto']);
 
-        self::drive(['--passthrough=auto']);
-
-        $this->assertTrue(Detect::autoPassthrough());
+        $this->assertSame(Cli::EXIT_OK, $exit);
+        $this->assertStringContainsString('tmux-transaction: enabled', $out);
+        $this->assertFalse(Detect::autoPassthrough(), 'restoration goes both ways — a pre-existing disabled state must come back');
     }
+
+    public function testBackToBackRunsNeverBleedThePassthroughDecision(): void
+    {
+        Detect::setAutoPassthrough(true);
+        self::drive(['--dump-detect', '--passthrough=none']);
+        $this->assertTrue(Detect::autoPassthrough());
+
+        Detect::setAutoPassthrough(false);
+        self::drive(['--dump-detect', '--passthrough=auto']);
+        $this->assertFalse(Detect::autoPassthrough(), 'each run starts from the ambient setting, never the previous override');
+    }
+
+
 
     public function testSecondPositionalExitsUsage(): void
     {

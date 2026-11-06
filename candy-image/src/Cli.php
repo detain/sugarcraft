@@ -301,70 +301,78 @@ final class Cli
             return self::EXIT_USAGE;
         }
 
+        // m19 — the tmux/GNU-Screen transaction switch is a process-global in
+        // sugar-image; a CLI run must scope it, not leave it stamped after
+        // main() returns (library embedding callers share the process).
+        $wasAutoPassthrough = Detect::autoPassthrough();
         Detect::setAutoPassthrough($passthrough === 'auto');
 
-        if ($dump) {
-            return self::dumpDetect($stdout);
-        }
-
-        if ($file === null) {
-            self::err($stderr, Lang::t('cli.usage'));
-
-            return self::EXIT_USAGE;
-        }
-
-        // The animation path steers only the viewport box: --width/--height/
-        // --size apply to it, while the render dials below speak only to the
-        // still-image path and would be silently dropped. Refuse the
-        // combination with the named list instead (M4).
-        if ($animate && $animateDials !== []) {
-            self::err($stderr, Lang::t('cli.animate_dials_refused', ['flags' => implode(', ', array_keys($animateDials))]));
-
-            return self::EXIT_USAGE;
-        }
-
-        [$viewportW, $viewportH] = self::viewportCells();
-        $cellsW = $width ?? $viewportW;
-
-        if ($animate) {
-            return self::animate($file, $cellsW, $height ?? $viewportH, $stdout, $stderr, $play);
-        }
-
         try {
-            $image = ImageSource::fromFile($file);
-        } catch (\InvalidArgumentException | \RuntimeException $e) {
-            self::err($stderr, $e->getMessage());
+            if ($dump) {
+                return self::dumpDetect($stdout);
+            }
 
-            return self::EXIT_INPUT;
+            if ($file === null) {
+                self::err($stderr, Lang::t('cli.usage'));
+
+                return self::EXIT_USAGE;
+            }
+
+            // The animation path steers only the viewport box: --width/--height/
+            // --size apply to it, while the render dials below speak only to the
+            // still-image path and would be silently dropped. Refuse the
+            // combination with the named list instead (M4).
+            if ($animate && $animateDials !== []) {
+                self::err($stderr, Lang::t('cli.animate_dials_refused', ['flags' => implode(', ', array_keys($animateDials))]));
+
+                return self::EXIT_USAGE;
+            }
+
+            [$viewportW, $viewportH] = self::viewportCells();
+            $cellsW = $width ?? $viewportW;
+
+            if ($animate) {
+                return self::animate($file, $cellsW, $height ?? $viewportH, $stdout, $stderr, $play);
+            }
+
+            try {
+                $image = ImageSource::fromFile($file);
+            } catch (\InvalidArgumentException | \RuntimeException $e) {
+                self::err($stderr, $e->getMessage());
+
+                return self::EXIT_INPUT;
+            }
+
+            try {
+                $mosaic = Mosaic::fromModeString($format) ?? Mosaic::auto();
+                if ($symbols !== null) {
+                    $mosaic = $mosaic->withSymbolSelectors($symbols);
+                }
+                if ($canvas !== null) {
+                    $mosaic = $mosaic->withCanvasMode($canvas);
+                }
+                if ($work !== null) {
+                    $mosaic = $mosaic->withWorkFactor($work);
+                }
+                if ($scale !== null) {
+                    $mosaic = $mosaic->withScale($scale);
+                }
+                $bytes = $mosaic->render($image, $cellsW, $height);
+            } catch (\Throwable $e) {
+                self::err($stderr, $e->getMessage());
+
+                return self::EXIT_INPUT;
+            }
+
+            \fwrite($stdout, $bytes);
+            if (!str_ends_with($bytes, "\n")) {
+                \fwrite($stdout, "\n");
+            }
+
+            return self::EXIT_OK;
+        } finally {
+            Detect::setAutoPassthrough($wasAutoPassthrough);
         }
-
-        try {
-            $mosaic = Mosaic::fromModeString($format) ?? Mosaic::auto();
-            if ($symbols !== null) {
-                $mosaic = $mosaic->withSymbolSelectors($symbols);
-            }
-            if ($canvas !== null) {
-                $mosaic = $mosaic->withCanvasMode($canvas);
-            }
-            if ($work !== null) {
-                $mosaic = $mosaic->withWorkFactor($work);
-            }
-            if ($scale !== null) {
-                $mosaic = $mosaic->withScale($scale);
-            }
-            $bytes = $mosaic->render($image, $cellsW, $height);
-        } catch (\Throwable $e) {
-            self::err($stderr, $e->getMessage());
-
-            return self::EXIT_INPUT;
-        }
-
-        \fwrite($stdout, $bytes);
-        if (!str_ends_with($bytes, "\n")) {
-            \fwrite($stdout, "\n");
-        }
-
-        return self::EXIT_OK;
     }
 
     /**
