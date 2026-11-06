@@ -366,10 +366,17 @@ unavailable — it never writes into the install tree.
 
 CLI diagnostics and success lines are localized: the binary selects a locale
 from `LC_ALL` → `LC_MESSAGES` → `LANG` at start-up (16 shipped locales, see
-`lang/`). `candy-kv --help` and the argument parser's own errors stay English
-by design — they are the reference contract and are quoted verbatim by the
-test suite. Library diagnostics throw English exceptions (matching the rest
-of the fleet); the translated surface is what end users see.
+`lang/`). The missing-argument usage line is part of that translated surface —
+`usage()` emits `Lang::t('cli.usage_*')` before exit 2, so `LANG=fr candy-kv
+get` answers `Usage : candy-kv get <clé>`. Three surfaces stay English by
+design and are quoted verbatim by the test suite: `candy-kv --help` (a fixed
+heredoc — its option grammar mirrors the flag spellings), `src/Cli/ArgParser.php`'s
+own parse errors (unknown option, surplus positional), and the import/export
+runtime diagnostics — importer refusals and failure lines such as
+`File not found: <path>` throw plain English from outside the catalogs, a
+design the `src/Cli/ImportCommand.php` docblock states outright. Library
+diagnostics throw English exceptions (matching the rest of the fleet); the
+translated surface is what end users see.
 
 ## Demos
 
