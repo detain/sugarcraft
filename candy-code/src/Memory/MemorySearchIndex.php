@@ -185,12 +185,19 @@ final class MemorySearchIndex
         }
 
         // Owner-only from the first byte: the index holds every note's text,
-        // and the notes themselves are 0600. The umask covers SQLite's
-        // journal file too.
+        // and the notes themselves are 0600. The umask covers the WAL and SHM
+        // sidecars too — they are created inside this guarded window, exactly
+        // as the rollback journal was before.
         $previousUmask = umask(0077);
         try {
             $db = \SugarCraft\Code\Support\SqliteConnect::open($this->location);
 
+            // WAL for a derived cache is not a durability purchase — it is the
+            // end of the rollback-journal corruption class: a half-written
+            // hot journal bricks the file for the old synchronous=OFF shape,
+            // while WAL's frames checksum themselves and an interrupted
+            // writer leaves the last committed state readable.
+            $db->exec('PRAGMA journal_mode = WAL');
             // A derived cache: a crash costs a rebuild, never a note, so it
             // does not pay for an fsync per search.
             $db->exec('PRAGMA synchronous = OFF');
@@ -226,13 +233,18 @@ final class MemorySearchIndex
     /**
      * Delete a cache file SQLite reported as damaged (SQLITE_CORRUPT, or
      * SQLITE_NOTADB for a file that is not a database at all), so the next
-     * search rebuilds it instead of falling back to the scan for good.
+     * search rebuilds it instead of falling back to the scan for good. Under
+     * WAL the -wal/-shm sidecars go with it: a WAL is matched to its database
+     * by path, not inode, so a fresh main file left behind a stale -wal could
+     * adopt the dead writer's frames instead of starting empty.
      */
     private function discardIfDamaged(\Throwable $e): void
     {
         $code = $e instanceof \PDOException ? (int) ($e->errorInfo[1] ?? 0) : 0;
         if ($this->location !== self::IN_MEMORY && \in_array($code, self::DAMAGED_CODES, true)) {
             @unlink($this->location);
+            @unlink($this->location . '-wal');
+            @unlink($this->location . '-shm');
         }
     }
 
