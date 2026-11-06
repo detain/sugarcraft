@@ -8,10 +8,12 @@ declare(strict_types=1);
  * Run: php examples/standard-colors.php
  *
  * Exercises:
- * - StandardColors static color constants
- * - StandardColors::all() (all 16 in array)
+ * - StandardColors::all() catalog (all 16 in array, read-only surface)
  * - StandardColors::fromIndex() (lookup by index)
  * - Rendering each color as a foreground + background swatch
+ *
+ * The writable StandardColors::$red-style static constants are DEPRECATED —
+ * this demo deliberately names only the read-only all()/fromIndex() catalog.
  */
 
 require __DIR__ . '/../vendor/autoload.php';
