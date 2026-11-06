@@ -15,6 +15,8 @@
 
 sugar-flexbox — layout building blocks for terminal UIs, for PHP 8.3+. Provides four components: `FlexBox` (flexbox-like row/column layout), `Table` (sortable, filterable, styled grids with a cursor), `Viewport` (scrollable window with sticky regions), and `Scrollbar` (decorative scroll indicators).
 
+The library carries the house i18n plumbing (`src/Lang.php` plus locale files under `lang/`) but nothing in the shipped interface calls it yet: every label and message is English-only today, and the wiring stands ready for the day a string needs translating.
+
 ## Features
 
 ### FlexBox
