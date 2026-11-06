@@ -144,7 +144,7 @@ source string gets printed by downstream diagnostics.
 
 A `Palette` constructed with a **non-null stream that is not a TTY** answers
 `NoTTY` regardless of the whole ladder — including every force override.
-Measured: piped STDOUT with `FORCE_COLOR=3` gives `Palette::detect()` → `NoTTY`
+Measured: piped STDOUT with `FORCE_COLOR=3` gives `Palette::detect(STDOUT)` → `NoTTY`
 while `Probe::colorProfile()` → TrueColor. `ProfileWriter::wrap($stream, …)`
 inherits the gate because it delegates to `Palette::detect($stream, …)`, and a
 `NoTTY` answer makes `ProfileWriter::write()` strip the ANSI. So every
