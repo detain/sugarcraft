@@ -88,8 +88,10 @@ By default the filter is a **contiguous, case-folded substring match with an
 anchor bias**: a candidate is kept only when the first match starts in the
 **first half** of the item text. The rule is measured in Unicode codepoints,
 not bytes, so multibyte values (é, 日, emoji) halve where a user would expect.
-Worked misses: `ry` does not match `cherry` (first hit sits exactly at the
-midpoint), and `e` does not match `apple` (its first hit is past halfway).
+Worked misses: `ry` does not match `cherry` (its first hit starts past the
+midpoint — the accepted window is positions `[0, len/2)`, so a hit beginning
+exactly at the halfway point is already rejected), and `e` does not match
+`apple` (its first hit is past halfway).
 These are deliberate — deep matches are usually noise — and `setRanker()` is
 the escape hatch: plug in a
 [sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy) ranker to switch to **true subsequence matching**,
