@@ -359,7 +359,7 @@ the cut.
 
 - **Foundation utilities**: 🟢 complete.
 - **Runtime**: 🟢 Program loop, mouse (cell-motion + all-motion + SGR 1006), focus / blur, bracketed paste, full function-key set including F13–F63 and the Kitty PUA range, the cell-diff "cursed" renderer (synchronized output 2026 + unicode mode 2027), inline-mode rendering, declarative `View` struct, plus the Cmd surface (`Suspend` / `Interrupt` / `Exec` / `Sequence` / `Every` / `Printf` / `Raw` and more — a resume is deliberately not a Cmd: SIGCONT dispatches a `ResumeMsg` from the runtime) and the Program control methods (`wait` / `kill` / `releaseTerminal` / `restoreTerminal`).
-- **Terminal recovery**: 🟢 `setupTerminal()` arms a one-shot shutdown backstop. `run()`'s `finally` restores the terminal on every path it can see; a `die()`, `exit()` or zend bailout that skips pending `finally` blocks still lands on the registered shutdown function, so the library that entered the alt screen is the library that leaves it and consumers do not need to write their own `bin` guard. The hook holds a `WeakReference` and compares the install pid at fire time — finished Programs are never pinned alive by the shutdown queue, and a forked child exiting never releases the parent's terminal.
+- **Terminal recovery**: 🟢 `setupTerminal()` arms a one-shot shutdown backstop. `run()`'s `finally` restores the terminal on every path it can see; a `die()`, `exit()` or zend bailout that skips pending `finally` blocks still lands on the registered shutdown function, so the library that entered the alt screen is the library that leaves it and consumers do not need to write their own `bin` guard. The hook holds a `WeakReference` and compares the install pid at fire time — finished Programs are never pinned alive by the shutdown queue, and a forked child exiting never releases the parent's terminal. The arming is gated on `catchPanics` (`ProgramOptions`, default `true`): constructing with `catchPanics: false` — the debugger-owner case that does its own state capture — registers no hook, though an explicit `Program::armTerminalRelease()` before the run is a considered opt-in and is honored either way.
 
 
 ## Companion libraries
@@ -692,6 +692,12 @@ $program = new Program(
 );
 $program->run();
 ```
+
+One knob worth knowing by name: `catchPanics` (default `true`) gates whether
+`setupTerminal()` auto-arms the terminal-release shutdown backstop described
+under **Status → Terminal recovery**. Set it to `false` only when you take
+ownership of terminal restoration on bailout paths yourself; the explicit
+pre-arm `Program::armTerminalRelease()` remains honored regardless of the flag.
 
 For code that assembles options incrementally there is
 `SugarCraft\Core\ProgramOptions\ProgramOptionsBuilder` — a fluent mirror
