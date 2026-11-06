@@ -15,7 +15,7 @@
   {"name":"CandyMdview","slug":"candy-mdview","category":"app","description":"Markdown CLI viewer + pager.","url":"lib/candy-mdview.html"},
   {"name":"CandyMinesweeper","slug":"candy-minesweeper","category":"app","description":"Minesweeper on the SugarCraft stack.","url":"lib/candy-minesweeper.html"},
   {"name":"CandyScriptui","slug":"candy-scriptui","category":"app","description":"Interactive terminal widgets you can call from shell scripts — prompts, tables, spinners, and more.","url":"lib/candy-scriptui.html"},
-  {"name":"CandySql","slug":"candy-sql","category":"app","description":"Terminal SQL client for SQLite, MySQL and PostgreSQL with Workbench-style admin panels.","url":"lib/candy-sql.html"},
+  {"name":"CandySql","slug":"candy-sql","category":"app","description":"Terminal SQL client for SQLite, MySQL, MariaDB and PostgreSQL with Workbench-style admin panels.","url":"lib/candy-sql.html"},
   {"name":"CandySshLauncher","slug":"candy-ssh-launcher","category":"app","description":"A launch menu of your SSH hosts — pick one and connect.","url":"lib/candy-ssh-launcher.html"},
   {"name":"CandyStarter","slug":"candy-starter","category":"app","description":"Starter project for building your own SugarCraft apps — scaffold with composer create-project.","url":"lib/candy-starter.html"},
   {"name":"CandyTetris","slug":"candy-tetris","category":"app","description":"Tetris on the SugarCraft stack.","url":"lib/candy-tetris.html"},
