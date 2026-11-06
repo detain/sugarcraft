@@ -63,7 +63,10 @@ above); the explicit string exists as a test seam because `MysqlDatabase` is fin
 |--------------------|-------------------------------------------------|
 | `Tab`              | Cycle pane (Tables → Rows → Query → Admin)      |
 | `↑/↓` or `j/k`     | Move cursor in active list pane                 |
+| `↑/↓` (query pane) | Move the editor cursor between lines (chars reach the buffer, so this never scrolls a list here) |
+| `←/→` or `h/l`     | Scroll the Rows pane's result columns when the table is wider than the pane (`App::handleRowsKey`, src/App.php:321) |
 | `Enter` / `Space`  | Load the highlighted table into the rows pane   |
+| `Enter` (query pane) | Insert a newline in the editor — run with `Ctrl+R`/`Ctrl+E` (`App::editQuery`, src/App.php:456) |
 | `Ctrl+R`           | Run the SQL in the query pane                   |
 | `Ctrl+E`           | Run the SQL in the query pane                   |
 | `Ctrl+F`           | Save the query pane's text to the favorites list (session state — see disclosure below) |
@@ -82,6 +85,8 @@ above); the explicit string exists as a test seam because `MysqlDatabase` is fin
 | `[w]`              | Toggle read/write filter (Variables page)       |
 | `[s]`              | Focus search input (Variables page)              |
 | `[f]`              | Toggle hide-sleeping filter (Connections page)  |
+| `K` / `X`          | Connections page: arm `KILL CONNECTION` / `KILL QUERY` for the selected thread (background/system threads are refused outright) |
+| `y`                | Fire the armed kill / staged PerfSchema commit — any other key cancels (fail-safe: a stray keystroke never kills a session) |
 | `[c]`              | Stage commit of pending changes (PerfSchema page); `[y]` fires, any other key cancels |
 | `[c]`              | Toggle column unit formatting (Reports page)    |
 | `[x]`              | Build CSV of the current report into page state — not written to disk (Reports page; see disclosure below) |
