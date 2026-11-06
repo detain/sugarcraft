@@ -41,8 +41,9 @@ The string colour form is **hex-only** (it routes through `Color::hex`):
 `fg('white')` / `on('red')` throw — pass `Color` instances built with
 `Color::parse('white')`, or use colour names inside `[...]` markup
 (`[bg:red]`), which accepts names.
-The full-length names (`foreground` / `background` / `padding`
-/ `margin` / `setString`) work identically — pick whichever reads better at
+The full-length names work identically — `fg`→`foreground`, `bg` and
+`on`→`background`, `pad`→`padding`, `mg`→`margin`, `of`→`setString` (six
+short forms over five full-length names); pick whichever reads better at
 the call site:
 
 ```php
