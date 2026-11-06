@@ -354,6 +354,11 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
             // not a quotation of a line the launcher prints. DOCKER quotes no
             // launch line, so no guard exists and none is owed.
             'docs/DOCKER.md' => self::PAGE_QUOTE_IS_COINCIDENCE,
+            // weld drivdoc 2026-11-06: the exit-code battery's plain-mode row
+            // writes the prefix in backticks while describing what an
+            // unrecognized option prints to stderr — prose about the shape,
+            // not a quotation of a rendered line (same reading as CI.md).
+            'docs/FLEET-DRIVING.md' => self::PAGE_QUOTE_IS_PROSE,
         ],
         'PROJECT_TIER_TOOL_REMOVAL_FORMAT' => [
             'README.md' => ReadmeSettingsTierClaimTest::class
