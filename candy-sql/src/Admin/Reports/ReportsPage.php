@@ -719,7 +719,7 @@ final class ReportsPage extends PageBase implements RowNavigable
     private function renderFooter(): string
     {
         return Style::new()->foreground(Color::hex('#6b7280'))
-            ->render('[j/k] nav rows  [h/l] category  [/] cycle report  [c] unit toggle  [q] back');
+            ->render('[j/k] nav rows  [h/l] category  [[]/[]] report  [,/.] column  [c] unit  [r] refresh  [x] export  [q] back');
     }
 
     private function renderErrorScreen(): string
