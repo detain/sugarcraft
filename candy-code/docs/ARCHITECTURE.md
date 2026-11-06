@@ -59,7 +59,7 @@ stdin and stdout, and `Acp\AcpServer` drives each session through a
 `Host\SessionHub` on the same loop `serve` uses ([SERVER.md](SERVER.md)).
 
 `doctor` is the sharpest case — it diagnoses an install that may be broken, so it
-must not require the thing it is diagnosing. Each of its ten probes catches its
+must not require the thing it is diagnosing. Each of its seventeen probes catches its
 own throws, so an unreadable `config.json` becomes a reported line rather than
 taking the report down.
 
@@ -1378,7 +1378,7 @@ Four patterns worth recognising, because they explain otherwise-odd code:
    because they had.
 4. **A count carries its domain.** "Forty-four tools" means wired built-ins.
    "Eight skills" means directories under `src/Skills/BuiltIn/` that load.
-   "Nine probes" means `doctor`. Numbers in this codebase's comments are
+   "Seventeen probes" means `doctor`. Numbers in this codebase's comments are
    written next to the thing they were measured on, and several of them are
    derived by a test rather than typed.
 
