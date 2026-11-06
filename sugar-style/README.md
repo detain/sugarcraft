@@ -16,8 +16,7 @@
 
 ![demo](.vhs/dashboard.gif)
 
-sugar-style — declarative styling and layout for terminal UIs,
-for PHP 8.3+.
+**SugarStyle** — declarative styling and layout for terminal UIs. Requires PHP 8.3+.
 
 ```sh
 composer require sugarcraft/sugar-style
