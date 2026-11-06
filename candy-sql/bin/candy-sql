@@ -255,16 +255,20 @@ HISTORY
     Store snapshots at <path> instead of the default location.
 
 KEYBOARD SHORTCUTS (TUI)
-  Tab         Cycle focus through panes (Tables → Rows → Query → Admin)
-  ↑ / ↓       Navigate list rows (or j/k)
-  Enter       Load selected table's rows
-  Ctrl+Enter  Execute the current query
-  Ctrl+R      Execute the current query
-  Ctrl+E      Execute the current query
-  Ctrl+F      Add the current query to the favorites list (session
-              state only — no pane browses it, and it is not persisted)
-  1-8         Jump to an admin pane (only while the Admin pane is focused)
-  q           Quit from the Tables/Rows panes; returns to Tables from Admin
+  Tab          Cycle focus through panes (Tables → Rows → Query → Admin)
+  ↑ / ↓        Navigate list rows (or j/k)
+  Enter        Load selected table's rows
+  Space        Load selected table's rows (alias for Enter)
+  Ctrl+Enter   Execute the current query
+  Ctrl+R       Execute the current query
+  Ctrl+E       Execute the current query
+  Ctrl+F       Add the current query to the favorites list (session
+               state only — no pane browses it, and it is not persisted)
+  Ctrl+Shift+F Remove the current query from the favorites list
+  1-8          Jump to an admin pane (only while the Admin pane is focused)
+  q            Quit from the Tables/Rows panes; returns to Tables from Admin
+  Esc          Quit from the Tables/Rows panes; cancels an open Admin dialog
+  Backspace    Delete the character before the cursor (Query editor)
 
 SEE ALSO
   https://github.com/sugarcraft/candy-sql
