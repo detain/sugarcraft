@@ -359,7 +359,8 @@ sugar-forms is built on five shared packages:
   is always used today.
 - **[sugar-testing](https://github.com/sugarcraft/sugar-testing)** — `Assertions::assertGoldenAnsi` and
   `Assertions::assertCellGrid` snapshot helpers. Render fixtures live in
-  `tests/fixtures/`; set `UPDATE_GOLDENS=1` to regenerate them.
+  `tests/fixtures/`; `UPDATE_GOLDENS=1` creates missing goldens only — to
+  re-record an existing one, delete the file first and re-run.
 - **[sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy)** — `SmithWatermanMatcher` scoring,
   used ONLY by `Select::withFuzzySuggestions()` to rank the suggestion candidates
   (`src/Field/Select.php:326-330`, suggestions listed score-ranked at `:131-135`).
@@ -476,9 +477,12 @@ pins become proper `^1.0` constraints — track this in the release plan
 Render output is covered by golden-file snapshot tests. Fixture files live
 in `tests/fixtures/` with a `.golden` extension and are compared against
 actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
-To re-record fixtures after intentional output changes:
+To re-record a fixture after an intentional output change, delete the golden
+first — `UPDATE_GOLDENS=1` only creates missing goldens and never overwrites
+an existing one:
 
 ```sh
+rm tests/fixtures/<name>.golden
 UPDATE_GOLDENS=1 vendor/bin/phpunit
 ```
 
