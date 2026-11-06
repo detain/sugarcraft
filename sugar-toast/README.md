@@ -15,7 +15,7 @@ sugar-toast — a floating alert notification component for terminal UIs, for PH
 ## Features
 
 - **9 positions**: TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight, MiddleLeft, MiddleCenter, MiddleRight
-- **4 alert types**: Error, Warning, Info, Success — severity carried by icon + colour (add `withAccessibleText()` for a plain-text word; the chrome itself is identical across types)
+- **4 alert types**: Error, Warning, Info, Success — severity carried by icon + colour (add `withAccessibleText()` for a plain-text word; box shape and border glyphs are the same across types)
 - **Dynamic width**: full `maxWidth` by default; auto-fit to content engages ONLY via `withMinWidth(n>0)` — stacked boxes then anchor at ragged per-message offsets (shrink-to-fit vs stack-alignment trade)
 - **Symbol sets**: NerdFont (icons), Unicode (symbols), Ascii (plain text)
 - **Auto-dismiss**: time-based expiry, pruned by the host tick
@@ -70,9 +70,9 @@ ToastType::Success
 Each type also provides a localized label via `ToastType::label()` (e.g.
 `ToastType::Success->label()` → `"Success"` in English).
 
-`alert()` accepts either a `ToastType` enum case or a lowercase string
-(`"error"`, `"warning"`, `"info"`, `"success"`). Passing an unknown string
-throws `InvalidArgumentException`.
+`alert()` accepts either a `ToastType` enum case or a case-insensitive string
+(`"error"`/`"ERROR"`, `"warning"`, `"info"`, `"success"`). Passing an unknown
+string throws `InvalidArgumentException`.
 
 ## Positions
 
@@ -404,7 +404,7 @@ already over the new cap survive until the next push evicts them.
 | `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited; `< 1` throws `InvalidArgumentException`) |
 | `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
 | `->withHistoryLimit(?int $n)` | Cap history log, oldest evicted first (default 100; `null` = unbounded) |
-| `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert (string type = case-insensitive; `null` expiry inherits `withDuration()`; `id` updates a live alert in place; `$expiresAt` below the epoch floor throws — durations belong in `withDuration()`) |
+| `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert (string type = case-insensitive; `null` expiry inherits `withDuration()`; `id` updates a live alert in place; `$expiresAt` is an absolute epoch — duration-shaped values throw, durations belong in `withDuration()`) |
 | `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert with progress bar (0.0–1.0, finite — NAN/INF throw); same `id` = same box; wrong-slot `$expiresAt` throws |
 | `->push(Alert $alert): self` | Enqueue a pre-built `Alert` (styled/actioned) |
 | `->cancelAlert(int $index): self` | Make a queued alert persistent (never auto-dismisses) |
