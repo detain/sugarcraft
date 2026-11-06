@@ -92,6 +92,7 @@ candy-code/tests/Backend/EngineBackendTest.php	6.105	35
 candy-code/tests/App/DockDragBytePathTest.php	6.084	14
 candy-code/tests/Agents/AgentWorkerPoolTest.php	5.926	51
 candy-code/tests/Media/SecuritySweepTest.php	5.896	31
+candy-code/tests/Workflows/WorkflowVerdictRejectionTest.php	5.766	27
 candy-code/tests/Server/HookWebhooksTest.php	5.709	18
 candy-code/tests/Tui/KeyboardHandlerTest.php	5.700	86
 candy-code/tests/Integration/BinCandyCodeWiringTest.php	5.682	1355
