@@ -70,7 +70,7 @@ final class Counter implements Model
 - `pcntl` (signal handling — POSIX only; not available on Windows)
 - `FFI` extension (required on Windows for raw TTY support)
 - `react/event-loop` ^1.6 (Composer)
-- `sugarcraft/sugar-pty` `@dev` — the runtime's raw-mode/termios backend. sugar-core and
+- `sugarcraft/sugar-pty` `dev-master` (the spelling this lib's committed manifest uses) — the runtime's raw-mode/termios backend. sugar-core and
   sugar-pty hard-require each other (sugar-pty consumes core's primitives); CI injects the
   path-repo closure so the cycle resolves inside the monorepo, and standalone installs take
   both from Packagist. `Util\Tty\Termios` therefore appears in a public constructor type
