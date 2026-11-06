@@ -61,6 +61,10 @@ $cursor = $vt->cursor();
 echo "cursor at {$cursor->row},{$cursor->col}\n";
 ```
 
+`lines()` echoes the raw grid contents — on bytes from anywhere but your own
+program, read §Trust boundary and hostile input (below) before echoing that
+output anywhere.
+
 > **Captured-stream gotcha (ONLCR).** A real terminal writes line breaks as
 > `\r\n` because the tty layer (ONLCR) expands each `\n` on output. Feeding
 > the emulator a raw `\n` reproduces exact VT semantics — the cursor moves
