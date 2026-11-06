@@ -173,4 +173,4 @@ vendor/bin/phpunit
 
 ## Credits & inspiration
 
-Design antecedent: [`namzug16/gifterm`](https://github.com/namzug16/gifterm). The decode/render/playback layer it mirrors is developed here as [`sugarcraft/sugar-animation`](https://github.com/detain/sugarcraft/tree/master/sugar-animation); SugarCraft is a native PHP project on the Charm-inspired TEA stack.
+Design antecedent: [`namzug16/gifterm`](https://github.com/namzug16/gifterm). The decode/render/playback layer it mirrors is developed here as [`sugarcraft/sugar-animation`](https://github.com/detain/sugarcraft/tree/master/sugar-animation); SugarCraft is a native PHP project.
