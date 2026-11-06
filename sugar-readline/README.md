@@ -18,7 +18,7 @@ sugar-readline — an interactive line-editing prompt library for terminal UIs o
 - **SelectionPrompt** — filtered list with type-to-filter, cursor navigation and pagination
 - **MultiSelectPrompt** — filtered multi-choice with min/max enforcement and FIFO rollover at the cap
 - **ConfirmationPrompt** — Yes/No with customisable labels: choose with arrows/Tab/Space or pick directly with `y`/`n` (one keystroke to set), commit with Enter
-- **TextareaPrompt** — multi-line text input with line/column cursor and optional max-line cap; Enter submits, Shift+Enter and Ctrl+J break lines
+- **TextareaPrompt** — multi-line text input with line/column cursor and optional max-line cap; Enter submits, Shift+Enter and Ctrl+J break lines only where the terminal reports modified keys — on legacy wires both send a bare Enter byte and submit
 - **Immutable state** — every input-handling method returns a new instance; `view()` returns the ANSI string while each prompt exposes its own data accessor (`value()` on TextPrompt/TextareaPrompt, `selectedValue()` on SelectionPrompt, `selectedValues()` on MultiSelectPrompt, `result()` on ConfirmationPrompt), and the `Readline` pump owns all terminal writes
 - **Vim keybindings** — vi-mode (Insert/Normal, plus a motion-only Visual scaffold); `ViMode` delegates its key-to-operation mapping to `VimKeyHandler` in `sugar-forms` — the same handler that the `sugar-forms` widgets drive and whose widgets `sugar-widgets` re-exports through its `class_alias` facade; new bindings in the `VimAction` enum land in `sugar-forms` and benefit all three libs. Includes text objects: `ci"`, `di(`, `da{`, `yiw` and friends, with a working unnamed register (`x`/`dd`/`yy`/text-object yanks feed `p`)
 - **NO_COLOR respected** — when the `NO_COLOR` environment variable is set to a non-empty value, every decoration (colour and style alike) falls away and prompts print as plain text
@@ -153,7 +153,10 @@ print_r($result->lines());  // edited multi-line text
 `TextareaPrompt::new()` takes only the label — a textarea has no choices.
 Keyboard contract: **Enter submits**, **Shift+Enter** and **Ctrl+J** insert a
 new line, **Ctrl+U** kills the text before the cursor on the current line
-only, Up/Down move between lines, Escape/Ctrl+C abort. When a `maxLines`
+only, Up/Down move between lines, Escape/Ctrl+C abort. The break chords exist
+only where the terminal reports modified keys: on a legacy wire Shift+Enter
+and Ctrl+J arrive as bare 0x0A/0x0D — indistinguishable from Enter — and
+submit. When a `maxLines`
 cap is reached, further line breaks are silently refused wherever the cursor
 sits and text accumulates on the line under the cursor.
 
@@ -309,7 +312,7 @@ sequence a terminal can send.
 - `Key::Left` / `Key::Right` — move cursor (text input); also Ctrl+B / Ctrl+F
 - `Key::Up` / `Key::Down` — navigate selection list / history / textarea line; also Ctrl+P / Ctrl+N
 - `Key::Home` / `Key::End` — jump within the current line / list; also Ctrl+A / Ctrl+E
-- `Key::Enter` — submit text or select current choice (in the textarea, Shift+Enter and Ctrl+J break a line instead)
+- `Key::Enter` — submit text or select current choice (in the textarea, Shift+Enter and Ctrl+J break a line instead — where the terminal reports modified keys; on legacy wires both bytes are a plain Enter and submit)
 - `Key::Space` — a second Enter in SelectionPrompt (submits the row under the cursor); toggles the mark in MultiSelectPrompt; toggles Yes/No in ConfirmationPrompt; inserts a literal space in text inputs
 - `Key::Tab` — autocomplete or toggle confirmation value; pressing Tab again cycles the matches (first Tab extends to their longest common prefix)
 - `y` / `n` (any case) — set Yes/No directly in ConfirmationPrompt (Enter still commits); there the Left/Right arrows alias to the same one-keystroke Yes/No picks
