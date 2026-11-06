@@ -1524,7 +1524,7 @@ Without `--tls-cert`/`--tls-key` everything — the token, the sign-in code and
 the session cookie included — then crosses the network in **cleartext**, and
 the startup lines say so; with the pair the listener wraps itself in TLS, the
 sign-in URLs read `https://`, and the warning branches to the over-TLS
-wording instead of retiring (D-16: reachability still invites the whole
+wording instead of retiring (reachability still invites the whole
 network to knock, and an empty `--allowed-ips` roster is said out loud).
 A plaintext `http://` client against the TLS endpoint gets no answer at all.
 
