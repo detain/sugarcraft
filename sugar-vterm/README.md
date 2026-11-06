@@ -283,7 +283,7 @@ implements the superset.
 | `F` | CPL | (Handler) | Cursor up N + column 0. |
 | `G` | CHA | (Handler) | Cursor to column N. |
 | `H` | CUP | `cup($row, $col)` | Move cursor to (row, col) 1-indexed. |
-| `I` | CHT | `cht($n=1)` | Cursor forward N tab stops (emulator honours the tab-stop table; the renderer single-steps). |
+| `I` | CHT | `cht($n=1)` | Cursor forward N tab stops (emulator honours the tab-stop table; the renderer single-steps). Shadowed while `?1004 h` is set — the focus intercept consumes any `CSI Ps I` as focus-in before tab handling runs. |
 | `J` | ED | `ed($mode=0)` | Erase display: 0=cursor→end, 1=begin→cursor, 2=all, 3=all+scrollback (emulator clears the ring; the renderer has no ring, so 3 blanks the grid). |
 | `K` | EL | `el($mode=0)` | Erase line: 0=cursor→eol, 1=bol→cursor, 2=full line. |
 | `L` | IL | `il($n=1)` | Insert N blank lines at cursor. |
@@ -303,7 +303,7 @@ implements the superset.
 | `s` | DECSC | `scosc()` | Save cursor + Sgr + origin mode (emulator); the renderer saves the cursor position only. |
 | `u` | DECRC | `scorc()` | Restore cursor + Sgr + origin mode (emulator); the renderer restores the position only. |
 | `<n> SP q` | DECSCUSR | (Handler) | Cursor shape; the 0–6 vocabulary maps to block/underline/bar × blink, out-of-vocabulary values are stored verbatim (unclamped). |
-| `<n> I` / `<n> O` | Focus | (Handler) | Focus-in (`I`) / focus-out (`O`) report (under `?1004 h`). |
+| `I` / `O` | Focus | (Handler) | Focus-in / focus-out recorded on the params-less `CSI I` / `CSI O` form real terminals emit under `?1004 h`. While that mode is set the intercept runs before tab handling, so a parameterised `CSI Ps I` is consumed as focus-in and CHT is unreachable on the emulator path. |
 
 `(Handler)` rows live in the full `Handler/ScreenHandler` dispatcher used
 by `SugarCraft\Vterm\Terminal\Terminal`; the renderer's upstream
