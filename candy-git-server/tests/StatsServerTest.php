@@ -269,4 +269,126 @@ final class StatsServerTest extends TestCase
             $server1->stop();
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Connection bounds (Step 25) — the slowloris class fixed in the
+    // HttpListener, ported: newcomer refusal at capacity, idle and absolute
+    // seat deadlines swept without a readable event, oversized head refused.
+    // -------------------------------------------------------------------------
+
+    /** Open a client that sends a partial request head and holds the seat. */
+    private function openHalfFinishedClient(StatsServer $server)
+    {
+        $addr = $server->listenAddress();
+        $this->assertNotNull($addr);
+
+        $errno = 0;
+        $errstr = '';
+        $client = \stream_socket_client("tcp://{$addr}", $errno, $errstr, 2.0);
+        $this->assertIsResource($client, "connect failed: {$errstr}");
+        \stream_set_blocking($client, false);
+        \fwrite($client, "GET /stats HTTP/1.1\r\nHost: x\r\n");
+
+        return $client;
+    }
+
+    private function runLoopFor(StreamSelectLoop $loop, float $seconds): void
+    {
+        $timer = $loop->addTimer($seconds, static fn () => $loop->stop());
+        $loop->run();
+        $loop->cancelTimer($timer);
+    }
+
+    public function testRefusesNewcomerWhileSeatIsFull(): void
+    {
+        $server = new StatsServer($this->config, new Stats(), 30.0, 180.0, 1);
+        $loop = new StreamSelectLoop();
+        $server->start($loop);
+
+        $held = $this->openHalfFinishedClient($server);
+        $refused = $this->openHalfFinishedClient($server);
+        $this->runLoopFor($loop, 0.6);
+
+        // The established seat survives; the newcomer is cut, never the house.
+        $this->assertSame(1, $server->activeConnectionCount());
+        @\fread($refused, 1);
+        $this->assertTrue(\feof($refused), 'the over-capacity newcomer must be closed');
+
+        $server->stop();
+        @\fclose($held);
+        @\fclose($refused);
+    }
+
+    public function testIdleSeatDiesWithoutEverBecomingReadable(): void
+    {
+        $server = new StatsServer($this->config, new Stats(), 0.05);
+        $loop = new StreamSelectLoop();
+        $server->start($loop);
+
+        $client = $this->openHalfFinishedClient($server);
+        $this->runLoopFor($loop, 0.1);
+        $this->assertSame(1, $server->activeConnectionCount());
+
+        $this->runLoopFor($loop, 0.5);
+
+        $this->assertSame(0, $server->activeConnectionCount(), 'the sweep must reclaim the idle seat');
+        @\fread($client, 1);
+        $this->assertTrue(\feof($client));
+
+        $server->stop();
+        @\fclose($client);
+    }
+
+    public function testAbsoluteDeadlineCutsEvenADribblingClient(): void
+    {
+        // idle is generous (1.0s) while the drip refreshes every 0.05s —
+        // only the absolute deadline can reclaim this seat.
+        $server = new StatsServer($this->config, new Stats(), 1.0, 0.25);
+        $loop = new StreamSelectLoop();
+        $server->start($loop);
+
+        $client = $this->openHalfFinishedClient($server);
+        $drip = $loop->addPeriodicTimer(0.05, static function () use ($client): void {
+            @\fwrite($client, ' ');
+        });
+
+        $this->runLoopFor($loop, 0.6);
+        $loop->cancelTimer($drip);
+
+        $this->assertSame(0, $server->activeConnectionCount(), 'a slow-drip client that keeps talking still dies');
+        $server->stop();
+        @\fclose($client);
+    }
+
+    public function testOversizedHeadIsRefusedWith431(): void
+    {
+        // ~70 KB of header lines with no terminating blank line: the buffer
+        // would otherwise grow unbounded while the head stays incomplete.
+        $head = "GET /stats HTTP/1.1\r\nHost: x\r\n"
+            . \str_repeat("X-Pad: " . \str_repeat('a', 1024) . "\r\n", 70);
+        $this->assertGreaterThan(65536, \strlen($head));
+        $this->assertStringNotContainsString("\r\n\r\n", $head);
+
+        $server = new StatsServer($this->config, new Stats());
+        $loop = new StreamSelectLoop();
+        $server->start($loop);
+
+        $response = $this->httpRequest($server, $loop, $head);
+        $server->stop();
+
+        $this->assertStringStartsWith('HTTP/1.1 431 Request Header Fields Too Large', $response);
+    }
+
+    public function testStopCancelsTheDeadlineSweepTimer(): void
+    {
+        $server = new StatsServer($this->config, new Stats());
+        $loop = new StreamSelectLoop();
+        $server->start($loop);
+        $server->stop();
+
+        $timers = (new \ReflectionProperty(StreamSelectLoop::class, 'timers'))->getValue($loop);
+        $this->assertIsObject($timers);
+        $pending = (new \ReflectionProperty($timers, 'timers'))->getValue($timers);
+        $this->assertSame([], $pending, 'stop() must leave no sweep timer armed on the loop');
+    }
 }

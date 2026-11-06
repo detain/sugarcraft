@@ -6,6 +6,7 @@ namespace SugarCraft\GitServer;
 
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
 
 /**
  * Minimal HTTP stats endpoint on `stats.listen_addr`.
@@ -23,9 +24,33 @@ use React\EventLoop\LoopInterface;
  * Mirrors charmbracelet/soft-serve's stats server on
  * `stats.listen_addr` (upstream serves Prometheus metrics; candy-git-server
  * serves a minimal JSON counter set).
+ *
+ * Every seat is bounded three ways, ported from the {@see HttpListener}
+ * hardening (same slowloris class): a connection cap (the newcomer is
+ * refused while the house is full), an IDLE deadline (a client that stops
+ * talking loses its seat without ever becoming readable — the periodic
+ * sweep notices), and an ABSOLUTE deadline per request (a slow-drip client
+ * that keeps talking still dies). A request head longer than the header cap
+ * is refused with 431 before it can grow the buffer further. The
+ * loopback-default bind is a mitigation, not one of these bounds.
  */
 final class StatsServer
 {
+    /** Bytes of request head (line + headers) tolerated before refusal. */
+    private const MAX_HEADER_BYTES = 65536;
+
+    /** Silence tolerated on a half-finished request before the seat dies. */
+    private const IDLE_TIMEOUT_SECONDS = 30.0;
+
+    /** Total time tolerated for one request regardless of dribble. */
+    private const ABSOLUTE_DEADLINE_SECONDS = 180.0;
+
+    /** Concurrent half-finished or in-flight requests accepted. */
+    private const MAX_CLIENTS = 64;
+
+    /** How often the deadline sweep runs. */
+    private const SWEEP_PERIOD_SECONDS = 0.25;
+
     private Config $config;
     private ?Stats $stats;
 
@@ -34,11 +59,18 @@ final class StatsServer
 
     private ?LoopInterface $loop = null;
 
-    /** @var array<int, array{stream: resource, buffer: string}> keyed by (int) $stream */
+    private ?TimerInterface $sweepTimer = null;
+
+    /** @var array<int, array{stream: resource, buffer: string, connected_at: float, last_activity: float}> keyed by (int) $stream */
     private array $clients = [];
 
-    public function __construct(Config $config, ?Stats $stats = null)
-    {
+    public function __construct(
+        Config $config,
+        ?Stats $stats = null,
+        private readonly float $idleTimeoutSeconds = self::IDLE_TIMEOUT_SECONDS,
+        private readonly float $absoluteDeadlineSeconds = self::ABSOLUTE_DEADLINE_SECONDS,
+        private readonly int $maxClients = self::MAX_CLIENTS,
+    ) {
         $this->config = $config;
         $this->stats = $stats;
     }
@@ -74,6 +106,14 @@ final class StatsServer
 
         $this->serverStream = $stream;
         $this->loop->addReadStream($stream, fn () => $this->acceptConnection());
+        // Idle clients never become readable, so readiness callbacks
+        // cannot police the deadlines themselves — a slow tick sweeps.
+        $this->sweepTimer = $this->loop->addPeriodicTimer(
+            self::SWEEP_PERIOD_SECONDS,
+            function (): void {
+                $this->sweepDeadlines();
+            }
+        );
     }
 
     /** Tear down every loop registration and close all sockets. Idempotent. */
@@ -88,6 +128,10 @@ final class StatsServer
         }
         $this->clients = [];
 
+        if ($this->sweepTimer !== null) {
+            $this->loop?->cancelTimer($this->sweepTimer);
+            $this->sweepTimer = null;
+        }
         $this->loop?->removeReadStream($this->serverStream);
         @\fclose($this->serverStream);
         $this->serverStream = null;
@@ -97,6 +141,12 @@ final class StatsServer
     public function isRunning(): bool
     {
         return $this->serverStream !== null;
+    }
+
+    /** Seats currently held (accepted, request unfinished). */
+    public function activeConnectionCount(): int
+    {
+        return \count($this->clients);
     }
 
     /** Actual bound address (useful when the configured port is 0). */
@@ -116,39 +166,87 @@ final class StatsServer
 
     private function acceptConnection(): void
     {
+        if ($this->serverStream === null) {
+            return;
+        }
         $client = @\stream_socket_accept($this->serverStream, 0);
         if ($client === false) {
             return;
         }
-        \stream_set_blocking($client, false);
 
-        $this->clients[(int) $client] = ['stream' => $client, 'buffer' => ''];
+        if (\count($this->clients) >= $this->maxClients) {
+            // Refuse the NEWCOMER; established transfers are never cut to
+            // make room (the listener's capacity policy, same reasoning).
+            @\fclose($client);
+
+            return;
+        }
+
+        \stream_set_blocking($client, false);
+        $now = \microtime(true);
+
+        $this->clients[(int) $client] = [
+            'stream'        => $client,
+            'buffer'        => '',
+            'connected_at'  => $now,
+            'last_activity' => $now,
+        ];
         $this->loop->addReadStream($client, fn () => $this->onClientReadable($client));
+    }
+
+    /** Close every seat whose idle or absolute deadline has expired. */
+    private function sweepDeadlines(): void
+    {
+        $now = \microtime(true);
+        foreach ($this->clients as $id => $client) {
+            if ($now - $client['last_activity'] > $this->idleTimeoutSeconds
+                || $now - $client['connected_at'] > $this->absoluteDeadlineSeconds) {
+                // Silent drop: nothing answerable arrived (or nothing
+                // answerable ever will); there is no request to attach a
+                // status line to on the idle path.
+                $this->closeClient($client['stream']);
+                unset($this->clients[$id]);
+            }
+        }
     }
 
     /** @param resource $client */
     private function onClientReadable($client): void
     {
+        $id = (int) $client;
+        if (!isset($this->clients[$id])) {
+            return;
+        }
         $data = @\fread($client, 8192);
         if ($data === false || ($data === '' && \feof($client))) {
             $this->closeClient($client);
-            unset($this->clients[(int) $client]);
+            unset($this->clients[$id]);
 
             return;
         }
 
-        $buffer = &$this->clients[(int) $client]['buffer'];
+        $this->clients[$id]['last_activity'] = \microtime(true);
+        $buffer = &$this->clients[$id]['buffer'];
         $buffer .= $data;
 
         // Stats requests are header-only GETs — respond as soon as the
         // request head is complete.
         if (!\str_contains($buffer, "\r\n\r\n") && !\str_contains($buffer, "\n\n")) {
+            if (\strlen($buffer) > self::MAX_HEADER_BYTES) {
+                unset($buffer);
+                $this->writeResponse($client, 431, 'Request Header Fields Too Large', '{"error":"request header fields too large"}');
+                $this->closeClient($client);
+                unset($this->clients[$id]);
+
+                return;
+            }
+
             return;
         }
 
         $this->respond($client, $buffer);
         $this->closeClient($client);
-        unset($this->clients[(int) $client]);
+        unset($this->clients[$id]);
     }
 
     /** @param resource $client */
