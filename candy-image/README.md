@@ -133,7 +133,7 @@ pipes, plus a `?\Closure $play` seam for the animation loop). Detection,
 protocol selection, decode, and scaling are **only ever** sugar-image calls
 — no render logic may land in this package (façade law). The namespace is
 `SugarCraft\CandyImage\` rather than the mechanical `SugarCraft\Image\`
-because the latter is sugar-image's own — a ruling recorded in
+because the latter is sugar-image's own — per the naming rule in
 `PROJECT_NAMES.md`.
 
 ## Keys (while `--animate` plays)
