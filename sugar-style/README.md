@@ -277,12 +277,24 @@ echo Tree::new()
   that builds the same perimeter interpolation internally.
 - **`AdaptiveColor` / `CompleteColor` / `CompleteAdaptiveColor`** — value
   holders carrying per-profile (TrueColor / 256 / Ansi) and dark-vs-light
-  colour choices. Truth about resolution: `Style` stores and `render()` reads
-  **concrete `Color` slots only** — the renderer never resolves an adaptive
-  value at render time. Resolve first, then store the concrete colour:
-  `$s = $r->newStyle()->foreground($r->resolveAdaptive($c));` for the
-  profile pick, or `$c = ($r->lightDark())($light, $dark);` for the
-  scheme pick (`lightDark()` returns a `Closure(Color $light, Color $dark): Color`).
+  colour choices. `Style` really does ship slots for them:
+  `foregroundAdaptive()` / `backgroundAdaptive()` store a scheme pair,
+  `foregroundComplete()` / `backgroundComplete()` store a per-tier trio,
+  and `resolveAdaptive(bool $isDark)` / `resolveProfile()` collapse the
+  stored choice into the concrete slot (`resolveProfile()` is zero-arg —
+  it picks against the style's own `ColorProfile`). Two truths about
+  resolution: an explicitly-set concrete `foreground()`/`background()`
+  **wins** over the collapse (lipgloss precedence), and `render()` never
+  resolves — a style holding *only* an adaptive/complete slot renders as
+  plain text (measured:
+  `Style::new()->foregroundAdaptive($red, $blue)->of('x')->render()`
+  returns bare `x`). Keep the axes straight:
+  `Renderer::resolveAdaptive(AdaptiveColor): Color` is the dark-vs-light
+  *scheme* pick, while `Style::resolveProfile()` is the colour-depth
+  *tier* pick; `$c = ($r->lightDark())($light, $dark)` is a closure form
+  of the scheme pick (`lightDark()` returns a `Closure(Color $light, Color $dark): Color`).
+  See [Adaptive and complete colours](#adaptive-and-complete-colours--store-then-collapse)
+  for a runnable store-then-collapse example.
 - **`LightDark`** — pick helper for dark-bg vs light-bg colour schemes.
 - **`Layout`** (package-level) — `place`, `placeHorizontal`, `placeVertical`,
   `joinHorizontal`, `joinVertical`, `joinHorizontalWithSpacing`,
@@ -378,6 +390,39 @@ Trap: a bar-wide background `style()` and per-segment styles can be
 combined, but a per-segment style that ends in an SGR reset interrupts the
 bar background from that segment on — the two modes (bar-wide colour vs
 per-segment colour) are normally used one at a time.
+
+### Adaptive and complete colours — store then collapse
+
+`render()` reads only the concrete `Color` slots, so a stored
+adaptive/complete choice must be collapsed first —
+`resolveAdaptive(bool $isDark)` picks light-vs-dark by the bool you
+pass, `resolveProfile()` picks the tier from the style's own
+`ColorProfile`. A concrete `foreground()` set up front is not
+overwritten by the collapse.
+
+```php
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Style\Style;
+
+$warm = Color::rgb(200, 0, 0);
+$cool = Color::rgb(0, 200, 200);
+
+// Scheme axis: store a pair, collapse with the dark-vs-light answer.
+echo Style::new()
+    ->foregroundAdaptive($warm, $cool)
+    ->resolveAdaptive(isDark: false)
+    ->of('red on dark schemes')
+    ->render() . "\n";
+
+// Tier axis: store three spellings, collapse against the style's profile.
+echo Style::new()
+    ->colorProfile(ColorProfile::Ansi)
+    ->foregroundComplete(Color::rgb(0, 0, 200), Color::ansi256(21), Color::ansi(4))
+    ->resolveProfile()
+    ->of('blue at the 16-colour tier')
+    ->render() . "\n";
+```
 
 ## Custom Renderer & color-profile
 
