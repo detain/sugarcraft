@@ -725,12 +725,24 @@ admin guide's failure table says a hanging child hangs here, and why the
 enforcement: `done()` is consulted when the stack walks in, never inside the
 byte loop.
 
-**`ChildSpawner` is narrower than the class behind it.** The interface
-`Spawn` type-hints is:
+**`ChildSpawner` is narrower than the class behind it.** The complete
+interface `Spawn` type-hints is *two* methods:
 
 ```php
 public function runChild(Session $session, array $cmd, ?array $env = null): int;
+
+public function signalChild(int $signal): void;
 ```
+
+`signalChild()` is load-bearing, not an afterthought: every mapped
+`SignalMsg` the default channel handler receives — INT, TERM, HUP, QUIT,
+KILL, USR1, USR2 and the SIGWINCH resize path — is forwarded to the live
+child through this one call (`DefaultChannelHandler::handleSignal`).
+It is a no-op when no child is running, and delivery must not depend on
+ext-posix — sugar-pty's `Libc::kill()` falls back to libc `kill(2)` over
+FFI. A custom spawner written from only the `runChild` signature does not
+fail at spawn time; it fails at class load with a missing-method fatal,
+so copy both.
 
 `InProcessTransport::runChild()` accepts two more arguments -- `$stdin` and
 `$stdout` -- and they are what make a testable, stream-injecting middleware
