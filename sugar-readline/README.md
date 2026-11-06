@@ -3,7 +3,7 @@
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-readline)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-readline)
-[![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-readline?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-readline)
+[![Packagist Channel](https://img.shields.io/badge/packagist-dev--master-blue)](https://packagist.org/packages/sugarcraft/sugar-readline)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
@@ -27,8 +27,14 @@ sugar-readline — an interactive line-editing prompt library for terminal UIs o
 ## Install
 
 ```bash
-composer require sugarcraft/sugar-readline
+composer require sugarcraft/sugar-readline:dev-master
 ```
+
+No tagged release exists yet, so `dev-master` is the only resolvable
+constraint — the versionless form fails Packagist's default stability
+filter. Working from a checkout of this library? Run `composer install`
+inside `sugar-readline/` before executing the `examples/` scripts; they
+boot from `vendor/autoload.php`.
 
 ## Quick Start
 
