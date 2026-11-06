@@ -151,6 +151,15 @@ is not a suppression switch inside the renderer. If your app must honour
 `NO_COLOR` end-to-end, consult `ColorProfile::detect()` and emit plain
 text yourself; there is no automatic downgrade.
 
+Completeness boundary: the ladder decides **colour only**. The terminal
+control sequences the runtime emits — alt-screen `?1049h`, cursor
+save/restore, synchronized output (DEC 2026), mouse and focus tracking,
+bracketed paste — are gated on `ProgramOptions`, never on the ladder: a
+`TERM=dumb` program or a non-tty stdout still receives every one of them
+once `setupTerminal()` runs. There is no plain-text degraded path in the
+runtime, inline mode included. (The same scope applies to the terminal
+recovery backstop under **Status** — it is control machinery, not colour.)
+
 ## Architecture
 
 - **`Model`** — your app implements `init()`, `update(Msg)`, `view()`, `subscriptions()`.
