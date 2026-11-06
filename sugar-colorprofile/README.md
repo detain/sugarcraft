@@ -464,7 +464,10 @@ Beyond the env ladder above, the library exposes a richer capability surface:
   position by `Probe\TerminfoParser` (a `des=` string mentioning "Tc" does not
   promote anything) and exec'd at the **`Probe\InfocmpBinary`-resolved absolute
   path** (the same path the availability gate checked — the binary is never
-  looked up on PATH). `TERM_PROGRAM` maps only terminals that actually
+  looked up on PATH, and because `infocmpAvailable()` is an overridable seam
+  the terminfo leg re-reads that path and fails closed: a null composes no
+  command, so an override can never demote the absolute binary into a
+  TERM-shaped command word). `TERM_PROGRAM` maps only terminals that actually
   implement what they advertise — notably `Apple_Terminal` does NOT set `ITerm2`
   (Terminal.app has no OSC 1337 images). Reports answer through
   `allWithSource()`/`has()`/`source()` plus the `colorDescription()` prose, and

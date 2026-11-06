@@ -228,7 +228,15 @@ class TerminalProbe
         // Exec the SAME absolute path the availability gate checked — a bare
         // relative `infocmp` would re-resolve through PATH at exec time and
         // let a planted PATH entry answer a question the gate said it could not.
-        $binary = InfocmpBinary::path() ?? '';
+        // A null path fails CLOSED here: `?? ''` used to splice an empty
+        // binary onto the command line, which left the escaped TERM alone as
+        // the COMMAND WORD — and infocmpAvailable() is an overridable seam,
+        // so a subclass answering "true" could outlive the roster's verdict.
+        $binary = InfocmpBinary::path();
+        if ($binary === null) {
+            return $caps;
+        }
+
         $output = $this->runCommand($binary . ' -1 ' . escapeshellarg($term) . ' 2>/dev/null');
         if ($output === null || $output === '') {
             return $caps;

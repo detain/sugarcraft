@@ -660,4 +660,52 @@ final class TerminalProbeTest extends TestCase
         $this->assertSame('terminfo:Tc|RGB', $report->source(Capability::TrueColor));
         $this->assertTrue($report->has(Capability::Sixel));
     }
+
+    public function testCheckTerminfoFailsClosedWhenTheRosterPathIsNull(): void
+    {
+        // m24: checkTerminfo composed the command with
+        // `InfocmpBinary::path() ?? ''`. infocmpAvailable() is an
+        // overridable seam, so a subclass (or a future internal change)
+        // answering "yes" while the roster finds no binary left the
+        // escaped TERM as the COMMAND WORD of " -1 'xterm' 2>/dev/null".
+        // The leg now re-reads path() and a null fails closed: no command
+        // at all, no terminfo-sourced capabilities.
+        $probe = new class extends TerminalProbe {
+            /** @var list<string> */
+            public array $commands = [];
+
+            public function __construct()
+            {
+                parent::__construct(['TERM' => 'xterm'], false);
+            }
+
+            protected function isInteractive(): bool
+            {
+                return false;
+            }
+
+            protected function infocmpAvailable(): bool
+            {
+                return true;
+            }
+
+            protected function runCommand(string $cmd): ?string
+            {
+                $this->commands[] = $cmd;
+
+                return "\tTc,\n\trgb=\\E[38;2;%p1;%p2;%p3m,\n";
+            }
+        };
+
+        InfocmpBinary::reset();
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, '');
+        try {
+            $report = $probe->runProbe();
+
+            $this->assertSame([], $probe->commands, 'no command may be composed without an authoritative binary');
+            $this->assertFalse($report->has(Capability::TrueColor), 'a null roster path must not source terminfo caps');
+        } finally {
+            InfocmpBinary::reset();
+        }
+    }
 }
