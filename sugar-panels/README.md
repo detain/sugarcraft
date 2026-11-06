@@ -80,7 +80,7 @@ $layout = $panels->vertical(
     $panels->horizontal(
         $panels->leaf("Left panel"),
         $panels->leaf("Right panel"),
-    )->withBorder(false),
+    )->withBorder(false)->withGrow(),
     $panels->leaf("Bottom bar")->withBorder(false),
 )->withBorder(false);
 
@@ -91,16 +91,21 @@ echo $panels->render($layout, 60, 7);
 ╭────────────────────────────╮╭────────────────────────────╮
 │Left panel                  ││Right panel                 │
 │                            ││                            │
+│                            ││                            │
+│                            ││                            │
 ╰────────────────────────────╯╰────────────────────────────╯
 Bottom bar
 ```
 
-(The 60×7 viewport continues with two blank rows — every row the renderer emits
-is the viewport width, padded.)
+The horizontal row carries `withGrow()`, so it flexes to six of the seven rows
+while `Bottom bar` — the fixed child — claims its measured natural single row at
+the bottom. That claiming runs on the flex pass and needs at least one flexing
+sibling; with no flex child at all the split is proportional instead (see *Flex
+and natural sizes*). Every row the renderer emits is padded to the viewport
+width, `Bottom bar`'s included.
 
 The doubled `││` seam between the boxes is the documented frame rule (each panel
-draws its own edge; borders are never merged into junction glyphs), and
-`Bottom bar` claims its natural single row because it is a fixed child.
+draws its own edge; borders are never merged into junction glyphs).
 
 ## Flex and natural sizes
 
