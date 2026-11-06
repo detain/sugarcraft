@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flexbox;
 
-use SugarCraft\Widgets\Scrollbar\Scrollbar as BitsScrollbar;
+use SugarCraft\Widgets\Scrollbar\Scrollbar as WidgetsScrollbar;
 use SugarCraft\Widgets\Scrollbar\ScrollbarState;
 
 /**
- * Immutable scrollbar wrapper over the canonical {@see BitsScrollbar}.
+ * Immutable scrollbar wrapper over the canonical {@see WidgetsScrollbar}.
  *
  * Composes the sugar-forms Scrollbar rather than reimplementing it: the
  * `SugarCraft\Widgets\Scrollbar\Scrollbar` symbol this file imports is a
@@ -18,9 +18,9 @@ use SugarCraft\Widgets\Scrollbar\ScrollbarState;
  */
 final readonly class Scrollbar
 {
-    private BitsScrollbar $inner;
+    private WidgetsScrollbar $inner;
 
-    private function __construct(BitsScrollbar $inner)
+    private function __construct(WidgetsScrollbar $inner)
     {
         $this->inner = $inner;
     }
@@ -28,13 +28,13 @@ final readonly class Scrollbar
     /** Vertical scrollbar with defaults (░ track, █ thumb, ▲▼ arrows). */
     public static function vertical(): self
     {
-        return new self(BitsScrollbar::vertical());
+        return new self(WidgetsScrollbar::vertical());
     }
 
     /** Horizontal scrollbar with defaults (░ track, █ thumb, no arrows). */
     public static function horizontal(): self
     {
-        return new self(BitsScrollbar::horizontal());
+        return new self(WidgetsScrollbar::horizontal());
     }
 
     public function withTrackChar(string $char): self
@@ -58,7 +58,7 @@ final readonly class Scrollbar
      * (which hands the forms viewport the same canonical class) can accept
      * THIS lib's Scrollbar and unwrap it — the wrapper is opaque otherwise.
      */
-    public function widgetScrollbar(): BitsScrollbar
+    public function widgetScrollbar(): WidgetsScrollbar
     {
         return $this->inner;
     }

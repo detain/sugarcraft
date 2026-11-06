@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Flexbox;
 
 use SugarCraft\Core\Msg;
-use SugarCraft\Widgets\Viewport\Viewport as BitsViewport;
+use SugarCraft\Widgets\Viewport\Viewport as WidgetsViewport;
 
 /**
- * Immutable viewport wrapper over the canonical {@see BitsViewport}.
+ * Immutable viewport wrapper over the canonical {@see WidgetsViewport}.
  *
  * Composes the sugar-forms Viewport rather than reimplementing it: the
  * `SugarCraft\Widgets\Viewport\Viewport` symbol this file imports is a
@@ -20,19 +20,19 @@ use SugarCraft\Widgets\Viewport\Viewport as BitsViewport;
  */
 final readonly class Viewport
 {
-    private BitsViewport $inner;
+    private WidgetsViewport $inner;
     private int $stickyHeader;
     private int $stickyFooter;
     private ?Viewport $syncedViewport;
 
     /**
-     * @param BitsViewport        $inner        canonical forms viewport (via the widgets alias) holding content + dimensions
+     * @param WidgetsViewport        $inner        canonical forms viewport (via the widgets alias) holding content + dimensions
      * @param int                 $stickyHeader rows pinned to the top
      * @param int                 $stickyFooter rows pinned to the bottom
      * @param Viewport|null       $syncedViewport scroll-sync partner
      */
     private function __construct(
-        BitsViewport $inner,
+        WidgetsViewport $inner,
         int $stickyHeader = 0,
         int $stickyFooter = 0,
         ?Viewport $syncedViewport = null,
@@ -46,12 +46,12 @@ final readonly class Viewport
     /** Construct with default dimensions (80×24). */
     public static function new(int $width = 80, int $height = 24): self
     {
-        return new self(BitsViewport::new($width, $height));
+        return new self(WidgetsViewport::new($width, $height));
     }
 
     public static function withContent(string $content, int $width = 80, int $height = 24): self
     {
-        return new self(BitsViewport::new($width, $height)->setContent($content));
+        return new self(WidgetsViewport::new($width, $height)->setContent($content));
     }
 
     // ---- sticky positioning --------------------------------------------
