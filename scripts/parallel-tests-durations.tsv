@@ -25,6 +25,7 @@ candy-code/tests/Workflows/WorkflowStageResourceLockTest.php	15.227	9
 candy-code/tests/Cli/BootstrapLaunchNoticeRoutingTest.php	15.084	22
 candy-code/tests/LSP/LspConnectionStdinWedgeTest.php	14.887	14
 candy-code/tests/App/DockGeometryParityTest.php	14.580	63
+candy-code/tests/Workflows/WorkflowOrphanedRunTest.php	13.560	7
 candy-code/tests/Workflows/WorkflowIncrementalPauseTest.php	13.544	6
 candy-code/tests/Tools/BuiltInToolCorpusTest.php	13.413	53
 candy-code/tests/Support/ForkedChildExitConventionTest.php	13.273	4
