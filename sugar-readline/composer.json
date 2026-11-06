@@ -28,6 +28,7 @@
     },
     "require": {
         "php": "^8.3",
+        "ext-mbstring": "*",
         "sugarcraft/sugar-core": "@dev",
         "sugarcraft/sugar-forms": "@dev",
         "sugarcraft/sugar-input": "@dev"
