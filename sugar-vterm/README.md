@@ -391,7 +391,7 @@ DEC 2026 sections below.
 | `4:2` / `4:3` / `4:4` / `4:5` | Double / Curly / Dotted / Dashed underline. |
 | `5` / `6` | Blink (slow and rapid fold onto one bit). |
 | `7` | Inverse (swap fg/bg). |
-| `8` | Hidden (conceal). |
+| `8` | Hidden (conceal) — emulator tracks it, but `Screen::lines()` is a TEXT channel: concealed text still appears in extracted content, so spoiler/secrets hygiene is the consuming host's job. |
 | `9` | Strikethrough. |
 | `21` | Accepted and ignored — the SGR handler has no arm for it. |
 | `22` | Reset bold + faint. |
