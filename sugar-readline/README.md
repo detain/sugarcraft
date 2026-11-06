@@ -253,13 +253,13 @@ normalised to one canonical language at the choke point. The `Key` class
 lists the primary bindings; it is not an exhaustive enumeration of every
 sequence a terminal can send.
 
-- `Key::Left` / `Key::Right` — move cursor (text input); also Ctrl+B / Ctrl+F, and Ctrl+H erases before the cursor (ASCII rubout behaviour)
+- `Key::Left` / `Key::Right` — move cursor (text input); also Ctrl+B / Ctrl+F
 - `Key::Up` / `Key::Down` — navigate selection list / history / textarea line; also Ctrl+P / Ctrl+N
 - `Key::Home` / `Key::End` — jump within the current line / list; also Ctrl+A / Ctrl+E
 - `Key::Enter` — submit text or select current choice (in the textarea, Shift+Enter and Ctrl+J break a line instead)
 - `Key::Space` — a second Enter in SelectionPrompt (submits the row under the cursor); toggles the mark in MultiSelectPrompt; toggles Yes/No in ConfirmationPrompt; inserts a literal space in text inputs
 - `Key::Tab` — autocomplete or toggle confirmation value; pressing Tab again cycles the matches (first Tab extends to their longest common prefix)
-- `Key::Backspace` / `Key::Delete` — delete characters; Ctrl+D deletes under the cursor and, on an empty buffer, aborts (like GNU `delete-char-or-eof`)
+- `Key::Backspace` / `Key::Delete` — delete characters; Ctrl+H erases before the cursor (both the BS 0x08 and DEL 0x7F spellings bind to Backspace); Ctrl+D deletes under the cursor and, on an empty buffer, aborts (like GNU `delete-char-or-eof`)
 - `Key::CtrlU` / `Key::CtrlK` — delete to start / end of line; Ctrl+W deletes the previous word
 - `Key::CtrlR` / `Key::CtrlS` — reverse / forward incremental history search
 - Ctrl+Z / Ctrl+Y — undo / redo the last edit run (a run of consecutive typing collapses into one undo step)
