@@ -4,8 +4,6 @@
 [![Coverage](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-pty)](https://codecov.io/gh/detain/sugarcraft)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> Formerly published as `sugarcraft/candy-pty` (renamed 2026-10). <!-- @rename-keep -->
-
 sugar-pty — pseudo-terminal primitives for PHP 8.3+, the building blocks for
 driving child processes inside terminal UIs. Open a master/slave PTY pair, spawn a child with
 its stdio wired to the slave, pump bytes between the host and the
@@ -31,6 +29,9 @@ Heads-up for the first run: distro-packaged PHP often ships
 Failed to load libc` the moment it binds — the
 [ext-ffi bullet under Known limitations](#ext-ffi-is-required--and-distro-php-often-ships-it-switched-off)
 carries the fix and a one-line check for what your PHP actually answered.
+
+From a clone of the monorepo instead of a composer require:
+`cd sugar-pty && composer install && vendor/bin/phpunit`.
 
 ## Quickstart
 
@@ -93,6 +94,9 @@ Production code should wrap the drain and reap in `try/finally` so
 `@deprecated` shims kept for consumers predating the contract split —
 `Pty::open()` delegates to the same `PosixPtySystem` path, and both
 go away at v2.0. New code should use `PtySystemFactory` as above.
+
+Rename bookkeeping: this package was formerly published as
+`sugarcraft/candy-pty` (renamed 2026-10). <!-- @rename-keep -->
 
 ## API at a glance
 
