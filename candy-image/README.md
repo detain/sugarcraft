@@ -20,13 +20,18 @@ distilled to the ones the SugarCraft core can actually honor — and no
 shell-out to `chafa`, ever.
 
 ```bash
-composer require sugarcraft/candy-image
-candy-image photo.png                    # auto-detect + render
-candy-image --dump-detect                # why is my image blank?
-candy-image --format=half --size=80x24 logo.png
-candy-image --format=symbols --symbols=ascii logo.png   # ASCII-art tier
-candy-image --format=symbols --canvas=ansi256 --work=7 logo.png
+composer require "sugarcraft/candy-image:@dev"   # no stable release yet — see Install
+./vendor/bin/candy-image photo.png                    # auto-detect + render
+./vendor/bin/candy-image --dump-detect                # why is my image blank?
+./vendor/bin/candy-image --format=half --size=80x24 logo.png
+./vendor/bin/candy-image --format=symbols --symbols=ascii logo.png   # ASCII-art tier
+./vendor/bin/candy-image --format=symbols --canvas=ansi256 --work=7 logo.png
 ```
+
+Composer's `vendor/bin` is not on your `PATH` by default, so the bare
+`candy-image` command above only works if you add it. Inside a checkout the
+entry point is `php bin/candy-image …` — the spelling the demo tape runs — and
+a rolling dev phar is published too (see Install).
 
 ## Options
 
