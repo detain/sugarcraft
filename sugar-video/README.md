@@ -21,14 +21,19 @@ composer require sugarcraft/sugar-video
 ```
 
 ```php
-use SugarCraft\Video\Player;
+use SugarCraft\Video\Reel;
 
 // Play a video with auto-detected terminal capability.
-$player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);
-
-// Run it (Space=play, q=quit).
-(new \SugarCraft\Core\Program($player))->run();
+Reel::open('clip.mp4')->play();
 ```
+
+**Reel** is the everyday entry point: an immutable description of what to
+play — source, render mode, size, ramp, subtitles, audio — finished with
+`play()`, which builds its own sugar-core `Program`, owns the event loop,
+and blocks until you quit. **Player** is the TEA model underneath it
+(`init()`/`update()`/`view()`); a host that already owns a program loop
+mounts the model itself via `Reel::toPlayer()`, described under
+“Embedding the player without owning the loop”.
 
 > **Status:** complete — full implementation with ffmpeg decode pipe,
 > pure-PHP GIF fallback, all rendering modes (ascii/ansi256/truecolor/
@@ -206,6 +211,18 @@ $player = $player->play(); // un-pause: re-anchors the play clock on the new mod
 
 // When the host leaves the player screen, release the child processes:
 $player->stop(); // idempotent — stops audio companion + closes decoder/ffmpeg
+```
+
+Or build the model directly: `Player::open()` takes the same source and
+geometry a `Reel` would forward, and everything below applies unchanged.
+
+```php
+use SugarCraft\Video\Player;
+
+$player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);
+
+// Run it (Space=play, q=quit).
+(new \SugarCraft\Core\Program($player))->run();
 ```
 
 **Host contract** — the caller that owns the loop is responsible for:
