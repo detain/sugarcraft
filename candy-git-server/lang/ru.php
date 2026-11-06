@@ -48,7 +48,7 @@ return [
     'cli.usage_repo_info'      => 'Использование: candy-git-server repo info <name>',
     'cli.no_repos'             => 'Репозиториев пока нет.',
     'cli.repo_listing_none'    => '  (пока нет репозиториев)',
-    'cli.repo_invalid_name'    => 'Недопустимое имя репозитория: {name} (используйте только буквы, цифры, точку, подчёркивание, дефис, nie może zaczynać się od kropki ani дефиса)',
+    'cli.repo_invalid_name'    => 'Недопустимое имя репозитория: {name} (используйте только буквы, цифры, точку, подчёркивание, дефис, не может начинаться с точки или дефиса)',
     'cli.repo_created'         => "Репозиторий '{name}' создан в {path}",
     'cli.repo_not_found'       => 'Репозиторий не найден: {name}',
     'cli.repo_info'            => "Имя:         {name}\nОписание:  {description}\nПубличный:       {is_public}\nПриватный:      {is_private}\nРазрешить push:   {allow_push}\nПуть:         {path}\nВетки:     {branches}\nТеги:         {tags}",
