@@ -34,6 +34,7 @@ return [
     'point.components_finite' => 'компоненты Point должны быть конечными; получено x={x}, y={y}, z={z}',
     'bezier.points_finite' => 'опорные точки cubic-bezier должны быть конечными, получено [{x1}, {y1}, {x2}, {y2}]',
     'bezier.x_range' => 'значения x опорных точек CubicBezier должны быть в [0, 1]; получено x1={x1}, x2={x2}',
+    'bezier.t_finite' => 't должно быть конечным; получено {t}',
     'projectile.dt_finite' => 'deltaTime должно быть конечным; получено {deltaTime}',
     'projectile.negative_dt' => 'deltaTime должно быть >= 0; получено {deltaTime}',
     'projectile.components_finite' => 'Компоненты {name} снаряда должны быть конечными',

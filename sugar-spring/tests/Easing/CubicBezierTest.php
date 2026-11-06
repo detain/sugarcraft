@@ -221,10 +221,12 @@ final class CubicBezierTest extends TestCase
     }
 
     /**
-     * evaluate() is deliberately UNCLAMPED — back/elastic control points
-     * overshoot [0,1] by design — and an out-of-domain t silently
-     * extrapolates rather than throwing. Pinned so a future "tidy-up" clamp
-     * is a disclosed behavior change, not a silent one.
+     * evaluate() is deliberately UNCLAMPED in the OUTPUT and for finite
+     * out-of-range t — back/elastic control points overshoot [0,1] by design
+     * and a finite out-of-domain t extrapolates rather than throwing. Pinned
+     * so a future "tidy-up" clamp is a disclosed behavior change, not a
+     * silent one. Non-finite t is the exception: refused since step 35
+     * (see testEvaluateRefusesNonFiniteT).
      */
     public function testEvaluateOvershootsFreelyAndExtrapolatesOutsideDomain(): void
     {
@@ -244,6 +246,47 @@ final class CubicBezierTest extends TestCase
         $this->assertSame(1.0, $cb->evaluate(1.0));
         $this->assertTrue(is_finite($cb->evaluate(1.5)));
         $this->assertTrue(is_finite($cb->evaluate(-0.5)));
+    }
+
+    /**
+     * Step 35 (docs-fix-1104 M4): NAN/INF t used to sail through the solver
+     * and return silent garbage (measured pre-fix: NAN->8.13e-21, INF->1.0,
+     * -INF->8.13e-21 on ease()). Now refused at the door, like every other
+     * non-finite input in the library.
+     *
+     * @dataProvider nonFiniteTimeProvider
+     */
+    public function testEvaluateRefusesNonFiniteT(float $t): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('t must be finite');
+
+        CubicBezier::ease()->evaluate($t);
+    }
+
+    /** @return array<string, array{float}> */
+    public static function nonFiniteTimeProvider(): array
+    {
+        return ['NAN' => [NAN], '+INF' => [INF], '-INF' => [-INF]];
+    }
+
+    /**
+     * Finite out-of-range t stays unclamped and unrefused, but the solver's
+     * honesty has a documented shape: past ~1e2 the Newton iteration loses
+     * to the bounded subdivision fallback, which answers with an endpoint
+     * (measured: ease()->evaluate(1e3) === 1.0 exactly; -1e3 lands within
+     * 1e-6 of 0.0). A far-out t therefore saturates instead of extrapolating
+     * wildly — pinned so a solver rewrite that changes the shape is disclosed.
+     */
+    public function testFarOutFiniteTSaturatesToTheEndpoints(): void
+    {
+        $cb = CubicBezier::ease();
+
+        $this->assertSame(1.0, $cb->evaluate(1e3));
+        $this->assertLessThan(1e-6, $cb->evaluate(-1e3));
+        // Moderate out-of-range t still genuinely extrapolates.
+        $this->assertEqualsWithDelta(0.8966768501516175, $cb->evaluate(1.5), 1e-9);
+        $this->assertEqualsWithDelta(0.39423701507036757, $cb->evaluate(-0.5), 1e-9);
     }
 
     /**

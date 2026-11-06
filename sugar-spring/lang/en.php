@@ -34,6 +34,7 @@ return [
     'point.components_finite' => 'Point components must be finite; got x={x}, y={y}, z={z}',
     'bezier.points_finite' => 'cubic-bezier control points must be finite, got [{x1}, {y1}, {x2}, {y2}]',
     'bezier.x_range' => 'CubicBezier control points must have x-values in [0, 1]; got x1={x1}, x2={x2}',
+    'bezier.t_finite' => 't must be finite; got {t}',
     'projectile.dt_finite' => 'deltaTime must be finite; got {deltaTime}',
     'projectile.negative_dt' => 'deltaTime must be >= 0; got {deltaTime}',
     'projectile.components_finite' => 'Projectile {name} components must be finite',

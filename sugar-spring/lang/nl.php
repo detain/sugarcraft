@@ -34,6 +34,7 @@ return [
     'point.components_finite' => 'componenten van Point moeten eindig zijn; gekregen x={x}, y={y}, z={z}',
     'bezier.points_finite' => 'cubic-bezier-controlepunten moeten eindig zijn, gekregen [{x1}, {y1}, {x2}, {y2}]',
     'bezier.x_range' => 'de x-waarden van CubicBezier-controlepunten moeten in [0, 1] liggen; gekregen x1={x1}, x2={x2}',
+    'bezier.t_finite' => 't moet eindig zijn; gekregen {t}',
     'projectile.dt_finite' => 'deltaTime moet eindig zijn; gekregen {deltaTime}',
     'projectile.negative_dt' => 'deltaTime moet >= 0 zijn; gekregen {deltaTime}',
     'projectile.components_finite' => 'De {name}-componenten van het projectiel moeten eindig zijn',

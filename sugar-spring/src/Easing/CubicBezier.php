@@ -147,10 +147,14 @@ final readonly class CubicBezier
     /**
      * Evaluate the cubic bezier at normalized time $t ∈ [0, 1].
      *
-     * Range honesty: designed for $t in [0, 1]; an out-of-range $t is
-     * NOT rejected and NOT clamped — the Newton solve walks the polynomial
-     * outside [0, 1] (the binary fallback stays inside it), so the result is
-     * a curve-dependent extrapolation. The RETURN value is likewise unclamped: control points with y
+     * Range honesty: designed for $t in [0, 1]; a non-finite $t (NAN, INF)
+     * is refused outright — before that door existed such values silently
+     * returned a bogus endpoint.
+     * A finite out-of-range $t is NOT rejected and NOT clamped — the Newton
+     * solve walks the polynomial outside [0, 1], though past roughly 1e2 the
+     * solve loses to the bounded subdivision fallback, which returns an
+     * endpoint: on ease(), evaluate(1e3) is exactly 1.0 and evaluate(-1e3)
+     * lands near 0. The RETURN value is likewise unclamped: control points with y
      * outside [0, 1] (the back/elastic style of control point) legitimately overshoot
      * beyond 0..1 progress — note that the `Easing` enum's Back and Elastic cases are
      * analytic overshoots, not beziers, and CubicBezier ships no Back preset itself —
@@ -158,6 +162,10 @@ final readonly class CubicBezier
      */
     public function evaluate(float $t): float
     {
+        if (!is_finite($t)) {
+            throw new \InvalidArgumentException(Lang::t('bezier.t_finite', ['t' => $t]));
+        }
+
         if ($t === 0.0 || $t === 1.0) {
             return $t;
         }

@@ -34,6 +34,7 @@ return [
     'point.components_finite' => 'Point 성분은 유한해야 합니다. 입력값: x={x}, y={y}, z={z}',
     'bezier.points_finite' => 'cubic-bezier 제어점은 유한해야 합니다. 입력값: [{x1}, {y1}, {x2}, {y2}]',
     'bezier.x_range' => 'CubicBezier 제어점의 x 값은 [0, 1] 범위여야 합니다. 입력값: x1={x1}, x2={x2}',
+    'bezier.t_finite' => 't는 유한해야 합니다. 입력값: {t}',
     'projectile.dt_finite' => 'deltaTime은 유한해야 합니다. 입력값: {deltaTime}',
     'projectile.negative_dt' => 'deltaTime은 0 이상이어야 합니다. 입력값: {deltaTime}',
     'projectile.components_finite' => 'Projectile {name} 구성 요소는 유한해야 합니다',

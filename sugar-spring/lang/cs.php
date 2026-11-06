@@ -34,6 +34,7 @@ return [
     'point.components_finite' => 'souřadnice Point musí být konečné; obdrženo x={x}, y={y}, z={z}',
     'bezier.points_finite' => 'řídicí body cubic-bezier musí být konečné, obdrženo [{x1}, {y1}, {x2}, {y2}]',
     'bezier.x_range' => 'hodnoty x řídicích bodů CubicBezier musí být v [0, 1]; obdrženo x1={x1}, x2={x2}',
+    'bezier.t_finite' => 't musí být konečné; obdrženo {t}',
     'projectile.dt_finite' => 'deltaTime musí být konečné; získáno {deltaTime}',
     'projectile.negative_dt' => 'deltaTime musí být >= 0; získáno {deltaTime}',
     'projectile.components_finite' => 'Komponenty {name} projektilu musí být konečné',

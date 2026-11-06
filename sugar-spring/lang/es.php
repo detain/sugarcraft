@@ -34,6 +34,7 @@ return [
     'point.components_finite' => 'los componentes de Point deben ser finitos; se obtuvo x={x}, y={y}, z={z}',
     'bezier.points_finite' => 'los puntos de control cubic-bezier deben ser finitos, se obtuvo [{x1}, {y1}, {x2}, {y2}]',
     'bezier.x_range' => 'los valores x de los puntos de control de CubicBezier deben estar en [0, 1]; se obtuvo x1={x1}, x2={x2}',
+    'bezier.t_finite' => 't debe ser finito; se obtuvo {t}',
     'projectile.dt_finite' => 'deltaTime debe ser finito; se obtuvo {deltaTime}',
     'projectile.negative_dt' => 'deltaTime debe ser >= 0; se obtuvo {deltaTime}',
     'projectile.components_finite' => 'Los componentes del {name} del proyectil deben ser finitos',

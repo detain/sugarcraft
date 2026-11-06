@@ -539,7 +539,10 @@ for ($f = 0; $f <= 60; $f++) {
 }
 ```
 
-`CubicBezier::evaluate(float $t): float` takes `t` in `[0, 1]` and returns the
+`CubicBezier::evaluate(float $t): float` takes a finite `t` (a non-finite
+value throws; a finite out-of-range `t` is neither refused nor clamped, but
+past roughly 1e2 the solver saturates to an endpoint — `evaluate(1e3)` is
+exactly `1.0` on `ease()`) and returns the
 eased progress. The x-mapping is solved to `[0, 1]` monotonicity (control
 x-values are range-checked); the y-output lands exactly on `(0, 1)` for all 26
 named presets, and no preset overshoots the interval — every named curve's
