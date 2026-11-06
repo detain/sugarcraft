@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-flexbox",
-    "description": "Terminal-cell layout utilities: FlexBox (CSS-flexbox-like responsive row/column layout), Table (sortable, filterable data table with column definitions) and a scrolling Viewport.",
+    "description": "Terminal-cell layout utilities: FlexBox (CSS-flexbox-like responsive row/column layout), Table (sortable, filterable grid with cursor, styled columns and a delta-rendering TableRenderer), a scrolling Viewport with sticky regions, and Scrollbar indicators.",
     "type": "library",
     "license": "MIT",
     "keywords": [
