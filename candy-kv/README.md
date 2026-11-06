@@ -94,7 +94,7 @@ To try the CLI without touching your real store, sandbox it first:
 `export XDG_CONFIG_HOME=$(mktemp -d)`.
 
 ```bash
-candy-kv set <key> [value] [--ttl SECONDS] [--binary|--text]   # reads stdin if no value
+candy-kv set <key> [value] [--ttl SECONDS] [--binary|--text]   # no value reads STDIN — silently, no prompt (see STDIN)
 candy-kv get <key> [--sanitize]                               # exact stored bytes by default
 candy-kv list [-k|-v] [-r] [-d DELIM] [pattern]               # one row per entry
 candy-kv delete <key> [--dry-run]                             # exact key or glob pattern
@@ -204,6 +204,12 @@ parsing exempts a bare `-` from the dash prefix for **every** subcommand
 switch and never an error: `set k -` stores a one-character dash value,
 `get -` looks up a key literally named `-`, and `list -` is a pattern matching
 the single character `-`.
+
+There is no prompt and no tty check behind the stdin fallback
+(`stream_get_contents(STDIN)` in `bin/candy-kv`): running `candy-kv set k`
+with nothing piped waits silently for the value, which looks like a hang at a
+keyboard until EOF arrives (Ctrl-D). Pipe the value or pass it as the second
+argument; `printf %s my-secret-token | candy-kv set api-token` never pauses.
 
 ### Key naming, `@`, and escapes
 
