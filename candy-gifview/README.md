@@ -134,8 +134,8 @@ The key table is fixed in the player model; keys are not rebindable.
 - All CLI messages are localized via environment locale
   (`LC_ALL`/`LC_MESSAGES`/`LANG`) across 16 languages; in-app playback
   chrome (the status line) is currently English-only.
-- **Reduced motion is not auto-detected**: unlike `sugar-spring`,
-  `sugar-toast` and `sugar-overlay`, this viewer does NOT read
+- **Reduced motion is not auto-detected**: unlike `sugar-spring` and
+  `sugar-toast`, this viewer does NOT read
   `REDUCE_MOTION`/`PREFERS_REDUCED_MOTION` (nor
   `Probe::reducedMotion()` from `sugar-colorprofile`) — a motion-averse
   user must opt in with `--paused` (or step with `←`/`→`) rather than
