@@ -309,9 +309,9 @@ solarizedDark/Light) sets them explicitly; consumers must NOT assume
   connector sets; per-section style overrides; custom indenter.
 - **`Table\Table`** — `headers` / `row(s)` / `border` /
   `headerAlign` / `rowAlign` / `styleFunc` / per-side border toggles /
-  `width` / `offset` / `clearRows` / `data(Data)` / `wrap(\Closure(string $cell,
+  `width` / `offset` / `clearRows` / `data(Data)` / `wrap(?\Closure(string $cell,
   int $colWidth): list<string>)` (every returned line renders; a wrapped row
-  spans several physical lines).
+  spans several physical lines; `wrap(null)` clears wrapping).
 - **`Table\Data`** — row-reader interface (`rows` / `columns` /
   `at($r, $c)`). Default impl `Table\StringData::fromMatrix(iterable)`.
 - **`Output`** — top-level `print` / `println` / `sprint` / `printf` /
