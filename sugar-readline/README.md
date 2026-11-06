@@ -418,9 +418,9 @@ refine the query, repeated Ctrl+R/Ctrl+S steps through older/newer matches,
 Enter accepts the match into the buffer (without submitting), and
 Escape/Ctrl+G cancels back to the original line — and so does Ctrl+C while a
 search is active: it cancels the search, not the prompt, and only the next
-keypress can abort. The prompt renders a
-`(reverse-i-search)`query': match` indicator, switching to `(failed
-reverse-i-search)` when nothing matches (including empty history). On a
+keypress can abort. The prompt renders a ``(reverse-i-search)`query': match``
+indicator, switching to ``(failed reverse-i-search)`query': match`` when
+nothing matches (including empty history). On a
 hidden prompt the line masks query and match alike, in the same idiom.
 
 ## History
