@@ -967,7 +967,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param array<string, mixed> $data    the decoded pause file
      * @param array<string, mixed> $context the pause file's context
-     * @return array{0: int, 1: array{stageResults: list<StageResult>, totalTokens: int, totalCost: float, startedAt: \DateTimeImmutable, stageInputHashes: array<string, string>}}
+     * @return array{0: int, 1: array{stageResults: list<StageResult>, totalTokens: int, totalCost: float, startedAt: \DateTimeImmutable, stageInputHashes: array<string, string>, recordedResults: array<string, StageResult>, totalsCountRecordedRows: bool}}
      */
     private function priorProgress(array $data, Workflow $workflow, array $context): array
     {
@@ -975,12 +975,18 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $rows = is_array($data['stageResults'] ?? null) ? array_values($data['stageResults']) : [];
 
         $succeeded = [];
+        // C13: every successful recorded row, keyed by stage name, not just
+        // the positionally-skipped prefix. The skip stays positional (skipping
+        // an unrecorded stage is not recoverable); this map exists so the
+        // hash-gated cache can find a later stage's recorded answer.
+        $recordedByName = [];
         foreach ($rows as $row) {
             $stage = is_array($row) ? $this->deserializeStageResult($row) : null;
             if ($stage === null || !$stage->isSuccess()) {
                 break;
             }
             $succeeded[] = $stage;
+            $recordedByName[$stage->stageName] = $stage;
         }
 
         $skip = $rows === [] ? $recorded : min($recorded, count($succeeded));
@@ -1020,6 +1026,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // An old record has none, and an empty map is what the resumed
             // run seeds with — absence downstream is a cache miss, by law.
             'stageInputHashes' => is_array($data['stageInputHashes'] ?? null) ? $data['stageInputHashes'] : [],
+            'recordedResults' => $recordedByName,
+            // Whether the seed totals are the file's cumulative spend (which
+            // was written in the same snapshot as the rows above, so it ALREADY
+            // counts every recorded row) or a sum of the skipped prefix (which
+            // counts only that prefix). The cache carry reads this to decide
+            // whether a carried row's spend is already paid for. A record
+            // carrying only one numeric total falls to the conservative side:
+            // the carry adds, so a report may over-count but never deflate.
+            'totalsCountRecordedRows' => is_numeric($data['totalTokens'] ?? null)
+                && is_numeric($data['totalCost'] ?? null),
         ]];
     }
 
@@ -1827,23 +1843,29 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     );
                 }
 
-                // Every agent the stage ran, with its result name, recorded by
-                // the executor as each one settles — so an executor that throws
-                // AFTER an agent ran still hands that agent's tokens and output
-                // to the failed StageResult below instead of dropping them.
+                // C13 opt-in: a `cache: true` stage whose record still matches
+                // its declaration carries without dispatch — door defaults closed.
+                $cached = $this->cachedStageResult($stage, $stageType, $prior);
+                if ($cached !== null) {
+                    $context[$cached->stageName . '.output'] = ($stage['capture'] ?? false) === true
+                        ? $this->captureStageOutput($interruptId, $stageIndex, $cached)
+                        : $cached->output ?? '';
+                    $stageResults[] = $cached;
+                    if (($prior['totalsCountRecordedRows'] ?? false) !== true) {
+                        $totalTokens += $this->sumTokens($cached);
+                        $totalCost += $this->sumCost($cached);
+                    }
+                    continue;
+                }
+
+                // Every agent the stage ran is recorded by the executor as each
+                // settles — an executor that throws AFTER one ran still bills it.
                 $dispatched = [];
                 $heldLocks = [];
 
                 try {
-                    // O3: host-resource serialization. Before anything is
-                    // dispatched, take an exclusive flock on every distinct
-                    // resource this stage's tasks declare, in sorted name
-                    // order so two engines reaching for the same pair cannot
-                    // deadlock each other. A stage that cannot get the lock
-                    // within its bounded wait throws into the shared catch
-                    // below: the stage fails LOUD, naming the resource and
-                    // the wait, and the ordinary pause/resume machinery
-                    // treats it like any other failed stage.
+                    // O3: exclusive, sorted, bounded flocks on every declared
+                    // resource BEFORE dispatch — full law: acquireStageResources().
                     $heldLocks = $this->acquireStageResources($stage, $stageType);
 
                     if ($stageType === 'parallel') {
@@ -1981,6 +2003,41 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $this->restoreInterruptHandlers($previousAsyncSignals);
             }
         }
+    }
+
+    /**
+     * C13 opt-in carry: whether this stage's pause record already holds the
+     * answer the declaration asks for (docs/WORKFLOWS.md `cache:` section).
+     *
+     * Three conditions, all required: the stage opted in (absent `cache:` is
+     * the default OFF); the record carries a SUCCESSFUL row for the stage name
+     * (the successful-prefix law in priorProgress keeps post-failure rows out);
+     * and the identity hash recorded when that row settled still matches this
+     * declaration's hash — same recipe, same single site (pre-interpolation
+     * type/prompt/model/schema; the capture/cache keys are NOT material, so
+     * flipping the opt-in alone never invalidates). hash_equals, and an absent
+     * hash is never equal: forged, stale or missing means cache miss and a
+     * plain re-dispatch. The caller carries the row WITHOUT dispatch, so no
+     * spend is invented; whether to re-add the row's recorded spend is the
+     * totalsCountRecordedRows decision at the call site.
+     *
+     * @param array<string, mixed> $stage
+     * @param array<string, mixed> $prior
+     */
+    private function cachedStageResult(array $stage, string $stageType, array $prior): ?StageResult
+    {
+        if (($stage['cache'] ?? false) !== true) {
+            return null;
+        }
+
+        $name = (string) ($stage['name'] ?? '');
+        $cached = $prior['recordedResults'][$name] ?? null;
+        $recordedHash = (string) ($prior['stageInputHashes'][$name] ?? '');
+        if (!$cached instanceof StageResult || !$cached->isSuccess() || $recordedHash === '') {
+            return null;
+        }
+
+        return hash_equals($recordedHash, self::stageInputHash($stage, $stageType)) ? $cached : null;
     }
 
     /**

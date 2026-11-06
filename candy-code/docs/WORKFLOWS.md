@@ -332,6 +332,38 @@ by — so the flag lives on the stage map (legal beside a `tasks:` list, like
 - **Absent means untouched:** a stage without `capture:` interpolates today's
   full output, byte for byte — and writes nothing anywhere new.
 
+### `cache:` reuses a recorded stage result on resume (opt-in)
+
+A stage may carry `cache: true`. On **resume**, if the pause record already
+holds a SUCCESSFUL result for that stage name and the identity hash recorded
+when that result settled still matches the stage's declaration, the stage is
+CARRIED: settled from the record with zero dispatch — no agent runs, no tokens
+billed again. The door defaults closed, and three things keep it honest.
+
+- **The match is the same hash the engine already records** (docs of the g5
+  substrate): a digest over the stage's `type` plus each task's
+  prompt-template, `model` and `outputSchema` — computed pre-interpolation, at
+  one single site. Edit the ask and the hash moves, so a stale answer is
+  never reused for new work. The `capture:` and `cache:` keys are NOT part of
+  the digest, so toggling them alone never invalidates a recorded answer.
+- **Missing, changed or forged means re-dispatch.** No recorded row, no
+  recorded hash, a hash that does not match the declaration, or a
+  non-successful row: every one falls through to an ordinary dispatch. A
+  hand-edited record claiming a hash it cannot prove is refused the same way
+  — `hash_equals` with an absent hash is never equal.
+- **Lineage and money stay true.** The carried stage's agent records ARE the
+  rows the pause file stored — nothing is fabricated and nothing re-billed
+  when the record's own totals already counted them; a record that lacks
+  numeric totals re-adds the carried row's recorded spend instead of
+  undercounting it. A carried stage takes no resource locks, and its capture
+  file — when it has one — is republished from the recorded output, never from
+  a fresh agent run. A carried stage's downstream interpolation sees exactly
+  the bytes a fresh run would have produced.
+
+A `--no-cache` CLI kill-switch is NOT part of this door (a host-command seam
+can add one later); `cache:` is per-stage, and a stage that does not ask is
+always re-dispatched.
+
 ### `type: verification` and `type: pipeline` reach the compound shapes from YAML
 
 A stage may carry an explicit `type:` beside its name. Absent means `type: stage`
@@ -612,6 +644,9 @@ name; both resolve to the same run.
   nothing and reports completed.
 - **Only stages that succeeded count.** `stagesCompleted` and the recorded
   stage results are the successful prefix of the run, never the failed stage.
+  A stage declared `cache: true` may additionally be CARRIED on resume from a
+  successful recorded row even when its position was not (yet) skipped —
+  hash-gated, opt-in, default off; see the `cache:` section above.
   The token and cost totals are the run's whole spend, including what a failed
   attempt spent.
 - **`resume`** continues after the last successful stage and reports
