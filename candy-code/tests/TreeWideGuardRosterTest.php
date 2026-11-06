@@ -459,13 +459,15 @@ final class TreeWideGuardRosterTest extends TestCase
      * EVERY ROW HAS THE SAME CAUSE, and it is stated rather than implied: the
      * root reaches the walker through a function PARAMETER, and parameter taint
      * is not in the derivation for the measured reason the class doc-block
-     * gives. A human has read each of these THREE ROWS and confirmed the walk is
-     * over the package's own files. (This said "each of these three" and was
+     * gives. A human has read every row and confirmed the walk is over the
+     * package's own files. (This said "each of these three" and was
      * correct until `BaseSystemPromptTest.php` was reclassified into the constant
      * a commit later - the sentence did not travel with the row it describes.
      * MEASURED at that HEAD: four rows, and `why` agreed with declared = 4. It
-     * said FOUR until P6.S2 retired that row the other way; MEASURED here, three
-     * rows and `why` agrees at 3.)
+     * said FOUR until P6.S2 retired that row the other way; the population has
+     * moved since in both directions, and the size anchor in the warranted test
+     * is what carries the current number — this prose deliberately no longer
+     * tries to.)
      *
      * THAT USED TO CITE "rule 40" AND NO SUCH RULE EXISTS. WHAT IT SAID: "which
      * is rule 40". WHAT IS TRUE: prompt_plan.md's section 16.8 rule 40 is "a
@@ -535,6 +537,10 @@ final class TreeWideGuardRosterTest extends TestCase
         'Session/SqliteConnectCensusTest.php' => 'the census walk takes the package root and walks src/ and bin/ for connect spellings',
         // phpFilesUnder($root . '/src') where $root = \dirname(__DIR__).
         'DenialPrefixRosterTest.php' => 'phpFilesUnder() takes src/ as a parameter and walks it recursively',
+        // RS-AGENT-C4: the capability-card consumer census walks src/ to
+        // prove nothing outside the sanctioned four speaks CapabilityCard —
+        // a tree-wide guard by construction, same shape as the row above.
+        'Agents/CapabilityConsumerCensusTest.php' => 'phpFilesUnder() takes src/ as a parameter and walks it recursively (capability-card consumer census)',
     ];
 
     /**
@@ -2272,10 +2278,10 @@ final class TreeWideGuardRosterTest extends TestCase
             'the declared-guard constant is empty, so this test ranges over nothing',
         );
 
-        // AND ITS SIZE IS PINNED, which is what lets the two paragraphs above
-        // say THREE out loud. Same reasoning as the sibling constants: the loop
-        // below is a `foreach`, so a deleted row is one fewer iteration and one
-        // fewer chance to fail. This is the ONE size in this file written in
+        // AND ITS SIZE IS PINNED, which is what the two paragraphs above defer
+        // to rather than restating. Same reasoning as the sibling constants: the
+        // loop below is a `foreach`, so a deleted row is one fewer iteration and
+        // one fewer chance to fail. This is the ONE size in this file written in
         // prose AND owned by an assertion; the rest are derived at the point of
         // use or are before/after pairs - see THE POPULATIONS ARE NOT PINNED IN
         // PROSE.
@@ -2290,8 +2296,12 @@ final class TreeWideGuardRosterTest extends TestCase
         // row's walk came into channel B of the derivation (its own
         // warranted-arm message named this deletion), retired in the same
         // change-set as the prose above the constant.
+        // Moved 4 -> 5 at RS-AGENT-C4 (wf/a2a): `Agents/CapabilityConsumerCensusTest.php`
+        // walks src/ with a byte-copied phpFilesUnder() to prove nothing outside
+        // the sanctioned four consumers speaks CapabilityCard - a tree-wide guard
+        // by construction, licensed in the same change-set as this count.
         $this->assertCount(
-            4,
+            5,
             self::DECLARED_TREE_WIDE_GUARDS,
             'the declared-guard list has changed size. A row is a LICENCE, so adding one is a '
             . 'deliberate act that belongs in the same change-set as this count; removing one '
