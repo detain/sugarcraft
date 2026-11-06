@@ -71,8 +71,14 @@ final class AgentMentions
      */
     private const ADDRESS = '#^@([A-Za-z][\w-]*)#';
 
-    /** Where {@see ADDRESS} matches, the token ends: whitespace or end of string. */
-    private const TOKEN_END = '/[\s]/u';
+    /**
+     * The character right after the name that ENDS the address token:
+     * whitespace. (The empty remainder — the line is exactly the address —
+     * is the other end, answered in {@see addressedName()} before this ever
+     * runs; the pattern is anchored because an unanchored '\s' search would
+     * let ':x hi' 'look like' a token end on its second character.)
+     */
+    private const TOKEN_END = '/\A[\s]/u';
 
     /** The reserved keyword heads of the mention channel. */
     private const RESERVED_HEADS = ['agent', 'diff', 'mcp', 'pr', 'session'];
