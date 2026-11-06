@@ -29,7 +29,7 @@ $tools-&gt;selectedValues();                       // ['vim', 'git']</code></pre
     <pre class="code"><code class="language-php">use SugarCraft\Readline\{Readline, TextPrompt};
 
 $prompt = Readline::fromStdin()-&gt;run(TextPrompt::new('Your name: '), STDOUT);
-$prompt-&gt;isSubmitted();                          // false on Esc / Ctrl+C / EOF</code></pre>
+$prompt-&gt;isSubmitted();                          // false (pending) on Esc/Ctrl+C; left unsubmitted at EOF when Readline owns the pump</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
