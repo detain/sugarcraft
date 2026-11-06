@@ -20,7 +20,8 @@ store, or manage an inbox.
 ## Features
 
 - **Dual transport** — send via the Resend HTTP API or raw SMTP
-- **Email value object** — from, to, cc, bcc, subject, body, HTML body, reply-to, attachments
+- **Email value object** — from, to, cc, bcc, subject, body, HTML body, reply-to, attachments,
+  signature (the signature joins the plain-text body only — an HTML-only mail silently drops it)
 - **File attachments** — attach from disk paths (`withAttachment()`), or pass raw in-memory
   bytes with `Attachment::fromContent()` via the constructor's `attachments:` parameter
 - **Inline attachments (CID)** — `withInlineAttachment()` embeds images addressed as
@@ -190,7 +191,7 @@ export CANDY_MAIL_SMTP_HELO=mail.example.com  # EHLO/HELO identity (letters, dig
 export CANDY_MAIL_SMTP_CA_FILE=/path/ca.pem   # custom CA bundle for TLS verification
 export CANDY_MAIL_SMTP_TIMEOUT=30             # connect + per-response seconds budget, 1..3600 (default 30)
 export CANDY_MAIL_FROM=me@example.com         # Sender default — REQUIRED unless --from passed (never fabricated)
-export CANDY_MAIL_SIGNATURE="Sent with CandyMail"  # Appended to body
+export CANDY_MAIL_SIGNATURE="Sent with CandyMail"  # Appended to the plain-text body (HTML-only mail drops it)
 # Pre-rename POP_* exports are imported onto CANDY_MAIL_* equivalents whole-prefix
 # (an already-set CANDY_MAIL_* wins); the 11 names this program reads also emit a
 # one-time deprecation warning — off-roster POP_* vars map to names nothing consumes,
