@@ -83,7 +83,7 @@ output anywhere.
 > the emulator a raw `\n` reproduces exact VT semantics — the cursor moves
 > down one row *without* resetting the column — so text captured with bare
 > LFs (files, pipes, hand-written fixtures) stacks diagonally and the cell
-> grid false-diffs against what a human saw on screen. Normalize `\n` to
+> grid false-diffs against what a human saw on screen. Normalise `\n` to
 > `\r\n` (collapsing existing `\r\n` first) before `feed()` when the source
 > is not a tty capture.
 
@@ -273,7 +273,7 @@ the renderer-relevant subset of CSI dispatches. The full
 `Handler\ScreenHandler` (used by `SugarCraft\Vterm\Terminal\Terminal`)
 implements the superset.
 
-| Final byte | Name | Method | Behavior |
+| Final byte | Name | Method | Behaviour |
 |------------|------|--------|----------|
 | `@` | ICH | `ich($n=1)` | Insert N blank characters at cursor. |
 | `A` | CUU | `cuu($n=1)` | Cursor up N, clamped to scroll region top. |
@@ -318,7 +318,7 @@ Three asymmetries are deliberate and pinned out of
 the emulator walks a tab-stop table, the renderer merely offsets the column
 by N and ignores tab stops entirely, and `TBC` no-ops), `b` REP (renderer
 only, the emulator discards it), and BCE
-background-color erase (`X` ECH and mode-3 scrollback clearing are
+background-colour erase (`X` ECH and mode-3 scrollback clearing are
 emulator-only). The renderer honours the same DECAWM/DECTCEM private
 modes, origin-mode clamps, and SGR set as the emulator.
 
@@ -398,7 +398,7 @@ cursor + SGR with a full restore.
 
 The default `OscHandlerImpl` (renderer path) implements:
 
-| Sequence | Method | Behavior |
+| Sequence | Method | Behaviour |
 |----------|--------|----------|
 | `OSC 0;<title> BEL/ST` | `title($title)` | Set window title. |
 | `OSC 1;<name> BEL/ST` | `title($name)` | Set icon name — folded onto the same title channel; both engines route 0/1/2 into one slot and store no separate icon name. |
@@ -464,7 +464,7 @@ the VHS demo GIF loops regardless of viewer settings.
 
 When BCE mode is enabled (`CSI ?12 h`), erase operations (`CSI K`, `CSI J`,
 `CSI X`) fill cleared cells with the current SGR background color instead of
-a plain blank cell. This prevents "ghosting" in terminals with colored
+a plain blank cell. This prevents "ghosting" in terminals with coloured
 backgrounds — the erased area retains its visual background rather than going
 black.
 
@@ -527,7 +527,7 @@ When auto-wrap is **on** (the default, matching xterm/VT/ANSI.SYS), a graphic la
 rightmost column parks the cursor there arming a deferred (phantom)
 wrap; the next graphic consumes it, moving to column 0 of the next row
 before writing — and if that row is within a scroll region the region
-scrolls up by one line, matching VT100 behavior. When **off**, the
+scrolls up by one line, matching VT100 behaviour. When **off**, the
 cursor clamps at the rightmost column and subsequent graphics overwrite
 it (the phantom flag is set by geometry alone, so a mid-stream `?7l` /
 `?7h` toggles like xterm).
@@ -760,7 +760,7 @@ attachments, erase fills) are held in a queue on `ScreenHandler` instead
 of being applied immediately. When the mode is disabled (`CSI ?2026 l`),
 all queued mutations are replayed atomically. This prevents mid-sequence
 screen updates from being visible to the user, matching xterm's batched
-update behavior.
+update behaviour.
 
 ```php
 use SugarCraft\Vterm\Terminal\Terminal;
