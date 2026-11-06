@@ -758,7 +758,8 @@ private arrow-key or Ctrl-key buffering.
   `FFI::cdef()` resolves symbols at that call, not at script startup. The
   `ffi.enable` *directive* is what gets in the way: many Linux
   distributions ship PHP with `ffi.enable=0` in `php.ini` (a security hardening
-  measure; PHP's own default is `preload`) which causes sugar-pty to throw
+  measure; PHP's compiled-in default is `1`, while the bundled
+  `php.ini-development`/`php.ini-production` templates set `preload`) which causes sugar-pty to throw
   `PtyException: Failed to load libc`.
   To fix: set `ffi.enable=1` in `php.ini` and restart the web server or
   PHP-FPM pool, or inline at process start: `php -d ffi.enable=1
