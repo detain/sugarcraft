@@ -320,7 +320,7 @@ implements the superset.
 | `d` | VPA | (Handler) | Cursor to row N. |
 | `f` | HVP | `hvp($row, $col)` | Same as CUP — move cursor to (row, col). |
 | `g` | TBC | `tbc($mode=0)` | Tab clear: 0=column, 3=all (renderer: no-op — tab stops unmodelled). |
-| `h` | DECSET (private, `?`-prefixed only) | `decset($mode, $prefix)` | Set mode; bare SM without the `?` prefix is inert on both engines (the emulator gate and `CsiHandlerImpl::decset` refuse it). `?7 h` enables DECAWM, `?12 h` BCE, `?25 h` cursor visible, `?47/?1047/?1049 h` alt screen, `?1004 h` focus events, `?2026 h` synchronized output, `?6 h` DECOM, `?1000/?1001/?1002/?1003 h` mouse tracking, `?1005/?1006/?1015 h` mouse encoding, `?1048 h` cursor save/restore, `?2004 h` bracketed paste — full roster below. |
+| `h` | DECSET (private, `?`-prefixed only) | `decset($mode, $prefix)` | Set mode; bare SM without the `?` prefix is inert on both engines (the emulator gate and `CsiHandlerImpl::decset` refuse it). `?7 h` enables DECAWM, `?25 h` cursor visible (`?12 h` is xterm's blinking-text-cursor control, not a BCE gate — accepted and discarded by both engines), `?47/?1047/?1049 h` alt screen, `?1004 h` focus events, `?2026 h` synchronized output, `?6 h` DECOM, `?1000/?1001/?1002/?1003 h` mouse tracking, `?1005/?1006/?1015 h` mouse encoding, `?1048 h` cursor save/restore, `?2004 h` bracketed paste — full roster below. |
 | `l` | DECRST (private, `?`-prefixed only) | `decrst($mode, $prefix)` | Reset mode (mirror of `h`; bare RM without the prefix is inert). |
 | `m` | SGR | `sgr($params)` | Set graphic rendition. Subparam colons (`4:1`..`4:5`) parsed. |
 | `r` | DECSTBM | `decstbm($top, $bottom)` | Set scroll region rows (1-indexed). |
@@ -484,18 +484,22 @@ the VHS demo GIF loops regardless of viewer settings.
 
 ## Background Color Erase (BCE)
 
-When BCE mode is enabled (`CSI ?12 h`), erase operations (`CSI K`, `CSI J`,
-`CSI X`) fill cleared cells with the current SGR background color instead of
-a plain blank cell. This prevents "ghosting" in terminals with coloured
-backgrounds — the erased area retains its visual background rather than going
-black.
+On the DEC model, erase operations (`CSI K`, `CSI J`, `CSI X`) fill cleared
+cells with the current SGR background color instead of a plain blank cell —
+BCE is ALWAYS ON, there is no gate. DEC private mode 12 (`CSI ?12 h`) is
+xterm's blinking-text-cursor control, not a BCE switch, and neither engine
+models it: it is accepted and discarded. BCE prevents "ghosting" in
+terminals with coloured backgrounds — the erased area retains its visual
+background rather than going black. Scrolled-in rows are the documented
+exception: the blanks `IL`/`DL`/`SU`/`SD` insert stay default cells (see
+`ScrollHandler`).
 
 ```php
 use SugarCraft\Vterm\Color\Color;  // color value object
 use SugarCraft\Vterm\Terminal\Terminal;
 
 $vt = Terminal::new(cols: 80, rows: 24);
-$vt->feed("\x1b[48;5;196m\x1b[?12h");  // red background + BCE on
+$vt->feed("\x1b[48;5;196m");             // red background — BCE needs no gate
 $vt->feed("\x1b[2J");                   // erase screen — cells carry red bg
 
 $bg = $vt->screen()->cell(0, 0)->background();  // ?Color on the erased cell
@@ -503,8 +507,9 @@ echo $bg->value, "\n";                  // 196 — palette slot ($bg->kind is 2 
 echo Color::truecolor(255, 0, 0)->red(), "\n"; // 255 — truecolor splits via red()/green()/blue()
 ```
 
-BCE state is tracked via the `Sgr` object's background color — the pen
-must be set before the erase sequence for the background to carry through.
+There is no separate BCE flag to track: the erased fill reads the `Sgr`
+object's background colour directly, so the pen must be set before the
+erase sequence for the background to carry through.
 
 ## Diff API
 
@@ -799,7 +804,7 @@ var_dump($vt->screen()->cell(0, 0)->grapheme);  // 'A'
 ```
 
 Mutations are queued on the handler's internal synchronized-output queue and replayed
-atomically when the window closes. BCE erase (CSI ?12 h)
+atomically when the window closes. BCE erase
 and combining-char attachments are both eligible for queued writes.
 The queue is bounded: past 16384 pending mutations a partial flush lands
 to the grid, so an adversarial flood costs memory safety before it costs
