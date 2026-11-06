@@ -52,9 +52,9 @@ final class NonInteractiveStopTrailersTest extends TestCase
             'a turn that stopped nowhere grows a trailer it cannot justify',
         );
         self::assertSame(
-            ['schema', 'result'],
+            ['schema', 'result', 'refusals'],
             \array_keys(self::capturedJsonRun(Message::assistant('the answer'))[0]),
-            'the clean document is not the two keys every pipeline jq depends on',
+            'the clean document is not the three-key stable set the json envelope promises (wf-s5 ruling 2026-11-06)',
         );
     }
 
