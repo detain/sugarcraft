@@ -96,13 +96,13 @@ $pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></p
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Pty</td><td>open(cols = 80, rows = 24)</td><td>Allocate master/slave PTY pair (FD_CLOEXEC master, winsize applied at open)</td></tr>
-<tr><td>Pty</td><td>spawn(cmd, env, cols = null, rows = null, controllingTerminal = false)</td><td>(facade) Spawn child with PTY; explicit geometry applied before the spawn and re-asserted after it, null keeps the pair's current size</td></tr>
-<tr><td>Pty</td><td>read(len, timeout = 0.05)</td><td>Read bytes from PTY; null timeout = mode-governed blocking</td></tr>
-<tr><td>Pty</td><td>write(data)</td><td>Write bytes to PTY</td></tr>
-<tr><td>Pty</td><td>resize(cols, rows)</td><td>Resize terminal window</td></tr>
-<tr><td>Pty</td><td>size()</td><td>Get current terminal size</td></tr>
-<tr><td>Pty</td><td>close()</td><td>Idempotent; always close(2)s the master fd and throws PtyException if that close (or the stream wrapper's fclose) fails</td></tr>
+<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>open(cols = 80, rows = 24)</td><td>Allocate master/slave PTY pair (FD_CLOEXEC master, winsize applied at open)</td></tr>
+<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>spawn(cmd, env, cols = null, rows = null, controllingTerminal = false)</td><td>(facade) Spawn child with PTY; explicit geometry applied before the spawn and re-asserted after it, null keeps the pair's current size</td></tr>
+<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>read(len, timeout = 0.05)</td><td>Read bytes from PTY; null timeout = mode-governed blocking</td></tr>
+<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>write(data)</td><td>Write bytes to PTY</td></tr>
+<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>resize(cols, rows)</td><td>Resize terminal window</td></tr>
+<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>size()</td><td>Get current terminal size</td></tr>
+<tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>close()</td><td>Idempotent; always close(2)s the master fd and throws PtyException if that close (or the stream wrapper's fclose) fails</td></tr>
 <tr><td>PtySystemFactory</td><td>new()</td><td>Build the platform PtySystem, honouring SUGARCRAFT_PTY_BACKEND (default() is a deprecated alias)</td></tr>
 <tr><td>PosixSlavePty</td><td>spawn(cmd, env, cols = null, rows = null, controllingTerminal = false)</td><td>Spawn on a pair from PtySystem::open(); explicit geometry applied on every spawn, null keeps the pair's current size</td></tr>
 <tr><td>Libc</td><td>kill(pid, signal)</td><td>posix_kill() when ext-posix is loaded, libc kill(2) over FFI otherwise</td></tr>
