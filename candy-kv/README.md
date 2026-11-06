@@ -384,10 +384,13 @@ share the byte-exact, case-sensitive semantics of exact ones.
 
 - Values are stored **unencrypted** — SQLite is a container, not a vault. The
   token example above is readable with `sqlite3` or any text editor.
-- Database files are created `0600` (owner-only) and existing files are
-  tightened to `0600` on open; the data directory is created `0700`. WAL mode
-  adds `*-wal` / `*-shm` sidecars, also `0600`. `saveTo()` likewise chmods
-  its target before writing.
+- A fresh database file is born under the process umask — SQLite offers no
+  creation mode — and schema pages are the only bytes written at that mode
+  before the open path tightens the file (existing loose files alike) plus
+  its `*-wal` / `*-shm` sidecars to `0600` (owner-only), so no user value
+  byte ever lands on a looser file; a chmod that cannot be applied fails
+  the open loudly. The data directory is created `0700`. `saveTo()` likewise
+  chmods its target before writing.
 - `get` on a typo prints the closest key to stderr. On shared machines,
   remember key names can themselves be sensitive — stderr is still a log.
   Suggestions fire only within half the query's length; a far-from-anything
