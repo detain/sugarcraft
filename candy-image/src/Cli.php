@@ -9,6 +9,7 @@ use SugarCraft\Animation\Player;
 use SugarCraft\Animation\Renderer;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Image\Detect;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
@@ -160,19 +161,19 @@ final class Cli
                 }
 
                 if (!in_array($flag, ['format', 'width', 'height', 'size', 'scale', 'passthrough', 'symbols', 'canvas', 'work'], true)) {
-                    \fwrite($stderr, Lang::t('cli.bad_flag', ['flag' => $flag]) . "\n");
+                    self::err($stderr, Lang::t('cli.bad_flag', ['flag' => $flag]));
 
                     return self::EXIT_USAGE;
                 }
 
                 if ($raw === null || $raw === '') {
-                    \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--' . $flag, 'value' => '']) . "\n");
+                    self::err($stderr, Lang::t('cli.bad_value', ['flag' => '--' . $flag, 'value' => '']));
 
                     return self::EXIT_USAGE;
                 }
 
                 $bad = static function () use ($stderr, $flag, $raw): int {
-                    \fwrite($stderr, Lang::t('cli.bad_value', ['flag' => '--' . $flag, 'value' => $raw]) . "\n");
+                    self::err($stderr, Lang::t('cli.bad_value', ['flag' => '--' . $flag, 'value' => $raw]));
 
                     return self::EXIT_USAGE;
                 };
@@ -180,12 +181,12 @@ final class Cli
                 switch ($flag) {
                     case 'format':
                         if ($raw === 'chafa') {
-                            \fwrite($stderr, Lang::t('cli.chafa_refused') . "\n");
+                            self::err($stderr, Lang::t('cli.chafa_refused'));
 
                             return self::EXIT_USAGE;
                         }
                         if (!in_array(strtolower($raw), self::FORMATS, true) || Mosaic::fromModeString($raw) === null) {
-                            \fwrite($stderr, Lang::t('cli.bad_format', ['value' => $raw]) . "\n");
+                            self::err($stderr, Lang::t('cli.bad_format', ['value' => $raw]));
 
                             return self::EXIT_USAGE;
                         }
@@ -236,7 +237,7 @@ final class Cli
                         try {
                             SymbolMap::new()->withSelectors($raw);
                         } catch (\InvalidArgumentException) {
-                            \fwrite($stderr, Lang::t('cli.bad_symbols', ['value' => $raw]) . "\n");
+                            self::err($stderr, Lang::t('cli.bad_symbols', ['value' => $raw]));
 
                             return self::EXIT_USAGE;
                         }
@@ -265,7 +266,7 @@ final class Cli
                             $passthrough = $value;
                             break;
                         }
-                        \fwrite($stderr, Lang::t('cli.passthrough_refused', ['value' => $raw]) . "\n");
+                        self::err($stderr, Lang::t('cli.passthrough_refused', ['value' => $raw]));
 
                         return self::EXIT_USAGE;
                 }
@@ -277,7 +278,7 @@ final class Cli
                 continue;
             }
 
-            \fwrite($stderr, Lang::t('cli.too_many', ['arg' => $token]) . "\n");
+            self::err($stderr, Lang::t('cli.too_many', ['arg' => $token]));
 
             return self::EXIT_USAGE;
         }
@@ -289,7 +290,7 @@ final class Cli
         }
 
         if ($file === null) {
-            \fwrite($stderr, Lang::t('cli.usage') . "\n");
+            self::err($stderr, Lang::t('cli.usage'));
 
             return self::EXIT_USAGE;
         }
@@ -299,7 +300,7 @@ final class Cli
         // still-image path and would be silently dropped. Refuse the
         // combination with the named list instead (M4).
         if ($animate && $animateDials !== []) {
-            \fwrite($stderr, Lang::t('cli.animate_dials_refused', ['flags' => implode(', ', array_keys($animateDials))]) . "\n");
+            self::err($stderr, Lang::t('cli.animate_dials_refused', ['flags' => implode(', ', array_keys($animateDials))]));
 
             return self::EXIT_USAGE;
         }
@@ -314,7 +315,7 @@ final class Cli
         try {
             $image = ImageSource::fromFile($file);
         } catch (\InvalidArgumentException | \RuntimeException $e) {
-            \fwrite($stderr, $e->getMessage() . "\n");
+            self::err($stderr, $e->getMessage());
 
             return self::EXIT_INPUT;
         }
@@ -335,7 +336,7 @@ final class Cli
             }
             $bytes = $mosaic->render($image, $cellsW, $height);
         } catch (\Throwable $e) {
-            \fwrite($stderr, $e->getMessage() . "\n");
+            self::err($stderr, $e->getMessage());
 
             return self::EXIT_INPUT;
         }
@@ -349,6 +350,19 @@ final class Cli
     }
 
     /**
+     * Single stderr choke point: every message this class prints can
+     * carry foreign bytes (argv values, exception text), so they pass
+     * through the repo-wide untrusted sweep before reaching the
+     * terminal — a forged escape sequence must never be emitted raw.
+     *
+     * @param resource $stderr
+     */
+    private static function err($stderr, string $message): void
+    {
+        \fwrite($stderr, Sanitize::untrusted($message) . "\n");
+    }
+
+    /**
      * Print the resolved terminal detection state — the chafa
      * --dump-detect surface that answers "why is my image blank in this
      * terminal". Read-only: env table, TermDb match,
@@ -359,7 +373,7 @@ final class Cli
     private static function dumpDetect($stdout): int
     {
         $write = static function (string $line) use ($stdout): void {
-            \fwrite($stdout, $line . "\n");
+            \fwrite($stdout, Sanitize::untrusted($line) . "\n");
         };
 
         $write('candy-image ' . self::runningVersion() . ' — terminal detection dump');
@@ -427,13 +441,13 @@ final class Cli
         try {
             $frames = Decoder::decode($file, $cellsW, $cellsH);
         } catch (\RuntimeException $e) {
-            \fwrite($stderr, $e->getMessage() . "\n");
+            self::err($stderr, $e->getMessage());
 
             return self::EXIT_INPUT;
         }
 
         if ($frames === []) {
-            \fwrite($stderr, Lang::t('cli.no_frames', ['path' => $file]) . "\n");
+            self::err($stderr, Lang::t('cli.no_frames', ['path' => $file]));
 
             return self::EXIT_INPUT;
         }

@@ -422,4 +422,34 @@ final class CliTest extends TestCase
         $this->assertSame(Cli::EXIT_INPUT, $exit, 'the box dials steer the animation path, so they must not join the refusal');
         $this->assertStringNotContainsString('ignores', $err);
     }
+
+    public function testDumpDetectCannotEmitRawControlBytesFromHostileEnv(): void
+    {
+        $term = getenv('TERM');
+        $colorterm = getenv('COLORTERM');
+        putenv("TERM=\x1b]8;;http://evil\x07xterm-weird");
+        putenv("COLORTERM=truecolor\x0a\x1b[31mfake");
+
+        try {
+            [$exit, $out] = self::drive(['--dump-detect']);
+        } finally {
+            putenv($term === false ? 'TERM' : "TERM=$term");
+            putenv($colorterm === false ? 'COLORTERM' : "COLORTERM=$colorterm");
+        }
+
+        $this->assertSame(Cli::EXIT_OK, $exit);
+        $this->assertStringContainsString('env: TERM=', $out, 'the field label survives the sweep');
+        $this->assertStringNotContainsString("\x1b", $out, 'a hostile TERM must never emit a raw escape');
+        $this->assertStringNotContainsString("\x07", $out, 'a forged OSC bell must die at the write choke');
+    }
+
+    public function testRefusalsSanitizeHostileArgvBytes(): void
+    {
+        [$exit, , $err] = self::drive(["--format=svg\x1b]8;;http://evil\x07", 'x.png']);
+
+        $this->assertSame(Cli::EXIT_USAGE, $exit);
+        $this->assertStringContainsString('unknown render format', $err);
+        $this->assertStringNotContainsString("\x1b", $err, 'the echoed value must not carry raw escapes');
+        $this->assertStringNotContainsString("\x07", $err);
+    }
 }
