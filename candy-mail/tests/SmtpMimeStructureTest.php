@@ -233,7 +233,7 @@ final class SmtpMimeStructureTest extends TestCase
 
         // M-DD: against a server without 8BITMIME the document must be 7-bit safe.
         $mime7 = $transport->buildMimeMessage($email, false);
-        $this->assertStringContainsString('Content-Transfer-Encoding: 7bit', $mime7);
+        $this->assertStringContainsString('Content-Transfer-Encoding: quoted-printable', $mime7);
         $this->assertStringNotContainsString('Content-Transfer-Encoding: 8bit', $mime7);
         $this->assertStringContainsString('=C3=A9', $mime7, 'quoted-printable form (RFC 2045 sect. 6.7)');
         $this->assertHeaderLinesWithinRfc5322($mime7);

@@ -703,7 +703,7 @@ final class SmtpTransport implements Transport
 
             return \array_merge(
                 $lines,
-                ["Content-Type: {$type}; charset=\"utf-8\"", 'Content-Transfer-Encoding: 7bit', ''],
+                ["Content-Type: {$type}; charset=\"utf-8\"", 'Content-Transfer-Encoding: quoted-printable', ''],
                 \explode("\n", \rtrim($qp, "\n")),
                 [''],
             );
