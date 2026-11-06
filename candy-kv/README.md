@@ -274,7 +274,11 @@ TTLs (whole seconds) collect into a reserved `"_ttl"` object:
 **YAML envelope.** A flat `key: value` dialect — one pair per line, keys
 quoted when needed, values quoted/escaped as required. Binary entries ride
 the same base64; TTLs become `skate_ttl_<key>` integer lines and binary
-flags `skate_binary_<key>` lines. When symfony/yaml is installed it renders
+flags `skate_binary_<key>` lines. For compatibility the YAML route also
+**reads** the legacy nested `_ttl:` / `_binary:` envelope (the JSON reserved
+shape pasted into YAML) and honors it like the flat lines
+(`src/Import/YamlImporter.php:108-126`); the `skate_…` lines above are the
+only shape YAML export ever writes. When symfony/yaml is installed it renders
 and parses the identical flat shape (plus `!!binary` tags for stray control
 bytes, which the fallback parser also reads). A single process always uses
 one engine; the fallback refuses constructs only symfony wraps for very long
