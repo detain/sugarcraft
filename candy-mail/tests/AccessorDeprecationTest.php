@@ -193,7 +193,7 @@ final class AccessorDeprecationTest extends TestCase
     }
 
     /**
-     * Docs leg: the README Accessor-deprecation table must list exactly
+     * Docs leg: the README Deprecated-accessors table must list exactly
      * the swept pair (nothing added, nothing dropped).
      */
     public function testTheReadmeTableAgreesWithTheSrcCensus(): void
@@ -203,7 +203,7 @@ final class AccessorDeprecationTest extends TestCase
         $section = (string) $sections[
             \array_key_first(\array_filter(
                 $sections,
-                static fn (string $s): bool => \str_starts_with($s, 'Accessor deprecation')
+                static fn (string $s): bool => \str_starts_with($s, 'Deprecated accessors')
             ))
         ];
         \preg_match_all(
@@ -212,7 +212,7 @@ final class AccessorDeprecationTest extends TestCase
             $rows,
             PREG_SET_ORDER
         );
-        $this->assertCount(1, $rows, 'README Accessor-deprecation table must list exactly the swept pair');
+        $this->assertCount(1, $rows, 'README Deprecated-accessors table must list exactly the swept pair');
         $this->assertSame('Attachment', $rows[0]['class']);
         $this->assertSame('getContent', $rows[0]['legacy']);
         $this->assertSame('content', $rows[0]['bare']);
