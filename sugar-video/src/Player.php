@@ -53,7 +53,7 @@ use SugarCraft\Video\Subtitle\WebVtt;
  *   [ / ]      — decrease / increase speed (0.25 steps, 0.25–4.0)
  *   0–9        — seek to 0–90% of duration
  *   m          — cycle rendering mode
- *   q / Esc    — quit
+ *   q / Esc / Ctrl-C — quit
  *
  * Mirrors the TEA player structure in sugar-animation/src/Player.php but
  * adapted for continuous video rather than discrete GIF frames.
