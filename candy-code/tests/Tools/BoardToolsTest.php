@@ -81,6 +81,46 @@ final class BoardToolsTest extends TestCase
         $this->assertSame(0, $this->board()->head());
     }
 
+    public function testAClaimOrReleaseToolCallCarriesItsPathsToTheBoard(): void
+    {
+        $post = BoardPostTool::new()->withBoard($this->member('coder-1'));
+
+        $claim = $post->execute(['to' => 'ALL', 'kind' => 'CLAIM', 'body' => 'standing on the auth helper',
+            'paths' => ['src/Auth.php', 'src/Login.php']]);
+        $this->assertFalse($claim->isError(), $claim->content());
+        $this->assertSame('Posted #1 to ALL [CLAIM].', $claim->content());
+
+        $release = $post->execute(['to' => 'ALL', 'kind' => 'RELEASE', 'body' => 'the login flow is free again',
+            'paths' => ['src/Login.php']]);
+        $this->assertFalse($release->isError(), $release->content());
+        $this->assertSame('Posted #2 to ALL [RELEASE].', $release->content());
+
+        $this->assertSame(['src/Auth.php', 'src/Login.php'], $this->board()->entries()[0]->paths);
+        $claims = $this->board()->outstandingClaims();
+        $this->assertCount(1, $claims);
+        $this->assertSame(['src/Auth.php'], $claims[0]->paths, 'the RELEASE cleared only src/Login.php');
+    }
+
+    public function testAPathsRefusalNamesOnlyParamsThatExistOnTheWire(): void
+    {
+        $post = BoardPostTool::new()->withBoard($this->member('coder-1'));
+
+        foreach ([
+            [['to' => 'ALL', 'kind' => 'CLAIM', 'body' => 'mine now'], 'a CLAIM names the paths it is standing on'],
+            [['to' => 'ALL', 'kind' => 'RELEASE', 'body' => 'not mine now'], 'a RELEASE names the paths it is clearing'],
+            [['to' => 'ALL', 'kind' => 'INFO', 'body' => 'x', 'paths' => ['src/Auth.php']],
+                'paths belong to a CLAIM or a RELEASE'],
+            [['to' => 'ALL', 'kind' => 'CLAIM', 'body' => 'x', 'paths' => 'src/Auth.php'],
+                '`paths` must be a list of file paths'],
+        ] as [$args, $why]) {
+            $result = $post->execute($args);
+            $this->assertTrue($result->isError());
+            $this->assertStringContainsString($why, $result->content());
+            $this->assertStringEndsWith('Nothing was posted.', $result->content());
+        }
+        $this->assertSame(0, $this->board()->head());
+    }
+
     public function testAReadNamesTheRosterFramesThePostsAsUntrustedAndGivesTheNextCursor(): void
     {
         $this->member('tester-2')->post(Board::ALL, BoardKind::Info, 'login tests live in tests/Auth');
@@ -123,6 +163,9 @@ final class BoardToolsTest extends TestCase
         $this->assertTrue($read->isParallelSafe());
         $this->assertSame(['to', 'kind', 'body'], $post->inputSchema()['required']);
         $this->assertSame(BoardKind::values(), $post->inputSchema()['properties']['kind']['enum']);
+        $this->assertSame('array', $post->inputSchema()['properties']['paths']['type']);
+        $this->assertSame('string', $post->inputSchema()['properties']['paths']['items']['type']);
+        $this->assertNotContains('paths', $post->inputSchema()['required'], 'paths is optional at the wire: only CLAIM and RELEASE must carry it');
         $this->assertStringNotContainsString(BoardPostTool::NAME, $read->promptGuidance(), 'guidance names no sibling tool');
         $this->assertStringNotContainsString(BoardReadTool::NAME, $post->promptGuidance(), 'guidance names no sibling tool');
         $this->assertStringContainsString('HOLD and VETO are advisory', $read->promptGuidance());

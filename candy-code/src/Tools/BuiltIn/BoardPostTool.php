@@ -12,8 +12,9 @@ use SugarCraft\Code\Tools\ToolResult;
 
 /**
  * Post to the shared board of the parallel `Task` batch this run belongs to
- * (roadmap 4.5, Kilo's `board_post`): an INFO, ASK, RESULT, HOLD or VETO
- * ({@see BoardKind}) to one peer or to everyone.
+ * (roadmap 4.5, Kilo's `board_post`): an INFO, ASK, RESULT, HOLD, VETO, CLAIM
+ * or RELEASE ({@see BoardKind}) to one peer or to everyone. A CLAIM or
+ * RELEASE names its files in the `paths` argument; the board reserves them.
  *
  * PERMISSION CLASS: no-ask. A post writes only the batch's own board, a file
  * the harness creates for the batch and removes after it, so a prompt would
@@ -56,8 +57,9 @@ final readonly class BoardPostTool implements Tool, PromptGuidance
         return 'Post a short message to the shared board of the parallel batch of sub-agents you belong to, for one'
             . ' peer (its id) or for ' . Board::ALL . '. `kind` is INFO (something peers may want to know), ASK (a'
             . ' question), RESULT (a finished result peers can build on), HOLD (please wait before doing something)'
-            . ' or VETO (please do not do something); HOLD and VETO are advice, not locks. Nobody is woken: a peer'
-            . ' sees a notice on its next tool result.';
+            . ' or VETO (please do not do something); HOLD and VETO are advice, not locks. CLAIM (I am working on'
+            . ' these files) and RELEASE (I am done with them) stand on `paths` and must list them; a CLAIM without'
+            . ' `paths` is refused. Nobody is woken: a peer sees a notice on its next tool result.';
     }
 
     public function promptGuidance(): string
@@ -83,7 +85,7 @@ final readonly class BoardPostTool implements Tool, PromptGuidance
                 'kind' => [
                     'type' => 'string',
                     'enum' => BoardKind::values(),
-                    'description' => 'What the post is: INFO, ASK, RESULT, HOLD or VETO',
+                    'description' => 'What the post is: INFO, ASK, RESULT, HOLD, VETO, CLAIM or RELEASE',
                 ],
                 'body' => [
                     'type' => 'string',
@@ -92,6 +94,13 @@ final readonly class BoardPostTool implements Tool, PromptGuidance
                 'reply_to' => [
                     'type' => 'integer',
                     'description' => 'Optional. The number of the post this one answers (e.g. 3 for #3)',
+                ],
+                'paths' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string'],
+                    'description' => 'The files this post reserves or clears. Required for CLAIM and RELEASE (a CLAIM'
+                        . ' names the paths it is standing on); must be left off every other kind. At most '
+                        . Board::MAX_CLAIM_PATHS . ' paths, each at most ' . Board::MAX_PATH_BYTES . ' bytes',
                 ],
             ],
             'required' => ['to', 'kind', 'body'],
@@ -130,9 +139,13 @@ final readonly class BoardPostTool implements Tool, PromptGuidance
                 return self::refused('`reply_to` must be a post number');
             }
         }
+        $paths = $args['paths'] ?? [];
+        if (!\is_array($paths)) {
+            return self::refused('`paths` must be a list of file paths');
+        }
 
         try {
-            $entry = $board->post($to, $kind, $body, $replyTo);
+            $entry = $board->post($to, $kind, $body, $replyTo, $paths);
         } catch (\InvalidArgumentException | \RuntimeException $e) {
             return self::refused($e->getMessage());
         }
