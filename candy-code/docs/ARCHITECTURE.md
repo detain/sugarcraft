@@ -818,8 +818,14 @@ caller, the TUI's own engine path included, attaches none and gets a fail-closed
 denial. See [`PERMISSIONS.md`](PERMISSIONS.md#ask-needs-somewhere-to-ask).
 
 ```
-ProtectFilesHook → ConfirmRemoveHook → AuditHook → [hooks.yaml] → PermissionGateHook
+ProtectFilesHook → ConfirmRemoveHook → [hooks.yaml] → PermissionGateHook
 ```
+
+`HookManager::registerBuiltIns()` registers `AuditHook` in that same slot — between
+`ConfirmRemoveHook` and whatever a file contributes — but its event is
+`PostToolUse` (`AuditHook::event()`), so it is not a link in the `PreToolUse` chain
+drawn above; it runs after every other `PostToolUse` hook. See
+[`HOOKS.md`](HOOKS.md#the-built-in-hooks).
 
 `HookRegistry::executeHooks()` re-scans the whole chain against a MODIFY
 rewrite, so a hook that rewrites `Bash{command:"ls"}` into
