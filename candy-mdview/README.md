@@ -80,11 +80,13 @@ Flags:
 Two independent chains decide color, and it matters which one you are in:
 
 - **Decoration gate** (does the stream emit ANSI and OSC envelopes at all):
-  `--no-ansi`, then `--ansi`, then the environment (`CLICOLOR_FORCE` /
-  `FORCE_COLOR` force color on when set to any value other than `0`; a
-  non-empty `NO_COLOR` — including `NO_COLOR=0` per the spec — or
-  `CLICOLOR=0` force it off; an empty `NO_COLOR=` takes no position), then
-  whether stdout is a terminal. The terminfo probe is *not* consulted here.
+  `--no-ansi`, then `--ansi`, then the environment — where only affirmative
+  ON verdicts act: `CLICOLOR_FORCE` / `FORCE_COLOR` force color on when set
+  to any value other than `0`. A non-empty `NO_COLOR` — including
+  `NO_COLOR=0` per the spec — or `CLICOLOR=0` forces nothing off *here*: it
+  decides the theme probe only, so on a terminal the gate still opens. An
+  empty `NO_COLOR=` takes no position in either chain. The terminfo probe is
+  *not* consulted at the gate.
 - **Theme probe** (implicit theme tier only): a terminfo capability probe
   (`TERM=dumb` counts as colorless) picks between the `ansi` and `ascii`
   themes.
