@@ -955,12 +955,15 @@ final class QuickPick
     private function computeWidth(): int
     {
         // Measure in visible cells (ANSI-stripped, wide-rune aware) so the auto
-        // width matches what view() actually renders.
+        // width matches what view() actually renders — which is true only
+        // because the formatter receives the SAME guarded value here as on the
+        // render path below: guard() first, so a host that echoes or caches
+        // the closure argument never sees the unguarded string (review M8).
         $promptLen = Width::of($this->prompt);
         $filterLen = Width::of($this->filterText);
         $itemMax   = 0;
         foreach ($this->filteredItems as $item) {
-            $itemLen = Width::of(($this->itemFormatter)($item->value(), false, $item->number()));
+            $itemLen = Width::of(($this->itemFormatter)(UntrustedText::guard($item->value()), false, $item->number()));
             if ($itemLen > $itemMax) $itemMax = $itemLen;
         }
         return \max($promptLen + $filterLen + self::WIDTH_PAD_HEADER, $itemMax + self::WIDTH_PAD_ITEM);

@@ -6,6 +6,7 @@ namespace SugarCraft\QuickPick\Tests;
 
 use SugarCraft\Core\Util\Width;
 use SugarCraft\QuickPick\{QuickPick, FilteredItem, Item};
+use SugarCraft\QuickPick\Support\UntrustedText;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -137,5 +138,40 @@ final class QuickPickGeometryTest extends TestCase
         $lines = \explode("\n", $h->view(''));
 
         $this->assertGreaterThanOrEqual(2, \count($lines));
+    }
+
+    public function testItemFormatterNeverReceivesUnguardedValuesOnAnyPath(): void
+    {
+        // M8: the auto-width path used to hand the formatter the RAW value
+        // while the render path passed the guarded one, so a formatter that
+        // echoes or caches its argument could see the untrusted string even
+        // though view() rendered a clean frame. Both paths must now deliver
+        // byte-identical UntrustedText::guard() output.
+        $hostile   = "\x1b[31mred\x1b[0m\x1b]0;evil\x07\u{e000}forged\u{e001}\ttab\nline";
+        $received  = [];
+        $formatter = static function (string $item) use (&$received): string {
+            $received[] = $item;
+
+            return $item;
+        };
+
+        $h = QuickPick::new(['plain', $hostile], $formatter)->show();
+        // Auto width (windowWidth 0) forces computeWidth() over every item,
+        // then the render pass consults the formatter again per visible row.
+        $h->view(\implode("\n", \array_fill(0, 30, '')));
+
+        $this->assertNotEmpty($received, 'the formatter must be consulted on the measured paths');
+        foreach ($received as $value) {
+            $this->assertStringNotContainsString("\x1b", $value, 'formatter must never receive raw escape sequences (M8)');
+            $this->assertStringNotContainsString("\u{e000}", $value, 'formatter must never receive forged zone sentinels (M8)');
+            $this->assertStringNotContainsString("\u{e001}", $value, 'formatter must never receive forged zone sentinels (M8)');
+            $this->assertStringNotContainsString("\t", $value, 'formatter must never receive raw tabs (M8)');
+            $this->assertStringNotContainsString("\n", $value, 'formatter must never receive raw newlines (M8)');
+        }
+        $this->assertContains(
+            UntrustedText::guard($hostile),
+            $received,
+            'the guarded string itself must be exactly what the formatter receives (M8, non-vacuity)'
+        );
     }
 }
