@@ -145,6 +145,12 @@ final class CapabilityCardStore
             : AgentRunCards::segment($sessionScope);
 
         $rows = [];
+        // An absent store is the ordinary opt-out state (nobody has ever run
+        // the publish verb), so it answers quietly; the false-arm below only
+        // catches a directory removed between the door-check and the scan.
+        if (!is_dir($root)) {
+            return [];
+        }
         $sessions = scandir($root);
         if ($sessions === false) {
             return [];
