@@ -45,6 +45,7 @@ return [
     'email.crlf_in_header' => '{field}ヘッダーにCRLFインジェクションが検出されました',
     'resend.send_cancelled' => 'Resend送信を開始する前にキャンセルされました',
     'resend.curl_missing' => 'Resendトランスポートにはext-curlが必要です (SMTPトランスポートは平文SMTPでは拡張機能を必要としません; TLSにはext-opensslが必要です)',
+    'resend.no_api_key' => 'ResendトランスポートにAPIキーがありません: コンストラクターに渡すか RESEND_API_KEY を設定してください',
     'attachment.unreadable' => '添付ファイルが読み取り可能ではありません: {path}',
     'attachment.no_path' => 'ファイル名で添付する場合はファイルパスを指定してください',
     'attachment.invalid_cid' => '無効なContent-ID形式: {cid} (RFC 2392ではmsg-id形式が必要)',

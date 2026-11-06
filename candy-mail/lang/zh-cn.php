@@ -45,6 +45,7 @@ return [
     'email.crlf_in_header' => '在 {field} 标头中检测到 CRLF 注入',
     'resend.send_cancelled' => 'Resend 发送开始前已取消',
     'resend.curl_missing' => 'Resend 传输需要 ext-curl（SMTP 传输使用普通 SMTP 时无需扩展；使用 TLS 时需要 ext-openssl）',
+    'resend.no_api_key' => 'Resend 传输没有 API 密钥：请向构造函数传入密钥或设置 RESEND_API_KEY',
     'attachment.unreadable' => '附件文件不可读：{path}',
     'attachment.no_path' => '按文件名附加时必须提供文件路径',
     'attachment.invalid_cid' => '无效的 Content-ID 格式：{cid}（RFC 2392 要求 msg-id 格式）',

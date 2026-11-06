@@ -45,6 +45,7 @@ return [
     'email.crlf_in_header' => 'Обнаружена CRLF-инъекция в заголовке {field}',
     'resend.send_cancelled' => 'Отправка Resend отменена до начала',
     'resend.curl_missing' => 'Для транспорта Resend требуется ext-curl (транспорт SMTP не требует расширений для обычного SMTP; для TLS требуется ext-openssl)',
+    'resend.no_api_key' => 'Транспорт Resend не имеет API-ключа: передайте ключ в конструктор или установите RESEND_API_KEY',
     'attachment.unreadable' => 'Файл вложения не читается: {path}',
     'attachment.no_path' => 'При вложении по имени файла необходимо указать путь к файлу',
     'attachment.invalid_cid' => 'Недопустимый формат Content-ID: {cid} (RFC 2392 требует формат msg-id)',

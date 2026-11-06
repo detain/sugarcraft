@@ -32,6 +32,14 @@ final class ResendTransport implements Transport
             throw new \RuntimeException(Lang::t('resend.send_cancelled'));
         }
 
+        // A transport that was never handed a credential must not dial the API
+        // with an empty bearer. The CLI guards blank keys upstream of this
+        // class; direct embedders get the same loud refusal here - the one
+        // seam that actually spends the authenticated call.
+        if ($this->apiKey === '') {
+            throw new \InvalidArgumentException(Lang::t('resend.no_api_key'));
+        }
+
         // Envelope shape is checked BEFORE any HTTP work: a transport used
         // directly (not via Mailer) must refuse an empty envelope rather than
         // pay an authenticated API call for it.

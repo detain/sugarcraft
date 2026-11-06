@@ -45,6 +45,7 @@ return [
     'email.crlf_in_header' => 'Injeção de CRLF detetada no cabeçalho {field}',
     'resend.send_cancelled' => 'Envio Resend cancelado antes de iniciar',
     'resend.curl_missing' => 'ext-curl é necessário para o transporte Resend (o transporte SMTP não precisa de extensões para SMTP simples; ext-openssl para TLS)',
+    'resend.no_api_key' => 'O transporte Resend não tem chave de API: passe uma ao construtor ou defina RESEND_API_KEY',
     'attachment.unreadable' => 'O ficheiro anexado não é legível: {path}',
     'attachment.no_path' => 'Deve ser indicado um caminho de ficheiro ao anexar por nome de ficheiro',
     'attachment.invalid_cid' => 'Formato de Content-ID inválido: {cid} (a RFC 2392 exige o formato msg-id)',

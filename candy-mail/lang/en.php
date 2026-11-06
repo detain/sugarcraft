@@ -41,6 +41,7 @@ return [
     // ResendTransport.php
     'resend.send_cancelled' => 'Resend send cancelled before it started',
     'resend.curl_missing' => 'ext-curl is required for the Resend transport (SMTP transport needs no extensions for plain SMTP; ext-openssl for TLS)',
+    'resend.no_api_key' => 'Resend transport has no API key: pass one to the constructor or set RESEND_API_KEY',
     'resend.network_error' => 'Resend network error: {error}',
     'resend.api_error' => 'Resend API error ({status}): {body}',
 

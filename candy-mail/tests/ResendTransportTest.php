@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Mail\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Mail\Email;
 use SugarCraft\Mail\ResendTransport;
 
 /**
@@ -114,11 +115,34 @@ final class ResendTransportTest extends TestCase
         $this->assertArrayHasKey('resend.curl_missing', $keys);
     }
 
+    public function testSendRefusesEmptyApiKeyBeforeAnyHttpWork(): void
+    {
+        // Step 35 hardening: an embedder that constructed the transport with
+        // neither a key argument nor RESEND_API_KEY must be refused loudly at
+        // send() instead of POSTing an empty 'Authorization: Bearer ' header.
+        $saved = \getenv('RESEND_API_KEY', true);
+        \putenv('RESEND_API_KEY');
+        try {
+            unset($_ENV['RESEND_API_KEY']);
+            $transport = new ResendTransport('');
+            $email     = new Email(from: ['me@example.com'], to: ['you@example.com']);
+
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage('no API key');
+
+            $transport->send($email);
+        } finally {
+            if ($saved !== false) {
+                \putenv('RESEND_API_KEY=' . $saved);
+            }
+            unset($_ENV['RESEND_API_KEY']);
+        }
+    }
+
     /**
      * @return array<int, mixed>
      */
-    private function invokeCurlOptions(ResendTransport $transport, string $json): array
-    {
+    private function invokeCurlOptions(ResendTransport $transport, string $json): array    {
         $method = new \ReflectionMethod($transport, 'curlOptions');
         $method->setAccessible(true);
 

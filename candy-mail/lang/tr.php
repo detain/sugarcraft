@@ -45,6 +45,7 @@ return [
     'email.crlf_in_header' => '{field} başlığında CRLF enjeksiyonu algılandı',
     'resend.send_cancelled' => 'Resend gönderimi başlamadan önce iptal edildi',
     'resend.curl_missing' => 'Resend taşıyıcısı için ext-curl gerekiyor (SMTP taşıyıcısı düz SMTP için eklenti gerektirmez; TLS için ext-openssl)',
+    'resend.no_api_key' => 'Resend taşıyıcısının API anahtarı yok: oluşturucuya bir anahtar verin veya RESEND_API_KEY ayarlayın',
     'attachment.unreadable' => 'Ek dosya okunamıyor: {path}',
     'attachment.no_path' => 'Dosya adıyla ek yapılırken bir dosya yolu sağlanmalıdır',
     'attachment.invalid_cid' => 'Geçersiz Content-ID biçimi: {cid} (RFC 2392 msg-id biçimini gerektirir)',

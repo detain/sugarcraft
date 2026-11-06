@@ -45,6 +45,7 @@ return [
     'email.crlf_in_header' => 'تم رصد حقن CRLF في الترويسة {field}',
     'resend.send_cancelled' => 'تم إلغاء إرسال Resend قبل بدئه',
     'resend.curl_missing' => 'مطلوب ext-curl لنقل Resend (نقل SMTP لا يحتاج امتدادات لبريد SMTP العادي; TLS يتطلب ext-openssl)',
+    'resend.no_api_key' => 'نقل Resend ليس لديه مفتاح API: مرر مفتاحا إلى المُنشئ أو عيّن RESEND_API_KEY',
     'attachment.unreadable' => 'ملف المرفق غير قابل للقراءة: {path}',
     'attachment.no_path' => 'يجب توفير مسار الملف عند الإرفاق باسم الملف',
     'attachment.invalid_cid' => 'تنسيق معرّف المحتوى غير صالح: {cid} (RFC 2392 يتطلب تنسيق msg-id)',
