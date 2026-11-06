@@ -10,7 +10,7 @@
 
 # SugarReadline
 
-sugar-readline — an interactive line-editing prompt library for terminal UIs, for PHP 8.3+.
+sugar-readline — an interactive line-editing prompt library for terminal UIs on PHP 8.3+.
 
 ## Features
 
