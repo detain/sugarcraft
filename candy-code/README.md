@@ -3031,6 +3031,7 @@ cd candy-code && composer install && vendor/bin/phpunit
 ```
 
 **30,857 tests / 762,256 assertions, 0 failures, 8 skipped** — the whole of
+5d3da446e (candy-code: read-back pins for the pragma wave (cache_size x3, WAL x2, sidecar privacy + stale-WAL sweep) + suite figure bump 30,830T/761,930A)
 `candy-code/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6.
 The 22m51s serial timing was taken on the earlier 24,863-test tree (2026-10-18);

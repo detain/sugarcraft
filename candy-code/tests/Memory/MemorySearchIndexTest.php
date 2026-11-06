@@ -171,6 +171,20 @@ final class MemorySearchIndexTest extends TestCase
         self::assertSame([], $store->unreadable());
     }
 
+    public function testTheCacheIsWalJournaled(): void
+    {
+        $store = new MemoryStore($this->dir);
+        $store->add('a note', 'user');
+        $store->search('note');
+
+        // journal_mode is persistent in the file header, so a fresh connection
+        // reports what the store armed at open() — WAL ends the rollback-
+        // journal corruption class the discardIfDamaged self-heal used to carry.
+        $cache = $this->dir . '/' . MemorySearchIndex::FILENAME;
+        $pdo = new \PDO('sqlite:' . $cache);
+        self::assertSame('wal', $pdo->query('PRAGMA journal_mode')->fetchColumn());
+    }
+
     public function testAProjectKeyedStoreUsesItsOwnCacheFile(): void
     {
         $store = MemoryStore::forProject($this->dir, '/srv/app');
@@ -209,9 +223,16 @@ final class MemorySearchIndexTest extends TestCase
         $id = $store->add('survives a broken cache', 'user');
         $cache = $this->dir . '/' . MemorySearchIndex::FILENAME;
         file_put_contents($cache, str_repeat('not a database ', 100));
+        file_put_contents($cache . '-wal', 'stale wal bytes');
+        file_put_contents($cache . '-shm', 'stale shm bytes');
 
         self::assertSame([$id], array_map(static fn(MemoryEntry $e): string => $e->id(), $store->search('broken')));
         self::assertFileDoesNotExist($cache, 'the damaged file is discarded');
+
+        // A WAL is matched by path, not inode: the discard must sweep the
+        // sidecars too, or a stale journal could be adopted by the rebuild.
+        self::assertFileDoesNotExist($cache . '-wal', 'the discard sweeps the WAL sidecar');
+        self::assertFileDoesNotExist($cache . '-shm', 'the discard sweeps the SHM sidecar');
 
         self::assertSame([$id], array_map(static fn(MemoryEntry $e): string => $e->id(), $store->search('broken')));
         self::assertFileExists($cache, 'and rebuilt by the next search');

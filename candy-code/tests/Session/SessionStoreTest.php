@@ -87,6 +87,15 @@ final class SessionStoreTest extends TestCase
         $this->assertSame('wal', $result);
     }
 
+    public function testConstructorRaisesThePageCache(): void
+    {
+        $store = new SessionStore($this->dbPath);
+
+        // cache_size is a per-connection pragma: it must be read from the
+        // store's own live connection, never from a freshly opened second one.
+        self::assertSame(-64000, (int) $store->pdo()->query('PRAGMA cache_size')->fetchColumn());
+    }
+
     public function testConstructorSetsExceptionMode(): void
     {
         $store = new SessionStore($this->dbPath);

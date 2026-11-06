@@ -113,12 +113,35 @@ final class EmbeddingCacheTest extends TestCase
     {
         mkdir($this->dir, 0700, true);
         file_put_contents($this->dir . '/e.sqlite', str_repeat('not a database ', 100));
+        file_put_contents($this->dir . '/e.sqlite-wal', 'stale wal bytes');
+        file_put_contents($this->dir . '/e.sqlite-shm', 'stale shm bytes');
         $cache = EmbeddingCache::at($this->dir . '/e.sqlite');
 
         $cache->vectors('m', ['alpha'], $this->embedder());
         $cache->vectors('m', ['alpha'], $this->embedder());
 
         self::assertCount(1, $this->calls, 'the second call is served by the rebuilt file');
+
+        // A WAL is matched by path, not inode: a stale sidecar adopted by the
+        // rebuilt main file would be read as journal frames, so discard sweeps
+        // the sidecars too.
+        self::assertStringNotContainsString('stale wal bytes', (string) @file_get_contents($this->dir . '/e.sqlite-wal'));
+        self::assertStringNotContainsString('stale shm bytes', (string) @file_get_contents($this->dir . '/e.sqlite-shm'));
+    }
+
+    public function testTheFileIsWalJournaledWithOwnerOnlySidecars(): void
+    {
+        $cache = EmbeddingCache::at($this->dir . '/e.sqlite');
+        $cache->vectors('m', ['alpha'], $this->embedder());
+
+        $pdo = new \PDO('sqlite:' . $this->dir . '/e.sqlite');
+        self::assertSame('wal', $pdo->query('PRAGMA journal_mode')->fetchColumn());
+
+        // journal_mode persists in the file header, but the sidecar modes are
+        // only observable while this connection still holds them open: the
+        // guard window that created them is why they are 0600 by construction.
+        self::assertSame(0600, fileperms($this->dir . '/e.sqlite-wal') & 0777);
+        self::assertSame(0600, fileperms($this->dir . '/e.sqlite-shm') & 0777);
     }
 
     public function testTheFileIsOwnerOnlyAndLivesUnderTheHomeCache(): void
