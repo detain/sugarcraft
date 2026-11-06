@@ -228,14 +228,15 @@ responsibility: sanitise or re-encode it before you emit it.
 makes it wrap and the cursor-up repaint maths desyncs (the classic
 staircase). `TextPrompt::withDisplayWidth($cells)` bounds the editable
 region to a window around the cursor (clipped ends marked `…`, cell-width
-aware, `0` = unbounded). When `Readline::run()` prepares a prompt it has not
-been given an explicit width for, it auto-applies the `COLUMNS` environment
-value — and only that: `bash` does not export `COLUMNS` by default (zsh
-does), so under bash nothing is adopted unless the host exports it or probes
-the size itself (e.g. `stty size`) and passes the result to
-`withDisplayWidth()`. Passing `0` does not opt out either — `0` is the very
-sentinel the auto-apply keys on, so a prompt still at `0` remains eligible
-for adoption.
+aware; `0` renders the row unbounded). The state `run()` keys on is *unset*:
+only a prompt still at `null` (the default, restored by
+`withDisplayWidth(null)`) auto-adopts the `COLUMNS` environment value — and
+only that: `bash` does not export `COLUMNS` by default (zsh does), so under
+bash nothing is adopted unless the host exports it or probes the size itself
+(e.g. `stty size`) and passes the result to `withDisplayWidth()`. An
+explicit width always survives: a non-zero bound is kept as given, and an
+explicit `0` is honoured as a deliberate unbounded choice, never
+overwritten by adoption.
 Multi-line textarea output and wrapped labels can still exceed the window —
 long **prompts** (labels) are the host's layout responsibility either way.
 

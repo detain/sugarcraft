@@ -68,12 +68,14 @@ final class TextPrompt
     private string $hideMask        = '*';
 
     /**
-     * Visible width in terminal CELLS for view()'s single-line buffer row
-     * (0 = unbounded). Readline::run() adopts COLUMNS when this is left
-     * unset; explicit values always win. Clipping keeps the cursor inside
+     * Visible width in terminal CELLS for view()'s single-line buffer row,
+     * or null when the caller has not chosen one. null means "auto":
+     * Readline::run() adopts COLUMNS for a prompt left at null. A non-null
+     * width always wins and is never overwritten — whether a positive
+     * bound or an explicit 0 (unbounded). Clipping keeps the cursor inside
      * the window and marks clipped edges with '…'.
      */
-    private int $displayWidth = 0;
+    private ?int $displayWidth = null;
 
     /**
      * Buffer index where the current consecutive-insert run ends, or -1 when
@@ -244,20 +246,23 @@ final class TextPrompt
     }
 
     /**
-     * Bound the buffer row to $cells terminal columns (0 = unbounded).
+     * Bound the buffer row to $cells terminal columns; 0 is an explicit
+     * unbounded row (rendered full width, and Readline::run() will NOT
+     * adopt COLUMNS over it). Pass null to return to the unset state,
+     * which is the only state eligible for COLUMNS adoption.
      * Prevents the repaint staircase: a wrapped row breaks the row-count
      * bookkeeping repaint() relies on, so long values are windowed around
      * the cursor instead. Cells (not chars) — CJK/emoji widths are honored.
      */
-    public function withDisplayWidth(int $cells): self
+    public function withDisplayWidth(?int $cells): self
     {
         $clone = clone $this;
-        $clone->displayWidth = max(0, $cells);
+        $clone->displayWidth = $cells === null ? null : max(0, $cells);
         return $clone;
     }
 
-    /** Current display viewport width in cells; 0 = unbounded. */
-    public function displayWidth(): int
+    /** Current display viewport width in cells; null = unset (COLUMNS-eligible), 0 = explicit unbounded. */
+    public function displayWidth(): ?int
     {
         return $this->displayWidth;
     }
@@ -847,7 +852,8 @@ final class TextPrompt
             : Ansi::sanitize($this->buffer);
 
         // Window the buffer into the display viewport when one is set
-        // (Readline adopts COLUMNS; explicit withDisplayWidth wins).
+        // (null lets Readline adopt COLUMNS; an explicit width — bound or
+        // 0 — always wins).
         [$display, $viewCursor] = $this->fitToDisplay($display, $this->cursor);
 
         $before = self::sliceChars($display, 0, $viewCursor);
@@ -951,7 +957,7 @@ final class TextPrompt
      */
     private function fitToDisplay(string $display, int $cursor): array
     {
-        if ($this->displayWidth <= 0) {
+        if ($this->displayWidth === null || $this->displayWidth <= 0) {
             return [$display, $cursor];
         }
         // Label cells + one cell under the cursor + two edge markers.

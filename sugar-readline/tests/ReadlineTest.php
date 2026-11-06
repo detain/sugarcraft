@@ -1436,4 +1436,50 @@ final class ReadlineTest extends TestCase
         // Page 1 with size 3 contains items at indices 3,4
         $this->assertSame(['d', 'e'], $items);
     }
+
+    // =========================================================================
+    // COLUMNS auto-apply keys on the NULL (unset) sentinel, not on 0
+    // =========================================================================
+
+    public function testUnsetPromptAdoptsColumnsDuringRun(): void
+    {
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $previous = getenv('COLUMNS');
+        putenv('COLUMNS=40');
+        try {
+            fwrite($pair[1], "hi\r");
+            $driver = new StreamInputDriver($pair[0]);
+            $final = (new Readline($driver))->run(new TextPrompt('> '));
+            $this->assertSame(40, $final->displayWidth(), 'unset width adopts COLUMNS');
+        } finally {
+            if ($previous === false) {
+                putenv('COLUMNS');
+            } else {
+                putenv('COLUMNS=' . $previous);
+            }
+            fclose($pair[1]);
+            fclose($pair[0]);
+        }
+    }
+
+    public function testExplicitZeroDisplayWidthSurvivesAdoption(): void
+    {
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $previous = getenv('COLUMNS');
+        putenv('COLUMNS=40');
+        try {
+            fwrite($pair[1], "hi\r");
+            $driver = new StreamInputDriver($pair[0]);
+            $final = (new Readline($driver))->run((new TextPrompt('> '))->withDisplayWidth(0));
+            $this->assertSame(0, $final->displayWidth(), 'explicit 0 is never overwritten');
+        } finally {
+            if ($previous === false) {
+                putenv('COLUMNS');
+            } else {
+                putenv('COLUMNS=' . $previous);
+            }
+            fclose($pair[1]);
+            fclose($pair[0]);
+        }
+    }
 }

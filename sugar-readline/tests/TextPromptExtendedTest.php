@@ -471,11 +471,24 @@ final class TextPromptExtendedTest extends TestCase
         }
     }
 
-    public function testZeroDisplayWidthMeansUnbounded(): void
+    public function testUnsetDisplayWidthMeansUnbounded(): void
     {
+        // The unset state is null — the only width Readline::run() may
+        // adopt COLUMNS into. view() still renders unbounded; explicit 0
+        // survives adoption too (see ReadlineTest::
+        // testExplicitZeroDisplayWidthSurvivesAdoption).
         $p = TextPrompt::new('> ')->insertPastedText(str_repeat('y', 300));
-        $this->assertSame(0, $p->displayWidth());
+        $this->assertNull($p->displayWidth());
         $this->assertStringContainsString(str_repeat('y', 300), $p->view());
+    }
+
+    public function testWithDisplayWidthNullRestoresAutoApplyEligibility(): void
+    {
+        $p = TextPrompt::new('> ')->withDisplayWidth(40)->withDisplayWidth(null);
+        $this->assertNull($p->displayWidth());
+        // Negatives still clamp to the explicit-unbounded 0, never to null.
+        $q = TextPrompt::new('> ')->withDisplayWidth(-5);
+        $this->assertSame(0, $q->displayWidth());
     }
 
     // =========================================================================

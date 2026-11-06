@@ -342,17 +342,18 @@ final class Readline
 
     /**
      * Give width-aware prompts a display viewport when the caller has not
-     * set one and the environment reports a terminal width. This is what
+     * chosen one and the environment reports a terminal width. This is what
      * keeps a long single-line buffer from wrapping the repaint into a
-     * staircase (see repaint()); explicit withDisplayWidth() values always
-     * win, and 0 (no COLUMNS, custom prompt shapes) leaves the view
-     * unbounded exactly as before.
+     * staircase (see repaint()); an explicit withDisplayWidth() value
+     * always wins — a non-zero bound clips and an explicit 0 renders
+     * unbounded — and only the unset state (null) is eligible for
+     * adoption, so custom prompt shapes pass their width through as given.
      */
     private function fitPromptToWidth(object $prompt): object
     {
         if (!is_callable([$prompt, 'withDisplayWidth'])
             || !is_callable([$prompt, 'displayWidth'])
-            || $prompt->displayWidth() !== 0) {
+            || $prompt->displayWidth() !== null) {
             return $prompt;
         }
 
