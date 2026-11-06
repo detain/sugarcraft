@@ -52,7 +52,7 @@ for ($i = 0; $i &lt; 60; $i++) {
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Spring</td><td>new(deltaTime, angularFrequency, dampingRatio, reducedMotionOverride?)</td><td>Create a spring; non-finite / dt &lt; 0 / ω &lt; 1e-9 / ζ ≤ 0 refused</td></tr>
+<tr><td>Spring</td><td>new(deltaTime, angularFrequency, dampingRatio, reducedMotionOverride?)</td><td>Create a spring; non-finite / dt &lt; 0 / ω &lt; 1e-9 / ζ ≤ 0 / coefficient overflow refused</td></tr>
 <tr><td>Spring</td><td>update(pos, vel, target)</td><td>Step the simulation; snaps to [target, 0] under reduced motion</td></tr>
 <tr><td>Spring</td><td>settled(pos, vel, target, threshold?)</td><td>Completion predicate on position AND velocity</td></tr>
 <tr><td>Spring</td><td>fps($fps) / fromPreset($preset, $dt?, $override?)</td><td>deltaTime helper; five hand-tuned presets</td></tr>
