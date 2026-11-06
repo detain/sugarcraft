@@ -48,9 +48,15 @@ $transport-&gt;send($email);
 <tr><td>Email</td><td>withFrom() / withTo(...$to) / withCc(...) / withBcc(...) / withReplyTo() / withSubject()</td><td>Immutable header builders</td></tr>
 <tr><td>Email</td><td>withBody() / withHtmlBody() / withSignature()</td><td>Plain-text and HTML bodies</td></tr>
 <tr><td>Email</td><td>withAttachment(filename, path) / withInlineAttachment(path, cid, filename)</td><td>Attach a file, or embed one for a cid: reference</td></tr>
-<tr><td>SmtpTransport</td><td>__construct(host, port = 587, username = '', password = '', timeout = 30, heloHost = '') / send(Email)</td><td>SMTP delivery</td></tr>
-<tr><td>ResendTransport</td><td>__construct(apiKey = '') / send(Email)</td><td>Resend API delivery; falls back to RESEND_API_KEY</td></tr>
+<tr><td>Email</td><td>bodyWithSignature() / allRecipients()</td><td>Body with signature applied; combined to/cc/bcc list</td></tr>
+<tr><td>Transport</td><td>send(Email, ?token = null)</td><td>Delivery interface — implement to add a custom transport</td></tr>
+<tr><td>Mailer</td><td>__construct(Transport) / send(Email, ?token = null)</td><td>Transport-agnostic sender; validates the envelope before dialing</td></tr>
+<tr><td>SmtpTransport</td><td>__construct(host, port = 587, username = '', password = '', timeout = 30, heloHost = '') / send(Email, ?token = null)</td><td>SMTP delivery</td></tr>
+<tr><td>SmtpTransport</td><td>withRequireTls() / withImplicitTls() / withCaFile(caFile)</td><td>TLS policy and custom CA trust anchor</td></tr>
+<tr><td>SmtpTransport</td><td>buildMimeMessage(Email, allow8Bit = true)</td><td>Render the full MIME message without sending</td></tr>
+<tr><td>ResendTransport</td><td>__construct(apiKey = '') / send(Email, ?token = null)</td><td>Resend API delivery; falls back to RESEND_API_KEY</td></tr>
 <tr><td>Attachment</td><td>static fromPath(path, filename) / static inline(path, cid, filename)</td><td>Attachment value objects</td></tr>
+<tr><td>Attachment</td><td>static fromContent(content, filename, mimeType = 'application/octet-stream')</td><td>Build an attachment from in-memory bytes</td></tr>
 </table>
   </div>
 </section>
