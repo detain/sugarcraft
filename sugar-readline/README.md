@@ -77,7 +77,9 @@ The remaining prompt surface (all fluent, all returning new instances):
 `withValidator(callable)` gates `submit()` on a rule, `withCharLimit(int)`
 caps the buffer, `withHidden()` masks input (secrets) and disables history
 pushes and completion echoes, `withAutoSuggest(bool)` proposes the most
-recent matching history entry as a dim row under the prompt, and
+recent matching history entry as a dim row under the prompt (on by default
+whenever history is attached — the setter's practical use is turning it off,
+and the proposal scans the whole history on each repaint), and
 `withUndoManager(manager)`
 attaches an `UndoManager` — an immutable bounded (512-state) snapshot stack
 fed automatically as you type and edit, driven by Ctrl+Z/Ctrl+Y (or vi `u`

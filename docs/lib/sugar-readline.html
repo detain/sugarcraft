@@ -86,7 +86,7 @@ $prompt-&gt;isSubmitted();                          // false (pending) on Esc/Ct
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>TextPrompt</strong><span>Single-line input with default value, password masking, completions, validation, history and reverse search.</span></div>
+      <div class="feature"><strong>TextPrompt</strong><span>Single-line input with default value, password masking, completions, validation, history, reverse search and autosuggest (on by default with history).</span></div>
             <div class="feature"><strong>ConfirmationPrompt</strong><span>Yes / No with customizable labels and default.</span></div>
             <div class="feature"><strong>SelectionPrompt</strong><span>Arrow-key selection with filter-as-you-type and pagination.</span></div>
             <div class="feature"><strong>MultiSelectPrompt</strong><span>Multi-item selection with min/max enforcement, marker (◉/○), pagination.</span></div>
@@ -107,7 +107,7 @@ $prompt-&gt;isSubmitted();                          // false (pending) on Esc/Ct
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>TextPrompt</td><td>static new(label) / withDefault() / withHidden() / withCompletions() / withValidator() / withCharLimit() / withHistory() / withAutoSuggest(bool) / withUndoManager(manager) / withDisplayWidth() / withMode()</td><td>Single-line input</td></tr>
+<tr><td>TextPrompt</td><td>static new(label) / withDefault() / withHidden() / withCompletions() / withValidator() / withCharLimit() / withHistory() / withAutoSuggest(bool) / withUndoManager(manager) / withDisplayWidth() / withMode()</td><td>Single-line input; autosuggest is enabled by default whenever history is attached</td></tr>
 <tr><td>TextPrompt</td><td>handleChar(char) / handleKey(key) / insertPastedText(text) / submit() / abort() / value() / isSubmitted() / mode()</td><td>Drive the prompt and read the result</td></tr>
 <tr><td>ConfirmationPrompt</td><td>static new(label, defaultValue = false) / withConfirmLabel() / withCancelLabel() / withHint()</td><td>Yes / no prompt (Tab or Space toggles, Enter submits)</td></tr>
 <tr><td>SelectionPrompt</td><td>static new(label, choices) / withPageSize() / withFilter() / handleChar() / handleKey() / selectedValue()</td><td>Single choice with type-to-filter and pagination (PageUp/PageDown jump pages)</td></tr>
