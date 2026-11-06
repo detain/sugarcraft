@@ -18,8 +18,15 @@ use SugarCraft\Code\Support\ToolIpcFiles;
  * ({@see BoardKind}) with `BoardPost` and reads the board with `BoardRead`;
  * a peer that has not read yet learns there is something new from a notice
  * on its next tool result ({@see \SugarCraft\Code\Hooks\BuiltIn\BoardNoticeHook}).
- * Nothing wakes, interrupts or blocks a member: posts are text, and HOLD and
- * VETO are advice.
+ * Nothing wakes, interrupts or blocks a member: posts are text, and HOLD, VETO,
+ * CLAIM and RELEASE are advice.
+ *
+ * CLAIM and RELEASE (roadmap A8) are the board's coordination pair: a member
+ * names the files it is working in a CLAIM's `paths` and clears them with a
+ * RELEASE's, so a peer can consult {@see outstandingClaims()} before touching
+ * a file. This is flock-free by design — a claim is a notice peers weigh,
+ * never a lock anyone holds: two members may claim the same path and both
+ * claims stand, exactly as two peers may both post a HOLD.
  *
  * LIFECYCLE: ONE BOARD PER BATCH, the {@see \SugarCraft\Code\Support\SiblingSpendLedger}
  * lifecycle. {@see \SugarCraft\Code\Runtime::executeConcurrently()} creates it
@@ -56,6 +63,12 @@ final readonly class Board
 
     /** Entries one read returns when the caller names no limit. */
     public const DEFAULT_READ_LIMIT = 50;
+
+    /** Paths one CLAIM or RELEASE may name. */
+    public const MAX_CLAIM_PATHS = 64;
+
+    /** Bytes one path inside a CLAIM or RELEASE may run to. */
+    public const MAX_PATH_BYTES = 1024;
 
     /** The file extension a board carries under {@see ToolIpcFiles::RUNTIME_PREFIX}. */
     public const EXTENSION = 'board';
@@ -154,12 +167,18 @@ final readonly class Board
     /**
      * Append one post, signed by this view's member.
      *
+     * @param list<mixed> $paths the files a CLAIM stands on or a RELEASE
+     *         clears — only those two kinds may carry them, and they must
+     *         carry at least one
+     *
      * @throws \InvalidArgumentException for a post the board refuses as
      *         written (empty or oversized body, an unknown or own address, a
-     *         `reply_to` naming no post); the message is model-facing
+     *         `reply_to` naming no post, paths on a kind that names no files,
+     *         or a CLAIM or RELEASE that names none); the message is
+     *         model-facing
      * @throws \RuntimeException when the board is gone (its batch ended) or full
      */
-    public function post(string $to, BoardKind $kind, string $body, ?int $replyTo = null): BoardEntry
+    public function post(string $to, BoardKind $kind, string $body, ?int $replyTo = null, array $paths = []): BoardEntry
     {
         if ($this->member === '') {
             throw new \LogicException('only a member of the board can post to it');
@@ -188,6 +207,8 @@ final readonly class Board
             ));
         }
 
+        $names = self::claimPaths($kind, $paths);
+
         // r+, never a/c: a post after the batch ended must not resurrect the file.
         $handle = @fopen($this->path, 'r+');
         if ($handle === false) {
@@ -214,7 +235,7 @@ final readonly class Board
                 ));
             }
 
-            $entry = new BoardEntry($last + 1, $this->member, $to, $kind, $body, $replyTo, microtime(true));
+            $entry = new BoardEntry($last + 1, $this->member, $to, $kind, $body, $replyTo, microtime(true), $names);
             $line = json_encode($entry->toArray(), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
             if ($line === false) {
                 throw new \InvalidArgumentException('the post could not be encoded');
@@ -331,12 +352,134 @@ final readonly class Board
     }
 
     /**
+     * The CLAIM posts still standing, oldest first, each narrowed to the
+     * paths no later post by its own claimant has cleared: a path stands
+     * claimed until the member that claimed it names it in a RELEASE, and a
+     * later CLAIM of the same path by the same member replaces the earlier
+     * one where it still stands. Empty when nothing is claimed (or the board
+     * is gone).
+     *
+     * The returned entries are narrowed copies — the original `id`, `from`
+     * and `body`, but `paths` may name fewer files than the post did. A peer
+     * weighing a touch of its own asks, for each file: does some entry here
+     * name it under a member other than me?
+     *
+     * This is a reading of notices, never an arbiter: two members claiming
+     * the same path show both claims, and nothing here stops either of them.
+     *
+     * @return list<BoardEntry>
+     */
+    public function outstandingClaims(): array
+    {
+        /** @var array<string, array<array-key, BoardEntry>> $holders claimant => path key => standing CLAIM */
+        $holders = [];
+        foreach ($this->entries() as $entry) {
+            if ($entry->kind === BoardKind::Claim) {
+                foreach ($entry->paths as $path) {
+                    $holders[$entry->from][$path] = $entry;
+                }
+            } elseif ($entry->kind === BoardKind::Release) {
+                foreach ($entry->paths as $path) {
+                    unset($holders[$entry->from][$path]);
+                }
+            }
+        }
+
+        /** @var array<int, array{entry: BoardEntry, paths: list<string>}> $byPost */
+        $byPost = [];
+        foreach ($holders as $claimed) {
+            foreach ($claimed as $path => $entry) {
+                // A path spelled like a number arrives back as an int key;
+                // (string) restores the exact original, the way post() stored it.
+                $byPost[$entry->id] ??= ['entry' => $entry, 'paths' => []];
+                $byPost[$entry->id]['paths'][] = (string) $path;
+            }
+        }
+
+        ksort($byPost, SORT_NUMERIC);
+
+        $out = [];
+        foreach ($byPost as $group) {
+            $out[] = $group['entry']->withPaths($group['paths']);
+        }
+
+        return $out;
+    }
+
+    /**
      * Remove the board now rather than when its last view goes — for an owner
      * that knows the batch is over. Only the creating process can.
      */
     public function discard(): void
     {
         $this->lease->release();
+    }
+
+    /**
+     * The normalized paths a post of $kind may carry: trimmed, deduped in
+     * order, within the caps — CLAIM and RELEASE always carry at least one,
+     * and no other kind may carry any.
+     *
+     * @param list<mixed> $paths
+     *
+     * @return list<string>
+     *
+     * @throws \InvalidArgumentException with a model-facing message
+     */
+    private static function claimPaths(BoardKind $kind, array $paths): array
+    {
+        if ($paths === []) {
+            if ($kind === BoardKind::Claim || $kind === BoardKind::Release) {
+                throw new \InvalidArgumentException(sprintf(
+                    'a %s names the paths it %s — without them this post says nothing: put the files in `paths`, or post an %s instead',
+                    $kind->value,
+                    $kind === BoardKind::Claim ? 'is standing on' : 'is clearing',
+                    BoardKind::Info->value,
+                ));
+            }
+
+            return [];
+        }
+
+        if ($kind !== BoardKind::Claim && $kind !== BoardKind::Release) {
+            throw new \InvalidArgumentException(sprintf(
+                'paths belong to a %s or a %s: say what the %s is about in its body',
+                BoardKind::Claim->value,
+                BoardKind::Release->value,
+                $kind->value,
+            ));
+        }
+
+        if (\count($paths) > self::MAX_CLAIM_PATHS) {
+            throw new \InvalidArgumentException(sprintf(
+                'the post names %d paths; one post carries at most %d — claim the files you are touching, not the tree',
+                \count($paths),
+                self::MAX_CLAIM_PATHS,
+            ));
+        }
+
+        $names = [];
+        foreach ($paths as $path) {
+            if (!\is_string($path)) {
+                throw new \InvalidArgumentException(sprintf('every path must be a string, one is a %s', get_debug_type($path)));
+            }
+            $path = trim($path);
+            if ($path === '') {
+                throw new \InvalidArgumentException('a named path is empty: name the file, not a blank');
+            }
+            if (\strlen($path) > self::MAX_PATH_BYTES) {
+                throw new \InvalidArgumentException(sprintf(
+                    'a path runs %d bytes; one is at most %d',
+                    \strlen($path),
+                    self::MAX_PATH_BYTES,
+                ));
+            }
+            if (!\in_array($path, $names, true)) {
+                $names[] = $path;
+            }
+        }
+
+        return $names;
     }
 
     /**
