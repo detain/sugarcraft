@@ -258,12 +258,17 @@ final class SyntheticTest extends TestCase
      *
      * This was the exact F19 bug — calling `php examples/play.php` (no args)
      * caused two "Undefined array key 1" warnings because $argv[1] was
-     * accessed without guarding against unset keys.
+     * accessed without guarding against unset keys. argv parsing runs before
+     * any TTY decision, so the no-warnings half of the contract survives the
+     * Step 34 hoist unchanged.
      *
-     * We run via bash -c 'echo q | php examples/play.php' so that stdin is
-     * a TTY (bash provides a pseudo-TTY for the sub-shell).  This lets the
-     * Program::run() exit cleanly on 'q' without triggering /dev/tty open
-     * failures that occur with plain proc_open pipes.
+     * Step 34 (M5) flipped the second half: the stream_isatty(STDOUT) guard
+     * now protects EVERY invocation, not just explicit-mode ones, so a bare
+     * run whose stdout is captured answers with the refusal instead of the
+     * synthetic banner. (The old comment's claim that bash hands php a
+     * pseudo-TTY was never true — echo|php is a pipe — and playback under
+     * this harness only ever worked because the guard was unreachable for a
+     * bare run; that silent-pipe behaviour was exactly the defect.)
      */
     public function testPlayPhpNoArgsEmitsNoWarnings(): void
     {
@@ -273,8 +278,12 @@ final class SyntheticTest extends TestCase
 
         $this->assertStringNotContainsString('Warning:', (string) $stderr);
         $this->assertStringNotContainsString('Undefined array key', (string) $stderr);
-        // Confirm the synthetic pattern message was printed.
-        $this->assertStringContainsString('synthetic test pattern', (string) $stderr);
+        // The hoisted guard refuses before any source is generated: a bare
+        // piped run answers with the refusal, never the synthetic banner.
+        // Re-nesting the guard into the mode block restores the old banner
+        // and reddens both legs below.
+        $this->assertStringContainsString('playback needs a terminal', (string) $stderr);
+        $this->assertStringNotContainsString('synthetic test pattern', (string) $stderr);
     }
 
     /**
