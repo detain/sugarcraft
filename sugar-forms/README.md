@@ -355,8 +355,13 @@ Viewport sanitisation for externally-sourced content.
 
 ## Shared foundations
 
-sugar-forms is built on five shared packages:
+sugar-forms is built on six shared sibling packages:
 
+- **[sugar-core](https://github.com/sugarcraft/sugar-core)** — the Model–Update–View
+  runtime and message vocabulary (`Msg`, `Cmd`, `AsyncCmd`) that `Form` and every
+  field ride (`src/Form.php`, `src/KeyMap.php`, `src/Lang.php`, the cursor layer).
+- **[sugar-style](https://github.com/sugarcraft/sugar-style)** — declarative `Style`
+  primitives; `Theme`, the cursor blink and the text widgets render through them.
 - **[sugar-cellbuffer](https://github.com/sugarcraft/sugar-cellbuffer)** — Cell-grid model + `Buffer::toAnsi()` for
   rendering glyphs and styles to ANSI bytes. TextInput / TextArea use the buffer
   path internally; their snapshot tests pin byte-for-byte output.
@@ -365,10 +370,6 @@ sugar-forms is built on five shared packages:
   an explicit constraint set on the form; solver region routing is a reserved
   surface — `Form::view()` does not consult it yet, so greedy vertical stacking
   is always used today.
-- **[sugar-testing](https://github.com/sugarcraft/sugar-testing)** — `Assertions::assertGoldenAnsi` and
-  `Assertions::assertCellGrid` snapshot helpers. Render fixtures live in
-  `tests/fixtures/`; `UPDATE_GOLDENS=1` creates missing goldens only — to
-  re-record an existing one, delete the file first and re-run.
 - **[sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy)** — `SmithWatermanMatcher` scoring,
   used ONLY by `Select::withFuzzySuggestions()` to rank the suggestion candidates
   (`src/Field/Select.php:326-330`, suggestions listed score-ranked at `:131-135`).
@@ -385,23 +386,22 @@ sugar-forms is built on five shared packages:
   armed timer fires at most once into a cancellation check, so neither timer nor
   fetch outlives its keystroke's replacement and rapid keystrokes collapse to
   one live request.
-- **Vim keybindings** — `VimKeyHandler` provides a shared vim mode handler
-  (`VimState`: Insert/Normal/Visual/VisualLine; `VimAction`: CursorLeft,
-  CursorRight, CursorUp, CursorDown, DeleteChar, YankLine, …). Vim mode is an
-  opt-in on the inner text widgets themselves — each runs on it when you arm
-  `TextInput::withVimMode(true)` (single-line) or the TextArea equivalent
-  (`j`/`k` rows, `v` visual selection) — and sugar-readline's vi mode delegates
-  to this same handler; sugar-widgets re-exports the fields unchanged and
-  carries no vim layer of its own. New bindings benefit both hosts at once.
-  In `VisualLine` mode, however, `j`/`k` step between ENTRIES (the pinned
-  horizontal CursorLeft/CursorRight vocabulary),
-  not rows, and `V` currently aliases `v` into character-wise selection.
-  Text objects (`ci"`, `da{`, `yiw`, …) resolve through
-  `VimKeyHandler::handleTextObject()`: `VimOperator` (c/d/y) +
-  `TextObjectScope` (i/a) + a target key feed `TextObject::resolve()`,
-  which returns the `[start, end)` character range on the buffer —
-  innermost bracket pair wins, quotes pair left-to-right, unmatched
-  delimiters return null (vim's beep).
+
+The lib also ships a shared **vim keybinding** layer: `VimKeyHandler` provides a
+shared vim mode handler (`VimState`: Insert/Normal/Visual/VisualLine; `VimAction`:
+CursorLeft, CursorRight, CursorUp, CursorDown, DeleteChar, YankLine, …). Vim mode
+is an opt-in on the inner text widgets themselves — each runs on it when you arm
+`TextInput::withVimMode(true)` (single-line) or the TextArea equivalent (`j`/`k`
+rows, `v` visual selection) — and sugar-readline's vi mode delegates to this same
+handler; sugar-widgets re-exports the fields unchanged and carries no vim layer of
+its own. New bindings benefit both hosts at once. In `VisualLine` mode, however,
+`j`/`k` step between ENTRIES (the pinned horizontal CursorLeft/CursorRight
+vocabulary), not rows, and `V` currently aliases `v` into character-wise
+selection. Text objects (`ci"`, `da{`, `yiw`, …) resolve through
+`VimKeyHandler::handleTextObject()`: `VimOperator` (c/d/y) + `TextObjectScope`
+(i/a) + a target key feed `TextObject::resolve()`, which returns the
+`[start, end)` character range on the buffer — innermost bracket pair wins, quotes
+pair left-to-right, unmatched delimiters return null (vim's beep).
 
 The legacy `SugarCraft\Forms\Fuzzy\FuzzyMatcher` remains as a deprecated
 back-compat shim. It is a delegating final class, not an alias: scoring runs on
