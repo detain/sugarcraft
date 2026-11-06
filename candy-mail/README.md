@@ -230,7 +230,9 @@ locale fall back to English; the en catalog is the last stop before the raw key.
 ## Shared foundations
 
 candy-mail uses [sugar-async](https://github.com/detain/sugarcraft/tree/master/sugar-async)
-for cancellation on SMTP sends via `CancellationToken`: an **entry pre-check only**
+for cancellation on every send path (`Mailer::send`, `SmtpTransport::send`, and
+`ResendTransport::send` all apply the same check) via `CancellationToken`: an **entry
+pre-check only**
 (`isCancelled()` before the conversation starts). Blocking I/O never yields to the event
 loop mid-send, so `onCancel()` callbacks cannot fire during a running send — true
 mid-flight cancellation would require an async transport (documented in
