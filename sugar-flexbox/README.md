@@ -36,7 +36,8 @@ sugar-flexbox — layout building blocks for terminal UIs, for PHP 8.3+. Provide
 - **Delta rendering** — the stateful `TableRenderer` emits only the cells that changed between frames (see Buffer diffing below)
 
 ### Viewport
-- **Scrollable viewport** — composes `sugar-widgets` `Viewport` (SSOT)
+- **Scrollable viewport** — composes the canonical `sugar-forms` `Viewport`
+  (the `sugar-widgets` symbol is a deprecated `class_alias` façade onto it)
 - **Keyboard navigation** — line-up/down, page-up/down, half-page-up/down (`halfPageUp()`/`halfPageDown()`), goto-top/bottom
 - **Sticky regions** — `withStickyHeader($rows)` / `withStickyFooter($rows)` pin lines across scrolling; a row can never appear
   in both regions (the footer is clamped when the document is shorter than header + footer)
@@ -47,7 +48,7 @@ sugar-flexbox — layout building blocks for terminal UIs, for PHP 8.3+. Provide
 - **Smooth scroll** and scrollbar toggle; wide scrollbar runes reserve their true cell width
 
 ### Scrollbar
-- **Scrollbar** — composes `sugar-widgets` `Scrollbar` (SSOT)
+- **Scrollbar** — composes the canonical `sugar-forms` `Scrollbar` (same alias chain)
 - **Vertical and horizontal** scrollbars with configurable thumb/track characters
 - **Arrow toggling** for scrollbar ends
 

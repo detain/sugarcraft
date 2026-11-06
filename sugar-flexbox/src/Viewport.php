@@ -10,11 +10,13 @@ use SugarCraft\Widgets\Viewport\Viewport as BitsViewport;
 /**
  * Immutable viewport wrapper over the canonical {@see BitsViewport}.
  *
- * Composes the sugar-widgets Viewport rather than reimplementing it.
+ * Composes the sugar-forms Viewport rather than reimplementing it: the
+ * `SugarCraft\Widgets\Viewport\Viewport` symbol this file imports is a
+ * deprecated class_alias façade onto `SugarCraft\Forms\Viewport\Viewport`.
  * Adds sticky header/footer positioning and a decorative sync-partner
  * reference ({@see self::syncWith()} stores it; it propagates nothing).
  *
- * @see \SugarCraft\Widgets\Viewport\Viewport
+ * @see \SugarCraft\Forms\Viewport\Viewport
  */
 final readonly class Viewport
 {
@@ -24,7 +26,7 @@ final readonly class Viewport
     private ?Viewport $syncedViewport;
 
     /**
-     * @param BitsViewport        $inner        canonical widgets viewport holding content + dimensions
+     * @param BitsViewport        $inner        canonical forms viewport (via the widgets alias) holding content + dimensions
      * @param int                 $stickyHeader rows pinned to the top
      * @param int                 $stickyFooter rows pinned to the bottom
      * @param Viewport|null       $syncedViewport scroll-sync partner
@@ -113,7 +115,7 @@ final readonly class Viewport
     // ---- init/update/view forwarding (NOT the Core\Model contract) -----
 
     /**
-     * Forward to the canonical widgets viewport.
+     * Forward to the canonical forms viewport.
      *
      * TRUTH: this class does NOT implement
      * {@see \SugarCraft\Core\Model} — it has no `subscriptions()`, so
@@ -390,10 +392,10 @@ final readonly class Viewport
      * Attach the lib's own {@see Scrollbar} wrapper.
      *
      * The parameter previously type-hinted the shadowing `use` import of the
-     * widgets class, so passing THIS lib's Scrollbar — the documented
+     * widgets alias, so passing THIS lib's Scrollbar — the documented
      * companion — threw a TypeError (historically). It now accepts the
-     * library's own value object and unwraps the canonical widget for the
-     * delegate.
+     * library's own value object and unwraps the canonical forms widget for
+     * the delegate.
      */
     public function withVerticalScrollbar(Scrollbar $scrollbar): self
     {

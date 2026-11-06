@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">FlexBox layout engine for terminal grids — ratio-based item sizing, gap, align. Plus a simple table with sort, filter, cursor nav, and column styling. Viewport and Scrollbar compose the sugar-widgets SSOT.</p>
+<p class="lede" style="margin-top: 28px;">FlexBox layout engine for terminal grids — ratio-based item sizing, gap, align. Plus a simple table with sort, filter, cursor nav, and column styling. Viewport and Scrollbar compose the canonical sugar-forms classes (the sugar-widgets symbols are deprecated aliases).</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-flexbox</code></pre>
@@ -25,8 +25,8 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
     <div class="feature-grid">
       <div class="feature"><strong>FlexBox</strong><span>Ratio-based row / column layout. Align: Start, Center, End, Stretch (one value drives both axes — box height plus text placement in row mode, rendered width plus placement in column mode; no CSS justify-content counterpart).</span></div>
             <div class="feature"><strong>Table</strong><span>Sort by column (asc/desc toggle), filter by text, cursor navigation, per-column style.</span></div>
-            <div class="feature"><strong>Viewport</strong><span>Scrollable viewport composes sugar-widgets Viewport (SSOT). Keyboard nav (line/page/half-page), mouse wheel, smooth scroll, scrollbar. Sticky headers and footers via withStickyHeader()/withStickyFooter(); syncWith() is a decorative partner marker only (scroll state never propagates).</span></div>
-            <div class="feature"><strong>Scrollbar</strong><span>Scrollbar composes sugar-widgets Scrollbar (SSOT). Vertical/horizontal, configurable thumb/track chars.</span></div>
+            <div class="feature"><strong>Viewport</strong><span>Scrollable viewport composes the canonical sugar-forms Viewport. Keyboard nav (line/page/half-page), mouse wheel, smooth scroll, scrollbar. Sticky headers and footers via withStickyHeader()/withStickyFooter(); syncWith() is a decorative partner marker only (scroll state never propagates).</span></div>
+            <div class="feature"><strong>Scrollbar</strong><span>Scrollbar composes the canonical sugar-forms Scrollbar. Vertical/horizontal, configurable thumb/track chars.</span></div>
             <div class="feature"><strong>Immutability</strong><span>All builders return new instances.</span></div>
             
     </div>

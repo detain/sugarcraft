@@ -10,9 +10,11 @@ use SugarCraft\Widgets\Scrollbar\ScrollbarState;
 /**
  * Immutable scrollbar wrapper over the canonical {@see BitsScrollbar}.
  *
- * Composes the sugar-widgets Scrollbar rather than reimplementing it.
+ * Composes the sugar-forms Scrollbar rather than reimplementing it: the
+ * `SugarCraft\Widgets\Scrollbar\Scrollbar` symbol this file imports is a
+ * deprecated class_alias façade onto `SugarCraft\Forms\Scrollbar\Scrollbar`.
  *
- * @see \SugarCraft\Widgets\Scrollbar\Scrollbar
+ * @see \SugarCraft\Forms\Scrollbar\Scrollbar
  */
 final readonly class Scrollbar
 {
@@ -51,11 +53,10 @@ final readonly class Scrollbar
     }
 
     /**
-     * The canonical widgets scrollbar this wrapper delegates to.
-     *
-     * Needed so {@see Viewport::withVerticalScrollbar()} (which delegates to
-     * the widgets viewport) can accept THIS lib's Scrollbar and unwrap it —
-     * the wrapper is opaque otherwise.
+     * The canonical forms scrollbar (reached through the widgets alias) this
+     * wrapper delegates to. Needed so {@see Viewport::withVerticalScrollbar()}
+     * (which hands the forms viewport the same canonical class) can accept
+     * THIS lib's Scrollbar and unwrap it — the wrapper is opaque otherwise.
      */
     public function widgetScrollbar(): BitsScrollbar
     {
