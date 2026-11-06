@@ -785,7 +785,9 @@ unbounded channel is capped and nothing leaves the grid unsanitised:
 ## Development
 
 ```sh
-cd sugar-vterm && composer install
+# from the monorepo root: wire siblings to the local tree (CI injects the same path-repo closure)
+php scripts/refresh-deps.php --mode=linked --libs=sugar-vterm
+cd sugar-vterm
 vendor/bin/phpunit                                              # test suite
 vendor/bin/phpstan analyze                                      # static analysis (level: max)
 vendor/bin/php-cs-fixer fix --config=../.php-cs-fixer.dist.php  # lint + auto-fix style
