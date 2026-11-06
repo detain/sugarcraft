@@ -460,8 +460,14 @@ final class WorkflowStageResourceLockTest extends TestCase
                 }
             }
         }
-        self::assertSame(['A', 'B'], array_keys($starts), 'both ids logged starts');
-        self::assertSame(['A', 'B'], array_keys($ends), 'both ids logged ends');
+        // Which id STARTED first is legitimate either way — assert the SET,
+        // in sorted order, and let the winner fall out of the timestamps.
+        $ids = array_keys($starts);
+        sort($ids);
+        self::assertSame(['A', 'B'], $ids, 'both ids logged starts');
+        $ids = array_keys($ends);
+        sort($ids);
+        self::assertSame(['A', 'B'], $ids, 'both ids logged ends');
 
         // Serialization: the critical sections never overlap — whoever won
         // (either order is legitimate) ran start-to-end before the other
