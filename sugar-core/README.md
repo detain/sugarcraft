@@ -330,8 +330,8 @@ The runtime paints whatever `view()` returns. It does **not** clip frames to
 the terminal, and `Pane`/`Rect` carry bounds purely as advisory metadata —
 no code path in the renderer reads them. A frame wider than the viewport
 soft-wraps and shifts every following row, which is why border-alignment
-defects surface so often across TUI apps. Read `WindowSizeMsg` (1-based
-`$cols` / `$rows` arrive at startup and on every resize), size your content
+defects surface so often across TUI apps. Read `WindowSizeMsg` (plain cell
+counts `$cols` / `$rows` arrive at startup and on every resize), size your content
 to it, and truncate with `Util\Width::truncateAnsi()` so SGR bytes survive
 the cut.
 
