@@ -90,7 +90,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Form</td><td>new(Field ...$fields)</td><td>Create a single-group form with fields</td></tr>
 <tr><td>Form</td><td>groups(Group ...$groups)</td><td>Create a multi-page form</td></tr>
-<tr><td>Form</td><td>values() / string() / int() / bool() / array()</td><td>Submitted values of visible, non-skippable fields — hidden fields, hidden groups and Note fields are excluded (legacy <code>getString()</code> &amp; friends remain as deprecated forwarders, to be removed in 2.0.0)</td></tr>
+<tr><td>Form</td><td>values() / string() / int() / bool() / array()</td><td>Submitted values of visible, non-skippable fields — hidden fields, hidden groups and skippable Note fields are excluded (legacy <code>getString()</code> &amp; friends remain as deprecated forwarders, to be removed in 2.0.0)</td></tr>
 <tr><td>Form</td><td>get(key, default = null)</td><td>Value of one field, or the fallback when the key is absent</td></tr>
 <tr><td>Form</td><td>validateAll()</td><td>Run all field validators, return [fieldKey => errorMessage]</td></tr>
 <tr><td>Form</td><td>withErrorSummary(bool)</td><td>Show all errors at once on submit failure</td></tr>
@@ -105,7 +105,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 <tr><td>Field\Select</td><td>withAsyncSuggestions(callable, int = 150)</td><td>Async suggestions with debounce</td></tr>
 <tr><td>Field\Select</td><td>withEnum(BackedEnum::class)</td><td>Coerce selected value to enum type</td></tr>
 <tr><td>Field\MultiSelect</td><td>new(name)</td><td>Create multi-select field (j/k nav, Space toggle)</td></tr>
-<tr><td>Field\Note</td><td>new(key)</td><td>Create note field — text set via withTitle/withDescription; notes never appear in values()</td></tr>
+<tr><td>Field\Note</td><td>new(key)</td><td>Create note field — text set via withTitle/withDescription; plain notes never appear in values() (a withNext(true) note contributes a null entry)</td></tr>
 <tr><td>Validator\Required</td><td>validate(string): true|string</td><td>true to pass, or the error string when the value is empty</td></tr>
 <tr><td>Validator\Email</td><td>validate(string): true|string</td><td>true to pass, or the error string when the value is not a valid email</td></tr>
 <tr><td>Spinner\Spinner</td><td>new(?Style)</td><td>Create a spinner with style</td></tr>
