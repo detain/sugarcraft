@@ -585,7 +585,7 @@ flooded by leaked `?1003` motion reporting.
 
 | Class | Method | Description |
 |---|---|---|
-| `Manager` | `newGlobal()` | Create global manager |
+| `Manager` | `newGlobal()` | Build a fresh un-prefixed manager independent of every other instance — NOT the shared default (that is `Zones::defaultManager()`) |
 | `Manager` | `newPrefix(prefix)` | Create prefixed manager for isolation |
 | `Manager` | `mark(name, rendered)` | Wrap output with zone marker |
 | `Manager` | `scan(output)` | Record positions, strip markers |
@@ -601,6 +601,7 @@ flooded by leaked `?1003` motion reporting.
 | `Scan` | `strip(rendered)` | Public byte-wise removal of well-formed tags |
 | `Mark` | `untrusted(text)` | Sweep foreign sentinel framing bytes off untrusted labels |
 | `Zones` (static) | `mark` / `scan` / `get` / `clear` / `close` / `setEnabled` / `isEnabled` / `newPrefix` / `anyInBounds*` | Package-level facade over the default manager |
+| `Zones` (static) | `defaultManager()` | Read the shared default `Manager` the package-level facade routes through (`Manager::newGlobal()` builds a different, independent instance) |
 | `Zone` | `inBounds(mouseMsg)` | Test if mouse is inside zone |
 | `ZoneHoverTracker` | `__construct(manager)` | Track hover state over a manager |
 | `ZoneHoverTracker` | `update(mouseMsg)` | Process mouse event, return enter/exit msg |
