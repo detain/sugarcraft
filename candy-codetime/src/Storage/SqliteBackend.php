@@ -33,6 +33,32 @@ final class SqliteBackend implements HeartbeatReader
                 "candy-codetime: cannot set the busy timeout on database file {$dbPath}",
             );
         }
+        // WAL removes the writer-blocks-reader class outright: the file's
+        // model is several appenders (editor plugin + CLI + cron) sharing it
+        // while a dashboard reads it, and under the rollback journal every
+        // commit locked all readers out until it finished.
+        $this->db->exec('PRAGMA journal_mode = WAL');
+        // WAL's companion, armed ONLY on a confirmed migration. exec() is not
+        // a receipt: a refused migration (read-only filesystem, locking-
+        // protocol clash) answers with the OLD mode, and synchronous=NORMAL
+        // on a ROLLBACK journal is the corruption-prone combination — commits
+        // acknowledge before the journal lands. Read the mode back; when it
+        // is not 'wal', synchronous stays at SQLite's safe FULL default,
+        // which is exactly what is correct for the journal in use.
+        if (strtolower((string) $this->db->querySingle('PRAGMA journal_mode')) === 'wal') {
+            // FULL buys nothing under WAL: heartbeat telemetry that loses its
+            // last transaction to a power cut costs one minute of history,
+            // and every bin call-site already fail-softs a Throwable.
+            $this->db->exec('PRAGMA synchronous = NORMAL');
+        }
+        // A negative cache_size is kibibytes: a 64,000 KiB (62.5 MiB) page
+        // cache keeps the range scans over idx_heartbeats_time in memory even
+        // at full history. The database itself stays far below that, so this
+        // is headroom, not pressure.
+        $this->db->exec('PRAGMA cache_size = -64000');
+        // No PRAGMA foreign_keys: heartbeats and milestones are standalone
+        // tables, so enabling it would be dead configuration implying
+        // relations the schema declares nowhere.
         $this->db->exec('CREATE TABLE IF NOT EXISTS heartbeats (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             time INTEGER NOT NULL,
@@ -52,14 +78,27 @@ final class SqliteBackend implements HeartbeatReader
 
         // privacy-first: the db holds paths as supplied and project names just like
         // the JSONL files, so it gets the same owner-private treatment Store
-        // gives them (tighten-if-loose, throw if that fails). The -wal/-journal
-        // side files are transient under the default rollback journal mode and
-        // inherit the same 0700 data directory.
+        // gives them (tighten-if-loose, throw if that fails). Under WAL the
+        // -wal/-shm sidecars are no longer transient: the -wal carries
+        // committed heartbeats until checkpointed, so the sweep (which runs
+        // after the journal_mode pragma, and after the CREATE execs that
+        // first materialise the sidecars) covers $dbPath-wal and
+        // $dbPath-shm too. A sidecar absent at open is skipped; one found
+        // loose is tightened, and a failed tighten throws exactly like the
+        // main file's does.
         $mode = @fileperms($dbPath);
         if ($mode !== false && ($mode & 0o077) !== 0 && !@chmod($dbPath, 0o600)) {
             throw new \RuntimeException(
                 "candy-codetime: cannot make database file {$dbPath} owner-private",
             );
+        }
+        foreach ([$dbPath . '-wal', $dbPath . '-shm'] as $sidecar) {
+            $sidecarMode = @fileperms($sidecar);
+            if ($sidecarMode !== false && ($sidecarMode & 0o077) !== 0 && !@chmod($sidecar, 0o600)) {
+                throw new \RuntimeException(
+                    "candy-codetime: cannot make database sidecar {$sidecar} owner-private",
+                );
+            }
         }
     }
 

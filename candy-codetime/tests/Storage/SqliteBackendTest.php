@@ -29,6 +29,13 @@ final class SqliteBackendTest extends TestCase
         if (is_file($this->dbPath)) {
             unlink($this->dbPath);
         }
+        // The WAL posture leaves sidecars behind; the temp dir stays clean.
+        foreach (['-wal', '-shm'] as $suffix) {
+            $sidecar = $this->dbPath . $suffix;
+            if (is_file($sidecar)) {
+                unlink($sidecar);
+            }
+        }
     }
 
     public function testInsertAndQuery(): void
@@ -191,5 +198,82 @@ final class SqliteBackendTest extends TestCase
         );
         sort($projects);
         $this->assertSame(['holder', 'waiter'], $projects);
+    }
+
+    /**
+     * The ctor's pragma posture must be live on the connection it hands out.
+     * synchronous and cache_size are per-connection settings, so they are
+     * read back through the backend's own handle — a second connection would
+     * answer with SQLite's defaults, not the ctor's arms (journal_mode=WAL
+     * is persistent in the file header, so it would survive either way).
+     */
+    public function testTheConstructorArmsThePragmaPostureOnItsOwnConnection(): void
+    {
+        $db = (new \ReflectionProperty(SqliteBackend::class, 'db'))->getValue($this->backend);
+        $this->assertInstanceOf(\SQLite3::class, $db);
+        $this->assertSame('wal', strtolower((string) $db->querySingle('PRAGMA journal_mode')));
+        // SQLITE_BRIEF-free numbering: 1 == NORMAL, 2 == FULL, 3 == EXTRA.
+        $this->assertSame(1, (int) $db->querySingle('PRAGMA synchronous'));
+        // Spelled back exactly: negative cache_size is kibibytes (62.5 MiB).
+        $this->assertSame(-64000, (int) $db->querySingle('PRAGMA cache_size'));
+    }
+
+    /**
+     * Privacy sweep over the WAL sidecars: a -wal file left loose by an
+     * earlier build (or an umask that let SQLite create it 0644) is
+     * tightened by the next open, like the main database already was.
+     */
+    public function testALooseWalSidecarIsTightenedByTheNextOpen(): void
+    {
+        $this->backend->insert(new Heartbeat(time: 1718900000, project: 'p', language: 'php', file: 'a.php'));
+        $sidecar = $this->dbPath . '-wal';
+        // The first write in WAL mode materialises the sidecar while this
+        // connection stays open — fail loud, never skip, if that changes.
+        $this->assertFileExists($sidecar);
+        $this->assertTrue(chmod($sidecar, 0o644));
+        clearstatcache(true, $sidecar);
+        $this->assertSame(0o644, fileperms($sidecar) & 0o777);
+
+        new SqliteBackend($this->dbPath); // second open runs the sweep
+
+        clearstatcache(true, $sidecar);
+        $this->assertSame(0o600, fileperms($sidecar) & 0o777);
+    }
+
+    /**
+     * The synchronous=NORMAL arm is conditional, never a straight exec: a
+     * refused WAL migration (read-only filesystem, locking-protocol clash)
+     * still answers exec() with the OLD mode, and NORMAL on a rollback
+     * journal is the corruption-prone combination. Forcing a refusal
+     * portably would need a read-only mount, so this pins the guard's SHAPE
+     * on the constructor source — journal_mode is read back after the WAL
+     * exec, and the synchronous exec sits inside a conditional keyed to
+     * 'wal' that follows the read-back. The live posture on the normal
+     * path is pinned by testTheConstructorArmsThePragmaPostureOnItsOwnConnection;
+     * an inverted guard would redden that one (FULL on a confirmed WAL file),
+     * so polarity is covered without faking a refusal.
+     */
+    public function testTheSynchronousArmIsGatedBehindTheJournalModeReadBack(): void
+    {
+        $source = (string) file_get_contents(
+            (new \ReflectionMethod(SqliteBackend::class, '__construct'))->getFileName(),
+        );
+        $setWal = strpos($source, "'PRAGMA journal_mode = WAL'");
+        // Quote-terminated needle: cannot match the exec literal above.
+        $readBack = strpos($source, "'PRAGMA journal_mode'");
+        $synchronous = strpos($source, "'PRAGMA synchronous = NORMAL'");
+
+        $this->assertIsInt($setWal);
+        $this->assertIsInt($readBack, 'the ctor must read journal_mode back after the WAL exec');
+        $this->assertIsInt($synchronous);
+        $this->assertLessThan($readBack, $setWal, 'the read-back must follow the WAL exec');
+        $this->assertLessThan($synchronous, $readBack, 'the synchronous arm must follow the read-back');
+
+        $window = substr($source, $setWal, $synchronous - $setWal);
+        $this->assertMatchesRegularExpression(
+            '/if\s*\(.*\'PRAGMA journal_mode\'.*\'wal\'\s*\)\s*\{/s',
+            $window,
+            'PRAGMA synchronous must be armed behind a conditional that reads journal_mode back and compares to wal, never unconditionally',
+        );
     }
 }

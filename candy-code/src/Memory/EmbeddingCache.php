@@ -322,6 +322,10 @@ final class EmbeddingCache
         $previousUmask = umask(0077);
         try {
             $db = \SugarCraft\Code\Support\SqliteConnect::open($this->file);
+            // WAL retires the rollback-journal corruption class for the
+            // synchronous = OFF posture below (see MemorySearchIndex for the
+            // full reasoning); sidecar creation lands inside the umask window.
+            $db->exec('PRAGMA journal_mode = WAL');
             // A derived cache: a crash costs a recompute, never a note.
             $db->exec('PRAGMA synchronous = OFF');
             $db->exec(
@@ -340,11 +344,19 @@ final class EmbeddingCache
         return $db;
     }
 
+    /**
+     * Delete a cache file SQLite reported as damaged (SQLITE_CORRUPT, or
+     * SQLITE_NOTADB for a file that is not a database at all). Under WAL the
+     * -wal/-shm sidecars go with it — a WAL is matched to its database by
+     * path, not inode, so a rebuilt main file must not adopt a dead -wal.
+     */
     private function discardIfDamaged(\Throwable $e): void
     {
         $code = $e instanceof \PDOException ? (int) ($e->errorInfo[1] ?? 0) : 0;
         if ($this->file !== null && \in_array($code, self::DAMAGED_CODES, true)) {
             @unlink($this->file);
+            @unlink($this->file . '-wal');
+            @unlink($this->file . '-shm');
         }
     }
 }

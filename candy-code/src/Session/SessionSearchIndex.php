@@ -287,6 +287,10 @@ final class SessionSearchIndex
 
         try {
             $pdo = SqliteConnect::open($dbPath);
+            // Same 64 MiB page cache the store's own connection runs (its
+            // transcripts are what this reader loads); per-store doctrine —
+            // the connect arm never arms it.
+            $pdo->exec('PRAGMA cache_size=-64000');
         } catch (\Throwable) {
             return null;
         }

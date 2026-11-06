@@ -423,6 +423,10 @@ if ($cmd === 'backup') {
     $backupDir = $dataDir . '-backups';
     // M1: the archive only clones `*.jsonl`. A sqlite user who believes they
     // are covered must be told otherwise on every run, not by a footnote.
+    // The WAL posture deepens the refusal: recent commits ride the
+    // `-wal`/`-shm` sidecars until checkpointed, so even a byte-exact copy
+    // of the `.db` alone would miss them (and sidecar files are no longer
+    // transient to copy piecemeal either).
     if (is_file($dbPath)) {
         fwrite(STDERR, Lang::t('cli.backup_sqlite_notice', ['db' => Sanitize::untrusted($dbPath)]) . "\n");
     }

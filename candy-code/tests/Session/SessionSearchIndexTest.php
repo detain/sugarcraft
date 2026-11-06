@@ -121,6 +121,20 @@ final class SessionSearchIndexTest extends TestCase
         return $pdo;
     }
 
+    public function testTheReadOnlyHandleRaisesThePageCache(): void
+    {
+        $this->baseStore();
+        $index = SessionSearchIndex::openForReadOnly($this->dbPath);
+
+        self::assertNotNull($index);
+
+        // cache_size is per-connection and the read-only path builds its own;
+        // the property is the only way to interrogate that connection.
+        $property = new \ReflectionProperty(SessionSearchIndex::class, 'pdo');
+        $property->setAccessible(true);
+        self::assertSame(-64000, (int) $property->getValue($index)->query('PRAGMA cache_size')->fetchColumn());
+    }
+
     public function testOpeningTheIndexLandsTheTablesAndAsksForTheFirstSweep(): void
     {
         $store = $this->baseStore();

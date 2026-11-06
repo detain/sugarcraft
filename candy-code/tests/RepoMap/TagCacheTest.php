@@ -57,6 +57,15 @@ final class TagCacheTest extends TestCase
         self::assertSame(['files' => 1, 'tags' => 3], $cache->stats());
     }
 
+    public function testTheConnectionRaisesThePageCache(): void
+    {
+        $cache = TagCache::open($this->dir . '/cache.sqlite');
+
+        $property = new \ReflectionProperty(TagCache::class, 'pdo');
+        $property->setAccessible(true);
+        self::assertSame(-64000, (int) $property->getValue($cache)->query('PRAGMA cache_size')->fetchColumn());
+    }
+
     public function testPutReplacesAFilesPreviousTags(): void
     {
         $cache = TagCache::open($this->dir . '/cache.sqlite');

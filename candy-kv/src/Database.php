@@ -128,6 +128,15 @@ final class Database
         }
         $this->migrateExpiryColumn();
         $this->db->exec('PRAGMA journal_mode = WAL');
+        // 64,000 KiB (62.5 MiB) page-cache cap per connection (negative spelling is KiB):
+        // list/glob/pattern walks on large stores reread the same pages, and
+        // the cap lets them land in cache instead of disk. It is a ceiling,
+        // not an allocation — a small store never grows past its working set.
+        $this->db->exec('PRAGMA cache_size = -64000');
+        // No PRAGMA synchronous = NORMAL: the WAL companion is declined. This
+        // is a secrets store with per-command write cadence — at that rate the
+        // speed win is worth nothing, while the power-loss window that can
+        // drop the newest commits is.
         // Pattern operations must share the case-sensitive semantics of the
         // exact ones: default LIKE folds case, so list/delete 'Abc-*' would
         // sweep keys that get('Abc-1') reads and delete('Abc-1') misses.
