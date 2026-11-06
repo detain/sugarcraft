@@ -9,15 +9,21 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Backend\CancellationToken;
+use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Workflows\StageResult;
+use SugarCraft\Code\Workflows\Workflow;
 use SugarCraft\Code\Workflows\WorkflowEngineInterface;
+use SugarCraft\Code\Workflows\WorkflowLinter;
+use SugarCraft\Code\Workflows\WorkflowRegistry;
 use SugarCraft\Code\Workflows\WorkflowResult;
 use SugarCraft\Code\Workflows\WorkflowStatus;
 
 /**
- * `/workflow run|pause|resume|status|list` (roadmap O-2h moved it out of
+ * `/workflow run|pause|resume|status|list|lint` (roadmap O-2h moved it out of
  * `Chat::handleWorkflowCommand()`; `Chat::workflowRun()` and
  * `Chat::driveWorkflowFiber()` delegate here).
  *
@@ -58,6 +64,7 @@ final class WorkflowCommand implements HostCommand
             'resume' => self::resume($engine, $inputText, $args),
             'status' => self::status($engine, $inputText, $args),
             'list' => self::list($engine, $inputText),
+            'lint' => self::lintCommand($inputText, $args, $context),
             default => self::help($inputText, Lang::t('host.workflow.unknown_command', ['command' => $command])),
         };
     }
@@ -127,6 +134,7 @@ final class WorkflowCommand implements HostCommand
         $lines[] = Lang::t('host.workflow.help.resume');
         $lines[] = Lang::t('host.workflow.help.status');
         $lines[] = Lang::t('host.workflow.help.list');
+        $lines[] = Lang::t('host.workflow.help.lint');
         $lines[] = Lang::t('host.workflow.help.self');
         $lines[] = '';
         $lines[] = Lang::t('host.workflow.help.note');
@@ -551,5 +559,111 @@ final class WorkflowCommand implements HostCommand
         }
 
         return self::respond($inputText, $response);
+    }
+
+    /**
+     * Handle /workflow lint command (C5).
+     *
+     * Static check of a workflow plan WITHOUT dispatching agents: a plan
+     * table plus findings with severity. The cannot-load verdict rides an
+     * error-flagged row — the slash surface has no exit codes, and the
+     * 0/1/2 mapping is reported as a protocol seam (WorkflowMethods carries
+     * no lint row and protocol regen is a serialized surface).
+     */
+    private static function lintCommand(string $inputText, string $args, CommandContext $context): CommandResult
+    {
+        $target = trim($args);
+
+        if ($target === '') {
+            return self::help($inputText, Lang::t('host.workflow.usage.lint'));
+        }
+
+        try {
+            $workflow = self::lintTarget($target, $context);
+        } catch (\Throwable $e) {
+            return self::respond($inputText, Lang::t('host.workflow.error', ['error' => 'cannot-load — ' . $e->getMessage()]), true);
+        }
+
+        $report = WorkflowLinter::lint($workflow, [], self::toolUniverse($context));
+
+        $lines = ["Lint of workflow `{$workflow->name}` (no agents dispatched):", '', $report->renderPlanTable()];
+        if ($report->hasFindings()) {
+            $lines[] = '';
+            $lines[] = $report->renderFindings();
+        }
+        $lines[] = '';
+        $lines[] = 'Verdict: ' . $report->verdictLine();
+
+        return self::respond($inputText, implode("\n", $lines), $report->hasErrors());
+    }
+
+    /**
+     * Resolve the lint target: a `<file>.yaml`/`.yml` path loads through the
+     * same fail-closed YAML parser the registry uses (a path lint cannot
+     * consult tiers it was not asked about); anything else is a NAME and
+     * loads through the registry tiers, project before user. A `.php` path
+     * is refused loudly — requiring it would EXECUTE the file.
+     */
+    private static function lintTarget(string $target, CommandContext $context): Workflow
+    {
+        $extension = strtolower(pathinfo($target, PATHINFO_EXTENSION));
+
+        if ($extension === 'php') {
+            throw new \RuntimeException('a PHP workflow file executes at load; lint it by NAME (the registry tiers load it) instead');
+        }
+
+        if ($extension === 'yaml' || $extension === 'yml') {
+            $contents = is_file($target) ? @file_get_contents($target) : false;
+            if ($contents === false) {
+                throw new \RuntimeException("no workflow file at {$target}");
+            }
+
+            return (new WorkflowRegistry())->fromYamlString($contents, $target);
+        }
+
+        return self::registryFor($context)->load($target);
+    }
+
+    /**
+     * The same two tiers WorkflowEngine sees: a read-only mirror of
+     * Bootstrap::workflowEngine()'s registry wiring (project tier from the
+     * resolved config root, user tier from the trusted config dir). Built
+     * per call on purpose — the command must not cache a registry across
+     * config edits.
+     */
+    private static function registryFor(CommandContext $context): WorkflowRegistry
+    {
+        $configRoot = LaunchContext::configRoot($context->root);
+        $userConfigDir = Bootstrap::trustedConfigDirPath();
+
+        return new WorkflowRegistry(
+            $userConfigDir . '/workflows',
+            $configRoot === null ? null : rtrim($configRoot, '/') . '/.candy-code/workflows',
+            projectRoot: $configRoot,
+            userHome: dirname($userConfigDir),
+        );
+    }
+
+    /**
+     * The declared-vs-known tool leg needs the session's tool universe;
+     * EngineBackend::tools() is not on the Backend contract, so a context
+     * without one (or with a non-engine double) degrades the leg to skipped
+     * rather than guessing a universe.
+     *
+     * @return ?list<string> null = universe unreachable => skip that leg
+     */
+    private static function toolUniverse(CommandContext $context): ?array
+    {
+        $backend = $context->backend;
+        if (!$backend instanceof EngineBackend) {
+            return null;
+        }
+
+        $names = [];
+        foreach ($backend->tools() as $tool) {
+            $names[] = $tool->name();
+        }
+
+        return $names;
     }
 }

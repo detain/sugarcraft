@@ -435,6 +435,11 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — existingRules() lists the `*.md` names in the project\'s own `.candy-code/rules/` '
                 . 'so the /newrule prompt can name the taken ones; nothing is read',
         ],
+        'Host/Commands/WorkflowCommand.php|file_get_contents' => [
+            'USER_TYPED — lintTarget(): `/workflow lint <file>` reads a `.yaml` plan whose path came '
+                . 'from the typed argument; the bytes are parsed as data (never required), so a '
+                . 'hostile path costs at most a read the person at the terminal could have done anyway',
+        ],
         'Host/TurnController.php|file_get_contents' => [
             'SELF_LOCATED — a forked child\'s result file (roadmap O-2g takePayload()), named by '
                 . 'Support\\ToolIpcFiles::reserve() in this process before the fork, read once and discarded',
@@ -1555,6 +1560,16 @@ final class ReadPathCensusTest extends TestCase
                 . 'built from the registry\'s CONFIGURED workflowsPath(), not from the anchored '
                 . 'readableUserDir(), so a link on the workflows directory relocates the pause '
                 . 'files with it. What that yields is this engine\'s own JSON, not code',
+        ],
+        'Workflows/WorkflowLinter.php|file_get_contents' => [
+            'SELF_LOCATED — readPauseLedger(): `/workflow status` re-reads the engine\'s own '
+                . '`.running/<id>.json` record (identifier-sanitized name, or content-matched). '
+                . 'RESIDUAL, stated: the directory comes from the registry\'s CONFIGURED '
+                . 'workflowsPath(), the same residual the engine\'s rows above declare',
+        ],
+        'Workflows/WorkflowLinter.php|glob' => [
+            'NAMES_ONLY — readPauseLedger(): lists the pause directory to match a ledger whose '
+                . 'workflowId equals the requested identifier; nothing is read through the listing',
         ],
         'Workflows/WorkflowRegistry.php|require' => [
             'CONTAINED — THE TENTH READ PATH: the user tier\'s directory is anchored to $HOME and '
