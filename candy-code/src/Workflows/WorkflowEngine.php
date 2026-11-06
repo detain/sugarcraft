@@ -1821,7 +1821,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $stageStartedAt = new \DateTimeImmutable();
 
                 $stageType = $stage['type'] ?? '';
-                if (!in_array($stageType, ['parallel', 'stage', 'pipeline', 'verification'], true)) {
+                if (!in_array($stageType, Workflow::STAGE_TYPES, true)) {
                     throw new UnsupportedStageTypeException(
                         "Stage type '{$stageType}' is not supported. Only 'stage', 'parallel', 'pipeline', and 'verification' are implemented."
                     );

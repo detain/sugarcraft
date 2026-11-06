@@ -16,6 +16,18 @@ namespace SugarCraft\Code\Workflows;
 final readonly class Workflow
 {
     /**
+     * The stage shapes a workflow may declare.
+     *
+     * WHY one list: the engine's walker dispatches on these, the linter
+     * diagnoses against them, and (C1) the YAML parser admits exactly them —
+     * three surfaces that silently diverge if each keeps its own copy.
+     * Order is the engine refusal sentence's order, kept byte-stable.
+     *
+     * @var list<string>
+     */
+    public const STAGE_TYPES = ['stage', 'parallel', 'pipeline', 'verification'];
+
+    /**
      * @param string                $name                Human-readable workflow name.
      * @param string                $description         Brief description of what the workflow does.
      * @param array                 $stages              Ordered list of raw stage-task arrays built by WorkflowBuilder.

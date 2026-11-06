@@ -26,9 +26,11 @@ use SugarCraft\Code\Permissions\PermissionRule;
  *  - firstRejectMisuse() refuses a `reject` verdict rule outside a
  *    verification stage's verifier slot. The walk here is its mirror.
  *
- * YAML plans carry only the surface the YAML tiers can express (no per-task
- * timeout/reject; those fields stay null), so those legs degrade to no-op for
- * YAML-loaded workflows exactly as the DTO nulls dictate.
+ * YAML plans now reach the whole stage surface — per-task timeout, reject
+ * and rejectMinOccurrences all parse into the DTO (C1), and the stage shapes
+ * themselves come from {@see Workflow::STAGE_TYPES}, the one list the engine
+ * walker and the YAML parser share — so no leg degrades to no-op for a
+ * YAML-loaded workflow anymore.
  *
  * The report is structural diagnostics and stays literal English — the same
  * law the engine's refusals follow (a workflow author reads raw text in the
@@ -36,8 +38,14 @@ use SugarCraft\Code\Permissions\PermissionRule;
  */
 final class WorkflowLinter
 {
-    /** Stage shapes the engine's walker dispatches on; anything else is a run-time refusal. */
-    private const SUPPORTED_TYPES = ['stage', 'parallel', 'pipeline', 'verification'];
+    /**
+     * C1 parity: the accepted stage shapes live on the Workflow VO — this is
+     * an alias, not a copy, so the lint verdict can never disagree with the
+     * engine's run-time refusal after a list edit on either side.
+     *
+     * @var list<string>
+     */
+    private const SUPPORTED_TYPES = Workflow::STAGE_TYPES;
 
     /** Above this per-task retry count a runaway retry loop is probably a typo. */
     private const RETRIES_WARN_ABOVE = 10;

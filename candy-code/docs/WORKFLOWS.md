@@ -93,6 +93,7 @@ stages:                          # a LIST, never a map
     model: claude-sonnet-4-5     # optional; run this task on a named model
     resource: gpu                  # optional; exclusive host lock held for this task's stage
     lockWaitSeconds: 60            # optional; seconds to wait for that lock before the stage fails
+    timeout: 60                    # optional; positive int, this ONE task's wall-clock budget
     capture: true                  # optional; publish this stage's full output to a file (downstream sees path + preview)
 
   - name: fix
@@ -124,7 +125,11 @@ any other failed stage, so the run stops there.
   included: when `maxConcurrent` bounds the stage, an agent still waiting for
   one of those slots when the budget runs out never starts.
 - A PHP task's own `timeout()` (below) bounds that one agent from its dispatch;
-  the stage's budget still applies, and whichever expires first wins.
+  the stage's budget still applies, and whichever expires first wins. The same
+  bound is spellable in YAML: `timeout: 60` on a single-task stage, on an entry
+  of a `tasks:` list, on a `parallel:` agent, on a pipeline step and on either
+  sub-map of a verification stage (the verifier's own budget bounds only the
+  verification pass).
 
 The bound is enforced by `AgentWorkerPool` on its forking path, which is the
 path `/workflow run` takes. Where the pool cannot fork (no `pcntl`, or a failed
@@ -319,6 +324,48 @@ by — so the flag lives on the stage map (legal beside a `tasks:` list, like
   work is never lost to the loss of a file.
 - **Absent means untouched:** a stage without `capture:` interpolates today's
   full output, byte for byte — and writes nothing anywhere new.
+
+### `type: verification` and `type: pipeline` reach the compound shapes from YAML
+
+A stage may carry an explicit `type:` beside its name. Absent means `type: stage`
+— the plain single-task or `tasks:`-list shape above. The accepted spellings are
+exactly `stage`, `parallel`, `pipeline`, and `verification`; anything else is
+refused at load, naming the offending word. `parallel: true` remains the flag
+form of `type: parallel` — carrying both spellings at once, or pairing
+`parallel: true` with one of the compound types, is a contradiction the loader
+refuses rather than resolves.
+
+```yaml
+  - name: review                     # verification: run a task, then judge it
+    type: verification
+    task:
+      agent: coder
+      prompt: Fix the finding.
+      tools: [Edit, Read]
+    verifier:
+      agent: reviewer
+      prompt: Review the fix. Answer APPROVE or REJECT with reasons.
+      reject: '/\bREJECT\b|\bNEEDS-FIX\b/i'   # verifier verdicts fail the stage
+      rejectMinOccurrences: 1                  # how many matches make it a REJECT
+
+  - name: scaffold                   # pipeline: steps chained in sequence
+    type: pipeline
+    stages:
+      - name: plan                   # each step is a task map; the step's name
+        agent: architect             # is also what {{plan.output}} interpolates
+        prompt: Write the plan.
+      - agent: coder
+        prompt: Implement {{prevResult}}   # prevResult carries the prior step
+```
+
+A verification stage fails when the verifier *mechanically* fails, runs out of
+time, or produces output matching its `reject:` pattern (see `reject()` below —
+the verdict machinery is the same one PHP plans use; YAML plans get it for free).
+A pipeline stage runs its steps in order against one shared stage budget, and
+each step's `timeout:` bounds only itself. `reject:` belongs on a verifier:
+putting it on a plain task parses into the DTO, and the engine's pre-flight
+refuses the run naming the misuse — the parser refuses shapes, the engine owns
+placement policy.
 
 ### Everything malformed is refused, not coerced
 
@@ -776,6 +823,12 @@ describes.
 lock around the stage exactly as
 [`resource` serializes a stage against the host](#resource-serializes-a-stage-against-the-host)
 describes.
+`timeout()` — spelled `timeout:` on any task map, list entry, parallel agent,
+pipeline step or verification sub-map in YAML — bounds that one agent, and
+`reject()` with its optional `atLeast` — spelled `reject:` and
+`rejectMinOccurrences:` on a verification stage's `verifier:` (or `task:`) map
+— carries the verdict pattern onto the DTO, after which the semantics below are
+identical whatever spelling authored it.
 
 ### `reject()` fails a stage on the verifier verdict
 

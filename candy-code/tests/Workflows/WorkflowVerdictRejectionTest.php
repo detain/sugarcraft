@@ -15,6 +15,7 @@ use SugarCraft\Code\Workflows\Tasks;
 use SugarCraft\Code\Workflows\Workflow;
 use SugarCraft\Code\Workflows\WorkflowBuilder;
 use SugarCraft\Code\Workflows\WorkflowEngine;
+use SugarCraft\Code\Workflows\WorkflowLoadException;
 use SugarCraft\Code\Workflows\WorkflowRegistry;
 use SugarCraft\Code\Workflows\WorkflowStatus;
 use SugarCraft\Code\Workflows\WorkflowTask;
@@ -370,27 +371,36 @@ final class WorkflowVerdictRejectionTest extends TestCase
         $this->assertSame('/X/', (new WorkflowTask('reviewer', 'p', reject: '/X/'))->reject);
     }
 
-    public function testYamlCannotSpellAVerificationStageAndSilentlyIgnoresStrayRejectKeys(): void
+    public function testTheYamlTierNowHonoursRejectAndRefusesMalformedPatternsLoudly(): void
     {
         $workflowsDir = $this->tempDir . '/workflows';
-        $yaml = <<<'YAML'
+        $good = <<<'YAML'
 name: yaml-verdict
-description: a YAML stage cannot become a verification stage
+description: a plain stage records the reject pattern on the DTO
 
 stages:
   - name: one
     agent: coder
     prompt: "plain step"
-    reject: "REJECT"
+    reject: "/REJECT/"
 YAML;
-        file_put_contents($workflowsDir . '/yaml-verdict.yaml', $yaml);
+        file_put_contents($workflowsDir . '/yaml-verdict.yaml', $good);
 
         $workflow = (new WorkflowRegistry($workflowsDir))->loadYaml('yaml-verdict');
 
         $task = $workflow->stages[0]['tasks'][0];
         $this->assertInstanceOf(WorkflowTask::class, $task);
-        $this->assertNull($task->reject, 'the YAML surface has no reject spelling — the key is ignored, not honoured');
-        $this->assertNotSame('verification', $workflow->stages[0]['type'] ?? null, 'YAML stages parse as plain stage/parallel only');
+        $this->assertSame('/REJECT/', $task->reject, 'C1: the reject spelling reaches the DTO on every task surface');
+        $this->assertNotSame('verification', $workflow->stages[0]['type'] ?? null, 'a plain stage stays plain — placement policy belongs to the engine pre-flight');
+
+        $bad = str_replace('/REJECT/', 'REJECT', $good);
+        file_put_contents($workflowsDir . '/yaml-verdict.yaml', $bad);
+        try {
+            (new WorkflowRegistry($workflowsDir))->loadYaml('yaml-verdict');
+            $this->fail('a bare-word pattern is not a PCRE and must be refused at parse');
+        } catch (WorkflowLoadException $error) {
+            $this->assertStringContainsString('"reject"', $error->getMessage());
+        }
     }
 
     // ----------------------------------------------------------------- (g)

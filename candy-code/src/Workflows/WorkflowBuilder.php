@@ -66,11 +66,16 @@ final class WorkflowBuilder
      *        capture file and hand downstream stages the path plus a bounded
      *        preview instead of the dump — see
      *        {@see WorkflowEngine::captureStageOutput()}.
+     * @param bool $cache C13: OPT-IN resume reuse. When true, a resume that
+     *        carries this stage's recorded result AND a matching input hash
+     *        settles the stage from the record instead of re-dispatching
+     *        agents (see {@see WorkflowEngine}). Default off: a stage re-runs
+     *        unless its author says its output is stable enough to trust.
      *
      * @throws \InvalidArgumentException When $tasks is an empty list or holds
      *         something other than TaskBuilders.
      */
-    public function stage(string $name, TaskBuilder|array $tasks, bool $capture = false): self
+    public function stage(string $name, TaskBuilder|array $tasks, bool $capture = false, bool $cache = false): self
     {
         $tasks = $tasks instanceof TaskBuilder ? [$tasks] : array_values($tasks);
         if ($tasks === []) {
@@ -94,7 +99,9 @@ final class WorkflowBuilder
             'name' => $name,
             'type' => 'stage',
             'tasks' => $built,
-        ] + ($capture === true ? ['capture' => true] : []);
+        ]
+            + ($capture === true ? ['capture' => true] : [])
+            + ($cache === true ? ['cache' => true] : []);
 
         return $this;
     }
@@ -111,7 +118,7 @@ final class WorkflowBuilder
      *
      * @param TaskBuilder[] $tasks
      */
-    public function parallel(string $name, array $tasks, bool $capture = false): self
+    public function parallel(string $name, array $tasks, bool $capture = false, bool $cache = false): self
     {
         $builtTasks = array_map(
             static fn(TaskBuilder $t) => $t->build(),
@@ -122,7 +129,9 @@ final class WorkflowBuilder
             'name' => $name,
             'type' => 'parallel',
             'tasks' => $builtTasks,
-        ] + ($capture === true ? ['capture' => true] : []);
+        ]
+            + ($capture === true ? ['capture' => true] : [])
+            + ($cache === true ? ['cache' => true] : []);
 
         return $this;
     }
@@ -136,7 +145,7 @@ final class WorkflowBuilder
      * @param TaskBuilder[]|array[] $stages Each element is a TaskBuilder instance or a plain array
      *                                     with 'name', 'type', 'tasks' keys.
      */
-    public function pipeline(string $name, array $stages, bool $capture = false): self
+    public function pipeline(string $name, array $stages, bool $capture = false, bool $cache = false): self
     {
         $nestedStageArrays = [];
         foreach ($stages as $index => $stage) {
@@ -159,7 +168,9 @@ final class WorkflowBuilder
             'name' => $name,
             'type' => 'pipeline',
             'stages' => $nestedStageArrays,
-        ] + ($capture === true ? ['capture' => true] : []);
+        ]
+            + ($capture === true ? ['capture' => true] : [])
+            + ($cache === true ? ['cache' => true] : []);
 
         return $this;
     }
@@ -190,8 +201,13 @@ final class WorkflowBuilder
      * @param string      $name     Human-readable name for this stage.
      * @param TaskBuilder $task     The task to run and then verify.
      * @param TaskBuilder $verifier The verifier that checks the task output.
+     * @param bool        $capture  Same S3 law as {@see stage()}'s capture.
+     * @param bool        $cache    Same C13 opt-in resume-reuse law as
+     *        {@see stage()}'s cache: the recorded hash covers BOTH slots'
+     *        task and verifier prompts, so a carried stage replays exactly
+     *        what a prior run verified.
      */
-    public function withVerification(string $name, TaskBuilder $task, TaskBuilder $verifier): self
+    public function withVerification(string $name, TaskBuilder $task, TaskBuilder $verifier, bool $capture = false, bool $cache = false): self
     {
         $clone = clone $this;
         $clone->stages[] = [
@@ -199,7 +215,9 @@ final class WorkflowBuilder
             'type' => 'verification',
             'task' => $task->build(),
             'verifier' => $verifier->build(),
-        ];
+        ]
+            + ($capture === true ? ['capture' => true] : [])
+            + ($cache === true ? ['cache' => true] : []);
 
         return $clone;
     }

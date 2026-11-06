@@ -1305,24 +1305,54 @@ final class WorkflowRegistry
                 }
                 $seenStageNames[$stageName] = $index;
 
-                $isParallel = $this->requireParallelFlag($stage, "Workflow file {$yamlPath} stage '{$stageName}'");
+                $where = "Workflow file {$yamlPath} stage '{$stageName}'";
+                $flaggedParallel = $this->requireParallelFlag($stage, $where);
+                // C1: the stage's shape is decided once, here, from either
+                // spelling — the `parallel: true` flag or the `type:` key —
+                // and never twice down the line.
+                $stageType = $this->requireStageType($stage, $where);
+                if ($flaggedParallel && $stageType === 'parallel') {
+                    throw new WorkflowLoadException(
+                        "{$where} carries both \"parallel: true\" and \"type: parallel\"; one spelling is enough"
+                    );
+                }
+                if ($flaggedParallel && ($stageType === 'verification' || $stageType === 'pipeline')) {
+                    throw new WorkflowLoadException(
+                        "{$where} declares \"parallel: true\", which contradicts \"type: {$stageType}\""
+                    );
+                }
+                $isParallel = $flaggedParallel || $stageType === 'parallel';
                 // S3: the capture flag is stage-scoped like `parallel:` — a
                 // key the author wrote beside `tasks:` is legitimate, not a
                 // task key misplaced.
-                $capture = $this->requireCaptureFlag($stage, "Workflow file {$yamlPath} stage '{$stageName}'");
-                $parsed = $this->parseYamlStage($stage, $stageName, $yamlPath, $isParallel);
+                $capture = $this->requireCaptureFlag($stage, $where);
+                // C13's door rides the same stage-scoped law: strict bool,
+                // absent means off.
+                $cache = $this->requireCacheFlag($stage, $where);
 
-                if ($isParallel) {
+                if ($stageType === 'verification') {
+                    $builder = $builder->withVerification(
+                        $stageName,
+                        $this->parseVerificationSubMap($stage, 'task', $where),
+                        $this->parseVerificationSubMap($stage, 'verifier', $where),
+                        capture: $capture,
+                        cache: $cache,
+                    );
+                } elseif ($stageType === 'pipeline') {
+                    $builder = $builder->pipeline($stageName, $this->parsePipelineSteps($stage, $where), capture: $capture, cache: $cache);
+                } elseif ($isParallel) {
                     // $parsed is an array of TaskBuilders for parallel stages
                     // This delegates to WorkflowBuilder::parallel(), which feeds
                     // executeParallelStage() in WorkflowEngine.php.  The full
                     // parallel() primitive chain spans: WorkflowEngine,
                     // WorkflowBuilder, Workflow, WorkflowRegistry, AgentWorkerPool.
-                    $builder = $builder->parallel($stageName, $parsed, capture: $capture);
+                    $parsed = $this->parseYamlStage($stage, $stageName, $yamlPath, $isParallel);
+                    $builder = $builder->parallel($stageName, $parsed, capture: $capture, cache: $cache);
                 } else {
                     // $parsed is a single TaskBuilder for a regular stage, or
                     // a list of them for a `tasks:` stage run in sequence.
-                    $builder = $builder->stage($stageName, $parsed, capture: $capture);
+                    $parsed = $this->parseYamlStage($stage, $stageName, $yamlPath, $isParallel);
+                    $builder = $builder->stage($stageName, $parsed, capture: $capture, cache: $cache);
                 }
             }
         }
@@ -1420,6 +1450,61 @@ final class WorkflowRegistry
     }
 
     /**
+     * A stage's `cache:` flag (C13) — strict boolean, the same spelling law
+     * as `capture:`/`parallel:`. It is the opt-in door for resume reuse:
+     * absent (the default) means the stage re-runs on resume like always,
+     * and only an explicit `cache: true` lets a recorded stage settle from
+     * the pause file. A mangled flag must never quietly widen reuse.
+     */
+    private function requireCacheFlag(array $stage, string $where): bool
+    {
+        if (!array_key_exists('cache', $stage)) {
+            return false;
+        }
+
+        if (!is_bool($stage['cache'])) {
+            throw new WorkflowLoadException(
+                "{$where} \"cache\" must be a boolean (true or false, unquoted), got "
+                . get_debug_type($stage['cache'])
+            );
+        }
+
+        return $stage['cache'];
+    }
+
+    /**
+     * A stage's `type:` spelling (C1). Absent means the plain `stage` shape;
+     * anything present must name exactly one of the shapes the engine walks
+     * ({@see Workflow::STAGE_TYPES}) — the parser, the linter and the engine
+     * refuse from that ONE list, so a YAML plan can never declare a stage
+     * shape its runner would reject at dispatch time.
+     *
+     * @param array<array-key, mixed> $stage
+     *
+     * @throws WorkflowLoadException When `type` is not one of the supported spellings.
+     */
+    private function requireStageType(array $stage, string $where): string
+    {
+        $type = $this->requireString($stage, 'type', 'stage', $where);
+
+        if (in_array($type, Workflow::STAGE_TYPES, true)) {
+            return $type;
+        }
+
+        $supported = [];
+        foreach (Workflow::STAGE_TYPES as $spelling) {
+            $supported[] = "'{$spelling}'";
+        }
+        $last = array_pop($supported);
+
+        throw new WorkflowLoadException(
+            "{$where} declares type: {$type}; supported stage types are "
+            . implode(', ', $supported)
+            . ", and {$last} — the same list the engine dispatches on"
+        );
+    }
+
+    /**
      * A `config:` value as a count of things, at least 1.
      *
      * The `(int)` casts this replaces were the quietest defect in the loader.
@@ -1444,6 +1529,19 @@ final class WorkflowRegistry
      */
     private function requirePositiveInt(mixed $value, string $key, string $yamlPath): int
     {
+        return $this->requireTaskPositiveInt($value, $key, "Workflow file {$yamlPath}");
+    }
+
+    /**
+     * The same whole-number-at-least-1 parse, for surfaces whose message
+     * prefix is already a full `$where` (task maps beside a stage path).
+     * ONE parser: `config.timeout` and a per-task `timeout:` must never
+     * disagree about what "600" or "abc" means.
+     *
+     * @throws WorkflowLoadException When the value is not a whole number >= 1.
+     */
+    private function requireTaskPositiveInt(mixed $value, string $key, string $where): int
+    {
         $int = null;
         if (is_int($value)) {
             $int = $value;
@@ -1453,13 +1551,13 @@ final class WorkflowRegistry
 
         if ($int === null) {
             throw new WorkflowLoadException(
-                "Workflow file {$yamlPath} \"{$key}\" must be a whole number, got " . get_debug_type($value)
+                "{$where} \"{$key}\" must be a whole number, got " . get_debug_type($value)
             );
         }
 
         if ($int < 1) {
             throw new WorkflowLoadException(
-                "Workflow file {$yamlPath} \"{$key}\" must be at least 1, got {$int}"
+                "{$where} \"{$key}\" must be at least 1, got {$int}"
             );
         }
 
@@ -1617,6 +1715,7 @@ final class WorkflowRegistry
                 if (array_key_exists('lockWaitSeconds', $agent)) {
                     $b = $b->lockWaitSeconds($this->requireLockWaitSeconds($agent['lockWaitSeconds'], "{$where} agent #{$agentIndex}"));
                 }
+                $b = $this->applyTaskArms($b, $agent, "{$where} agent #{$agentIndex}");
                 $builders[] = $b;
             }
             return $builders;
@@ -1658,7 +1757,9 @@ final class WorkflowRegistry
             $b = $b->lockWaitSeconds($this->requireLockWaitSeconds($stage['lockWaitSeconds'], $where));
         }
 
-        return $b;
+        // C1: the per-task timeout / reject verdict arms, same spelling law
+        // as the task-list and verification sub-map surfaces.
+        return $this->applyTaskArms($b, $stage, $where);
     }
 
     /**
@@ -1676,7 +1777,11 @@ final class WorkflowRegistry
      */
     private function parseYamlTaskList(array $stage, string $where): array
     {
-        foreach (['agent', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds'] as $key) {
+        // C1: the list grew with the surface — a stage that chooses `tasks:`
+        // keeps the new per-task verdict keys at task level too, so the
+        // stage-level spelling of timeout/reject/rejectMinOccurrences is
+        // refused exactly like the nine that came before it.
+        foreach (['agent', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds', 'timeout', 'reject', 'rejectMinOccurrences'] as $key) {
             if (array_key_exists($key, $stage)) {
                 throw new WorkflowLoadException(
                     "{$where} lists \"tasks\", so \"{$key}\" belongs on each task, not on the stage"
@@ -1701,39 +1806,163 @@ final class WorkflowRegistry
                 throw new WorkflowLoadException("{$at} must be a map, got " . get_debug_type($task));
             }
 
-            $b = Tasks::agent($this->requireString($task, 'agent', 'coder', $at));
-            if (array_key_exists('name', $task)) {
-                $b = $b->name($this->requireString($task, 'name', '', $at));
+            $builders[] = $this->readTaskMap($task, $at);
+        }
+
+        return $builders;
+    }
+
+    /**
+     * One task-map reader, shared by the `tasks:` list entries, the
+     * verification stage's `task`/`verifier` sub-maps and the pipeline
+     * stage's step maps (C1).
+     *
+     * The WHY is single-source: the same key must mean the same thing,
+     * refuse with the same message, and land in the same DTO field on every
+     * surface that carries a task — a per-surface copy of this body is how
+     * the pre-C1 spellings drifted into three near-identical literals.
+     *
+     * @param array<array-key, mixed> $map
+     */
+    private function readTaskMap(array $map, string $at): TaskBuilder
+    {
+        $b = Tasks::agent($this->requireString($map, 'agent', 'coder', $at));
+        if (array_key_exists('name', $map)) {
+            $b = $b->name($this->requireString($map, 'name', '', $at));
+        }
+        if (array_key_exists('prompt', $map)) {
+            $b = $b->prompt($this->requireString($map, 'prompt', '', $at));
+        }
+        if (array_key_exists('tools', $map)) {
+            $b = $b->tools($this->requireToolList($map['tools'], $at));
+        }
+        if (array_key_exists('retries', $map)) {
+            $b = $b->retries($this->requireRetryCount($map['retries'], $at));
+        }
+        if (array_key_exists('outputSchema', $map)) {
+            $b = $b->outputSchema($this->requireSchema($map['outputSchema'], $at));
+        }
+        if (array_key_exists('isolation', $map)) {
+            $b = $b->isolation($this->requireIsolation($map['isolation'], $at));
+        }
+        // S2 (wf-g2g3): the per-stage model ask, same spelling law as the
+        // stage and parallel-agent arms — whether the session can SERVE it
+        // is the ONE ladder's job at dispatch (ModelChoice), never a second here.
+        if (array_key_exists('model', $map)) {
+            $b = $b->model($this->requireModel($map['model'], $at));
+        }
+        // O3: per-task resource spelling — the stage's lock set is the
+        // union of its tasks' declarations, read at dispatch.
+        if (array_key_exists('resource', $map)) {
+            $b = $b->resource($this->requireResource($map['resource'], $at));
+        }
+        if (array_key_exists('lockWaitSeconds', $map)) {
+            $b = $b->lockWaitSeconds($this->requireLockWaitSeconds($map['lockWaitSeconds'], $at));
+        }
+
+        return $this->applyTaskArms($b, $map, $at);
+    }
+
+    /**
+     * The C1 verdict arms every task surface shares: `timeout`, `reject`
+     * and `rejectMinOccurrences`.
+     *
+     * reject parses on EVERY task surface on purpose: placement is the
+     * engine's policy, not the parser's — WorkflowEngine's reject-misuse
+     * pre-flight refuses a reject() that sits anywhere but a verification
+     * stage's verifier slot, before a single agent is dispatched. The
+     * parser refuses shapes; it never second-guesses strategy.
+     *
+     * @param array<array-key, mixed> $map
+     */
+    private function applyTaskArms(TaskBuilder $b, array $map, string $at): TaskBuilder
+    {
+        if (array_key_exists('timeout', $map)) {
+            $b = $b->timeout($this->requireTaskPositiveInt($map['timeout'], 'timeout', $at));
+        }
+
+        if (array_key_exists('rejectMinOccurrences', $map) && !array_key_exists('reject', $map)) {
+            throw new WorkflowLoadException(
+                "{$at} sets \"rejectMinOccurrences\" without \"reject\"; the threshold counts"
+                . " reject-pattern matches, so the pattern has to be there too"
+            );
+        }
+
+        $pattern = $this->requireString($map, 'reject', '', $at);
+        if ($pattern !== '') {
+            $atLeast = array_key_exists('rejectMinOccurrences', $map)
+                ? $this->requireTaskPositiveInt($map['rejectMinOccurrences'], 'rejectMinOccurrences', $at)
+                : 1;
+            try {
+                $b = $b->reject($pattern, $atLeast);
+            } catch (\InvalidArgumentException $error) {
+                // Same wrap law as requireSchema(): a pattern the author wrote is a
+                // pattern the author meant, so a bad PCRE is named, not coerced.
+                throw new WorkflowLoadException("{$at} \"reject\": {$error->getMessage()}", 0, $error);
             }
-            if (array_key_exists('prompt', $task)) {
-                $b = $b->prompt($this->requireString($task, 'prompt', '', $at));
+        }
+
+        return $b;
+    }
+
+    /**
+     * A verification stage's `task:` or `verifier:` sub-map (C1).
+     *
+     * Both slots read through the one task-map surface, so the verifier is
+     * a first-class agent (model, isolation, schema all available) and not
+     * a second-class prompt string.
+     *
+     * @param array<array-key, mixed> $stage
+     */
+    private function parseVerificationSubMap(array $stage, string $slot, string $where): TaskBuilder
+    {
+        if (!array_key_exists($slot, $stage)) {
+            throw new WorkflowLoadException(
+                "{$where} is type: verification, so it needs a \"{$slot}\" sub-map"
+            );
+        }
+        $map = $stage[$slot];
+        if (!is_array($map)) {
+            throw new WorkflowLoadException("{$where} \"{$slot}\" must be a map, got " . get_debug_type($map));
+        }
+
+        return $this->readTaskMap($map, "{$where} \"{$slot}\"");
+    }
+
+    /**
+     * A pipeline stage's `stages:` list of steps (C1).
+     *
+     * Each step is one task map; {@see WorkflowBuilder::pipeline()} names
+     * the nested sub-stage from the step's own `name`, falling back to its
+     * agent label — the same ladder the PHP form uses.
+     *
+     * @param array<array-key, mixed> $stage
+     * @return list<TaskBuilder>
+     */
+    private function parsePipelineSteps(array $stage, string $where): array
+    {
+        if (!array_key_exists('stages', $stage)) {
+            throw new WorkflowLoadException(
+                "{$where} is type: pipeline, so it needs a \"stages\" list of steps"
+            );
+        }
+        $steps = $stage['stages'];
+        if (!is_array($steps) || !array_is_list($steps)) {
+            throw new WorkflowLoadException(
+                "{$where} \"stages\" must be a list, got " . (is_array($steps) ? 'a map' : get_debug_type($steps))
+            );
+        }
+        if ($steps === []) {
+            throw new WorkflowLoadException("{$where} \"stages\" must list at least one step");
+        }
+
+        $builders = [];
+        foreach ($steps as $stepIndex => $step) {
+            $at = "{$where} step #{$stepIndex}";
+            if (!is_array($step)) {
+                throw new WorkflowLoadException("{$at} must be a map, got " . get_debug_type($step));
             }
-            if (array_key_exists('tools', $task)) {
-                $b = $b->tools($this->requireToolList($task['tools'], $at));
-            }
-            if (array_key_exists('retries', $task)) {
-                $b = $b->retries($this->requireRetryCount($task['retries'], $at));
-            }
-            if (array_key_exists('outputSchema', $task)) {
-                $b = $b->outputSchema($this->requireSchema($task['outputSchema'], $at));
-            }
-            if (array_key_exists('isolation', $task)) {
-                $b = $b->isolation($this->requireIsolation($task['isolation'], $at));
-            }
-            // S2 (wf-g2g3): the per-stage model ask, same spelling law as the
-            // stage and parallel-agent arms above.
-            if (array_key_exists('model', $task)) {
-                $b = $b->model($this->requireModel($task['model'], $at));
-            }
-            // O3: per-task resource spelling — the stage's lock set is the
-            // union of its tasks' declarations, read at dispatch.
-            if (array_key_exists('resource', $task)) {
-                $b = $b->resource($this->requireResource($task['resource'], $at));
-            }
-            if (array_key_exists('lockWaitSeconds', $task)) {
-                $b = $b->lockWaitSeconds($this->requireLockWaitSeconds($task['lockWaitSeconds'], $at));
-            }
-            $builders[] = $b;
+            $builders[] = $this->readTaskMap($step, $at);
         }
 
         return $builders;
