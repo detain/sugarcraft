@@ -369,17 +369,27 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *        check and is left to whichever layer eventually owns the call.
      *
      *        And one corollary a reader of the two paragraphs above would
-     *        otherwise assume the other way: a stage's DECLARED tool list is
-     *        advisory, not a capability boundary.
+     *        otherwise assume the other way: whether a stage's DECLARED tool
+     *        list is a capability boundary depends on the dispatch path.
      *        {@see \SugarCraft\Code\Agents\AgentWorkerPool::executeAll()}
-     *        (AgentWorkerPool.php:333-342) builds every per-agent request with
-     *        `tools: $request->tools` — the FIRST task's list — so a parallel
-     *        agent that declared `[Read]` is handed the first agent's tools
-     *        instead. That is not a bypass of the check above, because the
-     *        check examines every task's declaration and the set actually
-     *        handed out is therefore a subset of the checked union; but it does
-     *        mean the list is a request for capability, and nothing downstream
-     *        enforces that an agent receives only what it declared.
+     *        (AgentWorkerPool.php:648-667) builds each per-agent request with
+     *        `tools: $toolGrantResolver($agent)` when the caller supplies a
+     *        resolver, and with `tools: $request->tools` — the FIRST task's
+     *        list — when it does not. The manager path takes the first
+     *        branch: {@see AgentManager::executeAll()} resolves every batch
+     *        member's declaration against the session registry before the
+     *        pool forks anything, and hands the result down as that resolver,
+     *        so a parallel agent that declared `[Read]` is handed its own
+     *        grant rather than a sibling's — and
+     *        {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook} holds
+     *        every call it then makes to the same declaration. An embedder
+     *        driving the pool without a resolver — or a manager with no
+     *        registry, its documented escape hatch — still gets the shared
+     *        first list, and on that path the declaration remains a request
+     *        for capability, not a boundary. Neither branch is a bypass of
+     *        the check above: it examines every task's declaration, so what
+     *        reaches an agent — its own grant or the first task's list — is
+     *        always a subset of the checked union.
      *
      * @param ?string $environmentRoot The session's resolved project root -
      *        `--root`'s value as {@see \SugarCraft\Code\Cli\Bootstrap::chat()}
