@@ -4995,6 +4995,7 @@ final class Subcommands
         'bundles' => 'cli.completion.verb.bundles',
         'completion' => 'cli.completion.verb.completion',
         'doctor' => 'cli.completion.verb.doctor',
+        'gc' => 'cli.completion.verb.gc',
         'import' => 'cli.completion.verb.import',
         'login' => 'cli.completion.verb.login',
         'lsp' => 'cli.completion.verb.lsp',
@@ -5016,6 +5017,9 @@ final class Subcommands
         // C-SES-7.b: 'import' sits with the verbs that CREATE rows — it never
         // needs a <target>, its operand is a transcript file.
         'session' => ['list', 'show', 'import', 'rename', 'delete', 'pin', 'unpin', 'archive', 'unarchive'],
+        // gc-cli-1106 B1: only the two actions that exist TODAY are listed;
+        // sessions/analyze/purge ride later rungs.
+        'gc' => ['status', 'vacuum'],
         'bundles' => ['list', 'install', 'marketplace', 'update', 'search', 'recommend'],
         'lsp' => ['install', 'list'],
         'mcp' => ['list', 'auth', 'import', 'trust', 'serve'],
