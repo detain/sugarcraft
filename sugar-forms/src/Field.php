@@ -56,8 +56,9 @@ interface Field
      *
      * NOTE (accessor era, 2026-10-24): this getTitle() read cannot
      * lose its get* prefix — the bare title() slot is a live fluent setter
-     * (`title(string $title): self`) on eleven of the twelve implementing
-     * fields, and PHP admits one method per name, so the interface cannot
+     * (`title(string $title): self`) on all twelve implementing
+     * fields (RadioPills's short-form title() alias postdates the original
+     * count), and PHP admits one method per name, so the interface cannot
      * bind a bare read the classes cannot spell. Treated as the documented
      * legal exception (sugar-style precedent); rostered in
      * tests/AccessorDeprecationTest.php pending the owner vocabulary ruling.
