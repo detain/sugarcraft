@@ -959,7 +959,6 @@ Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (
   GIF renderer. Uses this lib's root `Terminal` + `Snapshot` to drive
   every rendered frame.
 - [SugarCraft monorepo](https://github.com/detain/sugarcraft)
-- Originally inspired by [charmbracelet/x/vt](https://github.com/charmbracelet/x/tree/main/vt)
 
 ## Credits & inspiration
 
