@@ -30,6 +30,7 @@ asking.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The code's shape, seams and invariants, incl. [the screen, zone by zone](ARCHITECTURE.md#the-screen-zone-by-zone) | You are reading or changing `src/` |
 | [PROMPT_ENGINEERING.md](PROMPT_ENGINEERING.md) | How the system prompt is assembled | You tune agent behaviour |
 | [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Symptom-first error recovery, incl. CI automation notes | Something is broken |
+| [ACCESSIBILITY.md](ACCESSIBILITY.md) | Screen-reader mode, reduced motion, the contrast floor, audible cues | You drive the TUI with a reader, motion or colour is a problem, or you are checking what is enforced vs promised |
 | [protocol/](protocol/) | Generated JSON schema of the serve wire | You build a client |
 | [examples/](examples/) | systemd unit, the PR-comment bot workflow, other deployment samples | You install it as a service or wire the bot into CI |
 

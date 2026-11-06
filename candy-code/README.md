@@ -77,7 +77,7 @@ Claude Code, OpenCode and OpenClaw.
 | [Providers](#providers) | Provider types, model metadata, fallback models, SGLang specifics |
 | [Scripting and automation](#scripting-and-automation) | `-p`/`run`, flags, exit codes, the JSON document, subcommands, shell-out backends |
 | [Server mode, web UI and attach](#server-mode-web-ui-and-attach) | `candy-code serve`, the browser UI, `candy-code attach`, editors through `candy-code acp` |
-| [The agent loop](#the-agent-loop) · [Capabilities](#capabilities) · [Architecture](#architecture) | How a turn runs and what ships |
+| [The agent loop](#the-agent-loop) · [Capabilities](#capabilities) · [Accessibility](#accessibility) · [Architecture](#architecture) | How a turn runs, what ships, the accessibility surfaces, the code's shape |
 | [Custom provider](#custom-provider) · [Accessor deprecation](#accessor-deprecation) | Writing a `ProviderInterface` class in PHP; the bare-accessor rename and its `get*` forwarders |
 | [Limitations](#limitations) · [Tests](#tests) | What is not finished; how the suite is run |
 | [Credits & inspiration](#credits--inspiration) | Where the design came from |
@@ -105,6 +105,7 @@ Claude Code, OpenCode and OpenClaw.
 | [`docs/MCP.md`](docs/MCP.md) | MCP servers: `.mcp.json`, the trust gate, auth, the in-process git server |
 | [`docs/SERVER.md`](docs/SERVER.md) | `candy-code serve`, remote access (`--allowed-host`, `--allowed-ips`), picking a new session's directory (`--allow-dir-browse`), the `candy-code.v1` protocol, the web UI, `candy-code attach`, editors through `candy-code acp` |
 | [`docs/DOCKER.md`](docs/DOCKER.md) | Running `serve` in a container: the application image, the volume layout, ports and health checks, and the `/tmp` cleanup caveat for long-lived containers |
+| [`docs/ACCESSIBILITY.md`](docs/ACCESSIBILITY.md) | Screen-reader mode, reduced motion, the contrast floor, audible cues — what each sheds, what each enforces, and where the switches live |
 | [`docs/PROMPT_ENGINEERING.md`](docs/PROMPT_ENGINEERING.md) | How the system prompt and the turn-context row are assembled, and why |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | What runs where: the binary, the bootstrap, `Chat`, the engine, sessions |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Exit codes, missing skills/tools/hooks, provider problems, where diagnostics go |
@@ -2835,6 +2836,32 @@ under `.candy-code/rules/` honour their `models:` frontmatter — case-insensiti
 model includes all — while `keywords:` stays inert and is named by the launch
 frontmatter audit. An `EnvironmentBlock` (cwd, platform, model, date) closes the system prompt so the model is not guessing at its surroundings; the live git state (branch, status, recent log, diffs after a write) and the files the agent touched ride a `<turn-context>` row at the end of each request instead, so the prompt itself stays byte-stable for the provider's prefix cache.
 - **Permission prompts** — the blocking request/reply flow is wired end to end: `Chat` runs the whole batch of a turn's tool calls through the `PreToolUse` chain *before* forking any of them, and a `HookResult::ask()` suspends the turn on a `PermissionRequestMsg` rendered as a Veil modal over the transcript. `y`/`n`/`a` settles the paused call rather than being advisory, and `a` records a session-scoped grant for calls like this one (the same scope on both paths, below), saved with the session so `--resume` keeps it; `e` edits that scope before it is remembered, and `/permissions revoke` takes a grant back. The modal shows a `Bash` call's command itself, with the model's caption beneath it, and names what `a` would remember. The grant answers only the permission gate's own question: when one of your hooks asks, or `auto` flags a security finding, the modal offers no `a`, says why, and the question is put again on the next call. The prompt is *armed* when it goes up and any non-answer keystroke disarms it (`Enter` re-arms), so an ordinary slash command typed at a live prompt is swallowed instead of answering it. The TUI's default mode, `default`, asks for every write, shell command and network call; `accept-edits` and `auto` ask for less, and `bypass-permissions` and `dont-ask` never prompt (a hook that returns `ask()` still does). The **engine** path asks through the same modal: an engine turn runs in a forked child, and each ASK it raises crosses the turn's two-way frame channel as an `ask` frame, goes up as the same y/n/a prompt, and the answer goes back down as `ask_reply` while the child waits (its idle ceiling is paused for as long as the question is open). There, `n`/`Esc` hands the model a `Permission denied:` result and the turn carries on, and `a` remembers a **pattern** for the rest of the session rather than one exact call — `git status` grants `Bash(git status)` and `Bash(git status *)`, an `Edit` grants that path, a `WebFetch` that host, an MCP tool that tool; a pipeline or chain is generalised per segment with its operators kept (`sed -n 1,5p f | sort | uniq` → `Bash(sed * | sort * | uniq *)`), with launchers (`bash -c`, `sudo`, `xargs`), destructive commands (`rm`, `mv`, `chmod`, …), a writing redirection's target and a `curl` piped on kept literal. A leading `cd <dir inside the project> &&` is a no-op for grants on every path: `a` on `cd /repo && git status --short` remembers `Bash(git status *)`, which then covers `git status` and `cd /repo/sub && git status` too (a `cd` out of the project, or through an expansion, stays part of the command). A remembered pattern only ever answers a question: it never lifts a configured `Deny`, Plan mode's refusals or the `rm -rf /` breaker, and it is never written to a settings file. A question the turn ends underneath (the child gone, the stream corrupt) reaches the model as `Permission required:` — nobody answered it — not as a refusal. The one-shot `-p` path is different: it attaches a console approver, prompts on stderr at a terminal, and refuses with a reason when there is no terminal.
+
+## Accessibility
+
+Four accessibility surfaces ship wired, each with an implementation behind
+it (the full contract, file by file, is
+[docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md)):
+
+- **The `screenReader` setting (live)** sheds what a narrating reader
+  cannot hear: box frames, rules and the diff gutter draw as blank paper
+  (border titles kept verbatim), pane and dock icons drop, the list
+  cursor becomes a plain `>`, selected menu rows carry a text `>` and an
+  `n/of` position instead of reverse video alone, and the agent-live
+  spinner pins to its first frame. With the mode off, every helper is a
+  byte-identical pass-through.
+- **Audible cues** — each permission prompt sounds a BEL beside the wait
+  (a command, never a painted byte), and the mode upgrades a silent
+  `notify: off` to `bell` so turn ends and waiting approvals always
+  sound rather than flashing a visual popup.
+- **`CANDY_CODE_REDUCED_MOTION` (launch-only)** pins the spinner's glyph
+  without shedding any other decoration; elapsed-seconds movement still
+  repaints.
+- **A contrast floor** — every colour the theme paints is held to WCAG
+  2.1 AA's 4.5:1 on the surfaces it actually appears on, enforced at
+  theme-resolve time by nudging the colour's lightness rather than
+  auditing after the fact; the `adaptive` theme resolves against the
+  terminal's own background over OSC 11.
 
 ## Architecture
 

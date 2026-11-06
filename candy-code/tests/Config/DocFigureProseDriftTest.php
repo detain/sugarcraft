@@ -5228,7 +5228,7 @@ final class DocFigureProseDriftTest extends TestCase
         $seenExemptions = [];
 
         $pages = array_values(array_filter(scandir($root . '/docs') ?: [], static fn(string $f): bool => str_ends_with($f, '.md')));
-        self::assertCount(25, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
+        self::assertCount(26, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
 
         // CCD-DOC-06: the root README.md joins the census. It was never on any
         // target list of this family, so a bare File.php:NNN cite planted there
