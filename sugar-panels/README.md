@@ -22,6 +22,7 @@ sugar-panels — a box-drawing layout engine that composes terminal content into
 - **No-border mode** — `noBorder()` flattens a subtree: neither its frames nor its dividers are painted, so adjacent panels touch
 - **Per-panel padding** — inner whitespace around content
 - **ANSI-aware content** — styled/coloured leaf text places by *visible* columns: escape sequences ride with the grapheme they style (zero width), wide graphemes keep their two columns, and a clipped or unbalanced span is auto-reset so colour never bleeds past the box
+- **Word-wrap at paint time** — a leaf line wider than its region is re-wrapped to fit at cell boundaries; over-long words split at grapheme boundaries, and only height overflow is dropped (see *Small viewports*)
 - **Flex / grow children** — `withFlex(int)` / `withGrow()`: a fixed child claims its **natural size** (widest visible line, floored by `minWidth`), a flex child fills the leftover by weight — so "sidebar = fixed, content = FILL" works without hand-counting columns
 - **Dimension hints** — `min*` floors the natural size, `max*` caps the node's **total footprint** (frame + padding + content), and the cap is what a flex basis claims
 - **Natural sizing** — `totalWidth()` / `totalHeight()` report the footprint a node asks for, measured from content
@@ -326,11 +327,21 @@ the whole grid.
 
 ## Small viewports
 
-Content that does not fit is dropped quietly. A line wider than the interior is
-truncated at the cell boundary (no ellipsis cue); lines past the interior height
-are not painted at all; a bordered box given fewer rows or columns than its two
-frame lines collapses to what fits. Nothing warns, because the renderer has no
-channel to warn on and a TUI host repainting per frame does not want one.
+Content that does not fit is handled quietly — but quietly is not the same as
+dropped. A line wider than the interior is **word-wrapped** at cell boundaries:
+it reflows on spaces, and a single word still too long splits at grapheme
+boundaries (a grapheme is atomic, so one wider than the region — a CJK glyph in
+a one-column box — is emitted as its own oversized chunk and then clipped).
+Only *height* overflow is dropped without a trace: the wrapped continuations
+consume the row budget, and lines past the interior height are not painted at
+all. A bordered box given fewer rows or columns than its two frame lines
+collapses to what fits. Nothing warns, because the renderer has no channel to
+warn on and a TUI host repainting per frame does not want one. One hazard rides
+the reflow: a line that already fits passes through verbatim, but a line that
+needed re-wrapping is re-joined with single spaces — an intentional run of
+whitespace (column alignment in a table, padded key bindings in a hint)
+therefore collapses on wrapped lines and not on their neighbours. If alignment
+matters, pre-wrap content narrower than the region.
 
 Ask the model first: `totalWidth()` / `totalHeight()` return the footprint a node
 claims **before word-wrap** — the unwrapped rectangle. The renderer reflows long
