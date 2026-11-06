@@ -134,7 +134,8 @@ final class Email
     }
 
     /**
-     * Strip CRLF from an address and validate it as a bare email.
+     * Refuse any address containing CRLF (reject, never fold it away) and
+     * validate it as a bare email.
      * Accepts display-name format "Name <addr@host>" and validates just the address part.
      *
      * Mirrors charmbracelet/pop address sanitization.
