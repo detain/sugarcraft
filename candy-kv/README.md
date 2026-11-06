@@ -443,9 +443,11 @@ heredoc — its option grammar mirrors the flag spellings), `src/Cli/ArgParser.p
 own parse errors (unknown option, surplus positional), and the import/export
 runtime diagnostics — importer refusals and failure lines such as
 `File not found: <path>` throw plain English from outside the catalogs, a
-design the `src/Cli/ImportCommand.php` docblock states outright. Library
-diagnostics throw English exceptions (matching the rest of the fleet); the
-translated surface is what end users see.
+design the `src/Cli/ImportCommand.php` docblock states outright. The rest of
+the library surface is catalog-keyed like the CLI — `store.cannot_read`,
+`database.entry_unreadable`, and `database.query_failed` carry the throw
+messages, so those exceptions follow the active locale too. English
+exceptions are the two named surfaces above, not the library as a whole.
 
 ## Demos
 
