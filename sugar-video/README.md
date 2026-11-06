@@ -96,7 +96,7 @@ Three named ramps are available:
 |------|-------------|----------|
 | `minimal` | ` .:-=+*#%@` | Low-resolution / high contrast |
 | `standard` | ` .,:;i1tfLCG08@` | General use (default) |
-| `dense` | `` .`^",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$`` | High-fidelity ASCII art |
+| `dense` | `` .\`^",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$`` | High-fidelity ASCII art |
 
 ```php
 use SugarCraft\Video\Reel;
