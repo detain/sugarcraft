@@ -20,8 +20,8 @@ declare(strict_types=1);
  * pins it to the tag's commit date; the stamp is then that instant in UTC and
  * rebuilds agree byte-wise on this field). Unset, the wall clock answers. The
  * version stamp itself is read back at runtime by
- * `SugarCraft\GifView\Support\Version::fromPharMetadata()` — candy-code's
- * The frozen vendor/ inside the artifact makes Composer's
+ * `SugarCraft\GifView\Support\Version::fromPharMetadata()`. The frozen
+ * vendor/ inside the artifact makes Composer's
  * InstalledVersions report the build root's dev guess, so a stamp NOTHING
  * consumes means `--version` lies. PharBuildScriptTest pins the stamp field
  * and its reader agree.
