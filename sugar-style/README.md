@@ -251,8 +251,10 @@ solarizedDark/Light) sets them explicitly; consumers must NOT assume
   2026-10: 72 fluent setters, 0 `with*()` methods, 34 getters (`get*` /
   `is*`), 31 `unset*()`. Re-derive with reflection over non-static public
   methods (return-`self` = setter; `get*`/`is*` = getter; `unset*` =
-  unsetter). Every setter and `inherit()` route through one private
-  62-positional-parameter `with()` choke. Props covered: fg/bg/border
+  unsetter). Every fluent setter routes through the private 62-positional-parameter
+  `with()` choke; `inherit()`/`patch()` mint the merged instance directly
+  (`new self(...)`, `src/Style.php:1013`/`:1178`) — the memo-reset consequence
+  holds either way (fresh instance). Props covered: fg/bg/border
   colours (incl. per-side), bold/italic/underline/strikethrough/faint/blink/
   rapidBlink/reverse/overline/invisible, padding/margin (1/2/4-arg shorthand
   + per-side) with `paddingChar()`/`marginChar()` fill glyphs, width/height,
