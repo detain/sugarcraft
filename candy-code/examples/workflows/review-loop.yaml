@@ -1,0 +1,99 @@
+# review-loop — build from a spec file, review with a structured verdict, address it.
+#
+# Loadable directly via SugarCraft\Code\Workflows\WorkflowRegistry:
+#
+#   $registry = new WorkflowRegistry(__DIR__ . '/examples/workflows');
+#   $workflow = $registry->loadYaml('review-loop');
+#   (new WorkflowEngine($registry, $pool))->run('review-loop', ['specfile' => 'docs/briefs/feature.md']);
+#
+# Or drop a copy in ~/.candy-code/workflows/review-loop.yaml (the default
+# WorkflowRegistry lookup path) and run it via the /workflow command inside
+# the chat TUI: `/workflow run review-loop specfile=docs/briefs/feature.md`.
+#
+# Parameters (run-context values are whitespace-split, so no value may
+# contain a space — which is why the task prose lives in a spec FILE that
+# every stage Reads, and only its path is passed):
+#   - specfile: path to the written spec to implement and review against.
+#
+# Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow):
+#   - top-level "name" is required; "description" and "config" are optional.
+#   - each item in "stages" is either a regular stage (agent/prompt/tools)
+#     or a parallel stage (parallel: true + a list of "agents").
+#   - {{var}} interpolates initial run() context; {{stageName.output}}
+#     interpolates a prior stage's collected output.
+#   - config.timeout is each stage's wall-clock budget in seconds; there is
+#     no per-task timeout spelling in YAML. maxConcurrent is omitted because
+#     this workflow has no parallel stage.
+#   - "retries" goes only on agents that are safe to run twice: "review"
+#     just reads, so it carries one; "build" and "address" edit files, so
+#     they carry none.
+#
+# Expressible-only notes (why this is a three-stage pass, not a loop):
+#   - "address" runs UNCONDITIONALLY. Today's YAML has neither a
+#     verification stage that can reject the run on a NEEDS-FIX verdict
+#     (that is PHP-builder-only) nor a when:/skip clause, so the APPROVE
+#     branch is carried by the address prompt itself: with a clean verdict
+#     it must change nothing and say so. That is a convention, not a gate.
+#   - The loop therefore lives with the DRIVER: re-run this workflow until
+#     the review stage's verdict reads APPROVE with zero findings. A
+#     verification stage with reject semantics, or a when: clause, would
+#     collapse build-review-address into a single self-governing run.
+#   - "review" uses tools before answering, and outputSchema rides the
+#     first request, so its output can arrive wrapped in the engine's "not
+#     constrained to the output schema" disclosure instead of the JSON
+#     shape below. A driver should treat any output that does not parse as
+#     a verdict as NEEDS-FIX.
+#   - {{review.output}} reaches "address" as a text blob, not parsed data —
+#     the addressing coder re-reads the verdict by eye.
+
+name: review-loop
+description: >
+  Implement the spec at the given file, review the working tree against
+  that same spec with a structured APPROVE/NEEDS-FIX verdict, then hand
+  the verdict to a coder that addresses the findings; the driver re-runs
+  the workflow until the verdict is APPROVE.
+
+stages:
+  - name: build
+    agent: coder
+    prompt: >
+      Read the spec at {{specfile}} and implement it in this checkout,
+      following the conventions of the surrounding code. Do not edit the
+      spec file itself. When done, report which files you created or
+      changed and how each spec requirement is met.
+    tools: [Read, Edit, Grep, Glob, Bash]
+
+  - name: review
+    agent: reviewer
+    prompt: >
+      Read the spec at {{specfile}}, then review the changes made for it
+      (see the build report: {{build.output}}) against the spec. Report
+      every finding — missing requirement, bug, convention violation —
+      with its file:line, and set verdict to APPROVE only if there are no
+      findings at all.
+    tools: [Read, Grep, Glob, Bash]
+    retries: 1
+    outputSchema:
+      type: object
+      properties:
+        verdict:
+          type: string
+          enum: [APPROVE, NEEDS-FIX]
+        findings:
+          type: array
+          items:
+            type: string
+      required: [verdict, findings]
+
+  - name: address
+    agent: coder
+    prompt: >
+      The reviewer's structured verdict for the last pass is below. If
+      verdict is APPROVE and findings is empty, change NOTHING and reply
+      exactly "no-changes". Otherwise apply every listed finding, then
+      report what you changed:
+      {{review.output}}
+    tools: [Read, Edit, Grep, Glob, Bash]
+
+config:
+  timeout: 2400

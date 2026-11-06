@@ -1,0 +1,122 @@
+# docs-drift-sweep — audit docs for drift, fan out a fixer per category, re-audit.
+#
+# Loadable directly via SugarCraft\Code\Workflows\WorkflowRegistry:
+#
+#   $registry = new WorkflowRegistry(__DIR__ . '/examples/workflows');
+#   $workflow = $registry->loadYaml('docs-drift-sweep');
+#   (new WorkflowEngine($registry, $pool))->run('docs-drift-sweep', ['scope' => 'docs/']);
+#
+# Or drop a copy in ~/.candy-code/workflows/docs-drift-sweep.yaml (the default
+# WorkflowRegistry lookup path) and run it via the /workflow command inside
+# the chat TUI: `/workflow run docs-drift-sweep scope=docs/`.
+#
+# Parameters (run-context values are whitespace-split, so no value may
+# contain a space):
+#   - scope: the docs subtree to sweep, as a single path token.
+#
+# Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow):
+#   - top-level "name" is required; "description" and "config" are optional.
+#   - each item in "stages" is either a regular stage (agent/prompt/tools)
+#     or a parallel stage (parallel: true + a list of "agents").
+#   - {{var}} interpolates initial run() context; {{stageName.output}}
+#     interpolates a prior stage's collected output.
+#   - config.maxConcurrent bounds how many parallel-stage agents run at
+#     once; config.timeout is each stage's wall-clock budget in seconds —
+#     there is no per-finding or per-task timeout spelling in YAML.
+#   - "retries" goes only on agents that are safe to run twice: the audit
+#     and recheck stages merely read, so they carry one; the fixers edit
+#     files, so a second run could apply a correction twice, and they carry
+#     none. The fixers are disjoint by finding category, the same partition
+#     lint-then-fix.yaml uses for its style/correctness fixers.
+#
+# Expressible-only notes (what today's YAML cannot say):
+#   - "recheck" emits a schema-shaped clean/remaining verdict, but NOTHING
+#     in the workflow can condition on it: verification stages that reject a
+#     run on a bad verdict are PHP-builder-only, and there is no when:/skip
+#     clause. The recheck output is for the DRIVER — read it, and if
+#     "remaining" is non-empty, re-run the sweep. This file is one pass.
+#   - "recheck" uses tools before answering, and outputSchema rides the
+#     first request, so its output can arrive wrapped in the engine's "not
+#     constrained to the output schema" disclosure instead of the JSON
+#     shape below. A driver should treat any output that does not parse as
+#     a verdict as "still dirty" and re-run.
+#   - {{audit.output}} reaches the fixers as a text blob, not data: each
+#     fixer self-selects its category by reading, and there is no way to
+#     fan out one fixer per FINDING (agent count is fixed at write time).
+
+name: docs-drift-sweep
+description: >
+  Compare documentation under the given scope against the code it
+  describes, fan out a doc fixer per finding category in parallel, then
+  re-audit and emit a clean/remaining verdict the driver acts on.
+
+stages:
+  - name: audit
+    agent: reviewer
+    prompt: >
+      Audit the documentation under {{scope}} against the code it
+      describes. List every drift finding as exactly one line in the form
+      "readme-table | file:line | correction needed" — or
+      "guide-prose | file:line | correction needed", or
+      "api-doc | file:line | correction needed". Use only those three
+      category tags. Report nothing that is not actual drift between doc
+      and code.
+    tools: [Read, Grep, Glob, Bash]
+    retries: 1
+
+  - name: fix
+    parallel: true
+    agents:
+      - name: readme-table-fixer
+        type: coder
+        prompt: >
+          From the findings listed in {{audit.output}}, apply ONLY the
+          "readme-table" ones — rows and tallies in README tables that
+          disagree with the code. Correct each to match the code today.
+          Leave guide-prose and api-doc findings alone; other agents own
+          those.
+        tools: [Read, Edit, Grep]
+
+      - name: guide-prose-fixer
+        type: coder
+        prompt: >
+          From the findings listed in {{audit.output}}, apply ONLY the
+          "guide-prose" ones — sentences in guides and handbooks that
+          describe behavior the code no longer has. Correct each to match
+          the code today. Leave readme-table and api-doc findings alone;
+          other agents own those.
+        tools: [Read, Edit, Grep]
+
+      - name: api-doc-fixer
+        type: coder
+        prompt: >
+          From the findings listed in {{audit.output}}, apply ONLY the
+          "api-doc" ones — docblocks and API reference text whose
+          signatures, types, or contracts drifted from the code. Correct
+          each to match the code today. Leave readme-table and guide-prose
+          findings alone; other agents own those.
+        tools: [Read, Edit, Grep]
+
+  - name: recheck
+    agent: reviewer
+    prompt: >
+      Re-audit {{scope}} exactly as the audit stage did, after the fixes
+      reported in {{fix.output}} landed. Set clean to true only if NO
+      drift findings remain in any category; otherwise list every leftover
+      finding in "remaining", one per line, in the same tagged form.
+    tools: [Read, Grep, Glob, Bash]
+    retries: 1
+    outputSchema:
+      type: object
+      properties:
+        clean:
+          type: boolean
+        remaining:
+          type: array
+          items:
+            type: string
+      required: [clean, remaining]
+
+config:
+  maxConcurrent: 3
+  timeout: 1800
