@@ -356,9 +356,14 @@ sugar-forms is built on five shared packages:
 - **[sugar-testing](https://github.com/sugarcraft/sugar-testing)** — `Assertions::assertGoldenAnsi` and
   `Assertions::assertCellGrid` snapshot helpers. Render fixtures live in
   `tests/fixtures/`; set `UPDATE_GOLDENS=1` to regenerate them.
-- **[sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy)** — `SmithWatermanMatcher` scores.
-  Select / MultiSelect filter delegates to it internally; the existing public
-  `withFilter(callable)` injection point is preserved for custom filters.
+- **[sugar-fuzzy](https://github.com/sugarcraft/sugar-fuzzy)** — `SmithWatermanMatcher` scoring,
+  used ONLY by `Select::withFuzzySuggestions()` to rank the suggestion candidates
+  (`src/Field/Select.php:326-330`, suggestions listed score-ranked at `:131-135`).
+  The Select list filter itself is the plain case-insensitive substring match over
+  `Item::filterValue()` inside this lib (`src/ItemList/ItemList.php:248-251`) —
+  typing k finds Kitchen because 'kitchen' contains 'k', not by scoring. There is
+  no public injection point for an alternative matcher, and MultiSelect does no
+  fuzzy matching at all (k is cursor-up there; digits 1-9 are jump-toggles).
 - **[sugar-async](https://github.com/sugarcraft/sugar-async)** — `Async\Await` + `CancelledException`
   for async suggestion fetchers. `withAsyncSuggestions` stores a
   `CancellationSource` on the model and cancels the previous timer before
