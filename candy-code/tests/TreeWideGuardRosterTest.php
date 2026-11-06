@@ -838,9 +838,15 @@ final class TreeWideGuardRosterTest extends TestCase
         // and its only walks are the tearDown() sweeps of the c6k-send-*
         // fixture dir setUp() made.
         'Tools/ShellSendTest.php' => ['scandir($this->c6kRoot)', 'scandir($dir)'],
+        // G5 weld, in-step: tearDown()'s removeDirectory() sweeps the
+        // sys_get_temp_dir() pause-record fixture dir setUp() made.
+        'Workflows/WorkflowIncrementalPauseTest.php' => ['scandir($dir)'],
         'Workflows/WorkflowRegistryTest.php' => ['scandir($dir)'],
         // tearDown() removes the sys_get_temp_dir() HOME sandbox setUp() made.
         'Workflows/WorkflowRetriesTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
+        // G5 weld, in-step: tearDown()'s removeDirectory() sweeps the
+        // sys_get_temp_dir() lock-dir fixture setUp() made.
+        'Workflows/WorkflowStageResourceLockTest.php' => ['scandir($dir)'],
     ];
 
     /**
