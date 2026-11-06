@@ -17,8 +17,9 @@ use SugarCraft\Core\Util\Sanitize;
  * The U+E000 + id + U+E001 triple is the zone opening;
  * U+E000 / + id + U+E001 is the zone close.
  *
- * The sentinels are C0-adjacent control-like PUA codepoints: they are ZERO
- * WIDTH to the scanner and normally render as nothing, but they are NOT
+ * The sentinels are Private Use Area codepoints (U+E000/U+E001), not C0
+ * controls or anything adjacent to them: they are ZERO WIDTH to the
+ * scanner and normally render as nothing, but they are NOT
  * guaranteed invisible on every host — terminals fall back to rendering
  * unused PUA codepoints as boxes or Dotted Circle, and screen readers
  * announce them as garbage. Treat a frame that leaks markers as cosmetic
