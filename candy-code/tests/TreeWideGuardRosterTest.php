@@ -670,6 +670,16 @@ final class TreeWideGuardRosterTest extends TestCase
         // sys_get_temp_dir() cc-cmp-tlsargs-* dir setUp() created; the scandir is
         // that unlink walk, confined to the test's own sandbox.
         'Cli/ServeArgsTest.php' => ['scandir($this->tlsDir)'],
+        // wf-driver D1: removePresetScratch() in tearDown() unlinks-then-rmdir's
+        // the sys_get_temp_dir() cc-session-id-preset-* scratch the child-witness
+        // legs build (fake HOME, session.db, endpoint bodies); scandir($path) is
+        // that listing walk and it never leaves the test's own sandbox.
+        'Cli/SessionIdPresetTest.php' => ['scandir($path)'],
+        // wf-driver D2: removeStreamScratch() in tearDown() empties the
+        // sys_get_temp_dir() cc-stream-json-* scratch the live-feed legs mkdir'd;
+        // scandir($path) is the same unlink-first listing walk, confined to the
+        // test's own sandbox.
+        'Cli/StreamJsonInputTest.php' => ['scandir($path)'],
         'Cli/SubcommandsMcpImportTest.php' => ['scandir($this->tempDir)'],
         // C-MCP-5.b: tearDown() unlinks the entries the mcp-serve-proj/home
         // sandboxes setUp() mkdir'd under sys_get_temp_dir() before its own

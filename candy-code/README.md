@@ -2038,6 +2038,7 @@ candy-code --max-turns 8 -p "audit this"          # cap this launch's tool-loop 
 candy-code --json-schema answer.json -p "extract fields" # constrain the answer to a JSON Schema
 candy-code --append-system-prompt @rules.md -p "audit this" # append operator rules to this one prompt's system prompt
 candy-code --session-id 0a1b2c3d4e5f6071 -p "audit this"  # pre-allocate this run's session id (16 lowercase hex)
+candy-code --input-format stream-json -p "audit this"      # feed NDJSON {"type":"user"} events from piped stdin as turns before the prompt
 candy-code --worktree fix-bug        # run this session in its own git worktree
 candy-code --incognito                            # launch keeping nothing: no row, no transcript, no memory write
 candy-code --restricted -p "audit this"          # launch with no code-running tools (Bash, Task and friends are absent)
@@ -3035,7 +3036,7 @@ API and stay as-is. Boolean `is*()`/`has*()` predicates are convention-compliant
 cd candy-code && composer install && vendor/bin/phpunit
 ```
 
-**30,857 tests / 762,256 assertions, 0 failures, 8 skipped** — the whole of
+**30,908 tests / 762,692 assertions, 0 failures, 8 skipped** — the whole of
 `candy-code/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6.
 The 22m51s serial timing was taken on the earlier 24,863-test tree (2026-10-18);
