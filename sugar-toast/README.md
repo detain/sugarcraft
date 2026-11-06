@@ -24,9 +24,9 @@ sugar-toast — a floating alert notification component for terminal UIs, for PH
 - **Accessible text mode**: `withAccessibleText()` names the severity in words and prints progress percentages — a text channel beside the frame's colour/glyph language (WCAG 1.4.1)
 - **Action buttons**: `[Label]` buttons attached to an alert with closure callbacks
 - **Styled alerts**: per-alert background/foreground/border colour overrides
-- **History log**: immutable, bounded record of dismissed alerts (default cap 100)
+- **History log**: immutable, bounded record of dismissed and overflow-evicted alerts (default cap 100)
 - **Pure renderer**: outputs ANSI strings; works with any TUI framework
-- **Accessibility environment variables**: `REDUCE_MOTION`/`PREFERS_REDUCED_MOTION` drop blink; `NO_COLOR`/`CLICOLOR=0` drop all colour bytes (renderer palette, custom alert colours, inline message SGR); `CLICOLOR_FORCE` overrides. Environment-only checks — sugar-toast composites for its host and never probes a TTY itself
+- **Accessibility environment variables**: `REDUCE_MOTION`/`PREFERS_REDUCED_MOTION` drop blink; `NO_COLOR`/`CLICOLOR=0` drop all colour bytes (renderer palette, custom alert colours, inline message SGR); `CLICOLOR_FORCE` overrides. The gates are deliberately not spec-literal: a literal `NO_COLOR=0` counts as unset (suppression off) and `CLICOLOR` must read exactly `0` to drop colour — `CLICOLOR=00` keeps it; the divergence law lives in the colour-decision docblock. Environment-only checks — sugar-toast composites for its host and never probes a TTY itself
 
 ## Install
 
@@ -236,6 +236,10 @@ zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar); keys and `{count}` placeholde
 contract — only values translate. To add one, copy `lang/en.php` to
 `lang/<code>.php` and translate the values. The lookup chain follows
 `SugarCraft\Core\I18n\T`: exact locale → base language → `en` → raw key.
+That chain makes a new key a mandatory two-part step: add the row to
+`lang/en.php` — missing there, every locale ships the raw key — and to the
+other 16 locale files too; a locale that skips the row silently ships the
+English fallback instead of a translation.
 
 **Using the facade:**
 
@@ -447,7 +451,7 @@ already over the new cap survive until the next push evicts them.
 | `HistoryLog` | `push(Alert, ?int $limit = null): self` | Append alert, evicting oldest past `$limit`; new log |
 | `HistoryLog` | `all(): list<Alert>` | Return all entries |
 | `HistoryLog` | `count(): int` | Entry count |
-| `Position` | `xOffset(int $alertWidth, int $viewportWidth): int` | X offset of a box in a viewport (left edge 0, center floored, right flush) |
+| `Position` | `xOffset(int $alertWidth, int $viewportWidth): int` | X offset of a box in a viewport (left edge 0, center floored, right flush). Right/centre arms go **negative** when the box is wider than the viewport — `view()` clamps via max(0), so hosts calling this accessor directly must clamp the same way (the law lives in the `Position::xOffset()` docblock) |
 | `Position` | `yOffset(int $alertHeight, int $viewportHeight, int $stackedHeightBefore = 0): int` | Y offset; top families stack downward from the top, bottom and middle families stack upward against `$stackedHeightBefore`, clamped to row 0 on short viewports |
 | `ToastType` | `label(): string` | Translated severity word (`Lang::t('type.*')`) — surfaced in the frame by `withAccessibleText()` |
 | `ToastType` | `icon(SymbolSet $set): string` | Icon glyph for this type under the given symbol set |
