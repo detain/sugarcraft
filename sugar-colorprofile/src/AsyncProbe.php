@@ -32,10 +32,17 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  * - The infocmp binary is not present
  * - TERM is unset or empty — the probe does not fabricate a terminal type
  *   the caller never declared
+ * - TERM carries a shape infocmp would parse as its own option (shared
+ *   predicate {@see InfocmpBinary::isSafeTermName()})
+ * - The chain rung is not Ansi/Ansi256 — the child can only ADD TrueColor,
+ *   so floors (Ascii) and already-TrueColor answers settle without a spawn,
+ *   in parity with the sync leg's promotion gate
  *
  * Every spawned child is bounded: a wall-clock ceiling timer escalates
  * TERM → KILL and the exit/error handlers cancel BOTH rungs, so a settled
- * caller can never be followed by a stray SIGKILL. Slots whose caller
+ * caller can never be followed by a stray SIGKILL. Both child pipes drain
+ * into keep-a-prefix 8 KiB buffers — past the ceiling the child is noise,
+ * never an accumulator that grows with the pipe. Slots whose caller
  * abandoned the loop are reclaimed (child killed) by the next call — the
  * static slot table can therefore never wedge permanently.
  *
@@ -73,6 +80,16 @@ final class AsyncProbe
 
     /** Keep-a-prefix bound for the child's stderr drain (see MT8 listener). */
     private const STDERR_CAP_BYTES = 8192;
+
+    /**
+     * Keep-a-prefix bound for the child's stdout pump, mirroring the stderr
+     * arm: the capability scan reads cap names at line-heads near the front
+     * of an `infocmp -1` dump, and real single-terminal dumps stay far below
+     * 8 KiB. Past the ceiling the child is noise — the accumulator stops
+     * growing and the settle treats the truncated prefix as the whole dump
+     * (advisory), instead of letting a pathological writer grow with the pipe.
+     */
+    private const STDOUT_CAP_BYTES = 8192;
 
     /**
      * In-flight children keyed by an opaque token, each with the child handle
@@ -167,7 +184,9 @@ final class AsyncProbe
         // reads the streams directly.
         $stdout = '';
         $process->stdout?->on('data', function ($chunk) use (&$stdout): void {
-            $stdout .= $chunk;
+            if (\strlen($stdout) < self::STDOUT_CAP_BYTES) {
+                $stdout .= $chunk;
+            }
         });
 
         // The child's stderr must be drained or infocmp can block writing to

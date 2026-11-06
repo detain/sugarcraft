@@ -304,6 +304,79 @@ final class AsyncProbeTest extends TestCase
         }
     }
 
+    public function testTrueColorLineBeyondTheStdoutCapIsDiscarded(): void
+    {
+        // M10: the capability scan judges AT MOST the kept prefix. A child that
+        // buries its Tc declaration under more than 8 KiB of filler is noise by
+        // contract — the line never reaches the accumulator. Without the cap
+        // this exact child promoted the answer to TrueColor (base-red).
+        //
+        // The filler is ~128 KiB so the Tc bytes can never ride the first
+        // pipe read (the OS pipe holds 64 KiB); once the accumulator has
+        // reached the ceiling every later chunk is dropped whole.
+        Probe::_reset();
+        $slots = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
+        $slots->setValue(null, []);
+
+        $printer = \tempnam(\sys_get_temp_dir(), 'tc');
+        $this->assertIsString($printer);
+        $hadForceColor = \getenv('FORCE_COLOR');
+        unset($_ENV['FORCE_COLOR']);
+        putenv('FORCE_COLOR');
+        \file_put_contents(
+            $printer,
+            "#!/bin/sh\nprintf '\\tFx0," . \str_repeat('x', 131100) . ",\\n'\nprintf '\\tTc,\\n'\n",
+        );
+        \chmod($printer, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+
+        $_ENV['TERM'] = 'xterm-256color';
+        putenv('TERM=xterm-256color');
+
+        try {
+            $resolved = null;
+            AsyncProbe::colorProfile()->then(function (ColorProfile $p) use (&$resolved): void {
+                $resolved = $p;
+            });
+
+            if ($resolved === null) {
+                $loop = \React\EventLoop\Loop::get();
+                $poll = null;
+                $watchdog = $loop->addTimer(8.0, static function () use ($loop): void {
+                    $loop->stop();
+                });
+                $poll = $loop->addPeriodicTimer(0.005, static function () use ($loop, &$resolved, &$poll, $watchdog): void {
+                    if ($resolved === null) {
+                        return;
+                    }
+                    $loop->cancelTimer($watchdog);
+                    if ($poll !== null) {
+                        $loop->cancelTimer($poll);
+                    }
+                    $loop->stop();
+                });
+                $loop->run();
+            }
+
+            $this->assertSame(
+                ColorProfile::Ansi256,
+                $resolved,
+                'a Tc line past the 8 KiB prefix must not reach the capability scan',
+            );
+            $this->assertCount(0, $slots->getValue(), 'the settle released its slot');
+        } finally {
+            unset($_ENV['TERM']);
+            putenv('TERM');
+            if ($hadForceColor !== false) {
+                $_ENV['FORCE_COLOR'] = $hadForceColor;
+                putenv('FORCE_COLOR=' . $hadForceColor);
+            }
+            Probe::_reset();
+            $slots->setValue(null, []);
+            @\unlink($printer);
+        }
+    }
+
     /**
      * @return array<int, array{process: \\React\\ChildProcess\\Process, deadline: float}>
      */

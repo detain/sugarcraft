@@ -74,6 +74,22 @@ final class AsyncProbeBoundedTest extends TestCase
         self::assertStringContainsString('STDERR_CAP_BYTES', $src);
     }
 
+    public function testChildStdoutIsCappedIntoABoundedBuffer(): void
+    {
+        // M10: the stdout accumulator was a bare append — a pathological child
+        // grew it without end before the capability scan ever judged it. The
+        // pump must carry the same keep-a-prefix guard as stderr: a ceiling
+        // check around the append, not a raw concatenation. The behavior-side
+        // pin (a Tc line beyond the cap never lands) is in {@see AsyncProbeTest}.
+        $src = self::src();
+        self::assertStringContainsString('self::STDOUT_CAP_BYTES', $src);
+        self::assertStringContainsString('\strlen($stdout) < self::STDOUT_CAP_BYTES', $src);
+
+        $const = (new \ReflectionClass(AsyncProbe::class))->getReflectionConstant('STDOUT_CAP_BYTES');
+        self::assertNotFalse($const, 'stdout needs its own named ceiling, mirroring stderr');
+        self::assertSame(8192, $const->getValue(), 'the ceiling is the documented 8 KiB');
+    }
+
     public function testConcurrencyCeilingIsAPublicDocumentedKnob(): void
     {
         $const = (new \ReflectionClass(AsyncProbe::class))->getReflectionConstant('MAX_CONCURRENT_PROBES');

@@ -23,6 +23,12 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  * never re-shell (the old code ran a fresh unbounded shell_exec per call),
  * and {@see self::_reset()} clears the cap for tests.
  *
+ * That cap bounds FREQUENCY, not the exec itself: a phase-2 shell-out is
+ * un-timed and output-unbounded — @shell_exec blocks until infocmp exits and
+ * slurps the whole dump. It is a CLI/startup-context face; inside a live
+ * event loop or a request path use {@see AsyncProbe}, whose child carries a
+ * deadline ladder and capped pipes instead.
+ *
  * @see https://github.com/charmbracelet/colorprofile
  */
 final class Probe

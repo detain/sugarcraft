@@ -474,17 +474,23 @@ Beyond the env ladder above, the library exposes a richer capability surface:
   BasicAscii-only report→`Ascii`).
 - **`AsyncProbe::colorProfile()`** — the same infocmp check in a ReactPHP child
   process; returns a promise. Every child is bounded (5 s ceiling → TERM, 1 s
-  grace → KILL, the KILL timer cancelled when the child exits first, stderr
-  drained under an 8 KiB cap so a chatty child cannot wedge on a full pipe) and
-  slot reclamation kills children whose loop was abandoned, so the public
+  grace → KILL, the KILL timer cancelled when the child exits first, both
+  pipes drained into keep-a-prefix 8 KiB buffers so a chatty child can neither
+  wedge on a full pipe nor grow the accumulator without end) and slot
+  reclamation kills children whose loop was abandoned, so the public
   `AsyncProbe::MAX_CONCURRENT_PROBES = 4` cap can never wedge. **Every async
-  settle answers from the detection chain — no blocking exec ever runs on the
-  loop thread.** `AsyncProbe` falls back to the sync `Probe::colorProfile()`
+  settle answers from the detection chain, except the TrueColor promotion read
+  from a `Tc`-declaring child dump** — which itself only runs on the Ansi and
+  Ansi256 rungs and sees at most the capped prefix; no blocking exec ever runs
+  on the loop thread. `AsyncProbe` falls back to the sync `Probe::colorProfile()`
   only when no event loop is present at all; the sync probe itself runs
   whenever called, so invoking it from inside a live loop can block that loop
-  on the optional phase-2 `infocmp` exec. Env suppression, a missing infocmp binary, an unset or
-  `dumb` TERM, the cap being reached, or a timeout/kill all settle to the
-  chain's answer. Results are advisory only.
+  on the optional phase-2 `infocmp` exec — and unlike the child, that exec
+  carries neither deadline nor output ceiling: it is a CLI/startup-context
+  face, never a request- or tick-path one. Env suppression, a missing infocmp
+  binary, an unset or `dumb` TERM, a TERM whose shape infocmp would read as an
+  option, a chain rung other than Ansi/Ansi256, the cap being reached, or a
+  timeout/kill all settle to the chain's answer. Results are advisory only.
 
 ## Overriding detection
 
