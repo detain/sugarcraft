@@ -122,7 +122,7 @@ final class StateMachineTest extends TestCase
     public function testGetInnerSize(): void
     {
         $state = StateMachine::new()->setSize(60, 20);
-        $size = $state->getInnerSize();
+        $size = $state->innerSize();
         $this->assertIsArray($size);
         $this->assertCount(2, $size);
         $this->assertEquals(60, $size[0]);

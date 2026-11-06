@@ -360,7 +360,7 @@ final class CodeTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $code = Code::new("line1\nline2\nline3")->withMaxWidth(20);
-        [$w, $h] = $code->getInnerSize();
+        [$w, $h] = $code->innerSize();
 
         // Width should include border chars (content + 4)
         $this->assertGreaterThanOrEqual(4, $w);
@@ -372,7 +372,7 @@ final class CodeTest extends TestCase
     {
         $code = Code::new("line1\nline2")->withMaxWidth(20);
         $withLabel = $code->withLanguage('php');
-        [$w, $h] = $withLabel->getInnerSize();
+        [$w, $h] = $withLabel->innerSize();
 
         // Should have extra height for language label
         $this->assertGreaterThanOrEqual(4, $h); // 2 lines + 2 borders + 1 label
@@ -381,7 +381,7 @@ final class CodeTest extends TestCase
     public function testGetInnerSizeWithoutWidthConstraint(): void
     {
         $code = Code::new("short\nlonger line");
-        [$w, $h] = $code->getInnerSize();
+        [$w, $h] = $code->innerSize();
 
         // Should compute natural width from longest line + border
         $this->assertGreaterThan(4, $w);
@@ -391,7 +391,7 @@ final class CodeTest extends TestCase
     public function testGetInnerSizeZeroWidthReturnsNaturalDimensions(): void
     {
         $code = Code::new('test')->withMaxWidth(0);
-        [$w, $h] = $code->getInnerSize();
+        [$w, $h] = $code->innerSize();
 
         // When maxWidth is 0, natural dimensions are computed from code content
         $this->assertGreaterThan(0, $w); // Natural dimensions based on code content

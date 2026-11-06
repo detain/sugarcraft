@@ -141,7 +141,7 @@ final class Dropdown implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $triggerWidth = Width::string($this->label) + 1 + Width::string($this->expandIcon);
 

@@ -231,7 +231,7 @@ final class Hint implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $content = $this->icon !== '' ? $this->icon . ' ' . $this->text : $this->text;
         $useWidth = $this->width ?? 80;

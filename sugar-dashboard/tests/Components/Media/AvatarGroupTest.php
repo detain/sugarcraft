@@ -128,8 +128,8 @@ final class AvatarGroupTest extends TestCase
         $groupNoOverlap = AvatarGroup::fromNames(['A', 'B']);
         $groupWithOverlap = AvatarGroup::fromNames(['A', 'B'])->withOverlap(3);
 
-        [$wNoOverlap, ] = $groupNoOverlap->getInnerSize();
-        [$wWithOverlap, ] = $groupWithOverlap->getInnerSize();
+        [$wNoOverlap, ] = $groupNoOverlap->innerSize();
+        [$wWithOverlap, ] = $groupWithOverlap->innerSize();
 
         $this->assertLessThan($wNoOverlap, $wWithOverlap);
     }
@@ -149,7 +149,7 @@ final class AvatarGroupTest extends TestCase
     public function testWidthCalculationAccountsForOverlap(): void
     {
         $group = AvatarGroup::fromNames(['A', 'B', 'C']);
-        [$w, ] = $group->getInnerSize();
+        [$w, ] = $group->innerSize();
 
         // Each avatar is 5 wide, 3 overlap means 5 + 5 - 2 + 5 - 2 = 11
         $this->assertSame(11, $w);
@@ -158,7 +158,7 @@ final class AvatarGroupTest extends TestCase
     public function testWidthCalculationWithOverflow(): void
     {
         $group = AvatarGroup::compact(['A', 'B', 'C', 'D', 'E'], 3);
-        [$w, ] = $group->getInnerSize();
+        [$w, ] = $group->innerSize();
 
         // 3 avatars (5-2 each = 3*3 + 2 = 11) + overflow indicator (5) + overlap (2) = 18
         $this->assertGreaterThan(15, $w);
@@ -242,7 +242,7 @@ final class AvatarGroupTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $group = AvatarGroup::fromNames(['Alice', 'Bob']);
-        [$w, $h] = $group->getInnerSize();
+        [$w, $h] = $group->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -251,7 +251,7 @@ final class AvatarGroupTest extends TestCase
     public function testGetInnerSizeEmptyGroup(): void
     {
         $group = AvatarGroup::fromNames([]);
-        [$w, $h] = $group->getInnerSize();
+        [$w, $h] = $group->innerSize();
 
         $this->assertSame(0, $w);
         $this->assertSame(0, $h);
@@ -260,7 +260,7 @@ final class AvatarGroupTest extends TestCase
     public function testHeightMatchesAvatarSize(): void
     {
         $group = AvatarGroup::fromNames(['A', 'B']);
-        [, $h] = $group->getInnerSize();
+        [, $h] = $group->innerSize();
 
         // Medium avatar is 5 pixels tall
         $this->assertSame(5, $h);
@@ -308,7 +308,7 @@ final class AvatarGroupTest extends TestCase
     public function testZeroOverlap(): void
     {
         $group = AvatarGroup::fromNames(['A', 'B'])->withOverlap(0);
-        [$w, ] = $group->getInnerSize();
+        [$w, ] = $group->innerSize();
 
         // Two 5-wide avatars with 0 overlap = 10
         $this->assertSame(10, $w);

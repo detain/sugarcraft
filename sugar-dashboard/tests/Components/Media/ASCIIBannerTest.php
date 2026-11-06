@@ -287,7 +287,7 @@ final class ASCIIBannerTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $banner = ASCIIBanner::new('Test');
-        [$w, $h] = $banner->getInnerSize();
+        [$w, $h] = $banner->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -298,8 +298,8 @@ final class ASCIIBannerTest extends TestCase
         $bannerNoSub = ASCIIBanner::new('Title');
         $bannerWithSub = ASCIIBanner::withTitleAndSubtitle('Title', 'Subtitle');
 
-        [, $h1] = $bannerNoSub->getInnerSize();
-        [, $h2] = $bannerWithSub->getInnerSize();
+        [, $h1] = $bannerNoSub->innerSize();
+        [, $h2] = $bannerWithSub->innerSize();
 
         $this->assertGreaterThan($h1, $h2);
     }
@@ -309,8 +309,8 @@ final class ASCIIBannerTest extends TestCase
         $bannerSmall = ASCIIBanner::new('Title')->withPadding(1);
         $bannerLarge = ASCIIBanner::new('Title')->withPadding(3);
 
-        [, $h1] = $bannerSmall->getInnerSize();
-        [, $h2] = $bannerLarge->getInnerSize();
+        [, $h1] = $bannerSmall->innerSize();
+        [, $h2] = $bannerLarge->innerSize();
 
         $this->assertGreaterThan($h1, $h2);
     }

@@ -263,7 +263,7 @@ final class TestimonialTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $testimonial = Testimonial::new([['text' => 'Short quote', 'author' => 'Author']]);
-        [$w, $h] = $testimonial->getInnerSize();
+        [$w, $h] = $testimonial->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);

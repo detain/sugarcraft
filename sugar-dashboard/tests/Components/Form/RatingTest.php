@@ -177,7 +177,7 @@ final class RatingTest extends TestCase
     public function testGetInnerSizeReturnsCorrectWidth(): void
     {
         $rating = Rating::new(5);
-        [$w, $h] = $rating->getInnerSize();
+        [$w, $h] = $rating->innerSize();
 
         $this->assertSame(5, $w);
         $this->assertSame(1, $h);
@@ -186,7 +186,7 @@ final class RatingTest extends TestCase
     public function testGetInnerSizeWithCustomChars(): void
     {
         $rating = Rating::new(3)->withChars('***', '---');
-        [$w, $h] = $rating->getInnerSize();
+        [$w, $h] = $rating->innerSize();
 
         // Should use max width of either char
         $this->assertGreaterThan(0, $w);

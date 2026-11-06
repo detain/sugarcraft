@@ -229,7 +229,7 @@ final class TextTest extends TestCase
     {
         $text = Text::new("short\nmedium length\nvery long line");
 
-        [$w, $h] = $text->getInnerSize();
+        [$w, $h] = $text->innerSize();
 
         // Width should be the longest line
         $this->assertSame(14, $w); // "very long line" = 14 chars
@@ -241,7 +241,7 @@ final class TextTest extends TestCase
     {
         $text = Text::new('hello world super long text')->setSize(5, 100);
 
-        [$w, $h] = $text->getInnerSize();
+        [$w, $h] = $text->innerSize();
 
         // Width should be 5 (the set width)
         $this->assertSame(5, $w);
@@ -253,7 +253,7 @@ final class TextTest extends TestCase
     {
         $text = Text::new('hello world')->withMaxWidth(5);
 
-        [$w, $h] = $text->getInnerSize();
+        [$w, $h] = $text->innerSize();
 
         $this->assertSame(5, $w);
         $this->assertSame(2, $h); // "hello" and "world"

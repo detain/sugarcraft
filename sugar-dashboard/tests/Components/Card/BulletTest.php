@@ -275,7 +275,7 @@ final class BulletTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $bullet = Bullet::new(50.0, 100.0)->withWidth(20);
-        [$w, $h] = $bullet->getInnerSize();
+        [$w, $h] = $bullet->innerSize();
 
         $this->assertGreaterThanOrEqual(20, $w);
         $this->assertSame(1, $h);
@@ -287,7 +287,7 @@ final class BulletTest extends TestCase
             ->withWidth(20)
             ->withShowComparative(true)
             ->withComparative(75.0);
-        [$w, $h] = $bullet->getInnerSize();
+        [$w, $h] = $bullet->innerSize();
 
         $this->assertSame(2, $h);
     }
@@ -306,7 +306,7 @@ final class BulletTest extends TestCase
             comparativeColor: null,
             backgroundColor: null
         );
-        [$w, $h] = $bullet->getInnerSize();
+        [$w, $h] = $bullet->innerSize();
 
         $this->assertSame(0, $w);
     }

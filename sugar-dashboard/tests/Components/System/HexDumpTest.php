@@ -226,7 +226,7 @@ final class HexDumpTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $hex = HexDump::new('Hello');
-        [$w, $h] = $hex->getInnerSize();
+        [$w, $h] = $hex->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -235,7 +235,7 @@ final class HexDumpTest extends TestCase
     public function testGetInnerSizeWithEmptyData(): void
     {
         $hex = HexDump::new('');
-        [$w, $h] = $hex->getInnerSize();
+        [$w, $h] = $hex->innerSize();
 
         $this->assertSame(0, $w);
         $this->assertSame(0, $h);
@@ -247,9 +247,9 @@ final class HexDumpTest extends TestCase
         $hex17 = HexDump::new(str_repeat('A', 17));
         $hex33 = HexDump::new(str_repeat('A', 33));
 
-        [, $h1] = $hex1->getInnerSize();
-        [, $h17] = $hex17->getInnerSize();
-        [, $h33] = $hex33->getInnerSize();
+        [, $h1] = $hex1->innerSize();
+        [, $h17] = $hex17->innerSize();
+        [, $h33] = $hex33->innerSize();
 
         // 1 byte = 1 line, 17 bytes = 2 lines, 33 bytes = 3 lines (bytesPerLine=16)
         $this->assertLessThan($h17, $h1);

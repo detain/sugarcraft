@@ -197,7 +197,7 @@ final class HeatmapTest extends TestCase
     public function testGetInnerSize(): void
     {
         $heatmap = Heatmap::new([[0.5]]);
-        [$w, $h] = $heatmap->getInnerSize();
+        [$w, $h] = $heatmap->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -206,7 +206,7 @@ final class HeatmapTest extends TestCase
     public function testGetInnerSizeWithValues(): void
     {
         $heatmap = Heatmap::new([[0.5]])->withValues(true);
-        [$w, $h] = $heatmap->getInnerSize();
+        [$w, $h] = $heatmap->innerSize();
 
         // With values shown, width is larger
         $this->assertGreaterThan(1, $w);
@@ -215,7 +215,7 @@ final class HeatmapTest extends TestCase
     public function testGetInnerSizeWithoutLegend(): void
     {
         $heatmap = Heatmap::new([[0.5]])->withLegend(false);
-        [, $h] = $heatmap->getInnerSize();
+        [, $h] = $heatmap->innerSize();
 
         // Without legend, height is just the data rows
         $this->assertSame(1, $h);

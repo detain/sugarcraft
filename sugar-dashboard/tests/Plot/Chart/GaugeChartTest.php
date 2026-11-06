@@ -39,7 +39,7 @@ final class GaugeChartTest extends TestCase
     public function testGetInnerSizeReturnsDimensions(): void
     {
         $gauge = GaugeChart::new(50.0, 0.0, 100.0);
-        [$width, $height] = $gauge->getInnerSize();
+        [$width, $height] = $gauge->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

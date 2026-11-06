@@ -110,7 +110,7 @@ final class CandlestickChartTest extends TestCase
     public function testGetInnerSize(): void
     {
         $chart = CandlestickChart::new()->setSize(65, 15);
-        $size = $chart->getInnerSize();
+        $size = $chart->innerSize();
         $this->assertIsArray($size);
         $this->assertCount(2, $size);
         $this->assertEquals(65, $size[0]);

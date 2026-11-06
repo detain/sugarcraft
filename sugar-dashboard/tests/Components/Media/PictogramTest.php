@@ -46,7 +46,7 @@ final class PictogramTest extends TestCase
         $chart = Pictogram::new([
             ['label' => 'Item', 'value' => 50],
         ]);
-        [$width, $height] = $chart->getInnerSize();
+        [$width, $height] = $chart->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

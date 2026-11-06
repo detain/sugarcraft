@@ -324,7 +324,7 @@ final class DualSampleGraph implements SizedItem
         ]);
     }
 
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         return [$this->width, $this->height];
     }

@@ -37,7 +37,7 @@ final class ActivityFeedTest extends TestCase
         $feed = ActivityFeed::new([
             new ActivityEvent('Alice', 'pushed to', 'main', 'push', '2 min ago'),
         ]);
-        [$width, $height] = $feed->getInnerSize();
+        [$width, $height] = $feed->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

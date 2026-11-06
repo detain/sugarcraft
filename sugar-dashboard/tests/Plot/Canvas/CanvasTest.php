@@ -17,7 +17,7 @@ final class CanvasTest extends TestCase
     {
         $c = Canvas::new(40, 20);
         $this->assertInstanceOf(Canvas::class, $c);
-        $this->assertSame([40, 20], $c->getInnerSize());
+        $this->assertSame([40, 20], $c->innerSize());
     }
 
     public function testSetPixelReturnsNewInstance(): void
@@ -169,7 +169,7 @@ final class CanvasTest extends TestCase
         $c = Canvas::new(10, 10);
         $c2 = $c->withWidth(20);
         $this->assertNotSame($c, $c2);
-        $this->assertSame([20, 10], $c2->getInnerSize());
+        $this->assertSame([20, 10], $c2->innerSize());
     }
 
     public function testWithHeightReturnsNewInstance(): void
@@ -177,7 +177,7 @@ final class CanvasTest extends TestCase
         $c = Canvas::new(10, 10);
         $c2 = $c->withHeight(30);
         $this->assertNotSame($c, $c2);
-        $this->assertSame([10, 30], $c2->getInnerSize());
+        $this->assertSame([10, 30], $c2->innerSize());
     }
 
     public function testWithDefaultFgReturnsNewInstance(): void

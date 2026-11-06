@@ -223,7 +223,7 @@ final class HeatMapChart implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int, 1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         if (empty($this->data) || empty($this->data[0] ?? [])) {
             return [0, 0];

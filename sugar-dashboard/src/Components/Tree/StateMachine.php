@@ -374,7 +374,7 @@ final class StateMachine implements SizedItem
      *
      * @return array{0:int, 1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $stateCount = count($this->states);
         $cols = max(1, intval(sqrt($stateCount)));

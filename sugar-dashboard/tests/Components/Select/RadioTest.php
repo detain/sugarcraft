@@ -237,7 +237,7 @@ final class RadioTest extends TestCase
             ['label' => 'Option'],
             ['label' => 'Longer Option'],
         ]);
-        [$w, $h] = $radio->getInnerSize();
+        [$w, $h] = $radio->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(2, $h);

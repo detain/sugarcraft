@@ -124,7 +124,7 @@ final class SequenceTest extends TestCase
     public function testGetInnerSize(): void
     {
         $sequence = Sequence::new()->setSize(70, 20);
-        $size = $sequence->getInnerSize();
+        $size = $sequence->innerSize();
         $this->assertIsArray($size);
         $this->assertCount(2, $size);
         $this->assertEquals(70, $size[0]);

@@ -287,7 +287,7 @@ final class InputTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $input = Input::new();
-        [$w, $h] = $input->getInnerSize();
+        [$w, $h] = $input->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(3, $h); // Top border, middle, bottom border
@@ -298,8 +298,8 @@ final class InputTest extends TestCase
         $inputNoError = Input::new();
         $inputWithError = Input::new()->withError('Error message here');
 
-        [, $h1] = $inputNoError->getInnerSize();
-        [, $h2] = $inputWithError->getInnerSize();
+        [, $h1] = $inputNoError->innerSize();
+        [, $h2] = $inputWithError->innerSize();
 
         $this->assertGreaterThan($h1, $h2);
     }

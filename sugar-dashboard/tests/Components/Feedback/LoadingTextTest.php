@@ -184,7 +184,7 @@ final class LoadingTextTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $loading = LoadingText::new('Test');
-        [$w, $h] = $loading->getInnerSize();
+        [$w, $h] = $loading->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -193,7 +193,7 @@ final class LoadingTextTest extends TestCase
     public function testGetInnerSizeWithLongerText(): void
     {
         $loading = LoadingText::new('Processing files...');
-        [$w, $h] = $loading->getInnerSize();
+        [$w, $h] = $loading->innerSize();
 
         $this->assertGreaterThan(10, $w);
         $this->assertSame(1, $h);

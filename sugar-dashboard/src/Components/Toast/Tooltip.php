@@ -191,7 +191,7 @@ final class Tooltip implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $textWidth = Width::string($this->text);
         $width = $this->width !== null ? max($this->width, $textWidth + 4) : $textWidth + 4;

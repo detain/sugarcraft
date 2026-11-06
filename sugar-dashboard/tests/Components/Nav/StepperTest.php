@@ -203,7 +203,7 @@ final class StepperTest extends TestCase
         $stepper = Stepper::new([
             ['label' => 'Test', 'status' => 'pending'],
         ]);
-        [$w, $h] = $stepper->getInnerSize();
+        [$w, $h] = $stepper->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h); // Single line
@@ -216,7 +216,7 @@ final class StepperTest extends TestCase
             ['label' => 'Two', 'status' => 'active'],
             ['label' => 'Three', 'status' => 'pending'],
         ]);
-        [$w, $h] = $stepper->getInnerSize();
+        [$w, $h] = $stepper->innerSize();
 
         $this->assertGreaterThan(10, $w);
         $this->assertSame(1, $h);

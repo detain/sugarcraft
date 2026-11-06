@@ -375,7 +375,7 @@ final class ClassDiagram implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int, 1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $classCount = count($this->classes);
         $cols = max(1, intval(sqrt($classCount)));

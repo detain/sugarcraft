@@ -69,7 +69,7 @@ final class KeyMap implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         if ($this->size['width'] !== null && $this->size['height'] !== null) {
             return [$this->size['width'], $this->size['height']];
@@ -77,7 +77,7 @@ final class KeyMap implements \SugarCraft\Dashboard\Foundation\SizedItem
         if (! $this->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
             return [0, 0];
         }
-        return $this->content->getInnerSize();
+        return $this->content->innerSize();
     }
 
     // ─── Action Registration ───────────────────────────────────────

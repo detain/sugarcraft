@@ -71,7 +71,7 @@ final class VideoTest extends TestCase
     public function testGetInnerSize(): void
     {
         $video = Video::new()->setSize(80, 20);
-        $size = $video->getInnerSize();
+        $size = $video->innerSize();
         $this->assertIsArray($size);
         $this->assertCount(2, $size);
         $this->assertEquals(80, $size[0]);

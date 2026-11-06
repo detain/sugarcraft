@@ -132,7 +132,7 @@ final class Center implements \SugarCraft\Dashboard\Foundation\SizedItem
     private function measureContent(): array
     {
         if ($this->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-            [$w, $h] = $this->content->getInnerSize();
+            [$w, $h] = $this->content->innerSize();
             if ($w > 0 && $h > 0) {
                 return ['width' => $w, 'height' => $h];
             }
@@ -184,7 +184,7 @@ final class Center implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $w = $this->width ?? 0;
         $h = $this->height ?? 0;

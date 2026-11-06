@@ -102,7 +102,7 @@ final class Stack implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         if ($this->items === []) {
             return [0, 0];
@@ -113,7 +113,7 @@ final class Stack implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         foreach ($this->items as $index => $item) {
             if ($item instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [$w, $h] = $item->getInnerSize();
+                [$w, $h] = $item->innerSize();
                 $maxWidth = max($maxWidth, $w);
                 $totalHeight += $h;
             } else {

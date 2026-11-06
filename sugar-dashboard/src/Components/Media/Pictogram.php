@@ -117,7 +117,7 @@ final class Pictogram implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int, 1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $useWidth = $this->width ?? $this->maxIcons + 15;
         $useHeight = $this->height ?? max(3, count($this->items));

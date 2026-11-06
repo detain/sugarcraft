@@ -427,7 +427,7 @@ final class DonutTest extends TestCase
             ['label' => 'A', 'value' => 30],
         ]);
 
-        [$width, $height] = $donut->getInnerSize();
+        [$width, $height] = $donut->innerSize();
         $this->assertEquals($width, $height);
     }
 

@@ -233,7 +233,7 @@ final class DotMatrixTest extends TestCase
     public function testGetInnerSize(): void
     {
         $matrix = DotMatrix::new('HI');
-        [$w, $h] = $matrix->getInnerSize();
+        [$w, $h] = $matrix->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(5, $h); // Always 5 rows
@@ -244,8 +244,8 @@ final class DotMatrixTest extends TestCase
         $matrix2 = DotMatrix::new('AB');
         $matrix6 = DotMatrix::new('ABCDEF');
 
-        [$w2, $h] = $matrix2->getInnerSize();
-        [$w6, $h] = $matrix6->getInnerSize();
+        [$w2, $h] = $matrix2->innerSize();
+        [$w6, $h] = $matrix6->innerSize();
 
         // 6 chars should be wider than 2 chars
         $this->assertGreaterThan($w2, $w6);
@@ -256,8 +256,8 @@ final class DotMatrixTest extends TestCase
         $matrixNoFrame = DotMatrix::new('A')->withShowFrame(false);
         $matrixWithFrame = DotMatrix::new('A')->withShowFrame(true);
 
-        [$wNoFrame, $hNoFrame] = $matrixNoFrame->getInnerSize();
-        [$wWithFrame, $hWithFrame] = $matrixWithFrame->getInnerSize();
+        [$wNoFrame, $hNoFrame] = $matrixNoFrame->innerSize();
+        [$wWithFrame, $hWithFrame] = $matrixWithFrame->innerSize();
 
         // With frame should be larger
         $this->assertGreaterThan($wNoFrame, $wWithFrame);
@@ -269,8 +269,8 @@ final class DotMatrixTest extends TestCase
         $matrix1 = DotMatrix::new('A')->withCellSize(1);
         $matrix2 = DotMatrix::new('A')->withCellSize(2);
 
-        [$w1, $h1] = $matrix1->getInnerSize();
-        [$w2, $h2] = $matrix2->getInnerSize();
+        [$w1, $h1] = $matrix1->innerSize();
+        [$w2, $h2] = $matrix2->innerSize();
 
         // Larger cell size should have larger dimensions
         $this->assertGreaterThan($w1, $w2);

@@ -229,7 +229,7 @@ final class CommentTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $comment = Comment::new('Author', 'Short body');
-        [$w, $h] = $comment->getInnerSize();
+        [$w, $h] = $comment->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThanOrEqual(1, $h);
@@ -239,7 +239,7 @@ final class CommentTest extends TestCase
     {
         $longBody = str_repeat('word ', 100);
         $comment = Comment::new('Author', $longBody)->setSize(40, 50);
-        [$w, $h] = $comment->getInnerSize();
+        [$w, $h] = $comment->innerSize();
 
         $this->assertSame(40, $w);
         $this->assertGreaterThan(1, $h);

@@ -177,7 +177,7 @@ final class TileLayout implements Item, SizedItem
         return implode("\n", $views);
     }
 
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         return [$this->width ?? 0, $this->height ?? 0];
     }

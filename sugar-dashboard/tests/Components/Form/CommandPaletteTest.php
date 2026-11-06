@@ -341,7 +341,7 @@ final class CommandPaletteTest extends TestCase
             ['label' => 'Command'],
         ]);
 
-        [$w, $h] = $palette->getInnerSize();
+        [$w, $h] = $palette->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -355,7 +355,7 @@ final class CommandPaletteTest extends TestCase
             ['label' => 'Three'],
         ]);
 
-        [, $h] = $palette->getInnerSize();
+        [, $h] = $palette->innerSize();
 
         $this->assertSame(7, $h); // header + search + top border + 3 commands + bottom border
     }
@@ -367,7 +367,7 @@ final class CommandPaletteTest extends TestCase
             ['label' => 'Much Longer Label'],
         ]);
 
-        [$w, ] = $palette->getInnerSize();
+        [$w, ] = $palette->innerSize();
 
         $this->assertGreaterThanOrEqual(25, $w);
     }

@@ -201,7 +201,7 @@ final class ModalTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $modal = Modal::new('Test');
-        [$w, $h] = $modal->getInnerSize();
+        [$w, $h] = $modal->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -210,7 +210,7 @@ final class ModalTest extends TestCase
     public function testGetInnerSizeWithExplicitSize(): void
     {
         $modal = Modal::new('Test')->setSize(100, 30);
-        [$w, $h] = $modal->getInnerSize();
+        [$w, $h] = $modal->innerSize();
 
         $this->assertGreaterThanOrEqual(20, $w);
         $this->assertGreaterThanOrEqual(5, $h);

@@ -105,7 +105,7 @@ final class SunburstTest extends TestCase
     public function testGetInnerSize(): void
     {
         $sunburst = Sunburst::new()->setSize(50, 25);
-        $size = $sunburst->getInnerSize();
+        $size = $sunburst->innerSize();
         $this->assertIsArray($size);
         $this->assertCount(2, $size);
         $this->assertEquals(50, $size[0]);

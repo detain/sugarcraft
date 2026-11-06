@@ -186,7 +186,7 @@ final class RatioGrid implements Item, SizedItem
         return $heights;
     }
 
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         return [$this->width ?? 0, $this->height ?? 0];
     }

@@ -171,7 +171,7 @@ final class PopoverTest extends TestCase
     public function testWidthAllocation(): void
     {
         $popover = Popover::new('Title', 'Content')->setSize(50, 10);
-        [$w, ] = $popover->getInnerSize();
+        [$w, ] = $popover->innerSize();
 
         $this->assertGreaterThanOrEqual(50, $w);
     }
@@ -247,7 +247,7 @@ final class PopoverTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $popover = Popover::new('Title', 'Content');
-        [$w, $h] = $popover->getInnerSize();
+        [$w, $h] = $popover->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -258,8 +258,8 @@ final class PopoverTest extends TestCase
         $popoverNoTitle = Popover::new('', 'Content');
         $popoverWithTitle = Popover::new('Title', 'Content');
 
-        [, $hNoTitle] = $popoverNoTitle->getInnerSize();
-        [, $hWithTitle] = $popoverWithTitle->getInnerSize();
+        [, $hNoTitle] = $popoverNoTitle->innerSize();
+        [, $hWithTitle] = $popoverWithTitle->innerSize();
 
         $this->assertGreaterThan($hNoTitle, $hWithTitle);
     }
@@ -269,8 +269,8 @@ final class PopoverTest extends TestCase
         $popoverNoArrow = Popover::new('Title', 'Content')->withShowArrow(false);
         $popoverWithArrow = Popover::new('Title', 'Content')->withShowArrow(true);
 
-        [, $hNoArrow] = $popoverNoArrow->getInnerSize();
-        [, $hWithArrow] = $popoverWithArrow->getInnerSize();
+        [, $hNoArrow] = $popoverNoArrow->innerSize();
+        [, $hWithArrow] = $popoverWithArrow->innerSize();
 
         $this->assertGreaterThan($hNoArrow, $hWithArrow);
     }

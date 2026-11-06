@@ -103,7 +103,7 @@ final class MindMapTest extends TestCase
     public function testGetInnerSize(): void
     {
         $mindMap = MindMap::new()->setSize(60, 15);
-        $size = $mindMap->getInnerSize();
+        $size = $mindMap->innerSize();
         $this->assertIsArray($size);
         $this->assertCount(2, $size);
         $this->assertEquals(60, $size[0]);

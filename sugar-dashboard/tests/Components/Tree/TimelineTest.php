@@ -37,7 +37,7 @@ final class TimelineTest extends TestCase
             ['time' => '10:00', 'title' => 'Event 1'],
         ]);
 
-        [$width, $height] = $timeline->getInnerSize();
+        [$width, $height] = $timeline->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

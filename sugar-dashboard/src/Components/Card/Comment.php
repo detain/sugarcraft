@@ -183,7 +183,7 @@ final class Comment implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $maxWidth = $this->width ?? 80;
         $bodyLines = $this->wrapText($this->body, $maxWidth - 2);

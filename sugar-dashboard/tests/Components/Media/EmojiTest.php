@@ -289,7 +289,7 @@ final class EmojiTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $emoji = Emoji::thumbsUp();
-        [$w, $h] = $emoji->getInnerSize();
+        [$w, $h] = $emoji->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -298,7 +298,7 @@ final class EmojiTest extends TestCase
     public function testGetInnerSizeWithLabel(): void
     {
         $emoji = new Emoji('🎉', 'Test', Emoji::SIZE_MEDIUM, null, true);
-        [$w, ] = $emoji->getInnerSize();
+        [$w, ] = $emoji->innerSize();
 
         // Width should account for emoji + space + label
         $this->assertGreaterThan(1, $w);

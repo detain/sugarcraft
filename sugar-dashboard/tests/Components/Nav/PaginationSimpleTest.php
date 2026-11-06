@@ -279,7 +279,7 @@ final class PaginationSimpleTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $pagination = PaginationSimple::new(5, 10);
-        [$w, $h] = $pagination->getInnerSize();
+        [$w, $h] = $pagination->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -288,7 +288,7 @@ final class PaginationSimpleTest extends TestCase
     public function testGetInnerSizeWithLargeTotalPages(): void
     {
         $pagination = PaginationSimple::new(1, 1000);
-        [$w, $h] = $pagination->getInnerSize();
+        [$w, $h] = $pagination->innerSize();
 
         // Should be wider for larger page numbers
         $this->assertGreaterThan(20, $w);

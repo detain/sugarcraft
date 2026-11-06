@@ -158,7 +158,7 @@ final class ClockTest extends TestCase
     public function testGetInnerSize(): void
     {
         $clock = Clock::new();
-        [$w, $h] = $clock->getInnerSize();
+        [$w, $h] = $clock->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -167,7 +167,7 @@ final class ClockTest extends TestCase
     public function testGetInnerSizeWithDate(): void
     {
         $clock = Clock::new()->withDate(true);
-        [$w, $h] = $clock->getInnerSize();
+        [$w, $h] = $clock->innerSize();
 
         // With date should be wider
         $this->assertGreaterThan(10, $w);

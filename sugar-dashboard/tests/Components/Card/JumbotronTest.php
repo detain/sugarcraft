@@ -340,7 +340,7 @@ final class JumbotronTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $jumbotron = Jumbotron::new('Title');
-        [$w, $h] = $jumbotron->getInnerSize();
+        [$w, $h] = $jumbotron->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -351,8 +351,8 @@ final class JumbotronTest extends TestCase
         $jumbotronNoSub = Jumbotron::new('Title');
         $jumbotronWithSub = Jumbotron::new('Title')->withSubtitle('Subtitle');
 
-        [, $hNoSub] = $jumbotronNoSub->getInnerSize();
-        [, $hWithSub] = $jumbotronWithSub->getInnerSize();
+        [, $hNoSub] = $jumbotronNoSub->innerSize();
+        [, $hWithSub] = $jumbotronWithSub->innerSize();
 
         $this->assertGreaterThan($hNoSub, $hWithSub);
     }
@@ -362,8 +362,8 @@ final class JumbotronTest extends TestCase
         $jumbotronNoButton = Jumbotron::new('Title');
         $jumbotronWithButton = Jumbotron::new('Title')->withButtonText('Click');
 
-        [, $hNoButton] = $jumbotronNoButton->getInnerSize();
-        [, $hWithButton] = $jumbotronWithButton->getInnerSize();
+        [, $hNoButton] = $jumbotronNoButton->innerSize();
+        [, $hWithButton] = $jumbotronWithButton->innerSize();
 
         $this->assertGreaterThan($hNoButton, $hWithButton);
     }
@@ -373,8 +373,8 @@ final class JumbotronTest extends TestCase
         $jumbotronNoBorder = Jumbotron::new('Title')->withBorder(false);
         $jumbotronWithBorder = Jumbotron::new('Title');
 
-        [, $hNoBorder] = $jumbotronNoBorder->getInnerSize();
-        [, $hWithBorder] = $jumbotronWithBorder->getInnerSize();
+        [, $hNoBorder] = $jumbotronNoBorder->innerSize();
+        [, $hWithBorder] = $jumbotronWithBorder->innerSize();
 
         $this->assertGreaterThan($hNoBorder, $hWithBorder);
     }

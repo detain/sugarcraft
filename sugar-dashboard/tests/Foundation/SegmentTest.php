@@ -97,7 +97,7 @@ final class SegmentTest extends TestCase
     public function testGetInnerSizeSingleDigit(): void
     {
         $segment = Segment::new('5');
-        [$width, $height] = $segment->getInnerSize();
+        [$width, $height] = $segment->innerSize();
 
         $this->assertSame(3, $width);
         $this->assertSame(5, $height);
@@ -106,7 +106,7 @@ final class SegmentTest extends TestCase
     public function testGetInnerSizeMultipleDigits(): void
     {
         $segment = Segment::new('12:34');
-        [$width, $height] = $segment->getInnerSize();
+        [$width, $height] = $segment->innerSize();
 
         // 5 digits + 2 colons = 5*3 + 2 = 17
         $this->assertSame(17, $width);

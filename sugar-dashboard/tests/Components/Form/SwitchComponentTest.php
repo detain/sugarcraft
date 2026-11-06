@@ -167,7 +167,7 @@ final class SwitchComponentTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $switch = SwitchComponent::new();
-        [$w, $h] = $switch->getInnerSize();
+        [$w, $h] = $switch->innerSize();
 
         $this->assertSame(4, $w);
         $this->assertSame(1, $h);
@@ -176,7 +176,7 @@ final class SwitchComponentTest extends TestCase
     public function testGetInnerSizeOnState(): void
     {
         $switch = SwitchComponent::on();
-        [$w, $h] = $switch->getInnerSize();
+        [$w, $h] = $switch->innerSize();
 
         $this->assertSame(4, $w);
         $this->assertSame(1, $h);

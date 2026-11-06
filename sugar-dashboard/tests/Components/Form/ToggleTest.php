@@ -190,7 +190,7 @@ final class ToggleTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $toggle = Toggle::new();
-        [$w, $h] = $toggle->getInnerSize();
+        [$w, $h] = $toggle->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -199,7 +199,7 @@ final class ToggleTest extends TestCase
     public function testGetInnerSizeWithCustomLabels(): void
     {
         $toggle = Toggle::new()->withLabels('ENABLED', 'DISABLED');
-        [$w, $h] = $toggle->getInnerSize();
+        [$w, $h] = $toggle->innerSize();
 
         $this->assertGreaterThan(7, $w); // Should be wider with custom labels
     }

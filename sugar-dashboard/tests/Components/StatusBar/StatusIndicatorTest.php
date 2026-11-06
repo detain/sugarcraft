@@ -191,7 +191,7 @@ final class StatusIndicatorTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $indicator = StatusIndicator::new()->withSize(1);
-        [$w, $h] = $indicator->getInnerSize();
+        [$w, $h] = $indicator->innerSize();
 
         $this->assertSame(1, $w);
         $this->assertSame(1, $h);
@@ -200,7 +200,7 @@ final class StatusIndicatorTest extends TestCase
     public function testGetInnerSizeWithLargerSize(): void
     {
         $indicator = StatusIndicator::new()->withSize(3);
-        [$w, $h] = $indicator->getInnerSize();
+        [$w, $h] = $indicator->innerSize();
 
         $this->assertSame(3, $w);
         $this->assertSame(1, $h);

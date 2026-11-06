@@ -232,7 +232,7 @@ final class FeaturesTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $features = Features::new([['icon' => '★', 'title' => 'Test', 'description' => 'Desc']]);
-        [$w, $h] = $features->getInnerSize();
+        [$w, $h] = $features->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);

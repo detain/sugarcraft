@@ -120,7 +120,7 @@ final class GanttTest extends TestCase
     public function testGetInnerSize(): void
     {
         $gantt = Gantt::new()->setSize(70, 12);
-        $size = $gantt->getInnerSize();
+        $size = $gantt->innerSize();
         $this->assertIsArray($size);
         $this->assertCount(2, $size);
         $this->assertEquals(70, $size[0]);

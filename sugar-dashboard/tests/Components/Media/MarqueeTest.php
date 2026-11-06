@@ -37,7 +37,7 @@ final class MarqueeTest extends TestCase
     public function testGetInnerSizeReturnsDimensions(): void
     {
         $marquee = Marquee::new('Test');
-        [$width, $height] = $marquee->getInnerSize();
+        [$width, $height] = $marquee->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertEquals(1, $height);
     }

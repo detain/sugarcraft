@@ -92,7 +92,7 @@ final class Split implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         if ($this->panes === []) {
             return [0, 0];
@@ -113,7 +113,7 @@ final class Split implements \SugarCraft\Dashboard\Foundation\SizedItem
             // A plain Sizer without an intrinsic-size contract keeps the
             // exact box it was just allocated (third-party-safe, E-audit #2).
             [$pW2, $pH2] = $pane instanceof \SugarCraft\Dashboard\Foundation\SizedItem
-                ? $pane->getInnerSize()
+                ? $pane->innerSize()
                 : [$pW, $pH];
             $maxWidth = max($maxWidth, $pW2);
             $maxHeight = max($maxHeight, $pH2);

@@ -14,7 +14,7 @@ interface Drawable
     /**
      * Get the rectangle this drawable occupies.
      */
-    public function getRect(): Rect;
+    public function rect(): Rect;
 
     /**
      * Set the rectangle this drawable should fill.

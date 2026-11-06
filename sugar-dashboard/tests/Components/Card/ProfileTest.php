@@ -299,7 +299,7 @@ final class ProfileTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $profile = Profile::new('John Doe', 'Developer', 'A bio');
-        [$w, $h] = $profile->getInnerSize();
+        [$w, $h] = $profile->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -310,8 +310,8 @@ final class ProfileTest extends TestCase
         $withoutAvatar = Profile::new('John', 'Dev', 'Bio');
         $withAvatar = Profile::new('John', 'Dev', 'Bio', 'JD');
 
-        [, $h1] = $withoutAvatar->getInnerSize();
-        [, $h2] = $withAvatar->getInnerSize();
+        [, $h1] = $withoutAvatar->innerSize();
+        [, $h2] = $withAvatar->innerSize();
 
         $this->assertGreaterThan($h1, $h2);
     }

@@ -232,7 +232,7 @@ final class DendrogramTest extends TestCase
         $root = new DendrogramNode('1', 'Root', 100);
         $dendrogram = Dendrogram::new()->withRoot($root)->setSize(60, 20);
 
-        [$w, $h] = $dendrogram->getInnerSize();
+        [$w, $h] = $dendrogram->innerSize();
         $this->assertSame(60, $w);
         $this->assertSame(20, $h);
     }

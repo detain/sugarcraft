@@ -44,7 +44,7 @@ final class ChipGroup implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Parse the chip list at the boundary (audit family of finding #2,
      * re-audit at 7860dbba9): renderWrapped()/calculateNaturalWidth()/
-     * calculateWrappedSize() call getInnerSize() on every element, trusting
+     * calculateWrappedSize() call innerSize() on every element, trusting
      * the list<Chip> docblock. Chip itself implements SizedItem natively, so
      * an instanceof gate here is the whole fix — a bare-Sizer element can
      * never reach those reads.
@@ -222,7 +222,7 @@ final class ChipGroup implements \SugarCraft\Dashboard\Foundation\SizedItem
         $chipCount = count($this->chips);
         for ($i = 0; $i < $chipCount; $i++) {
             $chip = $this->chips[$i];
-            [$chipWidth, ] = $chip->getInnerSize();
+            [$chipWidth, ] = $chip->innerSize();
             $chipRendered = $chip->render();
 
             // Check if we need to wrap to a new line
@@ -265,7 +265,7 @@ final class ChipGroup implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $totalWidth = 0;
         for ($i = 0; $i < count($this->chips); $i++) {
-            [$w, ] = $this->chips[$i]->getInnerSize();
+            [$w, ] = $this->chips[$i]->innerSize();
             $totalWidth += $w;
             if ($i < count($this->chips) - 1) {
                 $totalWidth += $this->gap;
@@ -280,7 +280,7 @@ final class ChipGroup implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         if ($this->chips === []) {
             return [0, 0];
@@ -310,7 +310,7 @@ final class ChipGroup implements \SugarCraft\Dashboard\Foundation\SizedItem
         $isFirstChipOnLine = true;
 
         for ($i = 0; $i < count($this->chips); $i++) {
-            [$w, ] = $this->chips[$i]->getInnerSize();
+            [$w, ] = $this->chips[$i]->innerSize();
 
             if (!$isFirstChipOnLine && $currentLineWidth + $this->gap + $w > $availableWidth) {
                 $maxLineWidth = max($maxLineWidth, $currentLineWidth);

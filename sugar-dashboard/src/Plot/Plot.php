@@ -117,12 +117,12 @@ final class Plot implements SizedItem, Drawable
         return $clone;
     }
 
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         return [$this->width, $this->height];
     }
 
-    public function getRect(): Rect
+    public function rect(): Rect
     {
         return $this->rect ?? new Rect(0, 0, $this->width - 1, $this->height - 1);
     }
@@ -138,7 +138,7 @@ final class Plot implements SizedItem, Drawable
 
     public function draw(Buffer $buffer): void
     {
-        [$bufWidth, $bufHeight] = $buffer->getInnerSize();
+        [$bufWidth, $bufHeight] = $buffer->innerSize();
 
         $innerWidth = $this->width - ($this->showAxes ? 2 : 0);
         $innerHeight = $this->height - ($this->showAxes ? 2 : 0);
@@ -147,7 +147,7 @@ final class Plot implements SizedItem, Drawable
             return;
         }
 
-        $rect = $this->getRect();
+        $rect = $this->rect();
         $globalStyle = $this->color !== null
             ? new \SugarCraft\Dashboard\Foundation\Style(foreground: $this->color)
             : new \SugarCraft\Dashboard\Foundation\Style();

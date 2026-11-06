@@ -101,7 +101,7 @@ final class BarTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $bar = Bar::new('Content')->setSize(20, 1);
-        [$w, $h] = $bar->getInnerSize();
+        [$w, $h] = $bar->innerSize();
 
         $this->assertSame(20, $w);
         $this->assertSame(1, $h);
@@ -110,7 +110,7 @@ final class BarTest extends TestCase
     public function testGetInnerSizeWithoutSetSize(): void
     {
         $bar = Bar::new('Hello');
-        [$w, $h] = $bar->getInnerSize();
+        [$w, $h] = $bar->innerSize();
 
         // Height should be 1 for bar
         $this->assertSame(1, $h);
@@ -337,7 +337,7 @@ final class BarTest extends TestCase
     public function testHeightAlwaysOne(): void
     {
         $bar = Bar::new('test')->setSize(20, 5);
-        [$w, $h] = $bar->getInnerSize();
+        [$w, $h] = $bar->innerSize();
 
         // Height should still be 1 regardless of setSize height
         $this->assertSame(1, $h);

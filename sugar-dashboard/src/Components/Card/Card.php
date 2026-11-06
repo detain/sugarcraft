@@ -284,7 +284,7 @@ final class Card implements \SugarCraft\Dashboard\Foundation\SizedItem, Drawable
 
         if ($this->content instanceof \SugarCraft\Dashboard\Foundation\Item) {
             if ($this->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [$w, ] = $this->content->getInnerSize();
+                [$w, ] = $this->content->innerSize();
                 // Add space for borders (2) and padding (2 * padding)
                 $contentWidth = max($contentWidth, $w + 2 + (2 * $this->padding));
             }
@@ -296,7 +296,7 @@ final class Card implements \SugarCraft\Dashboard\Foundation\SizedItem, Drawable
         // Account for footer width as well
         if ($this->footer !== null) {
             if ($this->footer instanceof \SugarCraft\Dashboard\Foundation\Item && $this->footer instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [$fw, ] = $this->footer->getInnerSize();
+                [$fw, ] = $this->footer->innerSize();
                 $footerWidth = $fw + 2 + (2 * $this->padding);
             } else {
                 $footerWidth = Width::string($this->footer) + 2 + (2 * $this->padding);
@@ -312,7 +312,7 @@ final class Card implements \SugarCraft\Dashboard\Foundation\SizedItem, Drawable
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $useWidth = $this->width ?? $this->calculateNaturalWidth();
         $useWidth = max($useWidth, 3);
@@ -328,7 +328,7 @@ final class Card implements \SugarCraft\Dashboard\Foundation\SizedItem, Drawable
         $contentHeight = 1;
         if ($this->content instanceof \SugarCraft\Dashboard\Foundation\Item) {
             if ($this->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [, $h] = $this->content->getInnerSize();
+                [, $h] = $this->content->innerSize();
                 $contentHeight = max(1, $h);
             }
         } elseif ($this->content !== '') {
@@ -343,7 +343,7 @@ final class Card implements \SugarCraft\Dashboard\Foundation\SizedItem, Drawable
             $footerHeight = 1;
             if ($this->footer instanceof \SugarCraft\Dashboard\Foundation\Item) {
                 if ($this->footer instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                    [, $h] = $this->footer->getInnerSize();
+                    [, $h] = $this->footer->innerSize();
                     $footerHeight = max(1, $h);
                 }
             }
@@ -488,9 +488,9 @@ final class Card implements \SugarCraft\Dashboard\Foundation\SizedItem, Drawable
 
     // ─── Drawable implementation ──────────────────────────────────
 
-    public function getRect(): Rect
+    public function rect(): Rect
     {
-        [$w, $h] = $this->getInnerSize();
+        [$w, $h] = $this->innerSize();
         return new Rect(0, 0, $w - 1, $h - 1);
     }
 

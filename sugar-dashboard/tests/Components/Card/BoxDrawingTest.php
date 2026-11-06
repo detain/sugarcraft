@@ -239,7 +239,7 @@ final class BoxDrawingTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $box = BoxDrawing::new();
-        [$w, $h] = $box->getInnerSize();
+        [$w, $h] = $box->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -250,8 +250,8 @@ final class BoxDrawingTest extends TestCase
         $boxNoTitle = BoxDrawing::new();
         $boxWithTitle = BoxDrawing::titled('Title');
 
-        [, $h1] = $boxNoTitle->getInnerSize();
-        [, $h2] = $boxWithTitle->getInnerSize();
+        [, $h1] = $boxNoTitle->innerSize();
+        [, $h2] = $boxWithTitle->innerSize();
 
         $this->assertGreaterThanOrEqual($h1, $h2);
     }

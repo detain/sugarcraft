@@ -241,7 +241,7 @@ final class ProgressRingTest extends TestCase
     public function testGetInnerSize(): void
     {
         $ring = ProgressRing::new(0.5);
-        [$w, $h] = $ring->getInnerSize();
+        [$w, $h] = $ring->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -252,8 +252,8 @@ final class ProgressRingTest extends TestCase
         $ringWithPct = ProgressRing::new(0.5)->withPercentage(true);
         $ringWithoutPct = ProgressRing::new(0.5)->withPercentage(false);
 
-        [$wWith, $hWith] = $ringWithPct->getInnerSize();
-        [$wWithout, $hWithout] = $ringWithoutPct->getInnerSize();
+        [$wWith, $hWith] = $ringWithPct->innerSize();
+        [$wWithout, $hWithout] = $ringWithoutPct->innerSize();
 
         // With percentage should be taller due to label
         $this->assertGreaterThan($hWithout, $hWith);

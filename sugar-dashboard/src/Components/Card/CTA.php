@@ -179,7 +179,7 @@ final class CTA implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $width = $this->getWidth();
         $labelWidth = Width::string($this->label) + ($this->showArrow ? 4 : 0);

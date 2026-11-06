@@ -97,7 +97,7 @@ final class OrgChartTest extends TestCase
     public function testGetInnerSize(): void
     {
         $orgChart = OrgChart::new()->setSize(65, 12);
-        $size = $orgChart->getInnerSize();
+        $size = $orgChart->innerSize();
         $this->assertIsArray($size);
         $this->assertCount(2, $size);
         $this->assertEquals(65, $size[0]);

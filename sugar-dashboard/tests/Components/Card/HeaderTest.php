@@ -169,8 +169,8 @@ final class HeaderTest extends TestCase
         $headerNoDivider = Header::new('Title');
         $headerWithDivider = Header::new('Title')->withDivider();
 
-        [, $hNoDivider] = $headerNoDivider->getInnerSize();
-        [, $hWithDivider] = $headerWithDivider->getInnerSize();
+        [, $hNoDivider] = $headerNoDivider->innerSize();
+        [, $hWithDivider] = $headerWithDivider->innerSize();
 
         $this->assertSame($hNoDivider + 1, $hWithDivider);
     }
@@ -266,7 +266,7 @@ final class HeaderTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $header = Header::new('Title');
-        [$w, $h] = $header->getInnerSize();
+        [$w, $h] = $header->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -277,8 +277,8 @@ final class HeaderTest extends TestCase
         $headerNoSub = Header::new('Title');
         $headerWithSub = Header::new('Title')->withSubtitle('Sub');
 
-        [, $hNoSub] = $headerNoSub->getInnerSize();
-        [, $hWithSub] = $headerWithSub->getInnerSize();
+        [, $hNoSub] = $headerNoSub->innerSize();
+        [, $hWithSub] = $headerWithSub->innerSize();
 
         $this->assertSame($hNoSub + 1, $hWithSub);
     }
@@ -306,7 +306,7 @@ final class HeaderTest extends TestCase
     public function testLongTitleGetsProperWidth(): void
     {
         $header = Header::new(str_repeat('x', 50));
-        [$w, ] = $header->getInnerSize();
+        [$w, ] = $header->innerSize();
 
         $this->assertSame(50, $w);
     }

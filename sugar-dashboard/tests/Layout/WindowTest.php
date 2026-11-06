@@ -108,7 +108,7 @@ final class WindowTest extends TestCase
     public function testGetInnerSizeWithSetSize(): void
     {
         $window = Window::new(Text::new('Content'))->setSize(20, 8);
-        [$w, $h] = $window->getInnerSize();
+        [$w, $h] = $window->innerSize();
 
         // Inner size should be smaller than total due to borders and title
         $this->assertLessThan(20, $w);
@@ -118,7 +118,7 @@ final class WindowTest extends TestCase
     public function testGetInnerSizeWithZeroSize(): void
     {
         $window = Window::new(Text::new('Content'));
-        [$w, $h] = $window->getInnerSize();
+        [$w, $h] = $window->innerSize();
 
         $this->assertSame(0, $w);
         $this->assertSame(0, $h);

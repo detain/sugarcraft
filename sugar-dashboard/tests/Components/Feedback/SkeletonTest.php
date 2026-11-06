@@ -228,7 +228,7 @@ final class SkeletonTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $skeleton = Skeleton::new(3);
-        [$w, $h] = $skeleton->getInnerSize();
+        [$w, $h] = $skeleton->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(3, $h);
@@ -237,7 +237,7 @@ final class SkeletonTest extends TestCase
     public function testGetInnerSizeWithWidthAllocation(): void
     {
         $skeleton = Skeleton::new(2)->setSize(100, 2);
-        [$w, ] = $skeleton->getInnerSize();
+        [$w, ] = $skeleton->innerSize();
 
         $this->assertSame(100, $w);
     }
@@ -245,7 +245,7 @@ final class SkeletonTest extends TestCase
     public function testGetInnerSizeWithCustomLineWidths(): void
     {
         $skeleton = Skeleton::new(2)->withLineWidths([30, 60]);
-        [$w, $h] = $skeleton->getInnerSize();
+        [$w, $h] = $skeleton->innerSize();
 
         $this->assertSame(80, $w); // max of allocated or custom
         $this->assertSame(2, $h);

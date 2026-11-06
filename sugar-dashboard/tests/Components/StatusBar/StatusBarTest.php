@@ -126,7 +126,7 @@ final class StatusBarTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $bar = StatusBar::new()->withSegments('L', 'C', 'R')->setSize(20, 1);
-        [$w, $h] = $bar->getInnerSize();
+        [$w, $h] = $bar->innerSize();
 
         $this->assertSame(20, $w);
         $this->assertSame(1, $h);
@@ -135,7 +135,7 @@ final class StatusBarTest extends TestCase
     public function testGetInnerSizeWithoutSetSize(): void
     {
         $bar = StatusBar::new()->withLeft('Hello');
-        [$w, $h] = $bar->getInnerSize();
+        [$w, $h] = $bar->innerSize();
 
         // Height should be 1 for status bar
         $this->assertSame(1, $h);
@@ -332,7 +332,7 @@ final class StatusBarTest extends TestCase
     public function testHeightAlwaysOne(): void
     {
         $bar = StatusBar::new()->withSegments('L', 'C', 'R')->setSize(20, 5);
-        [$w, $h] = $bar->getInnerSize();
+        [$w, $h] = $bar->innerSize();
 
         // Height should still be 1 regardless of setSize height
         $this->assertSame(1, $h);

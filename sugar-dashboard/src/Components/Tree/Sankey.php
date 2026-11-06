@@ -395,7 +395,7 @@ final class Sankey implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $width = $this->width ?? 60;
         $height = $this->height ?? max(10, count($this->nodes) * 3 + 4);

@@ -107,7 +107,7 @@ final class Pad implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int}
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $w = $this->width ?? 0;
         $h = $this->height ?? 0;

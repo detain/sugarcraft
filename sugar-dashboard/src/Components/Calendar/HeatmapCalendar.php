@@ -278,7 +278,7 @@ final class HeatmapCalendar implements \SugarCraft\Dashboard\Foundation\SizedIte
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         if (empty($this->data)) {
             return [0, 0];

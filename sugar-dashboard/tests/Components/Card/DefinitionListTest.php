@@ -94,7 +94,7 @@ final class DefinitionListTest extends TestCase
         [$w, $h] = DefinitionList::new()
             ->row('Host', 'localhost')
             ->row('Port', '3306')
-            ->getInnerSize();
+            ->innerSize();
         $this->assertGreaterThan(0, $w);
         $this->assertSame(2, $h);
     }

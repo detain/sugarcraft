@@ -44,7 +44,7 @@ final class TableChartTest extends TestCase
             [['Alice', '100']]
         );
 
-        [$width, $height] = $table->getInnerSize();
+        [$width, $height] = $table->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

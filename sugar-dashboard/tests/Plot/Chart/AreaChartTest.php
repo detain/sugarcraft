@@ -34,7 +34,7 @@ final class AreaChartTest extends TestCase
             ['label' => 'Series A', 'values' => [10, 20, 30]],
         ]);
 
-        [$width, $height] = $chart->getInnerSize();
+        [$width, $height] = $chart->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

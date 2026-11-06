@@ -141,7 +141,7 @@ final class ZStack implements \SugarCraft\Dashboard\Foundation\SizedItem
         $maxWidth = 0;
         foreach ($this->items as $item) {
             if ($item instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [$w, ] = $item->getInnerSize();
+                [$w, ] = $item->innerSize();
                 $maxWidth = max($maxWidth, $w);
             } else {
                 $rendered = $item->render();
@@ -168,7 +168,7 @@ final class ZStack implements \SugarCraft\Dashboard\Foundation\SizedItem
         $maxHeight = 0;
         foreach ($this->items as $item) {
             if ($item instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [, $h] = $item->getInnerSize();
+                [, $h] = $item->innerSize();
                 $maxHeight = max($maxHeight, $h);
             } else {
                 $rendered = $item->render();
@@ -184,7 +184,7 @@ final class ZStack implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         if ($this->items === []) {
             return [0, 0];
@@ -195,7 +195,7 @@ final class ZStack implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         foreach ($this->items as $item) {
             if ($item instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [$w, $h] = $item->getInnerSize();
+                [$w, $h] = $item->innerSize();
                 $maxWidth = max($maxWidth, $w);
                 $maxHeight = max($maxHeight, $h);
             } else {

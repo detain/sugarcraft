@@ -232,7 +232,7 @@ final class FooterTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $footer = Footer::new();
-        [$w, $h] = $footer->getInnerSize();
+        [$w, $h] = $footer->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThanOrEqual(1, $h);
@@ -241,7 +241,7 @@ final class FooterTest extends TestCase
     public function testGetInnerSizeWithBorderBoth(): void
     {
         $footer = Footer::new()->withBorderPosition('both');
-        [, $h] = $footer->getInnerSize();
+        [, $h] = $footer->innerSize();
 
         // Should have top border line + content line + bottom border line = 3
         $this->assertSame(3, $h);

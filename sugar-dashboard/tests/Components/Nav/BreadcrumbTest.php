@@ -298,7 +298,7 @@ final class BreadcrumbTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $breadcrumb = Breadcrumb::new(['Home', 'Category', 'Item']);
-        [$w, $h] = $breadcrumb->getInnerSize();
+        [$w, $h] = $breadcrumb->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h); // Breadcrumb is single-line
@@ -307,7 +307,7 @@ final class BreadcrumbTest extends TestCase
     public function testGetInnerSizeEmptyReturnsZeroWidth(): void
     {
         $breadcrumb = Breadcrumb::new([]);
-        [$w, $h] = $breadcrumb->getInnerSize();
+        [$w, $h] = $breadcrumb->innerSize();
 
         $this->assertSame(0, $w);
         $this->assertSame(1, $h);
@@ -316,7 +316,7 @@ final class BreadcrumbTest extends TestCase
     public function testGetInnerSizeWithWidthAllocation(): void
     {
         $breadcrumb = Breadcrumb::new(['A'])->setSize(50, 1);
-        [$w, ] = $breadcrumb->getInnerSize();
+        [$w, ] = $breadcrumb->innerSize();
 
         $this->assertGreaterThanOrEqual(50, $w);
     }
@@ -324,7 +324,7 @@ final class BreadcrumbTest extends TestCase
     public function testGetInnerSizeWithManyItems(): void
     {
         $breadcrumb = Breadcrumb::new(['Home', 'Category', 'Subcategory', 'Item']);
-        [$w, ] = $breadcrumb->getInnerSize();
+        [$w, ] = $breadcrumb->innerSize();
 
         // More items = wider
         $this->assertGreaterThan(

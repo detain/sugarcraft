@@ -465,7 +465,7 @@ final class DotMatrix implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $charCount = mb_strlen($this->content, 'UTF-8');
         $charWidth = (5 + self::CHAR_SPACING) * $this->cellSize;

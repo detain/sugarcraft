@@ -187,7 +187,7 @@ final class EditorTest extends TestCase
     {
         $editor = Editor::new("Line 1\nLine 2");
 
-        [$w, $h] = $editor->getInnerSize();
+        [$w, $h] = $editor->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThanOrEqual(3, $h); // 2 lines + border

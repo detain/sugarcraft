@@ -80,7 +80,7 @@ final class WordCloud implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int, 1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         return [$this->width ?? 40, $this->height ?? 10];
     }

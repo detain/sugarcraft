@@ -92,7 +92,7 @@ final class AudioTest extends TestCase
     public function testGetInnerSize(): void
     {
         $audio = Audio::new()->setSize(60, 6);
-        $size = $audio->getInnerSize();
+        $size = $audio->innerSize();
         $this->assertIsArray($size);
         $this->assertCount(2, $size);
         $this->assertEquals(60, $size[0]);

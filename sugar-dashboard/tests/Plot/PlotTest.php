@@ -246,7 +246,7 @@ final class PlotTest extends TestCase
         $plot = Plot::new();
         $resized = $plot->setSize(60, 20);
 
-        [$w, $h] = $resized->getInnerSize();
+        [$w, $h] = $resized->innerSize();
         $this->assertSame(60, $w);
         $this->assertSame(20, $h);
     }

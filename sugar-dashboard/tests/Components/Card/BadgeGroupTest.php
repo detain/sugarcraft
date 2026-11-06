@@ -162,7 +162,7 @@ final class BadgeGroupTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $group = BadgeGroup::fromLabels(['Hi', 'Bye']);
-        [$w, $h] = $group->getInnerSize();
+        [$w, $h] = $group->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThanOrEqual(1, $h);
@@ -171,7 +171,7 @@ final class BadgeGroupTest extends TestCase
     public function testEmptyGroupHasZeroSize(): void
     {
         $group = new BadgeGroup();
-        [$w, $h] = $group->getInnerSize();
+        [$w, $h] = $group->innerSize();
 
         $this->assertSame(0, $w);
         $this->assertSame(0, $h);
@@ -266,7 +266,7 @@ final class BadgeGroupTest extends TestCase
     public function testNonBadgeElementIsRefusedAtTheDoor(): void
     {
         // Sibling hole of the ChipGroup door pin: BadgeGroup measures through
-        // getInnerSize() in four places (wrap render, natural width, wrapped
+        // innerSize() in four places (wrap render, natural width, wrapped
         // size, max-height) yet its raw-array door accepted anything.
         $foreign = new class implements SizedItem {
             public function render(): string
@@ -279,7 +279,7 @@ final class BadgeGroupTest extends TestCase
                 return $this;
             }
 
-            public function getInnerSize(): array
+            public function innerSize(): array
             {
                 return [2, 3];
             }
@@ -306,7 +306,7 @@ final class BadgeGroupTest extends TestCase
         $this->assertStringContainsString('P', $group->render());
         $this->assertStringContainsString('Q', $group->render());
 
-        [$w, $h] = $group->getInnerSize();
+        [$w, $h] = $group->innerSize();
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
     }

@@ -121,7 +121,7 @@ final class LayoutTest extends TestCase
     public function testGetInnerSize(): void
     {
         $layout = Layout::horizontal([])->setSize(80, 24);
-        [$w, $h] = $layout->getInnerSize();
+        [$w, $h] = $layout->innerSize();
 
         $this->assertSame(80, $w);
         $this->assertSame(24, $h);

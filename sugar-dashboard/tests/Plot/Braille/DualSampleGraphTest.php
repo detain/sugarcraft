@@ -445,9 +445,9 @@ final class DualSampleGraphTest extends TestCase
         $this->assertSame([3, 2, 'block', true, true, 50, -5], [
             $g->width(), $g->height(), $g->family(), $g->inverted(), $g->noZero(), $g->maxValue(), $g->offset(),
         ]);
-        $this->assertSame([3, 2], $g->getInnerSize());
+        $this->assertSame([3, 2], $g->innerSize());
         $resized = $g->withData(...range(1, 20))->setSize(2, 0);
-        $this->assertSame([2, 1], $resized->getInnerSize());
+        $this->assertSame([2, 1], $resized->innerSize());
         $this->assertSame(range(1, 20), $resized->samples());
     }
 

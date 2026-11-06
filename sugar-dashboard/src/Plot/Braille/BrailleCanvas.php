@@ -330,7 +330,7 @@ final class BrailleCanvas implements SizedItem
         return $clone;
     }
 
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         return [$this->cellWidth, $this->cellHeight];
     }

@@ -266,7 +266,7 @@ final class MarkdownTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $md = Markdown::new("Line 1\nLine 2\nLine 3");
-        [$w, $h] = $md->getInnerSize();
+        [$w, $h] = $md->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(3, $h);
@@ -275,7 +275,7 @@ final class MarkdownTest extends TestCase
     public function testEmptyContentHasZeroHeight(): void
     {
         $md = Markdown::new('');
-        [, $h] = $md->getInnerSize();
+        [, $h] = $md->innerSize();
 
         $this->assertSame(0, $h);
     }

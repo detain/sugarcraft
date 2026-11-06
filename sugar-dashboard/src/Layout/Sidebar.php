@@ -234,7 +234,7 @@ final class Sidebar implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $useWidth = $this->width ?? $this->calculateNaturalWidth();
         $useWidth = max(3, $useWidth);

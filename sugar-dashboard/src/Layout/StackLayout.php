@@ -76,7 +76,7 @@ final class StackLayout implements Item, SizedItem
 
         foreach ($this->items as $item) {
             if ($item instanceof SizedItem) {
-                $itemHeight = $item->getInnerSize()[1] ?? 0;
+                $itemHeight = $item->innerSize()[1] ?? 0;
                 $sized = $item->setSize($width, $itemHeight);
                 $rendered = $sized->render();
             } else {
@@ -154,7 +154,7 @@ final class StackLayout implements Item, SizedItem
         return implode("\n", $result);
     }
 
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         return [$this->width ?? 0, $this->height ?? 0];
     }

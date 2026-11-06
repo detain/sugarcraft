@@ -81,7 +81,7 @@ final class FunnelChart implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int, 1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $maxValue = 0;
         foreach ($this->stages as $stage) {

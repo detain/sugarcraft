@@ -180,7 +180,7 @@ final class ImageTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $image = Image::placeholder()->withMaxWidth(30)->withMaxHeight(15);
-        [$w, $h] = $image->getInnerSize();
+        [$w, $h] = $image->innerSize();
 
         $this->assertSame(30, $w);
         $this->assertSame(15, $h);

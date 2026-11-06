@@ -98,7 +98,7 @@ final class Stat implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int, 1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $useWidth = $this->width ?? max(
             mb_strlen($this->label ?? '', 'UTF-8'),

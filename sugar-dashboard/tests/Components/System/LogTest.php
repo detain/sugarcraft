@@ -549,7 +549,7 @@ final class LogTest extends TestCase
             LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:02:00'),
         ]);
 
-        [$w, $h] = $log->getInnerSize();
+        [$w, $h] = $log->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(3, $h);
@@ -561,7 +561,7 @@ final class LogTest extends TestCase
             ->withEntries([LogEntry::new('Test', LogLevel::Info, '2024-01-15 10:00:00')])
             ->setSize(60, 5);
 
-        [$w, $h] = $log->getInnerSize();
+        [$w, $h] = $log->innerSize();
 
         $this->assertSame(60, $w);
         $this->assertSame(1, $h);
@@ -635,7 +635,7 @@ final class LogTest extends TestCase
         $log = Log::new();
 
         $this->assertSame('', $log->render());
-        $this->assertTrue($log->getInnerSize()[1] === 0);
+        $this->assertTrue($log->innerSize()[1] === 0);
     }
 
     public function testHeightConstrainsOutput(): void

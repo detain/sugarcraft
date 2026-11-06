@@ -84,7 +84,7 @@ final class Kbd implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int, 1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $keyWidth = 0;
         foreach ($this->keys as $key) {
@@ -106,7 +106,7 @@ final class Kbd implements \SugarCraft\Dashboard\Foundation\SizedItem
             return '';
         }
 
-        $useWidth = $this->width ?? $this->getInnerSize()[0];
+        $useWidth = $this->width ?? $this->innerSize()[0];
 
         // Build key strings
         $keyParts = [];

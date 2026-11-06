@@ -356,7 +356,7 @@ final class SankeyTest extends TestCase
             ->addNode('n1', 'Node 1', 100)
             ->addNode('n2', 'Node 2', 50)
             ->setSize(60, 20);
-        [$w, $h] = $sankey->getInnerSize();
+        [$w, $h] = $sankey->innerSize();
 
         $this->assertSame(60, $w);
         $this->assertSame(20, $h);
@@ -365,7 +365,7 @@ final class SankeyTest extends TestCase
     public function testGetInnerSizeWithDefaultValues(): void
     {
         $sankey = Sankey::new()->addNode('n1', 'Node 1', 100);
-        [$w, $h] = $sankey->getInnerSize();
+        [$w, $h] = $sankey->innerSize();
 
         $this->assertSame(60, $w);
         $this->assertGreaterThanOrEqual(10, $h);

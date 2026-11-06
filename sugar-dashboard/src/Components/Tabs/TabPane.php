@@ -84,12 +84,12 @@ final class TabPane implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $content = $this->content;
 
         if ($content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-            return $content->getInnerSize();
+            return $content->innerSize();
         }
 
         return [0, 0];

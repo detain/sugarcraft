@@ -157,7 +157,7 @@ final class ProgressListTest extends TestCase
         $list = ProgressList::new([
             ['label' => 'Task', 'progress' => 0.5],
         ]);
-        [$w, $h] = $list->getInnerSize();
+        [$w, $h] = $list->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -170,7 +170,7 @@ final class ProgressListTest extends TestCase
             ['label' => 'Task 2', 'progress' => 0.6],
             ['label' => 'Task 3', 'progress' => 0.9],
         ]);
-        [$w, $h] = $list->getInnerSize();
+        [$w, $h] = $list->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(3, $h);
@@ -183,7 +183,7 @@ final class ProgressListTest extends TestCase
             ['label' => 'Task 2', 'progress' => 0.6],
         ])->setSize(50, 1);
 
-        [$w, $h] = $list->getInnerSize();
+        [$w, $h] = $list->innerSize();
 
         $this->assertSame(1, $h);
     }

@@ -185,7 +185,7 @@ final class NProgress implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $width = $this->getWidth();
         $percentageOffset = $this->showPercentage && $this->ratio >= 0 ? 5 : 0;

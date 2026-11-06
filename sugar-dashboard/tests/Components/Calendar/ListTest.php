@@ -242,7 +242,7 @@ final class ListTest extends TestCase
     public function testGetInnerSizeWithNoSetSize(): void
     {
         $list = ListComponent::new(['Short', 'Medium length']);
-        [$w, $h] = $list->getInnerSize();
+        [$w, $h] = $list->innerSize();
 
         // Height should be number of items
         $this->assertSame(2, $h);
@@ -253,7 +253,7 @@ final class ListTest extends TestCase
     public function testGetInnerSizeWithSetSize(): void
     {
         $list = ListComponent::new(['Item'])->setSize(20, 5);
-        [$w, $h] = $list->getInnerSize();
+        [$w, $h] = $list->innerSize();
 
         $this->assertSame(20, $w);
         $this->assertSame(5, $h);

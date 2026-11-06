@@ -201,7 +201,7 @@ final class NavbarTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $navbar = Navbar::new();
-        [$w, $h] = $navbar->getInnerSize();
+        [$w, $h] = $navbar->innerSize();
 
         $this->assertGreaterThan(0, $w);
         // Default navbar has borderColor set, so height is 2 (content + border line)
@@ -214,7 +214,7 @@ final class NavbarTest extends TestCase
             ['label' => 'Item1'],
             ['label' => 'Item2'],
         ]);
-        [$w, $h] = $navbar->getInnerSize();
+        [$w, $h] = $navbar->innerSize();
 
         $this->assertGreaterThan(0, $w);
         // Navbar with borderColor set has height 2 (content + border line)

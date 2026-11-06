@@ -268,7 +268,7 @@ final class MenuTest extends TestCase
             ['label' => 'Edit'],
         ]);
 
-        [$w, $h] = $menu->getInnerSize();
+        [$w, $h] = $menu->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -283,7 +283,7 @@ final class MenuTest extends TestCase
             ]],
         ])->withSubmenuOpen(true);
 
-        [$w, $h] = $menu->getInnerSize();
+        [$w, $h] = $menu->innerSize();
 
         $this->assertSame(3, $h); // 1 bar + 2 submenu items
     }

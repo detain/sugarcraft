@@ -253,7 +253,7 @@ final class HintTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $hint = Hint::new('Test');
-        [$w, $h] = $hint->getInnerSize();
+        [$w, $h] = $hint->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -262,7 +262,7 @@ final class HintTest extends TestCase
     public function testGetInnerSizeWithWrapping(): void
     {
         $hint = Hint::new('This is a longer hint that should wrap')->setSize(10, 5);
-        [$w, $h] = $hint->getInnerSize();
+        [$w, $h] = $hint->innerSize();
 
         $this->assertGreaterThan(1, $h);
     }

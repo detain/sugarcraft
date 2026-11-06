@@ -279,7 +279,7 @@ final class TableBorderedTest extends TestCase
         $table = TableBordered::new([
             ['header' => 'Test'],
         ]);
-        [$w, $h] = $table->getInnerSize();
+        [$w, $h] = $table->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -288,7 +288,7 @@ final class TableBorderedTest extends TestCase
     public function testGetInnerSizeWithEmptyColumns(): void
     {
         $table = TableBordered::new([]);
-        [$w, $h] = $table->getInnerSize();
+        [$w, $h] = $table->innerSize();
 
         $this->assertSame(0, $w);
         $this->assertSame(0, $h);
@@ -300,7 +300,7 @@ final class TableBorderedTest extends TestCase
             [['header' => 'Test']],
             [['Data']]
         );
-        [, $h] = $table->getInnerSize();
+        [, $h] = $table->innerSize();
 
         // Should have: top border + header + separator + data + bottom border = 5 lines
         $this->assertGreaterThanOrEqual(4, $h);
@@ -311,8 +311,8 @@ final class TableBorderedTest extends TestCase
         $table1 = TableBordered::new([['header' => 'A']], [['1']]);
         $table2 = TableBordered::new([['header' => 'A']], [['1'], ['2'], ['3']]);
 
-        [, $h1] = $table1->getInnerSize();
-        [, $h2] = $table2->getInnerSize();
+        [, $h1] = $table1->innerSize();
+        [, $h2] = $table2->innerSize();
 
         $this->assertLessThan($h2, $h1);
     }

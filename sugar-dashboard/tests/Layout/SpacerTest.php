@@ -143,7 +143,7 @@ final class SpacerTest extends TestCase
     {
         $original = Spacer::new(5, 1);
         $resized = $original->setSize(20, 5);
-        [$w, $h] = $resized->getInnerSize();
+        [$w, $h] = $resized->innerSize();
 
         $this->assertSame(20, $w);
         $this->assertSame(5, $h);
@@ -205,7 +205,7 @@ final class SpacerTest extends TestCase
     {
         $original = Spacer::new(5, 1);
         $original->withWidth(20);
-        [$w, ] = $original->getInnerSize();
+        [$w, ] = $original->innerSize();
 
         $this->assertSame(5, $w);
     }
@@ -217,7 +217,7 @@ final class SpacerTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $spacer = Spacer::new(10, 5);
-        [$w, $h] = $spacer->getInnerSize();
+        [$w, $h] = $spacer->innerSize();
 
         $this->assertSame(10, $w);
         $this->assertSame(5, $h);
@@ -226,7 +226,7 @@ final class SpacerTest extends TestCase
     public function testGetInnerSizeAfterSetSize(): void
     {
         $spacer = Spacer::new(5, 1)->setSize(30, 10);
-        [$w, $h] = $spacer->getInnerSize();
+        [$w, $h] = $spacer->innerSize();
 
         $this->assertSame(30, $w);
         $this->assertSame(10, $h);

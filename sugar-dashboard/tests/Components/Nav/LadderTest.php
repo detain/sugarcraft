@@ -42,7 +42,7 @@ final class LadderTest extends TestCase
         $ladder = Ladder::new([
             ['label' => 'Step 1'],
         ]);
-        [$width, $height] = $ladder->getInnerSize();
+        [$width, $height] = $ladder->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

@@ -50,7 +50,7 @@ final class SplitTest extends TestCase
         ]);
         $split = $split->setSize(80, 24);
 
-        [$width, $height] = $split->getInnerSize();
+        [$width, $height] = $split->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

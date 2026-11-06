@@ -270,7 +270,7 @@ final class CTATest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $cta = CTA::new('Get Started', 'Try it free');
-        [$w, $h] = $cta->getInnerSize();
+        [$w, $h] = $cta->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -281,8 +281,8 @@ final class CTATest extends TestCase
         $withoutDesc = CTA::new('Test');
         $withDesc = CTA::new('Test', 'Description');
 
-        [, $h1] = $withoutDesc->getInnerSize();
-        [, $h2] = $withDesc->getInnerSize();
+        [, $h1] = $withoutDesc->innerSize();
+        [, $h2] = $withDesc->innerSize();
 
         $this->assertGreaterThan($h1, $h2);
     }

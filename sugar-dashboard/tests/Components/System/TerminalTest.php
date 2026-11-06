@@ -314,7 +314,7 @@ final class TerminalTest extends TestCase
     {
         $terminal = Terminal::new();
 
-        [$w, $h] = $terminal->getInnerSize();
+        [$w, $h] = $terminal->innerSize();
 
         $this->assertSame(80, $w);
         $this->assertSame(24, $h);

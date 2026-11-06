@@ -429,7 +429,7 @@ final class ChartTest extends TestCase
         $chart = Chart::new([new ChartDataPoint('A', 1)])
             ->withWidth(40)
             ->withHeight(10);
-        [$w, $h] = $chart->getInnerSize();
+        [$w, $h] = $chart->innerSize();
 
         // Width includes widthConstraint + 10 for y-axis labels
         $this->assertSame(50, $w);
@@ -440,7 +440,7 @@ final class ChartTest extends TestCase
     public function testGetInnerSizeWithoutConstraints(): void
     {
         $chart = Chart::new([new ChartDataPoint('A', 1)]);
-        [$w, $h] = $chart->getInnerSize();
+        [$w, $h] = $chart->innerSize();
 
         // Default widthConstraint is null, defaults to 50 + 10
         $this->assertSame(60, $w);
@@ -454,7 +454,7 @@ final class ChartTest extends TestCase
             ->withWidth(40)
             ->withHeight(10)
             ->setSize(60, 15);
-        [$w, $h] = $chart->getInnerSize();
+        [$w, $h] = $chart->innerSize();
 
         // setSize overrides width/height, adding 10 and 2 respectively
         $this->assertSame(70, $w);

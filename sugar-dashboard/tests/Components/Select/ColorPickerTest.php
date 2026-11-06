@@ -228,7 +228,7 @@ final class ColorPickerTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $picker = ColorPicker::new();
-        [$w, $h] = $picker->getInnerSize();
+        [$w, $h] = $picker->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -237,11 +237,11 @@ final class ColorPickerTest extends TestCase
     public function testGetInnerSizeWithHiddenHex(): void
     {
         $picker = ColorPicker::new()->withShowHex(false);
-        [$w, $h] = $picker->getInnerSize();
+        [$w, $h] = $picker->innerSize();
 
         // Height should be one less without hex display
         $withHex = ColorPicker::new();
-        [$w2, $h2] = $withHex->getInnerSize();
+        [$w2, $h2] = $withHex->innerSize();
 
         $this->assertLessThan($h2, $h);
     }
@@ -254,7 +254,7 @@ final class ColorPickerTest extends TestCase
             '#0000FF',
         ])->withColumns(1);
 
-        [$w, $h] = $picker->getInnerSize();
+        [$w, $h] = $picker->innerSize();
 
         // Should be taller with single column
         $this->assertGreaterThan(3, $h);

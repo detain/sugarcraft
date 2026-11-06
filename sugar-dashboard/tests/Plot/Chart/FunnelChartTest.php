@@ -33,7 +33,7 @@ final class FunnelChartTest extends TestCase
         $chart = FunnelChart::new([
             ['label' => 'A', 'value' => 100],
         ]);
-        [$width, $height] = $chart->getInnerSize();
+        [$width, $height] = $chart->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

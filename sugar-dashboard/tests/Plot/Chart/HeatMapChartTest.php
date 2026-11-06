@@ -33,7 +33,7 @@ final class HeatMapChartTest extends TestCase
     public function testGetInnerSizeReturnsDimensions(): void
     {
         $heatmap = HeatMapChart::new([[0.1, 0.5]]);
-        [$width, $height] = $heatmap->getInnerSize();
+        [$width, $height] = $heatmap->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

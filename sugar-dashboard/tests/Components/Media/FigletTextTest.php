@@ -145,7 +145,7 @@ final class FigletTextTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $figlet = FigletText::new('HI');
-        [$w, $h] = $figlet->getInnerSize();
+        [$w, $h] = $figlet->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -156,8 +156,8 @@ final class FigletTextTest extends TestCase
         $short = FigletText::new('A');
         $long = FigletText::new('HELLO');
 
-        [$wShort, ] = $short->getInnerSize();
-        [$wLong, ] = $long->getInnerSize();
+        [$wShort, ] = $short->innerSize();
+        [$wLong, ] = $long->innerSize();
 
         $this->assertGreaterThan($wShort, $wLong);
     }

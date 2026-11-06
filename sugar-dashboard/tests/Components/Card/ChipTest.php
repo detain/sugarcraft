@@ -236,7 +236,7 @@ final class ChipTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $chip = Chip::new('Test');
-        [$w, $h] = $chip->getInnerSize();
+        [$w, $h] = $chip->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -245,7 +245,7 @@ final class ChipTest extends TestCase
     public function testGetInnerSizeWithWidthAllocation(): void
     {
         $chip = Chip::new('Hi')->setSize(50, 1);
-        [$w, ] = $chip->getInnerSize();
+        [$w, ] = $chip->innerSize();
 
         $this->assertGreaterThanOrEqual(50, $w);
     }
@@ -253,11 +253,11 @@ final class ChipTest extends TestCase
     public function testGetInnerSizeWithDeleteIcon(): void
     {
         $chip = Chip::new('Test')->withDeletable(true);
-        [$w, ] = $chip->getInnerSize();
+        [$w, ] = $chip->innerSize();
 
         // Should be wider with delete icon
         $chipWithoutDelete = Chip::new('Test');
-        [$w2, ] = $chipWithoutDelete->getInnerSize();
+        [$w2, ] = $chipWithoutDelete->innerSize();
 
         $this->assertGreaterThan($w2, $w);
     }

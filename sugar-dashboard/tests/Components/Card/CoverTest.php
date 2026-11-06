@@ -43,7 +43,7 @@ final class CoverTest extends TestCase
             {
                 return "Size:{$this->w}x{$this->h}";
             }
-            public function getInnerSize(): array
+            public function innerSize(): array
             {
                 return [$this->w, $this->h];
             }
@@ -174,7 +174,7 @@ final class CoverTest extends TestCase
         $cover = Cover::new($this->strItem('test'))
             ->setSize(15, 5);
 
-        [$w, $h] = $cover->getInnerSize();
+        [$w, $h] = $cover->innerSize();
         $this->assertSame(15, $w);
         $this->assertSame(5, $h);
     }
@@ -183,7 +183,7 @@ final class CoverTest extends TestCase
     {
         $cover = Cover::new($this->strItem('hello'));
 
-        [$w, $h] = $cover->getInnerSize();
+        [$w, $h] = $cover->innerSize();
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
     }

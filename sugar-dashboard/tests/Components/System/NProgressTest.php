@@ -245,7 +245,7 @@ final class NProgressTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $nprogress = NProgress::new(0.5);
-        [$w, $h] = $nprogress->getInnerSize();
+        [$w, $h] = $nprogress->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -254,7 +254,7 @@ final class NProgressTest extends TestCase
     public function testGetInnerSizeWithWidthAllocation(): void
     {
         $nprogress = NProgress::new(0.5)->setSize(80, 1);
-        [$w, ] = $nprogress->getInnerSize();
+        [$w, ] = $nprogress->innerSize();
 
         $this->assertGreaterThanOrEqual(80, $w);
     }
@@ -262,7 +262,7 @@ final class NProgressTest extends TestCase
     public function testGetInnerSizeWithPercentageShowsExtraWidth(): void
     {
         $nprogress = NProgress::new(0.5)->withShowPercentage(true);
-        [$w, ] = $nprogress->getInnerSize();
+        [$w, ] = $nprogress->innerSize();
 
         // Should include percentage width
         $this->assertGreaterThan(40, $w);

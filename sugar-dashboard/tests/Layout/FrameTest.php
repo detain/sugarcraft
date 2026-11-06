@@ -141,7 +141,7 @@ final class FrameTest extends TestCase
         $frame = Frame::new($this->strItem('test'));
         $frame = $frame->setSize(10, 5);
 
-        [$w, $h] = $frame->getInnerSize();
+        [$w, $h] = $frame->innerSize();
 
         // 10 total - 2 borders = 8 inner width
         $this->assertSame(8, $w);
@@ -155,11 +155,11 @@ final class FrameTest extends TestCase
             ->withPadding(2); // 2 cells each side
         $frame = $frame->setSize(12, 7);
 
-        [$w, $h] = $frame->getInnerSize();
+        [$w, $h] = $frame->innerSize();
 
-        // 12 total - 2 borders = 10 (padding is NOT subtracted by getInnerSize)
+        // 12 total - 2 borders = 10 (padding is NOT subtracted by innerSize)
         $this->assertSame(10, $w);
-        // 7 total - 2 borders = 5 (padding is NOT subtracted by getInnerSize)
+        // 7 total - 2 borders = 5 (padding is NOT subtracted by innerSize)
         $this->assertSame(5, $h);
     }
 
@@ -168,7 +168,7 @@ final class FrameTest extends TestCase
         $frame = Frame::new($this->strItem('tiny'));
         $frame = $frame->setSize(1, 1);
 
-        [$w, $h] = $frame->getInnerSize();
+        [$w, $h] = $frame->innerSize();
         $this->assertLessThanOrEqual(0, $w);
         $this->assertLessThanOrEqual(0, $h);
     }
@@ -176,7 +176,7 @@ final class FrameTest extends TestCase
     public function testGetInnerSizeBeforeSetSizeReturnsZero(): void
     {
         $frame = Frame::new($this->strItem('test'));
-        [$w, $h] = $frame->getInnerSize();
+        [$w, $h] = $frame->innerSize();
         $this->assertSame(0, $w);
         $this->assertSame(0, $h);
     }
@@ -233,11 +233,11 @@ final class FrameTest extends TestCase
             ->withPaddingXY(3, 1) // 3 vertical, 1 horizontal
             ->setSize(12, 9);
 
-        [$w, $h] = $frame->getInnerSize();
+        [$w, $h] = $frame->innerSize();
 
-        // 12 - 2 borders = 10 (padding is NOT subtracted by getInnerSize)
+        // 12 - 2 borders = 10 (padding is NOT subtracted by innerSize)
         $this->assertSame(10, $w);
-        // 9 - 2 borders = 7 (padding is NOT subtracted by getInnerSize)
+        // 9 - 2 borders = 7 (padding is NOT subtracted by innerSize)
         $this->assertSame(7, $h);
     }
 

@@ -276,7 +276,7 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
         $usedWidth = 0;
         foreach ($this->children as $index => $child) {
             if ($child->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [$childWidth, $childHeight] = $child->content->getInnerSize();
+                [$childWidth, $childHeight] = $child->content->innerSize();
             } else {
                 // Non-Sizer: render to measure natural size (memoised for
                 // this pass — the paint loop reuses the same string).
@@ -354,7 +354,7 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
         $usedHeight = 0;
         foreach ($this->children as $index => $child) {
             if ($child->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [$childWidth, $childHeight] = $child->content->getInnerSize();
+                [$childWidth, $childHeight] = $child->content->innerSize();
             } else {
                 // Non-Sizer: render to measure natural size (memoised for
                 // this pass — the paint loop reuses the same string).
@@ -515,7 +515,7 @@ final class Layout implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         return [$this->getWidth(), $this->getHeight()];
     }

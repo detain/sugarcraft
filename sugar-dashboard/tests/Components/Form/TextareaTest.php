@@ -112,8 +112,8 @@ final class TextareaTest extends TestCase
         $textarea5 = Textarea::new('Content', 5);
         $textarea10 = Textarea::new('Content', 10);
 
-        [, $h5] = $textarea5->getInnerSize();
-        [, $h10] = $textarea10->getInnerSize();
+        [, $h5] = $textarea5->innerSize();
+        [, $h10] = $textarea10->innerSize();
 
         $this->assertSame($h5 + 5, $h10);
     }
@@ -170,8 +170,8 @@ final class TextareaTest extends TestCase
         $textareaNoError = Textarea::new('Content');
         $textareaWithError = Textarea::new('Content')->withError('Error!');
 
-        [, $hNoError] = $textareaNoError->getInnerSize();
-        [, $hWithError] = $textareaWithError->getInnerSize();
+        [, $hNoError] = $textareaNoError->innerSize();
+        [, $hWithError] = $textareaWithError->innerSize();
 
         $this->assertGreaterThan($hNoError, $hWithError);
     }
@@ -319,7 +319,7 @@ final class TextareaTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $textarea = Textarea::new('Content');
-        [$w, $h] = $textarea->getInnerSize();
+        [$w, $h] = $textarea->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -330,8 +330,8 @@ final class TextareaTest extends TestCase
         $textareaNoError = Textarea::new('Content');
         $textareaWithError = Textarea::new('Content')->withError('Long error message that wraps');
 
-        [, $hNoError] = $textareaNoError->getInnerSize();
-        [, $hWithError] = $textareaWithError->getInnerSize();
+        [, $hNoError] = $textareaNoError->innerSize();
+        [, $hWithError] = $textareaWithError->innerSize();
 
         $this->assertGreaterThan($hNoError, $hWithError);
     }
@@ -388,7 +388,7 @@ final class TextareaTest extends TestCase
     public function testZeroRowsClamped(): void
     {
         $textarea = Textarea::new('Content', 0);
-        [, $h] = $textarea->getInnerSize();
+        [, $h] = $textarea->innerSize();
 
         // Minimum should be 3 (top border + 1 row + bottom border)
         $this->assertGreaterThanOrEqual(3, $h);

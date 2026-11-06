@@ -378,7 +378,7 @@ final class AreaTest extends TestCase
         $area = Area::new([
             new AreaPoint('Jan', 50),
         ])->setSize(50, 12);
-        [$w, $h] = $area->getInnerSize();
+        [$w, $h] = $area->innerSize();
 
         $this->assertSame(50, $w);
         $this->assertSame(12, $h);
@@ -389,7 +389,7 @@ final class AreaTest extends TestCase
         $area = Area::new([
             new AreaPoint('Jan', 50),
         ]);
-        [$w, $h] = $area->getInnerSize();
+        [$w, $h] = $area->innerSize();
 
         $this->assertGreaterThanOrEqual(10, $w);
         $this->assertGreaterThanOrEqual(4, $h);

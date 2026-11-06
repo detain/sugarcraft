@@ -37,7 +37,7 @@ final class MetricsGridTest extends TestCase
         $grid = MetricsGrid::new([
             new MetricCard('Revenue', '$12,450'),
         ]);
-        [$width, $height] = $grid->getInnerSize();
+        [$width, $height] = $grid->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

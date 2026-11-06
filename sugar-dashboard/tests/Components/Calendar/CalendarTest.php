@@ -30,7 +30,7 @@ final class CalendarTest extends TestCase
     public function testGetInnerSizeReturnsDimensions(): void
     {
         $cal = Calendar::now();
-        [$width, $height] = $cal->getInnerSize();
+        [$width, $height] = $cal->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

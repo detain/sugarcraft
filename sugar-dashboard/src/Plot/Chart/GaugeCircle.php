@@ -128,7 +128,7 @@ final class GaugeCircle implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Set the allocated dimensions for this gauge.
      *
-     * Once set, render() and getInnerSize() fit the dial to the allocation
+     * Once set, render() and innerSize() fit the dial to the allocation
      * instead of the constructor radius (v5 D2 geometry activation).
      */
     public function setSize(int $width, int $height): \SugarCraft\Dashboard\Foundation\Sizer
@@ -424,7 +424,7 @@ final class GaugeCircle implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $diameter = ($this->effectiveRadius() * 2) + 1;
         $labelHeight = $this->showLabel ? 1 : 0;

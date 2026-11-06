@@ -212,7 +212,7 @@ final class ProgressTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $progress = Progress::new(0.5);
-        [$w, $h] = $progress->getInnerSize();
+        [$w, $h] = $progress->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -221,7 +221,7 @@ final class ProgressTest extends TestCase
     public function testGetInnerSizeWithPercentageShowsExtraWidth(): void
     {
         $progress = Progress::new(0.5)->withShowPercentages(true);
-        [$w, ] = $progress->getInnerSize();
+        [$w, ] = $progress->innerSize();
 
         // Should include percentage width
         $this->assertGreaterThan(40, $w);

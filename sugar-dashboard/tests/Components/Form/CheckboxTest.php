@@ -235,7 +235,7 @@ final class CheckboxTest extends TestCase
             ['label' => 'Option', 'checked' => false],
             ['label' => 'Longer Option', 'checked' => true],
         ]);
-        [$w, $h] = $checkbox->getInnerSize();
+        [$w, $h] = $checkbox->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(2, $h);

@@ -174,7 +174,7 @@ final class Tabs implements \SugarCraft\Dashboard\Foundation\SizedItem
         $tab = $this->tabs[$selectedIndex];
         $content = $tab['content'] ?? '';
 
-        $tabBarHeight = $this->activeChar !== '' ? 2 : 1; // Same calculation as getInnerSize()
+        $tabBarHeight = $this->activeChar !== '' ? 2 : 1; // Same calculation as innerSize()
         $contentHeight = $this->height !== null ? $this->height - $tabBarHeight : 0;
 
         if ($content instanceof \SugarCraft\Dashboard\Foundation\Sizer&& $this->width !== null && $contentHeight > 0) {
@@ -190,7 +190,7 @@ final class Tabs implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         // Calculate width from tab labels
         $width = 0;
@@ -212,7 +212,7 @@ final class Tabs implements \SugarCraft\Dashboard\Foundation\SizedItem
             $tab = $this->tabs[$safeIndex];
             $content = $tab['content'];
             if ($content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [, $h] = $content->getInnerSize();
+                [, $h] = $content->innerSize();
                 $contentHeight += $h;
             } else {
                 // Estimate single line content

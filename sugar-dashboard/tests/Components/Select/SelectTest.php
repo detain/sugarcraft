@@ -215,7 +215,7 @@ final class SelectTest extends TestCase
             ['label' => 'Option'],
             ['label' => 'Longer Option'],
         ]);
-        [$w, $h] = $select->getInnerSize();
+        [$w, $h] = $select->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(2, $h);

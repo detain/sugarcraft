@@ -327,7 +327,7 @@ final class SliderTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $slider = Slider::new(50);
-        [$w, $h] = $slider->getInnerSize();
+        [$w, $h] = $slider->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h); // Single line for horizontal
@@ -336,7 +336,7 @@ final class SliderTest extends TestCase
     public function testGetInnerSizeVertical(): void
     {
         $slider = Slider::vertical(50)->setSize(5, 15);
-        [$w, $h] = $slider->getInnerSize();
+        [$w, $h] = $slider->innerSize();
 
         $this->assertSame(5, $w);
         $this->assertSame(15, $h);
@@ -345,7 +345,7 @@ final class SliderTest extends TestCase
     public function testGetInnerSizeWithWidthAllocation(): void
     {
         $slider = Slider::new(50)->setSize(80, 1);
-        [$w, ] = $slider->getInnerSize();
+        [$w, ] = $slider->innerSize();
 
         $this->assertGreaterThanOrEqual(80, $w);
     }

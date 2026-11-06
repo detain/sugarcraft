@@ -203,7 +203,7 @@ final class DrawerTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $drawer = Drawer::new('Test');
-        [$w, $h] = $drawer->getInnerSize();
+        [$w, $h] = $drawer->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -212,7 +212,7 @@ final class DrawerTest extends TestCase
     public function testGetInnerSizeWithExplicitSize(): void
     {
         $drawer = Drawer::new('Test')->setSize(80, 24);
-        [$w, $h] = $drawer->getInnerSize();
+        [$w, $h] = $drawer->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);

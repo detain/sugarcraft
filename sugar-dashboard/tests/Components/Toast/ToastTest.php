@@ -353,7 +353,7 @@ final class ToastTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $toast = Toast::new('Test message');
-        [$w, $h] = $toast->getInnerSize();
+        [$w, $h] = $toast->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -364,8 +364,8 @@ final class ToastTest extends TestCase
         $toastNoTitle = Toast::new('Message');
         $toastWithTitle = Toast::new('Message')->withTitle('Title');
 
-        [, $h1] = $toastNoTitle->getInnerSize();
-        [, $h2] = $toastWithTitle->getInnerSize();
+        [, $h1] = $toastNoTitle->innerSize();
+        [, $h2] = $toastWithTitle->innerSize();
 
         $this->assertGreaterThan($h1, $h2);
     }
@@ -373,7 +373,7 @@ final class ToastTest extends TestCase
     public function testGetInnerSizeWithLongMessage(): void
     {
         $toast = Toast::new(str_repeat('word ', 20));
-        [, $h] = $toast->getInnerSize();
+        [, $h] = $toast->innerSize();
 
         // Long message should increase height due to wrapping
         $this->assertGreaterThan(3, $h);

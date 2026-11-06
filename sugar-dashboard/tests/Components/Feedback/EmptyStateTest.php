@@ -287,7 +287,7 @@ final class EmptyStateTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $empty = EmptyState::new();
-        [$w, $h] = $empty->getInnerSize();
+        [$w, $h] = $empty->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(2, $h); // icon + title
@@ -296,7 +296,7 @@ final class EmptyStateTest extends TestCase
     public function testGetInnerSizeWithDescription(): void
     {
         $empty = EmptyState::new()->withDescription('A description');
-        [, $h] = $empty->getInnerSize();
+        [, $h] = $empty->innerSize();
 
         $this->assertGreaterThan(2, $h);
     }
@@ -304,7 +304,7 @@ final class EmptyStateTest extends TestCase
     public function testGetInnerSizeWithAction(): void
     {
         $empty = EmptyState::new()->withAction('An action');
-        [, $h] = $empty->getInnerSize();
+        [, $h] = $empty->innerSize();
 
         $this->assertGreaterThan(2, $h);
     }
@@ -312,7 +312,7 @@ final class EmptyStateTest extends TestCase
     public function testGetInnerSizeWithWidthAllocation(): void
     {
         $empty = EmptyState::new()->setSize(100, 10);
-        [$w, ] = $empty->getInnerSize();
+        [$w, ] = $empty->innerSize();
 
         $this->assertSame(100, $w);
     }

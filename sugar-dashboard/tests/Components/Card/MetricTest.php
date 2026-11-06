@@ -516,7 +516,7 @@ final class MetricTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $metric = Metric::new(42.0)->withWidth(10);
-        [$w, $h] = $metric->getInnerSize();
+        [$w, $h] = $metric->innerSize();
 
         $this->assertGreaterThanOrEqual(2, $w);
         $this->assertSame(1, $h);
@@ -525,7 +525,7 @@ final class MetricTest extends TestCase
     public function testGetInnerSizeWithLabel(): void
     {
         $metric = Metric::new(42.0, 'Test')->withWidth(10);
-        [$w, $h] = $metric->getInnerSize();
+        [$w, $h] = $metric->innerSize();
 
         $this->assertGreaterThanOrEqual(4, $w);
         $this->assertSame(2, $h);
@@ -537,7 +537,7 @@ final class MetricTest extends TestCase
             ->withTrend(MetricTrend::Up)
             ->withShowTrend(true)
             ->withWidth(10);
-        [$w, $h] = $metric->getInnerSize();
+        [$w, $h] = $metric->innerSize();
 
         // Width should include trend symbol + space + value
         $this->assertGreaterThan(2, $w);

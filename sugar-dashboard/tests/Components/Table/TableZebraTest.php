@@ -362,7 +362,7 @@ final class TableZebraTest extends TestCase
         $table = TableZebra::new([
             ['header' => 'Test'],
         ]);
-        [$w, $h] = $table->getInnerSize();
+        [$w, $h] = $table->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -371,7 +371,7 @@ final class TableZebraTest extends TestCase
     public function testGetInnerSizeWithEmptyColumns(): void
     {
         $table = TableZebra::new([]);
-        [$w, $h] = $table->getInnerSize();
+        [$w, $h] = $table->innerSize();
 
         $this->assertSame(0, $w);
         $this->assertSame(0, $h);
@@ -383,7 +383,7 @@ final class TableZebraTest extends TestCase
             [['header' => 'Test']],
             [['Data']]
         );
-        [, $h] = $table->getInnerSize();
+        [, $h] = $table->innerSize();
 
         // Should have: header + data row = 2 lines
         $this->assertGreaterThanOrEqual(2, $h);
@@ -394,8 +394,8 @@ final class TableZebraTest extends TestCase
         $table1 = TableZebra::new([['header' => 'A']], [['1']]);
         $table2 = TableZebra::new([['header' => 'A']], [['1'], ['2'], ['3']]);
 
-        [, $h1] = $table1->getInnerSize();
-        [, $h2] = $table2->getInnerSize();
+        [, $h1] = $table1->innerSize();
+        [, $h2] = $table2->innerSize();
 
         $this->assertLessThan($h2, $h1);
     }
@@ -411,8 +411,8 @@ final class TableZebraTest extends TestCase
             [['1'], ['2']]
         )->withShowSeparators(true);
 
-        [, $h1] = $table1->getInnerSize();
-        [, $h2] = $table2->getInnerSize();
+        [, $h1] = $table1->innerSize();
+        [, $h2] = $table2->innerSize();
 
         $this->assertLessThan($h2, $h1);
     }

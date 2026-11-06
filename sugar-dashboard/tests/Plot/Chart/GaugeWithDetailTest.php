@@ -269,7 +269,7 @@ final class GaugeWithDetailTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $gauge = GaugeWithDetail::new('TEST', 50.0, 100.0, '', 40);
-        [$w, $h] = $gauge->getInnerSize();
+        [$w, $h] = $gauge->innerSize();
 
         // Width should be at least the constraint
         $this->assertGreaterThanOrEqual(40, $w);

@@ -292,7 +292,7 @@ final class KeyMapTest extends TestCase
         $keymap = KeyMap::new(Text::new('test'));
         $resized = $keymap->setSize(20, 5);
 
-        [$w, $h] = $resized->getInnerSize();
+        [$w, $h] = $resized->innerSize();
         $this->assertSame(20, $w);
         $this->assertSame(5, $h);
     }

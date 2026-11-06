@@ -138,7 +138,7 @@ final class Spinner implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $messageWidth = mb_strlen($this->message, 'UTF-8');
         $frameWidth = $this->frames !== [] ? 1 : 0;

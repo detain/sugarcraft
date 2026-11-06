@@ -244,7 +244,7 @@ final class BorderText implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         if ($this->content instanceof \SugarCraft\Dashboard\Foundation\Item) {
             if ($this->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [$w, ] = $this->content->getInnerSize();
+                [$w, ] = $this->content->innerSize();
                 $contentWidth = $w + 2;
             }
         } else {
@@ -259,7 +259,7 @@ final class BorderText implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $useWidth = $this->width ?? $this->calculateNaturalWidth();
         $useWidth = max($useWidth, 4);
@@ -267,7 +267,7 @@ final class BorderText implements \SugarCraft\Dashboard\Foundation\SizedItem
         $contentHeight = 1;
         if ($this->content instanceof \SugarCraft\Dashboard\Foundation\Item) {
             if ($this->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [, $h] = $this->content->getInnerSize();
+                [, $h] = $this->content->innerSize();
                 $contentHeight = max(1, $h);
             }
         } elseif ($this->content !== '') {

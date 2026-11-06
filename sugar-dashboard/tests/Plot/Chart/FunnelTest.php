@@ -382,7 +382,7 @@ final class FunnelTest extends TestCase
         $funnel = Funnel::new([
             new FunnelStage('Visitors', 1000),
         ])->setSize(50, 15);
-        [$w, $h] = $funnel->getInnerSize();
+        [$w, $h] = $funnel->innerSize();
 
         $this->assertSame(50, $w);
         $this->assertSame(15, $h);
@@ -394,7 +394,7 @@ final class FunnelTest extends TestCase
             new FunnelStage('Visitors', 1000),
             new FunnelStage('Leads', 500),
         ]);
-        [$w, $h] = $funnel->getInnerSize();
+        [$w, $h] = $funnel->innerSize();
 
         $this->assertSame(50, $w);
         $this->assertGreaterThanOrEqual(8, $h);

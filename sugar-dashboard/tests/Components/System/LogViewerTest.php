@@ -226,7 +226,7 @@ final class LogViewerTest extends TestCase
         $viewer = LogViewer::new([
             ['message' => 'Test message', 'severity' => LogViewer::Info],
         ]);
-        [$w, $h] = $viewer->getInnerSize();
+        [$w, $h] = $viewer->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -239,7 +239,7 @@ final class LogViewerTest extends TestCase
             ['message' => 'Message 2', 'severity' => LogViewer::Info],
             ['message' => 'Message 3', 'severity' => LogViewer::Info],
         ]);
-        [$w, $h] = $viewer->getInnerSize();
+        [$w, $h] = $viewer->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(3, $h);
@@ -252,7 +252,7 @@ final class LogViewerTest extends TestCase
             ['message' => 'Message 2', 'severity' => LogViewer::Info],
             ['message' => 'Message 3', 'severity' => LogViewer::Info],
         ])->withVisibleLines(2);
-        [$w, $h] = $viewer->getInnerSize();
+        [$w, $h] = $viewer->innerSize();
 
         $this->assertSame(2, $h);
     }

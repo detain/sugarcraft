@@ -168,7 +168,7 @@ final class DiffTest extends TestCase
     public function testGetInnerSize(): void
     {
         $diff = Diff::new('old', 'new');
-        [$w, $h] = $diff->getInnerSize();
+        [$w, $h] = $diff->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -177,7 +177,7 @@ final class DiffTest extends TestCase
     public function testGetInnerSizeHeightMatchesLineCount(): void
     {
         $diff = Diff::new("a\nb\nc", "a\nb\nc");
-        [, $h] = $diff->getInnerSize();
+        [, $h] = $diff->innerSize();
 
         // Should be at least number of lines
         $this->assertGreaterThanOrEqual(3, $h);

@@ -203,7 +203,7 @@ final class SegmentTest extends TestCase
     public function testGetInnerSize(): void
     {
         $segment = Segment::new('12');
-        [$w, $h] = $segment->getInnerSize();
+        [$w, $h] = $segment->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(5, $h); // Always 5 rows
@@ -214,8 +214,8 @@ final class SegmentTest extends TestCase
         $segment4 = Segment::new('1234');
         $segment8 = Segment::new('12345678');
 
-        [$w4, $h] = $segment4->getInnerSize();
-        [$w8, $h] = $segment8->getInnerSize();
+        [$w4, $h] = $segment4->innerSize();
+        [$w8, $h] = $segment8->innerSize();
 
         // 8 chars should be wider than 4 chars
         $this->assertGreaterThan($w4, $w8);

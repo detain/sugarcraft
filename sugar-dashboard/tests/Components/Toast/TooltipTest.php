@@ -255,7 +255,7 @@ final class TooltipTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $tooltip = Tooltip::new('Test');
-        [$w, $h] = $tooltip->getInnerSize();
+        [$w, $h] = $tooltip->innerSize();
 
         $this->assertGreaterThan(0, $w);
         // Height is 4: top border + text + bottom border + position arrow
@@ -265,7 +265,7 @@ final class TooltipTest extends TestCase
     public function testGetInnerSizeWithWidthAllocation(): void
     {
         $tooltip = Tooltip::new('Hi')->setSize(50, 5);
-        [$w, ] = $tooltip->getInnerSize();
+        [$w, ] = $tooltip->innerSize();
 
         $this->assertGreaterThanOrEqual(50, $w);
     }

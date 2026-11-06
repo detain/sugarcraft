@@ -156,7 +156,7 @@ final class ScreenTest extends TestCase
     public function testSetSizeAffectsContentSize(): void
     {
         $screen = Screen::new(Text::new('test'))->setSize(80, 24);
-        [$w, $h] = $screen->getInnerSize();
+        [$w, $h] = $screen->innerSize();
 
         $this->assertSame(80, $w);
         $this->assertSame(24, $h);
@@ -165,7 +165,7 @@ final class ScreenTest extends TestCase
     public function testGetInnerSizeUsesDefaults(): void
     {
         $screen = Screen::new(Text::new('test'));
-        [$w, $h] = $screen->getInnerSize();
+        [$w, $h] = $screen->innerSize();
 
         $this->assertSame(Screen::DEFAULT_WIDTH, $w);
         $this->assertSame(Screen::DEFAULT_HEIGHT, $h);

@@ -238,7 +238,7 @@ final class TagTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $tag = Tag::new('Test');
-        [$w, $h] = $tag->getInnerSize();
+        [$w, $h] = $tag->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h); // Single-line for non-outlined
@@ -247,7 +247,7 @@ final class TagTest extends TestCase
     public function testGetInnerSizeOutlinedHasHeightThree(): void
     {
         $tag = Tag::new('Test')->withStyle('outlined');
-        [, $h] = $tag->getInnerSize();
+        [, $h] = $tag->innerSize();
 
         $this->assertSame(3, $h); // Box with top, middle, bottom
     }
@@ -255,7 +255,7 @@ final class TagTest extends TestCase
     public function testGetInnerSizeWithWidthAllocation(): void
     {
         $tag = Tag::new('Hi')->setSize(50, 1);
-        [$w, ] = $tag->getInnerSize();
+        [$w, ] = $tag->innerSize();
 
         $this->assertGreaterThanOrEqual(50, $w);
     }

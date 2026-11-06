@@ -140,7 +140,7 @@ final class PaginationSimple implements \SugarCraft\Dashboard\Foundation\SizedIt
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         // Estimate: [‹] 1 / 10 [›] = about 12 chars
         $totalDigits = strlen((string) $this->totalPages);

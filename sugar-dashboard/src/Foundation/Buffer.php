@@ -172,7 +172,7 @@ final class Buffer implements Drawable, SizedItem
      *
      * @return Rect The rectangle
      */
-    public function getRect(): Rect
+    public function rect(): Rect
     {
         return new Rect(0, 0, $this->width - 1, $this->height - 1);
     }
@@ -188,7 +188,7 @@ final class Buffer implements Drawable, SizedItem
      */
     public function draw(Buffer $buffer): void
     {
-        $rect = $this->getRect();
+        $rect = $this->rect();
 
         for ($y = 0; $y < $this->height; $y++) {
             for ($x = 0; $x < $this->width; $x++) {
@@ -269,7 +269,7 @@ final class Buffer implements Drawable, SizedItem
      *
      * @return array{0:int, 1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         return [$this->width, $this->height];
     }

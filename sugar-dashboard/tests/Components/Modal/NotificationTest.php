@@ -176,7 +176,7 @@ final class NotificationTest extends TestCase
     public function testWidthAllocation(): void
     {
         $notification = Notification::new('Message')->setSize(60, 10);
-        [$w, ] = $notification->getInnerSize();
+        [$w, ] = $notification->innerSize();
 
         $this->assertGreaterThanOrEqual(60, $w);
     }
@@ -261,7 +261,7 @@ final class NotificationTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $notification = Notification::new('Message');
-        [$w, $h] = $notification->getInnerSize();
+        [$w, $h] = $notification->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -272,8 +272,8 @@ final class NotificationTest extends TestCase
         $notificationNoTitle = Notification::new('Message');
         $notificationWithTitle = Notification::new('Message')->withTitle('Title');
 
-        [, $hNoTitle] = $notificationNoTitle->getInnerSize();
-        [, $hWithTitle] = $notificationWithTitle->getInnerSize();
+        [, $hNoTitle] = $notificationNoTitle->innerSize();
+        [, $hWithTitle] = $notificationWithTitle->innerSize();
 
         $this->assertGreaterThan($hNoTitle, $hWithTitle);
     }
@@ -283,8 +283,8 @@ final class NotificationTest extends TestCase
         $notificationNoIcon = Notification::new('Message')->withTitle('Title');
         $notificationWithIcon = Notification::new('Message')->withTitle('Title')->withIcon('★');
 
-        [, $hNoIcon] = $notificationNoIcon->getInnerSize();
-        [, $hWithIcon] = $notificationWithIcon->getInnerSize();
+        [, $hNoIcon] = $notificationNoIcon->innerSize();
+        [, $hWithIcon] = $notificationWithIcon->innerSize();
 
         // Both should be same height since icon is part of title line
         $this->assertSame($hNoIcon, $hWithIcon);

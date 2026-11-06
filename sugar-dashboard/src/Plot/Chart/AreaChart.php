@@ -101,7 +101,7 @@ final class AreaChart implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int, 1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $useWidth = $this->width ?? $this->chartWidth + ($this->showLabels ? 10 : 0);
         $useHeight = $this->height ?? $this->chartHeight + ($this->showLegend ? 2 : 0);

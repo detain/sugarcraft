@@ -179,7 +179,7 @@ final class ZStackTest extends TestCase
     public function testGetInnerSizeEmptyStack(): void
     {
         $stack = ZStack::new();
-        [$w, $h] = $stack->getInnerSize();
+        [$w, $h] = $stack->innerSize();
 
         $this->assertSame(0, $w);
         $this->assertSame(0, $h);
@@ -188,7 +188,7 @@ final class ZStackTest extends TestCase
     public function testGetInnerSizeSingleItem(): void
     {
         $stack = ZStack::new(new Text('Hello'));
-        [$w, $h] = $stack->getInnerSize();
+        [$w, $h] = $stack->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -200,7 +200,7 @@ final class ZStackTest extends TestCase
             new Text('Small'),
             new Text('Medium Text')
         );
-        [$w, $h] = $stack->getInnerSize();
+        [$w, $h] = $stack->innerSize();
 
         // Should be the max dimensions
         $this->assertGreaterThan(0, $w);
@@ -213,10 +213,10 @@ final class ZStackTest extends TestCase
         $largeBadge = Badge::new('Longer Label');
 
         $stack = ZStack::new($smallBadge, $largeBadge);
-        [$w, ] = $stack->getInnerSize();
+        [$w, ] = $stack->innerSize();
 
-        [$smallW, ] = $smallBadge->getInnerSize();
-        [$largeW, ] = $largeBadge->getInnerSize();
+        [$smallW, ] = $smallBadge->innerSize();
+        [$largeW, ] = $largeBadge->innerSize();
 
         // Should be at least as large as the largest item
         $this->assertGreaterThanOrEqual($largeW, $w);

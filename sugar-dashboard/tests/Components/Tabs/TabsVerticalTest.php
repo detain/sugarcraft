@@ -329,7 +329,7 @@ final class TabsVerticalTest extends TestCase
         $tabs = TabsVertical::new([
             ['label' => 'Tab1', 'content' => Text::new('Content')],
         ]);
-        [$w, $h] = $tabs->getInnerSize();
+        [$w, $h] = $tabs->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -342,7 +342,7 @@ final class TabsVerticalTest extends TestCase
             ['label' => 'Tab2', 'content' => Text::new('Content 2')],
             ['label' => 'Tab3', 'content' => Text::new('Content 3')],
         ]);
-        [$w, $h] = $tabs->getInnerSize();
+        [$w, $h] = $tabs->innerSize();
 
         // Height should be at least 3 (number of tabs)
         $this->assertGreaterThanOrEqual(3, $h);

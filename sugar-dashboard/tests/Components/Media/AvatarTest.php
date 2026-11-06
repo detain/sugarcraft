@@ -279,7 +279,7 @@ final class AvatarTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $avatar = Avatar::fromName('Test');
-        [$w, $h] = $avatar->getInnerSize();
+        [$w, $h] = $avatar->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -288,11 +288,11 @@ final class AvatarTest extends TestCase
     public function testGetInnerSizeWithStatus(): void
     {
         $avatar = Avatar::fromName('Test')->withStatus('●');
-        [$w, ] = $avatar->getInnerSize();
+        [$w, ] = $avatar->innerSize();
 
         // Should be wider with status indicator
         $avatarWithoutStatus = Avatar::fromName('Test');
-        [$w2, ] = $avatarWithoutStatus->getInnerSize();
+        [$w2, ] = $avatarWithoutStatus->innerSize();
 
         $this->assertGreaterThan($w2, $w);
     }
@@ -300,7 +300,7 @@ final class AvatarTest extends TestCase
     public function testGetInnerSizeWithWidthAllocation(): void
     {
         $avatar = Avatar::fromName('Hi')->setSize(20, 1);
-        [$w, ] = $avatar->getInnerSize();
+        [$w, ] = $avatar->innerSize();
 
         $this->assertGreaterThanOrEqual(20, $w);
     }

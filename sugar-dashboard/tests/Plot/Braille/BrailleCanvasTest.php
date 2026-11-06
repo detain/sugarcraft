@@ -45,7 +45,7 @@ final class BrailleCanvasTest extends TestCase
         // 80 pixels wide = 40 braille cells (each cell is 2 pixels)
         // 24 pixels tall = 6 braille cells (each cell is 4 pixels)
         $canvas = BrailleCanvas::new(80, 24);
-        [$w, $h] = $canvas->getInnerSize();
+        [$w, $h] = $canvas->innerSize();
 
         $this->assertSame(40, $w);
         $this->assertSame(6, $h);

@@ -15,7 +15,7 @@ namespace SugarCraft\Dashboard\Plot\Chart;
  * pure function of the using class's own private string $style property
  * — precedent: ChartGridGeometry (the same extraction precedent).
  *
- * The sibling border idiom in these five files — getInnerSize() — is
+ * The sibling border idiom in these five files — innerSize() — is
  * deliberately NOT here: each class returns its own default dimensions
  * (and Funnel/Waterfall compute a data-derived height), so only the
  * `?? 65`-style numerals look shared; merging would change behavior.

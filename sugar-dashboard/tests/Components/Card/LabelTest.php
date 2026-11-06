@@ -203,7 +203,7 @@ final class LabelTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $label = Label::new('Test');
-        [$w, $h] = $label->getInnerSize();
+        [$w, $h] = $label->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -214,8 +214,8 @@ final class LabelTest extends TestCase
         $labelNoHelp = Label::new('Field');
         $labelWithHelp = Label::withHelp('Field', 'Some help text');
 
-        [, $h1] = $labelNoHelp->getInnerSize();
-        [, $h2] = $labelWithHelp->getInnerSize();
+        [, $h1] = $labelNoHelp->innerSize();
+        [, $h2] = $labelWithHelp->innerSize();
 
         $this->assertGreaterThan($h1, $h2);
     }

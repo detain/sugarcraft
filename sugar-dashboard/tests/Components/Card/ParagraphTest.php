@@ -282,7 +282,7 @@ final class ParagraphTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $p = Paragraph::new('Hello World')->withMaxWidth(40);
-        [$w, $h] = $p->getInnerSize();
+        [$w, $h] = $p->innerSize();
 
         $this->assertSame(40, $w);
         $this->assertGreaterThanOrEqual(1, $h);
@@ -291,7 +291,7 @@ final class ParagraphTest extends TestCase
     public function testGetInnerSizeIncludesLeading(): void
     {
         $p = Paragraph::new('one two three four five six')->withMaxWidth(10)->withLeading(2.0);
-        [$w, $h] = $p->getInnerSize();
+        [$w, $h] = $p->innerSize();
 
         // With double spacing and multiple lines, height should increase
         $this->assertGreaterThan(2, $h);
@@ -300,7 +300,7 @@ final class ParagraphTest extends TestCase
     public function testGetInnerSizeIncludesMargins(): void
     {
         $p = Paragraph::new('text')->withMarginTop(2)->withMarginBottom(1);
-        [$w, $h] = $p->getInnerSize();
+        [$w, $h] = $p->innerSize();
 
         // Height should include margin lines
         $this->assertSame(1 + 2 + 1, $h);
@@ -403,7 +403,7 @@ final class ParagraphTest extends TestCase
     public function testLeadingWithSingleLineNoEffect(): void
     {
         $p = Paragraph::new('single line')->withLeading(2.0);
-        [$w, $h] = $p->getInnerSize();
+        [$w, $h] = $p->innerSize();
 
         // Single line should still be height 1 (leading doesn't add space to single line)
         $this->assertSame(1, $h);
@@ -412,7 +412,7 @@ final class ParagraphTest extends TestCase
     public function testMarginsWithLeading(): void
     {
         $p = Paragraph::new('one two three four five six')->withMaxWidth(10)->withLeading(1.5)->withMarginTop(1)->withMarginBottom(1);
-        [$w, $h] = $p->getInnerSize();
+        [$w, $h] = $p->innerSize();
 
         // Should account for leading between multiple lines PLUS margins
         $this->assertGreaterThan(4, $h);

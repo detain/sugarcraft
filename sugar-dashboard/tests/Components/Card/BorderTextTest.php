@@ -198,7 +198,7 @@ final class BorderTextTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $border = BorderText::new('Test');
-        [$w, $h] = $border->getInnerSize();
+        [$w, $h] = $border->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);

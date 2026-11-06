@@ -154,7 +154,7 @@ final class QRCodeTest extends TestCase
     public function testGetInnerSize(): void
     {
         $qr = QRCode::new('test');
-        [$w, $h] = $qr->getInnerSize();
+        [$w, $h] = $qr->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -163,7 +163,7 @@ final class QRCodeTest extends TestCase
     public function testGetInnerSizeWithSizeParameter(): void
     {
         $qr = QRCode::new('test')->withSize(10);
-        [$w, $h] = $qr->getInnerSize();
+        [$w, $h] = $qr->innerSize();
 
         // Width should be size * 2 (each cell is 2 chars)
         $this->assertSame(20, $w);

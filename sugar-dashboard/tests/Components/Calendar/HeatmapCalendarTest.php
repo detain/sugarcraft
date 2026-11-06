@@ -271,7 +271,7 @@ final class HeatmapCalendarTest extends TestCase
             [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.3],
         ];
         $heatmap = HeatmapCalendar::new($data);
-        [$w, $h] = $heatmap->getInnerSize();
+        [$w, $h] = $heatmap->innerSize();
 
         // Width: day label (4) + 2 weeks * 2 (cell + gap) = 8
         $this->assertSame(8, $w);
@@ -286,7 +286,7 @@ final class HeatmapCalendarTest extends TestCase
             [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.3],
         ];
         $heatmap = HeatmapCalendar::new($data)->withLabels(false);
-        [$w, $h] = $heatmap->getInnerSize();
+        [$w, $h] = $heatmap->innerSize();
 
         // Width: 2 weeks * 2 (cell + gap) = 4
         // Height: 7 days only (legend is part of labels)
@@ -297,7 +297,7 @@ final class HeatmapCalendarTest extends TestCase
     public function testGetInnerSizeEmptyData(): void
     {
         $heatmap = HeatmapCalendar::new([]);
-        [$w, $h] = $heatmap->getInnerSize();
+        [$w, $h] = $heatmap->innerSize();
 
         $this->assertSame(0, $w);
         $this->assertSame(0, $h);

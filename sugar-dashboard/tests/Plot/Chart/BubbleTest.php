@@ -356,7 +356,7 @@ final class BubbleTest extends TestCase
         $bubble = Bubble::new([
             new BubblePoint('Alpha', 25, 75, 5),
         ])->setSize(50, 20);
-        [$w, $h] = $bubble->getInnerSize();
+        [$w, $h] = $bubble->innerSize();
 
         $this->assertSame(50, $w);
         $this->assertSame(20, $h);
@@ -367,7 +367,7 @@ final class BubbleTest extends TestCase
         $bubble = Bubble::new([
             new BubblePoint('Alpha', 25, 75, 5),
         ]);
-        [$w, $h] = $bubble->getInnerSize();
+        [$w, $h] = $bubble->innerSize();
 
         $this->assertSame(50, $w);
         $this->assertSame(20, $h);

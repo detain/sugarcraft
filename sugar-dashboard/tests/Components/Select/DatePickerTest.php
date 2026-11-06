@@ -258,7 +258,7 @@ final class DatePickerTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $picker = DatePicker::new(2024, 1);
-        [$w, $h] = $picker->getInnerSize();
+        [$w, $h] = $picker->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);

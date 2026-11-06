@@ -313,7 +313,7 @@ final class WizardTest extends TestCase
     public function testGetInnerSizeEmptyWizard(): void
     {
         $wizard = Wizard::fromSteps([]);
-        [$w, $h] = $wizard->getInnerSize();
+        [$w, $h] = $wizard->innerSize();
 
         $this->assertSame(0, $w);
         $this->assertSame(0, $h);
@@ -322,7 +322,7 @@ final class WizardTest extends TestCase
     public function testGetInnerSizeBasicWizard(): void
     {
         $wizard = Wizard::fromSteps(['Step 1', 'Step 2']);
-        [$w, $h] = $wizard->getInnerSize();
+        [$w, $h] = $wizard->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(2, $h); // Progress + labels
@@ -335,7 +335,7 @@ final class WizardTest extends TestCase
                 WizardStep::new('Step 1', 'Description 1'),
                 WizardStep::new('Step 2', 'Description 2'),
             ]);
-        [, $h] = $wizard->getInnerSize();
+        [, $h] = $wizard->innerSize();
 
         $this->assertSame(4, $h); // Progress + labels + 2 descriptions
     }
@@ -343,7 +343,7 @@ final class WizardTest extends TestCase
     public function testGetInnerSizeWithWidthAllocation(): void
     {
         $wizard = Wizard::fromSteps(['Step 1', 'Step 2'])->setSize(100, 5);
-        [$w, ] = $wizard->getInnerSize();
+        [$w, ] = $wizard->innerSize();
 
         $this->assertSame(100, $w);
     }

@@ -176,7 +176,7 @@ final class TimerTest extends TestCase
     public function testGetInnerSize(): void
     {
         $timer = Timer::new(60);
-        [$w, $h] = $timer->getInnerSize();
+        [$w, $h] = $timer->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -185,7 +185,7 @@ final class TimerTest extends TestCase
     public function testGetInnerSizeLongerTimer(): void
     {
         $timer = Timer::new(3600);
-        [$w, $h] = $timer->getInnerSize();
+        [$w, $h] = $timer->innerSize();
 
         // Hour timer is wider
         $this->assertSame(8, $w);

@@ -244,7 +244,7 @@ final class BrailleGeometryTest extends TestCase
         // 24 pixels / 4 = 6 cells tall
         $canvas = BrailleCanvas::new(80, 24);
 
-        [$cellWidth, $cellHeight] = $canvas->getInnerSize();
+        [$cellWidth, $cellHeight] = $canvas->innerSize();
         $this->assertSame(40, $cellWidth);
         $this->assertSame(6, $cellHeight);
     }
@@ -269,7 +269,7 @@ final class BrailleGeometryTest extends TestCase
         // 1x1 pixel should still give at least 1x1 cell
         $canvas = BrailleCanvas::new(1, 1);
 
-        [$cellWidth, $cellHeight] = $canvas->getInnerSize();
+        [$cellWidth, $cellHeight] = $canvas->innerSize();
         $this->assertGreaterThanOrEqual(1, $cellWidth);
         $this->assertGreaterThanOrEqual(1, $cellHeight);
     }

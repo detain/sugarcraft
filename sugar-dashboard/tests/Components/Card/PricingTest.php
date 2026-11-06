@@ -372,7 +372,7 @@ final class PricingTest extends TestCase
             'price' => '$49',
             'period' => '/mo',
         ]]);
-        [$w, $h] = $pricing->getInnerSize();
+        [$w, $h] = $pricing->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -392,8 +392,8 @@ final class PricingTest extends TestCase
             'features' => ['+Feature 1', '+Feature 2', '+Feature 3'],
         ]]);
 
-        [, $hNoFeatures] = $pricingNoFeatures->getInnerSize();
-        [, $hWithFeatures] = $pricingWithFeatures->getInnerSize();
+        [, $hNoFeatures] = $pricingNoFeatures->innerSize();
+        [, $hWithFeatures] = $pricingWithFeatures->innerSize();
 
         $this->assertGreaterThan($hNoFeatures, $hWithFeatures);
     }

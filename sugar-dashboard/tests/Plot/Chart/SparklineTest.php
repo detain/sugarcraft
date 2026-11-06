@@ -232,7 +232,7 @@ final class SparklineTest extends TestCase
         $sparkline = Sparkline::new(10)
             ->pushAll([10.0, 20.0, 30.0]);
 
-        [$w, $h] = $sparkline->getInnerSize();
+        [$w, $h] = $sparkline->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -241,7 +241,7 @@ final class SparklineTest extends TestCase
     public function testGetInnerSizeEmptyBuffer(): void
     {
         $sparkline = Sparkline::new(10);
-        [$w, $h] = $sparkline->getInnerSize();
+        [$w, $h] = $sparkline->innerSize();
 
         $this->assertSame(0, $w);
         $this->assertSame(1, $h);

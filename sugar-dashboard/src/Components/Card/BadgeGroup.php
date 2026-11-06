@@ -44,7 +44,7 @@ final class BadgeGroup implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * Parse the badge list at the boundary (audit family of finding #2,
      * re-audit at 7860dbba9): renderWrapped()/calculateNaturalWidth()/
-     * calculateWrappedSize()/getMaxBadgeHeight() call getInnerSize() on
+     * calculateWrappedSize()/getMaxBadgeHeight() call innerSize() on
      * every element, trusting the list<Badge> docblock. Badge itself
      * implements SizedItem natively, so an instanceof gate here is the
      * whole fix — a bare-Sizer element can never reach those reads.
@@ -222,7 +222,7 @@ final class BadgeGroup implements \SugarCraft\Dashboard\Foundation\SizedItem
         $badgeCount = count($this->badges);
         for ($i = 0; $i < $badgeCount; $i++) {
             $badge = $this->badges[$i];
-            [$badgeWidth, ] = $badge->getInnerSize();
+            [$badgeWidth, ] = $badge->innerSize();
             $badgeRendered = $badge->render();
 
             // Check if we need to wrap to a new line
@@ -265,7 +265,7 @@ final class BadgeGroup implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         $totalWidth = 0;
         for ($i = 0; $i < count($this->badges); $i++) {
-            [$w, ] = $this->badges[$i]->getInnerSize();
+            [$w, ] = $this->badges[$i]->innerSize();
             $totalWidth += $w;
             if ($i < count($this->badges) - 1) {
                 $totalWidth += $this->gap;
@@ -280,7 +280,7 @@ final class BadgeGroup implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         if ($this->badges === []) {
             return [0, 0];
@@ -310,7 +310,7 @@ final class BadgeGroup implements \SugarCraft\Dashboard\Foundation\SizedItem
         $isFirstBadgeOnLine = true;
 
         for ($i = 0; $i < count($this->badges); $i++) {
-            [$w, ] = $this->badges[$i]->getInnerSize();
+            [$w, ] = $this->badges[$i]->innerSize();
 
             if (!$isFirstBadgeOnLine && $currentLineWidth + $this->gap + $w > $availableWidth) {
                 $maxLineWidth = max($maxLineWidth, $currentLineWidth);
@@ -341,7 +341,7 @@ final class BadgeGroup implements \SugarCraft\Dashboard\Foundation\SizedItem
     {
         $maxHeight = 1;
         foreach ($this->badges as $badge) {
-            [, $h] = $badge->getInnerSize();
+            [, $h] = $badge->innerSize();
             $maxHeight = max($maxHeight, $h);
         }
         return $maxHeight;

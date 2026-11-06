@@ -339,7 +339,7 @@ final class ScrollbarTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $scrollbar = Scrollbar::new(0.5)->withHeight(10);
-        [$w, $h] = $scrollbar->getInnerSize();
+        [$w, $h] = $scrollbar->innerSize();
 
         $this->assertSame(1, $w);
         $this->assertSame(10, $h);
@@ -348,7 +348,7 @@ final class ScrollbarTest extends TestCase
     public function testGetInnerSizeWithArrows(): void
     {
         $scrollbar = Scrollbar::new(0.5)->withHeight(10)->withShowArrows(true);
-        [$w, $h] = $scrollbar->getInnerSize();
+        [$w, $h] = $scrollbar->innerSize();
 
         // Height should be 10 (track + 2 arrows)
         $this->assertSame(10, $h);
@@ -357,7 +357,7 @@ final class ScrollbarTest extends TestCase
     public function testGetInnerSizeWithoutArrows(): void
     {
         $scrollbar = Scrollbar::new(0.5)->withHeight(10)->withShowArrows(false);
-        [$w, $h] = $scrollbar->getInnerSize();
+        [$w, $h] = $scrollbar->innerSize();
 
         // Height should be 10 (just track)
         $this->assertSame(10, $h);

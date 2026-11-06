@@ -62,7 +62,7 @@ class BaseTile implements Item, SizedItem
         return '';
     }
 
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         return [$this->width ?? 0, $this->height ?? 0];
     }

@@ -311,7 +311,7 @@ final class IconTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $icon = new Icon('★', 'Label', 1);
-        [$w, $h] = $icon->getInnerSize();
+        [$w, $h] = $icon->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -320,7 +320,7 @@ final class IconTest extends TestCase
     public function testGetInnerSizeWithLabel(): void
     {
         $icon = new Icon('★', 'Label', 1);
-        [$w, ] = $icon->getInnerSize();
+        [$w, ] = $icon->innerSize();
 
         // Width should include glyph + space + label
         $this->assertGreaterThan(1, $w);

@@ -38,7 +38,7 @@ final class TreeVizTest extends TestCase
     public function testGetInnerSizeReturnsDimensions(): void
     {
         $tree = TreeViz::sample();
-        [$width, $height] = $tree->getInnerSize();
+        [$width, $height] = $tree->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

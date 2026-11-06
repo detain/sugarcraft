@@ -51,7 +51,7 @@ final class BadgeTest extends TestCase
     public function testGetInnerSizeReturnsDimensions(): void
     {
         $badge = Badge::new('Label');
-        [$width, $height] = $badge->getInnerSize();
+        [$width, $height] = $badge->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

@@ -41,7 +41,7 @@ final class CenterTest extends TestCase
             {
                 return "Size:{$this->w}x{$this->h}";
             }
-            public function getInnerSize(): array
+            public function innerSize(): array
             {
                 return [$this->w, $this->h];
             }
@@ -137,7 +137,7 @@ final class CenterTest extends TestCase
         $center = Center::new($this->strItem('test'))
             ->setSize(15, 5);
 
-        [$w, $h] = $center->getInnerSize();
+        [$w, $h] = $center->innerSize();
         $this->assertSame(15, $w);
         $this->assertSame(5, $h);
     }
@@ -146,7 +146,7 @@ final class CenterTest extends TestCase
     {
         $center = Center::new($this->strItem('hello'));
 
-        [$w, $h] = $center->getInnerSize();
+        [$w, $h] = $center->innerSize();
         $this->assertGreaterThanOrEqual(5, $w);
         $this->assertSame(1, $h);
     }

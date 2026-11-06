@@ -133,7 +133,7 @@ final class SwitchComponent implements \SugarCraft\Dashboard\Foundation\SizedIte
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         // [ O] or [O ] format = 4 characters
         return [4, 1];

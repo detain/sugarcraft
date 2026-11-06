@@ -161,7 +161,7 @@ final class StopwatchTest extends TestCase
     public function testGetInnerSize(): void
     {
         $stopwatch = Stopwatch::new();
-        [$w, $h] = $stopwatch->getInnerSize();
+        [$w, $h] = $stopwatch->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -170,7 +170,7 @@ final class StopwatchTest extends TestCase
     public function testGetInnerSizeWithMilliseconds(): void
     {
         $stopwatch = Stopwatch::new()->withMilliseconds(true);
-        [$w, $h] = $stopwatch->getInnerSize();
+        [$w, $h] = $stopwatch->innerSize();
 
         // With milliseconds: MM:SS.XX
         $this->assertGreaterThanOrEqual(8, $w);
@@ -179,7 +179,7 @@ final class StopwatchTest extends TestCase
     public function testGetInnerSizeRunning(): void
     {
         $stopwatch = Stopwatch::new()->withRunning(true);
-        [$w, $h] = $stopwatch->getInnerSize();
+        [$w, $h] = $stopwatch->innerSize();
 
         // Running adds " ▶" = 2 chars
         $this->assertGreaterThanOrEqual($w - 2, $w);

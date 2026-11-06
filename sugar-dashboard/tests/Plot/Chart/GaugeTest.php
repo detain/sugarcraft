@@ -324,7 +324,7 @@ final class GaugeTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $gauge = Gauge::new(0.5)->withWidth(20);
-        [$w, $h] = $gauge->getInnerSize();
+        [$w, $h] = $gauge->innerSize();
 
         // Width includes bar + percentage label
         $this->assertGreaterThanOrEqual(20, $w);
@@ -335,7 +335,7 @@ final class GaugeTest extends TestCase
     public function testGetInnerSizeWithoutWidthConstraint(): void
     {
         $gauge = new Gauge(0.5, null, false, null, null, '█', '░');
-        [$w, $h] = $gauge->getInnerSize();
+        [$w, $h] = $gauge->innerSize();
 
         // No width constraint, so width should be 0
         $this->assertSame(0, $w);

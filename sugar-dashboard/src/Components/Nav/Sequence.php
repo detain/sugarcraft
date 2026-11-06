@@ -400,7 +400,7 @@ final class Sequence implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int, 1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $width = $this->width ?? max(40, count($this->participants) * 10 + 10);
         $height = $this->height ?? max(12, count($this->messages) * 2 + 8);

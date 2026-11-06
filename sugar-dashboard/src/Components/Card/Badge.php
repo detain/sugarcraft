@@ -207,7 +207,7 @@ final class Badge implements \SugarCraft\Dashboard\Foundation\SizedItem, Drawabl
      *
      * @return array{0:int, 1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $sizeMap = [
             self::SizeSm => 1,
@@ -231,7 +231,7 @@ final class Badge implements \SugarCraft\Dashboard\Foundation\SizedItem, Drawabl
     {
         $text = $this->icon !== null ? $this->icon . ' ' . $this->text : $this->text;
 
-        $width = $this->width ?? $this->getInnerSize()[0];
+        $width = $this->width ?? $this->innerSize()[0];
 
         return match ($this->style) {
             self::StyleOutline => $this->renderOutline($text, $width),
@@ -375,9 +375,9 @@ final class Badge implements \SugarCraft\Dashboard\Foundation\SizedItem, Drawabl
 
     // ─── Drawable implementation ──────────────────────────────────
 
-    public function getRect(): Rect
+    public function rect(): Rect
     {
-        [$w, $h] = $this->getInnerSize();
+        [$w, $h] = $this->innerSize();
         return new Rect(0, 0, $w - 1, $h - 1);
     }
 

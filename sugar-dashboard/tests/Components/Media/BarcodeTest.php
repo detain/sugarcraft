@@ -162,7 +162,7 @@ final class BarcodeTest extends TestCase
     public function testGetInnerSize(): void
     {
         $barcode = Barcode::new('12345');
-        [$w, $h] = $barcode->getInnerSize();
+        [$w, $h] = $barcode->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -171,7 +171,7 @@ final class BarcodeTest extends TestCase
     public function testGetInnerSizeWithHeight(): void
     {
         $barcode = Barcode::new('12345')->withHeight(5);
-        [, $h] = $barcode->getInnerSize();
+        [, $h] = $barcode->innerSize();
 
         // Height includes bar rows + text label
         $this->assertSame(6, $h);
@@ -180,7 +180,7 @@ final class BarcodeTest extends TestCase
     public function testGetInnerSizeWithoutText(): void
     {
         $barcode = Barcode::new('12345')->withShowText(false);
-        [, $h] = $barcode->getInnerSize();
+        [, $h] = $barcode->innerSize();
 
         // Height is just bar rows
         $this->assertSame(3, $h);

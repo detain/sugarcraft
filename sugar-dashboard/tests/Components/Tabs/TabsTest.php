@@ -300,7 +300,7 @@ final class TabsTest extends TestCase
         $tabs = Tabs::new([
             ['label' => 'Tab1', 'content' => Text::new('Content')],
         ]);
-        [$w, $h] = $tabs->getInnerSize();
+        [$w, $h] = $tabs->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -312,7 +312,7 @@ final class TabsTest extends TestCase
             ['label' => 'Tab1', 'content' => Text::new('Content 1')],
             ['label' => 'Tab2', 'content' => Text::new('Content 2')],
         ]);
-        [$w, $h] = $tabs->getInnerSize();
+        [$w, $h] = $tabs->innerSize();
 
         // Width should increase with more/longer tabs
         $this->assertGreaterThan(0, $w);

@@ -272,7 +272,7 @@ final class AlertTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $alert = FeedbackAlert::new('Test message');
-        [$w, $h] = $alert->getInnerSize();
+        [$w, $h] = $alert->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -283,8 +283,8 @@ final class AlertTest extends TestCase
         $alertNoTitle = FeedbackAlert::new('Message');
         $alertWithTitle = FeedbackAlert::new('Message')->withTitle('Title');
 
-        [, $h1] = $alertNoTitle->getInnerSize();
-        [, $h2] = $alertWithTitle->getInnerSize();
+        [, $h1] = $alertNoTitle->innerSize();
+        [, $h2] = $alertWithTitle->innerSize();
 
         $this->assertGreaterThanOrEqual($h1, $h2);
     }

@@ -282,7 +282,7 @@ final class FigletText implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $font = $this->getFont();
         $chars = mb_str_split(mb_strtoupper($this->text, 'UTF-8'), 1, 'UTF-8');

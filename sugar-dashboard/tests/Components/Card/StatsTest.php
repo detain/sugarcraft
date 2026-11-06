@@ -174,8 +174,8 @@ final class StatsTest extends TestCase
         $vertical = Stats::new([['label' => 'A', 'value' => '1']]);
         $horizontal = Stats::horizontal([['label' => 'A', 'value' => '1']]);
 
-        [, $vHeight] = $vertical->getInnerSize();
-        [, $hHeight] = $horizontal->getInnerSize();
+        [, $vHeight] = $vertical->innerSize();
+        [, $hHeight] = $horizontal->innerSize();
 
         $this->assertSame(2, $vHeight);
         $this->assertSame(3, $hHeight);
@@ -240,7 +240,7 @@ final class StatsTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $stats = Stats::new([['label' => 'Test', 'value' => '100']]);
-        [$w, $h] = $stats->getInnerSize();
+        [$w, $h] = $stats->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -249,7 +249,7 @@ final class StatsTest extends TestCase
     public function testGetInnerSizeVerticalStyleHasHeightTwo(): void
     {
         $stats = Stats::new([['label' => 'T', 'value' => '1']]);
-        [, $h] = $stats->getInnerSize();
+        [, $h] = $stats->innerSize();
 
         $this->assertSame(2, $h);
     }

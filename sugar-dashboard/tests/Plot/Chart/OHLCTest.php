@@ -234,7 +234,7 @@ final class OHLCTest extends TestCase
             ->addPoint('AAPL', 150.0, 155.0, 149.0, 153.0)
             ->setSize(65, 15);
 
-        [$w, $h] = $ohlc->getInnerSize();
+        [$w, $h] = $ohlc->innerSize();
         $this->assertSame(65, $w);
         $this->assertSame(15, $h);
     }

@@ -99,7 +99,7 @@ final class GraphTest extends TestCase
     public function testGetInnerSize(): void
     {
         $graph = Graph::new()->setSize(60, 20);
-        $size = $graph->getInnerSize();
+        $size = $graph->innerSize();
         $this->assertIsArray($size);
         $this->assertCount(2, $size);
         $this->assertEquals(60, $size[0]);

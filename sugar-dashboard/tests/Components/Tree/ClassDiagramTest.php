@@ -137,7 +137,7 @@ final class ClassDiagramTest extends TestCase
     public function testGetInnerSize(): void
     {
         $diagram = ClassDiagram::new()->setSize(70, 20);
-        $size = $diagram->getInnerSize();
+        $size = $diagram->innerSize();
         $this->assertIsArray($size);
         $this->assertCount(2, $size);
         $this->assertEquals(70, $size[0]);

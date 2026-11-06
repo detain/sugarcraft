@@ -247,7 +247,7 @@ final class DropdownTest extends TestCase
             ['label' => 'Item 2'],
         ]);
 
-        [$w, $h] = $dropdown->getInnerSize();
+        [$w, $h] = $dropdown->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -260,7 +260,7 @@ final class DropdownTest extends TestCase
             ['label' => 'Item 2'],
         ])->withExpanded(true);
 
-        [$w, $h] = $dropdown->getInnerSize();
+        [$w, $h] = $dropdown->innerSize();
 
         $this->assertSame(3, $h); // 1 trigger + 2 items
     }

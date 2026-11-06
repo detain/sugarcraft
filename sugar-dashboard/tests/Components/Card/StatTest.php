@@ -49,7 +49,7 @@ final class StatTest extends TestCase
     public function testGetInnerSizeReturnsDimensions(): void
     {
         $stat = Stat::new('Label', 'Value');
-        [$width, $height] = $stat->getInnerSize();
+        [$width, $height] = $stat->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

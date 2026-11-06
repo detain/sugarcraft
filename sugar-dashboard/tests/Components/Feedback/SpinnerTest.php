@@ -151,8 +151,8 @@ final class SpinnerTest extends TestCase
         $spinnerNoMsg = Spinner::new()->withMessage('');
         $spinnerWithMsg = Spinner::new()->withMessage('Loading');
 
-        [$w1, $h1] = $spinnerNoMsg->getInnerSize();
-        [$w2, $h2] = $spinnerWithMsg->getInnerSize();
+        [$w1, $h1] = $spinnerNoMsg->innerSize();
+        [$w2, $h2] = $spinnerWithMsg->innerSize();
 
         // Width should be larger with message
         $this->assertGreaterThan($w1, $w2);
@@ -163,7 +163,7 @@ final class SpinnerTest extends TestCase
     public function testEmptyMessageGivesZeroWidth(): void
     {
         $spinner = new Spinner(['|'], 80, null, '');
-        [$w, $h] = $spinner->getInnerSize();
+        [$w, $h] = $spinner->innerSize();
 
         $this->assertGreaterThan(0, $w);
     }
@@ -240,7 +240,7 @@ final class SpinnerTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $spinner = Spinner::new()->withMessage('Test');
-        [$w, $h] = $spinner->getInnerSize();
+        [$w, $h] = $spinner->innerSize();
 
         // Width = frame(1) + space(1) + message(4) = 6
         $this->assertSame(6, $w);
@@ -250,7 +250,7 @@ final class SpinnerTest extends TestCase
     public function testGetInnerSizeWithoutMessage(): void
     {
         $spinner = new Spinner(['|'], 80, Color::ansi(9), '');
-        [$w, $h] = $spinner->getInnerSize();
+        [$w, $h] = $spinner->innerSize();
 
         $this->assertSame(1, $w);
         $this->assertSame(1, $h);

@@ -267,7 +267,7 @@ final class AccordionTest extends TestCase
         $accordion = Accordion::new([
             ['title' => 'Test', 'content' => 'Content'],
         ]);
-        [$w, $h] = $accordion->getInnerSize();
+        [$w, $h] = $accordion->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -282,8 +282,8 @@ final class AccordionTest extends TestCase
             ['title' => 'Test', 'content' => 'Content', 'isOpen' => true],
         ]);
 
-        [, $hClosed] = $accordionClosed->getInnerSize();
-        [, $hOpen] = $accordionOpen->getInnerSize();
+        [, $hClosed] = $accordionClosed->innerSize();
+        [, $hOpen] = $accordionOpen->innerSize();
 
         $this->assertGreaterThan($hClosed, $hOpen);
     }

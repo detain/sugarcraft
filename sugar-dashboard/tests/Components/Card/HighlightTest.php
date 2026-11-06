@@ -186,7 +186,7 @@ final class HighlightTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $highlight = Highlight::php("<?php\necho 'a';\necho 'b';");
-        [$w, $h] = $highlight->getInnerSize();
+        [$w, $h] = $highlight->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(3, $h); // 3 lines
@@ -195,7 +195,7 @@ final class HighlightTest extends TestCase
     public function testGetInnerSizeWithLineNumbers(): void
     {
         $highlight = Highlight::php("<?php\necho 'a';")->withLineNumbers(true);
-        [$w, ] = $highlight->getInnerSize();
+        [$w, ] = $highlight->innerSize();
 
         $this->assertGreaterThan(0, $w);
     }
@@ -308,7 +308,7 @@ final class HighlightTest extends TestCase
         // Test string with 3 newlines = 4 lines of code
         $code = "line1\nline2\nline3\nline4";
         $highlight = new Highlight($code, Highlight::LANG_TEXT);
-        [$w, $h] = $highlight->getInnerSize();
+        [$w, $h] = $highlight->innerSize();
 
         // Should be 4 lines
         $this->assertGreaterThan(0, $w);

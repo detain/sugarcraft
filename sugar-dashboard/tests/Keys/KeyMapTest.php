@@ -18,7 +18,7 @@ final class KeyMapTest extends TestCase
     {
         return new class implements \SugarCraft\Dashboard\Foundation\Item, \SugarCraft\Dashboard\Foundation\SizedItem {
             public function render(): string { return 'content'; }
-            public function getInnerSize(): array { return [10, 1]; }
+            public function innerSize(): array { return [10, 1]; }
             public function setSize(int $w, int $h): \SugarCraft\Dashboard\Foundation\Sizer { return $this; }
         };
     }
@@ -157,7 +157,7 @@ final class KeyMapTest extends TestCase
     public function testGetInnerSizeFallsBackToContent(): void
     {
         $km = KeyMap::new($this->makeContent());
-        $size = $km->getInnerSize();
+        $size = $km->innerSize();
         $this->assertSame([10, 1], $size);
     }
 }

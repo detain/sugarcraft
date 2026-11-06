@@ -148,7 +148,7 @@ final class NetworkTest extends TestCase
     public function testGetInnerSize(): void
     {
         $network = Network::new()->setSize(70, 18);
-        $size = $network->getInnerSize();
+        $size = $network->innerSize();
         $this->assertIsArray($size);
         $this->assertCount(2, $size);
         $this->assertEquals(70, $size[0]);

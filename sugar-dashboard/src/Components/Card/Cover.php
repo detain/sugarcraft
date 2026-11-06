@@ -200,7 +200,7 @@ final class Cover implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $w = $this->width ?? 0;
         $h = $this->height ?? 0;
@@ -211,7 +211,7 @@ final class Cover implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         // Return content's natural size
         if ($this->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-            return $this->content->getInnerSize();
+            return $this->content->innerSize();
         }
 
         $rendered = $this->content->render();

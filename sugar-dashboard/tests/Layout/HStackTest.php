@@ -188,7 +188,7 @@ final class HStackTest extends TestCase
     public function testGetInnerSizeEmptyStack(): void
     {
         $stack = HStack::new();
-        [$w, $h] = $stack->getInnerSize();
+        [$w, $h] = $stack->innerSize();
 
         $this->assertSame(0, $w);
         $this->assertSame(0, $h);
@@ -197,7 +197,7 @@ final class HStackTest extends TestCase
     public function testGetInnerSizeSingleItem(): void
     {
         $stack = HStack::new(new Text('Hello'));
-        [$w, $h] = $stack->getInnerSize();
+        [$w, $h] = $stack->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -206,7 +206,7 @@ final class HStackTest extends TestCase
     public function testGetInnerSizeMultipleItems(): void
     {
         $stack = HStack::new(new Text('A'), new Text('B'));
-        [$w, $h] = $stack->getInnerSize();
+        [$w, $h] = $stack->innerSize();
 
         $this->assertGreaterThan(1, $w); // Combined width
         $this->assertSame(1, $h);
@@ -217,8 +217,8 @@ final class HStackTest extends TestCase
         $stackNoSpacing = HStack::new(new Text('A'), new Text('B'));
         $stackWithSpacing = HStack::new(new Text('A'), new Text('B'))->withSpacing(3);
 
-        [$wNoSpacing, ] = $stackNoSpacing->getInnerSize();
-        [$wWithSpacing, ] = $stackWithSpacing->getInnerSize();
+        [$wNoSpacing, ] = $stackNoSpacing->innerSize();
+        [$wWithSpacing, ] = $stackWithSpacing->innerSize();
 
         $this->assertGreaterThan($wNoSpacing, $wWithSpacing);
     }

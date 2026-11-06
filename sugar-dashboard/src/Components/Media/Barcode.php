@@ -193,7 +193,7 @@ final class Barcode implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $width = strlen($this->content) * 8; // Approximate width
         $height = $this->height + ($this->showText ? 1 : 0);

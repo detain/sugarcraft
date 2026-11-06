@@ -261,7 +261,7 @@ final class SidebarTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $sidebar = Sidebar::new();
-        [$w, $h] = $sidebar->getInnerSize();
+        [$w, $h] = $sidebar->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(0, $h);
@@ -274,7 +274,7 @@ final class SidebarTest extends TestCase
             ['label' => 'Item2'],
             ['label' => 'Item3'],
         ]);
-        [$w, $h] = $sidebar->getInnerSize();
+        [$w, $h] = $sidebar->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(3, $h);
@@ -285,7 +285,7 @@ final class SidebarTest extends TestCase
         $sidebar = Sidebar::title('Menu', [
             ['label' => 'Item1'],
         ]);
-        [, $h] = $sidebar->getInnerSize();
+        [, $h] = $sidebar->innerSize();
 
         // Should have title (2 lines) + 1 item = 3
         $this->assertSame(3, $h);

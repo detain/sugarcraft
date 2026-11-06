@@ -95,7 +95,7 @@ final class Accordion implements SizedItem, Item
      *
      * @return array{0: int, 1: int}
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $innerWidth = $this->width - ($this->showBorder ? 2 : 0);
         $totalHeight = 0;

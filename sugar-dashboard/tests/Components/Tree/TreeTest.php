@@ -293,7 +293,7 @@ final class TreeTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $tree = Tree::new([TreeNode::new('Root')]);
-        [$w, $h] = $tree->getInnerSize();
+        [$w, $h] = $tree->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -306,7 +306,7 @@ final class TreeTest extends TestCase
                 TreeNode::new('Child'),
             ]),
         ]);
-        [, $h] = $tree->getInnerSize();
+        [, $h] = $tree->innerSize();
 
         // Root + Child = 2 lines
         $this->assertSame(2, $h);

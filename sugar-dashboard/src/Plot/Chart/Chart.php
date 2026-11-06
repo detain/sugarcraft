@@ -421,7 +421,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      * spans at most n * (max(1, floor($chartWidth / n) - 1) + 1) columns
      * (the default 40-wide, 2-point chart emits 50-cell rows). The +10
      * gutter covers the 9-cell label gutter plus the dash and matches what
-     * getInnerSize() already advertises for a full emitted frame
+     * innerSize() already advertises for a full emitted frame
      * (width + 10).
      *
      * RESIDUAL (documented, out of scope): y-labels formatted wider than 8
@@ -446,7 +446,7 @@ final class Chart implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $width = ($this->width ?? $this->widthConstraint ?? 50) + 10;
         $height = ($this->height ?? $this->heightConstraint) + 2; // For labels

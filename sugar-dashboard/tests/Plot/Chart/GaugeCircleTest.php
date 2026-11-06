@@ -288,7 +288,7 @@ final class GaugeCircleTest extends TestCase
     public function testGetInnerSize(): void
     {
         $gauge = GaugeCircle::new(0.5);
-        [$w, $h] = $gauge->getInnerSize();
+        [$w, $h] = $gauge->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -299,8 +299,8 @@ final class GaugeCircleTest extends TestCase
         $gaugeWithLabel = GaugeCircle::new(0.5)->withShowLabel(true);
         $gaugeWithoutLabel = GaugeCircle::new(0.5)->withShowLabel(false);
 
-        [$wWith, $hWith] = $gaugeWithLabel->getInnerSize();
-        [$wWithout, $hWithout] = $gaugeWithoutLabel->getInnerSize();
+        [$wWith, $hWith] = $gaugeWithLabel->innerSize();
+        [$wWithout, $hWithout] = $gaugeWithoutLabel->innerSize();
 
         // With label should be taller
         $this->assertGreaterThan($hWithout, $hWith);
@@ -311,8 +311,8 @@ final class GaugeCircleTest extends TestCase
         $gaugeSmall = GaugeCircle::new(0.5)->withRadius(4);
         $gaugeLarge = GaugeCircle::new(0.5)->withRadius(8);
 
-        [$wSmall, $hSmall] = $gaugeSmall->getInnerSize();
-        [$wLarge, $hLarge] = $gaugeLarge->getInnerSize();
+        [$wSmall, $hSmall] = $gaugeSmall->innerSize();
+        [$wLarge, $hLarge] = $gaugeLarge->innerSize();
 
         // Larger radius should have larger dimensions
         $this->assertGreaterThan($wSmall, $wLarge);
@@ -478,7 +478,7 @@ final class GaugeCircleTest extends TestCase
 
         $this->assertSame('2186ff670a87f0500b70148b0356b504108f1d7a', sha1($escape->render()));
         $this->assertSame(1063, strlen($escape->render()));
-        $this->assertSame([13, 14], $escape->getInnerSize());
+        $this->assertSame([13, 14], $escape->innerSize());
 
         $sized = GaugeCircle::new(0.8)->setSize(40, 10)->withAspect(1.0);
         $this->assertSame('347aeae53763671ddcfdb2b55a285058f03e83db', sha1($sized->render()));
@@ -582,7 +582,7 @@ final class GaugeCircleTest extends TestCase
 
         $this->assertNotSame($base, $chained);
         $this->assertSame($base->render(), $chained->render(), 'aspect/smoothRim/allocation must all survive the chain');
-        $this->assertSame([9, 10], $chained->getInnerSize());
+        $this->assertSame([9, 10], $chained->innerSize());
         $this->assertSame(1.5, (new \ReflectionProperty(GaugeCircle::class, 'aspect'))->getValue($chained));
     }
 
@@ -605,7 +605,7 @@ final class GaugeCircleTest extends TestCase
 
         $this->assertSame($sized->render(), $chained->render(), 'wither chain must not drop the allocation');
         $this->assertNotSame(GaugeCircle::new(0.8)->render(), $chained->render(), 'sized render must differ from radius-6 default');
-        $this->assertSame([9, 10], $chained->getInnerSize());
+        $this->assertSame([9, 10], $chained->innerSize());
     }
 
     public function testCrossDimensionAllocationsRenderDifferently(): void
@@ -617,8 +617,8 @@ final class GaugeCircleTest extends TestCase
         $largeLines = substr_count($large->render(), "\n") + 1;
 
         $this->assertNotSame($small->render(), $large->render(), 'cross-dim allocations must render differently');
-        $this->assertSame([9, 10], $small->getInnerSize());
-        $this->assertSame([19, 20], $large->getInnerSize());
+        $this->assertSame([9, 10], $small->innerSize());
+        $this->assertSame([19, 20], $large->innerSize());
         $this->assertSame(10, $smallLines, '40x10 → radius 4 → 9 grid rows + label');
         $this->assertSame(20, $largeLines, '60x20 → radius 9 → 19 grid rows + label');
     }
@@ -629,8 +629,8 @@ final class GaugeCircleTest extends TestCase
         // (radius 3, mirroring withRadius's max(3, …)), never a broken grid.
         $tiny = GaugeCircle::new(0.5)->setSize(4, 4);
 
-        $this->assertSame([7, 8], $tiny->getInnerSize());
+        $this->assertSame([7, 8], $tiny->innerSize());
         $this->assertNotSame('', $tiny->render());
-        $this->assertSame([7, 8], $tiny->withRatio(0.9)->getInnerSize(), 'floor survives withers');
+        $this->assertSame([7, 8], $tiny->withRatio(0.9)->innerSize(), 'floor survives withers');
     }
 }

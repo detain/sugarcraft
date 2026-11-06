@@ -279,7 +279,7 @@ final class PERTTest extends TestCase
             ->addTask('A', 'Planning', 3)
             ->setSize(70, 20);
 
-        [$w, $h] = $pert->getInnerSize();
+        [$w, $h] = $pert->innerSize();
         $this->assertSame(70, $w);
         $this->assertSame(20, $h);
     }

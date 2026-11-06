@@ -223,7 +223,7 @@ final class PartitionTest extends TestCase
         $root = new PartitionSegment('1', 'Root', 100);
         $partition = Partition::new()->withRoot($root)->setSize(60, 20);
 
-        [$w, $h] = $partition->getInnerSize();
+        [$w, $h] = $partition->innerSize();
         $this->assertSame(60, $w);
         $this->assertSame(20, $h);
     }

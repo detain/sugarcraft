@@ -307,7 +307,7 @@ final class MeterTest extends TestCase
     public function testGetInnerSize(): void
     {
         $meter = Meter::new(0.5);
-        [$w, $h] = $meter->getInnerSize();
+        [$w, $h] = $meter->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -318,8 +318,8 @@ final class MeterTest extends TestCase
         $meterWithLabel = Meter::new(0.5)->withShowLabel(true);
         $meterWithoutLabel = Meter::new(0.5)->withShowLabel(false);
 
-        [$wWith, $hWith] = $meterWithLabel->getInnerSize();
-        [$wWithout, $hWithout] = $meterWithoutLabel->getInnerSize();
+        [$wWith, $hWith] = $meterWithLabel->innerSize();
+        [$wWithout, $hWithout] = $meterWithoutLabel->innerSize();
 
         // With label should be taller
         $this->assertGreaterThan($hWithout, $hWith);
@@ -330,8 +330,8 @@ final class MeterTest extends TestCase
         $meterShort = Meter::new(0.5)->withHeight(8);
         $meterTall = Meter::new(0.5)->withHeight(16);
 
-        [$wShort, $hShort] = $meterShort->getInnerSize();
-        [$wTall, $hTall] = $meterTall->getInnerSize();
+        [$wShort, $hShort] = $meterShort->innerSize();
+        [$wTall, $hTall] = $meterTall->innerSize();
 
         // Taller meter should have greater height
         $this->assertGreaterThan($hShort, $hTall);

@@ -261,7 +261,7 @@ final class ProgressBarTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $bar = ProgressBar::new(0.5)->withWidth(30);
-        [$w, $h] = $bar->getInnerSize();
+        [$w, $h] = $bar->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
@@ -270,7 +270,7 @@ final class ProgressBarTest extends TestCase
     public function testGetInnerSizeWithoutWidthUsesConstraint(): void
     {
         $bar = ProgressBar::new(0.5);
-        [$w, $h] = $bar->getInnerSize();
+        [$w, $h] = $bar->innerSize();
 
         // Default width is 30, plus 5 for percentage
         $this->assertGreaterThanOrEqual(30, $w);

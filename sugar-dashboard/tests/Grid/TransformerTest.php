@@ -187,7 +187,7 @@ final class TransformerTest extends TestCase
     {
         $transformer = Transformer::new($this->createMockItem("short\nmedium length"));
 
-        [$w, $h] = $transformer->getInnerSize();
+        [$w, $h] = $transformer->innerSize();
 
         // Width should be the longest line (13 chars for "medium length")
         $this->assertSame(13, $w);
@@ -199,7 +199,7 @@ final class TransformerTest extends TestCase
     {
         $transformer = Transformer::new($this->createMockItem('test'))->setSize(10, 5);
 
-        [$w, $h] = $transformer->getInnerSize();
+        [$w, $h] = $transformer->innerSize();
 
         $this->assertSame(10, $w);
         $this->assertSame(5, $h);

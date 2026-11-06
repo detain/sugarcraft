@@ -31,7 +31,7 @@ final class GridLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
     /**
      * GridLayout walks the plain array positionally — the GridItem wrapper
      * class is never read here. Every element is used as a bare Item
-     * (render(), setSize()/getInnerSize() behind instanceof guards).
+     * (render(), setSize()/innerSize() behind instanceof guards).
      *
      * @param list<\SugarCraft\Dashboard\Foundation\Item> $items
      */
@@ -247,7 +247,7 @@ final class GridLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
         $sizes = [];
         foreach ($this->items as $item) {
             if ($item instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [$w, $h] = $item->getInnerSize();
+                [$w, $h] = $item->innerSize();
                 if ($w === 0 || $h === 0) {
                     $rendered = $item->render();
                     $lines = explode("\n", $rendered);
@@ -304,7 +304,7 @@ final class GridLayout implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $w = $this->width ?? 0;
         $h = $this->height ?? 0;

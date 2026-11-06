@@ -93,7 +93,7 @@ final class Calendar implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int, 1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         // Header (month year) + day names row + up to 6 weeks
         $width = 20; // enough for "September 2024"

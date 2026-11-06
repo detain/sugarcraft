@@ -163,7 +163,7 @@ final class MeterPositionGradientTest extends TestCase
     {
         $this->assertSame(self::BG . '■' . self::RESET, self::bar(0.99, 1)->render());
         $this->assertSame(self::fg(255, 0, 0) . '■' . self::RESET, self::bar(1.0, 1)->render());
-        $this->assertSame([1, 1], self::bar(1.0, 1)->getInnerSize());
+        $this->assertSame([1, 1], self::bar(1.0, 1)->innerSize());
     }
 
     public function testWidthTwoSplitsAtFifty(): void
@@ -179,7 +179,7 @@ final class MeterPositionGradientTest extends TestCase
 
     public function testAnalogFaceKeepsItsMinimumWidth(): void
     {
-        $this->assertSame([3, 13], Meter::new(0.5)->withWidth(1)->getInnerSize());
+        $this->assertSame([3, 13], Meter::new(0.5)->withWidth(1)->innerSize());
     }
 
     /**
@@ -228,8 +228,8 @@ final class MeterPositionGradientTest extends TestCase
     {
         $meter = self::bar(1.0)->setSize(4, 1);
         $this->assertSame(4, mb_substr_count($meter->render(), '■'));
-        $this->assertSame([4, 1], $meter->getInnerSize());
-        $this->assertSame([10, 1], self::bar(1.0)->getInnerSize());
+        $this->assertSame([4, 1], $meter->innerSize());
+        $this->assertSame([10, 1], self::bar(1.0)->innerSize());
     }
 
     public function testZeroAllocatedWidthRendersNothing(): void

@@ -173,14 +173,14 @@ final class BufferTest extends TestCase
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // getInnerSize
+    // innerSize
     // ═══════════════════════════════════════════════════════════════
 
     public function testGetInnerSizeReturnsDimensions(): void
     {
         $buffer = Buffer::new(10, 20);
 
-        [$w, $h] = $buffer->getInnerSize();
+        [$w, $h] = $buffer->innerSize();
 
         $this->assertSame(10, $w);
         $this->assertSame(20, $h);
@@ -248,8 +248,8 @@ final class BufferTest extends TestCase
     {
         $buffer = Buffer::new(100, 50)->setString(0, 0, 'test');
         $this->assertSame('t', $buffer->getCell(0, 0)->rune);
-        $this->assertSame(100, $buffer->getInnerSize()[0]);
-        $this->assertSame(50, $buffer->getInnerSize()[1]);
+        $this->assertSame(100, $buffer->innerSize()[0]);
+        $this->assertSame(50, $buffer->innerSize()[1]);
     }
 
     public function testRenderProducesCorrectLineCount(): void

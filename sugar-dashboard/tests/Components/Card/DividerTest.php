@@ -36,7 +36,7 @@ final class DividerTest extends TestCase
     public function testGetInnerSizeReturnsDimensions(): void
     {
         $divider = Divider::new();
-        [$width, $height] = $divider->getInnerSize();
+        [$width, $height] = $divider->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

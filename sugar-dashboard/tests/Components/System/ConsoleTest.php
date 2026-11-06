@@ -294,7 +294,7 @@ final class ConsoleTest extends TestCase
                 ConsoleEntry::info('Line 3'),
             ]);
 
-        [$w, $h] = $console->getInnerSize();
+        [$w, $h] = $console->innerSize();
 
         $this->assertSame(80, $w);
         $this->assertSame(3, $h);

@@ -175,7 +175,7 @@ final class TabsVertical implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         // Calculate width from label width + separator + content estimate
         $labelColumnWidth = 2 + $this->labelWidth + 2; // prefix + label + suffix
@@ -193,7 +193,7 @@ final class TabsVertical implements \SugarCraft\Dashboard\Foundation\SizedItem
             $tab = $this->tabs[$safeIndex];
             $content = $tab['content'];
             if ($content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [, $contentHeight] = $content->getInnerSize();
+                [, $contentHeight] = $content->innerSize();
                 $height = max($height, $contentHeight);
             }
         }

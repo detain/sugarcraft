@@ -291,15 +291,15 @@ final class BufferTest extends TestCase
         // Should return new instance
         $this->assertNotSame($buffer, $modified);
         // Original should be unchanged
-        $this->assertSame([3, 3], $buffer->getInnerSize());
+        $this->assertSame([3, 3], $buffer->innerSize());
         // Modified should have new size
-        $this->assertSame([5, 5], $modified->getInnerSize());
+        $this->assertSame([5, 5], $modified->innerSize());
     }
 
     public function testGetRectReturnsCurrentRect(): void
     {
         $buffer = Buffer::new(5, 4);
-        $rect = $buffer->getRect();
+        $rect = $buffer->rect();
 
         $this->assertInstanceOf(Rect::class, $rect);
         $this->assertSame(0, $rect->minX);
@@ -346,14 +346,14 @@ final class BufferTest extends TestCase
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // getInnerSize
+    // innerSize
     // ═══════════════════════════════════════════════════════════════
 
     public function testGetInnerSizeReturnsDimensions(): void
     {
         $buffer = Buffer::new(7, 4);
 
-        [$width, $height] = $buffer->getInnerSize();
+        [$width, $height] = $buffer->innerSize();
 
         $this->assertSame(7, $width);
         $this->assertSame(4, $height);
@@ -370,9 +370,9 @@ final class BufferTest extends TestCase
 
         $this->assertNotSame($original, $resized);
         // Original should be unchanged
-        $this->assertSame([3, 3], $original->getInnerSize());
+        $this->assertSame([3, 3], $original->innerSize());
         // New buffer should have new size
-        $this->assertSame([5, 5], $resized->getInnerSize());
+        $this->assertSame([5, 5], $resized->innerSize());
     }
 
     // ═══════════════════════════════════════════════════════════════

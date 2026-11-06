@@ -80,7 +80,7 @@ final class Viewport implements \SugarCraft\Dashboard\Foundation\SizedItem
         // Get content dimensions — content that cannot report an intrinsic
         // size is treated as exactly filling the viewport (nothing to scroll).
         if ($this->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-            [$contentWidth, $contentHeight] = $this->content->getInnerSize();
+            [$contentWidth, $contentHeight] = $this->content->innerSize();
         } else {
             [$contentWidth, $contentHeight] = [$width, $height];
         }
@@ -166,7 +166,7 @@ final class Viewport implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         return [
             $this->getWidth() > 0 ? $this->getWidth() : 0,
@@ -315,7 +315,7 @@ final class Viewport implements \SugarCraft\Dashboard\Foundation\SizedItem
         if (! $this->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
             return false;
         }
-        [$contentWidth, $contentHeight] = $this->content->getInnerSize();
+        [$contentWidth, $contentHeight] = $this->content->innerSize();
         $viewportWidth = $this->getWidth();
         $viewportHeight = $this->getHeight();
 

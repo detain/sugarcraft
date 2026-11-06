@@ -111,7 +111,7 @@ final class Clock implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         // Format: "12:59:59 PM" = 11 chars or "00:00:00" = 8 chars
         $width = $this->use24Hour ? ($this->showSeconds ? 8 : 5) : ($this->showSeconds ? 11 : 8);

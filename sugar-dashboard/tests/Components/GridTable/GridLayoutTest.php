@@ -43,7 +43,7 @@ final class GridLayoutTest extends TestCase
             {
                 return "Size:{$this->w}x{$this->h}";
             }
-            public function getInnerSize(): array
+            public function innerSize(): array
             {
                 return [$this->w, $this->h];
             }
@@ -208,7 +208,7 @@ final class GridLayoutTest extends TestCase
         $layout = GridLayout::columns(2, [$this->strItem('test')])
             ->setSize(15, 5);
 
-        [$w, $h] = $layout->getInnerSize();
+        [$w, $h] = $layout->innerSize();
         $this->assertSame(15, $w);
         $this->assertSame(5, $h);
     }
@@ -217,7 +217,7 @@ final class GridLayoutTest extends TestCase
     {
         $layout = GridLayout::columns(2, [$this->strItem('hello')]);
 
-        [$w, $h] = $layout->getInnerSize();
+        [$w, $h] = $layout->innerSize();
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
     }

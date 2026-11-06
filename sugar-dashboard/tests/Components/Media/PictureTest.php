@@ -214,13 +214,13 @@ final class PictureTest extends TestCase
         $withoutCaption = Picture::fromUrl('https://example.com/photo.jpg')
             ->withWidthHint(20)
             ->withHeightHint(5);
-        [$w1, $h1] = $withoutCaption->getInnerSize();
+        [$w1, $h1] = $withoutCaption->innerSize();
 
         $withCaption = Picture::fromUrl('https://example.com/photo.jpg')
             ->withWidthHint(20)
             ->withHeightHint(5)
             ->withCaption('A caption');
-        [$w2, $h2] = $withCaption->getInnerSize();
+        [$w2, $h2] = $withCaption->innerSize();
 
         $this->assertSame($h1 + 1, $h2);
     }
@@ -302,7 +302,7 @@ final class PictureTest extends TestCase
         $picture = Picture::placeholder()
             ->withWidthHint(20)
             ->withHeightHint(10);
-        [$w, $h] = $picture->getInnerSize();
+        [$w, $h] = $picture->innerSize();
 
         // Should be widthHint + 2 (borders) and heightHint + 2 (borders)
         $this->assertSame(22, $w);
@@ -315,7 +315,7 @@ final class PictureTest extends TestCase
             ->withWidthHint(20)
             ->withHeightHint(10)
             ->withCaption('Test');
-        [$w, $h] = $picture->getInnerSize();
+        [$w, $h] = $picture->innerSize();
 
         // Should have extra height for caption
         $this->assertSame(22, $w);
@@ -427,7 +427,7 @@ final class PictureTest extends TestCase
     public function testNegativeWidthHintDefaultsToOne(): void
     {
         $picture = Picture::placeholder()->withWidthHint(-5);
-        [$w, ] = $picture->getInnerSize();
+        [$w, ] = $picture->innerSize();
 
         $this->assertGreaterThanOrEqual(1, $w);
     }
@@ -435,7 +435,7 @@ final class PictureTest extends TestCase
     public function testNegativeHeightHintDefaultsToOne(): void
     {
         $picture = Picture::placeholder()->withHeightHint(-5);
-        [, $h] = $picture->getInnerSize();
+        [, $h] = $picture->innerSize();
 
         $this->assertGreaterThanOrEqual(1, $h);
     }

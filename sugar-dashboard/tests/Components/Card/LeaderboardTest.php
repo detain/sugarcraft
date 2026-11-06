@@ -39,7 +39,7 @@ final class LeaderboardTest extends TestCase
         $leaderboard = Leaderboard::new([
             ['label' => 'Alice', 'value' => 100],
         ]);
-        [$width, $height] = $leaderboard->getInnerSize();
+        [$width, $height] = $leaderboard->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

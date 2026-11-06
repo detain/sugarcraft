@@ -37,7 +37,7 @@ final class KbdTest extends TestCase
     public function testGetInnerSizeReturnsDimensions(): void
     {
         $kbd = Kbd::single('Enter');
-        [$width, $height] = $kbd->getInnerSize();
+        [$width, $height] = $kbd->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

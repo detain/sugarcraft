@@ -370,7 +370,7 @@ final class CardTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $card = Card::new(Text::new('Content'));
-        [$w, $h] = $card->getInnerSize();
+        [$w, $h] = $card->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -381,8 +381,8 @@ final class CardTest extends TestCase
         $cardNoTitle = Card::new(Text::new('Content'));
         $cardWithTitle = Card::new(Text::new('Content'))->withTitle('Title');
 
-        [, $h1] = $cardNoTitle->getInnerSize();
-        [, $h2] = $cardWithTitle->getInnerSize();
+        [, $h1] = $cardNoTitle->innerSize();
+        [, $h2] = $cardWithTitle->innerSize();
 
         $this->assertGreaterThan($h1, $h2);
     }
@@ -392,8 +392,8 @@ final class CardTest extends TestCase
         $cardNoFooter = Card::new(Text::new('Content'));
         $cardWithFooter = Card::new(Text::new('Content'))->withFooter(Text::new('Footer'));
 
-        [, $h1] = $cardNoFooter->getInnerSize();
-        [, $h2] = $cardWithFooter->getInnerSize();
+        [, $h1] = $cardNoFooter->innerSize();
+        [, $h2] = $cardWithFooter->innerSize();
 
         $this->assertGreaterThan($h1, $h2);
     }
@@ -401,7 +401,7 @@ final class CardTest extends TestCase
     public function testGetInnerSizeWithWidthAllocation(): void
     {
         $card = Card::new(Text::new('Content'))->setSize(80, 20);
-        [$w, ] = $card->getInnerSize();
+        [$w, ] = $card->innerSize();
 
         $this->assertGreaterThanOrEqual(80, $w);
     }

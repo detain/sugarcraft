@@ -326,7 +326,7 @@ final class TreemapTest extends TestCase
         $treemap = Treemap::new([
             new TreemapLeaf('l1', 'Alpha', 50),
         ])->setSize(40, 15);
-        [$w, $h] = $treemap->getInnerSize();
+        [$w, $h] = $treemap->innerSize();
 
         $this->assertSame(40, $w);
         $this->assertSame(15, $h);
@@ -337,7 +337,7 @@ final class TreemapTest extends TestCase
         $treemap = Treemap::new([
             new TreemapLeaf('l1', 'Alpha', 50),
         ]);
-        [$w, $h] = $treemap->getInnerSize();
+        [$w, $h] = $treemap->innerSize();
 
         $this->assertSame(40, $w);
         $this->assertGreaterThanOrEqual(2, $h);

@@ -246,7 +246,7 @@ final class ComboBoxTest extends TestCase
         $combobox = ComboBox::new('Search...', [
             ['label' => 'Item'],
         ]);
-        [$w, $h] = $combobox->getInnerSize();
+        [$w, $h] = $combobox->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(2, $h); // 1 input + 1 result
@@ -260,7 +260,7 @@ final class ComboBoxTest extends TestCase
             ['label' => 'Cherry'],
         ])->withQuery('a');
 
-        [$w, $h] = $combobox->getInnerSize();
+        [$w, $h] = $combobox->innerSize();
 
         $this->assertSame(2, $h); // 1 input + 1 filtered result (Apple)
     }
@@ -272,7 +272,7 @@ final class ComboBoxTest extends TestCase
             ['label' => 'Banana'],
         ]);
 
-        [$w, $h] = $combobox->getInnerSize();
+        [$w, $h] = $combobox->innerSize();
 
         $this->assertSame(3, $h); // 1 input + 2 results
     }

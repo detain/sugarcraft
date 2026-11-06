@@ -143,7 +143,7 @@ final class ShadowTest extends TestCase
     {
         $text = Text::new('Inner');
         $shadow = Shadow::new($text);
-        [$w, $h] = $shadow->getInnerSize();
+        [$w, $h] = $shadow->innerSize();
 
         // Should have dimensions for content + shadow
         $this->assertGreaterThan(0, $w);
@@ -154,7 +154,7 @@ final class ShadowTest extends TestCase
     {
         $text = Text::new('Size');
         $shadow = Shadow::new($text)->setSize(20, 5);
-        [$w, $h] = $shadow->getInnerSize();
+        [$w, $h] = $shadow->innerSize();
 
         $this->assertSame(20, $w);
         $this->assertSame(5, $h);
@@ -165,7 +165,7 @@ final class ShadowTest extends TestCase
         $text = Text::new('Offset');
         // Default offset is 1,1 so dimensions should include +1 for right shadow col and bottom shadow row
         $shadow = Shadow::new($text)->withOffset(2, 3);
-        [$w, $h] = $shadow->getInnerSize();
+        [$w, $h] = $shadow->innerSize();
 
         // Should include xOffset and yOffset in calculation
         $this->assertGreaterThan(0, $w);

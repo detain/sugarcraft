@@ -303,7 +303,7 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         if ($this->content instanceof \SugarCraft\Dashboard\Foundation\Item) {
             if ($this->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [$w, ] = $this->content->getInnerSize();
+                [$w, ] = $this->content->innerSize();
                 $contentWidth = max($contentWidth, $w + 2);
             }
         } else {
@@ -312,7 +312,7 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
 
         if ($this->footer !== null) {
             if ($this->footer instanceof \SugarCraft\Dashboard\Foundation\Item && $this->footer instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [$fw, ] = $this->footer->getInnerSize();
+                [$fw, ] = $this->footer->innerSize();
                 $contentWidth = max($contentWidth, $fw + 2);
             } else {
                 $contentWidth = max($contentWidth, Width::string($this->footer) + 2);
@@ -327,7 +327,7 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $useWidth = $this->width ?? $this->calculateNaturalWidth();
         $useWidth = max($useWidth, 3);
@@ -344,7 +344,7 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
         $contentHeight = 1;
         if ($this->content instanceof \SugarCraft\Dashboard\Foundation\Item) {
             if ($this->content instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [, $h] = $this->content->getInnerSize();
+                [, $h] = $this->content->innerSize();
                 $contentHeight = max(1, $h);
             }
         } elseif ($this->content !== '') {
@@ -357,7 +357,7 @@ final class Panel implements \SugarCraft\Dashboard\Foundation\SizedItem
             $rows++; // Footer separator
             $footerHeight = 1;
             if ($this->footer instanceof \SugarCraft\Dashboard\Foundation\Item && $this->footer instanceof \SugarCraft\Dashboard\Foundation\SizedItem) {
-                [, $h] = $this->footer->getInnerSize();
+                [, $h] = $this->footer->innerSize();
                 $footerHeight = max(1, $h);
             }
             $rows += $footerHeight;

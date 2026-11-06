@@ -249,7 +249,7 @@ final class Emoji implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $emojiWidth = Width::string($this->emoji) * $this->size;
         $labelWidth = ($this->label !== null && $this->showLabel) ? Width::string($this->label) + 1 : 0;

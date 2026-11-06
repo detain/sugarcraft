@@ -278,7 +278,7 @@ final class Donut implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int, 1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $useSize = min($this->width ?? $this->size, $this->height ?? $this->size);
         return [$useSize, $useSize];

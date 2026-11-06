@@ -302,7 +302,7 @@ final class BrailleCanvasGradientTest extends TestCase
         );
 
         $this->assertSame(self::bitGrid($plain), self::bitGrid($graded));
-        $this->assertSame($plain->getInnerSize(), $graded->getInnerSize());
+        $this->assertSame($plain->innerSize(), $graded->innerSize());
 
         // Same runes in the same cells once the SGR is stripped; the plain
         // path pads uncolored runes with a trailing space, so compare runes only.

@@ -203,7 +203,7 @@ final class PanelTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $panel = Panel::new('Test');
-        [$w, $h] = $panel->getInnerSize();
+        [$w, $h] = $panel->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertGreaterThan(0, $h);
@@ -214,8 +214,8 @@ final class PanelTest extends TestCase
         $panelNoTitle = Panel::new('Content');
         $panelWithTitle = Panel::new('Content')->withTitle('Title');
 
-        [, $h1] = $panelNoTitle->getInnerSize();
-        [, $h2] = $panelWithTitle->getInnerSize();
+        [, $h1] = $panelNoTitle->innerSize();
+        [, $h2] = $panelWithTitle->innerSize();
 
         $this->assertGreaterThanOrEqual($h1, $h2);
     }

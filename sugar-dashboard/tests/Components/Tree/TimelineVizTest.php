@@ -37,7 +37,7 @@ final class TimelineVizTest extends TestCase
         $timeline = TimelineViz::new([
             new TimelineEvent('09:00', 'Meeting', null, 'meeting'),
         ]);
-        [$width, $height] = $timeline->getInnerSize();
+        [$width, $height] = $timeline->innerSize();
         $this->assertGreaterThan(0, $width);
         $this->assertGreaterThan(0, $height);
     }

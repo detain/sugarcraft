@@ -302,7 +302,7 @@ final class Icon implements \SugarCraft\Dashboard\Foundation\SizedItem
      *
      * @return array{0:int,1:int} [width, height]
      */
-    public function getInnerSize(): array
+    public function innerSize(): array
     {
         $glyphWidth = Width::string($this->glyph);
         $width = ($glyphWidth * $this->size) + ($this->label !== null ? Width::string($this->label) + 1 : 0);

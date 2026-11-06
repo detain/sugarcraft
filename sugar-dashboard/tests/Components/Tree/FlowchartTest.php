@@ -131,7 +131,7 @@ final class FlowchartTest extends TestCase
     public function testGetInnerSize(): void
     {
         $flowchart = Flowchart::new()->setSize(65, 18);
-        $size = $flowchart->getInnerSize();
+        $size = $flowchart->innerSize();
         $this->assertIsArray($size);
         $this->assertCount(2, $size);
         $this->assertEquals(65, $size[0]);

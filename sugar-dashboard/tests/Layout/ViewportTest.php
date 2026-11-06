@@ -89,7 +89,7 @@ final class ViewportTest extends TestCase
     {
         $text = Text::new('Hello');
         $viewport = Viewport::new($text)->setSize(20, 5);
-        [$w, $h] = $viewport->getInnerSize();
+        [$w, $h] = $viewport->innerSize();
 
         $this->assertSame(20, $w);
         $this->assertSame(5, $h);

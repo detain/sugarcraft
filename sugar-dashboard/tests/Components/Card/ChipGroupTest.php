@@ -162,7 +162,7 @@ final class ChipGroupTest extends TestCase
     public function testGetInnerSizeReturnsCorrectDimensions(): void
     {
         $group = ChipGroup::fromLabels(['Hi', 'Bye']);
-        [$w, $h] = $group->getInnerSize();
+        [$w, $h] = $group->innerSize();
 
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h); // Chips don't wrap by default
@@ -171,7 +171,7 @@ final class ChipGroupTest extends TestCase
     public function testEmptyGroupHasZeroSize(): void
     {
         $group = new ChipGroup();
-        [$w, $h] = $group->getInnerSize();
+        [$w, $h] = $group->innerSize();
 
         $this->assertSame(0, $w);
         $this->assertSame(0, $h);
@@ -266,7 +266,7 @@ final class ChipGroupTest extends TestCase
     public function testNonChipElementIsRefusedAtTheDoor(): void
     {
         // Re-audit at 7860dbba9 (finding #2 family): the wrap/measure paths
-        // called getInnerSize() on every element trusting the list<Chip>
+        // called innerSize() on every element trusting the list<Chip>
         // docblock — any foreign element passed the raw-array door and fataled
         // at render time. The ctor now parses, naming the offending index.
         $intruder = new class implements SizedItem {
@@ -280,7 +280,7 @@ final class ChipGroupTest extends TestCase
                 return $this;
             }
 
-            public function getInnerSize(): array
+            public function innerSize(): array
             {
                 return [2, 1];
             }
@@ -308,7 +308,7 @@ final class ChipGroupTest extends TestCase
         $this->assertStringContainsString('A', $group->render());
         $this->assertStringContainsString('B', $group->render());
 
-        [$w, $h] = $group->getInnerSize();
+        [$w, $h] = $group->innerSize();
         $this->assertGreaterThan(0, $w);
         $this->assertSame(1, $h);
     }

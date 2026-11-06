@@ -165,7 +165,7 @@ final class CursorTest extends TestCase
     public function testSetSizeAffectsGetInnerSize(): void
     {
         $cursor = Cursor::new()->setSize(10, 5);
-        [$w, $h] = $cursor->getInnerSize();
+        [$w, $h] = $cursor->innerSize();
 
         $this->assertSame(10, $w);
         $this->assertSame(5, $h);
@@ -174,7 +174,7 @@ final class CursorTest extends TestCase
     public function testGetInnerSizeWithoutSetSize(): void
     {
         $cursor = Cursor::new();
-        [$w, $h] = $cursor->getInnerSize();
+        [$w, $h] = $cursor->innerSize();
 
         // Default size should be 1x1
         $this->assertSame(1, $w);

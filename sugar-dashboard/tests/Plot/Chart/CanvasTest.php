@@ -37,16 +37,16 @@ final class CanvasTest extends TestCase
     {
         $canvas = Canvas::new(10, 10);
 
-        $this->assertSame(10, $canvas->getInnerSize()[0]);
-        $this->assertSame(10, $canvas->getInnerSize()[1]);
+        $this->assertSame(10, $canvas->innerSize()[0]);
+        $this->assertSame(10, $canvas->innerSize()[1]);
     }
 
     public function testCanvasConstructorDefaults(): void
     {
         $canvas = new Canvas();
 
-        $this->assertSame(40, $canvas->getInnerSize()[0]);
-        $this->assertSame(20, $canvas->getInnerSize()[1]);
+        $this->assertSame(40, $canvas->innerSize()[0]);
+        $this->assertSame(20, $canvas->innerSize()[1]);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -74,8 +74,8 @@ final class CanvasTest extends TestCase
         $canvas = Canvas::new(10, 10);
         $wider = $canvas->withWidth(20);
 
-        $this->assertSame(20, $wider->getInnerSize()[0]);
-        $this->assertSame(10, $wider->getInnerSize()[1]);
+        $this->assertSame(20, $wider->innerSize()[0]);
+        $this->assertSame(10, $wider->innerSize()[1]);
     }
 
     public function testWithHeightReturnsNewHeight(): void
@@ -83,8 +83,8 @@ final class CanvasTest extends TestCase
         $canvas = Canvas::new(10, 10);
         $taller = $canvas->withHeight(20);
 
-        $this->assertSame(10, $taller->getInnerSize()[0]);
-        $this->assertSame(20, $taller->getInnerSize()[1]);
+        $this->assertSame(10, $taller->innerSize()[0]);
+        $this->assertSame(20, $taller->innerSize()[1]);
     }
 
     // ═══════════════════════════════════════════════════════════════
