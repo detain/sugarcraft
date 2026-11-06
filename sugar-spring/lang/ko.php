@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'spring.fps_positive' => 'fps는 > 0이어야 합니다; 받음: {fps}',
     'spring.inputs_finite' => 'Spring 입력은 유한해야 합니다; 받음: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
-    'spring.negative_dt' => 'deltaTime은 >= 0이어야 합니다; 받음: {deltaTime}',
+    'spring.dt_positive' => 'deltaTime은 > 0이어야 합니다; 받음: {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency는 1e-9 이상이어야 합니다. 진동할 수 없는 스프링은 절대 안정되지 않습니다. 입력값: {angularFrequency}',
     'spring.damping_positive' => 'dampingRatio는 0보다 커야 합니다. 감쇠 없는 스프링은 영원히 진동하며 안정되지 않습니다. 입력값: {dampingRatio}',
     'spring.coeffs_finite' => '스프링 계수가 유한하지 않은 값으로 오버플로되었습니다. 입력값: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',

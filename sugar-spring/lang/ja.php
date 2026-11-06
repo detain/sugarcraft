@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'spring.fps_positive' => 'fps は > 0 である必要があります；取得：{fps}',
     'spring.inputs_finite' => 'Spring の入力は有限である必要があります；取得：deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
-    'spring.negative_dt' => 'deltaTime は >= 0 である必要があります；取得：{deltaTime}',
+    'spring.dt_positive' => 'deltaTime は > 0 である必要があります；取得：{deltaTime}',
     'spring.angular_too_small' => 'angularFrequency は 1e-9 以上である必要があります。振動できないばねは決して安定しません。取得値: {angularFrequency}',
     'spring.damping_positive' => 'dampingRatio は 0 より大である必要があります。減衰のないばねは永遠に振動し、決して安定しません。取得値: {dampingRatio}',
     'spring.coeffs_finite' => 'ばねの係数が非有限値にオーバーフローしました。取得値: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',

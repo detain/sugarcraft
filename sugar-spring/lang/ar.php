@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'spring.fps_positive' => 'fps يجب أن يكون > 0; تم الحصول على: {fps}',
     'spring.inputs_finite' => 'يجب أن تكون مدخلات Spring منتهية؛ تم الحصول على: deltaTime={deltaTime}، angularFrequency={angularFrequency}، dampingRatio={dampingRatio}',
-    'spring.negative_dt' => 'يجب أن يكون deltaTime >= 0؛ تم الحصول على: {deltaTime}',
+    'spring.dt_positive' => 'يجب أن يكون deltaTime > 0؛ تم الحصول على: {deltaTime}',
     'spring.angular_too_small' => 'يجب أن تكون angularFrequency أكبر من أو تساوي 1e-9؛ النابض الذي لا يستطيع التذبذب لا يهدأ أبدًا؛ المُدخل {angularFrequency}',
     'spring.damping_positive' => 'يجب أن تكون dampingRatio أكبر من 0؛ النابض غير المخمَّد يتذبذب إلى الأبد ولا يهدأ أبدًا؛ المُدخل {dampingRatio}',
     'spring.coeffs_finite' => 'فاضت معاملات النابض إلى قيم غير منتهية؛ المُدخل deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',

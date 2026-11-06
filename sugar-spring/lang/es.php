@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'spring.fps_positive' => 'fps debe ser > 0; obtenido: {fps}',
     'spring.inputs_finite' => 'Las entradas de Spring deben ser finitas; obtenido: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
-    'spring.negative_dt' => 'deltaTime debe ser >= 0; obtenido: {deltaTime}',
+    'spring.dt_positive' => 'deltaTime debe ser > 0; obtenido: {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency debe ser >= 1e-9; un resorte que no puede oscilar nunca se estabiliza; se obtuvo {angularFrequency}',
     'spring.damping_positive' => 'dampingRatio debe ser > 0; un resorte sin amortiguación oscila para siempre y nunca se estabiliza; se obtuvo {dampingRatio}',
     'spring.coeffs_finite' => 'los coeficientes del resorte desbordaron a valores no finitos; se obtuvo deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',

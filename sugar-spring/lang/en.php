@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'spring.fps_positive' => 'fps must be > 0; got {fps}',
     'spring.inputs_finite' => 'Spring inputs must be finite; got deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
-    'spring.negative_dt' => 'deltaTime must be >= 0; got {deltaTime}',
+    'spring.dt_positive' => 'deltaTime must be > 0; got {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency must be >= 1e-9; a spring that cannot oscillate never settles; got {angularFrequency}',
     'spring.damping_positive' => 'dampingRatio must be > 0; an undamped spring oscillates forever and never settles; got {dampingRatio}',
     'spring.coeffs_finite' => 'Spring coefficients overflowed to non-finite values; got deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',

@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'spring.fps_positive' => 'fps > 0 olmalıdır; alınan: {fps}',
     'spring.inputs_finite' => 'Spring girdileri sonlu olmalıdır; alınan: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
-    'spring.negative_dt' => 'deltaTime >= 0 olmalıdır; alınan: {deltaTime}',
+    'spring.dt_positive' => 'deltaTime > 0 olmalıdır; alınan: {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency >= 1e-9 olmalı; salınamayan bir yay asla yatışmaz; alınan {angularFrequency}',
     'spring.damping_positive' => 'dampingRatio > 0 olmalı; sönümsüz yay sonsuza dek salınır ve asla yatışmaz; alınan {dampingRatio}',
     'spring.coeffs_finite' => 'yay katsayıları sonlu olmayan değerlere taştı; alınan deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',

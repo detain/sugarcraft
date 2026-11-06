@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'spring.fps_positive' => 'fps 必须 > 0；实际：{fps}',
     'spring.inputs_finite' => 'Spring 输入必须为有限值；实际：deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
-    'spring.negative_dt' => 'deltaTime 必须 >= 0；实际：{deltaTime}',
+    'spring.dt_positive' => 'deltaTime 必须 > 0；实际：{deltaTime}',
     'spring.angular_too_small' => 'angularFrequency 必须 >= 1e-9；无法振荡的弹簧永远不会稳定；得到 {angularFrequency}',
     'spring.damping_positive' => 'dampingRatio 必须 > 0；无阻尼弹簧永远振荡且永不稳定；得到 {dampingRatio}',
     'spring.coeffs_finite' => '弹簧系数溢出为非有限值；得到 deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',

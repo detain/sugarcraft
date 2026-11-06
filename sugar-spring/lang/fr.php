@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'spring.fps_positive' => 'fps doit être > 0 ; reçu : {fps}',
     'spring.inputs_finite' => 'Les entrées de Spring doivent être finies ; reçu : deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
-    'spring.negative_dt' => 'deltaTime doit être >= 0 ; reçu : {deltaTime}',
+    'spring.dt_positive' => 'deltaTime doit être > 0 ; reçu : {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency doit être >= 1e-9 ; un ressort qui ne peut pas osciller ne se stabilise jamais ; obtenu : {angularFrequency}',
     'spring.damping_positive' => 'dampingRatio doit être > 0 ; un ressort non amorti oscille indéfiniment et ne se stabilise jamais ; obtenu : {dampingRatio}',
     'spring.coeffs_finite' => 'les coefficients du ressort ont débordé vers des valeurs non finies ; obtenu : deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',

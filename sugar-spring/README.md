@@ -43,10 +43,11 @@ part 1](https://ryanjuckett.com/posts/spring-physics-part-1/) / [part
 2](https://ryanjuckett.com/posts/spring-physics-part-2/)). Choose
 `dampingRatio`: < 1 oscillates, = 1 is critical (no overshoot, fastest
 convergence), > 1 is over-damped. The frequency and damping arguments must
-produce a converging spring (and the frame time must not be negative):
+produce a converging spring (and the frame time must be positive):
 `angularFrequency` must be at least `1e-9` and `dampingRatio` must be greater
 than `0` — a zero-damping spring oscillates forever and a negative one
-diverges, and a negative `deltaTime` would integrate backwards, so the
+diverges, a zero `deltaTime` would freeze the state and a negative one would
+integrate backwards, so the
 constructor refuses these instead of letting your frame loop run until the
 user closes the window.
 
@@ -546,7 +547,7 @@ back-flavoured control points — same honesty rule as `Easing`.
 
 - **`Spring`** — `__construct($deltaTime, $angularFrequency, $dampingRatio,
   ?bool $reducedMotionOverride = null)` (the classic `$dt`/`ω`/`ζ` triple;
-  refuses non-finite inputs, `dt < 0`, `ω < 1e-9`, `ζ <= 0` and coefficient
+  refuses non-finite inputs, `dt <= 0`, `ω < 1e-9`, `ζ <= 0` and coefficient
   overflow) / `update($pos, $vel, $target)` / `fps(float $n)` /
   `fromPreset(SpringPreset, ?float $deltaTime = null, ?bool $reducedMotionOverride = null)` /
   static `settled($pos, $vel, $target, $threshold = SETTLING_THRESHOLD)`.

@@ -194,11 +194,28 @@ final class SpringTest extends TestCase
         new Spring(-1.0 / 60.0, 6.0, 1.0);
     }
 
-    public function testZeroDeltaTimeIsStillAccepted(): void
+    public function testZeroDeltaTimeThrowsAtConstruction(): void
     {
-        $s = new Spring(0.0, 6.0, 1.0);
-        // dt=0 ⇒ identity coefficients: the state passes through untouched.
-        $this->assertSame([5.0, 2.0], $s->update(5.0, 2.0, 5.0));
+        // Step 33 (docs-fix-1104 M2): dt=0 produced identity coefficients —
+        // a frozen spring whose documented `while (!settled(...))` loop never
+        // ends. The door is exactly positive now, like every other door on
+        // this constructor.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('deltaTime must be > 0');
+
+        new Spring(0.0, 6.0, 1.0);
+    }
+
+    public function testSubEpsilonPositiveDeltaTimeIsAccepted(): void
+    {
+        // The refusal is non-positive, NOT smaller-than-some-floor: a small
+        // positive dt is slow rather than illegal. At 1e-8 (below any frame
+        // scale, near where float cancellation starts swallowing the step —
+        // 1e-9 already rounds to a per-frame identity) the spring still
+        // constructs and still advances the state.
+        $s = new Spring(1e-8, 6.0, 1.0);
+        [$pos] = $s->update(0.0, 0.0, 100.0);
+        $this->assertGreaterThan(0.0, $pos);
     }
 
     // ─── Review-1102 M-A: per-frame data plane ─────────────────────────────

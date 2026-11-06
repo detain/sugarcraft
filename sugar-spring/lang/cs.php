@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'spring.fps_positive' => 'fps musí být > 0; obdrženo: {fps}',
     'spring.inputs_finite' => 'Vstupy Spring musí být konečné; obdrženo: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
-    'spring.negative_dt' => 'deltaTime musí být >= 0; obdrženo: {deltaTime}',
+    'spring.dt_positive' => 'deltaTime musí být > 0; obdrženo: {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency musí být >= 1e-9; pružina, která nemůže kmitat, se nikdy neustálí; obdrženo {angularFrequency}',
     'spring.damping_positive' => 'dampingRatio musí být > 0; netlumená pružina kmitá věčně a nikdy se neustálí; obdrženo {dampingRatio}',
     'spring.coeffs_finite' => 'koeficienty pružiny přetekly do nekonečných hodnot; obdrženo deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',

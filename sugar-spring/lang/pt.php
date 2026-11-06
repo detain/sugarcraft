@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'spring.fps_positive' => 'fps tem de ser > 0; obtido: {fps}',
     'spring.inputs_finite' => 'As entradas do Spring têm de ser finitas; obtido: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
-    'spring.negative_dt' => 'deltaTime tem de ser >= 0; obtido: {deltaTime}',
+    'spring.dt_positive' => 'deltaTime tem de ser > 0; obtido: {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency deve ser >= 1e-9; uma mola que não pode oscilar nunca se estabiliza; obtido {angularFrequency}',
     'spring.damping_positive' => 'dampingRatio deve ser > 0; uma mola sem amortecimento oscila para sempre e nunca se estabiliza; obtido {dampingRatio}',
     'spring.coeffs_finite' => 'os coeficientes da mola estouraram para valores não finitos; obtido deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',

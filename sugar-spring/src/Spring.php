@@ -45,7 +45,8 @@ final class Spring
         // Fail-fast at the boundary. Non-finite inputs poison the oscillator
         // (NAN folds silently through comparisons, an INF dampingRatio flows
         // into the over-damped branch where 0·INF produces NAN coefficients),
-        // and a negative deltaTime integrates the oscillator backwards.
+        // a deltaTime of 0 freezes the state in place (identity coefficients)
+        // and a negative one integrates the oscillator backwards.
         // Beyond that, a spring that cannot converge is ILLEGAL, not slow:
         // ω below the numeric floor carries no restoring force (the former
         // identity transform froze position forever), ζ = 0 oscillates with
@@ -59,8 +60,8 @@ final class Spring
                 'dampingRatio' => $dampingRatio,
             ]));
         }
-        if ($deltaTime < 0.0) {
-            throw new \InvalidArgumentException(Lang::t('spring.negative_dt', ['deltaTime' => $deltaTime]));
+        if ($deltaTime <= 0.0) {
+            throw new \InvalidArgumentException(Lang::t('spring.dt_positive', ['deltaTime' => $deltaTime]));
         }
         if ($angularFrequency < self::EPSILON) {
             throw new \InvalidArgumentException(Lang::t('spring.angular_too_small', ['angularFrequency' => $angularFrequency]));
@@ -197,8 +198,9 @@ final class Spring
     public static function fps(float $n): float
     {
         // is_finite() first: `INF <= 0.0` is false, so fps(INF) would
-        // otherwise "succeed" at 0.0 — a frozen step time, the identity
-        // spring's other door to never advancing.
+        // otherwise "succeed" at 0.0 — a frozen step time, the very value the
+        // Spring constructor now refuses outright (dt <= 0); catching it at
+        // this door keeps callers from ever holding the poison.
         if (!is_finite($n) || $n <= 0.0) {
             throw new \InvalidArgumentException(Lang::t('spring.fps_positive', ['fps' => $n]));
         }

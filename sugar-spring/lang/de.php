@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'spring.fps_positive' => 'fps muss > 0 sein; erhalten: {fps}',
     'spring.inputs_finite' => 'Spring-Eingaben müssen endlich sein; erhalten: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
-    'spring.negative_dt' => 'deltaTime muss >= 0 sein; erhalten: {deltaTime}',
+    'spring.dt_positive' => 'deltaTime muss > 0 sein; erhalten: {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency muss >= 1e-9 sein; eine Feder, die nicht schwingen kann, setzt sich nie; erhalten: {angularFrequency}',
     'spring.damping_positive' => 'dampingRatio muss > 0 sein; eine ungedämpfte Feder schwingt ewig und setzt sich nie; erhalten: {dampingRatio}',
     'spring.coeffs_finite' => 'Federkoeffizienten sind zu nicht-endlichen Werten übergelaufen; erhalten: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',

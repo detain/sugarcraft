@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'spring.fps_positive' => 'fps moet > 0 zijn; gekregen: {fps}',
     'spring.inputs_finite' => 'Spring-invoer moet eindig zijn; gekregen: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
-    'spring.negative_dt' => 'deltaTime moet >= 0 zijn; gekregen: {deltaTime}',
+    'spring.dt_positive' => 'deltaTime moet > 0 zijn; gekregen: {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency moet >= 1e-9 zijn; een veer die niet kan oscilleren komt nooit tot rust; gekregen {angularFrequency}',
     'spring.damping_positive' => 'dampingRatio moet > 0 zijn; een ongedempte veer oscilleert eeuwig en komt nooit tot rust; gekregen {dampingRatio}',
     'spring.coeffs_finite' => 'veercoëfficiënten zijn geoverload naar niet-eindige waarden; gekregen deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',

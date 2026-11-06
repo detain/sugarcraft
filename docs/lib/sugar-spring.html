@@ -85,7 +85,7 @@ for ($i = 0; $i &lt; 60; $i++) {
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Spring</strong><span><code>dampingRatio &lt; 1</code> oscillates, <code>= 1</code> critical (no overshoot, fastest), <code>&gt; 1</code> over-damped. Zero/negative damping and near-zero frequency are refused at construction — a spring that cannot converge is illegal, not slow.</span></div>
+      <div class="feature"><strong>Spring</strong><span><code>dampingRatio &lt; 1</code> oscillates, <code>= 1</code> critical (no overshoot, fastest), <code>&gt; 1</code> over-damped. Non-positive frame time, zero/negative damping and near-zero frequency are refused at construction — a spring that cannot converge is illegal, not slow.</span></div>
       <div class="feature"><strong>Projectile</strong><span>Position, velocity, acceleration vectors. <code>Projectile::gravity()</code> + <code>terminalGravity()</code> helpers (Y-up, with legacy Y-down spellings).</span></div>
       <div class="feature"><strong>Easing &amp; bezier</strong><span>All 16 <code>Easing</code> cases (Linear plus the Penner In/Out/InOut families) + <code>CubicBezier</code> matching the CSS <code>transition-timing-function</code> solver.</span></div>
       <div class="feature"><strong>Chains &amp; collections</strong><span><code>SpringChain::tick()</code> hands off stage-to-stage on settle; <code>SpringCollection</code> drives many named springs with one tick and one <code>settled()</code> predicate.</span></div>
@@ -108,7 +108,7 @@ for ($i = 0; $i &lt; 60; $i++) {
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Spring</td><td>new(deltaTime, angularFrequency, dampingRatio, reducedMotionOverride?)</td><td>Create a spring; non-finite / dt &lt; 0 / ω &lt; 1e-9 / ζ ≤ 0 / coefficient overflow refused</td></tr>
+<tr><td>Spring</td><td>new(deltaTime, angularFrequency, dampingRatio, reducedMotionOverride?)</td><td>Create a spring; non-finite / dt ≤ 0 / ω &lt; 1e-9 / ζ ≤ 0 / coefficient overflow refused</td></tr>
 <tr><td>Spring</td><td>update(pos, vel, target)</td><td>Step the simulation; snaps to [target, 0] under reduced motion</td></tr>
 <tr><td>Spring</td><td>settled(pos, vel, target, threshold?)</td><td>Completion predicate on position AND velocity</td></tr>
 <tr><td>Spring</td><td>fps($fps) / fromPreset($preset, $dt?, $override?)</td><td>deltaTime helper; five hand-tuned presets</td></tr>

@@ -11,7 +11,7 @@ declare(strict_types=1);
 return [
     'spring.fps_positive' => 'fps musi być > 0; otrzymano: {fps}',
     'spring.inputs_finite' => 'Dane wejściowe Spring muszą być skończone; otrzymano: deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
-    'spring.negative_dt' => 'deltaTime musi być >= 0; otrzymano: {deltaTime}',
+    'spring.dt_positive' => 'deltaTime musi być > 0; otrzymano: {deltaTime}',
     'spring.angular_too_small' => 'angularFrequency musi wynosić >= 1e-9; sprężyna, która nie może drgać, nigdy się nie wyciszy; otrzymano {angularFrequency}',
     'spring.damping_positive' => 'dampingRatio musi wynosić > 0; sprężyna bez tłumienia drży wiecznie i nigdy się nie wycisza; otrzymano {dampingRatio}',
     'spring.coeffs_finite' => 'współczynniki sprężyny przebrały się do wartości nieskończonych; otrzymano deltaTime={deltaTime}, angularFrequency={angularFrequency}, dampingRatio={dampingRatio}',
