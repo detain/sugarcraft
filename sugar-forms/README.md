@@ -202,9 +202,11 @@ Form::groups(
 ### Reading values after submit
 
 `values()` returns every visible field keyed by `key()`. For typed access
-call `string()`, `int()`, `bool()`, `array()`. For inspecting state during a
-run use `errors()`, `hasErrors()`, `focusedField()`, `keyBinds()`, `help()`.
-(`getString()` & friends are deprecated forwarders, removed in 2.0.0.)
+call `string()`, `int()`, `bool()`, `array()`, or the keyed lookup
+`get(string $key, mixed $default = null)` — the only accessor with a default
+fallback. For inspecting state during a run use `errors()`, `hasErrors()`,
+`focusedField()`, `keyBinds()`, `help()`.
+(`getString()` & friends are deprecated forwarders, to be removed in 2.0.0.)
 
 ### Themes & accessibility
 
