@@ -542,8 +542,10 @@ final class App implements Model
         // D-M27: the editor's run keys used to fire DROP/TRUNCATE/… with zero
         // confirmation while KILL and SET GLOBAL gated behind prompts. First
         // press on a destructive statement only WARNS and arms; a second
-        // consecutive press with byte-identical SQL confirms. Any other query
-        // run, or an edit to the statement, disarms.
+        // consecutive press whose trimmed statement equals the staged SQL
+        // confirms. Any other query run, or an edit whose trimmed text differs
+        // from the staged SQL, disarms — a whitespace-only edit trims to the
+        // same statement and leaves the arm standing.
         if (self::isDestructiveStatement($trimmed)) {
             if ($this->ui->armedDestructive !== $trimmed) {
                 return [$this->mutate(['ui' => $this->ui

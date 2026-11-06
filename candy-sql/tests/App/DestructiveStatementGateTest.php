@@ -17,7 +17,8 @@ use SugarCraft\Sql\Pane;
 /**
  * D-M27: the Query pane's run keys used to fire DROP/TRUNCATE/DELETE with zero
  * confirmation. A destructive first press now only arms; a second consecutive
- * press of byte-identical SQL confirms; edits or other statements disarm.
+ * press whose trimmed statement equals the staged SQL confirms; an edit whose
+ * trimmed text differs, or another statement running, disarms.
  */
 final class DestructiveStatementGateTest extends TestCase
 {
