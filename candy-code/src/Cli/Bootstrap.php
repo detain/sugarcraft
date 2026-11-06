@@ -4395,6 +4395,23 @@ public static function useSessionLaunch(bool $continue, bool $resume = false, ?s
         LaunchContext::useIncognito($incognito);
     }
 
+    /**
+     * Delegates to {@see LaunchContext::useSessionLaunchPresetId()} — D1
+     * (RS-DRIVER a): `--session-id` registers on the same launch-context
+     * seam as the mode/target pair, so the one funnel every session-opening
+     * surface reads is also the one that sees the preset.
+     */
+    public static function useSessionLaunchPresetId(?string $sessionId): void
+    {
+        LaunchContext::useSessionLaunchPresetId($sessionId);
+    }
+
+    /** The id `--session-id` pre-allocated for this launch, if any. */
+    public static function sessionLaunchPresetId(): ?string
+    {
+        return LaunchContext::sessionLaunchPresetId();
+    }
+
     /** Whether this launch keeps nothing — {@see LaunchContext::incognito()}. */
     public static function incognito(): bool
     {
@@ -4467,10 +4484,32 @@ public static function pinPromptHistoryPath(?string $path): void
      * Why the session `--resume <target>` named cannot be opened, or null when
      * it can (or when no target was named). `bin/candy-code` asks before the
      * TUI takes the terminal, so a typo is a usage error rather than a silent
-     * fresh session.
+     * fresh session. Since D1 (RS-DRIVER a) this is also the pre-flight that
+     * collides a `--session-id` preset against the store — same reason: a
+     * driver that asked for a taken address must be told, not silently
+     * re-pointed. NonInteractive::run() asks it on the `-p` path.
      */
     public static function sessionLaunchError(): ?string
     {
+        // D1 (RS-DRIVER a): a pre-allocated id that already names a stored
+        // row is a usage error, not a silent share-the-address — the driver
+        // asked for THIS lineage address and something else owns it. Judged
+        // on the new-session leg only: the parser refused --session-id
+        // beside --continue/--resume/--incognito, and an attach launch
+        // answers from the server's own id (forLaunch() returns above the
+        // local store entirely), so elsewhere the preset could only be inert.
+        $preset = LaunchContext::sessionLaunchPresetId();
+        if ($preset !== null && LaunchContext::sessionLaunchMode() === 'new' && !LaunchContext::incognito()) {
+            try {
+                $clash = self::sessionStore(false)->session($preset);
+            } catch (\Throwable $e) {
+                return 'candy-code: --session-id: cannot open the session store: ' . $e->getMessage();
+            }
+            if ($clash !== null) {
+                return 'candy-code: --session-id ' . $preset . ': a session with that id is already stored; to reopen that session use --resume=' . $preset;
+            }
+        }
+
         if (LaunchContext::sessionLaunchMode() !== 'resume' || LaunchContext::sessionLaunchTarget() === null) {
             return null;
         }
@@ -4599,7 +4638,15 @@ public static function pinPromptHistoryPath(?string $path): void
             }
         }
 
-        $id = bin2hex(random_bytes(8));
+        // D1 (RS-DRIVER a): `--session-id` pre-allocation lands here — this
+        // leg, and only this leg, because an attach answered above (the
+        // server owns that id), incognito returns above (nothing is kept to
+        // address), and the parser refused the flag beside
+        // --continue/--resume. sessionLaunchError() has already collided the
+        // address against the store; the mint closure below stays defensive
+        // (a row planted between pre-flight and first prompt keeps its
+        // writer's metadata, exactly as with a random id that lost a race).
+        $id = LaunchContext::sessionLaunchPresetId() ?? bin2hex(random_bytes(8));
         // Where the session was opened, for the picker's footer and its
         // Ctrl+B branch filter (audit B1), which compares against the process
         // working directory's branch.

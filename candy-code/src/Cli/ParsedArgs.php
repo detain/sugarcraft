@@ -307,6 +307,17 @@ final readonly class ParsedArgs
          *  launch only; like the roots it refuses, it is not negotiable
          *  mid-session because the trust memos read the same static. */
         public bool $safeMode = false,
+        /** D1 (RS-DRIVER a): the RAW value `--session-id` named, or null.
+         *  The headless driver's pre-allocation of the lineage address — it
+         *  chooses the id the run will carry so the envelope's `session_id`
+         *  is known before the process finishes. Shape-judged at
+         *  {@see ArgvParser::parse()} (the same 16-hex grammar
+         *  {@see \SugarCraft\Code\Cli\Bootstrap::openSession()} mints with);
+         *  the store collision is a later pre-flight by {@see
+         *  \SugarCraft\Code\Cli\Bootstrap::sessionLaunchError()} because the
+         *  parser performs no filesystem read (the same raw-store-and-
+         *  later-judge law as {@see $jsonSchema}). */
+        public ?string $sessionId = null,
     ) {
     }
 
@@ -398,7 +409,8 @@ final readonly class ParsedArgs
         bool $incognito = false,
         bool $restricted = false,
         bool $safeMode = false,
+        ?string $sessionId = null,
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId);
     }
 }

@@ -99,6 +99,17 @@ final class LaunchContext
     private static ?string $sessionLaunchTarget = null;
 
     /**
+     * D1 (RS-DRIVER a): the 16-hex session id `--session-id` pre-allocated,
+     * or null. The same process-wide seam and clear-what-you-set contract as
+     * the launch-mode pair above: {@see Bootstrap::openSession()} reads it on
+     * the new-session leg and {@see Bootstrap::sessionLaunchError()} collides
+     * it against the store before anyone launches. The parser has already
+     * refused the flag beside `--continue`/`--resume`/`--incognito`, so it can
+     * only ever apply to a fresh row.
+     */
+    private static ?string $sessionLaunchPresetId = null;
+
+    /**
      * C-SES-7.c: whether this launch keeps NOTHING. `--incognito` registers
      * it here so every session-opening surface — `chat()`, the `-p` funnel,
      * and {@see Bootstrap::openSession()} itself — reads one static instead
@@ -273,6 +284,17 @@ final class LaunchContext
     }
 
     /**
+     * Register the id `--session-id` pre-allocated — D1 (RS-DRIVER a). The
+     * same clear-as-set contract as {@see useSessionLaunch()}: passing null
+     * (no flag) clears the static, so bin's registration and the `-p`
+     * funnel's idempotent re-registration agree on every answer.
+     */
+    public static function useSessionLaunchPresetId(?string $sessionId): void
+    {
+        self::$sessionLaunchPresetId = $sessionId;
+    }
+
+    /**
      * Register `--incognito` (C-SES-7.c): this launch keeps no session row,
      * no transcript and no automatic memory writes. The parser has already
      * refused the flag beside `--continue`/`--resume`, so an incognito launch
@@ -402,6 +424,12 @@ final class LaunchContext
     public static function sessionLaunchTarget(): ?string
     {
         return self::$sessionLaunchTarget;
+    }
+
+    /** The id `--session-id` pre-allocated (D1, RS-DRIVER a); null with no flag. */
+    public static function sessionLaunchPresetId(): ?string
+    {
+        return self::$sessionLaunchPresetId;
     }
 
     /** Whether this launch keeps nothing ({@see useIncognito()}, C-SES-7.c). */

@@ -163,6 +163,15 @@ final class ArgvParser
         // process).
         $restricted = false;
         $safeMode = false;
+        // D1 (RS-DRIVER a): --session-id — the headless driver pre-allocates
+        // the id the run carries, so the caller knows the lineage address
+        // before the process finishes instead of only from the result
+        // envelope after it. The RAW value is stored; the shape is judged by
+        // the tail gate below (a pure string grammar — the same 16 lowercase
+        // hex characters Bootstrap::openSession() mints) and the store
+        // collision is pre-flowed by Bootstrap::sessionLaunchError(), because
+        // parse() keeps its no-filesystem law.
+        $sessionId = null;
 
         $i = 1; // skip $argv[0] (script name)
         while ($i < \count($argv)) {
@@ -754,6 +763,55 @@ final class ArgvParser
                 continue;
             }
 
+            // --session-id=<id> (D1, RS-DRIVER a)
+            //
+            // The shape split follows --json-schema's precedent: the arm
+            // judges PRESENCE only (a missing or flag-shaped next token is
+            // the value the caller forgot to type); WHAT the id must look
+            // like is the tail gate's grammar check, and whether the store
+            // already owns the address is Bootstrap::sessionLaunchError()'s
+            // pre-flight — parse() never opens the database.
+            if (\str_starts_with($arg, '--session-id=')) {
+                $value = \substr($arg, 13); // length of "--session-id="
+                if ($value === '') {
+                    if ($usageError === null) {
+                        $usageError = 'candy-code: --session-id expects a session id, but the value is empty';
+                        $usageHint = self::sessionIdValueHint();
+                    }
+                    ++$i;
+                    continue;
+                }
+                $sessionId = $value;
+                ++$i;
+                continue;
+            }
+
+            // --session-id <id>
+            if ($arg === '--session-id') {
+                $next = $argv[$i + 1] ?? null;
+                if ($next === null || self::looksLikeFlag($next)) {
+                    if ($usageError === null) {
+                        $usageError = $next === null
+                            ? 'candy-code: --session-id expects a session id, but the argument list ended'
+                            : 'candy-code: --session-id expects a session id, but the next argument is the option ' . $next;
+                        $usageHint = self::sessionIdValueHint();
+                    }
+                    ++$i; // leave a flag-shaped $next for the loop to judge
+                    continue;
+                }
+                if ($next === '') {
+                    if ($usageError === null) {
+                        $usageError = 'candy-code: --session-id expects a session id, but the value is empty';
+                        $usageHint = self::sessionIdValueHint();
+                    }
+                    $i += 2; // the empty token is consumed; it is not a prompt
+                    continue;
+                }
+                $sessionId = $next;
+                $i += 2;
+                continue;
+            }
+
             // -c / --continue: reopen the most recently used session, with
             // its transcript, instead of starting a new one.
             if ($arg === '--continue' || $arg === '-c') {
@@ -1009,6 +1067,60 @@ final class ArgvParser
             $usageHint = Lang::t('cli.argv.hint.resume_needs_target');
         }
 
+        // D1 (RS-DRIVER a): the grammar of a pre-allocated id, judged on the
+        // RAW token like --output-format's whitelist below — the shape IS the
+        // minting grammar of Bootstrap::openSession() (bin2hex of 8 random
+        // bytes), so a valid preset can never collide with a format the
+        // store itself would refuse. Rejected LOUD, case-sensitive, for the
+        // same reason the format check is: an accepted-but-ignored spelling
+        // would hand the driver a lineage address that silently is not the
+        // one the run carries.
+        if ($usageError === null && $sessionId !== null && !\preg_match('/^[0-9a-f]{16}$/', $sessionId)) {
+            $usageError = 'candy-code: --session-id ' . $sessionId . ': not a 16-character lowercase hexadecimal session id';
+            $usageHint = self::sessionIdValueHint();
+        }
+
+        // D1: --session-id picks the id of a NEW row; --continue and
+        // --resume reopen a STORED one whose id is already decided. Both
+        // cannot win, so the pair is refused exactly the way
+        // --continue+--resume is above.
+        if ($usageError === null && $sessionId !== null && ($continueSession || $resumeRequested)) {
+            $usageError = 'candy-code: --session-id mints a new session under a chosen id, but --continue and --resume reopen a stored row whose id is already decided; use one of them';
+            $usageHint = 'Drop --session-id to reopen a stored session, or give --session-id alone to pre-allocate the id of a new one.';
+        }
+
+        // D1 + C-SES-7.c: --incognito mints an id that dies with the
+        // process — pre-allocating one would promise an address that never
+        // exists in the store, the same self-contradiction the --continue/
+        // --resume refusal above carries for the pair.
+        if ($usageError === null && $incognito && $sessionId !== null) {
+            $usageError = 'candy-code: --incognito keeps nothing, so an id pre-allocated with --session-id would address a row that is never stored; the two cannot be combined';
+            $usageHint = 'Drop --incognito to pre-allocate a stored id, or drop --session-id to launch a throwaway session.';
+        }
+
+        // D1: same verb-refusal as --worktree's — bin exits at a subcommand
+        // verb's own dispatch before any session funnel, so beside any verb
+        // the flag is carried and ignored. The verb-first spelling
+        // (`session list --session-id …`) is caught earlier by the
+        // unknown-flag recorder. Judged BEFORE the prompt gate: a verb
+        // launch misses both conditions at once, and its verb is the first
+        // thing wrong with it.
+        if ($usageError === null && $sessionId !== null && $subcommand !== null) {
+            $usageError = 'candy-code: --session-id pre-allocates an id for one main run; subcommand verbs run their own flow and could only ignore it';
+            $usageHint = 'Run the subcommand without --session-id, or start `candy-code --session-id <id> -p …` for a main run with a preset id.';
+        }
+
+        // D1: the flag keeps --json-schema's prompt-only gate, for the same
+        // AUT-4-P1 reason. The preset is read at exactly one production
+        // place — Bootstrap::openSession()'s new-session leg, reached through
+        // NonInteractive::run()'s funnel — and without -p (or `run
+        // "<prompt>"`) it would be parsed, carried, and silently dropped at
+        // the TUI boundary, which is the lie that guard was minted to forbid.
+        if ($usageError === null && $sessionId !== null && !$promptRequested) {
+            $usageError = 'candy-code: --session-id pre-allocates the id of a one-shot session, but this launch has no prompt to run';
+            $usageHint = 'Use --session-id with -p "<prompt>" or `candy-code run "<prompt>"`; the interactive TUI takes no preset id.';
+        }
+
         // C-AGT-7.b: --json-schema with nothing to constrain is not a launch
         // that forgot the flag, it is a launch that will ignore it. The schema
         // is read in exactly ONE place in production — NonInteractive::run()
@@ -1066,7 +1178,7 @@ final class ArgvParser
             $root = \array_shift($positional);
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId);
     }
 
     /**
@@ -1448,6 +1560,18 @@ final class ArgvParser
     private static function jsonSchemaValueHint(): string
     {
         return Lang::t('cli.argv.hint.json_schema');
+    }
+
+    /**
+     * The remedy line under the `--session-id` usage errors — plain English
+     * prose rather than a lang key because this lane adds no new lang/**
+     * entries; the grammar it states is the minting grammar of
+     * Bootstrap::openSession() (16 lowercase hex), and the raw-string shape
+     * follows the unrecognized-option precedent in bin/candy-code.
+     */
+    private static function sessionIdValueHint(): string
+    {
+        return 'Session ids are 16 lowercase hexadecimal characters — the form `candy-code session list` prints. Omit --session-id to let the run mint its own.';
     }
 
     /**

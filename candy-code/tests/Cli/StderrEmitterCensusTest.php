@@ -276,9 +276,14 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * the headless-default banner that now names `-p`'s new asking default; and C-SEC-7.b two more still: useRestricted()'s and useSafeMode()'s
  * one-launch notices each, and C-SEC-7.e one more: the once-per-session
  * implicit-autoReview launch notice that rides the seam when the default engages, and C-TOOL-6.e one more: the per-file skip announcements for user script tools, and C-SEC-3.b two more: trustedOriginNames()'s not-a-list and not-a-name-entry warnings), each producing a
- * distinct `candy-code: ` line, against a channel-4 credit of eight for that
+ * distinct `candy-code: ` line, against a channel-4 credit of ten for that
  * file (ISS-026's envelope-carrying resume notice joined the six as a raw
- * fwrite line, and its rv6 `--resume` pick twin joined the seven). Off by
+ * fwrite line, and its rv6 `--resume` pick twin joined the seven; D1
+ * RS-DRIVER.a's two --session-id collision legs in sessionLaunchError(),
+ * store-unreadable and already-stored, joined the nine and ten — they are
+ * RETURNED for failUsage to print, but each still produces one distinct
+ * `candy-code: ` line, the same shape as the resume-not-found row beside
+ * them). Off by
  * roughly five times, in the blind direction.
  *
  * IT WAS NOT A THEORY. Round 45's review added one
@@ -583,12 +588,12 @@ final class StderrEmitterCensusTest extends TestCase
         // C-AGT-7.b took it to thirty-six: the --json-schema-without-a-prompt
         // hint carries its own `candy-code: ` envelope, the same pre-launch
         // exit-2 usage decision as the family above it.
-        'src/Cli/ArgvParser.php' => 42, // +1 C-SES-7.c --incognito combination refusal (stderr-only: the usage error exits 2 before any session exists, so there is no transcript to name it in) | +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021); +1 C-AGT-7.b requires_prompt hint; +1 C-AGT-6.c serve-refusal message; +4 C-CTX-4.g --append-system-prompt refusal family
+        'src/Cli/ArgvParser.php' => 51, // +1 C-SES-7.c --incognito combination refusal (stderr-only: the usage error exits 2 before any session exists, so there is no transcript to name it in) | +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021); +1 C-AGT-7.b requires_prompt hint; +1 C-AGT-6.c serve-refusal message; +4 C-CTX-4.g --append-system-prompt refusal family | +9 D1 RS-DRIVER.a --session-id refusal family (empty/missing/flag value arms, shape, continue-resume clash, incognito clash, requires-prompt, subcommand clash) — all the same pre-launch exit-2 usage decision, stderr alone
         // +1 in ISS-026: SESSION_RESUME_CROSS_PROJECT_FORMAT carries its own
         // `candy-code: ` envelope, like the retention detail line.
         // +1 in ISS-026 residual (rv6): the --resume pick twin carries its own
         // envelope too.
-        'src/Cli/Bootstrap.php' => 8,
+        'src/Cli/Bootstrap.php' => 10, // +2 D1 RS-DRIVER.a: sessionLaunchError()'s --session-id collision legs (already-stored, store-unreadable) carry their own `candy-code: ` envelope — the strings are RETURNED for failUsage to print (stderr-alone: usage error, no session exists yet to name it in a transcript), the same decision as the resume-not-found row they sit beside
         'src/Cli/HeadlessPermissionPrompt.php' => 4,
         // 8A: the three migration notices (env fold, running-server refusal,
         // per-directory move), all stderr-alone — see INDIRECT_SITES' row for

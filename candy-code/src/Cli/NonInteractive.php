@@ -349,6 +349,14 @@ final class NonInteractive
             // back to false so an earlier in-process --incognito verdict
             // cannot leak a null row into THIS run's openSession().
             Bootstrap::useIncognito($args->incognito);
+            // D1 (RS-DRIVER a): --session-id registers on the same seam,
+            // clear-as-set like the two lines above it — passing null (no
+            // flag) pins the static back to null so an earlier in-process
+            // preset cannot leak into THIS run's openSession(). Unset, every
+            // reading below is the byte-identical pre-D1 state. The
+            // collision against an already-stored row is judged by the
+            // sessionLaunchError() pre-flight immediately after it.
+            Bootstrap::useSessionLaunchPresetId($args->sessionId);
 
             // A --resume target that names nothing is the operator's argv
             // mistake, checked before anything heavy runs - the same verdict
