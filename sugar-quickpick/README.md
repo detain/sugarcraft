@@ -125,7 +125,7 @@ A custom `setFilterFn()` predicate still applies on top of the ranker.
 | **Border & Style composition** | `withBorder()` and `withStyle()` compose `sugar-style` `Border` and `Style` for window decoration |
 | **HelpBar / StatusBar** | `withHelpBar()` and `withStatusBar()` attach keyboard-shortcut and status-line renders below the overlay |
 | **SIGWINCH resize** | `withOnResize()` + `attachSigwinch()` forwards terminal resize events via `SignalForwarder::attachSigwinchToFd` |
-| **Colorless by design** | The frame itself emits no color — pure Unicode runes. SGR appears only where the host opts in (`setMatchStyle()`, the item formatter, `withStyle()`), so there is nothing for `NO_COLOR` to suppress |
+| **Colorless by design** | The frame itself emits no color — pure Unicode runes (the default row decoration is the `●` cursor dot plus plain ordinals, and `setItemFormatter()` replaces it wholesale). SGR appears only where the host opts in (`setMatchStyle()`, the item formatter, `withStyle()`), so there is nothing for `NO_COLOR` to suppress |
 
 ## Architecture
 
@@ -193,6 +193,9 @@ public function setOffset(int $x, int $y): self
 
 // Custom item formatter:
 //   Closure(string $value, bool $isSelected, int $number): string
+// Replaces the built-in default rendering (a '● ' cursor prefix on the
+// selected row, 'N. ' ordinals, indent alignment for the rest) ENTIRELY —
+// re-render $isSelected/$number yourself if you still want an indicator.
 // It always receives the VALUE STRING (never an Item), even for Item objects,
 // plus the selection flag and the item's ordinal. Values arrive already
 // guarded (control bytes, escape sequences and forged zone sentinels are
