@@ -567,6 +567,33 @@ compactor must keep), so clear or start over. Moving the tiers is
 
 See [`AGENTS.md`](AGENTS.md).
 
+## git is missing and checkpoints, maps or tracked notes stop working
+
+`git` is a runtime dependency no manifest line enforces — it must simply be
+on PATH — and `doctor` has no probe for it. The features that shell out to
+it each name their own refusal instead:
+
+- **Turn checkpoints** (`/undo`, `/rewind`, and the background capture a
+  settled turn takes): the checkpointer asks git to diff and store the
+  turn's files, and with no git it reports `git is not installed` and takes
+  no step-back point. The edits your turns wrote are still on disk; only
+  the ability to step back over them is gone.
+- **The `RepoMap` tool and the prompt's symbol map**: both build their file
+  list through `git ls-files`. The tool answers with the listing error; a
+  prompt assembled with no capture simply carries no symbol-map section,
+  byte-for-byte the prompt of a build without the layer.
+- **Tracked project-memory notes**: `/memory add` with project scope checks
+  each note against `git ls-files` to decide whether the file is tracked.
+  With no git the tracked set is unknown and every repo note keeps its
+  default grouping label — a presentation loss, not a data loss.
+- **An `isolation: worktree` sub-agent run**: refused, with the git failure
+  in the result's reason — the same refusal shape as the not-a-checkout row
+  above.
+
+The fix is the same everywhere: install git. The PATH check runs per call
+and nothing about it is memoised across a session, so the next turn
+captures again the moment the binary appears.
+
 ## An `AI!` comment does nothing
 
 - `watchFiles` is off by default and read only from **your own** settings; a

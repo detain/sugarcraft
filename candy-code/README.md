@@ -198,24 +198,36 @@ checkout of this package instead: `composer install && ./bin/candy-code` —
 and inside the `sugarcraft` monorepo, run `php scripts/refresh-deps.php
 --mode=linked` first so the sibling libraries resolve from this tree.
 
-Requirements: PHP 8.3+ is a hard floor — nothing boots below it. No other
-row here is preflight-enforced: a missing piece degrades or fails at its own
-point of use, and `candy-code doctor` checks every row below (plus the
-provider, config, sandbox and session rows), so make it step zero whenever
-anything misbehaves. The extensions: `ext-sqlite3` (it backs the Team task
-list) and `pdo_sqlite` (the session store); `ext-mbstring` with `ext-intl`
-(text width and locale handling, used directly by the rendering stack);
-`ext-sodium` for Ed25519 signature checks — without it `self-update` and
-`tools/install.sh` refuse to swap or install a phar they cannot verify,
-which is the safe direction, not a breakage; and `ext-curl`, recommended
-rather than required — without it Guzzle's `Utils::chooseHandler()` routes
-the HTTP providers to the stream transport (where `allow_url_fopen` allows),
-and the `doctor` row answers `WARN`. `ext-pcntl` is strongly recommended:
-each turn runs in a forked child, and without it turns, parallel tool calls and
-sub-agents run in-process and the screen only updates when they finish.
-`candy-code serve` additionally needs `ext-pcntl`, `ext-posix` and `ext-ffi`,
-and serves the browser UI when `sugarcraft/candy-code-web` is installed
-beside it. On **Windows** the
+Requirements: PHP 8.3+ is a hard floor — nothing boots below it. Four
+extensions are declared in the package's `require` — `ext-sqlite3`,
+`pdo_sqlite`, `ext-mbstring` and `ext-intl` — so Composer's platform check
+enforces those at install time: a host missing one refuses the install
+before any candy-code code runs. Everything else in the table degrades or
+fails at its own point of use. `candy-code doctor` checks the PHP floor,
+the sqlite rows, mbstring and intl (each exercised, not name-checked),
+answers `WARN` for a missing `ext-curl` or `ext-sodium`, and names the
+`serve` trio under its server-mode row — but it has no probe for `git`,
+`ext-dom` or Universal Ctags: those three announce themselves at their own
+point of use, and the table's right-hand column says how. Make doctor step
+zero whenever anything misbehaves anyway; then read this table for what
+each piece carries (the day-one promises are cross-referenced where a row
+backs one):
+
+| Piece | Who needs it | Without it |
+|---|---|---|
+| `ext-sqlite3` (required) | the Team task board | board-backed team runs refuse |
+| `pdo_sqlite` (required) | the session store | sessions cannot be written, listed or read back — `--continue` and `/resume` have nothing to reopen |
+| `ext-mbstring` + `ext-intl` (required) | the rendering stack: text width, cluster walking, NFKC-normalised edit matching | no painted frame — the TUI counts and clips through them on every screen |
+| `git` on PATH | turn checkpoints (`/undo`, `/rewind`), the `RepoMap` tool and the prompt's symbol map, tracked project-memory notes, `isolation: worktree` sub-agent runs | each feature refuses at its own call site and names the reason (see [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)); the files your turns write are still written, there is just no step-back point for them |
+| `ext-dom` | WebFetch's HTML-to-Markdown conversion (its default format) | HTML bodies come back raw with a one-line note, still inside the output budget |
+| `ext-curl` (recommended) | the HTTP providers' transport | Guzzle's `Utils::chooseHandler()` routes the HTTP providers to the stream transport (where `allow_url_fopen` allows); the `doctor` row answers `WARN` |
+| `ext-sodium` (recommended) | Ed25519 signature checks in `self-update` and `tools/install.sh` | both refuse to swap or install a phar they cannot verify — the safe direction, not a breakage |
+| `ext-pcntl` (strongly recommended) | running each turn in a forked child | the TUI still runs: turns, parallel tool calls and sub-agents run in-process and the screen only updates when they finish; `doctor` surfaces this only through its server-mode `WARN` |
+| Universal Ctags (optional) | RepoMap coverage of non-PHP files | the map answers `PHP only (install Universal Ctags with +json to map other languages)` |
+| `ext-pcntl` + `ext-posix` + `ext-ffi` | `candy-code serve` only | serve refuses to start; the TUI and `-p` never ask for them |
+| `sugarcraft/candy-code-web` installed beside it | the browser UI | `serve` runs with no browser shell to serve |
+
+On **Windows** the
 chat/TUI is experimental: the interactive tools (Bash `interactive` and
 PtyRun) allocate a ConPTY pseudoconsole, which needs PHP 8.4+, Windows 10
 1809 or newer, `ext-ffi`, and a `bash.exe` on PATH or under the default Git
