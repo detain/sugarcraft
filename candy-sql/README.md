@@ -791,6 +791,18 @@ Pre-1.0 gaps to be aware of, mostly on the async (ReactPHP) query path:
   editor materialises every returned row into the in-process result table;
   only the schema-browse paths cap themselves (`PreviewQuery` appends
   `LIMIT 100`). Project what you need on huge tables.
+- **The EXPLAIN guard restricts shape, not side effects.** The Connections
+  MDL-tab guard (see *EXPLAIN safety guard* above) only runs `EXPLAIN` on
+  single `SELECT` statements, which stops accidental writes — but MySQL can
+  still const-evaluate what the statement contains: `EXPLAIN SELECT
+  SLEEP(60)` sleeps, a user-defined function in the projection runs, and
+  `INTO OUTFILE`/`INTO DUMPFILE` clauses reach the filesystem. Inspecting a
+  hostile thread's query text is not a neutral act.
+- **`--history=<path>` writes wherever you point it.** The flag accepts any
+  path and overwrites an existing file at that path; the owner-only modes
+  (dir 0700 / file 0600) apply to what the recorder creates, not to what it
+  replaces. The flag is a user-owned CLI choice — do not pass a path you do
+  not own the contents of.
 - **Reconnect automation is MySQL-only.** `ReconnectManager` folds the
   2002/2003/2013 error codes for MySQL sessions; a PostgreSQL or SQLite
   handle that drops stays dropped until the process relaunches.
