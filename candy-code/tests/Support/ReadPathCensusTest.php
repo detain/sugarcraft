@@ -391,10 +391,6 @@ final class ReadPathCensusTest extends TestCase
                 . 'regular file, and it is read, never minted (roadmap O-8a)',
         ],
         'Cli/NonInteractive.php|file_get_contents' => [
-            'CALLER_SUPPLIED — `--json-schema` operand (AUT-4): the operator\'s own argv names the '
-                . 'file; an inline `{` document never reaches this sink, a miss is refused before '
-                . 'reading (is_file + is_readable), and the bytes are only ever json_decode\'d into '
-                . 'a responseSchema shape — never executed, never written back',
             'CALLER_SUPPLIED — `--append-system-prompt` @operand (C-CTX-4.g): the operator\'s own '
                 . 'argv names the file, a miss is refused before reading (is_file + is_readable), '
                 . 'the bytes are bounded at the instruction-document ceiling before use, and they '
@@ -1367,6 +1363,12 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Support/ForkedChild.php|scandir' => [
             'PROCESS_DERIVED — closeInheritedServerFds() lists /proc/self/fd, this process\'s own descriptor table',
+        ],
+        'Support/JsonSchemaArgument.php|file_get_contents' => [
+            'CALLER_SUPPLIED — `--json-schema` operand (AUT-4): the operator\'s own argv names the '
+                . 'file; an inline `{` document never reaches this sink, a miss is refused before '
+                . 'reading (is_file + is_readable), and the bytes are only ever json_decode\'d into '
+                . 'a responseSchema shape — never executed, never written back',
         ],
         'Support/ProcessContainment.php|scandir' => [
             'PROCESS_DERIVED — closeOnExec() lists /proc/self/fd, this process\'s own descriptor table',
