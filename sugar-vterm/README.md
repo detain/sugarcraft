@@ -663,7 +663,7 @@ var_dump($vt->screen()->cell(0, 0)->grapheme);  // 'A'
 Mutations are queued on the handler's internal sync buffer and replayed
 atomically when the window closes. BCE erase (CSI ?12 h)
 and combining-char attachments are both eligible for queued writes.
-The queue is bounded: past 16 384 pending mutations a partial flush lands
+The queue is bounded: past 16384 pending mutations a partial flush lands
 to the grid, so an adversarial flood costs memory safety before it costs
 content — all-or-nothing is surrendered only under hostile pressure.
 
@@ -759,7 +759,7 @@ unbounded channel is capped and nothing leaves the grid unsanitised:
 - **Clipboard / focus events** — OSC 52 and DEC 1004 are *self-armed* by the
   remote program (no capability negotiation), so both logs are 1024-entry
   drop-oldest rings. `clipboardEvents()` and `focusEvents()` drain-on-read.
-- **DEC 2026 sync queue** — at most 16 384 pending cell writes; past that the
+- **DEC 2026 sync queue** — at most 16384 pending cell writes; past that the
   queue partially replays to the grid. Atomicity is surrendered only under
   adversarial pressure, never silently dropped.
 - **Scrollback** — bounded ring (default 1000 rows); `withScrollbackSize()`
