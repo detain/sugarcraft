@@ -105,9 +105,15 @@ the asset for verification.
 | `--passthrough`  | ✅ `auto`/`none` | The GNU Screen envelope **has** landed — sugar-image's `Passthrough\ScreenPassthrough` is applied automatically by detection. What refuses (exit 1, with a pointer mirroring `lang/en.php`) is *forcing* it: `tmux` and `screen` are not accepted values here; use `auto` or `none`. |
 | `--polite`       | ✅ no-op    | sugar-image has no async worker model; every render is already "polite". |
 | `--symbols`      | ✅ tag classes | chafa's `--symbols=` class grammar over the ported narrow corpus (the byte-frozen DEFAULT corpus is the 676-entry prefix — 1,251 effective glyphs / 1,260 entries count it fully expanded by `all`, with nine AMBIGUOUS-tagged misc-narrow glyphs BAD-vetoed even by `all`, as in the C build: ASCII, Latin, block table, legacy, misc, braille, sextant, octant) plus the opt-in wide kana tier (181 double-width glyphs, `wide`; rendered by the double-width wide-glyph engine). `[chars]` literal sets and codepoint ranges are not implemented. |
-| `--canvas` / `--work` | ✅ | the canvas-mode and work-factor dials, threaded onto whichever backend speaks them. |
+| `--scale`      | ✅          | chicle has a `scale` option (chicle-options.c); this CLI honors all six arms — `fit` `shrink` `fill` `stretch` `none` `crop` — mapped straight onto sugar-image's `Scale` enum. |
+| `--work`       | ✅          | chicle's integer work factor `1`–`9`, mapped onto the config float `(N−1)/8`, threaded onto whichever backend speaks it. |
 | `--probe=off`    | ⏭ refuses   | `Detect` exposes no env-only probe seam yet. |
 | everything else  | ⏭ refuses   | out of scope for a thin composition-only viewer (façade law): the capability stays in the libs. |
+
+`--canvas` deliberately does not sit in this map: chafa's CLI has no
+`--canvas` flag (its canvas mode is an internal, detected setting), so the
+spelling here is sugar-image's `CanvasMode` dial name surfaced for the text
+tiers — see Options above.
 
 ## Exit codes
 
