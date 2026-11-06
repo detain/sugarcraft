@@ -21,7 +21,7 @@
       <div class="feature"><strong>Alternate screen</strong><span>Runs the sugar-animation <code>Player</code> inside a sugar-core <code>Program</code> with <code>useAltScreen</code>, so your shell buffer is untouched when you quit.</span></div>
       <div class="feature"><strong>Live preset toggle</strong><span><code>d</code> swaps solid blocks ↔ the <code>` .:-=+*#%@`</code> density ramp without losing your frame position.</span></div>
       <div class="feature"><strong>Helpable</strong><span><code>--help</code> / <code>-h</code> print the localized usage line and exit 0; missing or unreadable files exit non-zero with the decoder's error on stderr.</span></div>
-      <div class="feature"><strong>Testable core</strong><span>All argument handling lives in <code>SugarCraft\GifView\Cli</code> — the bin is a two-line shim, and a closure seam lets tests drive the wired <code>Player</code> without a terminal.</span></div>
+      <div class="feature"><strong>Testable core</strong><span>All argument handling lives in <code>SugarCraft\GifView\Cli</code> — the bin is a thin shim (autoload probe with phar-identity resolution, locale wiring, then the <code>Cli::main()</code> hand-off), and a closure seam lets tests drive the wired <code>Player</code> without a terminal.</span></div>
       <div class="feature"><strong>Localized</strong><span>CLI usage and refusal messages ship in sixteen locales via the sugar-core i18n lookup.</span></div>
     </div>
 
