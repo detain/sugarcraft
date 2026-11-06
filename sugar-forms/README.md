@@ -244,7 +244,14 @@ second call replaces the first: `Text` holds one closure-only slot, and
 | `Email` | `Must be a valid email address` | Skipped when empty; uses `filter_var` |
 | `MinLength(int $min)` | `Must be at least N characters` | Uses `mb_strlen` (UTF-8 safe) |
 | `MaxLength(int $max)` | `Must be no more than N characters` | Uses `mb_strlen` (UTF-8 safe) |
-| `Pattern(string $pattern, string $message)` | `$message` | Skipped when empty; uses `preg_match` |
+| `Pattern(string $pattern, ?string $message = null, ?int $backtrackLimit = null, ?int $recursionLimit = null)` | `$message`, else the `validator.pattern` locale text | Skipped when empty; uses `preg_match` under a bounded PCRE budget (see below) |
+
+`Pattern` compiles once at construction — an invalid pattern throws
+`InvalidArgumentException` at the door. Every match then runs under a bounded
+PCRE budget (200,000 backtrack / 100,000 recursion steps by default, overridable
+per instance), applied via a scoped `ini_set` that is restored in a `finally`.
+A pattern that exhausts its budget is reported as a validation failure — the
+check fails closed, so a catastrophic pattern cannot hang the render loop.
 
 Custom validators implement `SugarCraft\Forms\Validator\Validator`:
 
