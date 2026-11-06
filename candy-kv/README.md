@@ -181,7 +181,11 @@ Expiry is stored as an integer epoch second, so a database written in one
 timezone reads with the same true instants everywhere. Pre-2026-10 databases
 stored offset-bearing ISO strings — candy-kv migrates those rows once, on
 open, preserving each row's exact instant. A row is live at `expires_at >=
-now`; `Entry::isExpired()` applies the same instant rule. Expired entries are
+now` — an integer-second comparison; `Entry::isExpired()` carries the same
+rule at sub-second precision, so at the exact expiry second SQL readers keep
+the row while `isExpired()` may already call it expired: a same-second
+boundary of at most one second, resolved in the user's favour on SQL reads.
+Expired entries are
 invisible to every reader (`get`, `list`, `delete`, `count`) but still occupy
 disk until you `candy-kv prune`, which deletes exactly the complement set.
 
