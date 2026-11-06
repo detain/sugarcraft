@@ -336,6 +336,33 @@ final class CliArgParserTest extends TestCase
         ArgParser::prune(['candy-kv', 'prune', 'oops'], 2);
     }
 
+    public function testNoArgumentsAnswersACleanCall(): void
+    {
+        ArgParser::noArguments(['candy-kv', 'list-dbs'], 2, 'list-dbs');
+        $this->expectNotToPerformAssertions();
+    }
+
+    public function testNoArgumentsRefusesSurplusPositionalNamingTheVerb(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('list-dbs takes no arguments, got "junk".');
+        ArgParser::noArguments(['candy-kv', 'list-dbs', 'junk'], 2, 'list-dbs');
+    }
+
+    public function testNoArgumentsRefusesFlagShapedTokens(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('--version takes no arguments, got "--frobnicate".');
+        ArgParser::noArguments(['candy-kv', '--version', '--frobnicate'], 2, '--version');
+    }
+
+    public function testNoArgumentsRefusesBeyondTheSentinel(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('takes no arguments, got "tail".');
+        ArgParser::noArguments(['candy-kv', 'list-dbs', '--', 'tail'], 2, 'list-dbs');
+    }
+
     public function testSentinelMakesFlagShapedTailPositional(): void
     {
         $result = ArgParser::set(['candy-kv', 'set', 'mykey', '--', '--ttl=60'], 2);

@@ -74,8 +74,17 @@ if ($argc < 2) {
 
 // Answered BEFORE the Store is constructed: construction is lazy (no mkdir,
 // no file opens until the first write), but a diagnostic flag must not need
-// a store object at all.
+// a store object at all. Its surplus tokens still face the parser: the
+// exit-code contract refuses unknown options and extra positionals with 2,
+// and --version is no exception. Caught locally so the refusal stays
+// store-free like the success path.
 if (($argv[1] ?? '') === '--version') {
+    try {
+        ArgParser::noArguments($argv, 2, '--version');
+    } catch (\InvalidArgumentException $e) {
+        fwrite(STDERR, 'candy-kv: ' . $e->getMessage() . "\n");
+        exit(2);
+    }
     fwrite(STDOUT, Version::line());
     exit(0);
 }
@@ -230,6 +239,9 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         break;
 
     case 'list-dbs':
+        // Takes no arguments: junk tokens must fold into the exit-2 usage
+        // contract, not print a happy list around them.
+        ArgParser::noArguments($argv, 2, 'list-dbs');
         foreach ($store->listDatabases() as $db) {
             echo "{$db}\n";
         }

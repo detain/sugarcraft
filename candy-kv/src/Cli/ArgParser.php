@@ -284,11 +284,30 @@ final class ArgParser
      */
     public static function prune(array $argv, int $offset): void
     {
+        self::noArguments($argv, $offset, 'prune');
+    }
+
+    /**
+     * Refuse every token following a verb that takes no options and no
+     * positionals (`prune`, `list-dbs`, the `--version` diagnostic).
+     *
+     * One shared walk for the whole no-argument family: the usage contract
+     * promises surplus positionals and unknown options fold into exit 2,
+     * so a verb that ignores the parser entirely breaks that promise by
+     * exiting 0 on garbage it never looked at.
+     *
+     * @param list<string> $argv    Full argv array.
+     * @param int          $offset  Offset where the verb's args begin.
+     * @param string       $command Verb named in the refusal.
+     * @throws \InvalidArgumentException naming the first extra token.
+     */
+    public static function noArguments(array $argv, int $offset, string $command): void
+    {
         [$tokens, $tail] = self::splitPositional($argv, $offset);
         if ($tokens !== [] || $tail !== []) {
             $extra = $tokens[0] ?? $tail[0];
             throw new \InvalidArgumentException(
-                'prune takes no arguments, got "' . $extra . '".'
+                $command . ' takes no arguments, got "' . $extra . '".'
             );
         }
     }

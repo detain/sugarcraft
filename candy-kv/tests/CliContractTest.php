@@ -69,6 +69,29 @@ final class CliContractTest extends TestCase
         $this->assertFalse(\is_dir($this->configHome . '/.config'));
     }
 
+    public function testVersionRefusesSurplusTokensAsUsageError(): void
+    {
+        $run = $this->runKv(['--version', '--frobnicate']);
+        $this->assertSame(2, $run['exit']);
+        $this->assertStringContainsString('--version takes no arguments, got "--frobnicate"', $run['stderr']);
+        $this->assertSame('', $run['stdout'], 'a refused --version must print no version line');
+        $this->assertFalse(\is_dir($this->configHome . '/.config'), 'the refusal stays store-free like the success path');
+    }
+
+    public function testListDbsRefusesSurplusTokensAsUsageError(): void
+    {
+        $run = $this->runKv(['list-dbs', 'junk', '--frobnicate']);
+        $this->assertSame(2, $run['exit']);
+        $this->assertStringContainsString('list-dbs takes no arguments, got "junk"', $run['stderr']);
+        $this->assertSame('', $run['stdout'], 'a refused list-dbs must not print a database list around the junk');
+    }
+
+    public function testListDbsStillAnswersCleanly(): void
+    {
+        $run = $this->runKv(['list-dbs']);
+        $this->assertSame(0, $run['exit']);
+    }
+
     public function testZeroTtlRefusedAndNothingStored(): void
     {
         $run = $this->runKv(['set', 'zero-ttl-k', 'v', '--ttl=0']);
