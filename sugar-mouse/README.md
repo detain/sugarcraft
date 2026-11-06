@@ -254,6 +254,13 @@ one, and the trackers need different reporting:
 | `1003` | all motion, button held or not | `ZoneHoverTracker` (enter/exit with no press at all) |
 | `1006` | SGR-style extended coordinates: reports arrive as `CSI < b ; x ; y M|m` — `M` press, `m` release, `b` the button code plus modifier bits | any of the above beyond row/col 223, where legacy X10 single-byte coordinates saturate |
 
+The decimal extended-coordinate siblings of `1006` — mode `1015` (urxvt
+style, `CSI b ; x ; y M`) and mode `1016` (xterm, the SGR report shape but
+carrying pixel coordinates) — are emitted and parsed by neither this lib
+nor sugar-core; decoding them is sugar-input's opt-in path. Swapping
+`1006` for either of those modes is a host-layer decision that changes
+what your input layer must speak, not just what the coordinates mean.
+
 `Manager::setMotionTracking(bool)` returns the all-motion byte string:
 `\x1b[?1003h\x1b[?1006h` on enable and the LIFO `\x1b[?1006l\x1b[?1003l` on
 disable — motion tracking plus the SGR coordinate companion, byte-identical
