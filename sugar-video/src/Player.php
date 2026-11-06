@@ -1367,6 +1367,16 @@ final class Player implements Model
      * means a Player reached a direct-render mode without going through a
      * factory that armed one — a programming error we surface loudly rather
      * than fataling on a null method call mid-frame.
+     *
+     * Disclosure on the other half of that build: in the Buffer-rung modes
+     * (Ascii, TrueColor, HalfBlock, QuarterBlock) view() never calls this
+     * method, so the factory-built AsciiRenderer, HalfBlockRenderer and
+     * QuarterBlockRenderer are never reached by the Player runtime either —
+     * the frames are composed inline in frameToBuffer() instead. Those three
+     * classes exist for direct factory use and tests; HalfBlockParityTest
+     * pins the inline path against its factory-built twin, and the rationale
+     * for keeping both (rather than consolidating) is spelled out on the
+     * inline HalfBlock branch inside frameToBuffer().
      */
     private function renderDirect(RgbFrame $frame): string
     {
