@@ -127,6 +127,13 @@ final class Probe
             return false;
         }
 
+        // Exec gate: a TERM infocmp would read as its own option (leading
+        // dash survives quoting) never reaches the binary — the chain
+        // answer stands. Shared predicate with AsyncProbe/TerminalProbe.
+        if (!InfocmpBinary::isSafeTermName($term)) {
+            return false;
+        }
+
         $key = strtolower($term);
         if (array_key_exists($key, self::$terminfoUpgradeMemo)) {
             return self::$terminfoUpgradeMemo[$key];

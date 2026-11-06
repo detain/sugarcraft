@@ -126,6 +126,12 @@ final class AsyncProbe
             return \React\Promise\resolve(self::settleFromChain($chain));
         }
 
+        // Exec gate (shared predicate with Probe/TerminalProbe): a TERM
+        // infocmp would parse as its own option never reaches the child.
+        if (!InfocmpBinary::isSafeTermName($term)) {
+            return \React\Promise\resolve(self::settleFromChain($chain));
+        }
+
         $deferred = new Deferred();
         $command = $infocmpPath . ' -1 ' . escapeshellarg($term);
 

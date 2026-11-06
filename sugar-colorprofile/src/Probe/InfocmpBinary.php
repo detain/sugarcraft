@@ -20,11 +20,24 @@ namespace SugarCraft\ColorProfile\Probe;
  * The result is memoized per process — the filesystem layout a probe sees
  * at first call is the layout every later call reports. {@see reset()}
  * clears the memo (test isolation only).
+ *
+ * The class also owns the name-shape gate every exec site consults before
+ * handing a TERM to the binary ({@see isSafeTermName()}): the question
+ * "may this TERM reach infocmp at all?" has exactly one answer, so it lives
+ * beside "where is infocmp?" rather than tripling across Probe, AsyncProbe
+ * and TerminalProbe.
  */
 final class InfocmpBinary
 {
     /** Candidate absolute paths, checked in order. */
     private const CANDIDATES = ['/usr/bin/infocmp', '/bin/infocmp'];
+
+    /**
+     * Name shape a TERM must have to reach infocmp: alnum first byte, then
+     * the characters real terminfo entries actually use (letters, digits,
+     * `.`, `_`, `+`, `-`).
+     */
+    private const TERM_NAME_PATTERN = '/^[A-Za-z0-9][A-Za-z0-9._+-]*$/';
 
     private static ?string $path = null;
 
@@ -51,6 +64,21 @@ final class InfocmpBinary
         self::$path = '';
 
         return null;
+    }
+
+    /**
+     * Is $term shaped like a terminal name rather than an infocmp option?
+     *
+     * `escapeshellarg()` quotes a leading-dash value but cannot make it a
+     * non-option to the program itself: `TERM=-D` measured as infocmp
+     * exiting 0 and printing its terminfo search path into the probe's
+     * stdout (verified for -e/-x/-0/-C/-F/-D). Gate every exec site on this
+     * predicate so a value beginning with `-` never reaches the binary;
+     * callers keep the env-anchored chain answer when it refuses.
+     */
+    public static function isSafeTermName(string $term): bool
+    {
+        return \preg_match(self::TERM_NAME_PATTERN, $term) === 1;
     }
 
     /**

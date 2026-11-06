@@ -219,6 +219,12 @@ class TerminalProbe
             return $caps;
         }
 
+        // Exec gate (shared predicate with Probe/AsyncProbe): a TERM infocmp
+        // would parse as its own option never reaches the binary.
+        if (!InfocmpBinary::isSafeTermName($term)) {
+            return $caps;
+        }
+
         // Exec the SAME absolute path the availability gate checked — a bare
         // relative `infocmp` would re-resolve through PATH at exec time and
         // let a planted PATH entry answer a question the gate said it could not.

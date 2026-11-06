@@ -164,7 +164,13 @@ the bytes are about to land.
 **Phase 2 (infocmp) — probe surfaces only:** `Probe`/`AsyncProbe` consult
 `infocmp -1` only when the ladder answers `Ansi` or `Ansi256`; `Tc`/`RGB`
 capability *names* (name-position match via `Probe\TerminfoParser`, never a
-whole-output regex) upgrade the answer to TrueColor. `TerminalProbe` runs its
+whole-output regex) upgrade the answer to TrueColor. Before any surface execs
+the binary, `TERM` must pass one shared name-shape predicate
+(`Probe\InfocmpBinary::isSafeTermName()`): alnum first byte, then only the
+characters real terminfo names use — so a value beginning with `-` never
+reaches infocmp (quoted, it is still an *option* to the program: `TERM=-D`
+measured as infocmp exiting 0 and printing its terminfo search path to the
+probe's stdout), and the env-anchored chain answer stands. `TerminalProbe` runs its
 terminfo phase more broadly: unless the env phase delivered a suppression
 decision (the `NoColor` capability — `NO_COLOR`, `CLICOLOR=0`, `TERM=dumb`) or
 the falsy-`FORCE_COLOR` `Ascii` floor, it queries the database even when the
