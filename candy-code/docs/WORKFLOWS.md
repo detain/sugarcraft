@@ -48,20 +48,27 @@ top-level code on every call. Before the process-wide memo landed,
 running the same workflow twice in one session re-declared its file-scope
 functions or classes and died with a `Cannot redeclare` **compile fatal** — the
 one failure mode `Chat`'s `catch (\Throwable)` around `/workflow run` cannot
-survive. `load()` now remembers each resolved path for the lifetime of the
-process — its return value, and, in a companion failure map, the `Throwable` a
-top-level throw raised — so a file compiles at most once whether it returned,
-returned garbage, or *threw*, and that door is closed on every shape. What
+survive. `load()` now remembers each resolved path — its return value, and, in
+a companion failure map, the `Throwable` a top-level throw raised — keyed with
+the bytes it was compiled from, so a file compiles at most once per set of
+bytes whether it returned, returned garbage, or *threw*, and that door is
+closed on every shape. What
 remains is ordinary and catchable: a file that does not *parse* raises a
 `ParseError` the command turns into a transcript line, and nothing is
 remembered — a file that failed to compile declared nothing, so there is
-nothing to redeclare and a typo heals on the next attempt. Every other broken
+nothing to redeclare and a typo heals on the next attempt. An unchanged broken
 file re-reports from memory on each later attempt: a file that returns
 something other than a `Workflow` repeats the same `WorkflowLoadException`
 from its cached answer, and a file that compiled and then threw repeats the
 original exception without the file ever being touched again (before the
-failure map, editing and re-running that second shape fatalled the CLI).
-Repairing either kind of broken file takes a restart, not a re-run. The YAML
+failure map, editing and re-running that second shape fatalled the CLI). Once
+the bytes *change*, the remembered answer is stale, and the process decides by
+shape: an edited file that declares **nothing** at file scope is re-required —
+nothing can redeclare it — so the edit or the repair lands in-process, no
+restart needed; an edited file that *does* declare file-scope symbols cannot
+be re-required without risking the uncatchable redeclare fatal, and serving
+the known-stale answer would silently run bytes you already replaced, so that
+one refuses loudly, naming the file and the restart that settles it. The YAML
 path, by contrast, re-reads its file on every run and reports every malformed
 shape as a `WorkflowLoadException` that becomes one transcript line.
 

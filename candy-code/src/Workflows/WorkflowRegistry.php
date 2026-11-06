@@ -82,9 +82,14 @@ final class WorkflowRegistry
      * a workflow file that hands back a non-Workflow value is cached too, so
      * the second attempt repeats the {@see WorkflowLoadException} instead of
      * re-executing — and possibly fataling on redeclaration — the broken file.
-     * The cost: within one process, editing such a file does not take effect
-     * until restart. A file that does not PARSE caches nothing (the
-     * {@see \ParseError} escapes before the write), so a typo heals on retry.
+     * Each entry rides the bytes it was compiled from (C16): when the file on
+     * disk has changed, an edit that DECLARES nothing at file scope is
+     * re-required and this answer replaced — the edit lands in-process —
+     * while an edit beside file-scope declarations is refused loudly, naming
+     * the restart that settles it, because re-requiring it is exactly the
+     * redeclare fatal this memo exists to close. A file that does not PARSE
+     * caches nothing (the {@see \ParseError} escapes before the write), so a
+     * typo heals on retry.
      *
      * @var array<string, mixed>
      */
@@ -99,9 +104,11 @@ final class WorkflowRegistry
      * uncatchable `Cannot redeclare` compile fatal, the very door the result
      * memo exists to close. Such a path is therefore poisoned: the original
      * Throwable is remembered and every later load re-throws IT without
-     * touching the file again. The user sees the same refusal twice, and a
-     * broken-then-edited file of this shape needs a restart, exactly like the
-     * non-Workflow-return case above.
+     * touching the file again — until the bytes change (C16): an edit to a
+     * file that declares NOTHING at file scope re-requires and drops the
+     * poison along with the stale bytes, while an edit beside file-scope
+     * declarations answers a loud restart-naming {@see WorkflowLoadException}
+     * instead — exactly like the non-Workflow-return case above.
      *
      * A {@see \ParseError} is exempt by design: a file that failed to compile
      * declared nothing, so there is nothing to redeclare and a typo must heal
@@ -113,6 +120,17 @@ final class WorkflowRegistry
      * @var array<string, \Throwable>
      */
     private static array $phpWorkflowFailures = [];
+
+    /**
+     * The bytes each {@see self::$phpWorkflows}/{@see self::$phpWorkflowFailures}
+     * entry was compiled from (C16), keyed like both maps. A null digest means
+     * md5_file could not read the file when the entry was stored: the memo
+     * then keeps its old path-only law, because re-requiring bytes we cannot
+     * even hash is the one risk this compile memo exists to control.
+     *
+     * @var array<string, string|null>
+     */
+    private static array $phpWorkflowHashes = [];
 
     /**
      * @param string      $workflowsPath        The user's own workflow directory. Both
@@ -355,9 +373,10 @@ final class WorkflowRegistry
      * uncatchable `Cannot redeclare` compile fatal no `catch (\Throwable)`
      * around `/workflow run` survives. That second run is exactly what
      * {@see self::$phpWorkflows} and its failure-side companion
-     * {@see self::$phpWorkflowFailures} together prevent: each path compiles
-     * at most once per process — whether it returned, returned garbage, or
-     * threw (ISS-045). The YAML path, by contrast, reports every
+     * {@see self::$phpWorkflowFailures} together prevent: each set of file
+     * bytes compiles at most once per process — whether it returned, returned
+     * garbage, or threw (ISS-045) — while an edit to bytes that declare nothing
+     * at file scope re-requires in-process (C16). The YAML path, by contrast, reports every
      * malformed shape as a {@see WorkflowLoadException} the command turns
      * into one transcript line.
      *
@@ -432,19 +451,57 @@ final class WorkflowRegistry
             // file to PHP's compiler, and the redeclaration this cache prevents
             // (ISS-045) is a property of the file, not of the route taken to it.
             $cacheKey = \realpath($phpPath) ?: $phpPath;
+            // The bytes this decision is about; null keeps the old path-only
+            // law (serve whatever is memoized), per $phpWorkflowHashes.
+            $digest = self::contentDigest($phpPath);
             // A file that compiled and then THREW has still installed its
-            // top-level declarations, so it must never be re-required: the
-            // remembered Throwable answers here instead, making the two
-            // throw-shapes (cached failure, cached garbage result) one door.
-            if (isset(self::$phpWorkflowFailures[$cacheKey])) {
-                throw self::$phpWorkflowFailures[$cacheKey];
-            }
+            // top-level declarations, so it must never be re-required on the
+            // SAME bytes: the remembered Throwable answers instead, making the
+            // two throw-shapes (cached failure, cached garbage result) one
+            // door. An EDITED poison is the different question (C16) below.
+            $poisoned = isset(self::$phpWorkflowFailures[$cacheKey]);
             // array_key_exists, NOT `??`: a file returning null is a cached
             // ANSWER (it fails the instanceof check below), and a null-coalesce
             // would read it as a miss and re-execute the very file the cache
             // exists to run once.
+            $memoized = \array_key_exists($cacheKey, self::$phpWorkflows);
+
+            // C16: a remembered answer goes stale when the bytes change. An
+            // edited file that DECLARES nothing at file scope is safe to
+            // re-require — nothing exists to redeclare — so the stale entry
+            // (or poison) is dropped and the fresh require below replaces it;
+            // the edit lands in-process instead of waiting for a restart. An
+            // edited file that DOES declare cannot be re-required (uncatchable
+            // redeclare fatal) and serving the known-stale answer would
+            // silently run bytes the user already replaced; both are wrong, so
+            // this refuses loudly and names the restart that settles it.
+            if (($poisoned || $memoized) && $digest !== null) {
+                $stored = self::$phpWorkflowHashes[$cacheKey] ?? null;
+                if ($stored !== null && $stored !== $digest) {
+                    if (self::sourceDeclaresFileScopeSymbols($phpPath)) {
+                        throw new WorkflowLoadException(
+                            "Workflow file {$phpPath} was edited after it was loaded in this process, and its "
+                            . 'new bytes declare file-scope symbols; re-requiring them could raise the '
+                            . 'uncatchable redeclare fatal, and the cached answer is known-stale — the edit '
+                            . 'needs a restart to take effect.'
+                        );
+                    }
+                    unset(
+                        self::$phpWorkflows[$cacheKey],
+                        self::$phpWorkflowFailures[$cacheKey],
+                        self::$phpWorkflowHashes[$cacheKey]
+                    );
+                    $poisoned = false;
+                    $memoized = false;
+                }
+            }
+
+            if ($poisoned) {
+                throw self::$phpWorkflowFailures[$cacheKey];
+            }
+
             try {
-                $workflow = \array_key_exists($cacheKey, self::$phpWorkflows)
+                $workflow = $memoized
                     ? self::$phpWorkflows[$cacheKey]
                     : require $phpPath;
             } catch (\ParseError $error) {
@@ -455,11 +512,14 @@ final class WorkflowRegistry
             } catch (\Throwable $error) {
                 // Compiled, executed, exploded: poison the path with the
                 // ORIGINAL Throwable so attempt two re-reports this exact
-                // refusal without touching the file again.
+                // refusal without touching the same bytes again — and record
+                // the bytes that installed it, so a FIX can re-require (C16).
                 self::$phpWorkflowFailures[$cacheKey] = $error;
+                self::$phpWorkflowHashes[$cacheKey] = $digest;
                 throw $error;
             }
             self::$phpWorkflows[$cacheKey] = $workflow;
+            self::$phpWorkflowHashes[$cacheKey] = $digest;
 
             if (!$workflow instanceof Workflow) {
                 throw new WorkflowLoadException(
@@ -2235,6 +2295,103 @@ final class WorkflowRegistry
         }
 
         return $names;
+    }
+
+    /**
+     * The bytes a .php workflow memo was compiled from (C16). Null when
+     * md5_file cannot read the file — the memo then keeps its path-only law.
+     */
+    private static function contentDigest(string $path): ?string
+    {
+        $digest = @md5_file($path);
+
+        return \is_string($digest) ? $digest : null;
+    }
+
+    /**
+     * Whether the file at $path declares anything a second compile could
+     * redeclare (C16) — the shape whose blind re-require raises the
+     * uncatchable `Cannot redeclare` compile fatal.
+     *
+     * The scan is deliberately conservative toward the loud refusal: a false
+     * refusal costs one restart, a false pass costs the whole process. A
+     * namespace anywhere (braced namespace blocks hide file-scope declarations
+     * from a depth walk), or a file-scope named function, class, interface,
+     * trait, enum or constant, accuses. Closures (`function (`), arrow
+     * functions (T_FN is its own token), anonymous classes (T_ANON_CLASS is
+     * its own token) and import lines (a keyword preceded by T_USE aliases,
+     * never declares) do not. Unreadable source accuses.
+     */
+    private static function sourceDeclaresFileScopeSymbols(string $path): bool
+    {
+        $source = @file_get_contents($path);
+        if (!\is_string($source)) {
+            return true;
+        }
+
+        $tokens = \PhpToken::tokenize($source);
+        $count = \count($tokens);
+        $depth = 0;
+        $previous = -1;
+        $skipIds = [\T_WHITESPACE => true, \T_COMMENT => true, \T_DOC_COMMENT => true];
+
+        for ($i = 0; $i < $count; ++$i) {
+            $id = $tokens[$i]->id;
+            if (isset($skipIds[$id])) {
+                continue;
+            }
+
+            if ($id === \T_NAMESPACE) {
+                return true;
+            }
+            // Braces lex as plain text tokens (PHP publishes no
+            // T_OPEN_CURLY_BRACE constant), so depth rides the characters.
+            $text = $tokens[$i]->text;
+            if ($text === '{') {
+                ++$depth;
+                $previous = -1;
+                continue;
+            }
+            if ($text === '}') {
+                --$depth;
+                $previous = -1;
+                continue;
+            }
+            if ($depth !== 0) {
+                continue;
+            }
+
+            if ($id === \T_FUNCTION) {
+                if ($previous !== \T_USE) {
+                    // A named function accuses; a closure does not. Scan past
+                    // by-ref '&' — the first real character decides.
+                    for ($j = $i + 1; $j < $count; ++$j) {
+                        $nid = $tokens[$j]->id;
+                        if (isset($skipIds[$nid])) {
+                            continue;
+                        }
+                        if ($nid === \T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG
+                            || $nid === \T_AMPERSAND_NOT_FOLLOWED_BY_VAR_OR_VARARG
+                        ) {
+                            continue;
+                        }
+                        $text = $tokens[$j]->text;
+                        if ($text === '(') {
+                            break;
+                        }
+                        if (\preg_match('/^[A-Za-z_\\\\]/', $text) === 1) {
+                            return true;
+                        }
+                        break;
+                    }
+                }
+            } elseif (\in_array($id, [\T_CLASS, \T_INTERFACE, \T_TRAIT, \T_ENUM, \T_CONST], true) && $previous !== \T_USE) {
+                return true;
+            }
+            $previous = $id;
+        }
+
+        return false;
     }
 
     /**
