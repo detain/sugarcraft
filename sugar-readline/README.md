@@ -14,10 +14,10 @@ sugar-readline — an interactive line-editing prompt library for terminal UIs o
 
 ## Features
 
-- **TextPrompt** — single-line input with validation, auto-completion, hidden/password mode, char limit, default value, history navigation, and an optional display-width viewport
+- **TextPrompt** — single-line input with validation, autocomplete, hidden/password mode, char limit, default value, history navigation, and an optional display-width viewport
 - **SelectionPrompt** — filtered list with type-to-filter, cursor navigation and pagination
 - **MultiSelectPrompt** — filtered multi-choice with min/max enforcement and FIFO rollover at the cap
-- **ConfirmationPrompt** — yes/no with customizable labels: choose with arrows/Tab/Space, commit with Enter
+- **ConfirmationPrompt** — Yes/No with customizable labels: choose with arrows/Tab/Space, commit with Enter
 - **TextareaPrompt** — multi-line text input with line/column cursor and optional max-line cap; Enter submits, Shift+Enter and Ctrl+J break lines
 - **Immutable state** — every input-handling method returns a new instance; `view()` returns the ANSI string while each prompt exposes its own data accessor (`value()` on TextPrompt/TextareaPrompt, `selectedValue()` on SelectionPrompt, `selectedValues()` on MultiSelectPrompt, `result()` on ConfirmationPrompt), and the `Readline` pump owns all terminal writes
 - **Vim keybindings** — vi-mode (Insert/Normal, plus a motion-only Visual scaffold); `ViMode` delegates its key-to-operation mapping to `VimKeyHandler` in `sugar-forms` — the same handler that the `sugar-forms` widgets drive and whose widgets `sugar-widgets` re-exports through its `class_alias` facade; new bindings in the `VimAction` enum land in `sugar-forms` and benefit all three libs. Includes text objects: `ci"`, `di(`, `da{`, `yiw` and friends, with a working unnamed register (`x`/`dd`/`yy`/text-object yanks feed `p`)
@@ -258,7 +258,7 @@ sequence a terminal can send.
 - `Key::Home` / `Key::End` — jump within the current line / list; also Ctrl+A / Ctrl+E
 - `Key::Enter` — submit text or select current choice (in the textarea, Shift+Enter and Ctrl+J break a line instead)
 - `Key::Space` — a second Enter in SelectionPrompt (submits the row under the cursor); toggles the mark in MultiSelectPrompt; toggles Yes/No in ConfirmationPrompt; inserts a literal space in text inputs
-- `Key::Tab` — auto-complete or toggle confirmation value; pressing Tab again cycles the matches (first Tab extends to their longest common prefix)
+- `Key::Tab` — autocomplete or toggle confirmation value; pressing Tab again cycles the matches (first Tab extends to their longest common prefix)
 - `Key::Backspace` / `Key::Delete` — delete characters; Ctrl+D deletes under the cursor and, on an empty buffer, aborts (like GNU `delete-char-or-eof`)
 - `Key::CtrlU` / `Key::CtrlK` — delete to start / end of line; Ctrl+W deletes the previous word
 - `Key::CtrlR` / `Key::CtrlS` — reverse / forward incremental history search
