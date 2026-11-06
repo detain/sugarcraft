@@ -34,6 +34,7 @@ pane build one on top of `Store::list()`.
 - **Levenshtein suggestions** — a key miss prints the closest live key (within half the query's character length) to stderr
 - **Import/Export** — JSON and YAML (`yml` accepted), fail-fast: a bad document or an unround-trippable value refuses before writing anything
 - **Atomic transactions** — `transaction()` wraps a callback in BEGIN IMMEDIATE/COMMIT/ROLLBACK
+- **Bounded lock waits** — every SQLite connection opens with a 5-second busy timeout (`Database.php:67`), so two candy-kv processes racing on one database queue on each other's write locks instead of failing instantly with SQLITE_BUSY
 - **Plain text output** — no color, no escapes ever, script-friendly by contract
 
 ## Install
