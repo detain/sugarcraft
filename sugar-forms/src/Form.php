@@ -1131,8 +1131,10 @@ final class Form implements Model
 
     /**
      * Currently-applicable key bindings rendered as `[label, keys]` rows
-     * suitable for a status / help bar. The bindings reflect form-level
-     * navigation (Tab, Shift-Tab, Enter, Esc/Ctrl-C) plus any extras
+     * suitable for a status / help bar. The four navigation rows are
+     * derived live from {@see self::activeKeyMap()} (m21) — the labels follow
+     * whatever map the form actually uses, including custom bindings —
+     * plus any extras
      * the focused field exposes via {@see Field::keyBindings()} when
      * implemented (currently only used by the standard navigation set
      * since per-field bindings vary). Mirrors the surface of huh's
@@ -1142,11 +1144,12 @@ final class Form implements Model
      */
     public function keyBinds(): array
     {
+        $keyMap = $this->activeKeyMap();
         $binds = [
-            ['next',   'tab / ↓'],
-            ['prev',   'shift+tab / ↑'],
-            ['submit', 'enter'],
-            ['quit',   'esc / ctrl+c'],
+            ['next',   implode(' / ', $keyMap->labelsFor('next'))],
+            ['prev',   implode(' / ', $keyMap->labelsFor('prev'))],
+            ['submit', implode(' / ', $keyMap->labelsFor('submit'))],
+            ['quit',   implode(' / ', $keyMap->labelsFor('abort'))],
         ];
         if (count($this->groups) > 1) {
             $binds[] = ['next page', 'tab past last field'];

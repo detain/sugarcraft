@@ -121,9 +121,13 @@ $form = Form::new(
 | `RadioPills`  | Horizontal pill row, single choice by arrows or mouse; windows the roster around the selection when a width is set | `withOptions(...)`, `withValue(label)`, `withTitle`, `withDescription`, `withTitleFunc` / `withDescriptionFunc`, `withWidth` |
 
 All fields share a common navigation contract: `Tab` / `↓` advances,
-`Shift+Tab` / `↑` retreats, `Enter` on the last interactive field submits,
-`Esc` / `Ctrl+C` aborts. Skippable fields (e.g. plain `Note`s) are passed
-over silently.
+`Shift+Tab` / `↑` retreats (Shift+Tab arrives on the wire as CSI `Z`,
+decoded to `Tab` with `shift: true`; `Alt+Tab` remains an accepted
+alias), `Enter` on the last interactive field submits, `Esc` / `Ctrl+C`
+aborts. Skippable fields (e.g. plain `Note`s) are passed over silently.
+The bindings live in a {@see \SugarCraft\Forms\KeyMap} — pass your own
+via `Form::withKeyMap()` and {@see \SugarCraft\Forms\Form::keyBinds()}
+renders the active set, never the defaults.
 
 ### Forms and groups
 
