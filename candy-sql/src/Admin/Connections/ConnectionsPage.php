@@ -524,7 +524,7 @@ final class ConnectionsPage extends PageBase implements RowNavigable
     private function renderKeyHints(): string
     {
         return Style::new()->foreground(Color::hex('#6b7280'))->render(
-            'j/k:nav  Tab:tabs  K:kill  X:kill-query  f:filter  r:refresh',
+            'j/k:nav  K:kill  X:kill-query  f:filter  r:refresh',
         );
     }
 

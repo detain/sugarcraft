@@ -232,6 +232,86 @@ final class PerfSchemaPageTest extends TestCase
         $this->assertSame('easy_setup', $result[0]->activeTab());
     }
 
+    // ─── Review M2 re-key: [ ] . Easy Setup actions, h/l tab cycling ───
+
+    private function charKey(string $ch): \SugarCraft\Core\Msg\KeyMsg
+    {
+        return new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, $ch, false, false, false);
+    }
+
+    /**
+     * The privilege probe re-executes on every loadData(); filter it out so the
+     * exec-growth legs assert the action statements themselves.
+     */
+    private function execLogSince(int $offset): array
+    {
+        return array_values(array_filter(
+            array_slice($this->db->execLog(), $offset),
+            static fn (string $sql): bool => !str_contains($sql, 'WHERE 1=0')
+        ));
+    }
+
+    public function testEasySetupActionsRunOnTheBracketPair(): void
+    {
+        $this->setupFakeDatabaseWithInstruments();
+        $page = new PerfSchemaPage($this->context);
+        $expected = [
+            '[' => \SugarCraft\Sql\Admin\PerfSchema\EasySetup::new()->enableStatements(),
+            ']' => \SugarCraft\Sql\Admin\PerfSchema\EasySetup::new()->disableStatements(),
+            '.' => \SugarCraft\Sql\Admin\PerfSchema\EasySetup::new()->resetToDefaultStatements(),
+        ];
+        foreach ($expected as $key => $statements) {
+            $before = count($this->db->execLog());
+            [$next] = $page->update($this->charKey($key));
+            $this->assertNotSame($page, $next, "key {$key} must return a reloaded clone");
+            $this->assertSame($statements, $this->execLogSince($before), "key {$key} must fire exactly its preset statements");
+            $page = $next;
+        }
+    }
+
+    public function testBracketKeysAreInertOffTheEasySetupTab(): void
+    {
+        $this->setupFakeDatabaseWithInstruments();
+        $page = (new PerfSchemaPage($this->context))->withTab(PerfSchemaPage::TAB_INSTRUMENTS);
+        $before = count($this->db->execLog());
+        foreach (['[', ']', '.'] as $key) {
+            [$same] = $page->update($this->charKey($key));
+            $this->assertSame($page, $same, "key {$key} must not touch the page on the Instruments tab");
+        }
+        $this->assertSame([], $this->execLogSince($before));
+    }
+
+    public function testEasySetupKeysRefuseInReadOnlyMode(): void
+    {
+        $this->setupFakeDatabaseWithInstruments();
+        $this->db->setExecThrows(new \PDOException('denied'));
+        $page = new PerfSchemaPage($this->context);
+        [$page] = $page->update($this->charKey('n')); // first update triggers loadData: probe throws -> read-only
+        $this->assertTrue($page->isReadOnly());
+        $before = count($this->db->execLog());
+        foreach (['[', ']', '.'] as $key) {
+            [$same] = $page->update($this->charKey($key));
+            $this->assertSame($page, $same);
+        }
+        $this->assertSame([], $this->execLogSince($before));
+        $this->db->setExecThrows(null);
+    }
+
+    public function testTabCyclingRunsOnHandLAndArrows(): void
+    {
+        $this->setupFakeDatabaseWithInstruments();
+        $page = new PerfSchemaPage($this->context);
+        [$next] = $page->update($this->charKey('l'));
+        $this->assertSame(PerfSchemaPage::TAB_INSTRUMENTS, $next->activeTab());
+        [$back] = $next->update($this->charKey('h'));
+        $this->assertSame(PerfSchemaPage::TAB_EASY_SETUP, $back->activeTab());
+
+        [$right] = $page->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Right, '', false, false, false));
+        $this->assertSame(PerfSchemaPage::TAB_INSTRUMENTS, $right->activeTab());
+        [$left] = $right->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Left, '', false, false, false));
+        $this->assertSame(PerfSchemaPage::TAB_EASY_SETUP, $left->activeTab());
+    }
+
     public function testUpdateReturnsWithQuitForQKey(): void
     {
         $page = new PerfSchemaPage($this->context);

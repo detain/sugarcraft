@@ -52,16 +52,18 @@ use SugarCraft\Sql\CellValue;
  *
  * **Read-only mode**: Detected by `hasUpdatePrivilege()` — tests with a no-op
  * `UPDATE ... SET ENABLED=ENABLED WHERE 1=0`. When true, all write actions
- * (Easy Setup [1/2/3] and inline toggles) are disabled. Requires `PROCESS`
+ * (Easy Setup `[`/`]`/`.` and inline toggles) are disabled. Requires `PROCESS`
  * privilege on MySQL.
  *
  * Keyboard shortcuts:
  *   [j/k] or [↑/↓] - Navigate items
+ *   [h/l] or [←/→] - Previous/next tab (the in-app tab switcher)
  *   [Space] or [Enter] - Toggle/select item
- *   [Tab] - Switch tabs
+ *   [Tab] - Switch tabs (standalone only: App consumes Tab for the pane cycle)
+ *   [`[` / `]` / `.`] - Easy Setup actions: enable full / disable / reset
  *   [c] - Stage commit for pending changes (when dirty); [y] fires it
  *   [r] - Revert pending changes
- *   [q] - Quit to previous view
+ *   [q] - Return to the Tables browser (App intercepts q on the admin pane)
  *
  * @see Mirrors mysql-workbench wb_admin_performance_schema
  */
@@ -258,6 +260,17 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             return [$this->withPrevTab(), null];
         }
 
+        // h/l or Left/Right arrows cycle tabs. These are the live in-app
+        // tab switchers: App delegates unclaimed chars (and the arrows) to
+        // row-navigable pages, so unlike the Tab pair above they are
+        // reachable while the app runs (review M2 re-key).
+        if ($ch === 'l' || $type === KeyType::Right) {
+            return [$this->withNextTab(), null];
+        }
+        if ($ch === 'h' || $type === KeyType::Left) {
+            return [$this->withPrevTab(), null];
+        }
+
         // j or Down navigates down
         if ($ch === 'j' || $type === KeyType::Down) {
             return [$this->withNavigateDown(), null];
@@ -283,9 +296,21 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
             return [$this->withRevert(), null];
         }
 
-        // Number keys for Easy Setup tab
-        if (($ch === '1' || $ch === '2' || $ch === '3') && $this->activeTab === self::TAB_EASY_SETUP) {
-            return $this->handleEasySetupAction((int) $ch);
+        // Easy Setup actions on the [ ] . bracket pair — the Reports-page
+        // convention. They replaced the digits 1/2/3, which App always
+        // intercepts as the admin pane picker before any page sees them
+        // (review M2); the bracket keys are otherwise unused here, so the
+        // actions are genuinely armed in the live app on the Easy Setup tab.
+        if ($this->activeTab === self::TAB_EASY_SETUP) {
+            if ($ch === '[') {
+                return $this->handleEasySetupAction(1);
+            }
+            if ($ch === ']') {
+                return $this->handleEasySetupAction(2);
+            }
+            if ($ch === '.') {
+                return $this->handleEasySetupAction(3);
+            }
         }
 
         // q quits (handled by parent)
@@ -501,7 +526,8 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
     }
 
     /**
-     * Handle Easy Setup tab actions (1/2/3 keys).
+     * Handle an Easy Setup action: 1 = enable full, 2 = disable,
+     * 3 = reset to defaults. Armed by the [ ] . keys on the Easy Setup tab.
      */
     private function handleEasySetupAction(int $action): array
     {
@@ -1073,9 +1099,7 @@ final class PerfSchemaPage extends PageBase implements RowNavigable
         if ($this->readOnlyMode) {
             $lines[] = $muted->render('  (Read-only mode - no privileges to modify)');
         } else {
-            $lines[] = '  [1] Enable Full PS';
-            $lines[] = '  [2] Disable PS';
-            $lines[] = '  [3] Reset to Defaults';
+            $lines[] = '  [: Enable Full PS   ]: Disable PS   .: Reset to Defaults';
         }
 
         $lines[] = '';

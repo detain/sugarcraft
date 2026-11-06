@@ -108,8 +108,8 @@ closing the app drops them. Likewise `[x]` on the Reports page regenerates
 it never touches the filesystem — writing `.csv` files is the separate
 `Db\Export\CsvExporter` API described under Exporters.
 
-The admin page's own `Tab`/`[1]`/`[2]`/`[3]` detail-tab handlers exist in the page code but are unreachable during normal app operation:
-`Tab` cycles the focus pane and the digits select admin pages, both at the app level — the pages' private handlers for those keys are therefore never reached except while a modal dialog is open, where App hands every key to the page instead (the dialog consumes or cancels it) rather than cycling panes or switching pages. Outside that window they are kept only for standalone (non-app) use.
+The admin pages' own `Tab`/`Shift+Tab` tab-cycling handlers (Variables, Connections detail tabs, PerfSchema) and ConnectionsPage's `[1]`/`[2]`/`[3]` detail-tab shortcuts exist in the page code but are unreachable during normal app operation:
+`Tab` cycles the focus pane and the digits select admin pages, both at the app level — the pages' private handlers for those keys are therefore never reached except while a modal dialog is open, where App hands every key to the page instead (the dialog consumes or cancels it) rather than cycling panes or switching pages. Outside that window they are kept only for standalone (non-app) use. The live in-app substitutes are page-local keys App delegates: `h`/`l` (or the arrows) cycle PerfSchema tabs, and the PerfSchema Easy Setup actions run on the `[` / `]` / `.` bracket pair — the same convention the Reports page uses for its own navigation. Connections detail tabs currently have no in-app chord; open the process row's details with `K`/`X`-adjacent selection keys as rendered.
 
 > **Key routing** — `App::update()` consumes, in order: `Ctrl+C` (unconditional quit); on the Admin pane, every key goes to the page while it is modal (`PageBase::isModal()`: the variable-editor dialog, the GTID dialog, a pending kill confirmation, or a staged PerfSchema commit) and `Esc` goes to the page whenever it is present; `q`/`Esc` quit **only from the Tables and Rows browser panes** (in the Query pane `Esc` no longer discards a drafted query); `Tab` cycles the focus pane. In the Query pane, `Ctrl+R`/`Ctrl+E` run the query (both also accept `Ctrl+Enter`) and every other key edits the buffer — except destructive statements (`DROP`/`TRUNCATE`/`DELETE`/`ALTER`/`RENAME`/`GRANT`/`REVOKE`), whose first press only arms a warning; a second consecutive run of the byte-identical SQL confirms, and any edit or other query disarms. On the Admin pane, `App::handleAdminKey()` then intercepts the page picker (`1`–`{n}`, `p`, `r`, `q`→return to Tables); `r` additionally forwards to the active page after dropping the shared `AdminQueryCache`. Pages listed in `RowNavigable` (Variables, Connections, Reports, PerfSchema, Debug) keep their own `j`/`k`/`↑`/`↓` row cursors; on non-row-navigable pages (ServerStatus, Dashboard) those same keys walk the sidebar. All remaining keys are delegated to the active page's `update()` method.
 
@@ -341,7 +341,7 @@ Available providers:
 - **`MysqlExplainProvider`** — `EXPLAIN` formatted rows with tag/parent/detail/indent
 - **`PostgresExplainProvider`** — `EXPLAIN (ANALYZE, FORMAT JSON)`, parses JSON structure for tree hierarchy
 
-> **EXPLAIN safety guard** — `ConnectionDetailTabs::explain()` (Connections page, MDL detail tab, key `[3]`) will not run `EXPLAIN` on a thread's query unless it is a single `SELECT` statement. Multi-statement queries (containing `;`) and any non-SELECT statement (INSERT/UPDATE/DELETE/DROP/etc.) are rejected before execution. This prevents accidental execution of write/cleanup statements when inspecting a thread's current query. Returns `null` when the query is ineligible or explain fails.
+> **EXPLAIN safety guard** — `ConnectionDetailTabs::explain()` (Connections page, MDL detail tab — the `[3]` shortcut that opens it is standalone-only; see the unreachable-handler note above) will not run `EXPLAIN` on a thread's query unless it is a single `SELECT` statement. Multi-statement queries (containing `;`) and any non-SELECT statement (INSERT/UPDATE/DELETE/DROP/etc.) are rejected before execution. This prevents accidental execution of write/cleanup statements when inspecting a thread's current query. Returns `null` when the query is ineligible or explain fails.
 
 ## Admin providers
 
@@ -494,13 +494,13 @@ The detector is wired from `App::adminPage()` into the `PerfSchemaPage` construc
 | Key | Action |
 |-----|--------|
 | `j/k` or `↑/↓` | Navigate rows up/down |
+| `h/l` or `←/→` | Previous/next tab |
 | `Space` or `Enter` | Toggle/select item (Instruments/Consumers/Actors/Objects tabs) |
-| `Tab` | Switch tabs |
-| `Shift+Tab` | Previous tab |
+| `[` / `]` / `.` | Easy Setup actions (enable full / disable / reset to defaults) — on the Easy Setup tab |
+| `Tab` / `Shift+Tab` | Next/previous tab — standalone only: `App` consumes `Tab` for the pane cycle |
 | `c` | Stage commit of pending changes (when dirty) — `y` fires the prepared statements, any other key cancels |
-| `r` | Revert pending changes (when dirty) |
-| `1/2/3` | Easy Setup actions (enable full / disable / reset to defaults) |
-| `q` | Return to the Tables browser |
+| `r` | Revert pending changes (when dirty) — `App` additionally drops the shared `AdminQueryCache` and re-fetches |
+| `q` | Return to the Tables browser (`App` intercepts `q` before the page) |
 
 > **Timer mutation safety** — on MySQL ≥8.0 the Options tab renders `performance_timers` as read-only instances. `SetupTimers::commitStatements()` returns `[]` for these because they carry `dirty=false`. Only timers loaded from `setup_timers` on <8.0 generate `UPDATE` statements.
 
