@@ -184,7 +184,9 @@ Each handler translates parser actions into handler state mutations:
 - `SgrHandler` — SGR sequences (colour + attributes)
 - `EraseHandler` — ED, EL, ECH
 - `ScrollHandler` — SU, SD, DECSTBM
-- `ModeHandler` — DECSET/DECRST/DECMODESET/DECMODERST (includes DECAWM mode 7)
+- `ModeHandler` — DECSET/DECRST private modes only (`?`-prefixed; the
+  extended SM/RM mode numbers 10/19/20/29 are not implemented — bare forms
+  stay inert on both engines; includes DECAWM mode 7)
 - `TabHandler` — TBC, HTS
 - `OscHandler` — OSC window title, hyperlink, colour palette
 - `ScreenHandler` — orchestrates all of the above; owns the Buffer
