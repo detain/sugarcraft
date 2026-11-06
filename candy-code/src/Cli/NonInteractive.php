@@ -308,6 +308,36 @@ final class NonInteractive
             return self::failUsage($e->getMessage(), $outputFormat);
         }
 
+        // D2 (RS-DRIVER b): `--input-format stream-json` turns stdin from a
+        // context blob into a line-delimited feed of structured input events
+        // — the reading twin of the NDJSON StreamJsonEmitter writes. The feed
+        // is judged HERE, before the session funnel, the backend build and
+        // any billed call: a mode that cannot work on this launch is the
+        // never-ran usage refusal (exit 2) every other flag gate uses, and a
+        // driver that forgets to pipe must learn that before it pays for a
+        // turn. The default `text` path is untouched — its read still happens
+        // exactly where it always did, inside the historyFrom() argument.
+        $streamInputRows = [];
+        if ($args->inputFormat === 'stream-json') {
+            $streamRaw = self::readStdinIfPiped();
+            if ($streamRaw === null) {
+                return self::failUsage(
+                    'candy-code: --input-format stream-json reads NDJSON input events from piped stdin, but this run has no stdin to read',
+                    $outputFormat,
+                    'Pipe one JSON object per line, e.g. {"type":"user","content":"..."}; drop the flag to get the default, where stdin is prepended as context instead.',
+                );
+            }
+
+            [$streamInputRows, $ignoredLines, $firstIgnoredType] = self::parseStreamJsonInput($streamRaw);
+            if ($ignoredLines > 0) {
+                // LOUD-ONCE per the packet: machine traffic loses turns in
+                // silence otherwise. One line names the count and the first
+                // offending shape; every other ignored line rides the count.
+                \fwrite(\STDERR, 'candy-code: --input-format stream-json ignored ' . $ignoredLines . ' stdin line(s) that were not usable {"type":"user"} input events'
+                    . ($firstIgnoredType !== null ? ' (first: ' . $firstIgnoredType . ')' : '') . ".\n");
+            }
+        }
+
         // Step 3.D-2: only a run that built its own backend owns the session
         // whose end it reports — a caller that supplied one (the tests, a
         // headless host) owns that session's lifecycle, SessionEnd included.
@@ -502,7 +532,11 @@ final class NonInteractive
         $gate = $backend instanceof \SugarCraft\Code\Backend\EngineBackend ? $backend->permissionGate() : null;
         $history = self::historyFrom(
             $args->prompt,
-            self::readStdinIfPiped(),
+            // D2: in stream mode the feed was already drained and judged
+            // above, and its turns ride $streamInputRows — passing the raw
+            // document through the context channel too would double-embed
+            // the JSON. `text` mode reads stdin exactly where it always did.
+            $args->inputFormat === 'stream-json' ? null : self::readStdinIfPiped(),
             $mentionRoot,
             $mentionNotices,
             ContextMentions::new($mentionRoot)
@@ -544,6 +578,18 @@ final class NonInteractive
         // itself both see the whole conversation, not just the new line.
         if ($opened !== null && $opened['history'] !== []) {
             $history = [...$opened['history'], ...$history];
+        }
+
+        // D2 (RS-DRIVER b): the NDJSON user turns slot between the resumed
+        // transcript and this run's typed prompt — the conversation reads in
+        // the order the driver fed it, and the typed `-p` prompt stays the
+        // final word, the same precedence law historyFrom() applies to stdin
+        // context. The rows are plain Message::user: the @/$ mention scan
+        // stays on the typed prompt ONLY (C-WEB-2.c — machine-fed text is
+        // not a privileged attachment request).
+        if ($streamInputRows !== []) {
+            $feed = \array_map(static fn (string $row): Message => Message::user($row), $streamInputRows);
+            $history = [...\array_slice($history, 0, -1), ...$feed, ...\array_slice($history, -1)];
         }
 
         // E173, THEN E219. A refusal this turn raises reached the JSON consumer
@@ -2190,6 +2236,94 @@ final class NonInteractive
         }
 
         return $data;
+    }
+
+    /**
+     * D2 (RS-DRIVER b): decode a `--input-format stream-json` stdin document
+     * into the user turns it names.
+     *
+     * The line grammar is the READING direction of the NDJSON event stream
+     * {@see StreamJsonEmitter} writes out: one JSON object per line, and only
+     * `{"type":"user"}` events carry input. Accepted text shapes: `content`
+     * as a string (the emitter's own spelling — it wins when a line carries
+     * both), then a nested `message` that is itself a string or carries a
+     * string `content` (the transcript-row spelling a driver round-tripping
+     * stored history produces). Anything without usable text, plus every
+     * non-user event and every malformed line, counts as IGNORED and is
+     * reported once by the caller with a count and the first offending
+     * shape — the packet's loud-once law for machine traffic, where a
+     * silently dropped line would be a lost turn.
+     *
+     * Pure — no streams, no output, no state — and public static like
+     * {@see readStdinIfPiped()} and {@see historyFrom()} so the decoder is
+     * pinned in-process while the run plumbing is pinned by child witnesses.
+     *
+     * @return array{0: list<string>, 1: int, 2: ?string}
+     */
+    public static function parseStreamJsonInput(string $raw): array
+    {
+        $turns = [];
+        $ignored = 0;
+        $firstIgnoredType = null;
+
+        foreach (\preg_split('/\R/u', $raw) ?: [] as $line) {
+            $line = \trim($line);
+            if ($line === '') {
+                continue;
+            }
+
+            $decoded = \json_decode($line, true);
+            if (\is_array($decoded) && ($decoded['type'] ?? null) === 'user') {
+                $content = self::streamJsonUserText($decoded);
+                if ($content !== null) {
+                    $turns[] = $content;
+                    continue;
+                }
+                if ($firstIgnoredType === null) {
+                    $firstIgnoredType = 'a user event without text content';
+                }
+            } elseif (\is_array($decoded)) {
+                $type = $decoded['type'] ?? null;
+                if ($firstIgnoredType === null) {
+                    $firstIgnoredType = \is_string($type) ? 'type ' . $type : 'an event without a type';
+                }
+            } elseif ($firstIgnoredType === null) {
+                $firstIgnoredType = 'malformed JSON';
+            }
+            ++$ignored;
+        }
+
+        return [$turns, $ignored, $firstIgnoredType];
+    }
+
+    /**
+     * D2: the text a `{"type":"user"}` input event carries — see {@see
+     * parseStreamJsonInput()} for the accepted spellings and their precedence.
+     * Null when the event has no usable text; the caller counts that as an
+     * ignored line rather than shipping an empty turn nobody asked for.
+     *
+     * @param array<array-key, mixed> $event
+     */
+    private static function streamJsonUserText(array $event): ?string
+    {
+        $content = $event['content'] ?? null;
+        if (\is_string($content) && $content !== '') {
+            return $content;
+        }
+
+        $message = $event['message'] ?? null;
+        if (\is_string($message) && $message !== '') {
+            return $message;
+        }
+
+        if (\is_array($message)) {
+            $inner = $message['content'] ?? null;
+            if (\is_string($inner) && $inner !== '') {
+                return $inner;
+            }
+        }
+
+        return null;
     }
 
     /**

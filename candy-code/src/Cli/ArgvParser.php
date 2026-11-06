@@ -131,6 +131,7 @@ final class ArgvParser
         $prompt = null;
         $root = null;
         $outputFormat = ParsedArgs::DEFAULT_OUTPUT_FORMAT;
+        $inputFormat = ParsedArgs::DEFAULT_INPUT_FORMAT;
         $positional = [];
         $unknownFlags = [];
         $promptRequested = false;
@@ -363,6 +364,42 @@ final class ArgvParser
                     continue;
                 }
                 $outputFormat = $next;
+                $i += 2;
+                continue;
+            }
+
+            // --input-format=<value>  (no space) — D2 (RS-DRIVER b), the
+            // reading-direction twin of --output-format directly above: same
+            // raw-store discipline, same empty-or-weird value caught by the
+            // whitelist below rather than special-cased here.
+            if (\str_starts_with($arg, '--input-format=')) {
+                $inputFormat = \substr($arg, 15); // length of "--input-format="
+                ++$i;
+                continue;
+            }
+
+            // --input-format <value>
+            //
+            // STRICT for every one of --output-format's reasons above it
+            // (ISS-084): a swallowed trailing value would run the legacy
+            // context mode while the driver believed it had fed events, and
+            // a flag-shaped value's unsupported-format error would shadow the
+            // sharper one the loop itself would have raised. The `=`-form
+            // stays the escape hatch.
+            if ($arg === '--input-format') {
+                $next = $argv[$i + 1] ?? null;
+                if ($next === null || self::looksLikeFlag($next)) {
+                    if ($usageError === null) {
+                        $usageError = 'candy-code: --input-format expects a format, but '
+                            . ($next === null
+                                ? 'the argument list ended'
+                                : 'the next argument is the option ' . $next);
+                        $usageHint = self::inputFormatValueHint();
+                    }
+                    ++$i; // leave a flag-shaped $next for the loop to judge
+                    continue;
+                }
+                $inputFormat = $next;
                 $i += 2;
                 continue;
             }
@@ -1041,6 +1078,20 @@ final class ArgvParser
             }
         }
 
+        // D2 (RS-DRIVER b): --input-format's whitelist, decided HERE under the
+        // identical CASE-SENSITIVE law as --output-format's above — every one
+        // of that check's reasons is shared: consumers compare with `===`, the
+        // TUI path and the one-shot path must reject alike, and an accepted-
+        // but-ignored spelling is the silent fallback this guard family exists
+        // to forbid. `text` names the legacy behavior, so an explicit `text`
+        // is exactly as admissible as an absent flag.
+        if (!\in_array($inputFormat, ParsedArgs::INPUT_FORMATS, true)) {
+            if ($usageError === null) {
+                $usageError = 'candy-code: --input-format ' . $inputFormat . ': unsupported input format';
+                $usageHint = self::inputFormatValueHint();
+            }
+        }
+
         // --continue and --resume both choose the session to open, so they
         // cannot both win - on a TUI launch or a one-shot run alike.
         if ($usageError === null && $continueSession && $resumeRequested) {
@@ -1121,6 +1172,23 @@ final class ArgvParser
             $usageHint = 'Use --session-id with -p "<prompt>" or `candy-code run "<prompt>"`; the interactive TUI takes no preset id.';
         }
 
+        // D2 (RS-DRIVER b): `stream-json` stdin is read in exactly ONE place
+        // in production — the one-shot funnel in NonInteractive::run() — so on
+        // a subcommand verb or a TUI launch the value would be parsed, carried
+        // and silently dropped, the AUT-4-P1 lie the --json-schema and
+        // --session-id gates beside this family were minted to forbid. Unlike
+        // them the gate is on the VALUE, not the flag: plain `text` changes
+        // nothing any path consumes, so, like --output-format's admitted
+        // default, it stays admissible everywhere.
+        if ($usageError === null && $inputFormat === 'stream-json' && $subcommand !== null) {
+            $usageError = 'candy-code: --input-format stream-json reads stdin as input events for one main run; subcommand verbs run their own flow and could only ignore it';
+            $usageHint = 'Run the subcommand without --input-format, or start `candy-code --input-format stream-json -p …` for a main run fed by events.';
+        }
+        if ($usageError === null && $inputFormat === 'stream-json' && !$promptRequested) {
+            $usageError = 'candy-code: --input-format stream-json feeds a one-shot run, but this launch has no prompt to run';
+            $usageHint = 'Use --input-format stream-json with -p "<prompt>" or `candy-code run "<prompt>"`, and pipe NDJSON events on stdin.';
+        }
+
         // C-AGT-7.b: --json-schema with nothing to constrain is not a launch
         // that forgot the flag, it is a launch that will ignore it. The schema
         // is read in exactly ONE place in production — NonInteractive::run()
@@ -1178,7 +1246,7 @@ final class ArgvParser
             $root = \array_shift($positional);
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId, $inputFormat);
     }
 
     /**
@@ -1572,6 +1640,17 @@ final class ArgvParser
     private static function sessionIdValueHint(): string
     {
         return 'Session ids are 16 lowercase hexadecimal characters — the form `candy-code session list` prints. Omit --session-id to let the run mint its own.';
+    }
+
+    /**
+     * D2 (RS-DRIVER b): the hint naming the accepted `--input-format`
+     * values, shaped as {@see ParsedArgs::INPUT_FORMATS} documents them.
+     * Raw English: the lang catalogue is owned separately, and this is the
+     * machine-surface usage-error family the flag was minted for.
+     */
+    private static function inputFormatValueHint(): string
+    {
+        return 'Valid input formats are: text (the default — piped stdin is prepended as context) or stream-json (NDJSON input events on piped stdin, one JSON object per line).';
     }
 
     /**

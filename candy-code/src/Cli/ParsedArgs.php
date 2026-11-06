@@ -34,6 +34,30 @@ final readonly class ParsedArgs
     public const OUTPUT_FORMATS = ['text', 'json', 'stream-json'];
 
     /**
+     * What piped stdin means when nothing overrides it: {@see
+     * NonInteractive::run()} prepends it as context to the one typed
+     * prompt. Duplicated as a literal for the same
+     * no-compile-time-dependency reason as
+     * {@see self::DEFAULT_OUTPUT_FORMAT}.
+     */
+    public const DEFAULT_INPUT_FORMAT = 'text';
+
+    /**
+     * Every value `--input-format` accepts, in help-text order. The
+     * input vocabulary is deliberately narrower than the output one —
+     * there is no bare-`json` whole-document INPUT mode; the one
+     * structured mode mirrors, in the reading direction, the NDJSON
+     * event grammar {@see \SugarCraft\Code\Cli\StreamJsonEmitter}
+     * writes out, so a driver can feed the same shapes it consumes.
+     *
+     * Matched CASE-SENSITIVELY by {@see ArgvParser::parse()} — the same
+     * law as {@see self::OUTPUT_FORMATS}.
+     *
+     * @var list<string>
+     */
+    public const INPUT_FORMATS = ['text', 'stream-json'];
+
+    /**
      * Every subcommand VERB {@see ArgvParser::parse()} recognises, in help-text
      * order. The verb only; each one's own operands (`list`, `delete <id>`,
      * `bash|zsh|fish`) are carried unvalidated in {@see self::$subcommandArgs}
@@ -318,6 +342,14 @@ final readonly class ParsedArgs
          *  parser performs no filesystem read (the same raw-store-and-
          *  later-judge law as {@see $jsonSchema}). */
         public ?string $sessionId = null,
+        /** D2 (RS-DRIVER b): what `--input-format` named, default
+         *  `text`. Whitelist-judged at {@see ArgvParser::parse()}
+         *  against {@see self::INPUT_FORMATS}; the mode's semantics
+         *  (stdin prepended as context vs stdin read as NDJSON
+         *  `{"type":"user"}` input events) live in {@see
+         *  \SugarCraft\Code\Cli\NonInteractive::run()}, and the unset
+         *  default keeps the legacy stdin path byte-identical. */
+        public string $inputFormat = self::DEFAULT_INPUT_FORMAT,
     ) {
     }
 
@@ -410,7 +442,8 @@ final readonly class ParsedArgs
         bool $restricted = false,
         bool $safeMode = false,
         ?string $sessionId = null,
+        string $inputFormat = ParsedArgs::DEFAULT_INPUT_FORMAT,
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId, $inputFormat);
     }
 }
