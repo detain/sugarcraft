@@ -206,16 +206,34 @@ fixed interval, ask the toast when the next prune is due and
 schedule a single timer for exactly that moment:
 
 ```php
-$delay = $toast->secondsUntilNextExpiry();   // seconds until the soonest expiry, or null
+use SugarCraft\Core\Cmd;
+use SugarCraft\Core\Msg;
+
+final class RepaintMsg implements Msg {}  // host-defined: sugar-toast ships no
+                                          // message class of its own
+$delay = $toast->secondsUntilNextExpiry();  // seconds until the soonest expiry, or null
 if ($delay !== null) {
-    // sugar-toast ships no message class of its own — wire this to your
-    // host's own timer. Cmd::tick(float $seconds, \Closure $onTick) is
-    // sugar-core's one-shot example:
-    $cmd = Cmd::tick($delay, function () use (&$toast) {
-        $toast = $toast->pruneExpired();
-        // Repaint, then reschedule from the new secondsUntilNextExpiry();
-        // when hasActiveAlert() is false there is nothing left to arm.
-    });
+    // sugar-core's one-shot timer: Cmd::tick(float $seconds, \Closure $produce)
+    // where $produce MUST return the Msg to dispatch into update() — a null
+    // (or empty) body dispatches nothing, and the chain dies at the first expiry.
+    $cmd = Cmd::tick($delay, static fn (): Msg => new RepaintMsg());
+}
+```
+
+The tick is one-shot, so the host re-arms from inside `update()` — that is also
+where the expired alert actually leaves the screen (the returned model renders
+the frame without it):
+
+```php
+if ($msg instanceof RepaintMsg) {
+    $this->toast = $this->toast->pruneExpired();
+    $next = $this->toast->secondsUntilNextExpiry();
+    return [
+        $this,
+        // Reschedule for the new soonest expiry; when nothing is left to
+        // expire there is nothing to arm (null = no timer).
+        $next === null ? null : Cmd::tick($next, static fn (): Msg => new RepaintMsg()),
+    ];
 }
 ```
 
