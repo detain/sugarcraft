@@ -68,8 +68,8 @@ libnsgif's single-play default — plays forever.
 | Key                    | Action                         |
 |------------------------|--------------------------------|
 | `Space`                | Pause / resume                 |
-| `←`                    | Step back one frame            |
-| `→`                    | Step forward one frame         |
+| `←`/Left               | Step back one frame            |
+| `→`/Right              | Step forward one frame         |
 | `d`                    | Toggle solid ↔ density preset  |
 | `q` / `Esc` / `Ctrl+C` | Quit                           |
 
