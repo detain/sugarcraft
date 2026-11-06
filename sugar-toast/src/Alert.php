@@ -20,7 +20,7 @@ final class Alert
      *        timer when one is set; a truly never-expiring alert is expressed
      *        by $persistent (via withoutExpiry()/withCancelledExpiry() or
      *        Toast::cancelAlert()), not by null alone (lib-reviews-1102 M15).
-     * @param float|null $progress  Progress 0.0–1.0 (finite; out-of-range clamps, NAN/INF throw); null = no progress bar
+     * @param float|null $progress  Progress 0.0–1.0 (non-finite throws; the constructor stores the value as given — withProgress() clamps on attach and render clamps again); null = no progress bar
      * @param list<Action> $actions  Clickable action buttons
      * @param Color|null $backgroundColor  Optional box background fill (null = no fill, plain render)
      * @param Color|null $foregroundColor  Optional message-text colour (null = terminal default)

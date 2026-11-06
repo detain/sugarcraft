@@ -305,7 +305,10 @@ re-inherits the expiry, so a progress bar whose host stopped ticking
 eventually expires on its own instead of freezing on screen forever.
 `alert()` and `push()` accept ids too; `removeAlert(string $id)` retires a
 single alert by identity. `progressToast()` accepts the same `$expiresAt`
-override as `alert()`. The progress value (0.0–1.0) is clamped automatically when finite; `NAN`/`INF` are refused with an `InvalidArgumentException` rather than rendering a lying bar.
+override as `alert()`. The progress value (0.0–1.0) is clamped on attach
+(`withProgress()`) and again at render; the `Alert` constructor itself only
+refuses non-finite and stores the value as given. `NAN`/`INF` are refused with
+an `InvalidArgumentException` rather than rendering a lying bar.
 
 ## Action Buttons
 
@@ -439,7 +442,7 @@ already over the new cap survive until the next push evicts them.
 | `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
 | `->withHistoryLimit(?int $n)` | Cap history log, oldest evicted first (default 100; `null` = unbounded; `0` is accepted as a no-history sentinel — negatives alone throw, unlike `withMaxConcurrent`, which refuses anything below 1) |
 | `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert (string type = case-insensitive; `null` expiry inherits `withDuration()`; `id` updates a live alert in place; `$expiresAt` is an absolute epoch — duration-shaped values throw, durations belong in `withDuration()`) |
-| `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert with progress bar (0.0–1.0, finite — NAN/INF throw); same `id` = same box; wrong-slot `$expiresAt` throws |
+| `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert with progress bar (0.0–1.0 — out-of-range clamps on attach, NAN/INF throw); same `id` = same box; wrong-slot `$expiresAt` throws |
 | `->push(Alert $alert): self` | Enqueue a pre-built `Alert` (styled/actioned) |
 | `->cancelAlert(int $index): self` | Make a queued alert persistent (never auto-dismisses) |
 | `->removeAlert(string $id): self` | Retire the queued alert with this id, unrecorded (companion of id updates) |
@@ -464,7 +467,7 @@ already over the new cap survive until the next push evicts them.
 
 | Class | Method | Description |
 |-------|--------|-------------|
-| `Alert` | `withProgress(float)` | Attach progress bar (0.0–1.0, finite out-of-range clamped, NAN/INF throw) |
+| `Alert` | `withProgress(float)` | Attach progress bar (0.0–1.0; out-of-range clamps on attach, NAN/INF throw) |
 | `Alert` | `withActions(list<Action>)` | Attach action buttons |
 | `Alert` | `isExpired(): bool` | Check expiry |
 | `Alert` | `withExpiry(float $duration)` | Set expiry from now |
