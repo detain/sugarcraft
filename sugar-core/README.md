@@ -660,7 +660,7 @@ first group, `use SugarCraft\Core\BatchMsg;` for the second — the
 | Paste | `PasteMsg`, `PasteStartMsg`, `PasteEndMsg` |
 | Lifecycle | `QuitMsg`, `SuspendMsg`, `ResumeMsg`, `InterruptMsg` |
 | Terminal | `WindowSizeMsg` (`$cols`/`$rows`), `CursorPositionMsg`, `BackgroundColorMsg`, `ForegroundColorMsg`, `CursorColorMsg`, `ColorProfileMsg`, `TerminalVersionMsg`, `ModeReportMsg`, `CapabilityMsg`, `KeyboardEnhancementsMsg`, `ClipboardMsg` |
-| Focus | `FocusGainedMsg`, `FocusLostMsg` |
+| Focus | `FocusGainedMsg`, `BlurMsg` — with `CSI ?1004h` enabled the reader emits these two on ESC `[I` (focus in) and ESC `[O` (focus out). `FocusLostMsg` exists and shares `BlurMsg`'s docblock, but it has no sugar-core producer — a handler coded to `instanceof FocusLostMsg` never fires from live input, so check `BlurMsg` |
 | Screen stack | `ScreenStackPushedMsg`, `ScreenStackPoppedMsg` |
 | Async | `ExceptionMsg`, `ExecMsg`, `EnvMsg`, `SubscriptionsMsg`, `SuggestionsReadyMsg`, `WorkerResultMsg` |
 
