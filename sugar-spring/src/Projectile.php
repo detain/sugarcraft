@@ -87,6 +87,15 @@ final class Projectile
      * and freezes the integrator: every Euler term is multiplied by it,
      * so the step hands back an identical state (the constructor refuses
      * only non-finite and negative frame times).
+     *
+     * **Mutability note.** Upstream `Projectile.Update()` returns a
+     * `Point` (the new position only) and mutates the projectile in
+     * place. PHP `update()` instead returns a new `Projectile` instance
+     * and leaves the receiver untouched — matching the rest of the
+     * SugarCraft stack's immutable-with pattern and avoiding spooky
+     * action when you keep a reference to an earlier frame for replay
+     * or debugging. The receiver keeps its old state; read the new
+     * position off the RESULT and reassign: `$p = $p->update();`.
      */
     public function update(): self
     {
@@ -103,16 +112,6 @@ final class Projectile
      * Gravity vector — Y-up, matching upstream harmonica
      * `Gravity = Vector{0, -9.81, 0}`. Use this when porting examples
      * from the harmonica docs verbatim.
-     *
-     * **Mutability note.** Upstream `Projectile.Update()` returns a
-     * `Point` (the new position only) and mutates the projectile in
-     * place. PHP `Projectile::update()` instead returns a new
-     * `Projectile` instance and leaves the receiver untouched —
-     * matches the rest of the SugarCraft stack's immutable-with-
-     * pattern and avoids spooky action when you keep a reference to
-     * an earlier frame for replay / debugging. The receiver keeps
-     * its old state — read the new position off the RESULT (and
-     * reassign: `$p = $p->update();`).
      */
     public static function gravity(): Vector
     {
