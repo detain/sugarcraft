@@ -324,7 +324,9 @@ by a wall-clock ceiling (default 600 s; tune with
 terminated" with the abandoned child's pid named. Communicate results via
 tempfile, pipe, database, or other out-of-band mechanism. On hosts without
 `pcntl_fork`, the action runs inline (no animation, no fork) and exceptions
-propagate normally.
+propagate normally — but the inline fallback is **unbounded**: the wall-clock
+ceiling can only rein in the forked child, so a hung action on a pcntl-less
+host blocks forever.
 
 ### Demos
 
