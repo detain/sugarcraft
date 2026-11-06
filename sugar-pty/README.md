@@ -550,7 +550,12 @@ and a row here nothing reads.
 `SUGARCRAFT_LIBC` and `SUGARCRAFT_TERMIOS` are also read by the test suite,
 which sets and restores them around the cases that exercise each branch.
 
-The pre-rename prefix `CANDY_PTY_` is still read, with a deprecation warning, and imported into `SUGAR_PTY_` by `tests/bootstrap.php`. <!-- @rename-keep -->
+The legacy-compat import of `CANDY_PTY_`-prefixed variables lives in
+`tests/bootstrap.php` only, with a deprecation warning, and covers only
+the test-only `SUGAR_PTY_HANG_BUDGET`. The three `src/` knobs
+(`SUGARCRAFT_LIBC`, `SUGARCRAFT_PTY_BACKEND`, `SUGARCRAFT_TERMIOS`) have
+no legacy prefix at all — a stale `CANDY_PTY_LIBC` is inert in
+production. <!-- @rename-keep -->
 
 ## Compared to node-pty / creack/pty / portable-pty
 
