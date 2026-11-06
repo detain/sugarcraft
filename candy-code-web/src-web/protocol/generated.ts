@@ -1823,7 +1823,7 @@ export interface Methods {
     }
     result: {
       workflowId: string
-      status: "draft" | "pending" | "running" | "paused" | "resuming" | "completed" | "failed" | "cancelled"
+      status: "draft" | "pending" | "running" | "paused" | "orphaned" | "resuming" | "completed" | "failed" | "cancelled"
     }
   }
   /** Resume a paused workflow run in a session. */
@@ -1886,7 +1886,7 @@ export interface Methods {
     }
     result: {
       workflowId: string
-      status: "draft" | "pending" | "running" | "paused" | "resuming" | "completed" | "failed" | "cancelled"
+      status: "draft" | "pending" | "running" | "paused" | "orphaned" | "resuming" | "completed" | "failed" | "cancelled"
     }
   }
   /** Stop a workspace host; refused while one of its turns runs, unless force. */
