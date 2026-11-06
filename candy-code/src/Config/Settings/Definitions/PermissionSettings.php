@@ -77,9 +77,9 @@ final class PermissionSettings implements SettingDefinitionSet
                 // The stored `false` alone reads as "off until switched on";
                 // the SHIPPED default is implicit engagement whenever a
                 // reviewable model resolves (Bootstrap::permissionGate()'s
-                // $autoReviewImplicit). The
-                // generated row, the launch notice and PERMISSIONS.md all
-                // carry that truth; this cell is the table's half of it.
+                // $autoReviewImplicit). The generated row, the launch
+                // notice and PERMISSIONS.md all carry that truth; this
+                // cell is the table's half of it.
                 ->withDefaultText('`false` stored; UNSET still engages whenever a reviewable model exists (every review is a paid call) — an explicit `false` is the opt-out')
                 ->withReaderSymbol(Bootstrap::class . '::permissionGate'),
             // C-SEC-7.d: what the auto reviewer reviews and what it reviews
