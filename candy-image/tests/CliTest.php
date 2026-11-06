@@ -141,7 +141,7 @@ final class CliTest extends TestCase
 
         $this->assertSame(Cli::EXIT_USAGE, $exit);
         $this->assertStringContainsString('chafa', $err);
-        $this->assertStringContainsString('F-18', $err);
+        $this->assertStringContainsString('chafa-independent', $err);
     }
 
     public function testSymbolsSelectorIsAcceptedAndValidated(): void
