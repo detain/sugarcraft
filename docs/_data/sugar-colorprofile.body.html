@@ -24,12 +24,22 @@ ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</c
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Profile detection</strong><span>One canonical 13-step ladder every surface shares: <code>CLICOLOR_FORCE=1</code> / <code>FORCE_COLOR</code> override first (falsy <code>FORCE_COLOR</code> lands on the <code>Ascii</code> floor), then <code>NO_COLOR</code> (empty = unset), <code>CLICOLOR=0</code> and <code>TERM=dumb</code> (case-insensitive) suppress — dumb outranks an advertised <code>COLORTERM</code>, it is a promise of minimal capabilities — then <code>COLORTERM</code>, <code>TERM_PROGRAM</code>, <code>WT_SESSION</code>, <code>GOOGLE_CLOUD_SHELL</code>, the <code>TMUX</code>/<code>STY</code> + <code>screen*</code>/<code>tmux*</code> rung (the inner TERM <em>is</em> the base; no re-anchoring happens) and the <code>TERM</code> depth patterns. <code>Palette</code> adds the stream TTY gate on top; <code>Probe</code>/<code>AsyncProbe</code>/<code>TerminalProbe</code> add the phase-2 infocmp <code>Tc</code>/<code>RGB</code> upgrade. The result is a <code>ColorProfile</code>: TrueColor, Ansi256, Ansi240, Ansi, Ansi8, Fgbg, Ascii or NoTTY.</span></div>
+      <div class="feature"><strong>Profile detection</strong><span>One canonical 13-step ladder every surface shares, override-first: <code>CLICOLOR_FORCE=1</code> / <code>FORCE_COLOR</code> outrank every later leg (a falsy <code>FORCE_COLOR</code> spelling lands on the <code>Ascii</code> floor). Suppressors come next: <code>NO_COLOR</code> (empty = unset), <code>CLICOLOR=0</code> and <code>TERM=dumb</code> (case-insensitive) turn color off — dumb outranks an advertised <code>COLORTERM</code>, it is a promise of minimal capabilities. Advertised depth follows: <code>COLORTERM</code>, <code>TERM_PROGRAM</code>, <code>WT_SESSION</code>, <code>GOOGLE_CLOUD_SHELL</code>, the <code>TMUX</code>/<code>STY</code> + <code>screen*</code>/<code>tmux*</code> rung and the <code>TERM</code> depth patterns. <code>Palette</code> adds the stream TTY gate on top; <code>Probe</code>/<code>AsyncProbe</code>/<code>TerminalProbe</code> add the phase-2 infocmp <code>Tc</code>/<code>RGB</code> upgrade. The result is a <code>ColorProfile</code>: TrueColor, Ansi256, Ansi240, Ansi, Ansi8, Fgbg, Ascii or NoTTY.</span></div>
       <div class="feature"><strong>Color degradation</strong><span><code>Palette::toProfile()</code> / <code>Color::convert()</code> downsample a color to the 256-color cube and gray ramp or to the 16 ANSI slots.</span></div>
       <div class="feature"><strong>String rewriting</strong><span><code>degrade()</code> rewrites the SGR colors in a string for the current profile and strips every escape under NoTTY. <code>ProfileWriter</code> does the same to everything written to a stream.</span></div>
       <div class="feature"><strong>StandardColors</strong><span>The 16 ANSI colors as <code>Color</code> values via the non-mutating read API — <code>StandardColors::all()</code>, <code>fromIndex(1)</code>, <code>catalog()</code>. (The <code>$red</code>/<code>$brightBlack</code> statics are deprecated process-global mutables; see the README deprecation window.)</span></div>
       <div class="feature"><strong>Perceptual distance</strong><span>CIELAB conversion with ΔE*76 / ΔE*94 / CIEDE2000 (<code>DeltaE</code>) and an opt-in nearest-palette matcher (<code>NearestColor</code>).</span></div>
     </div>
+
+    <h3 style="margin-top: 32px;">Detection phases</h3>
+    <p>The capability probes run in four phases; phase 1 <em>is</em> the shared <code>DetectionChain</code>, so the ladder cannot drift between surfaces:</p>
+    <table class="api-table">
+      <tr><th>Phase</th><th>Source</th><th>What it can set</th></tr>
+      <tr><td>1 — env ladder</td><td><code>DetectionChain</code> over <code>Env::resolve()</code></td><td>Any of the five detection-emittable levels: TrueColor / Ansi256 / Ansi / Ascii / NoTTY</td></tr>
+      <tr><td>2 — terminfo</td><td><code>infocmp -1</code> at a fixed absolute-path roster, never looked up on PATH</td><td>Promotes an Ansi/Ansi256 rung to TrueColor on <code>Tc</code>/<code>RGB</code>; <code>Sixel</code> from terminfo capability names</td></tr>
+      <tr><td>3 — advertised</td><td><code>TERM_PROGRAM</code> capability map (interactive streams only)</td><td>Advertised TrueColor (WezTerm/vscode/Ghostty), <code>ITerm2</code> (iTerm.app), <code>Hyperlinks</code> (Hyper)</td></tr>
+      <tr><td>4 — floors</td><td>Suppression and minimal-capability floors</td><td>Holds the <code>Ascii</code>/<code>NoTTY</code> landings and the reserved-capability gates</td></tr>
+    </table>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
@@ -53,7 +63,7 @@ ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</c
 <tr><td>ColorProfile</td><td>TrueColor, Ansi256, Ansi240, Ansi, Ansi8, Fgbg, Ascii, NoTTY / label() / maxColors() / degradedTo()</td><td>Enum of color profiles</td></tr>
 <tr><td>ProfileWriter</td><td>static wrap($stream, array $env = []) / write(string) / printf(format, ...)</td><td>Stream that degrades color on write</td></tr>
 <tr><td>StandardColors</td><td><code>all()</code>, <code>fromIndex(int)</code>, <code>catalog()</code></td><td>The 16 ANSI colors (non-mutating read API; the <code>$black</code>…<code>$brightWhite</code> statics are deprecated — see README)</td></tr>
-<tr><td>DetectionChain</td><td>static detect(array $env = []) → level() / source() / term() / toColorProfile()</td><td>The shared 13-step env ladder every detector agrees on</td></tr>
+<tr><td>DetectionChain</td><td>static detect(array $env = []) → level() / source() / term() / toColorProfile()</td><td>The shared 13-step env ladder every detector agrees on; on the <code>TMUX</code>/<code>STY</code> rung the inner <code>TERM</code> <em>is</em> the base — no re-anchoring happens</td></tr>
 <tr><td>Probe</td><td>static colorProfile() / isNoColor() / isForceColor() / reducedMotion()</td><td>Static env-probe layer + infocmp upgrade</td></tr>
 <tr><td>Env</td><td>static resolve(array $injected) / value(resolved, key) / sanitize(value)</td><td>Env resolution (a non-empty injected map fully replaces the ambient env) + sanitized source strings</td></tr>
 <tr><td>AsyncProbe</td><td>static colorProfile(): PromiseInterface</td><td>Bounded ReactPHP infocmp child; every settle answers from the detection chain</td></tr>
