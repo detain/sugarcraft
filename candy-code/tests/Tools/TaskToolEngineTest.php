@@ -113,7 +113,8 @@ final class TaskToolEngineTest extends TestCase
 
         $this->assertTrue($result->isError());
         $this->assertStringContainsString('ended without a final report (step cap 1)', $result->content());
-        $this->assertCount(1, $probe->calls, 'the work it did still happened');
+        $this->assertStringContainsString('blank-return stall', $result->content(), 'wf-g4: the give-up now names the stall that preceded it');
+        $this->assertCount(10, $probe->calls, 'the work it did still happened — and the same tool repeated on every continue-resume, because a step-capped silent turn replays its transcript');
     }
 
     public function testAStepCappedSubAgentReportsItsSummaryAndKeepsItsResumeId(): void
@@ -212,7 +213,11 @@ final class TaskToolEngineTest extends TestCase
     {
         $probe = self::probe('probe');
         // The capped run's no-tools summary request (WAVE_PLAN_2 §5) comes
-        // back empty, so the run is still reportless and refused with an id.
+        // back empty — and wf-g4 re-asks that silence on the SAME
+        // conversation (nine continue-resumes) before the stall refusal
+        // fires. The point of the test is unchanged: what a later resume
+        // rides is the transcript, so the report only lands once the
+        // caller speaks.
         $provider = new ScriptedProvider([
             new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', ['step' => 1])]),
             new CompleteResponse(content: ''),
@@ -222,6 +227,8 @@ final class TaskToolEngineTest extends TestCase
             ->withEngine(EngineBackend::new($provider, 'm')->withTools([$probe]));
 
         $first = $task->execute(self::call());
+        $this->assertStringContainsString('blank-return stall', $first->content(), 'the reportless capped run now ends as the named stall');
+        $this->assertGreaterThanOrEqual(10, count($provider->requests), 'each silent turn was re-asked before the give-up');
         $id = self::resumeId($first->content());
 
         $provider->then(new CompleteResponse(content: 'the report, finished'));
@@ -231,7 +238,8 @@ final class TaskToolEngineTest extends TestCase
         $this->assertStringStartsWith(\SugarCraft\Code\Context\DelegatedOutputFence::wrap('the report, finished') . "\n\n[sub-agent \"coder\" finished;", $resumed->content());
         $this->assertCount(1, $probe->calls, 'the resumed run did not redo the finished step');
 
-        $turns = self::turns($provider->requests[2]);
+        $finalRequest = $provider->requests[array_key_last($provider->requests)];
+        $turns = self::turns($finalRequest);
         $this->assertSame(['system', 'You are coder.'], $turns[0], 'the preset prompt was carried, not re-added');
         $this->assertSame(['user', 'Audit sugar-core and report the findings'], $turns[1]);
         $this->assertSame('assistant', $turns[2][0]);
@@ -241,7 +249,7 @@ final class TaskToolEngineTest extends TestCase
         $this->assertSame(['user', 'carry on and report'], $turns[array_key_last($turns)]);
         $this->assertNotNull(
             // Indexed past the persisted `<turn-context>` rows (step 1.A-2).
-            \SugarCraft\Code\Context\TurnContextBlock::strip($provider->requests[2]->messages)[2]->toArray()['tool_calls'] ?? null,
+            \SugarCraft\Code\Context\TurnContextBlock::strip($finalRequest->messages)[2]->toArray()['tool_calls'] ?? null,
             'the earlier assistant step kept its tool call across the disk round-trip',
         );
         $this->assertSame($id, self::resumeId($resumed->content()), 'a report keeps the run resumable under the same id (step 4.7-1)');

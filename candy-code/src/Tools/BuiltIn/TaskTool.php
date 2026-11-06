@@ -8,6 +8,7 @@ use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentWorkerPool;
+use SugarCraft\Code\Agents\BlankReturnResume;
 use SugarCraft\Code\Agents\Effort;
 use SugarCraft\Code\Agents\Live\ActivityItem;
 use SugarCraft\Code\Agents\Live\SubAgentActivityBuffer;
@@ -2067,192 +2068,248 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         // lives exactly as long as this run, as $seat does above.
         [$tools, $boardSeat] = $this->joinBoard($tools, $manager, $subAgent);
 
-        try {
-            $turn = $engine
-                ->withTools($tools)
-                ->withMaxSteps($maxTurns)
-                ->withSiblingSpend($this->siblingSpend)
-                ->withStepUsageObserver($observeUsage)
-                ->withTurnInbox($turnInbox)
-                ->completeTranscript(
-                    $messages,
-                    // SubAgentActivity is deliberately NOT in this signature:
-                    // a nested Task (roadmap 4.7-3) keeps the delegating run's
-                    // emitter (EngineBackend::turnTools() leaves a pre-bound
-                    // emitter in place below depth 0), so its frames go
-                    // straight to the parent and never reach this channel.
-                    // SpendCapBreached IS: the run's own cap check emits it, and
-                    // a narrower type here made that emit a TypeError that
-                    // surfaced as an unexplained "failed" (audit B4).
-                    // ContextLedgerChanged too (roadmap 3.B-5): a run on its
-                    // ephemeral ledger reports each prune as it lands, for
-                    // the same reason — it is the run's own view, shown to
-                    // nobody, so it is taken and dropped here.
-                    onEvent: static function (ToolStarted|ToolFinished|SpendCapBreached|\SugarCraft\Code\Events\ContextLedgerChanged $event) use ($onProgress, $stopIfCancelled, $stopIfControlled, $record, $foldThink, &$capStop, &$thinking, &$stats, $subAgent, $log, $flushLog): void {
-                        if ($event instanceof \SugarCraft\Code\Events\ContextLedgerChanged) {
-                            return;
-                        }
-                        // Before the call runs; a throw from a finished
-                        // event would only become that call's result.
-                        if ($event instanceof ToolStarted) {
-                            $stopIfCancelled();
-                            $stopIfControlled(false);
-                        }
-                        $onProgress();
-                        // A tool boundary ends the thought before it: the
-                        // next burst opens under a fresh label.
-                        $closeThought = static function () use ($foldThink, &$thinking): void {
-                            $foldThink();
-                            $thinking = false;
-                        };
-                        if ($event instanceof SpendCapBreached) {
-                            $capStop = $event;
-                            $closeThought();
-                            $record(sprintf('stopped: spend cap $%.4f reached ($%.4f spent)', $event->capUsd, $event->spentUsd), null);
+        // The widened engine describes the DELEGATION — tools, step cap,
+        // sibling spend mirror, usage observer, inbox — not one attempt,
+        // so the blank-return resume loop below re-asks on this same
+        // object with the grown transcript.
+        $runEngine = $engine
+            ->withTools($tools)
+            ->withMaxSteps($maxTurns)
+            ->withSiblingSpend($this->siblingSpend)
+            ->withStepUsageObserver($observeUsage)
+            ->withTurnInbox($turnInbox);
 
-                            return;
-                        }
-                        if ($event instanceof ToolStarted) {
+        // A blank final report used to end the delegation as a refusal on
+        // the spot; the same policy the pooled stage path applies now
+        // re-asks the silent session with one "continue", on the SAME
+        // conversation, before the honest stall refusal may fire. A blank
+        // turn the spend cap stopped is not re-asked either: the cap branch
+        // below wins, as it did before this policy existed.
+        // {@see BlankReturnResume}
+        $blankResume = new BlankReturnResume();
+        $blankUsages = [];
+        $attemptMessages = $messages;
+
+        while (true) {
+            try {
+                $turn = $runEngine->completeTranscript(
+                    $attemptMessages,
+                        // SubAgentActivity is deliberately NOT in this signature:
+                        // a nested Task (roadmap 4.7-3) keeps the delegating run's
+                        // emitter (EngineBackend::turnTools() leaves a pre-bound
+                        // emitter in place below depth 0), so its frames go
+                        // straight to the parent and never reach this channel.
+                        // SpendCapBreached IS: the run's own cap check emits it, and
+                        // a narrower type here made that emit a TypeError that
+                        // surfaced as an unexplained "failed" (audit B4).
+                        // ContextLedgerChanged too (roadmap 3.B-5): a run on its
+                        // ephemeral ledger reports each prune as it lands, for
+                        // the same reason — it is the run's own view, shown to
+                        // nobody, so it is taken and dropped here.
+                        onEvent: static function (ToolStarted|ToolFinished|SpendCapBreached|\SugarCraft\Code\Events\ContextLedgerChanged $event) use ($onProgress, $stopIfCancelled, $stopIfControlled, $record, $foldThink, &$capStop, &$thinking, &$stats, $subAgent, $log, $flushLog): void {
+                            if ($event instanceof \SugarCraft\Code\Events\ContextLedgerChanged) {
+                                return;
+                            }
+                            // Before the call runs; a throw from a finished
+                            // event would only become that call's result.
+                            if ($event instanceof ToolStarted) {
+                                $stopIfCancelled();
+                                $stopIfControlled(false);
+                            }
+                            $onProgress();
+                            // A tool boundary ends the thought before it: the
+                            // next burst opens under a fresh label.
+                            $closeThought = static function () use ($foldThink, &$thinking): void {
+                                $foldThink();
+                                $thinking = false;
+                            };
+                            if ($event instanceof SpendCapBreached) {
+                                $capStop = $event;
+                                $closeThought();
+                                $record(sprintf('stopped: spend cap $%.4f reached ($%.4f spent)', $event->capUsd, $event->spentUsd), null);
+
+                                return;
+                            }
+                            if ($event instanceof ToolStarted) {
+                                $closeThought();
+                                $flushLog();
+                                $log?->toolCall($event->toolCallId, $event->toolName, $event->arguments);
+                                self::trackCall($subAgent, $event);
+                                $stats['tools']++;
+                                $record('-> '.self::describeCall($event), ActivityItem::toolStarted(
+                                    $event->toolCallId,
+                                    $event->toolName,
+                                    ToolSummary::of($event->toolName, $event->arguments),
+                                ));
+
+                                return;
+                            }
                             $closeThought();
-                            $flushLog();
-                            $log?->toolCall($event->toolCallId, $event->toolName, $event->arguments);
+                            $log?->toolResult($event->toolCallId, $event->toolName, !$event->result->isError(), $event->result->content());
                             self::trackCall($subAgent, $event);
-                            $stats['tools']++;
-                            $record('-> '.self::describeCall($event), ActivityItem::toolStarted(
+                            $record('<- '.$event->toolName.($event->result->isError() ? ' (error)' : ''), ActivityItem::toolFinished(
                                 $event->toolCallId,
                                 $event->toolName,
-                                ToolSummary::of($event->toolName, $event->arguments),
+                                !$event->result->isError(),
+                                $event->result->durationMs() ?? 0,
                             ));
-
-                            return;
-                        }
-                        $closeThought();
-                        $log?->toolResult($event->toolCallId, $event->toolName, !$event->result->isError(), $event->result->content());
-                        self::trackCall($subAgent, $event);
-                        $record('<- '.$event->toolName.($event->result->isError() ? ' (error)' : ''), ActivityItem::toolFinished(
-                            $event->toolCallId,
-                            $event->toolName,
-                            !$event->result->isError(),
-                            $event->result->durationMs() ?? 0,
-                        ));
-                    },
-                    onReasoning: static function (string $delta) use ($onProgress, $readControls, &$think, $foldThink, $flushIfDue, &$logThought): void {
-                        $onProgress();
-                        $readControls(false);
-                        $logThought .= $delta;
-                        // The heartbeat's "alive, nothing to show" frame is an
-                        // empty delta ({@see EngineBackend::turnTools()}) — it
-                        // carries no thought to fold, but it still ticks the
-                        // frame buffer.
-                        if ($delta !== '') {
-                            $think .= $delta;
-                            if (strlen($think) >= self::THINK_LINE_BYTES) {
-                                $foldThink();
+                        },
+                        onReasoning: static function (string $delta) use ($onProgress, $readControls, &$think, $foldThink, $flushIfDue, &$logThought): void {
+                            $onProgress();
+                            $readControls(false);
+                            $logThought .= $delta;
+                            // The heartbeat's "alive, nothing to show" frame is an
+                            // empty delta ({@see EngineBackend::turnTools()}) — it
+                            // carries no thought to fold, but it still ticks the
+                            // frame buffer.
+                            if ($delta !== '') {
+                                $think .= $delta;
+                                if (strlen($think) >= self::THINK_LINE_BYTES) {
+                                    $foldThink();
+                                }
                             }
-                        }
-                        $flushIfDue();
-                    },
-                    onHeartbeat: static function () use ($onHeartbeat, $readControls): void {
-                        $readControls(false);
-                        if ($onHeartbeat !== null) {
-                            $onHeartbeat();
-                        }
-                    },
-                    // P-B2: the run's prose, as `text` items — the parent's
-                    // live line shows the newest fragment when the run is
-                    // writing rather than calling tools. Items only: the v1
-                    // tail stays the run's trail of what it did.
-                    onToken: static function (string $delta) use ($onProgress, $readControls, $buffer, $flushIfDue, &$logProse): void {
-                        $onProgress();
-                        $readControls(false);
-                        $logProse .= $delta;
-                        if ($delta !== '') {
-                            $buffer->add(ActivityItem::text($delta));
-                        }
-                        $flushIfDue();
-                    },
-                    // P-B2: per-step stats from the turn loop's own step
-                    // beat. Each step's start carries the loop's real step
-                    // ceiling, and it ticks the frame buffer before the
-                    // step's request goes out, so items waiting from the
-                    // last step leave now rather than after a long call.
-                    // The step count and token totals stay with the usage
-                    // observer, which bills each step as it lands.
-                    onStep: static function (\SugarCraft\Code\Events\StepStarted|\SugarCraft\Code\Events\UsageUpdated $event) use (&$stats, $flushIfDue, $stopIfCancelled, $stopIfControlled): void {
-                        if ($event instanceof \SugarCraft\Code\Events\StepStarted) {
-                            $stopIfCancelled();
-                            // The step boundary: where a pause holds.
-                            $stopIfControlled(true);
-                            $stats['maxSteps'] = $event->maxSteps;
-                        }
-                        $flushIfDue();
-                    },
-                );
-        } catch (TurnInterrupted $failure) {
-            // A run that failed part-way still billed every step it completed
-            // (audit B4). The transcript holds those steps' assistant turns,
-            // each with its own usage; the opening $messages are skipped so a
-            // resumed run's earlier, already-billed steps are not counted twice.
-            $spent = self::spentSince($failure->transcript, count($messages));
-            self::bill($subAgent, $spent, $baseTokens, $baseCost);
-            // P-E3: the user moved the run to the background. Saved like a
-            // cancelled run, then continued by a background session.
-            if ($failure->getPrevious() instanceof \SugarCraft\Code\Support\RunPromotedToBackground) {
+                            $flushIfDue();
+                        },
+                        onHeartbeat: static function () use ($onHeartbeat, $readControls): void {
+                            $readControls(false);
+                            if ($onHeartbeat !== null) {
+                                $onHeartbeat();
+                            }
+                        },
+                        // P-B2: the run's prose, as `text` items — the parent's
+                        // live line shows the newest fragment when the run is
+                        // writing rather than calling tools. Items only: the v1
+                        // tail stays the run's trail of what it did.
+                        onToken: static function (string $delta) use ($onProgress, $readControls, $buffer, $flushIfDue, &$logProse): void {
+                            $onProgress();
+                            $readControls(false);
+                            $logProse .= $delta;
+                            if ($delta !== '') {
+                                $buffer->add(ActivityItem::text($delta));
+                            }
+                            $flushIfDue();
+                        },
+                        // P-B2: per-step stats from the turn loop's own step
+                        // beat. Each step's start carries the loop's real step
+                        // ceiling, and it ticks the frame buffer before the
+                        // step's request goes out, so items waiting from the
+                        // last step leave now rather than after a long call.
+                        // The step count and token totals stay with the usage
+                        // observer, which bills each step as it lands.
+                        onStep: static function (\SugarCraft\Code\Events\StepStarted|\SugarCraft\Code\Events\UsageUpdated $event) use (&$stats, $flushIfDue, $stopIfCancelled, $stopIfControlled): void {
+                            if ($event instanceof \SugarCraft\Code\Events\StepStarted) {
+                                $stopIfCancelled();
+                                // The step boundary: where a pause holds.
+                                $stopIfControlled(true);
+                                $stats['maxSteps'] = $event->maxSteps;
+                            }
+                            $flushIfDue();
+                        },
+                    );
+            } catch (TurnInterrupted $failure) {
+                // A run that failed part-way still billed every step it completed
+                // (audit B4). The transcript holds those steps' assistant turns,
+                // each with its own usage; the opening $attemptMessages are
+                // skipped so a resumed run's earlier, already-billed steps are
+                // not counted twice, and the blank attempts banked so far ride
+                // the same total.
+                $spent = Usage::sum([...$blankUsages, self::spentSince($failure->transcript, count($attemptMessages))]);
+                self::bill($subAgent, $spent, $baseTokens, $baseCost);
+                // P-E3: the user moved the run to the background. Saved like a
+                // cancelled run, then continued by a background session.
+                if ($failure->getPrevious() instanceof \SugarCraft\Code\Support\RunPromotedToBackground) {
+                    [$worktreeNote, $keptWorktree] = $this->leaveWorktree($worktree, $agentName);
+                    $resume = $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath, $runLedger, $keptWorktree);
+                    // The log is complete before the session can append to it.
+                    $foldThink();
+                    $flushLog();
+                    $inboxTrailer = $turnInbox?->trailer() ?? '';
+
+                    return $this->moveToBackground(
+                        $toolCallId,
+                        $agentName,
+                        $description,
+                        $requestedModel,
+                        $subAgent->task,
+                        $resumeId,
+                        $resume,
+                        $stats['step'],
+                        $startedAt,
+                        $spent,
+                        $finish,
+                        ($inboxTrailer === '' ? '' : "\n\n" . $inboxTrailer) . $worktreeNote . $runNote,
+                    );
+                }
+                $cancelled = $failure->getPrevious() instanceof \SugarCraft\Code\Support\ToolCallCancelled;
+                $why = match (true) {
+                    !$cancelled => sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage()),
+                    $control['cancel'] && $control['cancelledBy'] !== null && $control['cancelledBy'] !== \SugarCraft\Code\Agents\Live\AgentMessage::FROM_USER
+                        => sprintf('sub-agent "%s" was cancelled by the agent that launched it (Subagents cancel)', $agentName),
+                    default => sprintf('sub-agent "%s" was cancelled by the user (%s)', $agentName, $control['cancel'] ? 'from the Agent View' : 'Esc'),
+                };
                 [$worktreeNote, $keptWorktree] = $this->leaveWorktree($worktree, $agentName);
                 $resume = $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath, $runLedger, $keptWorktree);
-                // The log is complete before the session can append to it.
-                $foldThink();
-                $flushLog();
+                $finish(
+                    $cancelled ? SubAgent::STATUS_STOPPED : SubAgent::STATUS_FAILED,
+                    '',
+                    $why,
+                    $cancelled ? SubAgentActivity::OUTCOME_CANCELLED : SubAgentActivity::OUTCOME_FAILED,
+                    $resumeId,
+                );
+
+                // P-D1: what the user told the run before it stopped is part of
+                // why it stopped where it did.
                 $inboxTrailer = $turnInbox?->trailer() ?? '';
 
-                return $this->moveToBackground(
+                return $this->refusal(
                     $toolCallId,
-                    $agentName,
-                    $description,
-                    $requestedModel,
-                    $subAgent->task,
-                    $resumeId,
-                    $resume,
-                    $stats['step'],
-                    $startedAt,
+                    $why . '. ' . $resume . $failureTail($failure->transcript) . ($inboxTrailer === '' ? '' : "\n\n" . $inboxTrailer) . $worktreeNote . $runNote,
+                    self::elapsedMs($startedAt),
                     $spent,
-                    $finish,
-                    ($inboxTrailer === '' ? '' : "\n\n" . $inboxTrailer) . $worktreeNote . $runNote,
                 );
             }
-            $cancelled = $failure->getPrevious() instanceof \SugarCraft\Code\Support\ToolCallCancelled;
-            $why = match (true) {
-                !$cancelled => sprintf('sub-agent "%s" failed: %s', $agentName, $failure->getMessage()),
-                $control['cancel'] && $control['cancelledBy'] !== null && $control['cancelledBy'] !== \SugarCraft\Code\Agents\Live\AgentMessage::FROM_USER
-                    => sprintf('sub-agent "%s" was cancelled by the agent that launched it (Subagents cancel)', $agentName),
-                default => sprintf('sub-agent "%s" was cancelled by the user (%s)', $agentName, $control['cancel'] ? 'from the Agent View' : 'Esc'),
-            };
-            [$worktreeNote, $keptWorktree] = $this->leaveWorktree($worktree, $agentName);
-            $resume = $this->suspend($agentName, $failure->transcript, $resumes, $suspension['id'] ?? null, $resumeId, $logPath, $runLedger, $keptWorktree);
-            $finish(
-                $cancelled ? SubAgent::STATUS_STOPPED : SubAgent::STATUS_FAILED,
-                '',
-                $why,
-                $cancelled ? SubAgentActivity::OUTCOME_CANCELLED : SubAgentActivity::OUTCOME_FAILED,
-                $resumeId,
-            );
 
-            // P-D1: what the user told the run before it stopped is part of
-            // why it stopped where it did.
-            $inboxTrailer = $turnInbox?->trailer() ?? '';
+            // The turn ended silently — no final report in hand. A blank
+            // return is never useful output, so ask the SAME session to
+            // continue, up to the shared cap; any non-blank report resets
+            // the streak. The dashboard row below stays the run's honest
+            // OUTCOME_EMPTY record; the refusal names the stall.
+            $attemptOutput = trim($turn->reply->content);
 
-            return $this->refusal(
-                $toolCallId,
-                $why . '. ' . $resume . $failureTail($failure->transcript) . ($inboxTrailer === '' ? '' : "\n\n" . $inboxTrailer) . $worktreeNote . $runNote,
-                self::elapsedMs($startedAt),
-                $spent,
-            );
+            if ($attemptOutput !== '') {
+                $blankResume->nonBlank();
+
+                break;
+            }
+
+            // A run the spend cap stopped outranks the blank policy: the
+            // finish below turns that stop into the cap refusal as-is.
+            if ($capStop !== null) {
+                break;
+            }
+
+            if (!$blankResume->observeBlank()) {
+                break;
+            }
+
+            $blankUsages[] = $turn->reply->usage;
+            $record(sprintf('⧗ blank return #%d — resumed the same session with "continue"', $blankResume->blankStreak()), null);
+            $log?->append(SubAgentTranscriptLog::T_STATUS, [
+                'status' => 'blank-resume',
+                'outcome' => 'resumed the same session after a silent turn',
+                'error' => null,
+            ]);
+            $attemptMessages = [...$turn->transcript, new UserMessage(BlankReturnResume::INSTRUCTION)];
         }
         // @endregion run
 
         // @region finish
         $reply = $turn->reply;
-        $spent = $reply->usage;
+        // The blank attempts billed their own steps already; the report row
+        // carries the whole delegation's spend. With no blank banked this is
+        // byte-identical to the old single-usage assignment (Usage::sum
+        // returns its first non-null entry unchanged).
+        $spent = $blankUsages === [] ? $reply->usage : Usage::sum([...$blankUsages, $reply->usage]);
         self::bill($subAgent, $spent, $baseTokens, $baseCost);
         // Saved before the finished frame goes out, so the frame can name
         // the id a later Task call resumes it by (every path below saves).
@@ -2298,13 +2355,15 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         );
 
         if ($content === '') {
+            // Reached only when the blank policy gave up: the run went silent
+            // ten times in a row and the continue-resumes did not wake it.
             return $this->refusal($toolCallId, sprintf(
                 'sub-agent "%s" ended without a final report (step cap %d); any work it did is in the tree'
                 . ' but was not summarised. %s',
                 $agentName,
                 $maxTurns,
                 $resume,
-            ) . $failureTail($turn->transcript) . $inboxNote, self::elapsedMs($startedAt), $spent);
+            ) . $blankResume->stallNote() . $failureTail($turn->transcript) . $inboxNote, self::elapsedMs($startedAt), $spent);
         }
 
         // A run that hit its step cap now ENDS IN A SUMMARY rather than in
@@ -2343,6 +2402,10 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $resume,
             );
         }
+        // The run kept its reports in the end; the nudge it needed is part of
+        // the record, outside the fence like the step-cap note. Empty string
+        // when the session never went silent, so the report is byte-identical.
+        $content .= $blankResume->resumedNote();
         $content .= $inboxNote;
 
         return new ToolResult(
