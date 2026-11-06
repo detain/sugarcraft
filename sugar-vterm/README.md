@@ -285,7 +285,7 @@ implements the superset.
 | `F` | CPL | (Handler) | Cursor up N + column 0. |
 | `G` | CHA | (Handler) | Cursor to column N. |
 | `H` | CUP | `cup($row, $col)` | Move cursor to (row, col) 1-indexed. |
-| `I` | CHT | `cht($n=1)` | Cursor forward N tab stops (emulator honours the tab-stop table; the renderer single-steps). Shadowed while `?1004 h` is set — the focus intercept consumes any `CSI Ps I` as focus-in before tab handling runs. |
+| `I` | CHT | `cht($n=1)` | Cursor forward N tab stops (emulator honours the tab-stop table; the renderer offsets the column forward by N, clamped to the last column, ignoring tab stops entirely). Shadowed while `?1004 h` is set — the focus intercept consumes any `CSI Ps I` as focus-in before tab handling runs. |
 | `J` | ED | `ed($mode=0)` | Erase display: 0=cursor→end, 1=begin→cursor, 2=all, 3=all+scrollback (emulator clears the ring; the renderer has no ring, so 3 blanks the grid). |
 | `K` | EL | `el($mode=0)` | Erase line: 0=cursor→eol, 1=bol→cursor, 2=full line. |
 | `L` | IL | `il($n=1)` | Insert N blank lines at cursor. |
@@ -294,7 +294,7 @@ implements the superset.
 | `S` | SU | `su($n=1)` | Scroll up N lines. |
 | `T` | SD | `sd($n=1)` | Scroll down N lines. |
 | `X` | ECH | (Handler) | Erase N characters from cursor (preserves BCE bg). |
-| `Z` | CBT | `cbt($n=1)` | Cursor backward N tab stops (emulator honours the tab-stop table; the renderer single-steps). |
+| `Z` | CBT | `cbt($n=1)` | Cursor backward N tab stops (emulator honours the tab-stop table; the renderer offsets the column back by N, clamped to column 0, ignoring tab stops entirely). |
 | `d` | VPA | (Handler) | Cursor to row N. |
 | `f` | HVP | `hvp($row, $col)` | Same as CUP — move cursor to (row, col). |
 | `g` | TBC | `tbc($mode=0)` | Tab clear: 0=column, 3=all (renderer: no-op — tab stops unmodelled). |
@@ -315,8 +315,9 @@ silently discards them. Rows with an explicit `Method` are implemented by
 the three asymmetries named below (one of them, `b` REP, is renderer-only).
 Three asymmetries are deliberate and pinned out of
 `tests/EngineDifferentialTest.php`'s corpus: tab handling (`I`/`Z`/`g` —
-the emulator walks a tab-stop table, the renderer single-steps and
-`TBC` no-ops), `b` REP (renderer only, the emulator discards it), and BCE
+the emulator walks a tab-stop table, the renderer merely offsets the column
+by N and ignores tab stops entirely, and `TBC` no-ops), `b` REP (renderer
+only, the emulator discards it), and BCE
 background-color erase (`X` ECH and mode-3 scrollback clearing are
 emulator-only). The renderer honours the same DECAWM/DECTCEM private
 modes, origin-mode clamps, and SGR set as the emulator.
