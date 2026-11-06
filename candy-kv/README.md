@@ -26,7 +26,7 @@ pane build one on top of `Store::list()`.
 
 - **Multi-database** — separate stores with the `key@dbname` suffix; the SQLite file for a name is created the first time something is written to it (reads of a missing database just see emptiness)
 - **Binary-safe** — values containing NUL bytes or invalid UTF-8 are stored base64-encoded with the binary flag (auto-detected; `--binary`/`--text` override); binary entries export as base64 envelopes and reimport byte-exact
-- **Glob patterns** — `list` and `delete` accept `*` and `?`; matching is byte-wise and case-sensitive, `\*`/`\?` stand for literals; `get` takes an exact key only
+- **Glob patterns** — `list` and `delete` accept `*` and `?`; matching is byte-wise and case-sensitive, `\*`/`\?` stand for literals; `get` takes an exact key only — and that gate is a raw-byte check, so a key whose *name* contains `*` or `?` is unreachable through `get` even when spelled `\*`/`\?` (the backslash does not hide the byte). Reach such keys with `list`/`delete` escape literals, `saveTo()`, or `export`.
 - **Ordered, filterable listing** — forward or reverse, keys only, values only, or full entries
 - **SQLite-backed** — one file per database under `$XDG_CONFIG_HOME/skate/` (or `~/.config/skate/`; see Data directory)
 - **Iterable streams** — `list()` yields results without loading everything into memory
@@ -132,7 +132,9 @@ candy-kv --version
 | a runtime error (unreadable store, failed write) | 1 |
 | usage error: unknown command, unknown option, bad/missing arguments, `--ttl 0`, pattern passed to `get` | 2 |
 
-Nothing is written on exit 2 paths.
+Nothing is written on exit 2 paths. The "pattern passed to `get`" refusal
+inspects the raw key bytes (`bin/candy-kv`: `strpbrk($key, '*?')`), so it fires
+on escaped spellings too — see Glob patterns above.
 
 ### Output format
 
