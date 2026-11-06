@@ -287,8 +287,9 @@ fd until the process exits even though its slot frees. `release()` (or
 ### `PtyInputDecoder` — key/mouse events straight off the master
 
 Feeds master reads through sugar-input's `EscapeDecoder`:
-`new(MasterPty $master, ?EscapeDecoder $decoder = null, int $readChunk = 8192)`
-(a `null` decoder gets a fresh `EscapeDecoder`),
+`new(MasterPty $master, EscapeDecoder $decoder = new EscapeDecoder(), int $readChunk = 8192)`
+(the decoder parameter is non-nullable with a `new` default — omit it to get a fresh
+`EscapeDecoder`; passing `decoder: null` raises a `TypeError`),
 `readEvents(float $timeout = 0.05): list<Event>` returns after one
 packet or one timeout (partial escape sequences buffer across calls) —
 an empty result is **ambiguous**, it means both "nothing yet" and "the
