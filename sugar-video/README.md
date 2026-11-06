@@ -5,7 +5,7 @@
 
 <!-- BADGES:BEGIN -->
 [![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-video)](https://app.codecov.io/gh/sugarcraft?flags%5B0%5D=sugar-video)
+[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-video)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-video)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-video?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-video)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
@@ -99,6 +99,8 @@ Three named ramps are available:
 | `dense` | `` .`^",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$`` | High-fidelity ASCII art |
 
 ```php
+use SugarCraft\Video\Reel;
+
 // Use the dense ramp for more detailed ASCII output
 Reel::open('video.mp4')->withRamp('dense')->play();
 ```
@@ -124,13 +126,15 @@ Reel::openUrl(
 )->play();
 ```
 
-Headers are validated at the boundary: a name or value containing a CR, LF or
-NUL (HPP / request-splitting), an empty name, a colon in the name, or a
-malformed field line all throw `InvalidArgumentException` before `ffmpeg` is
-ever spawned. **Migration note:** the second parameter used to be
+Headers are validated at the boundary: a name or value containing any C0
+control except HTAB, or DEL — which covers the classic CR, LF and NUL
+injection bytes (HPP / request-splitting) — an empty name, a colon in the
+name, or a malformed field line all throw `InvalidArgumentException` before
+`ffmpeg` is ever spawned. **Migration note:** the second parameter used to be
 `$allowedHosts`; it is now `$headers` (prefer named arguments). The old
-positional shape fails loudly — a positional host list is rejected outright as
-the legacy `allowedHosts` shape (its own migration message), `null` as a
+positional shape fails loudly — any list-shaped array is rejected outright as
+the legacy `allowedHosts` shape (its own migration message), even a list
+carrying otherwise-valid header field lines, and `null` fails as a
 `TypeError`. A `User-Agent` value is passed to
 `ffmpeg -user_agent`; every other header rides
 in a single `-headers` block. Both flags are emitted only for network sources —
@@ -389,7 +393,7 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
 
 The entry points worth knowing: `Reel` (open/openUrl/play/toPlayer + `withMode/withFps/withLoop/withRamp/withSubtitles/withAudio/withAllowedHosts`), `Player` (open/fromDecoder + pause/play/stop/isStopped/withSeek/withAudio/frameAt), `AudioPlayer` (start/stop/mute/unmute/isMuted), `Synthetic::generate`, `WebVtt::parse`, `VideoSource::probe`, `HttpHeaders::parse`, `Probe`, `DecoderFactory::new`, and `RendererFactory` (`auto`/`autoMode`/`supports`/`supportedModes`/`diagnose`).
 
-Ceilings that shape what plays: source capture is capped at 64 MiB per file (`GifDecoder::MAX_SOURCE_BYTES`, `AnimatedWebpDecoder::MAX_SOURCE_BYTES`); animated WebP at `MAX_FRAMES` 4096 frames, `MAX_CANVAS_PIXELS` 2048² per canvas and `MAX_TOTAL_PIXELS` 33,554,432 pixels summed across the file; GIF residency at `MAX_TOTAL_FRAME_PIXELS` 8 000 000 decoded pixels per playthrough; subtitles at 4 MiB (`Reel::MAX_SUBTITLE_BYTES`) and 10 000 cues (`WebVtt::MAX_CUES`, announced when truncated); the terminal geometry clamps to 10-200 columns and 5-80 rows (`Player::MIN/MAX_COLS`, `MIN/MAX_ROWS`). ffprobe output drains under an 8 MiB ceiling and a 10 s deadline; each ffmpeg frame read is bounded by a per-fill timeout.
+Ceilings that shape what plays: source capture is capped at 64 MiB per file (`GifDecoder::MAX_SOURCE_BYTES`, `AnimatedWebpDecoder::MAX_SOURCE_BYTES`); animated WebP at `MAX_FRAMES` 4096 frames, `MAX_CANVAS_PIXELS` 2048² per canvas and `MAX_TOTAL_PIXELS` 33,554,432 pixels summed across the file; GIF residency at an internal `GifDecoder` cap of 8 000 000 decoded pixels per playthrough; subtitles at 4 MiB (`Reel::MAX_SUBTITLE_BYTES`) and 10 000 cues (`WebVtt::MAX_CUES`, announced when truncated); the terminal geometry clamps to 10-200 columns and 5-80 rows (`Player::MIN/MAX_COLS`, `MIN/MAX_ROWS`). ffprobe output drains under an 8 MiB ceiling and a 10 s deadline; each ffmpeg frame read is bounded by a per-fill timeout.
 
 ## Color and terminal honesty
 
