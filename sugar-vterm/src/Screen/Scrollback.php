@@ -39,7 +39,7 @@ final class Scrollback
      * DivisionByZeroError on first push, a negative one an opaque
      * array_fill() ValueError. Throw rather than clamp: this is a
      * programmer error with no coherent fallback, and the sibling entry
-     * point `Terminal::withScrollbackSize()` (Terminal.php:511) already
+     * point `Terminal::withScrollbackSize()` (src/Terminal/Terminal.php) already
      * rejects the same input with InvalidArgumentException — clamping
      * here would make the two paths contradict each other. No upstream
      * Go counterpart: port-side guard.
