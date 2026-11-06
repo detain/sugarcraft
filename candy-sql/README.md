@@ -66,7 +66,7 @@ above); the explicit string exists as a test seam because `MysqlDatabase` is fin
 | `Ctrl+F`           | Save the query pane's text to the favorites list (session state — see disclosure below) |
 | `Ctrl+Shift+F` | Remove the current query from favorites |
 | `Backspace`        | Delete last character (query pane)              |
-| `q` / `Esc`        | Quit (except inside the query pane — `q` types) |
+| `q` / `Esc`        | Quit from the Tables and Rows panes only; inside Admin, `q` returns to Tables and `Esc` cancels an open modal dialog; inside the query pane `q` types and `Esc` does nothing |
 
 ### Admin Dashboard Keys
 
@@ -93,8 +93,8 @@ closing the app drops them. Likewise `[x]` on the Reports page regenerates
 it never touches the filesystem — writing `.csv` files is the separate
 `Db\Export\CsvExporter` API described under Exporters.
 
-The admin page's own `Tab`/`[1]`/`[2]`/`[3]` detail-tab handlers exist in the page code but are currently unreachable:
-`Tab` cycles the focus pane and the digits select admin pages, both at the app level — the pages' private handlers for those keys are therefore never reached and kept only for standalone (non-app) use.
+The admin page's own `Tab`/`[1]`/`[2]`/`[3]` detail-tab handlers exist in the page code but are unreachable during normal app operation:
+`Tab` cycles the focus pane and the digits select admin pages, both at the app level — the pages' private handlers for those keys are therefore never reached except while a modal dialog is open, where App hands every key to the page instead (the dialog consumes or cancels it) rather than cycling panes or switching pages. Outside that window they are kept only for standalone (non-app) use.
 
 > **Key routing** — `App::update()` consumes, in order: `Ctrl+C` (unconditional quit); on the Admin pane, every key goes to the page while it is modal (`PageBase::isModal()`: the variable-editor dialog, the GTID dialog, a pending kill confirmation, or a staged PerfSchema commit) and `Esc` goes to the page whenever it is present; `q`/`Esc` quit **only from the Tables and Rows browser panes** (in the Query pane `Esc` no longer discards a drafted query); `Tab` cycles the focus pane. In the Query pane, `Ctrl+R`/`Ctrl+E` run the query (both also accept `Ctrl+Enter`) and every other key edits the buffer — except destructive statements (`DROP`/`TRUNCATE`/`DELETE`/`ALTER`/`RENAME`/`GRANT`/`REVOKE`), whose first press only arms a warning; a second consecutive run of the byte-identical SQL confirms, and any edit or other query disarms. On the Admin pane, `App::handleAdminKey()` then intercepts the page picker (`1`–`{n}`, `p`, `r`, `q`→return to Tables); `r` additionally forwards to the active page after dropping the shared `AdminQueryCache`. Pages listed in `RowNavigable` (Variables, Connections, Reports, PerfSchema, Debug) keep their own `j`/`k`/`↑`/`↓` row cursors; on non-row-navigable pages (ServerStatus, Dashboard) those same keys walk the sidebar. All remaining keys are delegated to the active page's `update()` method.
 
@@ -102,7 +102,7 @@ The admin page's own `Tab`/`[1]`/`[2]`/`[3]` detail-tab handlers exist in the pa
 
 ### Admin Page Digit Map
 
-The admin sidebar is split into two sections (Management, then Performance). Digits `1`–`8` select pages in display order (digits outside the mapped range are ignored):
+The admin sidebar is split into two sections (Management, then Performance). The admin digit handler accepts `1`–`9`; digits `1`–`8` select pages in display order, and any accepted digit with no page at that position (`9`) is ignored:
 
 | Digit | Management Section | Digit | Performance Section |
 |-------|--------------------|-------|----------------------|
