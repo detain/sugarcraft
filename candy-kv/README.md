@@ -103,7 +103,7 @@ candy-kv list-dbs                                             # databases presen
 candy-kv prune                                                # remove expired residue (default db)
 candy-kv import <json|yaml|yml> <path> [--no-atomic]          # path=- reads STDIN
 candy-kv export <json|yaml|yml> [db] [pattern]
-candy-kv --help    # or: help
+candy-kv --help    # or: -h, help
 candy-kv --version
 ```
 
