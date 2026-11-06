@@ -280,7 +280,8 @@ renders every failed field's message above the form when submit fails.
 ranked by Smith-Waterman local-alignment score (sugar-fuzzy) and filtered to
 positive scores. The `fuzzy()` short alias is equivalent. For programmatic
 scoring use `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher` directly
-(`SugarCraft\Forms\Fuzzy\FuzzyMatcher` remains a deprecated alias of it;
+(the deprecated `SugarCraft\Forms\Fuzzy\FuzzyMatcher` is a delegating shim over
+it, not an alias — see Shared foundations;
 scoring defaults in `SugarCraft\Fuzzy\ScoringProfile`: match `+3`,
 mismatch `-3`, gap open `-5`, gap extend `-1`, adjacent bonus `+5`).
 
@@ -400,9 +401,12 @@ sugar-forms is built on five shared packages:
   innermost bracket pair wins, quotes pair left-to-right, unmatched
   delimiters return null (vim's beep).
 
-The legacy `SugarCraft\Forms\Fuzzy\FuzzyMatcher` (step-07 back-compat shim)
-remains as a deprecated alias — it delegates to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`
-with no behavioural divergence.
+The legacy `SugarCraft\Forms\Fuzzy\FuzzyMatcher` remains as a deprecated
+back-compat shim. It is a delegating final class, not an alias: scoring runs on
+the canonical `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`, and the shim
+survives only to preserve two legacy shapes — the
+`match(string, array): list<[string, int]>` return the SSOT no longer exposes,
+and the negative score for empty candidates (where the SSOT returns 0).
 
 ## Accessor deprecation (2026-10-24)
 
