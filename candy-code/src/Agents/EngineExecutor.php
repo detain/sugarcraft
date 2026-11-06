@@ -426,47 +426,92 @@ final class EngineExecutor implements ExecutorInterface
             $agent,
         ));
 
-        try {
-            // A delegated run (step 3.D-2): the turn ends on `SubagentStop`,
-            // not on the session's `Stop` — this engine is the session's own
-            // and carries nothing else that says so.
-            $turn = HookManager::runAsSubagent(
-                $agent->id,
-                $agent->agent->name,
-                static fn (): TranscriptTurn => $engine->completeTranscript(
-                    $messages,
-                    onEvent: $onEvent,
-                    onReasoning: $onProgress,
-                    onHeartbeat: $heartbeat,
-                    onToken: $onToken,
-                ),
-            );
-        } catch (TurnInterrupted $failure) {
-            // A run that failed part-way still billed the steps it completed
-            // (same bug class as audit B4): the interrupted transcript carries
-            // each completed step's assistant turn with its usage.
-            $usages = [];
-            foreach (\array_slice($failure->transcript, \count($messages)) as $message) {
-                if ($message instanceof AssistantMessage) {
-                    $usages[] = $message->usage();
+        // Blank-return resume (wf-g4): a child that COMPLETED its turn with a
+        // blank final report is resumed on the spot, the same session carried
+        // forward with one continue instruction, up to ten consecutive blanks.
+        // The worktree enters above and leaves exactly once below — a resumed
+        // attempt keeps editing in the stage's own tree, and every silent
+        // attempt's usage is banked so the final result bills the whole run.
+        $blankResume = new BlankReturnResume();
+        /** @var list<?Usage> $blankUsages */
+        $blankUsages = [];
+        /** @var list<Message> $attemptMessages */
+        $attemptMessages = $messages;
+
+        while (true) {
+            try {
+                // A delegated run (step 3.D-2): the turn ends on `SubagentStop`,
+                // not on the session's `Stop` — this engine is the session's own
+                // and carries nothing else that says so. Each resume is its own
+                // delegated turn on the SAME agent id, the way a follow-up would
+                // already behave.
+                $turn = HookManager::runAsSubagent(
+                    $agent->id,
+                    $agent->agent->name,
+                    static fn (): TranscriptTurn => $engine->completeTranscript(
+                        $attemptMessages,
+                        onEvent: $onEvent,
+                        onReasoning: $onProgress,
+                        onHeartbeat: $heartbeat,
+                        onToken: $onToken,
+                    ),
+                );
+            } catch (TurnInterrupted $failure) {
+                // A run that failed part-way still billed the steps it completed
+                // (same bug class as audit B4): the interrupted transcript carries
+                // each completed step's assistant turn with its usage. The offset
+                // is THIS attempt's input — earlier attempts' turns already live
+                // in the banked $blankUsages.
+                $usages = [];
+                foreach (\array_slice($failure->transcript, \count($attemptMessages)) as $message) {
+                    if ($message instanceof AssistantMessage) {
+                        $usages[] = $message->usage();
+                    }
                 }
+
+                // G2: a stage interrupted mid-run leaves its worktree the way
+                // Task leaves it — released when clean, disclosed by path (and
+                // branch) in the failure text when work was kept.
+                [$treeNote,] = WorktreeIsolation::leave($manager, $worktree, $agent->agent->name);
+
+                return self::failed(
+                    $agent,
+                    $startedAt,
+                    $failure->getMessage() . $treeNote,
+                    Usage::sum([...$blankUsages, ...$usages]),
+                    $expired ? AgentStatus::TimedOut : AgentStatus::Failed,
+                );
             }
 
-            // G2: a stage interrupted mid-run leaves its worktree the way
-            // Task leaves it — released when clean, disclosed by path (and
-            // branch) in the failure text when work was kept.
-            [$treeNote,] = WorktreeIsolation::leave($manager, $worktree, $agent->agent->name);
+            $output = trim($turn->reply->content);
 
-            return self::failed(
-                $agent,
-                $startedAt,
-                $failure->getMessage() . $treeNote,
-                Usage::sum($usages),
-                $expired ? AgentStatus::TimedOut : AgentStatus::Failed,
-            );
+            if (!BlankReturnResume::isBlank($output)) {
+                $blankResume->nonBlank();
+                break;
+            }
+
+            if (!$blankResume->observeBlank()) {
+                // The tenth consecutive blank: fail honestly, through the
+                // same Failed shape a mechanical stage failure uses, with the
+                // stall and its consumed budget named for the driver. The
+                // legacy sentence stays so a driver that greps for the old
+                // reason still recognises this one.
+                [$treeNote,] = WorktreeIsolation::leave($manager, $worktree, $agent->agent->name);
+
+                return self::failed(
+                    $agent,
+                    $startedAt,
+                    sprintf(
+                        'the agent ended without a final report (step cap %d); any work it did is in the tree but was not summarised',
+                        $maxTurns,
+                    ) . $treeNote . $blankResume->stallNote(),
+                    Usage::sum([...$blankUsages, $turn->reply->usage]),
+                );
+            }
+
+            $blankUsages[] = $turn->reply->usage;
+            $attemptMessages = [...$turn->transcript, new UserMessage(BlankReturnResume::INSTRUCTION)];
         }
-
-        $output = trim($turn->reply->content);
 
         // G2: release the stage's worktree exactly as Task leaves it — a clean
         // tree is removed and nothing says so; kept work is disclosed by path
@@ -474,14 +519,11 @@ final class EngineExecutor implements ExecutorInterface
         // failure text when the run reported nothing).
         [$treeNote,] = WorktreeIsolation::leave($manager, $worktree, $agent->agent->name);
 
-        if ($output === '') {
-            return self::failed($agent, $startedAt, sprintf(
-                'the agent ended without a final report (step cap %d); any work it did is in the tree but was not summarised',
-                $maxTurns,
-            ) . $treeNote, $turn->reply->usage);
-        }
-
         $output .= $treeNote;
+
+        // A report that rode on resumes says so, in the same bracketed tail
+        // discipline as the schema disclosure below; zero resumes, zero bytes.
+        $output .= $blankResume->resumedNote();
 
         // G3 honesty mirror of headless json_schema_unapplied: the stage
         // channel has no stderr for the driver, so the disclosure rides the
@@ -492,12 +534,17 @@ final class EngineExecutor implements ExecutorInterface
             $output .= "\n\n[the reply was not constrained to the output schema because the model ran tools before answering]";
         }
 
+        // Banked blank attempts bill alongside the reporting one; with no
+        // resumes $finalUsage IS the reply's own usage object, so the legacy
+        // numbers are untouched.
+        $finalUsage = $blankUsages === [] ? $turn->reply->usage : Usage::sum([...$blankUsages, $turn->reply->usage]);
+
         return new AgentResult(
             agentId: $agent->id,
             status: AgentStatus::Completed,
             output: $output,
-            tokensUsed: $turn->reply->usage?->totalTokens ?? 0,
-            costUsd: $turn->reply->usage?->costUsd ?? 0.0,
+            tokensUsed: $finalUsage?->totalTokens ?? 0,
+            costUsd: $finalUsage?->costUsd ?? 0.0,
             startedAt: $startedAt,
             completedAt: new \DateTimeImmutable(),
         );
