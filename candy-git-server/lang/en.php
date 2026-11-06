@@ -75,5 +75,9 @@ return [
     'cli.serve_http_needs_repo_root' => 'serve --http requires --repo-root DIR (the directory whose subdirectories are served)',
     'cli.serve_repo_root_not_dir' => '--repo-root is not a directory: {path}',
     'cli.serve_http_port_range' => '--http-port out of range: {port}',
+    'cli.serve_http_port_not_a_number' => 'serve --http: --http-port must be a number, got {port}',
+    'cli.serve_http_flag_unsupported' => 'Flag {flag} is not supported by serve --http (the listener runs in the foreground; daemonize with a supervisor).',
+    'cli.serve_http_unknown_flag' => 'Unknown flag for serve --http: {flag}',
+    'cli.port_deprecated'      => 'Note: --port is deprecated; use --http-port instead (alias held for compatibility).',
     'cli.serve_http_banner' => 'smart-HTTP listener on {addr} ({repos} repos, {published} published; {users} accounts; anonymous-read={anon}; push is served too — hook declines ride in-band)',
 ];

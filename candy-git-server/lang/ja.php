@@ -66,5 +66,9 @@ return [
     'cli.serve_http_needs_repo_root' => 'serve --http には --repo-root DIR が必要です (サブディレクトリが配信される対象ディレクトリ)',
     'cli.serve_repo_root_not_dir' => '--repo-root はディレクトリではありません: {path}',
     'cli.serve_http_port_range' => '--http-port が範囲外です: {port}',
+    'cli.serve_http_port_not_a_number' => 'serve --http: --http-port は数値でなければありませんが、{port} を受け取りました',
+    'cli.serve_http_flag_unsupported' => 'フラグ {flag} は serve --http ではサポートされていません（リスナーはフォアグラウンドで動作します。デーモン化はスーパバイザで行ってください）。',
+    'cli.serve_http_unknown_flag' => 'serve --http で {flag} は不明なフラグです',
+    'cli.port_deprecated'      => '注意: --port は非推奨です。代わりに --http-port を使用してください（互換性のためエイリアスを維持）。',
     'cli.serve_http_banner' => 'smart-HTTP リスナー {addr} ({repos} リポジトリ、{published} 公開、{users} アカウント; 匿名読み取り={anon}; push も配信 — フック拒否は帯域内で伝達)',
 ];

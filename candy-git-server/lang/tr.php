@@ -66,5 +66,9 @@ return [
     'cli.serve_http_needs_repo_root' => 'serve --http, --repo-root DİZİN gerektirir (alt dizinleri sunulan dizin)',
     'cli.serve_repo_root_not_dir' => '--repo-root bir dizin değil: {path}',
     'cli.serve_http_port_range' => '--http-port aralık dışında: {port}',
+    'cli.serve_http_port_not_a_number' => 'serve --http: --http-port bir sayı olmalı, alınan: {port}',
+    'cli.serve_http_flag_unsupported' => '{flag} bayrağı serve --http tarafından desteklenmez (dinleyici ön planda çalışır; bir supervizörle daemon yapın).',
+    'cli.serve_http_unknown_flag' => 'serve --http için bilinmeyen bayrak: {flag}',
+    'cli.port_deprecated'      => 'Not: --port kullanım dışı; yerine --http-port kullanın (uyumluluk için takma ad korundu).',
     'cli.serve_http_banner' => 'smart-HTTP dinleyici {addr} üzerinde ({repos} depo, {published} herkese açık, {users} hesap; anonim okuma={anon}; push da sunuluyor — kanca redleri bant içinde taşınır)',
 ];

@@ -75,5 +75,9 @@ return [
     'cli.serve_http_needs_repo_root' => 'serve --http exige --repo-root REP (le répertoire dont les sous-répertoires sont servis)',
     'cli.serve_repo_root_not_dir' => '--repo-root n’est pas un répertoire : {path}',
     'cli.serve_http_port_range' => '--http-port hors plage : {port}',
+    'cli.serve_http_port_not_a_number' => 'serve --http : --http-port doit être un nombre, reçu : {port}',
+    'cli.serve_http_flag_unsupported' => 'L’option {flag} n’est pas prise en charge par serve --http (l’écouteur tourne au premier plan ; daemonifiez via un superviseur).',
+    'cli.serve_http_unknown_flag' => 'Option inconnue pour serve --http : {flag}',
+    'cli.port_deprecated'      => 'Note : --port est déprécié ; utilisez --http-port (alias conservé pour compatibilité).',
     'cli.serve_http_banner' => 'listener smart-HTTP sur {addr} ({repos} dépôts, {published} publiés, {users} comptes ; lecture anonyme={anon} ; le push est servi — les refus d’accroches passent en bande)',
 ];

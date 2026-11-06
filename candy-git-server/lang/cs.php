@@ -66,5 +66,9 @@ return [
     'cli.serve_http_needs_repo_root' => 'serve --http vyžaduje --repo-root ADŘ (adresář, jehož podadresáře se obsluhují)',
     'cli.serve_repo_root_not_dir' => '--repo-root není adresář: {path}',
     'cli.serve_http_port_range' => '--http-port mimo rozsah: {port}',
+    'cli.serve_http_port_not_a_number' => 'serve --http: --http-port musí být číslo, dostalo se: {port}',
+    'cli.serve_http_flag_unsupported' => 'Příznak {flag} není serve --http podporován (listener běí v popředí; daemonizujte přes supervisora).',
+    'cli.serve_http_unknown_flag' => 'Neznámý příznak serve --http: {flag}',
+    'cli.port_deprecated'      => 'Poznámka: --port je zastaralý; použijte --http-port (alias zachován pro kompatibilitu).',
     'cli.serve_http_banner' => 'smart-HTTP listener na {addr} ({repos} repozitářů, {published} zveřejněno, {users} účtů; anonymní čtení={anon}; push je také obsluhován — odmítnutí hooků jedou in-band)',
 ];

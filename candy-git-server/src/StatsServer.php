@@ -10,8 +10,9 @@ use React\EventLoop\LoopInterface;
 /**
  * Minimal HTTP stats endpoint on `stats.listen_addr`.
  *
- * Serves the {@see Stats} counters as JSON: `GET /` or `GET /stats`
- * returns `{"uptime_seconds": …, "connections": …, …}`. Runs on a
+ * Serves the {@see Stats} counters as JSON: `GET /`, `GET /stats` and
+ * `GET /stats.json` return
+ * `{"uptime_seconds": …, "connections": …, …}`. Runs on a
  * ReactPHP event loop only (same transport pattern as
  * `GitDaemon::serveAsync()`); there is deliberately no blocking mode —
  * a stats endpoint that monopolises the process would starve the very

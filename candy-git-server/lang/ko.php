@@ -66,5 +66,9 @@ return [
     'cli.serve_http_needs_repo_root' => 'serve --http에는 --repo-root DIR이 필요합니다 (하위 디렉터리가 서비스되는 디렉터리)',
     'cli.serve_repo_root_not_dir' => '--repo-root가 디렉터리가 아닙니다: {path}',
     'cli.serve_http_port_range' => '--http-port가 범위 밖입니다: {port}',
+    'cli.serve_http_port_not_a_number' => 'serve --http: --http-port는 숫자여야 하며 {port}을(를) 받았습니다',
+    'cli.serve_http_flag_unsupported' => '플래그 {flag}는 serve --http에서 지원되지 않습니다(리스니는 포그라운드에서 정하되며 데몬화는 supervisor를 사용하세요).',
+    'cli.serve_http_unknown_flag' => 'serve --http의 알 수 없는 플래그: {flag}',
+    'cli.port_deprecated'      => '참고: --port는 권장되지 않습니다. --http-port를 사용하세요(호환를 위해 별명 유지).',
     'cli.serve_http_banner' => 'smart-HTTP 리스너 {addr} ({repos}개 저장소, {published}개 공개, {users}개 계정; 익명 읽기={anon}; push도 서비스됨 — 훅 거부는 인밴드로 전송)',
 ];

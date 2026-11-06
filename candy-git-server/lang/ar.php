@@ -66,5 +66,9 @@ return [
     'cli.serve_http_needs_repo_root' => 'serve --http يتطلب --repo-root DIR (الدليل الذي تُقدَّم مؤشرراته الفرعية)',
     'cli.serve_repo_root_not_dir' => '--repo-root ليس دليلًا: {path}',
     'cli.serve_http_port_range' => '--http-port خارج المدى: {port}',
+    'cli.serve_http_port_not_a_number' => 'serve --http: يجب أن يكون --http-port رقمًا، وقد ورد: {port}',
+    'cli.serve_http_flag_unsupported' => 'الخيار {flag} غير مدعوم في serve --http (المستمع يعمل في المقدمة؛ استخدم مدير عمليات للتحول إلى خدمة خلفية).',
+    'cli.serve_http_unknown_flag' => 'خيار غير معروف في serve --http: {flag}',
+    'cli.port_deprecated'      => 'ملاحظة: --port مهجور؛ استخدم --http-port بدلاً منه (إبقاء الاسم المستعار للتوافق).',
     'cli.serve_http_banner' => 'مستمع smart-HTTP على {addr} ({repos} مستودعات، {published} منشورًا، {users} حسابات؛ القراءة المجهولة={anon}؛ الدفع مُقدَّم أيضًا — تُنقل رفض الخطافات داخل النطاق)',
 ];

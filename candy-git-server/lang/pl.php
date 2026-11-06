@@ -66,5 +66,9 @@ return [
     'cli.serve_http_needs_repo_root' => 'serve --http wymaga --repo-root KATALOG (katalog, którego podkatalogi są obsługiwane)',
     'cli.serve_repo_root_not_dir' => '--repo-root nie jest katalogiem: {path}',
     'cli.serve_http_port_range' => '--http-port poza zakresem: {port}',
+    'cli.serve_http_port_not_a_number' => 'serve --http: --http-port musi być liczbą, otrzymano: {port}',
+    'cli.serve_http_flag_unsupported' => 'Flaga {flag} nie jest obsługiwana przez serve --http (listener działa na pierwszym planie; daemonizuj za pomocą supervisora).',
+    'cli.serve_http_unknown_flag' => 'Nieznana flaga serve --http: {flag}',
+    'cli.port_deprecated'      => 'Uwaga: --port jest przestarzały; użyj --http-port (alias zachowany dla kompatybilności).',
     'cli.serve_http_banner' => 'nasłuch smart-HTTP na {addr} ({repos} repo, {published} publicznych, {users} kont; anonimowy odczyt={anon}; push też jest obsługiwany — odrzucenia hooków jadą in-band)',
 ];

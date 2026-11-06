@@ -170,4 +170,81 @@ final class BinRepoCommandsTest extends TestCase
         $this->assertMatchesRegularExpression('/showcase\s*\(public\)/', $list['out']);
     }
 
+
+    public function testServeHttpRefusesNonNumericPort(): void
+    {
+        $r = $this->runBin(['serve', '--http', '--repo-root', $this->tmpDir, '--http-port', 'abc']);
+        self::assertSame(1, $r['rc'], $r['err']);
+        self::assertStringContainsString('abc', $r['err'], 'garbage port must be refused by name, not cast to 0');
+    }
+
+    public function testServeHttpRefusesOversizedNumericPort(): void
+    {
+        $r = $this->runBin(['serve', '--http', '--repo-root', $this->tmpDir, '--http-port', '70000']);
+        self::assertSame(1, $r['rc'], $r['err']);
+        self::assertStringContainsString('70000', $r['err']);
+    }
+
+    public function testServeHttpPortAliasWarnsAndRoutesToHttpPort(): void
+    {
+        $r = $this->runBin(['serve', '--http', '--repo-root', $this->tmpDir, '--port', '70000']);
+        self::assertSame(1, $r['rc'], $r['err']);
+        self::assertStringContainsString('deprecated', $r['err'], 'the legacy flag must name itself');
+        self::assertStringContainsString('70000', $r['err'], 'the value must reach the same range check');
+    }
+
+    public function testServeHttpPortAliasEqFormRefusesGarbage(): void
+    {
+        $r = $this->runBin(['serve', '--http', '--repo-root', $this->tmpDir, '--port=abc']);
+        self::assertSame(1, $r['rc'], $r['err']);
+        self::assertStringContainsString('abc', $r['err']);
+    }
+
+    public function testServeHttpRefusesDaemonFlag(): void
+    {
+        $r = $this->runBin(['serve', '--http', '--repo-root', $this->tmpDir, '--daemon']);
+        self::assertSame(1, $r['rc'], $r['err']);
+        self::assertStringContainsString('--daemon', $r['err']);
+    }
+
+    public function testServeHttpRefusesPidFileEqForm(): void
+    {
+        $r = $this->runBin(['serve', '--http', '--repo-root', $this->tmpDir, '--pid-file=/tmp/some.pid']);
+        self::assertSame(1, $r['rc'], $r['err']);
+        self::assertStringContainsString('--pid-file', $r['err']);
+    }
+
+    public function testServeHttpRefusesUnknownFlagAndEqForm(): void
+    {
+        $r = $this->runBin(['serve', '--http', '--repo-root', $this->tmpDir, '--nope']);
+        self::assertSame(1, $r['rc'], $r['err']);
+        self::assertStringContainsString('--nope', $r['err']);
+        $r = $this->runBin(['serve', '--http', '--repo-root', $this->tmpDir, '--publc=1']);
+        self::assertSame(1, $r['rc'], $r['err']);
+        self::assertStringContainsString('--publc', $r['err']);
+    }
+
+    public function testServeHttpRefusesVerboseFlag(): void
+    {
+        $r = $this->runBin(['serve', '--http', '--repo-root', $this->tmpDir, '--verbose']);
+        self::assertSame(1, $r['rc'], "the listener has no verbosity switch yet — silence would lie");
+        self::assertStringContainsString('--verbose', $r['err']);
+    }
+
+    public function testRepoCreateRefusesTypoFlagBeforePath(): void
+    {
+        $r = $this->runBin(['repo', 'create', 'oops', '--publc', $this->tmpDir]);
+        self::assertSame(1, $r['rc'], $r['err']);
+        self::assertStringContainsString('Usage:', $r['err']);
+        self::assertDirectoryDoesNotExist($this->tmpDir . '/repositories/oops');
+        self::assertDirectoryDoesNotExist($this->tmpDir . '/--publc/repositories/oops');
+    }
+
+    public function testRepoCreateRefusesTypoFlagAfterPath(): void
+    {
+        $r = $this->runBin(['repo', 'create', 'oops2', $this->tmpDir, '--publc']);
+        self::assertSame(1, $r['rc'], $r['err']);
+        self::assertStringContainsString('Usage:', $r['err']);
+        self::assertDirectoryDoesNotExist($this->tmpDir . '/repositories/oops2');
+    }
 }

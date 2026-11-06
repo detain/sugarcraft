@@ -66,5 +66,9 @@ return [
     'cli.serve_http_needs_repo_root' => 'serve --http 需要 --repo-root 目录 (其子目录被服务的目录)',
     'cli.serve_repo_root_not_dir' => '--repo-root 不是目录: {path}',
     'cli.serve_http_port_range' => '--http-port 超出范围: {port}',
+    'cli.serve_http_port_not_a_number' => 'serve --http：--http-port 必须是数字，收到：{port}',
+    'cli.serve_http_flag_unsupported' => 'serve --http 不支持选项 {flag}（监听器在前台运行；如需守护进程请使用进程管理器）。',
+    'cli.serve_http_unknown_flag' => 'serve --http 未知选项：{flag}',
+    'cli.port_deprecated'      => '注意：--port 已废弃；请改用 --http-port（为兼容性保留别名）。',
     'cli.serve_http_banner' => 'smart-HTTP 监听器于 {addr} ({repos} 个仓库, {published} 个公开, {users} 个账户; 匿名读取={anon}; 推送也在服务 — 钩子拒绝随带内传输)',
 ];

@@ -66,5 +66,9 @@ return [
     'cli.serve_http_needs_repo_root' => 'serve --http vereist --repo-root DIR (de map waarvan de submappen geserveerd worden)',
     'cli.serve_repo_root_not_dir' => '--repo-root is geen map: {path}',
     'cli.serve_http_port_range' => '--http-port buiten bereik: {port}',
+    'cli.serve_http_port_not_a_number' => 'serve --http: --http-port moet een getal zijn, ontvangen: {port}',
+    'cli.serve_http_flag_unsupported' => 'Vlag {flag} wordt niet ondersteund door serve --http (de listener draait op de voorgrond; daemoniseer via een supervisor).',
+    'cli.serve_http_unknown_flag' => 'Onbekende vlag voor serve --http: {flag}',
+    'cli.port_deprecated'      => 'Let op: --port is deprecated; gebruik --http-port (alias behouden voor compatibiliteit).',
     'cli.serve_http_banner' => 'smart-HTTP-listener op {addr} ({repos} repos, {published} gepubliceerd, {users} accounts; anoniem lezen={anon}; push wordt ook geserveerd — hook-afwijzingen reizen in-band)',
 ];

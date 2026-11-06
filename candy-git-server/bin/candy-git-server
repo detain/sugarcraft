@@ -173,10 +173,24 @@ function cmdServeHttp(array $args): int
     $port = 23232;
     $host = '127.0.0.1';
     $configPath = null;
+    $portRaw = '';
 
     for ($i = 0; $i < \count($args); $i++) {
         $arg = $args[$i];
-        $flagNames = ['--repo-root', '--http-port', '--http-host', '--config'];
+        if ($arg === '--http') {
+            continue; // the mode selector that dispatched here — not an option
+        }
+        if ($arg === '--daemon' || $arg === '--pid-file' || $arg === '--verbose'
+            || \str_starts_with($arg, '--pid-file=')) {
+            // These flags belong to the bare `serve` contract and to future
+            // daemon wiring; the --http listener cannot honor any of them,
+            // so they are refused loudly rather than silently ignored. The
+            // listener stays in the foreground (daemonize via a supervisor).
+            \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.serve_http_flag_unsupported',
+                ['flag' => \str_starts_with($arg, '--pid-file') ? '--pid-file' : $arg]) . "\n");
+            return 1;
+        }
+        $flagNames = ['--repo-root', '--http-port', '--http-host', '--config', '--port'];
         $value = null;
         if (\in_array($arg, $flagNames, true)) {
             $value = $args[$i + 1] ?? null;
@@ -188,14 +202,28 @@ function cmdServeHttp(array $args): int
         } else {
             $eq = \strpos($arg, '=');
             if ($eq === false || !\in_array(\substr($arg, 0, $eq), $flagNames, true)) {
-                continue; // unknown flags are ignored — the refusal path's honesty floor
+                if (\str_starts_with($arg, '--')) {
+                    // A '--'-shaped argument this listener does not know is a
+                    // typo or an unwired flag: refusing beats silently serving
+                    // something the operator never asked for.
+                    \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.serve_http_unknown_flag',
+                        ['flag' => $eq === false ? $arg : \substr($arg, 0, $eq)]) . "\n");
+                    return 1;
+                }
+                continue; // not a flag at all: a positional value
             }
             $value = \substr($arg, $eq + 1);
             $arg = \substr($arg, 0, $eq);
         }
         if ($arg === '--repo-root') {
             $repoRoot = (string) $value;
-        } elseif ($arg === '--http-port') {
+        } elseif ($arg === '--http-port' || $arg === '--port') {
+            if ($arg === '--port') {
+                // Deprecated alias, kept honest: it works, but names itself
+                // as legacy on stderr before anything else happens.
+                \fwrite(\STDERR, Lang::t('cli.port_deprecated') . "\n");
+            }
+            $portRaw = (string) $value;
             $port = (int) $value;
         } elseif ($arg === '--http-host') {
             $host = (string) $value;
@@ -210,6 +238,13 @@ function cmdServeHttp(array $args): int
     }
     if (!\is_dir($repoRoot)) {
         \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.serve_repo_root_not_dir', ['path' => $repoRoot]) . "\n");
+        return 1;
+    }
+    if ($portRaw !== '' && !\ctype_digit($portRaw)) {
+        // (int)'abc' === 0 would pass the range check and ask the kernel for
+        // an EPHEMERAL port: garbage is refused by name, never coerced.
+        \fwrite(\STDERR, 'candy-git-server: ' . Lang::t('cli.serve_http_port_not_a_number',
+            ['port' => $portRaw]) . "\n");
         return 1;
     }
     if ($port < 0 || $port > 65535) {
@@ -638,6 +673,12 @@ function cmdRepoCreate(array $args): int
         if ($arg === '--public') {
             $makePublic = true;
             continue;
+        }
+        if (\str_starts_with($arg, '--')) {
+            // '--publc' must never be reinterpreted as a data path or a
+            // silently-dropped extra positional: a typo'd flag is a usage
+            // error, refused before anything is created.
+            return error(Lang::t('cli.usage_repo_create') . "\n");
         }
         $positional[] = $arg;
     }

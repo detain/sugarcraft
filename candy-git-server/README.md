@@ -240,7 +240,7 @@ git clone http://localhost:23232/myrepo.git
 `serve --http` flags: `--repo-root DIR` (required; every bare dir and every
 `<dir>/.git` under it is registered under its basename), `--http-port N`
 (default `23232`), `--http-host H` (default `127.0.0.1`), `--config F`
-(the YAML config, defaults applied when absent). Exit codes: `1` for a
+(the YAML config, defaults applied when absent). `--port` is accepted as a deprecated alias of `--http-port` (a notice lands on stderr); `--daemon`, `--pid-file` and `--verbose` are refused on this path — the listener always stays in the foreground. Exit codes: `1` for a
 flag or bind error, `0` after SIGINT/SIGTERM shutdown (the graceful exit
 requires ext-pcntl — without it the terminal's default signal action kills
 the process and the shell sees 130/143). Anonymous reads
