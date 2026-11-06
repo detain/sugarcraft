@@ -97,7 +97,11 @@ $h = QuickPick::new($items)
 
 // Persist selections to a JSONL file inside your app's own state directory.
 // Pick a path you own — never a predictable world-shared location like /tmp.
-$history = new FileHistory(getenv('HOME') . '/.myapp/history.jsonl');
+// FileHistory creates the file, never its parent directories: make the
+// directory first, or the first append() throws RuntimeException.
+$historyPath = getenv('HOME') . '/.myapp/history.jsonl';
+@mkdir(\dirname($historyPath), 0700, true);
+$history = new FileHistory($historyPath);
 if ($choice = $h->selected()) {   // selected() is ?Item — null when nothing is selected
     $history->append($choice);    // save selected item
 }
@@ -374,7 +378,9 @@ use SugarCraft\QuickPick\FilteredItem;
 // refuses it, the mode follows the process umask and nothing is signalled.
 // Use a path you own; on shared hosts, never a predictable
 // world-writable location such as /tmp (a planted symlink there is refused
-// outright — see below).
+// outright — see below). The parent directory must already exist —
+// FileHistory creates only the file, never intermediate directories, so a
+// missing parent surfaces as a RuntimeException on the first append().
 $history = new FileHistory(getenv('HOME') . '/.myapp/history.jsonl');
 
 // Optionally jail the file inside a private base directory: paths that

@@ -28,7 +28,9 @@ $quickpick = QuickPick::new($items)
     ->setPrompt('> ');
 
 // Persist selections (path you own; files created are 0600)
-$history = new FileHistory(getenv('HOME') . '/.myapp/history.jsonl');
+$historyPath = getenv('HOME') . '/.myapp/history.jsonl';
+@mkdir(\dirname($historyPath), 0700, true); // FileHistory creates the file, never its parent
+$history = new FileHistory($historyPath);
 if ($choice = $quickpick->selected()) {
     $history->append($choice);
 }
