@@ -685,7 +685,8 @@ $striped = Table::new()
     ->styleFunc(static fn (int $r, int $c): Style =>
         $r === Table::HEADER_ROW
             ? Style::new()->bold()
-            : ($r % 2 === 0 ? Style::new()->faint() : Style::new()),
+            // italic carries the stripe; faint is decoration only
+            : ($r % 2 === 0 ? Style::new()->faint()->italic() : Style::new()),
     );
 echo $striped->render();
 ```
@@ -873,6 +874,18 @@ reads `$COLORFGBG` only, and an unset, non-numeric or out-of-range last
 field selects the dark scheme silently. Whichever scheme wins, verify
 pairs against the WCAG AA floors — 4.5:1 for text, 3:1 for non-text
 items such as borders and icons.
+
+Emitting an attribute is not the same as using it safely, and three
+need care. SGR `5`/`6` (`blink()` / `rapidBlink()`) fail WCAG 2.2.2
+(pause, stop, hide) and 2.3.1 (three flashes): a terminal cannot offer
+the user a way to pause or stop them, and rapid blink is strictly worse
+— treat both as content you cannot deliver accessibly. SGR `8`
+(`invisible()`) hides text from sight but not from selection, copy or a
+screen reader's buffer — anyone who copies the line recovers what the
+display withheld, so concealment is never a secret mechanism. SGR `2`
+(`faint()`) lowers contrast off the AA floors by design: never make it
+the sole carrier of a distinction (the zebra-striping example above
+stripes with *italic* and keeps faint as decoration only).
 
 ## Performance — build once, render many
 
