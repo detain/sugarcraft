@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-colorprofile",
-    "description": "PHP port of charmbracelet/colorprofile \u2014 magical terminal color profile detection and color degradation (TrueColor \u2192 ANSI256 \u2192 ANSI \u2192 ASCII).",
+    "description": "Terminal color profile detection and color degradation (TrueColor \u2192 ANSI256 \u2192 ANSI \u2192 ASCII), inspired by charmbracelet/colorprofile.",
     "type": "library",
     "license": "MIT",
     "keywords": [
