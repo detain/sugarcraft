@@ -39,6 +39,20 @@ final class ToolDocGenerator
     /** The sample project root the launch-report examples print. */
     private const SAMPLE_ROOT = '/repo/';
 
+    /**
+     * Why each {@see ToolCatalog::CONDITIONAL_BUILDS} name is absent from the
+     * plain-launch roster — one clause per name, keyed by runtime name, read by
+     * the README's "also holds" enumeration. A name added to CONDITIONAL_BUILDS
+     * without a reason here fails loudly at generation.
+     *
+     * @var array<string, string>
+     */
+    private const CONDITIONAL_BUILD_REASONS = [
+        'mcp_list' => 'joins the set only when a frozen launch shape actually deferred an MCP server',
+        'mcp_call' => 'joins the set under the same condition as `mcp_list`, its dispatch half',
+        'Advisor' => 'joins the set only when the launch resolved an `advisorModel`',
+    ];
+
     private function __construct()
     {
     }
@@ -131,15 +145,35 @@ final class ToolDocGenerator
         }
 
         $built = \count(ToolCatalog::builtUnconditionally());
-        // The entry WITHOUT a gloss goes last: the prose after the block
-        // finishes its sentence ("… joins the set only when …").
-        $wired = ToolCatalog::externallyWired();
-        usort($wired, static fn (CatalogEntry $a, CatalogEntry $b): int => ($a->gloss === '') <=> ($b->gloss === ''));
-        $external = array_map(
-            static fn (CatalogEntry $e): string => '`' . $e->fileName() . '`, whose runtime name `' . $e->name . '`'
-                . ($e->gloss === '' ? '' : ' ' . $e->gloss),
-            $wired,
-        );
+        // Entries WITHOUT a gloss go last: the prose after the block finishes
+        // their sentences ("… joins the set only when …"). N-01: the list must
+        // account for EVERY file under BuiltIn/, and the conditional builds are
+        // neither in the plain-launch roster (their names ride the roster only
+        // when the context carries what they need) nor externally wired — so
+        // they join the "also holds" enumeration here, before the gloss-less
+        // external whose clause the prose after :end completes.
+        $withGloss = [];
+        $withoutGloss = [];
+        foreach (ToolCatalog::externallyWired() as $entry) {
+            $line = '`' . $entry->fileName() . '`, whose runtime name `' . $entry->name . '`'
+                . ($entry->gloss === '' ? '' : ' ' . $entry->gloss);
+            if ($entry->gloss === '') {
+                $withoutGloss[] = $line;
+            } else {
+                $withGloss[] = $line;
+            }
+        }
+
+        $held = array_merge($withGloss, array_map(
+            static fn (CatalogEntry $e): string => '`' . $e->fileName() . '`, whose runtime name `' . $e->name . '` '
+                . (self::CONDITIONAL_BUILD_REASONS[$e->name] ?? throw new \RuntimeException(
+                    'ToolDocGenerator: conditional build `' . $e->name . '` has no reason sentence — add one',
+                )),
+            array_values(array_filter(
+                ToolCatalog::built(),
+                static fn (CatalogEntry $e): bool => \in_array($e->name, ToolCatalog::CONDITIONAL_BUILDS, true),
+            )),
+        ), $withoutGloss);
 
         $text = self::joined($items, ', ', ', and ') . '. These are **runtime tool names**, the same spelling the '
             . 'launch report and every `allowedTools`/`disabledTools`/`permissionRules` pattern uses; '
@@ -148,7 +182,7 @@ final class ToolDocGenerator
             . ucfirst(SettingsDocGenerator::spell($built)) . ' classes ship on every launch, and `Bootstrap::tools()` '
             . 'ships all ' . SettingsDocGenerator::spell($built);
 
-        return $external === [] ? $text : $text . '; `src/Tools/BuiltIn/` also holds ' . self::joined($external, ', ', ', and ');
+        return $held === [] ? $text : $text . '; `src/Tools/BuiltIn/` also holds ' . self::joined($held, ', ', ', and ');
     }
 
     /** The README `allowedTools: ["Bash"]` sentence's list of what it deletes. */
