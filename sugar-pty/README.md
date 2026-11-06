@@ -583,8 +583,8 @@ The legacy-compat import of `CANDY_PTY_`-prefixed variables lives in
 `tests/bootstrap.php` only, with a deprecation warning, and covers only
 the test-only `SUGAR_PTY_HANG_BUDGET`. The three `src/` knobs
 (`SUGARCRAFT_LIBC`, `SUGARCRAFT_PTY_BACKEND`, `SUGARCRAFT_TERMIOS`) have
-no legacy prefix at all — a stale `CANDY_PTY_LIBC` is inert in
-production. <!-- @rename-keep -->
+no legacy prefix at all — a stale `CANDY_PTY_LIBC` is inert in <!-- @rename-keep -->
+production.
 
 ## Compared to node-pty / creack/pty / portable-pty
 
