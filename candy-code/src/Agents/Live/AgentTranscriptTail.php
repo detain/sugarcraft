@@ -26,7 +26,9 @@ use SugarCraft\Code\ToolResult;
  * that does not decode, or decodes to anything but a known item, is dropped;
  * text is stripped of terminal escapes, control bytes and Private-Use
  * codepoints (the range the mouse-zone sentinels and image markers live in)
- * before it becomes a row.
+ * before it becomes a row, and printable role-marker imitations
+ * ({@see ReportSanitizer}) are folded into their inert visible spelling — the
+ * rows are re-ingested by a parent session, not just painted for a human.
  */
 final class AgentTranscriptTail
 {
@@ -253,13 +255,21 @@ final class AgentTranscriptTail
 
     /**
      * $text with terminal escapes, control bytes (tab and newline kept), DEL,
-     * C1 and Private-Use codepoints removed, and invalid UTF-8 scrubbed.
+     * C1 and Private-Use codepoints removed, invalid UTF-8 scrubbed — and the
+     * survivor's imitation-control heads (fake role tags, ChatML-style
+     * special tokens) folded into their inert visible spelling by
+     * {@see ReportSanitizer::sanitize()}. Runs last: the escape sweep must
+     * not be able to uncover a header the anchor never saw, and the
+     * sanitizer's own output (fullwidth forms, the marker) is already inside
+     * what the sweeps keep.
      */
     private static function clean(string $text): string
     {
         $text = mb_scrub($text, 'UTF-8');
         $text = preg_replace('/\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]?|\x1b\][^\x07\x1b]*(?:\x07|\x1b\x5c)?|\x1b/', '', $text) ?? '';
 
-        return preg_replace('/[\x00-\x08\x0b-\x1f\x7f]|[\x{80}-\x{9f}]|[\x{E000}-\x{F8FF}]/u', '', $text) ?? '';
+        return ReportSanitizer::sanitize(
+            preg_replace('/[\x00-\x08\x0b-\x1f\x7f]|[\x{80}-\x{9f}]|[\x{E000}-\x{F8FF}]/u', '', $text) ?? '',
+        );
     }
 }
