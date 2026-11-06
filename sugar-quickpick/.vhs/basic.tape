@@ -1,4 +1,4 @@
-# Render with: vhs sugar-quickpick/.vhs/basic.tape
+# Render with: (cd sugar-quickpick && vhs .vhs/basic.tape)
 Output .vhs/basic.gif
 
 Set FontSize 14

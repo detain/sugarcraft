@@ -1,4 +1,4 @@
-# Render with: vhs sugar-quickpick/.vhs/interaction.tape
+# Render with: (cd sugar-quickpick && vhs .vhs/interaction.tape)
 Output .vhs/interaction.gif
 
 Set FontSize 14
