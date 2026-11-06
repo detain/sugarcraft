@@ -19,6 +19,7 @@ asking.
 | [AGENTS.md](AGENTS.md) | Running sub-agents: presets, teams, delegation | You want work done in parallel |
 | [AGENTS_AUTHORING.md](AGENTS_AUTHORING.md) | Writing an agent-preset file, field by field | You author `.candy-code/agents/*.md` |
 | [WORKFLOWS.md](WORKFLOWS.md) | Multi-stage agent pipelines | You compose a repeatable run |
+| [FLEET-DRIVING.md](FLEET-DRIVING.md) | Headless `-p` as a machine surface | You orchestrate agents from scripts |
 | [SCHEDULES.md](SCHEDULES.md) | `schedules.json` rows: cadence, the `root` project binding, the permission floor, locks | You set up a repeating run, or one fired in the wrong project |
 | [HOOKS.md](HOOKS.md) | Lifecycle hooks, exit-code semantics, env | You automate reactions to events |
 | [MEMORY.md](MEMORY.md) | The memory stores and what reaches the prompt | You wonder what the model remembers |

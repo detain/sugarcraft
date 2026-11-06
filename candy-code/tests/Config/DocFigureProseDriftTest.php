@@ -5228,7 +5228,9 @@ final class DocFigureProseDriftTest extends TestCase
         $seenExemptions = [];
 
         $pages = array_values(array_filter(scandir($root . '/docs') ?: [], static fn(string $f): bool => str_ends_with($f, '.md')));
-        self::assertCount(26, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
+        // 27 as of 2026-11-06: FLEET-DRIVING.md joins the docs/ census (the
+        // headless-driver playbook), lifting 26 covered pages to 27.
+        self::assertCount(27, $pages, 'the docs page census moved — this anchor guard would silently stop covering a page');
 
         // CCD-DOC-06: the root README.md joins the census. It was never on any
         // target list of this family, so a bare File.php:NNN cite planted there
@@ -8020,7 +8022,10 @@ final class DocFigureProseDriftTest extends TestCase
             scandir($root . '/docs') ?: [],
             static fn (string $f): bool => $f !== 'README.md' && str_ends_with($f, '.md')
         ));
-        preg_match_all('/^\| \[([A-Za-z0-9_.]+\.md)\]\(\1\)/m', $page, $indexRows);
+        // 2026-11-06: the class gains the hyphen — FLEET-DRIVING.md is the first
+        // hyphenated page, and without it the row was invisible and set-equality
+        // reddened against a disk list that already carried the page.
+        preg_match_all('/^\| \[([A-Za-z0-9_.\-]+\.md)\]\(\1\)/m', $page, $indexRows);
         $indexedPages = \array_values(\array_unique($indexRows[1]));
         self::assertSame(
             \count($indexRows[1]),

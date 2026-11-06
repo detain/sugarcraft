@@ -1,0 +1,190 @@
+# Fleet driving — `candy-code -p` as a machine surface
+
+This page is the playbook for driving candy-code **headlessly** from scripts and
+orchestrators: one process per task, JSON envelopes on stdout, exit codes as
+gate signals. It records what is safe to depend on today, what is advisory, and
+where the two known honesty gaps are. Everything here was verified against the
+live tree; the source cites point at the enforcing code.
+
+## Canonical invocation
+
+```sh
+HOME=/tmp/fleet/home1 php /abs/path/to/candy-code/bin/candy-code \
+    -p 'Summarize CHANGELOG.md in three bullets' \
+    --output-format json \
+    --root /tmp/fleet/sandbox1
+```
+
+Rules that make a fleet reproducible:
+
+- **Absolute paths.** Invoke the real `bin/candy-code` file path, never a PATH
+  lookup or a relative one — shards launched from different working directories
+  must load the same code.
+- **Isolated `HOME`.** All state (sessions, workflows, agents, skills) lives
+  under `$HOME/.candy-code`. One `HOME` per isolation domain; `--config` moves
+  only the config file, not the state directories under `HOME`.
+- **`--root` sandbox.** The workspace the agent may touch is set with
+  `--root` (src/Cli/ArgvParser.php:362); give every fleet lane its own.
+- **Permissions.** Unattended lanes that must not stop at an approval prompt
+  pass `--permission-mode` (src/Cli/ArgvParser.php:498). The mode decision is
+  the permission system's, and it honors the flag — a stalled fleet is a
+  permission-mode mistake, not a hang.
+
+## The stdout envelope (`--output-format json`)
+
+A json run writes exactly one JSON document to stdout, on every exit path.
+Success shape (assembled at src/Cli/NonInteractive.php:2352):
+
+| Key | Presence | Meaning |
+| --- | --- | --- |
+| `schema` | always | Envelope version; `1`. |
+| `result` | always (success) | The final assistant text. |
+| `refusals` | when present | Denials recorded during the run; omitted when there were none. |
+| `session_id` | when present | 16-hex id of the session that served the turn. |
+| `usage` | when present | Token/cost record for the turn; fields declared at src/Usage.php:140-218 (`totalTokens`, `costUsd`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheCreationTokens`, `reasoningTokens`, `delegatedTokens`, `unpricedModel`, `webSearchRequests`). |
+| `steps_truncated` / `length_stopped` / `loop_guard_stopped_by` | only when true | The stop-reason trio: a step budget cut, an output-length stop, or a loop-guard intervention. |
+| `json_schema_applied` | only when `false` | Appears only when a schema was requested and the answer rode a tool result instead — the schema was not enforced on that turn. |
+
+Error shape (src/Cli/NonInteractive.php:1580): `{"schema":1,"result":null,
+"error":{"type":...,"message":...}}` with an optional `provider` key, and the
+same `refusals`-when-present rule (src/Cli/NonInteractive.php:1593). A machine
+error document is only emitted under json/stream-json output — plain-text mode
+dies with prose on stderr instead (guard at src/Cli/NonInteractive.php:1584).
+Provider failures surface as `error.type` `backend` with a raw English message
+(connection refused, HTTP status) — not locale-tied, safe to pattern-match.
+
+Drivers must treat **stdout as the only truth channel**. stderr carries launch
+notices and advisories — e.g. the autoReview cost warning behind the
+`autoReview` setting (src/Config/Settings/Definitions/PermissionSettings.php:71,
+read at src/Cli/Bootstrap.php:7637) — and is *advisory*: never gate on it,
+never parse it for the result. One probe run paid ~20.7k cold input tokens and
+then cache reads on follow-ups; expect the first turn of a fresh model pairing
+to be the expensive one.
+
+## The `stream-json` envelope
+
+`--output-format stream-json` emits NDJSON progress events
+`{sessionId, type, ts, durable, data}` (thin writer at
+src/Cli/StreamJsonEmitter.php:164) and then **the last line is the plain json
+success document above** (src/Cli/NonInteractive.php:776). Event vocabulary
+observed: `assistant.delta`, `reasoning.delta`, `tool.started`, `tool.progress`
+(tail-bounded, 4096-byte budget), `tool.finished`. Gate on the final line only;
+the preceding lines are a live tail, not the verdict.
+
+## Exit-code battery (measured)
+
+| Situation | Exit | stdout |
+| --- | --- | --- |
+| Turn completed | 0 | success envelope |
+| Provider unreachable (dead baseUrl in a `--config` copy) | 1 | machine error doc, `error.type` `backend` |
+| `session show` on an unknown target | 1 | prose on stderr, no envelope |
+| Unknown flag (`--nosuchflag`) | 2 | nothing parseable — `candy-code: unrecognized option` on stderr |
+| `--append-system-prompt` without `-p` | 2 | config refusal |
+| Bare `--resume` without `-p` | 2 | config refusal |
+| `--resume=` with empty value | 2 | config refusal |
+| `--json-schema` pointing at a bad path | 2 | config refusal |
+
+`EXIT_OK` / `EXIT_FAILURE` / `EXIT_CONFIG` are the three constants a driver
+needs (src/Cli/NonInteractive.php:107, src/Cli/NonInteractive.php:146,
+src/Cli/NonInteractive.php:186). `2` means your command line was wrong — fail
+loud and fix the launcher; `1` means the run itself failed, and the envelope
+tells you why.
+
+## Follow-up turns and lineage
+
+- `--resume=<session_id>` continues the same conversation and keeps the same
+  session id (flag plumbing at src/Cli/ArgvParser.php:152). A measured
+  follow-up turn finished in ~1.7 s against the same `session_id`.
+- Post-hoc lineage: `session show <id> --output-format json` returns the full
+  record — including `parent_id` and `parent_call_id`, so delegated sub-agent
+  sessions are reconstructible after the fact. Verb roster at
+  src/Cli/Subcommands.php:934; `list` flags at src/Cli/Subcommands.php:1011
+  (`--all`, `--archived`, `--children`, `--limit`).
+- Cost rollups across a fleet: `session import` exists for migrating stores
+  (src/Cli/Subcommands.php:1018), and the usage surface answers
+  `--output-format json` with a machine rollup shaped `scopeAll` / `windowDays`
+  / `days` — the shape is built at src/Cli/Subcommands.php:1568 and served
+  through the host-command facts helper at src/Cli/Subcommands.php:1587.
+
+## Structured answers: `--json-schema`
+
+Pass `--json-schema /abs/path/schema.json` (src/Cli/ArgvParser.php:653) and a
+schema-capable provider enforces it at request level. The local sglang provider
+sends `response_format.json_schema` (capability probe at
+src/Providers/SglangProvider.php:1087); the measured result came back as
+`result` containing the schema-shaped JSON **stringified inside the string** —
+drivers decode twice. When the answer follows a tool result the provider may
+skip enforcement; that is exactly the case the `json_schema_applied: false`
+key flags, so always check it before trusting the shape.
+
+## Piped stdin is context, not input
+
+Running `-p` with stdin closed or empty is the normal shape. Piping bytes to
+stdin prepends them to the prompt as context — bounded by a 10 MB cap
+(src/Cli/NonInteractive.php:193) and a two-second first-byte grace
+(src/Cli/NonInteractive.php:215). It is **not** an envelope channel: never feed
+JSON *into* the process expecting a request protocol, and never leave stdin
+open in a wrapper that has nothing to send — the grace window stalls the turn
+instead.
+
+## Fan-out safety
+
+Parallel `-p` invocations against the **same** `HOME` are safe: measured two
+concurrent runs both exited 0 with distinct `session_id`s, zero lock errors,
+and both hit the shared prompt cache (~20544 cache reads each). Scale as N
+plain processes — that is the batch mode. Two hygiene rules per lane: its own
+`--root`, and (if lanes write state you care about) its own `HOME` only when
+you actually want isolation; identical `HOME` for identical cache warmth.
+
+## What does *not* exist (don't improvise flags)
+
+Measured absent: `--allowedTools` / `--disallowedTools` (tool narrowing is the
+`permissionRules` config surface), `--session-id` (ids are minted, or supplied
+to `--resume`), `--param` / `--values` CLI plumbing, a top-level `workflow`
+subcommand (the workflow verbs are the `/workflow` slash commands: run,
+pause, resume, status, list), and any `--auto-review` flag (`autoReview` is a
+config key only — src/Config/LayeredSettings.php:589). The saved-workflow DSL
+lives at `~/.candy-code/workflows/<name>.php`; pause records live under
+`.running/` beside them.
+
+## KNOWN GAP — headless `/workflow` is model-mediated (being fixed)
+
+Driving a saved workflow through `-p '/workflow run <name>'` is **not** a
+machine pathway today. The headless model receives the request and
+re-translates the PHP DSL into its own `WorkflowTool` YAML plan — in the
+measured probe it read the engine source and rebuilt a plan of its own
+choosing. The verification machinery that makes workflows trustworthy —
+`withVerification` verdict scanning, the `ESCALATE:` stop-for-human rule,
+`outputSchema` enforcement, `reject()` retry routing — may therefore **never
+run**. The escalated probe run exited 0 with "completed successfully". Until a
+native headless workflow verb lands, do **not** gate a fleet on the exit codes
+or prose of headless workflow runs: drive the stages yourself as N parallel
+`-p` lanes (Task-style invocations) with file-protocol handshakes, and keep
+`/workflow` for interactive use.
+
+## KNOWN GAP — killing a headless workflow run loses the pause record (being fixed)
+
+A `SIGTERM` (or `SIGINT`) delivered to a headless workflow run exits 143 with
+an **empty stdout and no pause file** — `.running/` is never created, so
+`/workflow resume` has nothing to resume. The root cause is on the
+`WorkflowTool` path, which calls the engine's non-interactive entry (declared
+at src/Workflows/WorkflowEngine.php:717) with the interruptibility argument
+pinned off (src/Workflows/WorkflowEngine.php:723): signal handlers are only
+installed when the run is interruptible (src/Workflows/WorkflowEngine.php:1504),
+so the process dies on the raw signal. The interactive `/workflow run` path
+takes the interruptible default and does write pause records. Do not expect
+resume-from-kill on headless runs; budget time instead of assuming you can
+stop-and-restart mid-workflow there.
+
+## Driver checklist
+
+1. Absolute bin path, per-lane `HOME` policy, per-lane `--root`.
+2. `--output-format json`; parse stdout **only**; expect one document always.
+3. Gate on exit code: `0` trust envelope; `1` read `error.type`; `2` fix the
+   launcher. Check `json_schema_applied` when you asked for a schema.
+4. `session show --output-format json` and the usage rollup for post-hoc
+   lineage and spend.
+5. Fan out with plain processes; no batch-mode flag exists.
+6. Until the gaps above close: drive multi-stage work as your own parallel
+   `-p` lanes, not as headless saved-workflow runs, and never kill a headless
+   workflow run expecting a resume point.
