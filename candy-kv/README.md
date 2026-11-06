@@ -403,9 +403,30 @@ translated surface is what end users see.
 
 ## Demos
 
+VHS tapes under `.vhs/`, re-rendered by CI — five GIFs. `glob.gif` is recorded
+from live `./bin/candy-kv` calls; the other four drive the library surface
+through `php examples/*.php`. For a text walkthrough of the CLI itself, see
+the `Output format` transcript above.
+
 ### Glob pattern matching
 
 ![glob](.vhs/glob.gif)
+
+### Basic store/set/get
+
+![basic](.vhs/basic.gif)
+
+### Binary-safe values
+
+![binary](.vhs/binary.gif)
+
+### Multiple databases (`key@dbname`)
+
+![multidb](.vhs/multidb.gif)
+
+### Reverse-ordered listing
+
+![reverse-order](.vhs/reverse-order.gif)
 
 ## Shared foundations
 
