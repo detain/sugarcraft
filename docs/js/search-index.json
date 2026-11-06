@@ -51,7 +51,7 @@
   {"name":"SugarPty","slug":"sugar-pty","category":"library","description":"Pseudo-terminal primitive — spawn child processes wired to a controlled PTY, with resize forwarding and non-blocking I/O.","url":"lib/sugar-pty.html"},
   {"name":"SugarQuickpick","slug":"sugar-quickpick","category":"library","description":"Fuzzy finder overlay for terminal UIs.","url":"lib/sugar-quickpick.html"},
   {"name":"SugarReadline","slug":"sugar-readline","category":"library","description":"Interactive prompts — text, confirm, select, multi-select, textarea.","url":"lib/sugar-readline.html"},
-  {"name":"SugarSpring","slug":"sugar-spring","category":"library","description":"Damped spring physics, projectile sim, easing/bezier timing and reduced-motion-aware animation for PHP TUIs.","url":"lib/sugar-spring.html"},
+  {"name":"SugarSpring","slug":"sugar-spring","category":"library","description":"Damped spring physics, projectile sim, easing/bezier timing and reduced-motion snapping for spring-driven types.","url":"lib/sugar-spring.html"},
   {"name":"SugarSshServer","slug":"sugar-ssh-server","category":"library","description":"Run interactive terminal apps over SSH — composable middleware for serving your TUIs from OpenSSH.","url":"lib/sugar-ssh-server.html"},
   {"name":"SugarStyle","slug":"sugar-style","category":"library","description":"Declarative styling and layout for terminal output — colors, borders, tables, trees, and themes.","url":"lib/sugar-style.html"},
   {"name":"SugarTable","slug":"sugar-table","category":"library","description":"Full-featured interactive data table.","url":"lib/sugar-table.html"},
