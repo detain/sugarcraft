@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Agents\AgentPoolConfig;
 use SugarCraft\Code\Agents\AgentStatus;
+use SugarCraft\Code\Agents\BlankReturnResume;
 use SugarCraft\Code\Agents\EngineExecutor;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Backend\EngineBackend;
@@ -159,10 +160,15 @@ final class SubagentSettingsTest extends TestCase
         $task = (new TaskTool($manager, suspended: new \SugarCraft\Code\Agents\SuspendedDelegations($this->dir . '/suspended')))
             ->withEngine(EngineBackend::new($provider, 'm')->withTools($tools));
 
-        $task->execute(['description' => 'Loop', 'prompt' => 'loop until stopped', 'agent' => 'coder']);
+        $result = $task->execute(['description' => 'Loop', 'prompt' => 'loop until stopped', 'agent' => 'coder']);
 
-        self::assertCount(3, $provider->requests, 'two tool steps at the saved cap, then the closing summary request — not 200 steps');
+        // The blank-return policy re-asks a silent run once per consecutive blank
+        // until the ten-attempt budget is spent ({@see BlankReturnResume}), so the
+        // tally is each attempt's two tool steps plus its closing summary ask,
+        // times the whole budget — and the run ends in the honest stall refusal.
+        self::assertCount(3 * BlankReturnResume::MAX_CONSECUTIVE_BLANKS, $provider->requests, 'two tool steps and a summary ask per silent attempt, times the ten-attempt blank budget — not 200 steps');
         self::assertStringContainsString('budget of 2 tool steps', (string) $provider->requests[2]->messages[\count($provider->requests[2]->messages) - 1]->content());
+        self::assertStringContainsString('blank-return stall', $result->content());
     }
 
     public function testThePoolConfigTakesTheFanOutSetting(): void
