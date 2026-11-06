@@ -20,7 +20,7 @@ sugar-colorprofile — terminal color profile detection and color degradation fo
 - **Detect terminal color profile** from environment variables and TTY info
 - **ColorProfile enum**: the color-depth vocabulary shared by every surface of this library (8 levels, `TrueColor` 24-bit → `Ansi256` 256-color → `Ansi240` fixed slots 16-255 → `Ansi` 16-color → `Ansi8` basic 8 → `Fgbg` two-color fg/bg → `Ascii` black/white → `NoTTY`); the former renderer-facing `Profile` enum is now a deprecated `class_alias` façade over it — every old `Profile::X` spelling still resolves
 - **Color conversion**: downsample RGBA colors to any target profile
-- **ProfileWriter**: wrap a stream and automatically degrade color codes to match the terminal
+- **ProfileWriter**: wrap a stream and automatically match its output to the terminal — `degrade()` on the color rungs, full `stripAnsi()` on `NoTTY`
 - **ANSI stripping**: `NoTTY` output runs through `Palette::stripAnsi()`, which
   removes SGR/CSI/OSC/DCS sequences plus SS3, APC/PM/SOS strings, the enumerated
   Fe escape pairs and charset selectors — decoration (`\x1b[1m`, `\x1b[4m`) is
@@ -40,21 +40,22 @@ Requires PHP 8.3+ and no PHP extensions — the probes' optional `posix_*` calls
 are feature-detected, and an absent/unreadable `infocmp` child degrades the
 phase-2 answer instead of failing.
 
-## Quick Start
+## Quickstart
 
 ```php
 use SugarCraft\ColorProfile\Color;
 use SugarCraft\ColorProfile\Palette;
 use SugarCraft\ColorProfile\ProfileWriter;
 
-// Detect the terminal's color profile (pass a stream to gate on its TTY-ness;
-// a null stream means env-only detection — no TTY gate)
-$palette = new Palette(STDOUT);
-$profile = $palette->profile();
+// Detect the terminal's color profile (hero idiom — pass a stream to gate on
+// its TTY-ness; a null stream means env-only detection — no TTY gate)
+$profile = Palette::detect(STDOUT);
 
 echo "Your terminal supports: {$profile->label()}\n";
 
-// Downsample a TrueColor color to the detected profile
+// Downsample a TrueColor color to the detected profile. The reusable-palette
+// instance form memoizes the detection for repeated conversions:
+$palette = new Palette(STDOUT);
 $color = new Color(0x6b, 0x50, 0xff); // #6b50ff
 $converted = $palette->convert($color);
 echo "Converted: {$converted->toHex()}\n";
@@ -89,7 +90,7 @@ collapses toward the nearest color the profile can actually render.
 
 | ColorProfile | Colors    | Description                                     | Detection emits? |
 |--------------|-----------|-------------------------------------------------|------------------|
-| TrueColor    | 16.7M     | Full 24-bit RGB (24-bit ANSI)                   | yes              |
+| TrueColor    | 16.7M     | Full 24-bit RGB (SGR 38;2, de-facto xterm)      | yes              |
 | Ansi256      | 256       | 216 cube + 24 gray + 16 standard                | yes              |
 | Ansi240      | 240       | Fixed palette only — slots 16-255 (chafa INDEXED_240) | no — request-only |
 | Ansi         | 16        | Standard terminal colors                        | yes              |
@@ -118,14 +119,14 @@ answers Ansi on `Palette` but TrueColor on `TerminalProbe` (Phase-3 upgrade).
 cases `TrueColor`/`Ansi256`/`Ansi`/`Ascii`/`NoTTY` respectively):
 
 1. `CLICOLOR_FORCE=1` → TrueColor (overrides every env leg — step 0 can still outrank it)
-2. `FORCE_COLOR` (non-empty) → level: `true|yes|on|>=3` TrueColor, `2` Ansi256, `1` Ansi; any other spelling (`0`/`false`/`off`/…) → `Ascii` (color reduced to the black/white pair, decoration kept)
-3. `NO_COLOR` (set and **non**-empty; `""` = unset per no-color.org) → the `NoTTY` rung — strips **all** ANSI including decoration (bold/underline gone); for a color-only strip pin `Palette::withProfile(ColorProfile::Ascii)`
+2. `FORCE_COLOR` (non-empty) → level: numeric 3+ → TrueColor (as do `true`/`yes`/`on` in any case), `2` → Ansi256, `1` → Ansi; every other spelling (`0`/`false`/`off`/…) → `Ascii` floor (color reduced to the black/white pair, decoration kept)
+3. `NO_COLOR` (set and **non**-empty; `""` = unset — the supports-color convention, NO_COLOR's own text is presence-based) → the `NoTTY` rung — strips **all** ANSI including decoration (bold/underline gone); for a color-only strip pin `Palette::withProfile(ColorProfile::Ascii)`
 4. `CLICOLOR=0` → none (the `NoTTY` rung)
 5. `TERM=dumb` (case-insensitive) → none (the `NoTTY` rung)
 6. `COLORTERM=24bit|truecolor|yes` → TrueColor (`yes` is the legacy "this is a
    color terminal" marker, honored here as TrueColor — beyond its historical
    meaning; pin a profile explicitly if you want the conservative reading)
-7. `TERM_PROGRAM=iTerm.app` → TrueColor (inline image + 24-bit history)
+7. `TERM_PROGRAM=iTerm.app` (exact spelling, case-sensitive) → TrueColor (inline image + 24-bit history)
 8. `WT_SESSION` (set, non-empty) → TrueColor (Windows Terminal)
 9. `GOOGLE_CLOUD_SHELL` (set, non-empty) → TrueColor
 10. `TMUX` or `STY` set + base TERM begins `screen`/`tmux` → Ansi256
@@ -175,11 +176,11 @@ The ladder's env legs, one table row per variable, in ladder order:
 |---------|-------------|--------|
 | `CLICOLOR_FORCE=1` | 1 | force TrueColor past every env suppression leg, `NO_COLOR` included (step 1; the step-0 stream TTY gate still outranks it on stream-taking surfaces) |
 | `FORCE_COLOR` | 2 | non-empty level override honored by **all** surfaces through the chain (step 2): `true/yes/on/>=3` TrueColor, `2` Ansi256, `1` Ansi; falsy spellings (`0/false/off/no`) land on the `Ascii` floor — decoration kept, color reduced to the black/white pair. Outranks `NO_COLOR` by design |
-| `NO_COLOR` | 3 | set to a **non-empty** value (`""` = unset per no-color.org) → no color via the `NoTTY` rung / `NoColor` capability — `stripAnsi()` drops **all** ANSI including decoration (`\x1b[1m`/`\x1b[4m` gone). Contrast: falsy `FORCE_COLOR` lands the `Ascii` floor (step 2) which keeps decoration and reduces color to the black/white pair. Want NO_COLOR to keep bold/underline? Pin `Palette::withProfile(ColorProfile::Ascii)` |
+| `NO_COLOR` | 3 | set to a **non-empty** value (`""` = unset — the supports-color convention, NO_COLOR's own text is presence-based) → no color via the `NoTTY` rung / `NoColor` capability — `stripAnsi()` drops **all** ANSI including decoration (`\x1b[1m`/`\x1b[4m` gone). Contrast: falsy `FORCE_COLOR` lands the `Ascii` floor (step 2) which keeps decoration and reduces color to the black/white pair. Want NO_COLOR to keep bold/underline? Pin `Palette::withProfile(ColorProfile::Ascii)` |
 | `CLICOLOR=0` | 4 | suppress color |
 | `TERM=dumb` | 5 | case-insensitive; suppresses color — outranks `COLORTERM` (dumb is a promise of minimal capabilities) |
 | `COLORTERM=24bit\|truecolor\|yes` | 6 | TrueColor (exact value match, case-insensitive); `yes` is the legacy color-terminal marker, promoted here beyond its historical "some color" meaning |
-| `TERM_PROGRAM` | 7 | `iTerm.app` → TrueColor rung (step 7); phase 3 additionally maps WezTerm/vscode/Ghostty → TrueColor, iTerm.app → ITerm2, Hyper → Hyperlinks |
+| `TERM_PROGRAM` | 7 | `iTerm.app` (exact spelling, case-sensitive) → TrueColor rung (step 7); phase 3 additionally maps WezTerm/vscode/Ghostty → TrueColor, iTerm.app → ITerm2, Hyper → Hyperlinks |
 | `WT_SESSION` | 8 | set, non-empty → Windows Terminal, TrueColor |
 | `GOOGLE_CLOUD_SHELL` | 9 | set to any non-empty value (even `false`) → TrueColor |
 | `TMUX` / `STY` | 10 | set + base TERM already begins `screen*`/`tmux*` → Ansi256 (step 10). Under tmux/screen the inner TERM *is* the base — no re-anchoring to the outer terminal happens |
@@ -261,9 +262,7 @@ $key   = $matcher->closest(new Color(12, 34, 56), $brand);
 // it only trades construction cost for a sublinear lookup. Euclidean and Cie76
 // only; those are the metrics that admit a distance-preserving rotation.
 $idx  = PaletteIndex::fromPalette(NearestColor::palette256(), ColorDistance::Cie76);
-$near = $idx->nearest(new Color(30, 120, 30));  // === a Cie76-metric NearestColor->ansi256() answer
-// (the index only claims equality with the brute-force matcher under the SAME metric —
-//  the $matcher above is Cie2000, so compare against `new NearestColor(ColorDistance::Cie76)`)
+$near = $idx->nearest(new Color(30, 120, 30));  // === (new NearestColor(ColorDistance::Cie76))->ansi256(...)
 
 // Error-compensated lookup, chafa chafa-palette.c:1160-1197: pass the
 // per-channel accumulator by reference; the query is pushed by error * 0.9/16
@@ -272,7 +271,7 @@ $acc  = [0.0, 0.0, 0.0];                                    // start of the scan
 $d1   = $matcher->withError(new Color(90, 90, 90), $acc);    // dither chain step 1
 $d2   = $matcher->withError(new Color(91, 90, 89), $acc);    // ... inherits the push
 $none = null;
-$plain = $matcher->withError(new Color(12, 34, 56), $none);  // null === plain ansi256()
+$plain = $matcher->withError(new Color(12, 34, 56), $none);  // null accumulator = plain ansi256() behaviour
 ```
 
 The 256-entry and 16-entry palette Lab tables are memoized statically (fingerprint-guarded
@@ -412,7 +411,7 @@ SugarCraft\ColorProfile\
 ├── Probe           — static env-probe layer (colorProfile/isNoColor/isForceColor/reducedMotion)
 ├── AsyncProbe      — ReactPHP child-process infocmp probe (bounded children, settles from the chain)
 ├── Probe\TerminalProbe — phased capability report (env chain → terminfo → escape queries → fallbacks)
-├── Probe\Capability / ProbeReport / Probe\InfocmpBinary / Probe\TerminfoParser — capability enum, sourced report, resolved infocmp path, name-position terminfo parser
+├── Probe\Capability / Probe\ProbeReport / Probe\InfocmpBinary / Probe\TerminfoParser — capability enum, sourced report, resolved infocmp path, name-position terminfo parser
 ├── ColorMath       — sRGB→linear→XYZ (D65)→Lab conversion
 ├── DeltaE          — ΔE*₇₆ / ΔE*₉₄ / ΔE*₀₀ metrics
 ├── ColorDistance   — distance strategy enum (Euclidean/Cie76/Cie94/Cie2000)
@@ -447,7 +446,8 @@ Beyond the env ladder above, the library exposes a richer capability surface:
   `allWithSource()`/`has()`/`source()` plus the `colorDescription()` prose, and
   bridge into the shared vocabulary via `toColorProfile()`
   (TrueColor→`TrueColor`, Color256→`Ansi256`, Color16→`Ansi`,
-  NoColor→`NoTTY`, empty report→`Ansi` ladder-default parity).
+  NoColor→`NoTTY`, empty report→`Ansi` ladder-default parity,
+  BasicAscii-only report→`Ascii`).
 - **`AsyncProbe::colorProfile()`** — the same infocmp check in a ReactPHP child
   process; returns a promise. Every child is bounded (5 s ceiling → TERM, 1 s
   grace → KILL, the KILL timer cancelled when the child exits first, stderr
