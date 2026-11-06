@@ -58,4 +58,12 @@ foreach ($store->list(null, 'notes') as $e) {
 echo "\n=== Direct key@db access ===\n";
 echo 'gh_token@passwords: ' . $store->get('gh_token@passwords') . "\n";
 
+echo "\n=== deleteDatabase() ===\n";
+$gone = $store->deleteDatabase('notes');
+echo 'deleteDatabase("notes"): ' . ($gone ? 'true' : 'false') . "\n";
+echo "remaining databases:\n";
+foreach ($store->listDatabases() as $db) {
+    echo "  {$db}\n";
+}
+
 echo "\nDone.\n";
