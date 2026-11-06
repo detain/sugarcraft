@@ -137,7 +137,8 @@ structurally indistinguishable from a marker this lib emitted — the sentinels
   substring is materialized, so an attacker-sized span between a stray
   `U+E000` and a distant `U+E001` is rejected in O(1);
   `Mark::MAX_CONTENT_BYTES` (1 MiB) caps what `Mark` will emit around a
-  chunk. Both caps bound the EMIT side; parsing is linear single-pass with
+  chunk. Both caps bound the EMIT side; parsing runs in a single call —
+  O(n) typical, O(n log n) worst case on hostile unmatched-open input — with
   no cap of its own, so feed `->parse()` frames you expect to be
   terminal-sized — a hostile multi-megabyte blob (or an unterminated CSI/OSC
   run, which swallows the rest of its frame by design) is caller input-trust
