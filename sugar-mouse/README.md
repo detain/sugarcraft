@@ -318,7 +318,7 @@ Markers are **private-use-area sentinel tags** — zero-width *to the
 scanner* and not ANSI, so they never affect the recorded layout; hosts may
 still render unknown PUA codepoints, see
 [Sentinel design and trust boundary](#sentinel-design-and-trust-boundary)
-for the full threat model):
+for the full threat model:
 
 ```
 open:  U+E000 <id> U+E001
