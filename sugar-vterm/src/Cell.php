@@ -58,7 +58,7 @@ final readonly class Cell
      * @param Rendition          $rendition   Line width/height state stamped by `ESC # 3`–`ESC # 6`.
      * @param bool               $continuation Second column of a wide glyph.
      * @param Hyperlink|null     $hyperlink   Active OSC 8 hyperlink.
-     * @param string             $combining    Trailing combining marks (U+0300–U+036F) for the base grapheme.
+     * @param string             $combining    Trailing zero-width marks for the base grapheme — the set is whatever sugar-core `Width::string` scores 0 (combining diacritics, variation selectors, joiners), not a fixed U+0300–U+036F range.
      * @param string|null        $grapheme     Emulator-named constructor of {@see $char}.
      */
     public function __construct(

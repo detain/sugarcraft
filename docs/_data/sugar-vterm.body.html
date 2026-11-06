@@ -27,7 +27,7 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
       <div class="feature"><strong>Cursor + erase + scroll</strong><span>CUU/CUD/CUF/CUB/CUP/CHA/VPA, DECSC/DECRC, EL/ED/ECH/DCH/ICH, SU/SD, IND/RI/NEL.</span></div>
       <div class="feature"><strong>DEC modes</strong><span>1049 alt screen + cursor save, 25 cursor visibility, 1000/1002/1003/1006 mouse, 2004 bracketed paste, 2026 synchronized output (batch queue + flush on disable), 7 auto-wrap (DECAWM).</span></div>
       <div class="feature"><strong>OSC dispatch</strong><span>0/1/2 window title, 4 palette set, 8 hyperlinks (per-cell attribution), 52 clipboard write/read events.</span></div>
-      <div class="feature"><strong>Width-aware + combining</strong><span>CJK + most emoji take 2 cells with a continuation marker. Zero-width combining marks (U+0300–U+036F) attach to the preceding cell via <code>Cell::$combining</code> so composed graphemes render correctly in a single column.</span></div>
+      <div class="feature"><strong>Width-aware + combining</strong><span>CJK + most emoji take 2 cells with a continuation marker. Zero-width runes — anything sugar-core <code>Width::string</code> scores 0 (combining diacritics, variation selectors, joiners) — attach to the preceding cell via <code>Cell::$combining</code> so composed graphemes render correctly in a single column.</span></div>
       <div class="feature"><strong>Scrollback buffer</strong><span>Ring buffer (default 1000 rows) captures scrolled-off content. Access via <code>Screen::scrollback()</code>. Configure size with <code>Terminal::withScrollbackSize()</code>. Erased by <code>CSI 3 J</code>.</span></div>
     </div>
 

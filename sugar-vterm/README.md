@@ -682,10 +682,13 @@ pass an `onFocusEvent` callback to the constructor.
   marker is written to the second cell and inherits SGR + hyperlink from the
   base cell. The cursor advances by the full width.
 - **Normal (width 1):** Written to a single cell.
-- **Combining mark (width 0):** Zero-width Unicode combining diacritical marks
-  (U+0300–U+036F) are not silently discarded. Instead they are attached to
-  the preceding cell via `Cell::withCombining()` so the base character and
-  its combining marks render as a single composed grapheme in one column:
+- **Combining mark (width 0):** Zero-width runes are not silently discarded.
+  Attaching is driven by the sugar-core `Width::string` classification, not by
+  a fixed codepoint range: every zero-width rune (U+0300–U+036F plus the full
+  U+1AB0–U+1AFF, U+1DC0–U+1DFF, U+20D0–U+20FF, U+FE00–U+FE0F, U+FE20–U+FE2F
+  ranges, variation selectors, ZWJ/ZWNJ — anything `Width::string` scores 0)
+  is attached to the preceding cell via `Cell::withCombining()` so the base
+  character and its marks render as a single composed grapheme in one column:
 
 ```php
 use SugarCraft\Vterm\Terminal\Terminal;
