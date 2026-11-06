@@ -573,16 +573,23 @@ foreach ($alerts as $alert) {
 
 ### DashboardPage integration
 
-`AlertManager` integrates into the `DashboardPage` polling loop via `checkAlerts()`:
+`DashboardPage` runs its own private `checkAlerts()` inside the poll loop — it drives `AlertManager` for the metric evaluation but keeps alert state on the page:
 
 ```php
-// Inside DashboardPage's poll (cadence: the 1s admin tick, throttled to
-// CacheTtl::DASHBOARD = 1.0s in handleAdminTick). checkAndDispatch returns
-// ['alerts' => array<string,Alert>, 'notifier' => AlertNotifier]; the page
-// folds the alerts into its own state — there is no footer badge, the
-// toast surface IS the notification channel.
-['alerts' => $alerts, 'notifier' => $notifier] = $manager->checkAndDispatch($counters);
+// Inside DashboardPage's private checkAlerts(), called from the poll
+// (cadence: the 1s admin tick, throttled to CacheTtl::DASHBOARD = 1.0s in
+// handleAdminTick). The page seeds the manager with its own notifier and
+// folds the returned alerts into page state.
+$manager = AlertManager::new()
+    ->withThresholds(AlertThresholds::default())
+    ->withNotifier($this->alertNotifier);
+
+$alerts = $manager->checkAllMetrics($statusVars, $serverVars);
+// newly-breached keys are dispatched to the notifier; every current alert
+// is merged into $this->pendingAlerts, which renderFooter() renders.
 ```
+
+**The in-app channel is the footer badge.** The constructor installs `AlertNotifier::withDefaults(muted: true)` (DashboardPage.php:100-102), so toasts are no-ops in-app; while alerts are pending, `renderFooter()` draws an amber `[!] N alert(s)  [a] dismiss` strip, and `[a]` (`withClearAlerts()`) clears them. Toasts are the embedder opt-in: pass a live notifier via `withAlertNotifier(AlertNotifier::withDefaults(muted: false))`, or drive `AlertManager::checkAndDispatch()` directly as in the example above.
 
 **Alert dedup (state-transition only):** `checkAlerts()` maintains a `$breachedAlertKeys` array tracking which alert keys were breached at the last poll. It computes `array_diff_key` between current and previous breach keys and only fires a toast for newly-breached entries — a threshold that persists across poll ticks does **not** re-fire the toast. This prevents alert storms for continuously-breached thresholds (e.g., a stuck connection at 90% utilization). The `[a]` key dismisses all pending alerts and resets the breach-tracking state so the same alert can re-fire if the threshold is cleared and breached again. `AlertNotifier` is mute-safe by default — running without a toast factory is a silent no-op. The live predicate is `hasActiveAlert()` (there is no `hasAlerts()`).
 
