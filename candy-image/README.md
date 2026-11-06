@@ -77,7 +77,7 @@ the asset for verification.
 | `--animate`             | Animated-GIF pass-through into sugar-animation's `Player` (alternate screen). Pause, frame-stepping and the solid/density preset toggle ride this viewer's wired `Player` (Keys below); frame-rate, speed and watch-mode flags (`--fps`/`--speed`/`--duration`/`--watch`) live in `candy-gifview`. |
 | `--passthrough=V`       | tmux `allow-passthrough` transaction: `auto` (default) or `none`. |
 | `--polite`              | Accepted no-op for chafa muscle-memory — this viewer always renders inline and synchronously. |
-| `--dump-detect`         | Print the resolved terminal state: env table, TermDb chain + claims, Detect capability, cell pixel size, default fg/bg, DA1 reply, `auto()` selection, palette report. Exits 0. |
+| `--dump-detect`         | Print the resolved terminal state: two env lines (`TERM`, `COLORTERM`), then a detection report — TermDb chain/claims/passthrough/mux fields, Detect capabilities (sixel/kitty/iterm2/halfblock/chafa/tmux) and summary, cell pixel size, default fg/bg, DA1 reply, `auto()` selection, tmux transaction, palette report. The dump short-circuits *before* the file requirement and ignores any file argument: exits 0 with no file at all. |
 | `--version` / `--help` (`-h`) | Print the version / usage and exit 0.         |
 
 ## Chafa flag-compat map (what this base honors and why)
