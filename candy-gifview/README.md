@@ -125,7 +125,7 @@ The key table is fixed in the player model; keys are not rebindable.
 | Code | Meaning                                                                |
 |------|------------------------------------------------------------------------|
 | 0    | `--help`/`--version` printed, or playback ended normally.              |
-| 1    | Flag/argument refusal or a decode failure — the message lands on stderr. |
+| 1    | Flag/argument refusal, the ext-gd capability refusal, or a decode failure — the message lands on stderr. |
 | 128+N | The loop was stopped by signal N (e.g. 143 for SIGTERM).              |
 
 ## Accessibility
