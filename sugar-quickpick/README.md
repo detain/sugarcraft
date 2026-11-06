@@ -243,6 +243,8 @@ public function hide(): self
 // Append one or more characters to the filter text and re-filter. Resets
 // the cursor to 0. Input is silently refused once the filter holds
 // MAX_FILTER_LENGTH (256) codepoints — compare filterText() to detect.
+// The gate is checked before appending, so a paste accepted while under
+// the threshold lands whole and the filter can end up past 256.
 public function type(string $char): self
 
 // Remove the last codepoint from the filter text — grapheme clusters such
