@@ -12,13 +12,16 @@ use SugarCraft\Kv\Store;
 /**
  * CLI command handler for `candy-kv import`.
  *
- * i18n scope (intentional): the runtime stdout/stderr diagnostics in this
- * class and {@see ExportCommand} are plain English by design — they are
- * operator-facing command feedback, not catalogued messages. The localised
- * CLI surface is the usage lines, which `bin/candy-kv` routes through
- * `Lang::t('cli.usage_*')`. Importer failure texts (RuntimeException
- * messages) are programmer-facing exception details and stay English too.
- * See CALIBER_LEARNINGS.md "i18n scope".
+ * i18n scope (intentional): this class straddles both surfaces. The ONE
+ * catalogued emitter is the success line — `Lang::t('cli.imported_one')` /
+ * `Lang::t('cli.imported_n')` on stdout — joining the usage lines that
+ * `bin/candy-kv` routes through `Lang::t('cli.usage_*')`. Everything else
+ * stays plain English by design: the usage- and failure-class stderr
+ * diagnostics (unknown format, failed STDIN read, missing file, and the
+ * "Import failed:" refusal wrapper) are operator-facing command feedback,
+ * not catalogued messages, and importer failure texts (RuntimeException
+ * messages) are programmer-facing exception details. See
+ * CALIBER_LEARNINGS.md "i18n scope".
  */
 final class ImportCommand
 {

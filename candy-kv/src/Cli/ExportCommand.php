@@ -11,8 +11,11 @@ use SugarCraft\Kv\YamlDialect;
 /**
  * CLI command handler for `candy-kv export`.
  *
- * i18n scope: runtime diagnostics here are plain-English by design — see
- * the {@see ImportCommand} class docblock and CALIBER_LEARNINGS.md.
+ * i18n scope: every runtime diagnostic here is plain English by design,
+ * and there is no catalogued success line — the export payload on stdout
+ * IS the success surface. See the {@see ImportCommand} class docblock and
+ * CALIBER_LEARNINGS.md for the full split (including the one catalogued
+ * success emitter over there).
  */
 final class ExportCommand
 {
