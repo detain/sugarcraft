@@ -58,8 +58,19 @@ final class AsyncProbeBoundedTest extends TestCase
     {
         // MT8: an unread stderr pipe lets a chatty infocmp block on a full
         // buffer and die on the kill ladder; the drain is capped, not unbounded.
+        //
+        // The pump shape is pinned too: react/child-process ^0.6 never emits
+        // 'stdout'/'stderr' Process events — the child pipes are public STREAM
+        // PROPERTIES created inside start() — and the exit handler must read
+        // the accumulator by reference or it judges a stale empty string.
+        // The old dead-shape assertion is flipped to the live one in the same
+        // commit as the fix; a revert to either flaw reddens this test.
         $src = self::src();
-        self::assertStringContainsString("\$process->on('stderr'", $src);
+        self::assertStringContainsString('$process->stderr?->on(\'data\'', $src);
+        self::assertStringContainsString('$process->stdout?->on(\'data\'', $src);
+        self::assertStringContainsString('use ($deferred, &$stdout', $src);
+        self::assertStringNotContainsString("\$process->on('stderr'", $src, 'the dead event name must not return');
+        self::assertStringNotContainsString("\$process->on('stdout'", $src, 'the dead event name must not return');
         self::assertStringContainsString('STDERR_CAP_BYTES', $src);
     }
 

@@ -145,8 +145,12 @@ final class AsyncProbe
         };
         $process->start($loop);
 
+        // react/child-process 0.6 exposes the child pipes as stream PROPERTIES
+        // (created inside start()); Process itself emits only 'exit'. Listening
+        // for 'stdout'/'stderr' EVENTS silently never fires — the pump below
+        // reads the streams directly.
         $stdout = '';
-        $process->on('stdout', function ($chunk) use (&$stdout): void {
+        $process->stdout?->on('data', function ($chunk) use (&$stdout): void {
             $stdout .= $chunk;
         });
 
@@ -154,7 +158,7 @@ final class AsyncProbe
         // a full pipe and die on the TERM→KILL ladder over a cosmetic warning.
         // A bounded prefix is retained; everything past the cap is discarded.
         $stderr = '';
-        $process->on('stderr', function ($chunk) use (&$stderr): void {
+        $process->stderr?->on('data', function ($chunk) use (&$stderr): void {
             if (\strlen($stderr) < self::STDERR_CAP_BYTES) {
                 $stderr .= $chunk;
             }
@@ -183,7 +187,10 @@ final class AsyncProbe
         // killed by a signal; the handler must accept it, or the SIGKILL rung
         // of our own ladder would raise a TypeError inside Loop::run() and
         // take the embedding application's loop down with it.
-        $process->on('exit', function (?int $exitCode, ?int $signal = null) use ($deferred, $stdout, $release, $cancelLadder, $chain): void {
+        // $stdout must be captured BY REFERENCE: the accumulator is filled by
+        // the data pump after this closure is built, and a by-value copy would
+        // hand the exit handler the empty string it had at registration time.
+        $process->on('exit', function (?int $exitCode, ?int $signal = null) use ($deferred, &$stdout, $release, $cancelLadder, $chain): void {
             $cancelLadder();
             $release();
             if ($exitCode === 0 && TerminfoParser::hasCapName($stdout, TerminfoParser::TRUECOLOR_NAMES)) {
