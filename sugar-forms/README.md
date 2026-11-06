@@ -369,8 +369,9 @@ sugar-forms is built on five shared packages:
   typing k finds Kitchen because 'kitchen' contains 'k', not by scoring. There is
   no public injection point for an alternative matcher, and MultiSelect does no
   fuzzy matching at all (k is cursor-up there; digits 1-9 are jump-toggles).
-- **[sugar-async](https://github.com/sugarcraft/sugar-async)** — `Async\Await` + `CancelledException`
-  for async suggestion fetchers. `withAsyncSuggestions` stores a
+- **[sugar-async](https://github.com/sugarcraft/sugar-async)** — `AsyncOps` +
+  `CancellationSource` for async suggestion fetchers (the lib's failure
+  vocabulary is `OperationCancelledException` and `TimeoutException`). `withAsyncSuggestions` stores a
   `CancellationSource` on the model and cancels the previous timer before
   scheduling the next, so rapid keystrokes only fire one network request.
 - **Vim keybindings** — `VimKeyHandler` provides a shared vim mode handler
