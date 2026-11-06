@@ -436,15 +436,15 @@ $bar = new HelpBar([
 $bar = $bar->withShortcut('Ctrl+R', 'reload')
            ->withoutShortcut('↑↓');
 
-// Show or hide
-$bar = $bar->show();
-$bar = $bar->hide();
-
 // Read back the entries (key → description)
 $shortcuts = $bar->shortcuts();
 
-// Render: "↑↓: navigate │ Enter: select │ Esc: close"
+// Render: "Enter: select │ Esc: close │ Ctrl+R: reload"
 echo $bar->render();
+
+// Show or hide (fluent). A hidden bar renders the empty string — that is
+// how the overlay omits the line entirely:
+$bar->hide()->render(); // ''
 ```
 
 Shortcut labels are free-form strings rendered verbatim, so prefer word-form entries like 'Up/Down' (the 'Enter' row above already is one) over glyphs like '↑↓' for screen-reader listeners — the example removes the glyph entry with `withoutShortcut()` for exactly this reason.
