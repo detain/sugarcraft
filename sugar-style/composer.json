@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-style",
-    "description": "PHP port of charmbracelet/lipgloss \u2014 declarative terminal styling and layout.",
+    "description": "Declarative styling and layout for terminal UIs, inspired by charmbracelet/lipgloss.",
     "type": "library",
     "license": "MIT",
     "keywords": [
