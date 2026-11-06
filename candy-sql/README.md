@@ -277,7 +277,7 @@ driver://[user][:pass]@host[:port]/dbname[?query]
 >
 > | Mode | Effect |
 > |------|--------|
-> | unconfigured | The effective default is `prefer` — `ConnectionFactory::fromDsn()` seeds `sslMode = 'prefer'` when the query string names no mode (src/Db/ConnectionFactory.php:151) and `fromArgv()`/`fromArgs()` apply `?? 'prefer'` (:238). So a plain `mysql://` DSN or flag set already rides the opportunistic-TLS row below; the empty cell applies only to a hand-built `ConnectionConfig`. |
+> | unconfigured | The effective default is `prefer` — `ConnectionFactory::fromDsn()` seeds `sslMode = 'prefer'` when the query string names no mode (src/Db/ConnectionFactory.php:151) and `fromArgv()` applies `?? 'prefer'` (:238). So a plain `mysql://` DSN or flag set already rides the opportunistic-TLS row below; the empty cell applies only to a hand-built `ConnectionConfig`. |
 > | `` (empty) / `disable` | Plain TCP, no TLS options. |
 > | `allow` / `prefer` / `preferred` | Opportunistic TLS: `MYSQL_ATTR_SSL_CA=null`, `SSL_VERIFY_SERVER_CERT=false` — encrypts when the server supports it, verifies nothing (a downgraded connection is not reported). |
 > | `require` / `required` / `verify_ca` / `verify_identity` | TLS enforced with `SSL_VERIFY_SERVER_CERT=true`. Because no client CA is configured, verification runs against the server's system CA trust store. |
