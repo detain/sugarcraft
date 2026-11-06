@@ -423,7 +423,7 @@ contract itself binds the name) — PHP admits one method per name.
 The `Field` interface carries two abstract contract members through the same
 era: `getDescription()` and `getError()` are now `@deprecated` contract
 members whose canonical spelling is `description()` / `error()`. `getTitle()`
-is an interface-level exception: eleven of the twelve implementing fields
+is an interface-level exception: all twelve implementing fields
 bind the bare `title(string $title): self` setter, so the interface cannot
 adopt a bare read. Renamed class-level pairs:
 
