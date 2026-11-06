@@ -172,9 +172,10 @@ For callers that hold a raw `/dev/tty` fd (no `MasterPty` object),
 ```php
 use SugarCraft\Pty\SignalForwarder;
 use SugarCraft\Pty\Libc;
+use SugarCraft\Core\Util\Tty;
 
 $ttyFd    = Libc::lib()->open('/dev/tty', 0x0002); // O_RDWR
-$hostTty  = new Tty($ttyFd);
+$hostTty  = new Tty(\fopen('/dev/tty', 'r+'));     // Tty takes a stream resource, not the int fd
 SignalForwarder::attachSigwinchToFd(
     $ttyFd,
     fn () => $hostTty->size(),
