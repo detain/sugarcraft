@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-mail",
-    "description": "Email sender for PHP, modeled on the charmbracelet/pop Go tool \u2014 send via the Resend API or direct SMTP. Compose from stdin, attach files, supports CC/BCC, HTML body.",
+    "description": "Email sender for PHP, modeled on the charmbracelet/pop Go tool \u2014 send via the Resend HTTP API or direct SMTP. Compose from stdin, attach files, supports CC/BCC, HTML body.",
     "type": "library",
     "license": "MIT",
     "keywords": [

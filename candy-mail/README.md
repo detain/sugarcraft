@@ -10,7 +10,7 @@
 
 # CandyMail
 
-candy-mail — an email **sender** for PHP 8.3+, via the Resend API or direct SMTP.
+candy-mail — an email **sender** for PHP 8.3+, via the Resend HTTP API or direct SMTP.
 Send-only by design: candy-mail composes and dispatches mail; it does not read,
 store, or manage an inbox.
 
