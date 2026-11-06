@@ -370,7 +370,7 @@ final class StorageContractTest extends TestCase
 
     /**
      * The connection posture, pinned by read-back through the live handle:
-     * the page-cache cap answers -64000 (64MiB ceiling per connection, not an
+     * the page-cache cap answers -64000 (62.5 MiB ceiling per connection, not an
      * allocation) and synchronous answers 2 — SQLite's FULL. The second pin
      * is the deliberate decline: WAL's usual companion synchronous=NORMAL is
      * refused on this secrets store because writes land once per command, so
@@ -384,7 +384,7 @@ final class StorageContractTest extends TestCase
         $this->assertSame(
             -64000,
             (int) $handle->querySingle('PRAGMA cache_size'),
-            'the 64MiB page-cache cap must answer on the connection that opens the store'
+            'the 62.5 MiB page-cache cap must answer on the connection that opens the store'
         );
         $this->assertSame(
             2,

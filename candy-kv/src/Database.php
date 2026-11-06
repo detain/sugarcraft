@@ -128,7 +128,7 @@ final class Database
         }
         $this->migrateExpiryColumn();
         $this->db->exec('PRAGMA journal_mode = WAL');
-        // 64MiB page-cache cap per connection (the negative spelling is KiB):
+        // 64,000 KiB (62.5 MiB) page-cache cap per connection (negative spelling is KiB):
         // list/glob/pattern walks on large stores reread the same pages, and
         // the cap lets them land in cache instead of disk. It is a ceiling,
         // not an allocation — a small store never grows past its working set.
