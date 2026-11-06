@@ -71,6 +71,8 @@ $transport-&gt;send($email);
 // Or over the Resend HTTP API (key from the argument or RESEND_API_KEY)
 (new ResendTransport())-&gt;send($email);</code></pre>
 
+    <p>Attachment paths are read eagerly at build time — the file on disk must exist when <code>withAttachment()</code> is called, or the builder throws a <code>RuntimeException</code>.</p>
+
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>SMTP transport</strong><span>TCP connection with TLS, auth (plain/login), and batching.</span></div>
