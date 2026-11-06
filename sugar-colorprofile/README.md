@@ -36,6 +36,10 @@ sugar-colorprofile — terminal color profile detection and color degradation fo
 composer require sugarcraft/sugar-colorprofile
 ```
 
+Requires PHP 8.3+ and no PHP extensions — the probes' optional `posix_*` calls
+are feature-detected, and an absent/unreadable `infocmp` child degrades the
+phase-2 answer instead of failing.
+
 ## Quick Start
 
 ```php
