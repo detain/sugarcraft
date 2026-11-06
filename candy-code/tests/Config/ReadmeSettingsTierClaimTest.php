@@ -103,6 +103,11 @@ final class ReadmeSettingsTierClaimTest extends TestCase
         return $this->document('README.md');
     }
 
+    private function changelog(): string
+    {
+        return $this->document('CHANGELOG.md');
+    }
+
     /**
      * Any page in the package root, read as bytes.
      *
@@ -519,11 +524,16 @@ final class ReadmeSettingsTierClaimTest extends TestCase
     ];
 
     /**
-     * THE PROSE. Wherever README.md still quotes the retracted sentence — and it
-     * must, {@see \SugarCraft\Code\Config\LayeredSettings} keeps the retraction
-     * rather than deleting it, because a reader who finds only the conclusion
-     * deletes the guard — it has to be visibly A QUOTE, and the counterexample
-     * has to be within reach of it.
+     * THE PROSE. The retracted auditability sentence no longer appears in
+     * README.md at all: the code-chain Step 27 migration (commit e098cc0c0,
+     * "README repair histories migrate to CHANGELOG, contracts stay") moved the
+     * retraction history to CHANGELOG.md, where it is recorded as a bullet
+     * quoting the old claim and disproving it ("False: the filter matches names
+     * with bare `fnmatch()` ..."). This test follows the history there and
+     * keeps the structural rule over the README: the fragments may never be
+     * restated as README body prose, because body prose is what a reader skims
+     * and believes, and the guard that used to need a visible quote is now the
+     * retraction record itself.
      *
      * THE STRUCTURAL RULE IS THE REAL ASSERTION, and it is here because the
      * proximity rule alone SURVIVED ITS MUTATION. Restoring the false sentence
@@ -540,22 +550,25 @@ final class ReadmeSettingsTierClaimTest extends TestCase
      * appear only on a `>` line. Body prose is what a reader skims and believes;
      * a block quote is visibly an aside about a sentence that used to be there.
      *
-     * THE WINDOW IS KEPT AS WELL, narrowed to the quoted occurrences. It answers
-     * a different question — that the retraction still carries its
-     * counterexample rather than having drifted into a bare assertion — and a
-     * `[!B]*` sitting in some unrelated section three pages down would satisfy a
-     * whole-file contains() while the paragraph an operator actually reads
-     * carried the bare false claim.
+     * THE WINDOW IS KEPT AS WELL, narrowed to the quoted occurrences in the
+     * CHANGELOG retraction. It answers a different question — that the retraction
+     * still carries its counterexample rather than having drifted into a bare
+     * assertion — and a stray `fnmatch()` mention in some unrelated section would
+     * satisfy a whole-file contains() while the paragraph an operator actually
+     * reads carried the bare false claim. The README's own worked demo (the
+     * `[!B]*` block quote beside the settings contract) is asserted to still be
+     * present, because that is the half of the story the migration left behind.
      */
     public function testWhereverTheReadmeQuotesTheRetractedClaimTheCounterexampleIsRightThere(): void
     {
         $readme = $this->readme();
+        $retraction = $this->changelog();
         $quote = 'naming every tool it removes';
 
         self::assertStringContainsString(
             $quote,
-            $readme,
-            'README.md dropped the retracted claim instead of correcting it in place',
+            $retraction,
+            'CHANGELOG.md dropped the retracted claim instead of recording the migration; the history lives here now',
         );
 
         // PER PARAGRAPH, NOT PER LINE. A per-line scan is evaded by nothing more
@@ -565,7 +578,6 @@ final class ReadmeSettingsTierClaimTest extends TestCase
         // reads, so each is flattened to one whitespace-normalised string first
         // and only then searched.
         $offenders = [];
-        $quotedParagraphs = 0;
         $paragraph = [];
         $paragraphStart = 1;
         $lines = explode("\n", $readme);
@@ -600,9 +612,7 @@ final class ReadmeSettingsTierClaimTest extends TestCase
                         return !str_starts_with(ltrim($one), '>');
                     },
                 ));
-                if ($unquoted === []) {
-                    ++$quotedParagraphs;
-                } else {
+                if ($unquoted !== []) {
                     $offenders[] = $paragraphStart . ': ' . trim($unquoted[0]);
                 }
             }
@@ -615,28 +625,29 @@ final class ReadmeSettingsTierClaimTest extends TestCase
             'README.md asserts the retracted disabledTools auditability claim as body prose. It is false: '
             . '`Bootstrap::filterToolSet()` matches through `PermissionRule::matchesToolName()`, which is bare '
             . '`fnmatch()`, so `[!B]*` removes an unbounded set and names none of it. If the sentence has to '
-            . 'be restated, restate it inside the `>` retraction that disproves it',
+            . 'be restated, restate it inside the CHANGELOG.md retraction that disproves it',
         );
-        self::assertGreaterThan(
-            0,
-            $quotedParagraphs,
-            'the retraction quote is gone; it records what this section used to claim and why it was wrong',
+        self::assertStringContainsString(
+            self::COUNTEREXAMPLE_GLOB,
+            $readme,
+            'the worked demo that disproves the retracted claim left the README; the Step 27 migration left it '
+            . 'there beside the contract and it has to stay readable where the setting is documented',
         );
 
         $offset = 0;
         $seen = 0;
-        while (($at = strpos($readme, $quote, $offset)) !== false) {
+        while (($at = strpos($retraction, $quote, $offset)) !== false) {
             ++$seen;
-            $window = substr($readme, $at, 2000);
+            $window = substr($retraction, $at, 2000);
             self::assertStringContainsString(
-                self::COUNTEREXAMPLE_GLOB,
+                'False:',
                 $window,
-                'README.md states the retracted disabledTools claim without the counterexample that disproves it',
+                'CHANGELOG.md quotes the retracted claim without marking it retracted',
             );
             self::assertStringContainsString(
-                'That is false',
+                'fnmatch()',
                 $window,
-                'README.md quotes the retracted claim without marking it retracted',
+                'CHANGELOG.md states the retracted disabledTools claim without the counterexample that disproves it',
             );
             $offset = $at + 1;
         }
@@ -738,10 +749,27 @@ final class ReadmeSettingsTierClaimTest extends TestCase
      * must die with it, not swallow whatever body prose reuses the heading;
      * renaming or deleting the heading drops its real deprecation prose
      * back into the offender list.
+     *
+     * NAVIGATION IS NOT PROSE (weld cure, 2026-11-06). The README's table of
+     * contents gained a link row to this section with the code-chain Step 38
+     * root edits; the word inside a markdown anchor is navigation metadata,
+     * not a reader-facing assertion, so occurrences that live ONLY inside
+     * links to the exempt section are stripped before the scan. The link
+     * target is derived from the same heading constant, so renaming the
+     * section breaks the exemption in the same step — fail-closed, like the
+     * carve-out it extends.
      */
     public function testTheWordDeprecatedAppearsInTheReadmeOnlyInsideTheQuoteThatRetractsItOrTheAccessorSection(): void
     {
         $lines = explode("\n", $this->readme());
+        // Navigation links to the exempt section (the table of contents row
+        // added by the Step 38 root edits) are structural navigation, not
+        // prose: they name the section, they do not assert anything inside it.
+        // The anchor is DERIVED from ACCESSOR_SECTION_HEADING, so renaming or
+        // deleting the heading breaks the link text too and whatever remains
+        // falls back into the offender list — the exemption stays fail-closed
+        // exactly like the section carve-out it extends.
+        $anchor = preg_quote(strtolower(str_replace(' ', '-', substr(self::ACCESSOR_SECTION_HEADING, 3))), '#');
 
         $offenders = [];
         $quoted = 0;
@@ -751,9 +779,13 @@ final class ReadmeSettingsTierClaimTest extends TestCase
             if (str_starts_with($line, '## ')) {
                 $inAccessorSection = str_starts_with($line, self::ACCESSOR_SECTION_HEADING);
             }
-            if (stripos($line, 'deprecat') === false) {
+            $stripped = (string) preg_replace('/\[[^\]]*\]\(#' . $anchor . '(?:[^)]*)?\)/', '', $line);
+            if (stripos($stripped, 'deprecat') === false) {
+                // Either the line never mentioned it, or every occurrence was
+                // navigation to the exempt section — structural, not prose.
                 continue;
             }
+            $line = $stripped;
             if (str_starts_with(ltrim($line), '>')) {
                 ++$quoted;
 
