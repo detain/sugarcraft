@@ -1521,6 +1521,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
             return true;
         }
 
+        // The stat cache must not hand back a pre-refresh mtime: in a
+        // long-lived reader the cached value would over-age a live writer's
+        // heartbeat exactly when no start-time proof is available.
+        \clearstatcache(true, $pauseFile);
         $heartbeat = time() - (int) @filemtime($pauseFile);
 
         return $heartbeat > self::ORPHAN_HEARTBEAT_STALE_SECONDS;
