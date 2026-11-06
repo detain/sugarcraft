@@ -466,7 +466,7 @@ maps common orchestration needs to the PHP combinators:
 | Print text above the program region | `Cmd::println($s)` / `Cmd::printf($fmt, ...)` |
 | Drop bytes onto the wire | `Cmd::raw($bytes)` |
 | Suspend on Ctrl+Z, resume on SIGCONT | `Cmd::suspend()` (returns to a `ResumeMsg`) |
-| Run an external program (`$EDITOR`) | `Cmd::exec($command, captureOutput: false, onComplete: fn (int $exitCode) => $msg)` |
+| Run an external program (`$EDITOR`) | `Cmd::exec($commandOrArgv, captureOutput: false, onComplete: fn (int $exit, string $out, string $err, ?\Throwable $error): ?Msg)` → `ExecMsg` (a string runs via the shell, an argv list does not — prefer the list when args carry user input) |
 | Offload to a worker subprocess | `WorkerCmd::run($pool, $task)` (`callable|string $task`) → `WorkerResultMsg` |
 | Replace the subscription set for this cycle | `new SubscribeCmd($subscriptions)` |
 
