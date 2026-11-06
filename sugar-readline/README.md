@@ -451,7 +451,7 @@ hidden prompt the line masks query and match alike, in the same idiom.
 Prompts start with **no** history attached: navigation and Ctrl+R do nothing
 until you pass a store via `withHistory()`. `InMemoryHistory` keeps entries
 for the process lifetime; `FileHistory` persists them across processes —
-`new FileHistory($path, $maxHistory, $tempDir, $deferWrites)`: the file is
+`new FileHistory($filePath, $maxHistory, $tempDir, $deferWrites)`: the file is
 created (or tightened, if it exists) at mode `0600`, loaded on construction,
 and flushed at the latest on destruction. With `$deferWrites = true`, pushes
 queue in memory until `flush()` batch-writes them — queued entries are lost
