@@ -13,10 +13,10 @@ return [
     'store.cannot_read'         => 'Cannot read file: {path}',
 
     // bin/candy-kv
-    'cli.usage_set'             => 'Usage: {bin} set <key> [value] [--ttl SECONDS]',
-    'cli.usage_get'             => 'Usage: {bin} get <key>',
+    'cli.usage_set'             => 'Usage: {bin} set <key> [value] [--ttl SECONDS] [--binary|--text]',
+    'cli.usage_get'             => 'Usage: {bin} get <key> [--sanitize]',
     'cli.usage_delete'          => 'Usage: {bin} delete <key>',
-    'cli.usage_import'          => 'Usage: {bin} import <json|yaml|yml> <path>',
+    'cli.usage_import'          => 'Usage: {bin} import <json|yaml|yml> <path> [--no-atomic]',
     'cli.usage_export'          => 'Usage: {bin} export <json|yaml|yml> [db] [pattern]',
     'cli.deleted_n'             => 'Deleted {count} entries.',
     'cli.deleted_none'          => 'Nothing deleted: no entries match "{key}".',

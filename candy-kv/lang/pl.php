@@ -11,10 +11,10 @@ declare(strict_types=1);
 return [
     'database.entry_unreadable' => 'Wpis został zapisany, ale nie jest już czytelny (wygasły, usunięty lub uszkodzony)',
     'store.cannot_read'         => 'Nie można odczytać pliku: {path}',
-    'cli.usage_set'             => 'Użycie: {bin} set <klucz> [wartość] [--ttl SECONDS]',
-    'cli.usage_get'             => 'Użycie: {bin} get <klucz>',
+    'cli.usage_set'             => 'Użycie: {bin} set <klucz> [wartość] [--ttl SECONDS] [--binary|--text]',
+    'cli.usage_get'             => 'Użycie: {bin} get <klucz> [--sanitize]',
     'cli.usage_delete'          => 'Użycie: {bin} delete <klucz>',
-    'cli.usage_import'           => 'Użycie: {bin} import <json|yaml|yml> <ścieżka>',
+    'cli.usage_import'           => 'Użycie: {bin} import <json|yaml|yml> <ścieżka> [--no-atomic]',
     'cli.usage_export'            => 'Użycie: {bin} export <json|yaml|yml> [baza] [wzorzec]',
     'cli.deleted_n'             => 'Usunięto {count} wpisów.',
     'cli.unknown_command'       => 'Nieznane polecenie: {cmd}',

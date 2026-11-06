@@ -11,10 +11,10 @@ declare(strict_types=1);
 return [
     'database.entry_unreadable' => 'Item is geschreven maar niet meer leesbaar (verlopen, verwijderd of corrupt)',
     'store.cannot_read'         => 'Kan bestand niet lezen: {path}',
-    'cli.usage_set'             => 'Gebruik: {bin} set <key> [waarde] [--ttl SECONDS]',
-    'cli.usage_get'             => 'Gebruik: {bin} get <key>',
+    'cli.usage_set'             => 'Gebruik: {bin} set <key> [waarde] [--ttl SECONDS] [--binary|--text]',
+    'cli.usage_get'             => 'Gebruik: {bin} get <key> [--sanitize]',
     'cli.usage_delete'          => 'Gebruik: {bin} delete <key>',
-    'cli.usage_import'           => 'Gebruik: {bin} import <json|yaml|yml> <pad>',
+    'cli.usage_import'           => 'Gebruik: {bin} import <json|yaml|yml> <pad> [--no-atomic]',
     'cli.usage_export'            => 'Gebruik: {bin} export <json|yaml|yml> [db] [patroon]',
     'cli.deleted_n'             => '{count} entries verwijderd.',
     'cli.unknown_command'       => 'Onbekend commando: {cmd}',
