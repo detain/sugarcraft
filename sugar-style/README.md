@@ -246,7 +246,7 @@ echo Tree::new()
   methods (return-`self` = setter; `get*`/`is*` = getter; `unset*` =
   unsetter). Every fluent setter routes through the
   private 62-positional-parameter `with()` choke; `inherit()`/`patch()` mint the merged instance directly
-  (`new self(...)`, `src/Style.php:1013`/`:1178`) — the memo-reset consequence
+  (`new self(...)`, `src/Style.php:1013`/`:1176`) — the memo-reset consequence
   holds either way (fresh instance). Props covered: fg/bg/border
   colours (incl. per-side), bold/italic/underline/strikethrough/faint/blink/
   rapidBlink/reverse/overline/invisible, padding/margin (1/2/4-arg shorthand
