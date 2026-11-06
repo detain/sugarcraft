@@ -54,6 +54,16 @@ final class AgentMentionsTest extends TestCase
         // The discriminator against a door that lost its anchor: 'fix @coder'
         // asks the model to work, it does not address anybody.
         self::assertNull(AgentMentions::draft('fix @coder now', self::roster('coder')));
+        // Anchor-discrimination pin (MAJOR-1): the row above survives an
+        // anchor loss only by COINCIDENCE of byte offsets — an unanchored
+        // match still computes its rest from 1+strlen(name), and for 'coder'
+        // at column 4 that rest begins 'oder', not a space. Here the roster
+        // HOLDS the two-letter name and the mid-line '@dd' sits exactly three
+        // columns past the offset: rest lands on ' @dd x', the token-end
+        // check passes, and a door without the line-initial '^' rewrites
+        // prose into '@agent:dd @dd x'. Only the anchor keeps mid-line prose
+        // prose — this row is that anchor's pin.
+        self::assertNull(AgentMentions::draft('abc @dd x', self::roster('dd')));
     }
 
     public function testEmailLikeAndDomainTokensAreProse(): void

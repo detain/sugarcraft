@@ -84,12 +84,6 @@ final class AgentMentions
     private const RESERVED_HEADS = ['agent', 'diff', 'mcp', 'pr', 'session'];
 
     /**
-     * Head(s) that stay valid keyword mentions with NO colon, so a bare
-     * line-initial address of that spelling is the keyword's, not an address.
-     */
-    private const COLONLESS_HEADS = ['diff'];
-
-    /**
      * Not instantiable — a door, not a thing.
      *
      * @codeCoverageIgnore
