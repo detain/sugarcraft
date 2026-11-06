@@ -360,8 +360,11 @@ share the byte-exact, case-sensitive semantics of exact ones.
   miss says just `key not found`.
 - **Command lines are not secret storage.** Anything passed as an argument
   (`candy-kv set token "$SECRET"`) is visible to `ps`, shell history, and any
-  process accounting. Piping via stdin keeps the value out of argv; use
-  `--binary`/stdin for high-value entries where you can.
+  process accounting. Piping the value via stdin keeps it out of argv — that
+  is the high-value-entry path. `--binary` has no bearing on exposure: it
+  only forces the base64 storage form (see Binary-safe above), it does not
+  hide, encrypt, or redact anything, and the value still round-trips through
+  `get`.
 - Backups: copy the `.db` **together with its `-wal` sidecar** (or checkpoint
   first). Copying only `*.db` under WAL can lose the most recent writes.
   `deleteDatabase()` reports failure (returns `false`) when a sidecar could
@@ -406,7 +409,7 @@ translated surface is what end users see.
 
 ## Shared foundations
 
-candy-kv uses [sugar-fuzzy](https://github.com/detain/sugarcraft#sugar-fuzzy) for Smith-Waterman scored matching: `Store::fuzzyFilter()` is a live API that ranks keys against a free-text query. Glob-to-SQLite `LIKE` pattern filtering remains the active filter path for `list`/`delete`.
+candy-kv uses [sugar-fuzzy](https://github.com/detain/sugarcraft/tree/master/sugar-fuzzy/README.md) for Smith-Waterman scored matching: `Store::fuzzyFilter()` is a live API that ranks keys against a free-text query. Glob-to-SQLite `LIKE` pattern filtering remains the active filter path for `list`/`delete`.
 
 ## Accessor deprecation (2026-10-24)
 
