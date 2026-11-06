@@ -146,6 +146,14 @@ schemes (`rtsp://`, `rtmp://`, …) are not opened by `openUrl()`. Calling
 `openUrl()` without `allowedHosts:` also logs a one-line SSRF advisory
 (`ssrf.no_allowlist`, host only — never the path or query): ffmpeg resolves DNS
 and follows redirects, so an unbounded remote URL can reach internal hosts.
+Every child the library spawns — the transient `ffprobe` probe, the `ffmpeg`
+decoder, and the `ffplay`/`mpv` audio companion — starts with a scrubbed copy
+of the parent environment: any variable whose *name* contains
+`PROXY`, `SECRET`, `TOKEN`, `KEY`, `CREDENTIAL`, or `PASSWORD`
+(case-insensitive, `FfmpegCommandBuilder::scrubbedEnv()`) is removed, because
+those binaries run external code against your sources and have no need for
+credentials, while a missing or empty `PATH` is restored to
+`/usr/local/bin:/usr/bin:/bin` so discovery still works.
 
 ```php
 // Mutate headers fluently on an existing Reel (validated the same way):
