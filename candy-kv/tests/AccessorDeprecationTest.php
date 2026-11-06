@@ -10,11 +10,11 @@ use SugarCraft\Kv\Database;
 use SugarCraft\Kv\Store;
 
 /**
- * Pins the accessor-deprecation era (2026-10-24).
+ * Pins the 2026-10-24 accessor renames and their BC forwarders.
  *
  * Database::getRaw() was renamed to its bare twin raw(), and the
- * file-writing verb Store::getFile() to saveTo() — era-correct because
- * the operation writes store data OUT to disk; the store-side mutator
+ * file-writing verb Store::getFile() to saveTo() — a direction verb
+ * fits because the operation writes store data OUT to disk; the store-side mutator
  * setFile() keeps its name (file form of the canonical set() verb).
  * The legacy spellings stay byte-identical one-line BC forwarders
  * marked '@deprecated' + 'REMOVED-IN: 2.0.0' until v2.0.0.
