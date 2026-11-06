@@ -56,6 +56,15 @@ use SugarCraft\Code\Support\FrontmatterKeyAudit;
  * the host by its command door — so the change never races a running turn.
  * The choice is SESSION-scoped — it is never written to config, and the
  * next launch runs the plain session default.
+ *
+ * A3 adds `tree`, which runs BEFORE the manager gate like the draft verbs —
+ * it folds the {@see \SugarCraft\Code\Agents\Live\AgentRunCards} the
+ * delegation writes on disk, not the roster, so a session that never started
+ * a manager still learns what its past runs launched. The rows render the
+ * parent → children hierarchy through
+ * {@see AgentStatusCommands::tree()}: indent marks the launcher, a vanished
+ * launcher's children ride the top level flagged loudly, and forged cyclic
+ * lineage cannot hang the walk. Command output only — no pane, no TUI state.
  */
 final class AgentsHostCommand implements HostCommand
 {
@@ -69,9 +78,11 @@ final class AgentsHostCommand implements HostCommand
 
         // C-EXT-3.d: the draft verbs run before the manager gate — they are
         // file operations, and a build without a sub-agent runtime can still
-        // promote presets. Any other word (none, `list`, a preset name) falls
+        // promote presets. `tree` (A3) joins them: it reads the run cards on
+        // disk, not the roster, so it answers whether or not a manager was
+        // ever configured. Any other word (none, `list`, a preset name) falls
         // through to the roster arm unchanged.
-        if ($sub === 'new' || $sub === 'proposed' || $sub === 'accept') {
+        if ($sub === 'new' || $sub === 'proposed' || $sub === 'accept' || $sub === 'tree') {
             try {
                 return match ($sub) {
                     'new' => CommandResult::reply($text, Lang::t('host.agents.new.dispatched'))
@@ -81,6 +92,9 @@ final class AgentsHostCommand implements HostCommand
                         ))),
                     'proposed' => \count($words) <= 1
                         ? CommandResult::reply($text, self::proposedListing($context))
+                        : CommandResult::failure($text, Lang::t('host.agents.usage'), 2),
+                    'tree' => \count($words) <= 1
+                        ? CommandResult::reply($text, AgentStatusCommands::tree($context->currentSessionId()))
                         : CommandResult::failure($text, Lang::t('host.agents.usage'), 2),
                     default => self::accept($context, $text, \array_slice($words, 1)),
                 };
