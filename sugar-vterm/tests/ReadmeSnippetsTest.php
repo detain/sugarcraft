@@ -107,6 +107,54 @@ final class ReadmeSnippetsTest extends TestCase
         $this->assertSame('', trim($stderr), "the {$kind} snippet wrote to stderr:\n" . $stderr);
     }
 
+    /**
+     * Byte-outcome guard for the quickstart. The compile-and-run provider
+     * only proves a block exits 0; the quickstart once fed a stray literal
+     * "m" and printed "mhello" while every existing guard stayed green.
+     * This test takes README block 1 as documentation — appended with a
+     * cell assertion — so if the stray character returns, the doc lies to
+     * its own reader and the suite says so.
+     */
+    public function testQuickstartBlockPaintsItsLiteralText(): void
+    {
+        $block = null;
+        foreach (self::scriptProvider() as $label => [$kind, $body]) {
+            if ($label === 'README block 1') {
+                $this->assertSame('snippet', $kind);
+                $block = $body;
+                break;
+            }
+        }
+        $this->assertNotNull($block, 'the extractor no longer yields README block 1');
+
+        $check = <<<'PHP'
+
+$want = ['h', 'e', 'l', 'l', 'o'];
+foreach ($want as $i => $glyph) {
+    $got = $screen->cell(0, $i)->grapheme;
+    if ($got !== $glyph) {
+        fwrite(STDERR, "quickstart cell (0,{$i}) holds " . var_export($got, true) . ", expected '{$glyph}'\n");
+        exit(1);
+    }
+}
+$red = \SugarCraft\Vterm\Color\Color::indexed16(1);
+$fg = $screen->cell(0, 0)->foreground();
+if ($fg === null || !$red->equals($fg)) {
+    fwrite(STDERR, "quickstart cell (0,0) is not 16-color red\n");
+    exit(1);
+}
+PHP;
+
+        [$status, $stderr] = $this->runPhp([
+            '-d', 'max_execution_time=' . self::RUN_TIMEOUT_SECONDS,
+            '-d', 'display_errors=stderr',
+            '-d', 'error_reporting=E_ALL',
+            $this->materialise('snippet', $block . $check),
+        ]);
+        $this->assertSame(0, $status, "the quickstart block failed its paint assertion:\n" . $stderr);
+        $this->assertSame('', trim($stderr), "the quickstart check wrote to stderr:\n" . $stderr);
+    }
+
     /** README bodies become child-process scripts; example files run in place. */
     private function materialise(string $kind, string $source): string
     {

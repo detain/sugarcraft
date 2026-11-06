@@ -83,7 +83,7 @@ use SugarCraft\Vterm\Terminal\Terminal;
 $vt = Terminal::new(cols: 80, rows: 24);
 
 // Feed raw ANSI bytes from a terminal program.
-$vt->feed("\x1b[1;1H\x1b[31mmhello\x1b[0m");
+$vt->feed("\x1b[1;1H\x1b[31mhello\x1b[0m");
 
 // Inspect the rendered screen.
 $screen = $vt->screen();
