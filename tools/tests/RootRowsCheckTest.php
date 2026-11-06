@@ -14,7 +14,9 @@ declare(strict_types=1);
  * must report and NAME the offender, plus green arms proving the legs do not
  * simply accuse everything. The repo-wide arm is the drift pin: the moment a
  * root row or the seed moves without its counterpart, this file reddens the
- * `Generated docs pages` job.
+ * `Generated docs pages` job. The advisory arm (root-rows' retirement notes)
+ * is never-red by design, so it carries a planted polarity pair here instead —
+ * the same topology `GenDocsTest` uses for gen-docs' own `note:` lines.
  *
  * HOW TO RUN: see the long note at the top of CheckPathReposTest.php —
  * `sugar-core/vendor/bin/phpunit --bootstrap tools/tests/_bootstrap.php
@@ -38,6 +40,7 @@ final class RootRowsCheckTest extends TestCase
     private const STALE_WORDING = 'Demo row wording stale.';
     private const NEEDLE = 'Demo row wording fresh.';
     private const DEAD = 'Box-drawing layout engine';
+    private const GIT_DAEMON_DEAD = 'Git daemon, and HTTP';
 
     protected function setUp(): void
     {
@@ -183,6 +186,51 @@ final class RootRowsCheckTest extends TestCase
         $findings = $this->deriveFixture();
 
         $this->assertSame([], $findings, 'run-together whitespace inside the located row is the same text');
+    }
+
+    /**
+     * The staleness arm (zz-guard-proposal.md :39): a seeded dead phrase that no
+     * root file prints any more is a retirement candidate, noted and never red.
+     *
+     * THREE LEGS, because the arm can fail in three directions. On the real tree
+     * it must name the current vestigial set EXACTLY — four entries today (the
+     * git-server index row plus the three panels rows), with sugar-image/matchups
+     * 'Picker facade' correctly silent because docs/index.html still prints it; a
+     * seed or root-doc edit that changes that set reddens this pin, which is how
+     * the arm stays honest instead of decorative. On a planted fixture it must
+     * NAME the vestigial phrase — deleting the loop would otherwise pass every
+     * equality below vacuously — while derive() stays empty, pinning the
+     * never-red polarity. And a phrase that survives only in an unseeded
+     * neighbour row must NOT be noted, pinning the whole-file liveness rule that
+     * distinguishes a fossil from a guard that still has work to do.
+     */
+    public function testADeadPhraseAbsentFromEveryRootFileIsNotedForRetirement(): void
+    {
+        $notes = \CheckRootRows::advisories(dirname(__DIR__, 2));
+        $this->assertSame([
+            'note: index candy-git-server: retire-dead: ' . self::GIT_DAEMON_DEAD,
+            'note: readme sugar-panels: retire-dead: ' . self::DEAD,
+            'note: matchups sugar-panels: retire-dead: ' . self::DEAD,
+            'note: index sugar-panels: retire-dead: ' . self::DEAD,
+        ], $notes, 'the vestigial dead-phrase set is a drift pin: retire the seed row or heal the wording, in this commit');
+        $this->assertSame([], \CheckRootRows::derive(dirname(__DIR__, 2)), 'an advisory is never a finding');
+
+        $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_INDEX, $this->seedArming(['readme']));
+        $this->assertSame(
+            ['note: readme sugar-demo: retire-dead: ' . self::DEAD],
+            \CheckRootRows::advisories($this->tmpDir),
+            'a dead phrase absent everywhere must be named, not quietly ignored',
+        );
+        $this->assertSame([], $this->deriveFixture(), 'the vestigial arm cannot redden the run');
+
+        $live = self::GREEN_MATCHUPS . '| **SugarOther** | `sugar-other/` | port | ' . self::DEAD . ". |\n";
+        $this->writeFixture(self::GREEN_README, $live, self::GREEN_INDEX, $this->seedArming(['readme']));
+        $this->assertSame(
+            [],
+            \CheckRootRows::advisories($this->tmpDir),
+            'a phrase still printed anywhere stays a live guard',
+        );
+        $this->assertSame([], $this->deriveFixture());
     }
 
     private function seedArming(array $files): string

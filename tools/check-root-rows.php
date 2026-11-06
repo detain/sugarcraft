@@ -78,6 +78,57 @@ final class CheckRootRows
     }
 
     /**
+     * Advisory anti-rot leg (zz-guard-proposal.md :39): a seeded dead phrase that
+     * occurs nowhere in any root file cannot fire from current text — it exists
+     * only as a revert fossil, guarding a wording the repo no longer prints.
+     *
+     * WHY IT IS NEVER RED. The proposal specced this as a "retire the row" NOTE,
+     * explicitly not a finding: keeping the belt-braces entry is a legitimate
+     * curation choice (§7.4 — dead phrases accumulate per program-era), so a red
+     * would tax every future reword with a forced seed edit. The notes ride
+     * STDERR, so the STDOUT findings stream and the "checked N slug-rows" summary
+     * stay parser-clean, and the exit code still derives ONLY from findings.
+     * Mirrors the tools/gen-docs.php note channel (:486/:489): a warning and a
+     * skip, never a fatal.
+     *
+     * Liveness is whole-file on purpose, unlike derive()'s row scope: a phrase
+     * still printed anywhere is doing guard work somewhere, so only the
+     * absent-everywhere case is vestigial.
+     *
+     * @return list<string> one "note:" line per vestigial dead entry, order-stable
+     * @throws RuntimeException when the seed or a root file cannot be parsed
+     */
+    public static function advisories(string $root, ?string $seedPath = null): array
+    {
+        $seed = self::loadSeed($seedPath ?? $root . '/prompt_kit/root-rows-seed.json');
+        $texts = array_map(
+            [self::class, 'flatten'],
+            [
+                self::readFile($root . '/README.md'),
+                self::readFile($root . '/docs/MATCHUPS.md'),
+                self::readFile($root . '/docs/index.html'),
+            ],
+        );
+
+        $notes = [];
+        foreach ($seed['slugs'] as $slug => $entry) {
+            foreach (self::FILES as $file) {
+                if (!isset($entry[$file])) {
+                    continue;
+                }
+                foreach ($entry[$file]['dead'] as $dead) {
+                    $needle = self::flatten($dead);
+                    if (array_filter($texts, static fn (string $text): bool => str_contains($text, $needle)) === []) {
+                        $notes[] = sprintf('note: %s %s: retire-dead: %s', $file, $slug, $dead);
+                    }
+                }
+            }
+        }
+
+        return $notes;
+    }
+
+    /**
      * @return array{slugs: array<string, array<string, array{needles: list<string>, dead: list<string>}>>}
      */
     private static function loadSeed(string $path): array
@@ -344,6 +395,13 @@ if (PHP_SAPI === 'cli' && realpath((string) ($argv[0] ?? '')) === realpath(__FIL
     }
     foreach ($findings as $finding) {
         fwrite(STDOUT, $finding . "\n");
+    }
+    // Advisory notes on STDERR, never findings on STDOUT and never the exit code:
+    // derive() above already read the same seed and root files, so advisories()
+    // cannot throw where derive() did not — the same inputs, the same pre-read
+    // double shape the row-count line already relies on.
+    foreach (CheckRootRows::advisories($root, $seedPath) as $note) {
+        fwrite(STDERR, $note . "\n");
     }
     fwrite(STDOUT, sprintf("checked %d slug-rows; %d findings\n", $rowCount, count($findings)));
     exit($findings === [] ? 0 : 1);
