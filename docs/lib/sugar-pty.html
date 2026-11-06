@@ -55,7 +55,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-pty"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-pty" alt="SugarPty code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Open a master/slave PTY pair, spawn a child process with its stdin/stdout/stderr wired to the slave, and pump bytes / forward resizes between the host terminal and the child. Wraps the libc PTY syscalls (<code>posix_openpt</code>, <code>grantpt</code>, <code>unlockpt</code>, <code>ptsname_r</code>, <code>ioctl(TIOCSWINSZ)</code>) via ext-ffi — no shelling out to <code>/usr/bin/script</code>, no C extension to compile (transparent <code>stty(1)</code> fallbacks exist where FFI or an ioctl cannot answer).</p>
+    <p class="lede" style="margin-top: 28px;">Open a master/slave PTY pair, spawn a child process with its stdin/stdout/stderr wired to the slave, and pump bytes / forward resizes between the host terminal and the child. Wraps the libc PTY syscalls (<code>posix_openpt</code>, <code>grantpt</code>, <code>unlockpt</code>, <code>ptsname_r</code>, <code>ioctl(TIOCSWINSZ)</code>) via ext-ffi — no shelling out to <code>/usr/bin/script</code>, no C extension to compile (where FFI cannot answer, fallbacks exist only for termios (<code>stty(1)</code>), macOS size reads (<code>stty(1)</code>), and exit detection (<code>proc_get_status</code> polling) — with <code>ffi.enable=0</code> the core open/read/write/kill path has no fallback and throws).</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-pty</code></pre>
@@ -142,9 +142,9 @@ $pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></p
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
-      <li><a href="https://github.com/detain/sugarcraft">Source on GitHub</a> (monorepo, <code>sugar-pty/</code>)</li>
-      <li><a href="https://github.com/detain/sugarcraft/blob/master/sugar-pty/README.md">Full README</a></li>
-      <li><a href="https://github.com/detain/sugarcraft/tree/master/sugar-pty/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-pty">Source on GitHub</a> (split repo; monorepo home: <a href="https://github.com/detain/sugarcraft">detain/sugarcraft</a>, <code>sugar-pty/</code>)</li>
+      <li><a href="https://github.com/sugarcraft/sugar-pty/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-pty/tree/master/examples">Runnable examples</a></li>
       <li>Originally inspired by <a href="https://github.com/charmbracelet/x/tree/main/xpty">charmbracelet/x/xpty</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
