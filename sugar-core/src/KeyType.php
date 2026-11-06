@@ -40,7 +40,10 @@ enum KeyType: string
     case PageUp    = 'pageup';
     case PageDown  = 'pagedown';
 
-    // F-keys (upstream goes to F63; we cover F1-F35, the Kitty PUA range).
+    // F-keys (upstream goes to F63; reachable here are F1-F35 — legacy SS3
+    // / CSI ~ feed F1-F12, the Kitty PUA map below extends to F35, and the
+    // F36-F63 cases exist for value-space parity with upstream but have no
+    // decoder input path).
     case F1  = 'f1';
     case F2  = 'f2';
     case F3  = 'f3';
@@ -213,9 +216,11 @@ enum KeyType: string
             57362 => self::Pause,
             57363 => self::Menu,
 
-            // F1–F35 (Kitty range; upstream surfaces F36–F63 from xterm
-            // CSI 1;m;NN~ extensions, mapped separately by the legacy
-            // CSI parser).
+            // F1–F35 (Kitty functional-key codepoints 57364–57398). The
+            // legacy tilde table in InputReader stops at F12 (codes 11–24)
+            // and SS3 at F4, so F36–F63 — upstream's xterm-extension range —
+            // have no decoder input path in this lib; the enum cases are
+            // parity surface only.
             57364 => self::F1,
             57365 => self::F2,
             57366 => self::F3,
