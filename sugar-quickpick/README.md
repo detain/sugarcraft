@@ -101,6 +101,9 @@ ordering the list by descending fuzzy score and highlighting the scored runes:
 use SugarCraft\QuickPick\QuickPick;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
+// Self-contained corpus: 'terminal' is a t·m·l subsequence, no other item has all three runes.
+$items = ['terminal', 'editor', 'compiler'];
+
 $h = QuickPick::new($items)
     ->setRanker(new SmithWatermanMatcher())   // or any FuzzyMatcher
     ->setMatchStyle("\e[1m")
