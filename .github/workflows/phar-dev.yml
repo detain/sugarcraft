@@ -371,9 +371,11 @@ jobs:
       - name: Smoke — the archive runs
         # Honest, app-agnostic shape: --version must succeed and print
         # something on a virgin HOME, and --help must render. Which of those
-        # answers carries the dev stamp varies by app (candy-code and
-        # candy-top read their phar metadata back into --version; apps without
-        # that arm print their frozen composer version). The stamp gate
+        # answers carries the dev stamp varies by app: those with a
+        # Version::fromPharMetadata arm (candy-code, candy-top,
+        # candy-gifview, …) read their phar metadata back into --version,
+        # while apps without that arm print their frozen composer version.
+        # The stamp gate
         # above asserted metadata truth for EVERY app, so this step never
         # pretends: a missing CLI echo is a ::notice:: naming the gap, not a
         # pass-by-omission.
