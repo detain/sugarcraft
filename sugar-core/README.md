@@ -164,7 +164,7 @@ recovery backstop under **Status** — it is control machinery, not colour.)
 
 ## Architecture
 
-- **`Model`** — your app implements `init()`, `update(Msg)`, `view()`, `subscriptions()`.
+- **`Model`** — your app implements `init()`, `update(Msg)`, `view()`, `subscriptions()`. `view()` returns `string|View`: a plain string is the whole frame (auto-wrapped); a `View` struct carries the frame body plus declarative extras — cursor position, window title, progress-bar state (OSC 9;4), default fg/bg (OSC 10/11), mouse mode, focus reporting, bracketed paste, images — each emitted only when it changes.
 - **`Msg`** — marker interface for events. Built-ins: `KeyMsg`, `WindowSizeMsg`, `QuitMsg`
   (the full catalogue is indexed under [Message catalogue](#message-catalogue)).
 - **`Cmd`** — `Closure(): ?Msg`. Async work whose result is dispatched as a Msg. Helpers in `Cmd::quit()`, `Cmd::batch()`, `Cmd::send()`.
@@ -705,8 +705,10 @@ if you want to log it and resume (or show a friendlier frame) instead.
 
 Other gotchas:
 
-- **Don't return `null` from `Model::view()`.** The runtime expects
-  a string. Return `''` for an empty frame.
+- **Don't return `null` from `Model::view()`.** The contract is
+  `string|View` — null fails the return type. Return `''` for an empty
+  frame. (In a `View`, a null optional field means "unchanged from the
+  last frame", never "clear it".)
 - **Don't block the main thread** in `update()` or `view()` — the
   runtime won't pump frames while you're sleeping. Long work goes
   in a Cmd that emits a Msg when it finishes.
