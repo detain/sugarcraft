@@ -30,15 +30,17 @@ use SugarCraft\ColorProfile\Probe\ProbeReport;
 final class RendererFactory
 {
     /**
-     * Per-process memo of the live capability probe (M28).
+     * Per-process memo of the live capability probe.
      *
-     * WHY a memo: Mosaic::diagnose() is a SYNCHRONOUS terminal negotiation.
-     * The capability door below runs on every renderer acquisition — which
-     * includes every `m` keypress — and the pre-memo code re-probed each
-     * time, paying a round-trip's latency inside a keystroke to re-derive an
-     * answer that cannot change under a running program: a terminal's
-     * capabilities are fixed for the session. One probe per process is both
-     * the honest and the cheap shape.
+     * WHY a memo: Mosaic::diagnose() does NOT negotiate with the terminal —
+     * it delegates to sugar-colorprofile's TerminalProbe, a TERM_PROGRAM
+     * lookup table over the environment and terminfo that (despite the
+     * historical name) issues no raw OSC query round-trips. A terminal's
+     * capabilities are fixed for the session, and the capability door below
+     * runs on every renderer acquisition — which includes every `m`
+     * keypress — so probing once per process keeps the auto() ladder, the
+     * mode cycle list and the door permanently agreeing on what the seat
+     * can receive.
      */
     private static ?ProbeReport $reportMemo = null;
 
@@ -62,7 +64,17 @@ final class RendererFactory
     }
 
     /**
-     * Whether this terminal can actually RECEIVE the mode's output (M1).
+     * Every Mode this terminal can honestly render right now.
+     *
+     * @return list<Mode>
+     */
+    public static function supportedModes(): array
+    {
+        return array_values(array_filter(Mode::cases(), static fn (Mode $mode): bool => self::supports($mode)));
+    }
+
+    /**
+     * Whether this terminal can actually RECEIVE the mode's output.
      *
      * The text rungs (Ascii/Ansi256/TrueColor/HalfBlock/QuarterBlock) are
      * always transport-safe: they emit only SGR and glyphs, which degrade
@@ -82,16 +94,6 @@ final class RendererFactory
      * the findings ledger); the auto ladder gates on the same signal, so
      * ladder and door can never disagree.
      */
-    /**
-     * m16: every Mode this terminal can honestly render right now.
-     *
-     * @return list<Mode>
-     */
-    public static function supportedModes(): array
-    {
-        return array_values(array_filter(Mode::cases(), static fn (Mode $mode): bool => self::supports($mode)));
-    }
-
     public static function supports(Mode $mode): bool
     {
         return match ($mode) {
@@ -180,7 +182,10 @@ final class RendererFactory
      *  2. Sixel if Mosaic::diagnose() reports sixel support
      *  3. Kitty if Mosaic::diagnose() reports kitty support
      *  4. Iterm2 if Mosaic::diagnose() reports iterm2 support
-     *  5. TrueColor profile → HalfBlock
+     *  5. TrueColor profile → HalfBlock, gated on
+     *     TermInfo::symbolIsSafe(TermInfo::SYMBOL_BLOCK); on a seat whose
+     *     table says blocks are unsafe the rung steps down to Ansi256
+     *     (ASCII luma ramp, 256-color SGR)
      *  6. Ansi256 profile → Ansi256
      *  7. Default → Ascii
      *
