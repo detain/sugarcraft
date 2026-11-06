@@ -217,6 +217,39 @@ final class MirrorPullerTest extends TestCase
         $this->assertCount(1, $this->commands);
     }
 
+    public function testSchemeAllowlistIsTheNamedRosterAndExtDiesByName(): void
+    {
+        // "git:// admitted by choice": the roster IS the decision. Adding or
+        // removing any transport must be a deliberate edit that reddens here,
+        // never a silent side effect of touching the refusal ladder.
+        $this->assertSame(['https', 'ssh', 'git'], MirrorPuller::ALLOWED_SCHEMES);
+
+        $refuse = new \ReflectionMethod(MirrorPuller::class, 'upstreamRefusal');
+        $refuse->setAccessible(true);
+        /** @param callable(string): ?string */
+        $refusal = static fn (string $url): ?string => $refuse->invoke(null, $url);
+
+        $this->assertNull($refusal('git://example.com/pub.git'), 'git:// is admitted by choice');
+        $this->assertNull($refusal('SSH://example.com/p.git'), 'scheme match is case-insensitive');
+
+        // "ext:: refused by name": the named leg must carry its own message,
+        // not merely fall through to the generic roster refusal. Delete the
+        // stripos guard and these two assertions go red even though the URL
+        // still refuses (via scheme) — the leg stops being unpinned defense
+        // in depth and becomes the named, load-bearing gate it claims to be.
+        $byName = $refusal('ext::sh -c touch /tmp/pwned');
+        $this->assertNotNull($byName);
+        $this->assertStringContainsString('ext::', $byName);
+        $this->assertStringContainsString('executes', $byName);
+        $this->assertStringNotContainsString('must be one of', $byName, 'the named leg must fire before the roster leg');
+        $this->assertStringContainsString('ext::', (string) $refusal('EXT::sh'), 'the named match is case-insensitive too');
+
+        // Everything else outside the roster dies on the roster message.
+        $offRoster = $refusal('ftp://example.com/x.git');
+        $this->assertNotNull($offRoster);
+        $this->assertStringContainsString('must be one of https, ssh, git', $offRoster);
+    }
+
     public function testCredentialsAreRedactedInFailureLogs(): void
     {
         $logPath = $this->tmpDir . '/error.log';
