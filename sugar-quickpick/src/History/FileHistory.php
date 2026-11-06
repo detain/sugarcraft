@@ -18,8 +18,12 @@ use SugarCraft\QuickPick\Item;
  * output via {@see \SugarCraft\QuickPick\QuickPick::view()}, where the
  * render ingress guards them — but the FILE side still needs its own):
  *
- *  - Files this instance CREATES are chmod'ed 0600 immediately, independent
- *    of the process umask, so selections never land world-readable.
+ *  - Files this instance CREATES are opened exclusively (fopen 'x') and
+ *    chmod'ed 0600 BEFORE the first payload line rides the inode. The chmod
+ *    is best-effort — its failure is suppressed, so if the tightening is
+ *    refused the create mode follows the process umask and nothing is
+ *    signalled; verify the mode yourself if 0600 is load-bearing (a loud
+ *    refusal is an open owner decision).
  *  - A symlinked history path is REFUSED by every operation (and at
  *    construction when $baseDir is set): an attacker who can plant
  *    `/tmp/quickpick.jsonl` before the victim runs the first append would
@@ -43,7 +47,8 @@ final class FileHistory
 
     /**
      * @param string      $path    Path to the history file (created lazily on first append(),
-     *                             with 0600 permissions; a symlink at this path is refused).
+     *                             exclusive-open then a best-effort chmod to 0600 before
+     *                             payload; a symlink at this path is refused).
      * @param string|null $baseDir When non-null, $path is confined beneath this
      *                             directory: any path that resolves outside it
      *                             (via `..` traversal, an absolute path elsewhere,
@@ -139,9 +144,11 @@ final class FileHistory
     /**
      * Append an item to the history file.
      *
-     * Creates the file with 0600 permissions when it does not exist yet, so
-     * selections never land world-readable regardless of the process umask.
-     * Values carrying invalid UTF-8 are substituted (U+FFFD) rather than
+     * Creates the file exclusively when it does not exist yet and chmod's it
+     * 0600 before the first payload line; the chmod is best-effort (its
+     * failure is suppressed), so the effective creation mode stays
+     * umask-dependent wherever the tightening is refused. Values carrying
+     * invalid UTF-8 are substituted (U+FFFD) rather than
      * crashing the writer — history is best-effort storage, the frame must
      * not die over one malformed byte.
      *

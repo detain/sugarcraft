@@ -323,8 +323,10 @@ use SugarCraft\QuickPick\History\FileHistory;
 use SugarCraft\QuickPick\FilteredItem;
 
 // Point at a history file. Nothing touches the filesystem yet — the file is
-// created lazily on the first append(), with 0600 permissions regardless of
-// the process umask. Use a path you own; on shared hosts, never a predictable
+// created lazily on the first append() via exclusive-open, then chmod'ed 0600
+// before the first payload line. That chmod is best-effort: if the filesystem
+// refuses it, the mode follows the process umask and nothing is signalled.
+// Use a path you own; on shared hosts, never a predictable
 // world-writable location such as /tmp (a planted symlink there is refused
 // outright — see below).
 $history = new FileHistory(getenv('HOME') . '/.myapp/history.jsonl');

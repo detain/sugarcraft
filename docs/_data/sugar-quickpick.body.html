@@ -94,7 +94,7 @@ $allItems = $history->all();</code></pre>
 <tr><td>StatusBar</td><td>render()</td><td>Render as "[name: value] message" string</td></tr>
 <tr><td>Item</td><td>interface number(), value()</td><td>Contract for filterable items</td></tr>
 <tr><td>FilteredItem</td><td>new(int $number, string $value)</td><td>Numbered Item implementation</td></tr>
-<tr><td>FileHistory</td><td>new(string $path, ?string $baseDir)</td><td>Target a JSONL history file (created lazily on first append with 0600 mode; optional jail confines the path under $baseDir and refuses symlinked or escaping paths)</td></tr>
+<tr><td>FileHistory</td><td>new(string $path, ?string $baseDir)</td><td>Target a JSONL history file (created lazily on first append via exclusive-open then a best-effort chmod to 0600 before payload — a refused chmod stays umask-decided and unsignalled; optional jail confines the path under $baseDir and refuses symlinked or escaping paths)</td></tr>
 <tr><td>FileHistory</td><td>append(Item)</td><td>Append item as JSON line; fails loud (RuntimeException) on unopenable, unlocked, short-written or symlinked paths</td></tr>
 <tr><td>FileHistory</td><td>all()</td><td>Read all items from history (non-entry lines are skipped)</td></tr>
 <tr><td>FileHistory</td><td>clear() / path()</td><td>Empty the history (truncates in place under a lock) or get the file path</td></tr>
