@@ -25,6 +25,7 @@ sugar-panels — a box-drawing layout engine that composes terminal content into
 - **Flex / grow children** — `withFlex(int)` / `withGrow()`: a fixed child claims its **natural size** (widest visible line, floored by `minWidth`), a flex child fills the leftover by weight — so "sidebar = fixed, content = FILL" works without hand-counting columns
 - **Dimension hints** — `min*` floors the natural size, `max*` caps the node's **total footprint** (frame + padding + content), and the cap is what a flex basis claims
 - **Natural sizing** — `totalWidth()` / `totalHeight()` report the footprint a node asks for, measured from content
+- **Constraint-solved sizing** — flex distribution and the legacy `min*` hint split share one engine: `SugarCraft\Constraints\GreedySolver` from `sugarcraft/sugar-constraints` solves both dispatch paths, so a row's child regions tile the available span by the same arithmetic
 - **Leaf content** — leaf nodes take `string` (cast a `Stringable` yourself; the signature is strict)
 - **Stateful diff renderer** — first paint and every resize emit the full frame; later same-size renders emit only diff ops from the per-instance frame cache. Every frame is self-positioning (see *Frame protocol*). Call `resetPreviousFrame()` whenever terminal state may be unknown (clear, alt-screen switch, text capture). Outputs plain ANSI strings; works with any TUI framework
 - **Immutable nodes** — every `with*()` returns a *new* `Node`; an existing node is never modified, so keep the chained result
