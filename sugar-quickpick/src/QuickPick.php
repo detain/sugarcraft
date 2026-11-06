@@ -283,9 +283,10 @@ final class QuickPick
      *
      * Cost: the ranker re-scores the ENTIRE visible corpus on every keystroke
      * (distinct values only — duplicates share one scoring pass). Measured on a
-     * 20k-item corpus that is a few hundred milliseconds per key against single
-     * digits for the substring path. On large corpora keep the ranking opt-in
-     * per surface, or debounce key delivery host-side before calling type().
+     * 20k-item corpus that is several hundred milliseconds per key against low
+     * double-digit milliseconds for the substring path, both machine-dependent.
+     * On large corpora keep the ranking opt-in per surface, or debounce key
+     * delivery host-side before calling type().
      *
      * The anchor bias below doubles as the escape hatch for the substring path:
      * when it rejects a legitimate late match (needle only occurs in the second

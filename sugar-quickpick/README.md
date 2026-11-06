@@ -207,8 +207,9 @@ public function setFilterFn(\Closure $fn): self
 // When set, a non-empty filter ranks items by descending fuzzy score (true
 // subsequence matching) and highlighting follows the scored indices.
 // Cost note: every keystroke re-scores the WHOLE corpus against the filter —
-// tens of ms to hundreds of ms on 20k-item lists (the substring path is
-// single-digit ms). Debounce at the host or keep corpora modest.
+// on the order of hundreds of ms on 20k-item lists (the substring path is
+// low double-digit ms; both figures are machine-dependent). Debounce at the
+// host or keep corpora modest.
 public function setRanker(?\SugarCraft\Fuzzy\FuzzyMatcher $matcher): self
 
 // Apply a sugar-style Border to the overlay window
