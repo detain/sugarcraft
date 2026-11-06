@@ -12,8 +12,12 @@ use SugarCraft\Sql\Db\Identifier;
 /**
  * Inline editor for modifying MySQL variables via SET GLOBAL / SET PERSIST.
  *
- * Uses prepared statements for all value interpolation to prevent SQL injection.
- * Variable names are backtick-escaped (they come from a static catalog, not user input).
+ * Value binding rides PDO_MYSQL's emulated prepares (the default when
+ * ATTR_EMULATE_PREPARES is unset): MySQL has no native placeholder in a
+ * SET-value position, so PDO quotes the value client-side into the
+ * statement text before it reaches the server. Injection safety therefore
+ * rests on PDO's value quoting plus backtick-escaped catalog-sourced
+ * variable names — not on a server-side prepared statement.
  *
  * Error handling:
  *   - 1142 = no privilege
@@ -44,8 +48,9 @@ final class VariableEditor
     /**
      * Edit a variable using SET GLOBAL.
      *
-     * Uses a prepared statement with the variable name backtick-escaped
-     * and the value interpolated via placeholder.
+     * Binds the value via a `?` placeholder resolved through PDO_MYSQL's
+     * emulated prepares (see class docblock); the variable name is
+     * backtick-escaped and catalog-sourced, never user input.
      *
      * @param string $variableName The variable name (backtick-escaped internally)
      * @param string $newValue The new value to set
@@ -61,7 +66,7 @@ final class VariableEditor
         // Backtick-escape the variable name (it comes from catalog, not user)
         $escapedName = Identifier::quote(Flavor::MySQL, $variableName);
 
-        // Use prepared statement for the value
+        // Placeholder resolved by emulated prepares (PDO quotes the value client-side)
         $sql = "SET GLOBAL {$escapedName} = ?";
 
         try {
@@ -102,7 +107,7 @@ final class VariableEditor
         // Backtick-escape the variable name
         $escapedName = Identifier::quote(Flavor::MySQL, $variableName);
 
-        // Use prepared statement for the value
+        // Placeholder resolved by emulated prepares (PDO quotes the value client-side)
         $sql = "SET PERSIST {$escapedName} = ?";
 
         try {
