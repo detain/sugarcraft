@@ -179,7 +179,7 @@ recovery backstop under **Status** — it is control machinery, not colour.)
 - **`LruMap`** (in `Util/`) — fixed-capacity least-recently-used map: `get()` promotes, `peek()` reads without disturbing recency, `put()` evicts the longest-unused entry past the cap, `evictions()` reports how often that happened, and an optional `maxCapacity` growth guard caps `resize()`. Iterates most-recently-used first; `keys()` is the string-safe key view. The size bound that complements a TTL cache; it does not replace one.
 - **`Subscription`** — value object: id, Kind, params, produce closure.
 - **`Subscriptions`** — immutable collection with `withTick()`, `withKey()`, `withSignal()`, `withCustom()`, `all()`, `has()`.
-- **`Kind`** — pure enum: Tick / Key / Signal / Custom.
+- **`Kind`** — pure enum: Tick (periodic timer, `seconds`) / Key (a fixed 0.1 s polling timer — see Subscriptions) / Signal (handlers for the requested signals) / Custom (periodic timer, `interval` defaulting to 1.0 s).
 - **`SubscriptionCapable`** — trait providing the default `subscriptions(): null`.
 
 ### Composition primitives
@@ -199,11 +199,19 @@ recovery backstop under **Status** — it is control machinery, not colour.)
 
 ## Subscriptions
 
-Subscription reconciliation lets a Model declare recurring events
-(ticks, key events, signals) without managing timers manually. After each
+Subscription reconciliation lets a Model declare recurring timers and
+signal handlers (ticks, polled input, signals) without managing them
+manually. After each
 `update()` cycle the runtime diffs the returned `Subscriptions` set against
 the active one — new subscriptions start, dropped ones cancel, stable ones
 keep running.
+
+One cadence caveat worth stating plainly: `Kind::Key` is **not** how key
+presses arrive. Keystrokes reach `update()` through the input reader the
+moment they are parsed, subscription or not; a `withKey()` subscription
+arms a fixed 0.1 s polling timer (not configurable) whose produce closure
+runs on that beat. `withCustom()` arms its timer at `interval` seconds,
+defaulting to 1.0 s.
 
 ```php
 use SugarCraft\Core\{Model, Msg, Program, Subscriptions};
