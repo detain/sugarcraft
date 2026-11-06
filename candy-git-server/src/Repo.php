@@ -123,10 +123,22 @@ final class Repo
         };
     }
 
+    /**
+     * The git directory for a path (path itself when bare — a HEAD file at
+     * the root — else path/.git). Static so discovery gates that only have a
+     * path on hand (transport disk fallbacks) resolve the same layout the
+     * marker writer does, never a hardcoded '/.git' that silently misses a
+     * bare repo's marker and fail-closes a published repo to private.
+     */
+    public static function gitDirFor(string $path): string
+    {
+        return \is_file($path . '/HEAD') ? $path : $path . '/.git';
+    }
+
     /** The git directory for this repo (path itself when bare, else path/.git). */
     public function gitDir(): string
     {
-        return \is_file($this->path . '/HEAD') ? $this->path : $this->path . '/.git';
+        return self::gitDirFor($this->path);
     }
 
     /** Persist the current visibility marker into the repo's git directory. */
@@ -283,9 +295,17 @@ final class Repo
         return $this->path;
     }
 
+    /**
+     * Whether a Git repository lives at this path in EITHER supported
+     * layout — the lib's own `$path/.git` bare-Git shape (init()) or a
+     * true bare directory (HEAD at the root). Mirrors gitDir() so the
+     * registerRepo marker gate, and everything else that asks "does this
+     * repo exist", cannot go blind to bare shapes the marker writer
+     * itself handles.
+     */
     public function exists(): bool
     {
-        return \is_dir($this->path . '/.git');
+        return \is_dir($this->gitDir());
     }
 
     /**

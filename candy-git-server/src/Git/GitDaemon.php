@@ -1014,12 +1014,17 @@ final class GitDaemon
         $name = \basename($path);
         $fullPath = $this->config->reposPath() . '/' . $name;
 
-        if (\is_dir($fullPath . '/.git')) {
+        // gitDirFor() resolves the layout the same way the marker writer
+        // does — a true bare directory (HEAD at root) keeps its marker at
+        // its own root, so a hardcoded '/.git' probe would miss the
+        // publication an operator persisted via registerRepo.
+        $gitDir = Repo::gitDirFor($fullPath);
+        if (\is_dir($gitDir)) {
             // Marker-honest fallback: the on-disk visibility marker decides
             // publication — a directory that merely exists is fail-closed
             // PRIVATE for the daemon transport, never public-by-presence.
             return Repo::new($name, $fullPath)
-                ->withVisibility(Repo::markerVisibility($fullPath . '/.git'));
+                ->withVisibility(Repo::markerVisibility($gitDir));
         }
 
         return null;

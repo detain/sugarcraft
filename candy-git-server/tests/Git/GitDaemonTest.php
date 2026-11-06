@@ -256,6 +256,41 @@ final class GitDaemonTest extends TestCase
         $this->assertTrue($found->isVisiblePublic(), 'the marker is the only path to public');
     }
 
+    /**
+     * r1-MINOR-3: a bare repo (HEAD at the root) published via registerRepo
+     * must still resolve PUBLIC to a fresh daemon's marker-honest fallback —
+     * the next boot. The fallback used to probe a hardcoded '$path/.git'
+     * that never exists on a true bare layout, and the registerRepo gate
+     * used a non-bare exists(), so the persisted marker was both unwritten
+     * and unreadable there: publication silently reverted to fail-closed
+     * PRIVATE with nothing to point at.
+     */
+    public function testAPublishedBareRepoSurvivesTheNextBootFallback(): void
+    {
+        $reposPath = $this->tmpDir . '/repositories';
+        $bare = $reposPath . '/bare-published';
+        \mkdir($bare, 0755, true);
+        \file_put_contents($bare . '/HEAD', "ref: refs/heads/main\n");
+
+        $publisher = $this->createDaemon();
+        $publisher->registerRepo(Repo::new('bare-published', $bare)->withPublic(true));
+
+        // The bare-aware write put the marker at the bare root itself.
+        $this->assertFileExists($bare . '/' . Repo::VISIBILITY_MARKER);
+
+        // A fresh daemon knows nothing of the registration — only the disk.
+        $boot = $this->createDaemon();
+        $find = (new \ReflectionClass($boot))->getMethod('findRepoByPath');
+        $find->setAccessible(true);
+
+        $found = $find->invoke($boot, $bare);
+        $this->assertNotNull($found, 'the bare directory resolves on the fallback too');
+        $this->assertTrue(
+            $found->isVisiblePublic(),
+            'a registerRepo publication on the bare layout stays published for the next boot'
+        );
+    }
+
     // -------------------------------------------------------------------------
     // Access control integration tests
     // -------------------------------------------------------------------------

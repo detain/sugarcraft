@@ -401,6 +401,40 @@ final class SSHServerTest extends TestCase
         $this->assertTrue($found->isVisiblePublic(), 'the marker is the only path to public');
     }
 
+    /**
+     * r1-MINOR-3 mirror of the daemon pin: a bare repo (HEAD at the root)
+     * published via registerRepo must stay visible to a fresh server's
+     * marker-honest fallback. The non-bare exists() gate used to skip the
+     * marker write on bare layouts and the hardcoded '$path/.git' probe
+     * used to miss it on reads — publication silently reverted to
+     * fail-closed PRIVATE.
+     */
+    public function testAPublishedBareRepoSurvivesTheNextBootFallback(): void
+    {
+        $yaml = $this->tmpDir . '/bare-fallback.yaml';
+        \file_put_contents($yaml, "name: ssh-bare-fallback\n");
+        $publisher = new SSHServer(Config::load($yaml));
+
+        $bare = $this->createRepoPath('bare-published');
+        \file_put_contents($bare . '/HEAD', "ref: refs/heads/main\n");
+        $publisher->registerRepo(Repo::new('bare-published', $bare)->withPublic(true));
+
+        // The bare-aware write put the marker at the bare root itself.
+        $this->assertFileExists($bare . '/' . Repo::VISIBILITY_MARKER);
+
+        // A fresh server knows nothing of the registration — only the disk.
+        $boot = new SSHServer(Config::load($yaml));
+        $find = (new \ReflectionClass($boot))->getMethod('findRepoByPath');
+        $find->setAccessible(true);
+
+        $found = $find->invoke($boot, $bare);
+        $this->assertNotNull($found, 'the bare directory resolves on the fallback too');
+        $this->assertTrue(
+            $found->isVisiblePublic(),
+            'a registerRepo publication on the bare layout stays published for the next boot'
+        );
+    }
+
     public function testConfig(): void
     {
         $this->assertSame($this->config, $this->server->config());

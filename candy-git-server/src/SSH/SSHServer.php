@@ -234,9 +234,14 @@ final class SSHServer
         $name = \basename($path);
         $fullPath = $this->config->reposPath() . '/' . $name;
 
-        if (\is_dir($fullPath . '/.git')) {
+        // gitDirFor() resolves the layout the same way the marker writer
+        // does — a true bare directory (HEAD at root) keeps its marker at
+        // its own root, so a hardcoded '/.git' probe would miss the
+        // publication an operator persisted via registerRepo.
+        $gitDir = Repo::gitDirFor($fullPath);
+        if (\is_dir($gitDir)) {
             $repo = Repo::new($name, $fullPath)
-                ->withVisibility(Repo::markerVisibility($fullPath . '/.git'));
+                ->withVisibility(Repo::markerVisibility($gitDir));
             $this->repos[$name] = $repo;
             return $repo;
         }
