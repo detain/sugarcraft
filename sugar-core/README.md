@@ -54,6 +54,140 @@ final class Counter implements Model
 (new Program(new Counter()))->run();
 ```
 
+## The runtime loop
+
+Three rules carry through to every program:
+
+1. **Model is immutable.** `update()` returns a *new* Model, never
+   mutates the receiver. This buys you snapshot debugging, time
+   travel, undo — all for free.
+2. **Cmds run async.** `update()` decides what should happen; the
+   runtime applies the resulting Cmd. A Cmd is a closure returning
+   a Msg.
+3. **view() is pure.** Same Model in → same string out. Side
+   effects (writing to disk, hitting an HTTP endpoint, blinking the
+   cursor) all live in Cmds, never in `view()`.
+
+Once you've internalised the loop, every other SugarCraft feature is
+just a richer Msg or a more interesting Cmd.
+
+```text
+   Msg ──► update(Model, Msg) ──► [ new Model , ?Cmd ]
+           ▲                        │            │
+           │            new Model   │            │ ?Cmd runs async
+           │                        ▼            ▼
+           │                 view(new Model)       Cmd
+           │                        │              settles as
+           │                        ▼              a fresh Msg
+           │               renderer ──► stdout     │
+           │                (changed rows only)    │
+           └───────────────────────────────────────┘
+```
+
+### The renderer owns stdout
+
+The renderer owns stdout — printing to it from `update()` or `view()`
+will be overwritten on the next frame. The two ways to surface
+debug info from inside a running program:
+
+1. **Log to a file.** Tail the file from another terminal:
+   ```php
+   error_log('counter is now ' . $count . "\n", 3, '/tmp/candy.log');
+   ```
+   ```sh
+   $ tail -f /tmp/candy.log
+   ```
+2. **Use `Cmd::println()`.** Lines emitted via `Cmd::println()`
+   print *above* the program region (alt-screen and inline mode
+   both honour this) — perfect for "I got here" prints during
+   development.
+
+## Alt-screen vs inline mode
+
+The shipped default is **neither**: `useAltScreen: false` and
+`inlineMode: false` paint over the current screen with the diff renderer.
+
+Pass `useAltScreen: true` to `ProgramOptions` and the
+runtime takes over the alt-screen — the user's previous content is
+preserved underneath, and `Cmd::quit()` restores it. Best for
+fullscreen TUIs.
+
+Pass `useAltScreen: false` + `inlineMode: true` for a program that
+shares scrollback with the surrounding shell. A save/restore pair
+brackets the region: the first frame emits `ESC 7` (save cursor) before
+its lines, and every repaint after that emits `ESC 8` (restore cursor)
+plus an erase-to-end-of-screen **before** drawing the new frame — so
+preceding shell output stays visible. Pair with `Cmd::println()` to
+emit lines that scroll above the program region.
+
+A typical CandyScriptui prompt (`gum input`-style) uses inline mode;
+a fullscreen filter (`gum filter`-style) uses alt-screen.
+
+## Mouse support — cell-motion vs all-motion
+
+Pass `MouseMode::CellMotion` (only emit motion events while a
+button is held) or `MouseMode::AllMotion` (emit every motion event
+including bare-cursor moves) to `ProgramOptions`. Pick:
+
+- **`CellMotion`** when the model only cares about clicks + drags
+  (most apps). Fewer Msgs flow through `update()`, lighter on the
+  parser, plays nicely with terminal copy/paste because the user
+  can hold Shift to bypass mouse capture.
+- **`AllMotion`** when the model reacts to hover state (tooltips,
+  fancy cursor effects, drag-preview overlays). Trade: every
+  motion event lands in `update()`, so enable it only while a
+  hover-sensitive view is up (`View->mouseMode`) instead of
+  process-wide.
+
+`MouseMsg` carries a `MouseAction` enum (`Press` / `Release` /
+`Motion`) and 1-based `$x` / `$y` coordinates. The wheel is not an
+action: wheel events arrive as `Press` with `MouseButton::WheelUp` /
+`MouseButton::WheelDown`. The four `MouseClickMsg` / `MouseReleaseMsg` /
+`MouseMotionMsg` / `MouseWheelMsg` subclasses let you match by class
+when that's more convenient.
+
+`examples/mouse.php` is a runnable demonstrator.
+
+## ProgramOptions
+
+`ProgramOptions` is a 24-parameter value object (`readonly` promoted
+properties). Pass it as `Program`'s second argument:
+
+```php
+use SugarCraft\Core\{Program, ProgramOptions};
+
+$program = new Program(
+    new Counter(),
+    new ProgramOptions(framerate: 60.0, useAltScreen: true, mouseMode: MouseMode::CellMotion),
+);
+$program->run();
+```
+
+One knob worth knowing by name: `catchPanics` (default `true`) gates whether
+`setupTerminal()` auto-arms the terminal-release shutdown backstop described
+under **Status → Terminal recovery**. Set it to `false` only when you take
+ownership of terminal restoration on bailout paths yourself; the explicit
+pre-arm `Program::armTerminalRelease()` remains honored regardless of the flag.
+
+For code that assembles options incrementally there is
+`SugarCraft\Core\ProgramOptions\ProgramOptionsBuilder` — a fluent mirror
+of the same 24 options (`withFramerate()`, `withUseAltScreen()`,
+`withMouseMode()`, `withInlineMode()`, …); `build()` returns the
+`ProgramOptions` and performs no validation beyond the types:
+
+```php
+use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions\ProgramOptionsBuilder;
+
+$opts = (new ProgramOptionsBuilder())
+    ->withUseAltScreen(true)
+    ->withFramerate(60.0)
+    ->withCellDiffRenderer(true)
+    ->build();
+
+(new Program(new Counter(), $opts))->run();
+```
+
 ## Requirements
 
 - PHP 8.3+ (PHP 8.4+ recommended on Windows for FFI `SetConsoleCtrlHandler` support)
@@ -428,14 +562,12 @@ the cut.
 
 ![timer](.vhs/timer.gif)
 
-
 ## Status
 
 - **Foundation utilities**: 🟢 complete.
 - **Runtime**: 🟢 Program loop, mouse (cell-motion + all-motion + SGR 1006), focus / blur, bracketed paste, function keys F1–F35 reachable (legacy SS3 and CSI `~` cover F1–F12; the Kitty PUA functional-key range extends to F35 — the F36–F63 enum cases exist for upstream value-space parity but carry no decoder input path), the cell-diff "cursed" renderer, inline-mode rendering, declarative `View` struct — with synchronized output (DEC 2026) wrapping **every** renderer frame in every mode, and unicode mode (DEC 2027) a separate `unicodeMode` startup option, not a cell-diff feature; plus the Cmd surface (`Suspend` / `Interrupt` / `Exec` / `Sequence` / `Every` / `Printf` / `Raw` and more — full factory index under **Composing Cmds**;
 a resume is deliberately not a Cmd: SIGCONT dispatches a `ResumeMsg` from the runtime) and the Program control methods: `wait()` blocks until the loop has stopped — with `run()` itself blocking in PHP, it serves as a "no longer running" status query; `kill()` hard-stops synchronously (loop down, terminal torn down, the model is *not* notified — unlike `quit()`, which routes through `QuitMsg` and lets the model react); `releaseTerminal()` hands the tty back in cooked/line-buffered state so an `$EDITOR`-style external command can run without fighting the renderer for raw-mode keys; `restoreTerminal()` completes that handoff — re-entering alt screen / raw mode / mouse / paste / focus exactly as startup did, then triggering a full repaint on the next tick.
 - **Terminal recovery**: 🟢 `setupTerminal()` arms a one-shot shutdown backstop. `run()`'s `finally` restores the terminal on every path it can see; a `die()`, `exit()` or zend bailout that skips pending `finally` blocks still lands on the registered shutdown function, so the library that entered the alt screen is the library that leaves it and consumers do not need to write their own `bin` guard. The hook holds a `WeakReference` and compares the install pid at fire time — finished Programs are never pinned alive by the shutdown queue, and a forked child exiting never releases the parent's terminal. The arming is gated on `catchPanics` (`ProgramOptions`, default `true`): constructing with `catchPanics: false` — the debugger-owner case that does its own state capture — registers no hook, though an explicit `Program::armTerminalRelease()` before the run is a considered opt-in and is honored either way.
-
 
 ## Companion libraries
 
@@ -672,27 +804,6 @@ first group, `use SugarCraft\Core\BatchMsg;` for the second — the
 | Composition | `AddComponentMsg`, `RemoveComponentMsg` — both implement `ComponentAddressedMsg` |
 | Internal requests | `TickRequest` (`@internal` request shape — no BC promise, do not construct in user code), `ExecRequest` (the `Cmd::exec` request the Program intercepts) |
 
-## Alt-screen vs inline mode
-
-The shipped default is **neither**: `useAltScreen: false` and
-`inlineMode: false` paint over the current screen with the diff renderer.
-
-Pass `useAltScreen: true` to `ProgramOptions` and the
-runtime takes over the alt-screen — the user's previous content is
-preserved underneath, and `Cmd::quit()` restores it. Best for
-fullscreen TUIs.
-
-Pass `useAltScreen: false` + `inlineMode: true` for a program that
-shares scrollback with the surrounding shell. A save/restore pair
-brackets the region: the first frame emits `ESC 7` (save cursor) before
-its lines, and every repaint after that emits `ESC 8` (restore cursor)
-plus an erase-to-end-of-screen **before** drawing the new frame — so
-preceding shell output stays visible. Pair with `Cmd::println()` to
-emit lines that scroll above the program region.
-
-A typical CandyScriptui prompt (`gum input`-style) uses inline mode;
-a fullscreen filter (`gum filter`-style) uses alt-screen.
-
 ## Tutorial — building a shopping list
 
 Every SugarCraft program is three things: a **Model** (the state), an
@@ -759,38 +870,7 @@ final class ShoppingList implements Model
 (new Program(new ShoppingList(['eggs', 'milk', 'bread', 'candy'])))->run();
 ```
 
-Three rules carry through to every program:
-
-1. **Model is immutable.** `update()` returns a *new* Model, never
-   mutates the receiver. This buys you snapshot debugging, time
-   travel, undo — all for free.
-2. **Cmds run async.** `update()` decides what should happen; the
-   runtime applies the resulting Cmd. A Cmd is a closure returning
-   a Msg.
-3. **view() is pure.** Same Model in → same string out. Side
-   effects (writing to disk, hitting an HTTP endpoint, blinking the
-   cursor) all live in Cmds, never in `view()`.
-
-Once you've internalised the loop, every other SugarCraft feature is
-just a richer Msg or a more interesting Cmd.
-
 ## Debugging tips
-
-The renderer owns stdout — printing to it from `update()` or `view()`
-will be overwritten on the next frame. The two ways to surface
-debug info from inside a running program:
-
-1. **Log to a file.** Tail the file from another terminal:
-   ```php
-   error_log('counter is now ' . $count . "\n", 3, '/tmp/candy.log');
-   ```
-   ```sh
-   $ tail -f /tmp/candy.log
-   ```
-2. **Use `Cmd::println()`.** Lines emitted via `Cmd::println()`
-   print *above* the program region (alt-screen and inline mode
-   both honour this) — perfect for "I got here" prints during
-   development.
 
 An uncaught exception thrown from `update()` or `view()` reaches the
 program's exception handler (default: rethrow), which means a raw PHP
@@ -814,71 +894,6 @@ Other gotchas:
   cell-diff, `cellDiffRenderer: true`) renderer skips unchanged rows
   only when the frame is byte-stable — randomised or time-dependent
   output defeats the diff and repaints everything every frame.
-
-## Mouse support — cell-motion vs all-motion
-
-Pass `MouseMode::CellMotion` (only emit motion events while a
-button is held) or `MouseMode::AllMotion` (emit every motion event
-including bare-cursor moves) to `ProgramOptions`. Pick:
-
-- **`CellMotion`** when the model only cares about clicks + drags
-  (most apps). Fewer Msgs flow through `update()`, lighter on the
-  parser, plays nicely with terminal copy/paste because the user
-  can hold Shift to bypass mouse capture.
-- **`AllMotion`** when the model reacts to hover state (tooltips,
-  fancy cursor effects, drag-preview overlays). Trade: every
-  motion event lands in `update()`, so enable it only while a
-  hover-sensitive view is up (`View->mouseMode`) instead of
-  process-wide.
-
-`MouseMsg` carries a `MouseAction` enum (`Press` / `Release` /
-`Motion`) and 1-based `$x` / `$y` coordinates. The wheel is not an
-action: wheel events arrive as `Press` with `MouseButton::WheelUp` /
-`MouseButton::WheelDown`. The four `MouseClickMsg` / `MouseReleaseMsg` /
-`MouseMotionMsg` / `MouseWheelMsg` subclasses let you match by class
-when that's more convenient.
-
-`examples/mouse.php` is a runnable demonstrator.
-
-## ProgramOptions
-
-`ProgramOptions` is a 24-parameter value object (`readonly` promoted
-properties). Pass it as `Program`'s second argument:
-
-```php
-use SugarCraft\Core\{Program, ProgramOptions};
-
-$program = new Program(
-    new Counter(),
-    new ProgramOptions(framerate: 60.0, useAltScreen: true, mouseMode: MouseMode::CellMotion),
-);
-$program->run();
-```
-
-One knob worth knowing by name: `catchPanics` (default `true`) gates whether
-`setupTerminal()` auto-arms the terminal-release shutdown backstop described
-under **Status → Terminal recovery**. Set it to `false` only when you take
-ownership of terminal restoration on bailout paths yourself; the explicit
-pre-arm `Program::armTerminalRelease()` remains honored regardless of the flag.
-
-For code that assembles options incrementally there is
-`SugarCraft\Core\ProgramOptions\ProgramOptionsBuilder` — a fluent mirror
-of the same 24 options (`withFramerate()`, `withUseAltScreen()`,
-`withMouseMode()`, `withInlineMode()`, …); `build()` returns the
-`ProgramOptions` and performs no validation beyond the types:
-
-```php
-use SugarCraft\Core\Program;
-use SugarCraft\Core\ProgramOptions\ProgramOptionsBuilder;
-
-$opts = (new ProgramOptionsBuilder())
-    ->withUseAltScreen(true)
-    ->withFramerate(60.0)
-    ->withCellDiffRenderer(true)
-    ->build();
-
-(new Program(new Counter(), $opts))->run();
-```
 
 ## Program helpers
 
@@ -1014,3 +1029,4 @@ cd sugar-core && composer install && vendor/bin/phpunit
 ## Credits & inspiration
 
 Originally inspired by the Go [Charm](https://github.com/charmbracelet) ecosystem; SugarCraft is developed as a native PHP project.
+
