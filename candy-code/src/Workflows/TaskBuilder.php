@@ -24,6 +24,7 @@ final class TaskBuilder
     private ?int $retries = null;
     private ?Isolation $isolation = null;
     private ?string $name = null;
+    private ?string $reject = null;
 
     /**
      * Set the agent type (e.g. 'architect', 'coder', 'reviewer').
@@ -91,6 +92,46 @@ final class TaskBuilder
     }
 
     /**
+     * Reject the verifier's verdict when its completed output MATCHES a pattern.
+     *
+     * POLARITY, LOUD: this is a REJECT pattern, not an expectation — a MATCH
+     * means rejection, and the verification stage fails exactly as if the
+     * verifier agent itself had failed (retries consumed, /workflow resume
+     * re-runs it). Only the verifier slot of a withVerification() stage may
+     * carry it; the engine refuses any other placement before anything runs.
+     *
+     * The pattern is a PCRE as passed to preg_match(), delimiter included
+     * (e.g. '/REJECT/', '/\bNEEDS-FIX\b/i'). Validity is checked here, at
+     * set time — a pattern that cannot compile throws instead of being born
+     * into a workflow where its scan could only ever fail closed.
+     */
+    public function reject(string $pattern): self
+    {
+        if (@preg_match($pattern, '') === false) {
+            throw new \InvalidArgumentException(
+                'reject() pattern ' . $pattern . ' is not a valid PCRE: ' . self::pcreErrorText(),
+            );
+        }
+
+        $this->reject = $pattern;
+        return $this;
+    }
+
+    /** Last PCRE compile failure as readable text (shared with the engine's fail-closed scan). */
+    public static function pcreErrorText(): string
+    {
+        return match (preg_last_error()) {
+            PREG_BACKTRACK_LIMIT_ERROR => 'backtrack limit exceeded',
+            PREG_RECURSION_LIMIT_ERROR => 'recursion limit exceeded',
+            PREG_BAD_UTF8_ERROR => 'malformed UTF-8 (from the pattern)',
+            PREG_BAD_UTF8_OFFSET_ERROR => 'bad UTF-8 offset',
+            PREG_JIT_STACKLIMIT_ERROR => 'JIT stack limit exceeded',
+            PREG_NO_ERROR => 'unknown compile error',
+            default => 'unknown compile error',
+        };
+    }
+
+    /**
      * Assemble and return the immutable WorkflowTask DTO.
      */
     public function build(): WorkflowTask
@@ -103,6 +144,7 @@ final class TaskBuilder
             retries: $this->retries,
             isolation: $this->isolation,
             name: $this->name,
+            reject: $this->reject,
         );
     }
 }
