@@ -871,8 +871,8 @@ All three database implementations (`MysqlDatabase`, `PostgresDatabase`, `Sqlite
 use SugarCraft\Sql\Db\Export\CsvExporter;
 use SugarCraft\Sql\Db\Export\SqlExporter;
 
-$csv = (new CsvExporter($db))->exportCsv('/tmp/users.csv', 'users');
-$sql = (new SqlExporter($db))->exportSql('/tmp/users.sql');
+(new CsvExporter($db))->exportCsv('/tmp/users.csv', 'users');   // returns void, writes the file
+(new SqlExporter($db))->exportSql('/tmp/dump.sql');              // returns void; dumps ALL tables, not just one
 $csvString = (new CsvExporter($db))->exportReportResultsToString($columns, $rows);
 ```
 
