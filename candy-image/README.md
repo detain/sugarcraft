@@ -81,7 +81,7 @@ the asset for verification.
 | `--canvas=MODE`         | Colour canvas for the text tiers: `truecolor` (default) `ansi256` `ansi16` `fgbg`. A no-op on backends without the dial. |
 | `--work=N`              | Candidate-search effort: chafa's integer `1`–`9`, config float `(N−1)/8` — `1` is the cheapest render, `9` runs the exhaustive path. |
 | `--size=WxH`            | Render box in terminal cells (chafa spelling).                    |
-| `--width=N` / `--height=N` | Individual box legs; cannot be mixed with `--size`. Defaults: viewport columns × aspect-derived rows. |
+| `--width=N` / `--height=N` | Individual box legs; cannot be mixed with `--size`. Defaults: viewport columns × aspect-derived rows, with one status row held back when STDOUT is a live tty. When STDOUT is **not** a tty (piped output, CI, examples — e.g. `candy-image x.png > out.txt`) the viewport fallback is a fixed **60×24** cells; size the box explicitly if you need anything else. |
 | `--scale=S`             | Fit policy: `fit` `shrink` `fill` `stretch` `none` `crop` (maps onto `SugarCraft\Image\Scale`). |
 | `--animate`             | Animated-GIF pass-through into sugar-animation's `Player` (alternate screen). Pause, frame-stepping and the solid/density preset toggle ride this viewer's wired `Player` (Keys below); frame-rate, speed and watch-mode flags (`--fps`/`--speed`/`--duration`/`--watch`) live in `candy-gifview`. |
 | `--passthrough=V`       | tmux `allow-passthrough` transaction: `auto` (default) or `none`. |
