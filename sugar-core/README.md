@@ -12,8 +12,6 @@
 [![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
-
-![demo](.vhs/counter.gif)
 ```sh
 composer require sugarcraft/sugar-core
 ```
@@ -25,7 +23,7 @@ a full-screen diffing renderer.
 
 ```php
 use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program, Subscriptions};
-use SugarCraft\Core\Msg\{KeyMsg, WindowSizeMsg};
+use SugarCraft\Core\Msg\KeyMsg;
 
 final class Counter implements Model
 {
@@ -750,12 +748,13 @@ package consumes it — apps (or future library releases) adopt it directly:
 
 ```php
 use SugarCraft\Core\ProgressReporter;
-use SugarCraft\Core\Progress\CallbackProgressReporter;
 
-interface ProgressReporter
+// The interface ships with the lib — consumer code type-hints it and
+// calls the one contract method, report($current, $total, $label),
+// where $current is a 0-based step index and $label is optional.
+function report_stage(ProgressReporter $reporter, int $done, int $total): void
 {
-    /** @param int $current 0-based current step @param int $total Total steps @param string|null $label Optional label */
-    public function report(int $current, int $total, ?string $label = null): void;
+    $reporter->report($done, $total, 'downloading');
 }
 ```
 
@@ -784,18 +783,11 @@ string-prefix detection (`str_starts_with($desc, 'delete ')` patterns):
 use SugarCraft\Core\Undo\UndoActionType;
 use SugarCraft\Core\Undo\UndoAction;
 
-enum UndoActionType: string
-{
-    case Delete = 'delete';
-    case Move   = 'move';
-    case Rename = 'rename';
-    case Copy   = 'copy';
-    case Insert = 'insert';
-    case Modify = 'modify';
-    case Custom = 'custom';
-}
+// Both ship with the lib: UndoActionType is a string enum with the
+// cases Delete, Move, Rename, Copy, Insert, Modify and Custom, and
+// UndoAction is the readonly value object pairing a type with its
+// payload and display label.
 
-// Readonly value object pairing a type with its payload + display label
 $action = UndoAction::new(UndoActionType::Delete, ['path' => '/tmp/foo'], 'delete foo');
 echo $action->type->value;   // 'delete'
 echo $action->label;          // 'delete foo'
@@ -830,7 +822,7 @@ When a package in this monorepo is renamed, apps should keep working for users w
 
 Every line that spells an old name must carry the `@rename-keep` marker, or `tools/check-rename-residue.php` will flag it.
 
-## Test
+## Testing
 
 ```sh
 cd sugar-core && composer install && vendor/bin/phpunit
