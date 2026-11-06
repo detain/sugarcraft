@@ -952,6 +952,7 @@ candy-code/tests/Tools/BuiltIn/ApplyPatchTest.php	0.065	17
 candy-code/tests/Skills/CompiledPatternCacheBoundTest.php	0.065	6
 candy-code/tests/Host/Commands/AgentsNewAcceptTest.php	0.065	21
 candy-code/tests/App/DockGeometryPlumbingTest.php	0.065	7
+candy-code/tests/Agents/Live/ReportSanitizerTest.php	0.065	55
 candy-code/tests/Tools/BuiltIn/GenerateImageTest.php	0.064	21
 candy-code/tests/Tools/BuiltIn/WriteTest.php	0.064	24
 candy-code/tests/Backend/InTurnPruneTest.php	0.064	4
