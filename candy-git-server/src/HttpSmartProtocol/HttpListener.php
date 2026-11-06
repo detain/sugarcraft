@@ -31,6 +31,18 @@ use React\EventLoop\TimerInterface;
  * per request (a slow-drip client that keeps talking still dies). Body
  * sizes are capped by ONE knob: the router's maxRequestBodyBytes() — the
  * socket and the pack paths can never disagree about what is acceptable.
+ *
+ * The envelope stated above is per seat, and the honest arithmetic of the
+ * whole house follows from it: 64 seats × a 256 MiB default body cap is a
+ * ~16 GiB worst-case aggregate of buffered request bodies, and this class
+ * carries NO aggregate memory budget. A client that dribbles 1 MiB and a
+ * house of clients that each post a full-size pack are indistinguishable
+ * here. An in-flight-bytes admission budget was considered and declined:
+ * it is a resource-allocation policy that changes what the endpoint
+ * serves under load, and that is a ruling to make, not to sneak into a
+ * hardening step. Until such a ruling lands, http.max_pack_bytes is the
+ * tuning lever for the aggregate (lower the per-seat cap, lower the
+ * worst-case house) together with MAX_CLIENTS for the seat count.
  */
 final class HttpListener
 {
