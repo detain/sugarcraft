@@ -96,6 +96,22 @@ error document accompanies the 1 and 2 exits alongside the stderr prose —
 `error.type` `usage` for the exit-2 cases above (including unrecognized
 options), `not-found` for an unknown `session show` target.
 
+## Driver flags queued for merge (weld-queued)
+
+Collected from the driver-lane report; these describe the `wf/driver` branch.
+Until that weld lands, both options exit 2 as unrecognized on shipped builds.
+
+- `--session-id <16hex>` — pre-allocates the NEW one-shot session id so drivers
+  can key artifacts before the run completes; refuses (exit 2) if the id is
+  already stored or the value is not 16 lowercase hex; use `--resume` to reopen
+  a stored session. Never beside `-c`/`--resume`/`--incognito`/a subcommand or
+  without a prompt.
+- `--input-format stream-json` — each piped `{"type":"user","content":…}`
+  NDJSON line becomes its own user turn before the `-p` prompt; a malformed
+  JSON line exits 2 naming the line number; unusable shapes are counted and
+  named once on stderr while the run continues; the 10 MiB stdin cap counts raw
+  bytes pre-parse; requires a prompt; default `text` keeps the raw-prepend path.
+
 ## Follow-up turns and lineage
 
 - `--resume=<session_id>` continues the same conversation and keeps the same
@@ -145,8 +161,9 @@ you actually want isolation; identical `HOME` for identical cache warmth.
 ## What does *not* exist (don't improvise flags)
 
 Measured absent: `--allowedTools` / `--disallowedTools` (tool narrowing is the
-`permissionRules` config surface), `--session-id` (ids are minted, or supplied
-to `--resume`), `--param` / `--values` CLI plumbing, a top-level `workflow`
+`permissionRules` config surface), `--session-id` on shipped builds (ids are
+minted, or supplied to `--resume`; a pre-allocation variant is weld-queued
+under "Driver flags queued for merge" above), `--param` / `--values` CLI plumbing, a top-level `workflow`
 subcommand (the workflow verbs are the `/workflow` slash commands: run,
 pause, resume, status, list), and any `--auto-review` flag (`autoReview` is a
 config key only — src/Config/LayeredSettings.php:589). The saved-workflow DSL
