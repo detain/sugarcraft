@@ -20,6 +20,12 @@ sugar-quickpick — a fuzzy finder / quick-pick overlay for terminal UIs (PHP 8.
 composer require sugarcraft/sugar-quickpick
 ```
 
+> **Stability:** this package requires its `sugarcraft/` siblings at
+> `dev-master`. A Composer project left on the default `stable` minimum-stability
+> cannot resolve them — add `"minimum-stability": "dev", "prefer-stable": true`
+> to the consuming root (or pin the released `sugarcraft/*` tags once cut). The
+> monorepo publishes all libs together, so sibling versions always line up.
+
 ## Requirements
 
 - **PHP 8.3+** and **ext-ffi — required at install time.** The library
