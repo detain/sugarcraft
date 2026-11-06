@@ -156,8 +156,11 @@ $reel = $reel->withHeaders(['Cookie' => 'session=…']);
 `Reel::play()` builds its own sugar-core `Program` and blocks. To drive playback
 from a host that already owns a `Program`/event loop, use `Reel::toPlayer()` to
 get the `Player` model **paused** and mount it yourself. Building the model
-opens the source, so its `ffmpeg` child is spawned immediately — a host that
-mounts and never starts must still call `stop()` to release it.
+opens the source: probing spawns a short-lived `ffprobe` child that is reaped
+at once, and sources routed through ffmpeg (`mp4`/`avi`/`webm`, plus remote
+`.gif`/`.webp`) spawn their `ffmpeg` decoder child immediately — a host that
+mounts and never starts must still call `stop()` to release it. Locally
+decoded GIFs and animated WebP ride pure PHP/GD in-process and cost no child.
 
 ```php
 $player = Reel::openUrl($url, $headers)->toPlayer(); // paused; decoder child already spawned

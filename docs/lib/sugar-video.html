@@ -150,7 +150,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
 <tr><td>Reel</td><td>withAllowedHosts(hosts)</td><td>Pin the remote host allowlist</td></tr>
 <tr><td>Reel</td><td>withCellPx(w, h)</td><td>Tell the player the terminal cell pixel size (graphics modes rasterise at cols&#183;w &#215; rows&#183;h)</td></tr>
 <tr><td>Reel</td><td>withAutoMode()</td><td>Switch to auto mode: the renderer ladder picks the best supported mode at open time</td></tr>
-<tr><td>Reel</td><td>toPlayer()</td><td>Build the Player (paused, ffmpeg child already spawned)</td></tr>
+<tr><td>Reel</td><td>toPlayer()</td><td>Build the Player (paused; source already opened &#8212; ffmpeg-routed sources spawn their ffmpeg child now, local GIF/animated-WebP decode in-process, the ffprobe child is transient)</td></tr>
 <tr><td>Reel</td><td>play()</td><td>Run the player</td></tr>
 <tr><td>Player</td><td>::open(videoPath, cellsW, cellsH, ?fpsOverride, ?Mode, loop, ramp, cellPxW, cellPxH, subtitles, headers, frameBudgetMs, ?autoModeChooser)</td><td>Open a video source; a null <code>Mode</code> auto-detects terminal capability (the default)</td></tr>
 <tr><td>Player</td><td>::fromDecoder(decoder, cellsW, cellsH, fps, mode, &#x2026;)</td><td>Mount playback over any injected Decoder (server-transcoded streams, test doubles)</td></tr>
