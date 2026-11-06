@@ -228,4 +228,47 @@ final class PktLineTest extends TestCase
         self::assertNull(array_pop($packets));
         self::assertSame('0000', substr($bytes, -4));
     }
+
+    /**
+     * n10: decode() is the suite's reference oracle, NOT production
+     * plumbing. The request path byte-slices its service packet (the
+     * decode-reshape it replaced corrupted legal oversized payloads),
+     * answers ride encode(), and packfile bytes are never pkt payloads.
+     * This pin fails the moment a real call appears under src/ or bin/ —
+     * a production use must re-decide the framing story deliberately and
+     * say so in the docs, not drift into it silently. Prose mentions with
+     * empty parens (the StatelessRpc history comment) stay exempt.
+     */
+    public function testDecodeHasNoProductionCallersByLaw(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $files = [
+            $root . '/bin/candy-git-server',
+            $root . '/src/Git/PktLine.php',
+        ];
+
+        $walk = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root . '/src', \RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+        foreach ($walk as $entry) {
+            if ($entry->isFile() && $entry->getExtension() === 'php') {
+                $files[] = $entry->getPathname();
+            }
+        }
+
+        $seen = [];
+        foreach ($files as $path) {
+            if (isset($seen[$path])) {
+                continue;
+            }
+            $seen[$path] = true;
+            self::assertSame(
+                0,
+                \preg_match_all('/PktLine::decode\(\s*(?!\))/', (string) \file_get_contents($path)),
+                $path . ' must not call PktLine::decode in production',
+            );
+        }
+
+        self::assertGreaterThanOrEqual(2, count($seen), 'the walk must actually cover src/ and bin/');
+    }
 }

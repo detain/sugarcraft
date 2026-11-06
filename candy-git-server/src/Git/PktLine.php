@@ -96,6 +96,19 @@ final class PktLine
      * 0001-0003 side-band-style markers, which belong to responses and
      * never appear in a request body).
      *
+     * @internal Reference decoder with NO production callers, by law. The
+     *           request path strips its service packet with a byte-slice
+     *           ({@see StatelessRpc::stripServiceHeader()}), answers ride
+     *           {@see encode()}, and packfile bytes are not pkt payloads
+     *           at all — round-tripping whole bodies through a decode
+     *           reshapes exactly what must stay verbatim and throws on
+     *           legal oversized command packets, the defect the
+     *           byte-slice replaced. The suite uses this as the
+     *           independent oracle for what encode() emits and for
+     *           real-git advertisements. A production call site here
+     *           means that framing story was re-decided on purpose;
+     *           PktLineTest's zero-caller pin fails the silent version.
+     *
      * @return list<string|null> one entry per packet; null = flush-pkt
      * @throws \RuntimeException on any malformed framing
      */
