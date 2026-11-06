@@ -106,8 +106,11 @@ The key table is fixed in the player model; keys are not rebindable.
   over-disclosing is the honest direction. `Cli::MAX_FRAMES`
   (4096) is only the outer ceiling.
 - Intake is also bounded by file size (`Cli::MAX_INPUT_BYTES`, 64 MiB —
-  larger files are refused before being buffered) and by a resident-cell
-  budget (`Cli::MAX_RESIDENT_CELLS`, 6 million frame cells for the current
+  larger files are refused by a size check before being buffered; the check
+  and the read are two separate looks at the path, so a concurrent local
+  swap between them can still land more bytes than the cap announces, while
+  FIFOs and devices are blocked by the engine's `is_file()` gate) and by a
+  resident-cell budget (`Cli::MAX_RESIDENT_CELLS`, 6 million frame cells for the current
   viewport). The engine separately caps a single frame at 100 000 cells and
   the whole canvas at 2 million pixels.
 - `--watch` reloads decode synchronously inside the poll tick — a large
