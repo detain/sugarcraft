@@ -487,6 +487,13 @@ mid-flight when the process died always **re-runs in full** — records are per
 whole stage, and there is no partial credit inside a stage (or inside a
 `parallel` sub-stage).
 
+The record also carries a purely additive `stageInputHashes` map — per
+settled stage, a sha256 over its pre-interpolation prompt templates plus each
+task's model and schema identity. It is the substrate a future resume-side
+result cache (C13) will use to skip re-dispatching an unchanged stage; today
+nothing acts on it, and records written before it existed (or stages a
+resumed run never settled itself) read as a cache miss, never as corruption.
+
 ### Pause, resume, status
 
 `<id>` is the run ID `/workflow run` prints (`three-1a2b3c4d`) or the workflow

@@ -936,7 +936,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param array<string, mixed> $data    the decoded pause file
      * @param array<string, mixed> $context the pause file's context
-     * @return array{0: int, 1: array{stageResults: list<StageResult>, totalTokens: int, totalCost: float, startedAt: \DateTimeImmutable}}
+     * @return array{0: int, 1: array{stageResults: list<StageResult>, totalTokens: int, totalCost: float, startedAt: \DateTimeImmutable, stageInputHashes: array<string, string>}}
      */
     private function priorProgress(array $data, Workflow $workflow, array $context): array
     {
@@ -985,6 +985,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
             'totalTokens' => is_numeric($data['totalTokens'] ?? null) ? (int) $data['totalTokens'] : $totalTokens,
             'totalCost' => is_numeric($data['totalCost'] ?? null) ? (float) $data['totalCost'] : $totalCost,
             'startedAt' => self::parseTime($data['startedAt'] ?? null) ?? new \DateTimeImmutable(),
+            // C13 substrate pass-through: whatever hashes this file carries.
+            // An old record has none, and an empty map is what the resumed
+            // run seeds with — absence downstream is a cache miss, by law.
+            'stageInputHashes' => is_array($data['stageInputHashes'] ?? null) ? $data['stageInputHashes'] : [],
         ]];
     }
 
@@ -1336,6 +1340,18 @@ final class WorkflowEngine implements WorkflowEngineInterface
             'pausedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
         ];
 
+        // C13 substrate, purely additive: the identity hashes of every stage
+        // this live run has settled. Read from the slot, so every writer —
+        // the O1 refresh, an explicit pause, the signal handler — persists
+        // the same map. A run that is not live here (pause-after-finish) or
+        // a pre-C13 resume seed simply omits the key: absence is a cache
+        // miss, never a mis-read.
+        $slotToken = $this->liveRunFor($key);
+        $hashes = $slotToken === null ? [] : ($this->liveRuns[$slotToken]['inputHashes'] ?? []);
+        if ($hashes !== []) {
+            $data['stageInputHashes'] = $hashes;
+        }
+
         // Audit M4: the pre-fix write ignored file_put_contents' return (a
         // failed pause silently lost the run) and wrote the live path
         // directly (a crash mid-write tore the file resume() needs).
@@ -1583,6 +1599,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 completedAt: new \DateTimeImmutable(),
             );
         };
+        // C13 substrate: per-stage input-identity hashes, seeded from the
+        // record a resume consumes and extended as each stage settles.
+        // Purely additive — old records carry none, and a later cache-side
+        // consumer reads absence as a cache miss, never as corruption.
+        $inputHashes = is_array($prior['stageInputHashes'] ?? null) ? $prior['stageInputHashes'] : [];
+
         $liveToken = ++$this->liveRunSequence;
 
         try {
@@ -1592,6 +1614,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 'loadPath' => $loadPath,
                 'snapshot' => $snapshot,
                 'pauseRequested' => false,
+                'inputHashes' => $inputHashes,
             ];
 
             foreach ($workflow->stages as $stageIndex => $stage) {
@@ -1698,6 +1721,19 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $stageResults[] = $stageResult;
                 $totalTokens += $this->sumTokens($stageResult);
                 $totalCost += $this->sumCost($stageResult);
+
+                // C13 substrate: record WHAT THIS STAGE WAS ASKED to run —
+                // the pre-interpolation prompt template plus model and
+                // schema identity — so a future resume-side cache can match
+                // a settled stage against a later run's declarations without
+                // re-dispatching. Only successful settles are hashed: a
+                // failed stage produced nothing cacheable, and an identity
+                // for it would read as an invitation. Stored by stage name
+                // on the live slot, so every writer of the pause record
+                // (incremental, explicit, signal) carries the same map.
+                if ($stageResult->isSuccess()) {
+                    $this->liveRuns[$liveToken]['inputHashes'][$stageResult->stageName] = self::stageInputHash($stage, $stageType);
+                }
 
                 // O1: refresh the resilience record with this stage counted.
                 // Best-effort deliberately — a resilience write that fails
@@ -1976,6 +2012,55 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         return $bytes;
+    }
+
+    /**
+     * C13 substrate: the stable identity of what a stage WAS ASKED to run —
+     * its pre-interpolation prompt templates plus each task's model ask and
+     * schema identity, hashed sha256 over a canonical array. A later
+     * resume-side result cache can compare a recorded stage against a new
+     * run's declarations with zero re-dispatch; THIS engine only records
+     * the hash — no caching, no opt-in, no behavior change beyond one extra
+     * key on the pause record.
+     *
+     * The recipe is the point: consumers pin its shape, so it lives here,
+     * once, and widening it (tools, agent type, …) is a deliberate
+     * single-site decision for the cache wave, not an accident of this one.
+     *
+     * @param array<string, mixed> $stage
+     */
+    private static function stageInputHash(array $stage, string $stageType): string
+    {
+        $material = ['type' => $stageType, 'tasks' => []];
+
+        $push = static function (mixed $task) use (&$material): void {
+            if ($task instanceof WorkflowTask) {
+                $material['tasks'][] = [
+                    'prompt' => $task->prompt,
+                    'model' => $task->model,
+                    'schema' => $task->outputSchema,
+                ];
+            }
+        };
+
+        if ($stageType === 'verification') {
+            $push($stage['task'] ?? null);
+            $push($stage['verifier'] ?? null);
+        } elseif ($stageType === 'pipeline') {
+            foreach ($stage['stages'] ?? [] as $nested) {
+                if (is_array($nested)) {
+                    foreach ($nested['tasks'] ?? [] as $task) {
+                        $push($task);
+                    }
+                }
+            }
+        } else {
+            foreach ($stage['tasks'] ?? [] as $task) {
+                $push($task);
+            }
+        }
+
+        return hash('sha256', json_encode($material, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
     }
 
     /**

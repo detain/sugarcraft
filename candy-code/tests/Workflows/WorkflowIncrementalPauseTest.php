@@ -181,6 +181,100 @@ final class WorkflowIncrementalPauseTest extends TestCase
         return $this->readRecord();
     }
 
+    public function testTheRecordCarriesStablePerStageIdentityHashes(): void
+    {
+        $test = $this;
+        $seenAtB = null;
+        $seenAtC = null;
+        $this->script['do b'] = static function (SubAgent $agent) use ($test, &$seenAtB): ?AgentResult {
+            $seenAtB = $test->recordWhileRunning();
+
+            return null;
+        };
+        $this->script['do c'] = static function (SubAgent $agent) use ($test, &$seenAtC): ?AgentResult {
+            $seenAtC = $test->recordWhileRunning();
+
+            return null;
+        };
+
+        $run = $this->engine->run('three');
+        $this->assertSame(WorkflowStatus::Completed, $run->status);
+
+        $this->assertIsArray($seenAtB);
+        $hashA = $seenAtB['stageInputHashes']['a'] ?? null;
+        $this->assertIsString($hashA, 'a settled stage must carry its input identity (C13 substrate)');
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $hashA);
+        $this->assertSame(['a'], array_keys($seenAtB['stageInputHashes']), 'only settled stages are hashed');
+
+        $this->assertIsArray($seenAtC);
+        $this->assertSame(['a', 'b'], array_keys($seenAtC['stageInputHashes']));
+        $this->assertSame($hashA, $seenAtC['stageInputHashes']['a'], 'the hash is stable for the same declaration');
+
+        // The recipe, pinned so the future cache consumer and this writer
+        // cannot drift apart silently: sha256 over the canonical
+        // pre-interpolation material.
+        $this->assertSame(
+            hash('sha256', (string) json_encode([
+                'type' => 'stage',
+                'tasks' => [['prompt' => 'do a', 'model' => null, 'schema' => null]],
+            ], JSON_UNESCAPED_SLASHES)),
+            $hashA,
+            'the stageInputHash recipe drifted — C13 consumers pin exactly this shape',
+        );
+    }
+
+    public function testAnOlderRecordWithoutHashesResumesAndHashesOnlyWhatItRunsHere(): void
+    {
+        // Same hand-written pre-O1, pre-C13 record as the compatibility pin
+        // above — the resumed run must seed from nothing, skip stage a on
+        // the recorded count, and carry forward hashes only for stages THIS
+        // process settled. Absence for a is a cache miss by law, never
+        // corruption.
+        mkdir($this->tempDir . '/workflows/.running', 0755, true);
+        $atom = (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM);
+        file_put_contents(
+            $this->pauseFile(),
+            (string) json_encode([
+                'workflowId' => 'three-ffffffff',
+                'workflowPath' => 'three',
+                'status' => WorkflowStatus::Paused->value,
+                'stagesCompleted' => 1,
+                'context' => ['a.output' => 'OUT[do a]'],
+                'stageResults' => [[
+                    'stageName' => 'a',
+                    'status' => WorkflowStatus::Completed->value,
+                    'output' => 'OUT[do a]',
+                    'error' => null,
+                    'agents' => [],
+                    'startedAt' => $atom,
+                    'completedAt' => $atom,
+                ]],
+                'totalTokens' => 10,
+                'totalCost' => 0.5,
+                'startedAt' => $atom,
+                'pausedAt' => $atom,
+            ]),
+        );
+
+        $test = $this;
+        $seenAtC = null;
+        $this->script['do c'] = static function (SubAgent $agent) use ($test, &$seenAtC): ?AgentResult {
+            $seenAtC = $test->recordWhileRunning();
+
+            return null;
+        };
+
+        $resumed = $this->engine->resume('three');
+
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status);
+        $this->assertIsArray($seenAtC);
+        $this->assertSame(
+            ['b'],
+            array_keys($seenAtC['stageInputHashes'] ?? []),
+            'the resumed run hashes only stages it settled itself — a skipped pre-C13 stage stays a cache miss',
+        );
+    }
+
     public function testAFailedRunWithdrawsTheRecordItWasKeeping(): void
     {
         $test = $this;
