@@ -1,6 +1,6 @@
 [
   {"name":"CandyAnsiInspect","slug":"candy-ansi-inspect","category":"app","description":"ANSI escape-sequence inspector.","url":"lib/candy-ansi-inspect.html"},
-  {"name":"CandyCode","slug":"candy-code","category":"app","description":"Terminal AI coding agent — nine LLM providers, tools, skills, hooks, sub-agents, MCP, SQLite sessions.","url":"lib/candy-code.html"},
+  {"name":"CandyCode","slug":"candy-code","category":"app","description":"Terminal AI coding agent — eleven provider type keys over nine engines, 38 built-in tools per launch, skills, hooks, sub-agents, MCP, SQLite sessions.","url":"lib/candy-code.html"},
   {"name":"CandyCodeWeb","slug":"candy-code-web","category":"app","description":"The browser face of candy-code's server mode — Vite + Vue 3 + TypeScript + Pinia, shipped pre-built through Composer.","url":"lib/candy-code-web.html"},
   {"name":"CandyCodeshot","slug":"candy-codeshot","category":"app","description":"Code → SVG screenshot generator.","url":"lib/candy-codeshot.html"},
   {"name":"CandyCodetime","slug":"candy-codetime","category":"app","description":"Privacy-first coding-time tracker.","url":"lib/candy-codetime.html"},
