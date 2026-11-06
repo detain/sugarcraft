@@ -890,7 +890,10 @@ settles, and are never written into the transcript or the session store. The
 render mode itself is resolved once at launch by
 `Bootstrap::applyMediaRenderMode()` — `CANDY_CODE_MEDIA_RENDER_MODE`, else the
 merged `ui.imageRenderMode` setting, else `auto`, which asks the terminal; image
-`auto` prefers kitty, then iterm2, sixel, chafa, halfblock, and video prefers a
+`auto` walks kitty, then iterm2, then sixel, and otherwise lands on symbols —
+halfblock only when the terminal's text-availability slot is itself off
+(`sugar-image` `Mosaic::auto()`: chafa sits in the precedence table but is
+explicit-opt-in only, so `auto` never selects it), and video prefers a
 different order on purpose, so the two ladders are deliberately not shared.
 
 Those servers are started once, at launch, by `LSP\LspLauncher` through
