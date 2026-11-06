@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Config\Settings\Definitions;
 
+use SugarCraft\Code\Agents\Live\RunLiveness;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\Settings\ApplyMode;
@@ -93,6 +94,25 @@ final class AgentLoopSettings implements SettingDefinitionSet
                 ->withDefaultText('unset (no cap)')
                 ->withReaderSymbol(Bootstrap::class . '::maxCostUsd')
                 ->withReadBy('`Bootstrap::workspace()`, `Chat::applySettings()` → `maxCostUsd()` → `persistedMaxCostUsd()`'),
+            // RS-AGENT-BACKLOG A1: the agent strip's stall HINT. User tier only
+            // (no layered/project arm): a shared checkout must not be able to
+            // silence the operator's own liveness flag. 0 is off and keeps the
+            // strip byte-identical; a set value under the 30 s floor rises to
+            // the floor AT READ (`RunLiveness::clampThreshold()`), never as a
+            // save-time refusal. Detector only — a flagged row is a hint, not a
+            // intervention; acting on a stall is the B5 follow-up.
+            SettingDefinition::new(RunLiveness::SETTING_KEY, SettingType::Int, RunLiveness::OFF)
+                ->withCategory(SettingCategory::AgentLoop)
+                ->withRiskClass(RiskClass::Tuning)
+                // Live: the strip re-reads the threshold per render through the
+                // `UiSettings` memo, which `Chat::applySettings()` flushes on save.
+                ->withApplyMode(ApplyMode::Live)
+                ->withRange(0)
+                ->withLabel(Lang::t('settings.agentStallSeconds.label'))
+                ->withHelp(Lang::t('settings.agentStallSeconds.help'))
+                ->withDefaultText('0 (off)')
+                ->withReaderSymbol(RunLiveness::class . '::thresholdSeconds')
+                ->withReadBy('`AgentStatusBar::render()` → `RunLiveness::thresholdSeconds()` → `UiSettings::int()`'),
         ];
     }
 }

@@ -330,6 +330,12 @@ final class ApplySettingsTest extends TestCase
         // in `UiSettings::KEYS`, which that roster pins to Interface-category
         // keys (this one is Permissions).
         $handled[] = \SugarCraft\Code\Permissions\PermissionGate::AUTO_REVIEW_SCOPE_SETTING;
+
+        // A1: `RunLiveness::thresholdSeconds()` reads through the same
+        // `UiSettings` memo, so a save is live by the N-P4g mechanism; the key
+        // cannot sit in `UiSettings::KEYS` either — that roster pins to
+        // Interface-category keys (this one is AgentLoop).
+        $handled[] = \SugarCraft\Code\Agents\Live\RunLiveness::SETTING_KEY;
         $ownDoors = array_keys(SettingsWriter::LIVE_COMMAND_KEYS);
         foreach (SettingsSchema::all() as $definition) {
             if ($definition->applyMode !== ApplyMode::Live || \in_array($definition->ui, [UiEditability::ReadOnly, UiEditability::Hidden], true)) {
