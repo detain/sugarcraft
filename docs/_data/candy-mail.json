@@ -3,7 +3,7 @@
     "description": "CandyMail: Email sending — SMTP, API transports, attachments.",
     "ogTitle": "CandyMail — SugarCraft",
     "ogDescription": "Email sending — SMTP, API transports, attachments.",
-    "emoji": "",
+    "emoji": "📨",
     "displayName": "CandyMail",
     "tagline": "Email sending — SMTP, API transports, attachments",
     "phpVersion": "8.3+",
