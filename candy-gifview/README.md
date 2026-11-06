@@ -65,13 +65,13 @@ libnsgif's single-play default — plays forever.
 
 ## Keys
 
-| Key                    | Action                         |
-|------------------------|--------------------------------|
-| `Space`                | Pause / resume                 |
-| `←`/Left               | Step back one frame            |
-| `→`/Right              | Step forward one frame         |
-| `d`                    | Toggle solid ↔ density preset  |
-| `q` / `Esc` / `Ctrl+C` | Quit                           |
+| Key                    | Action                           |
+|------------------------|----------------------------------|
+| `Space`                | Pause / resume                   |
+| `←`/Left               | Step back one frame, wrapping    |
+| `→`/Right              | Step forward one frame, wrapping |
+| `d`                    | Toggle solid ↔ density preset    |
+| `q` / `Esc` / `Ctrl+C` | Quit                             |
 
 The key table is fixed in the player model; keys are not rebindable.
 
