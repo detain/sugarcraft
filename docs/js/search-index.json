@@ -49,7 +49,7 @@
   {"name":"SugarOverlay","slug":"sugar-overlay","category":"library","description":"Modal/overlay compositing for terminal UIs — foreground content over a background at any position with cell offsets, backdrop dimming, animated transitions, border chrome and click-zone hit-testing.","url":"lib/sugar-overlay.html"},
   {"name":"SugarPanels","slug":"sugar-panels","category":"library","description":"H/V panels with flex/natural sizing, borders, nesting, and stateful delta rendering.","url":"lib/sugar-panels.html"},
   {"name":"SugarPty","slug":"sugar-pty","category":"library","description":"Pseudo-terminal primitive — spawn child processes wired to a controlled PTY, with resize forwarding and non-blocking I/O.","url":"lib/sugar-pty.html"},
-  {"name":"SugarQuickpick","slug":"sugar-quickpick","category":"library","description":"Fuzzy finder overlay for terminal UIs.","url":"lib/sugar-quickpick.html"},
+  {"name":"SugarQuickpick","slug":"sugar-quickpick","category":"library","description":"Fuzzy finder / quick-pick overlay for terminal UIs.","url":"lib/sugar-quickpick.html"},
   {"name":"SugarReadline","slug":"sugar-readline","category":"library","description":"Interactive prompts — text, confirm, select, multi-select, textarea.","url":"lib/sugar-readline.html"},
   {"name":"SugarSpring","slug":"sugar-spring","category":"library","description":"Damped spring physics, projectile sim, easing/bezier timing and reduced-motion snapping for spring-driven types.","url":"lib/sugar-spring.html"},
   {"name":"SugarSshServer","slug":"sugar-ssh-server","category":"library","description":"Run interactive terminal apps over SSH — composable middleware for serving your TUIs from OpenSSH.","url":"lib/sugar-ssh-server.html"},
