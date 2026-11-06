@@ -487,6 +487,16 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     public function key(): string  { return $this->key; }
     public function value(): mixed { return $this->input->value; }
 
+    /**
+     * Echo-safe display projection (SF-2): password/mask fields yield the
+     * same characters a sighted user sees, never the raw secret. Normal
+     * fields return the value verbatim.
+     */
+    public function displayValue(): string
+    {
+        return $this->input->displayedValue();
+    }
+
     public function focus(): array
     {
         [$ti, $cmd] = $this->input->focus();

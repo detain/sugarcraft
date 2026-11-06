@@ -1094,7 +1094,13 @@ final class TextInput implements Model
         return [$this, null];
     }
 
-    private function displayedValue(): string
+    /**
+     * Echo-safe projection of the buffer for every display surface: Normal
+     * passes through, Password renders echoChar × length, Mask renders the
+     * masked runs, None renders empty. The raw secret never leaves through
+     * a display path — consumers that need the real value read value().
+     */
+    public function displayedValue(): string
     {
         return match ($this->echoMode) {
             EchoMode::Normal   => $this->value,

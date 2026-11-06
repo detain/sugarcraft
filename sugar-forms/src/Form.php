@@ -14,6 +14,7 @@ use SugarCraft\Constraints\Constraint\Constraint;
 use SugarCraft\Constraints\Direction;
 use SugarCraft\Constraints\LayoutSolver;
 use SugarCraft\Constraints\Region;
+use SugarCraft\Forms\Field\Input;
 
 /**
  * Top-level form container.
@@ -499,7 +500,15 @@ final class Form implements Model
         return $body;
     }
 
-    /** Plain-text fallback for screen readers / non-TUI contexts. */
+    /**
+     * Plain-text fallback for screen readers / non-TUI contexts. Honest
+     * scope (m8): exactly one line for the FOCUSED field — no group titles,
+     * no "Step X of Y" pagination, no error-summary block; values that carry
+     * an echo mode (Input password/mask) project through the same display
+     * characters the TUI shows, never the stored secret (SF-2). Programs
+     * that want the full page layout render the normal view(); see
+     * examples/ for runnable shapes.
+     */
     private function accessibleView(): string
     {
         $field = $this->focusedField();
@@ -507,7 +516,9 @@ final class Form implements Model
             return '';
         }
         $title = $field->getTitle();
-        $value = self::coerceString($field->value()) ?? '';
+        $value = $field instanceof Input
+            ? $field->displayValue()
+            : (self::coerceString($field->value()) ?? '');
         $err   = $field->error();
         $line  = $title === '' ? $value : ($title . ': ' . $value);
         return $err !== null ? $line . "\n! " . $err : $line;

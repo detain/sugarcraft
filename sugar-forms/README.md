@@ -155,7 +155,7 @@ Form::groups(
 | Method | What it does |
 | ------ | ------------ |
 | `withTheme(Theme)` | Switch the colour palette. |
-| `withAccessible(bool)` | Render plain `label: value` text — for screen readers / dumb terminals. |
+| `withAccessible(bool)` | Render one `label: value` line for the focused field — for screen readers / dumb terminals. Echo-mode fields project their display characters via `displayValue()`; the stored secret is never read aloud. |
 | `withShowHelp(bool)` | Toggle the help footer. |
 | `withShowErrors(bool)` | Toggle the inline `! error` line on validation failures. |
 | `withWidth(int)`, `withHeight(int)` | Pin the rendered geometry. |
@@ -176,7 +176,9 @@ Stock themes ship as static factories on `SugarCraft\Forms\Theme`:
 `ansi()` (default), `plain()`, `charm()`, `dracula()`, `catppuccin()`,
 `base16()`, `base()`. Pass one to `Form::withTheme(...)`. The accessibility
 mode flips the entire form to plain-text rendering — useful when you detect
-`NO_COLOR=1` or `TERM=dumb`.
+`NO_COLOR=1` or `TERM=dumb`. The accessible line is scoped to the focused
+field only — no group titles, no `Step X of Y` pagination, no error-summary
+block; runnable full-page shapes live under `examples/`.
 
 ### Validators and dynamic labels
 
