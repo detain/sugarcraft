@@ -74,8 +74,9 @@ while (!Spring::settled($pos, $vel, $target) && $frame < 600) {
 simulation `$n` times per second. `Spring::settled($pos, $vel, $target,
 $threshold)` is the stop predicate: position within the threshold (default
 `Spring::SETTLING_THRESHOLD` = `1e-4`) and velocity below it. Drive loops by
-`settled()` rather than by a fixed frame count — the count that finishes one
-spring takes seven seconds on another preset (see
+`settled()` rather than by a fixed frame count — a frame budget that completes
+one preset can be nowhere near enough for another: `Molasses` alone needs 439
+frames (~7.3 s) at 60 fps (see
 [Spring presets](#spring-presets)).
 
 ### Driving a frame loop
