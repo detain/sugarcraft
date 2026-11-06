@@ -28,7 +28,10 @@ final class Alert
      * @param bool $persistent  Explicit never-expire sentinel. When true, the
      *        queueing doors skip duration inheritance entirely. An explicit
      *        withExpiry()/withExtendedExpiry() clears it (a timer was asked
-     *        for); withoutExpiry() sets it.
+     *        for); withoutExpiry() sets it. The constructor accepts it
+     *        alongside an explicit $expiresAt, but isExpired() short-circuits
+     *        on the sentinel — the companion timestamp is stored and unread
+     *        while persistence stands (lib-reviews-1102 n24).
      * @param string|null $id  Stable identity for update-in-place. Re-queuing
      *        an alert with the same id through alert()/progressToast()/push()
      *        REPLACES the live alert at its queue position instead of

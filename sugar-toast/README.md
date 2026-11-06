@@ -160,6 +160,11 @@ $alert = (new Alert(ToastType::Info, 'Connected'))->withoutExpiry();
 $toast = $toast->push($alert);
 ```
 
+The `Alert` constructor itself accepts a `persistent` flag alongside an
+explicit `$expiresAt`: it takes the pair without complaint, but the
+sentinel wins — `isExpired()` short-circuits on persistence, so the stored
+timestamp stays unread while the flag stands.
+
 A later `withExpiry()`/`withExtendedExpiry()` on a persistent alert clears the
 sentinel (asking for a timer is asking for a timer). `Toast::cancelAlert()`
 routes through the same sentinel.
@@ -167,7 +172,11 @@ routes through the same sentinel.
 Persistent alerts never expire, so `pruneExpired()` cannot remove them — take
 them down with `dismiss()` (moves live alerts into the history log and stops
 rendering until you `clear()`) or `clear()` (drops the queue without
-recording). While dismissed, `alert()` throws; call `clear()` first.
+recording). While dismissed, the queueing doors `alert()`, `progressToast()`
+and `push()` throw; call `clear()` first. The queue-editing doors do not
+check the flag — `removeAlert()`, `pruneExpired()`, `cancelAlert()` and
+`extendAlert()`/`extendAll()` operate on the emptied queue and no-op
+silently on a dismissed instance.
 
 ## Loop Integration
 
@@ -386,7 +395,7 @@ already over the new cap survive until the next push evicts them.
 | `Toast::new(int $maxWidth = 50)` | Factory |
 | `->withPosition(Position)` | Screen position (9 positions) |
 | `->withDuration(?float $seconds)` | Auto-dismiss after N seconds; `null` disables |
-| `->withMaxWidth(int)` | Maximum alert width in cells |
+| `->withMaxWidth(int)` | Maximum alert width in cells. Non-positive values are not rejected — the renderer floors the effective cap to 1 cell (same for a `Toast::new(0)` width) |
 | `->withMinWidth(int)` | Minimum alert width in cells |
 | `->withSymbolSet(SymbolSet)` | NerdFont, Unicode, or Ascii symbols |
 | `->withAllowEscToClose(bool)` | Preference flag the host reads to decide if Escape dismisses (the renderer does not handle input) |
