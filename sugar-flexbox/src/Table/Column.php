@@ -111,7 +111,12 @@ final class Column
      * (the cursor style is painted OVER this one on a cursor row — see
      * Table::buildLines() — so the selected row stays visually dominant).
      *
-     * @param string $ansiStyle bare SGR parameter string ('' clears the style)
+     * @param string $ansiStyle bare SGR parameter string: codes 0..255
+     *     joined by single ';' ('' clears the style). Everything else —
+     *     an ESC, a letter, an out-of-range or zero-padded code, a
+     *     doubled or trailing ';', a value above 255 — throws
+     *     InvalidArgumentException at this door (Sgr::assertParameterString),
+     *     so the knob cannot be repurposed as an escape channel.
      */
     public function withStyle(string $ansiStyle): self
     {
