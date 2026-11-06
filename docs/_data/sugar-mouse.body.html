@@ -128,7 +128,7 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($click)) {
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Manager</td><td>newGlobal()</td><td>Build a fresh un-prefixed manager independent of every other instance — NOT the shared default (that is <code>Zones::defaultManager()</code>)</td></tr>
-<tr><td>Manager</td><td>newPrefix(?prefix)</td><td>Create prefixed manager for isolation</td></tr>
+<tr><td>Manager</td><td>newPrefix(prefix = '')</td><td>Create prefixed manager for isolation</td></tr>
 <tr><td>Manager</td><td>mark(id, content)</td><td>Wrap output with zone marker</td></tr>
 <tr><td>Manager</td><td>scan(rendered, ?width)</td><td>Record this namespace's positions, strip markers (delegates to <code>Scan::strip</code>); zones merge by id and persist until replaced or cleared</td></tr>
 <tr><td>Manager</td><td>zoneAt(col, row)</td><td>Geometric smallest-area hit without a MouseMsg</td></tr>
