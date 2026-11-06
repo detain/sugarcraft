@@ -504,7 +504,12 @@ output stream contains only the SGR sequences the renderer itself emits:
   grid as a real hyperlink and re-emitted intact on the rows the toast does
   not cover (and it round-trips through delta hosts that feed `view()`'s own
   output back as the next background). Rows the box covers are replaced
-  whole; nothing ever returns as printable `]8;;…` garbage.
+  whole; nothing ever returns as printable `]8;;…` garbage. The same walker
+  fails closed on an *unterminated* sequence opening too: an OSC/DCS introducer
+  (`\e]8;;…` and friends) that never reaches its ST swallows the remainder of
+  **that line** — framing never survives as printable garbage, but a host
+  re-feeding partial deltas loses the trailing text on the truncated row
+  (the trade lives in the `consumeStringSequence()` docblock).
 
 The full fleet-wide contract lives in
 [`docs/TRUST-BOUNDARY.md`](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md)
