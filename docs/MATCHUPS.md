@@ -84,7 +84,7 @@ ships as `App\` — called out in the table below.
 | **CandyMdview** (`candy-mdview/`) | 🟢 ready | Markdown CLI viewer / pager (consumes SugarMarkdown). |
 | **CandyAnsiInspect** (`candy-ansi-inspect/`) | 🟢 ready | ANSI escape-sequence inspector. |
 | **CandySshLauncher** (`candy-ssh-launcher/`) | 🟢 ready | SSH endpoint launcher (YAML / JSON endpoints). |
-| **CandyKv** (`candy-kv/`) | 🟢 ready | Personal key/value store — one SQLite database per store file, glob listing, TTL, JSON/YAML import/export. |
+| **CandyKv** (`candy-kv/`) | 🟢 ready | Personal key/value store — one SQLite file per database, glob + fuzzy listing, TTL, binary-safe values, JSON/YAML import/export. |
 | **CandyMail** (`candy-mail/`) | 🟢 ready | Email sending — SMTP + Resend API transports, attachments, HTML + plain-text multipart, fluent interface. |
 | **CandyGitServer** (`candy-git-server/`) | 🟡 in progress | Self-hostable Git server — smart-HTTP clone/fetch/push via `serve --http`; SSH delegates real git under host-sshd `ForceCommand`; git:// daemon advertisement-only. Users, repos, access control, optional LFS. |
 | **CandyCode** (`candy-code/`) | 🟢 ready | TUI AI coding agent — eleven provider type keys over nine engines, 38 built-in tools per launch, skills, hooks, agents, MCP, SQLite sessions. |

@@ -86,7 +86,7 @@ Every package installs independently with Composer. The libraries are grouped by
 | <img src="media/icons/candy-mdview.png" width="48" alt=""> | **[CandyMdview](candy-mdview/)** | Markdown CLI viewer / pager. |
 | <img src="media/icons/candy-ansi-inspect.png" width="48" alt=""> | **[CandyAnsiInspect](candy-ansi-inspect/)** | ANSI escape-sequence inspector. |
 | <img src="media/icons/candy-ssh-launcher.png" width="48" alt=""> | **[CandySshLauncher](candy-ssh-launcher/)** | TUI directory of SSH endpoints — YAML/JSON config + `pcntl_exec` into the chosen `ssh`. |
-| <img src="media/icons/candy-kv.png" width="48" alt=""> | **[CandyKv](candy-kv/)** | Personal key/value store — one SQLite database per store, `@dbname` namespaces, glob listing, TTL, binary values, JSON/YAML import/export. |
+| <img src="media/icons/candy-kv.png" width="48" alt=""> | **[CandyKv](candy-kv/)** | Personal key/value store — one SQLite file per database, glob + fuzzy listing, TTL, binary-safe values, JSON/YAML import/export. |
 | <img src="media/icons/candy-mail.png" width="48" alt=""> | **[CandyMail](candy-mail/)** | Email sending library — SMTP + Resend API transports, attachments, HTML + plain-text multipart, fluent interface. |
 | <img src="media/icons/candy-git-server.png" width="48" alt=""> | **[CandyGitServer](candy-git-server/)** | Self-hostable Git server — smart-HTTP clone/fetch/push via `serve --http`; SSH delegates real git under host-sshd `ForceCommand`; git:// daemon advertisement-only. Users, repos, access control, optional LFS. |
 | <img src="media/icons/candy-tetris.png" width="48" alt=""> | **[CandyTetris](candy-tetris/)** | Tetris clone — SRS rules, 7-bag, ghost piece, NES-style base scoring with Guideline bonuses, level-driven gravity. |
