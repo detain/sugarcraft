@@ -54,6 +54,8 @@ namespace SugarCraft\Core\I18n;
  * T::setLocale('fr');                       // explicit
  * T::setLocale(T::detect());                // from $LANG / $LC_ALL
  * echo T::t('core.color.invalid_hex', ['hex' => '#zz']);
+ * // resolves only once 'core' is registered (see the Lang facade above);
+ * // until then — and for any unknown key — the key comes back verbatim
  * ```
  *
  * ## Placeholder syntax
@@ -64,6 +66,9 @@ namespace SugarCraft\Core\I18n;
  * // lang/en.php
  * return ['color.invalid_hex' => 'invalid hex color: {hex}'];
  *
+ * // 'core' must be registered before the lookup resolves: explicitly via
+ * // T::register('core', $langDir), or lazily by any call through the
+ * // library's Lang facade (the pattern shown above)
  * T::t('core.color.invalid_hex', ['hex' => '#zz']);
  * // => "invalid hex color: #zz"
  * ```

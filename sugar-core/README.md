@@ -467,14 +467,21 @@ locale — call sites look strings up by fully-qualified key.
 
 ```php
 use SugarCraft\Core\I18n\T;
+use SugarCraft\Core\Lang;
 
-T::setLocale(T::detect());                 // 'en' / 'fr' / 'de' — LC_ALL → LC_MESSAGES → LANG
-echo T::t('core.color.invalid_hex', ['hex' => '#zz']);
+T::setLocale(T::detect());   // 'en' / 'fr' / 'de' — LC_ALL → LC_MESSAGES → LANG
+echo Lang::t('color.invalid_hex', ['hex' => '#zz']);
 // => "invalid hex color: #zz"
 ```
 
-Each library exposes a thin `Lang::t($key, $params)` wrapper with its
-namespace baked in, so call sites stay short:
+The catalogue attaches to the shared registry **lazily**: the first call
+through a library's `Lang` facade registers its `lang/` directory. A
+fully-qualified `T::t('core.color.invalid_hex', …)` in a process that has
+not registered `core` yet returns the key unchanged — the lookup chain
+(exact locale → base language → `en` → raw key) ends at the raw key
+instead of throwing, so an unregistered namespace fails silently. Prefer
+the facade: each library exposes exactly that thin `Lang::t($key,
+$params)` wrapper with its namespace baked in, so call sites stay short:
 
 ```php
 use SugarCraft\Core\Lang;
