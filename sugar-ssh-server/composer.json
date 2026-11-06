@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-ssh-server",
-    "description": "SSH server middleware framework \u2014 port of charmbracelet/wish. Composable middleware (auth, logging, rate-limiting, channel handling) and a PTY supervisor that runs a shell or a SugarCraft Program under a host OpenSSH daemon's ForceCommand. It does not implement the SSH wire protocol, and it ships no client, no port forwarding and no SFTP server.",
+    "description": "SSH server middleware framework \u2014 inspired by charmbracelet/wish, developed as a native PHP project. Composable middleware (auth, logging, rate-limiting, channel handling) and a PTY supervisor that runs a shell or a SugarCraft Program under a host OpenSSH daemon's ForceCommand. It does not implement the SSH wire protocol, and it ships no client, no port forwarding and no SFTP server.",
     "type": "library",
     "license": "MIT",
     "keywords": [
