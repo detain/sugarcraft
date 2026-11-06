@@ -44,7 +44,8 @@
         "sugarcraft/sugar-testing": "dev-master"
     },
     "suggest": {
-        "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent."
+        "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent.",
+        "ext-posix": "Routes Libc::kill() through posix_kill() when loaded; without it the same signal dispatch goes through libc kill(2) over FFI, so behaviour is unchanged — the extension is a preference, not a requirement."
     },
     "autoload": {
         "psr-4": {
