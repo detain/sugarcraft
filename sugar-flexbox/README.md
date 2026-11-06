@@ -92,7 +92,11 @@ Every dimension is in **cells**, and allocation follows one deterministic model 
    always the same way). A base share may therefore be 0 when the container cannot pay
    every flex sibling a cell (3 ratio-1 items across 2 cells yield 1/1/0, never 1/1/1);
    the 1-cell floor is the fallback for ratio-0/basis-0 items and for the no-flex-space
-   path, not a per-item minimum. Widths never shrink when the container grows.
+   path, not a per-item minimum. Within the ratio-split regime a width never shrinks as
+   the container grows; the no-flex-space fallback sits outside that monotonicity — there
+   every basis-less item is pinned to the 1-cell floor, so growing into the split can
+   hand one a SMALLER share than the fallback gave it (two ratio-1 items beside one
+   ratio-0 sibling allocate 1/1/1 across one cell but 1/0/1 across two).
 4. **Align** (`start`/`center`/`end`/`stretch`) is ONE value that drives BOTH axes — there
    is no separate cross-axis knob and no CSS `justify-content` counterpart, and rows are
    always placed top-down. In row mode the case selects the box height (`stretch` fills the
