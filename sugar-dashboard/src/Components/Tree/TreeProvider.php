@@ -17,7 +17,7 @@ interface TreeProvider
      *
      * @return list<TreeNode>
      */
-    public function getRoots(): array;
+    public function roots(): array;
 
     /**
      * Get children of a specific node.
@@ -25,12 +25,12 @@ interface TreeProvider
      * @param string $nodeId
      * @return list<TreeNode>
      */
-    public function getChildren(string $nodeId): array;
+    public function children(string $nodeId): array;
 
     /**
      * Get a node by its ID.
      */
-    public function getNode(string $nodeId): ?TreeNode;
+    public function node(string $nodeId): ?TreeNode;
 
     /**
      * Check if a node has children.
@@ -40,10 +40,10 @@ interface TreeProvider
     /**
      * Get the depth of a node in the tree.
      */
-    public function getDepth(string $nodeId): int;
+    public function depth(string $nodeId): int;
 
     /**
      * Get total value of all nodes (for proportional sizing).
      */
-    public function getTotalValue(): float;
+    public function totalValue(): float;
 }

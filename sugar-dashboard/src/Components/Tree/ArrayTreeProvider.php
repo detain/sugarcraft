@@ -36,7 +36,7 @@ final class ArrayTreeProvider implements TreeProvider
     /**
      * @return list<TreeNode>
      */
-    public function getRoots(): array
+    public function roots(): array
     {
         return array_values(array_filter(
             $this->nodes,
@@ -48,7 +48,7 @@ final class ArrayTreeProvider implements TreeProvider
     /**
      * @return list<TreeNode>
      */
-    public function getChildren(string $nodeId): array
+    public function children(string $nodeId): array
     {
         $childIds = $this->childrenMap[$nodeId] ?? [];
         return array_values(array_filter(
@@ -58,7 +58,7 @@ final class ArrayTreeProvider implements TreeProvider
         ));
     }
 
-    public function getNode(string $nodeId): ?TreeNode
+    public function node(string $nodeId): ?TreeNode
     {
         return $this->nodes[$nodeId] ?? null;
     }
@@ -68,7 +68,7 @@ final class ArrayTreeProvider implements TreeProvider
         return !empty($this->childrenMap[$nodeId] ?? []);
     }
 
-    public function getDepth(string $nodeId): int
+    public function depth(string $nodeId): int
     {
         $depth = 0;
         $currentId = $nodeId;
@@ -91,7 +91,7 @@ final class ArrayTreeProvider implements TreeProvider
         return $depth;
     }
 
-    public function getTotalValue(): float
+    public function totalValue(): float
     {
         return array_sum(array_map(
             fn(TreeNode $node) => $node->value,
