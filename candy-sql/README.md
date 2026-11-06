@@ -170,7 +170,7 @@ these tables.
 | `Admin\Providers\PostgresAdminProvider` | `AdminProviderInterface` via `pg_stat_database`, `pg_settings`, `pg_stat_activity`. Dashboard/connections implemented via `PostgresWidgetCatalog`. |
 | `Admin\Dashboard\PostgresWidgetCatalog` | Provides `io()` (10 widgets: tuple metrics) and `cache()` (4 widgets: Shared Buffers) panels. The Shared Buffers byte conversion `parseSharedBuffers()` is a private method of `Admin\Providers\PostgresAdminProvider`, not of this catalog. |
 | `ResultTable`    | Renders SQL result sets with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. `scrollLeft()`/`scrollRight()` builders. |
-| `Admin\ServerStatus\ServerStatusPage` | 2-column admin page: info/features/directories/SSL/replication/firewall panels on left, `SidebarGaugeSet` on right. Gauges poll ServerContext and optional Sampler for per-second rate calculations. `r` refresh, `q` quit. |
+| `Admin\ServerStatus\ServerStatusPage` | 2-column admin page: info/features/directories/SSL/replication/firewall panels on left, `SidebarGaugeSet` on right. Gauges poll ServerContext and optional Sampler for per-second rate calculations. `r` refresh; `q` returns to the Tables browser (as on every admin page). |
 | `Admin\ServerStatus\ServerInfoCard`    | Info card with host, socket, port, version, uptime (computed to running-since). |
 | `Admin\ServerStatusSnapshotAdapter` | Adapter wrapping `ServerContextInterface` to satisfy `StatusSnapshotProviderInterface`, enabling `Sampler` to compute per-second rate deltas across poll cycles. Stores snapshots internally so two-sample rate logic can operate on the same context without the context needing to implement the interface directly. |
 | `Admin\Sampler` | Rate computer service: takes two status snapshots and elapsed time, computes per-second deltas (Bytes_received, Bytes_sent, etc.) with negative-delta clamping. Restart detection is consumed from `provider->wasReset()` via `StatusSnapshotProviderInterface` — delegating to `ServerContext::detectReset()` as the single owner. Advance via `sample()` on each gauge refresh cycle. |
@@ -414,7 +414,7 @@ echo $page->render();
 | Key | Action |
 |-----|--------|
 | `[r]` | Refresh data |
-| `[q]` | Quit (exits the application) |
+| `[q]` | Return to the Tables browser |
 | `[g]` | Open GTID mode selector dialog (MySQL ≥ 5.7.6 only) |
 
 GTID dialog: press `[c]` to cycle through `OFF → OFF_PERMISSIVE → OFF_SECURE → ON_PERMISSIVE → ON`, then `[Enter]` to execute `SET @@GLOBAL.GTID_MODE = <mode>` or `[Esc]` to cancel. The dialog is only active when the server version is at least MySQL 5.7.6.
@@ -445,7 +445,7 @@ The Performance Reports pages (`[5]` Query Stats / `[7]` Table Stats in admin) d
 | `r` | Refresh current report (async — queues a new query) |
 | `x` | Build the current report as CSV (RFC-4180, formula-safe) into page state — no file is written |
 | `c` | Toggle unit display for time/byte columns (global; `selectedColumnIndex` is tracked for future per-column targeting) |
-| `q` | Quit (exits the application) |
+| `q` | Return to the Tables browser |
 
 > **Category/report navigation** — `h`/`l` and `[`/`]` keys traverse the category tree and the report list within each category respectively. Both wrap around at boundaries. Selecting a category or report triggers `loadCurrentReport()` asynchronously via `AdminQueryCache`, exactly as if the user clicked it in the tree.
 
@@ -500,7 +500,7 @@ The detector is wired from `App::adminPage()` into the `PerfSchemaPage` construc
 | `c` | Stage commit of pending changes (when dirty) — `y` fires the prepared statements, any other key cancels |
 | `r` | Revert pending changes (when dirty) |
 | `1/2/3` | Easy Setup actions (enable full / disable / reset to defaults) |
-| `q` | Quit (exits the application) |
+| `q` | Return to the Tables browser |
 
 > **Timer mutation safety** — on MySQL ≥8.0 the Options tab renders `performance_timers` as read-only instances. `SetupTimers::commitStatements()` returns `[]` for these because they carry `dirty=false`. Only timers loaded from `setup_timers` on <8.0 generate `UPDATE` statements.
 
