@@ -175,6 +175,51 @@ final class CliContractTest extends TestCase
         $this->assertStringContainsString("delim-k\tdv", $list['stdout']);
     }
 
+    public function testDryRunCountsEscapedAtGlobsLikeDeleteDoes(): void
+    {
+        // 'a\@b*' is one glob in the default database (escaped @ is literal).
+        // The old raw-strrpos split saw '@b*' as a suffix and answered
+        // "Nothing deleted" (exit 1) for a pattern delete really removes.
+        $this->assertSame(0, $this->runKv(['set', 'a\\@b-one', 'v1'])['exit']);
+        $this->assertSame(0, $this->runKv(['set', 'a\\@b-two', 'v2'])['exit']);
+
+        $dry = $this->runKv(['delete', 'a\\@b*', '--dry-run']);
+        $this->assertSame(0, $dry['exit'], $dry['stderr']);
+        $this->assertStringContainsString('2 entries.', $dry['stdout'], 'dry-run counts both rows');
+
+        $real = $this->runKv(['delete', 'a\\@b*']);
+        $this->assertSame(0, $real['exit'], $real['stderr']);
+        $this->assertStringNotContainsString('a@b-one', $this->runKv(['list'])['stdout']);
+    }
+
+    public function testDryRunCountsLeadingAtGlobsLikeDeleteDoes(): void
+    {
+        // '@roo*' is a literal-leading-@ glob in the default database; the
+        // naive split turned it into an empty key against database 'roo*'.
+        $this->assertSame(0, $this->runKv(['set', '@roo-x', 'v'])['exit']);
+
+        $dry = $this->runKv(['delete', '@roo*', '--dry-run']);
+        $this->assertSame(0, $dry['exit'], $dry['stderr']);
+        $this->assertStringContainsString('1 entry.', $dry['stdout'], 'dry-run counts the row');
+
+        $real = $this->runKv(['delete', '@roo*']);
+        $this->assertSame(0, $real['exit'], $real['stderr']);
+    }
+
+    public function testDryRunAgreesWithDeleteOnEscapedAtUnderASuffix(): void
+    {
+        // 'x\@y*@logs': pattern 'x@y*' in database logs (README law).
+        // Before the escape-aware split, dry-run matched the still-encoded
+        // spelling (zero rows, exit 1) while the real delete matched.
+        $this->assertSame(0, $this->runKv(['set', 'x\\@y-1@logs', 'v'])['exit']);
+
+        $dry = $this->runKv(['delete', 'x\\@y*@logs', '--dry-run']);
+        $this->assertSame(0, $dry['exit'], $dry['stderr']);
+
+        $real = $this->runKv(['delete', 'x\\@y*@logs']);
+        $this->assertSame(0, $real['exit'], $real['stderr']);
+    }
+
     public function testGetIsByteExactByDefaultAndSanitizesOnRequest(): void
     {
         $escaped = "a\x1b[31mred\x1b[0m";

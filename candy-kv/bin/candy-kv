@@ -276,12 +276,14 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
 /**
  * How many live entries a delete argument would touch (no writes).
  * Mirrors Store::delete's routing: glob → pattern list, else exact key.
+ * The split goes through Store::splitKey so escaped and leading-@
+ * spellings route identically in both modes; a raw strrpos picked the
+ * wrong separator (or none) whenever '@' was escaped or led the key,
+ * under-reporting exactly the shapes delete still honours.
  */
 function countMatches(Store $store, string $key): int
 {
-    $at = strrpos($key, '@');
-    $entryKey = $at === false ? $key : substr($key, 0, $at);
-    $dbName = $at === false ? null : substr($key, $at + 1);
+    [$dbName, $entryKey] = Store::splitKey($key, $store->defaultDatabase());
 
     if (strpbrk($entryKey, '*?') !== false) {
         return iterator_count($store->list($entryKey, $dbName, false, 'keys'));
