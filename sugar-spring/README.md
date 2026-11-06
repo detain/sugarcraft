@@ -86,28 +86,33 @@ matches wall-clock when you actually call `update()` at that rate. Two
 honest patterns:
 
 - **Fixed cadence (terminals, replays).** Build one spring with
-  `Spring::fps(60)` and tick it once per 60 Hz frame — with sugar-core
-  programs, once per tick command your `Program::subscriptions()` emits
-  (`Subscriptions::withTick()` / `Cmd::tick()`):
+  `Spring::fps(60)` and advance it by exactly one step per frame — with
+  sugar-core programs, once per tick command your `Program::subscriptions()`
+  emits (`Subscriptions::withTick()` / `Cmd::tick()`):
 
   ```php
   use SugarCraft\Spring\Spring;
 
   $spring = new Spring(Spring::fps(60), 6.0, 1.0);
+  $targets = [10.0, 60.0, 100.0];
+  $index = 0;
   $pos = 0.0;
   $vel = 0.0;
 
-  foreach ([10.0, 60.0, 100.0] as $target) {   // one frame per tick
-      do {
-          [$pos, $vel] = $spring->update($pos, $vel, $target);
-          // render $pos this frame
-      } while (!Spring::settled($pos, $vel, $target));
+  while ($index < count($targets)) {
+      [$pos, $vel] = $spring->update($pos, $vel, $targets[$index]);
+      // render $pos — exactly one update and one paint per frame
+      if (Spring::settled($pos, $vel, $targets[$index])) {
+          $index++;   // the NEXT frame starts the next stage
+      }
   }
   ```
 
-  If the loop drifts slower than 60 Hz the motion slows with it. That is a
-  feature for deterministic replays; for wall-clock motion measure the
-  real frame time instead:
+  Every pass of this loop is one frame: one `update()`, one render, never a
+  run-to-settled burst inside a single iteration. Motion then advances per
+  frame, so a loop that drifts slower than 60 Hz stretches the animation —
+  which is the determinism replays record tick counts for; for wall-clock
+  motion measure the real frame time instead:
 
   ```php
   use SugarCraft\Spring\Spring;
@@ -541,7 +546,7 @@ back-flavoured control points — same honesty rule as `Easing`.
 - **`Spring`** — `__construct($deltaTime, $angularFrequency, $dampingRatio,
   ?bool $reducedMotionOverride = null)` (the classic `$dt`/`ω`/`ζ` triple;
   refuses non-finite inputs, `dt < 0`, `ω < 1e-9`, `ζ <= 0` and coefficient
-  overflow) / `update($pos, $pos, $target)` / `fps(float $n)` /
+  overflow) / `update($pos, $vel, $target)` / `fps(float $n)` /
   `fromPreset(SpringPreset, ?float $deltaTime = null, ?bool $reducedMotionOverride = null)` /
   static `settled($pos, $vel, $target, $threshold = SETTLING_THRESHOLD)`.
   `const SETTLING_THRESHOLD = 1e-4`. `update()` rejects non-finite state and
