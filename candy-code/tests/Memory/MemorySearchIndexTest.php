@@ -108,6 +108,18 @@ final class MemorySearchIndexTest extends TestCase
 
     public function testAWriteInsideTheIndexedSecondIsStillSeen(): void
     {
+        // This pin compares a note's mtime against the "indexed_at" second of the
+        // first index; both are whole-second stamps. add(), the first search()'s
+        // indexing, and the behind-the-back touch MUST land inside one wall-clock
+        // second, or the straddled second (mtime strictly older than indexed_at)
+        // makes the skip rule fire correctly and gamma legitimately vanishes — a
+        // false red, not a defect. WAL journal setup on the first connect widened
+        // this window, so align to just past a second boundary: the whole fast
+        // sequence then fits in the fresh second with ~900 ms of headroom. The
+        // equality edge (mtime == indexed_at => re-index) stays fully pinned.
+        $intoSecond = (int) (microtime(true) * 1_000_000) % 1_000_000;
+        usleep(1_000_000 - $intoSecond + 20_000);
+
         $store = new MemoryStore($this->dir);
         $id = $store->add('alpha', 'user');
         self::assertCount(1, $store->search('alpha'));
