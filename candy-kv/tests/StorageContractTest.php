@@ -199,8 +199,24 @@ final class StorageContractTest extends TestCase
         $this->assertSame("äbc", $store->suggestionFor('abc'));
         $this->assertSame('color', $store->suggestionFor('colar'));
 
-        $this->assertNull($store->suggestionFor('z'), 'one-codepoint queries get no suggestions');
+        $this->assertNull($store->suggestionFor('z'), 'no live key within one edit of a one-codepoint query');
         $this->assertNull($store->suggestionFor('qqqqqq'));
+    }
+
+    public function testShortQueriesStillSuggestAtTheFlooredAllowance(): void
+    {
+        $store = $this->store();
+        $store->set('at', 'v');
+        $store->set('color', 'v');
+
+        // A plain half-the-length rule gave 1-2 codepoint queries a zero
+        // threshold, silencing did-you-mean exactly where a hint helps most.
+        // The allowance is floored at one edit instead.
+        $this->assertSame('at', $store->suggestionFor('a'), 'one-codepoint query clears the floored allowance');
+        $this->assertSame('at', $store->suggestionFor('ct'), 'two-codepoint one-edit typo suggests');
+
+        // The floor is not a free-for-all: distance must still clear it.
+        $this->assertNull($store->suggestionFor('co'));
     }
 
     public function testSaveToWritesPrivateFilesAndReportsMissingKeys(): void

@@ -164,9 +164,10 @@ final class Store
      * near enough to help. Backs the CLI's "did you mean" line.
      *
      * Distance is Levenshtein over UTF-8 codepoints; a candidate must lie
-     * within half the query's codepoint length (a deliberate skate
-     * tolerance — long queries get proportionally more slack). The
-     * comparison scans every non-expired key of the target database.
+     * within half the query's codepoint length, floored at one edit (a
+     * deliberate skate tolerance — long queries get proportionally more
+     * slack, short ones still clear one typo). The comparison scans every
+     * non-expired key of the target database.
      */
     public function suggestionFor(string $key): ?string
     {
@@ -290,10 +291,10 @@ final class Store
         // Codepoint distance, not byte distance: PHP's levenshtein() counts
         // bytes, so a single two-byte character (ä, one CJK glyph) registers
         // as 2-3 "edits" and multibyte typos never clear the tolerance.
-        $threshold = intdiv(\mb_strlen($key, 'UTF-8'), 2);
-        if ($threshold === 0) {
-            return null;
-        }
+        // The allowance is floored at one edit: a plain half-the-length rule
+        // gave 1-2 codepoint queries a zero threshold, silencing did-you-mean
+        // exactly where a hint helps most (typo 'a' for live key 'at').
+        $threshold = max(1, intdiv(\mb_strlen($key, 'UTF-8'), 2));
 
         $best = null;
         $bestDist = \PHP_INT_MAX;
