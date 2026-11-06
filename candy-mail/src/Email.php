@@ -134,8 +134,8 @@ final class Email
     }
 
     /**
-     * Refuse any address containing CRLF (reject, never fold it away) and
-     * validate it as a bare email.
+     * Refuse any address containing a C0 control byte or DEL (reject, never
+     * fold it away) and validate it as a bare email.
      * Accepts display-name format "Name <addr@host>" and validates just the address part.
      *
      * Mirrors charmbracelet/pop address sanitization.
@@ -150,6 +150,13 @@ final class Email
         // Reject any CRLF in the raw token
         if (\preg_match('/[\r\n]/', $addr)) {
             throw new \InvalidArgumentException(Lang::t('email.crlf_in_address'));
+        }
+        // ...and refuse the rest of the C0 + DEL class. CR/LF are the classic
+        // header-splitting pair, but NUL, VT, FF, ESC, BEL, raw TAB and DEL
+        // have no legal place in an envelope RCPT or header word either —
+        // the residual risk they carry is upstream log corruption.
+        if (\preg_match('/[\x00-\x1F\x7F]/', $addr)) {
+            throw new \InvalidArgumentException(Lang::t('email.invalid_address', ['addr' => $addr]));
         }
         $trimmed = \trim($addr);
 

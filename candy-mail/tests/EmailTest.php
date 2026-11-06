@@ -197,6 +197,26 @@ final class EmailTest extends TestCase
         );
     }
 
+    public function testRefusesEveryC0ControlAndDelInRecipient(): void
+    {
+        // Step 34 gate class: CRLF rides its precise label, the remaining
+        // C0 bytes and DEL are refused under the generic invalid-address
+        // label. Tab is included on purpose - a legal-but-exotic
+        // display-name tab is cheaper to lose than a silent log-corrupter.
+        foreach (["\x00", "\x07", "\x09", "\x0B", "\x0C", "\x1B", "\x1F", "\x7F"] as $byte) {
+            try {
+                new Email(
+                    from: ['me@example.com'],
+                    to:   ['you@example.com' . $byte . 'x'],
+                );
+                $this->fail('address carrying ' . \bin2hex($byte) . ' rode through the gate');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('Invalid email address', $e->getMessage());
+            }
+        }
+        $this->addToAssertionCount(1);
+    }
+
     public function testRejectsInvalidEmail(): void
     {
         $this->expectException(\InvalidArgumentException::class);
