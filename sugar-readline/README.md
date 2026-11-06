@@ -391,6 +391,17 @@ at each submit if the history must survive a hard kill. Pass a `$maxHistory` and
 the cap bounds the **file** too: bounded stores rewrite the whole file on
 each push, merging anything another process appended in between.
 
+Two write-path prerequisites: every store call stages a temp file beside the
+history and renames it over the target, so the history **directory** must be
+writable — a read-only mount or a cross-device boundary (when the staging
+directory and the target live on different filesystems) throws
+`RuntimeException` at the first append, never half-writes. The `$tempDir`
+argument overrides where that temp file is staged (default: `dirname($path)`)
+— point it inside the history's own filesystem when `/tmp` is elsewhere. And
+the sidecar `<path>.lock` persists by design: it is never written to (only
+its inode is `flock`ed) and never unlinked, because an unlink/rename rotation
+would reintroduce the very race the lock closes.
+
 Entries are stored one per line with backslash escapes (`\\`, `\n`, `\r`)
 applied at the write choke and undone on load — a value that somehow
 contains a raw newline survives a save/reload round-trip as **one** entry
