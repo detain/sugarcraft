@@ -154,11 +154,12 @@ final class JsonImporter
             $binary = ($binaryKeys[$key] ?? false) === true;
             $ttl = self::resolveTtl($ttlMap, $key);
 
-            if ($value === null) {
-                $value = '';
-            } elseif (\is_int($value) || \is_float($value)) {
+            if (\is_int($value) || \is_float($value)) {
                 $value = (string) $value;
             } elseif (!\is_string($value)) {
+                // null lands here too: get_debug_type(null) = 'null'. A
+                // null once coerced silently to an empty string — explicit
+                // "nothing" is not the same as "".
                 throw new \RuntimeException(
                     \sprintf('Entry "%s" has a %s value; only strings and numbers round-trip.', $key, \get_debug_type($value))
                 );

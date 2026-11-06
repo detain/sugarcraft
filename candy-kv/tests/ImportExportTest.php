@@ -116,10 +116,9 @@ final class ImportExportTest extends TestCase
 
     public function testJsonImporterCoercesScalarsRefusesComplexValues(): void
     {
-        // null and numeric JSON scalars import as text (matching what the
-        // flat YAML dialect stores); arrays and nested objects cannot
-        // round-trip and are refused loudly — silently skipping them let a
-        // typo'd document "import" a fraction of itself with a clean exit.
+        // Numeric JSON scalars import as text; null, arrays and nested
+        // objects refuse loudly — silently skipping them let a typo'd
+        // document "import" a fraction of itself with a clean exit.
         $path = $this->tmpDir . '/mixed.json';
         \file_put_contents($path, '{"str":"value","num":123,"arr":[1,2,3],"obj":{"a":1}}');
 
@@ -127,6 +126,16 @@ final class ImportExportTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Entry "arr" has a array value; only strings and numbers round-trip.');
         $importer->importFromFile($path, false);
+    }
+
+    public function testJsonImporterRefusesNullValue(): void
+    {
+        // A null once coerced silently to an empty string; explicit "nothing"
+        // is not "" and must not masquerade as a stored empty value.
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Entry "k" has a null value; only strings and numbers round-trip.');
+        $importer->importFromString('{"k":null}', false);
     }
 
     public function testJsonImporterRefusesComplexValuesBeforeWritingAnything(): void
@@ -376,6 +385,16 @@ final class ImportExportTest extends TestCase
         $this->assertSame('ABC', $this->store->entry('bin')->rawValue());
         $this->assertFalse($this->store->entry('txt')->binary);
         $this->assertSame('hello', $this->store->get('txt'));
+    }
+
+    public function testYamlImporterRefusesEmptyValue(): void
+    {
+        // `k:` parses to null on both YAML routes; it once coerced to an
+        // empty string entry. Explicit "nothing" must refuse, like JSON.
+        $importer = new YamlImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Entry "k" has a null value; only strings and numbers round-trip.');
+        $importer->importFromString("k:\n", false);
     }
 
     public function testYamlImporterAtomicMultiDatabaseThrows(): void

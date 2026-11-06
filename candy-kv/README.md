@@ -258,8 +258,9 @@ candy-kv export yaml mydb 'user-*'  # export filtered keys from one database
 
 The shape contract is strict in both directions. A top-level JSON list or
 YAML sequence is refused ("got a list/sequence") instead of importing
-indices as keys; values that cannot round-trip as stored text (booleans,
-arrays, objects) refuse the whole import **before** anything is written —
+indices as keys; values that cannot round-trip as stored text (nulls,
+booleans, arrays, objects) refuse the whole import **before** anything is
+written —
 no silent drops, no partial loads. That guarantee is about the data rows;
 the envelope metadata is best-effort — a `"_ttl"` or binary member naming a
 key the document does not otherwise carry is simply ignored, not an error.

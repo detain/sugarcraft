@@ -58,35 +58,34 @@ final class YamlFallbackTest extends TestCase
         $this->assertSame('single quoted', $this->store->get('key2'));
     }
 
-    public function testImportEmptyValue(): void
+    public function testImportEmptyValueRefuses(): void
     {
+        // Step 48: an empty value parses to null on both routes and used to
+        // coerce silently to "" — explicit "nothing" is refused now.
         $yaml = "empty-key: \n";
         $importer = new YamlImporter($this->store);
-        $count = $importer->importFromString($yaml, false);
-
-        $this->assertSame(1, $count);
-        $this->assertSame('', $this->store->get('empty-key'));
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Entry "empty-key" has a null value; only strings and numbers round-trip.');
+        $importer->importFromString($yaml, false);
     }
 
-    public function testImportTildeNullValue(): void
+    public function testImportTildeNullValueRefuses(): void
     {
         // ~ is YAML's null
         $yaml = "nil-key: ~\n";
         $importer = new YamlImporter($this->store);
-        $count = $importer->importFromString($yaml, false);
-
-        $this->assertSame(1, $count);
-        $this->assertSame('', $this->store->get('nil-key'));
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Entry "nil-key" has a null value; only strings and numbers round-trip.');
+        $importer->importFromString($yaml, false);
     }
 
-    public function testImportExplicitNullString(): void
+    public function testImportExplicitNullStringRefuses(): void
     {
         $yaml = "null-key: null\n";
         $importer = new YamlImporter($this->store);
-        $count = $importer->importFromString($yaml, false);
-
-        $this->assertSame(1, $count);
-        $this->assertSame('', $this->store->get('null-key'));
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Entry "null-key" has a null value; only strings and numbers round-trip.');
+        $importer->importFromString($yaml, false);
     }
 
     public function testImportWithTtlPrefix(): void
