@@ -33,6 +33,12 @@ Composer's `vendor/bin` is not on your `PATH` by default, so the bare
 entry point is `php bin/candy-image …` — the spelling the demo tape runs — and
 a rolling dev phar is published too (see Install).
 
+**Long options only.** Apart from `-h`, every flag is `--`-prefixed; chafa's
+single-dash muscle memory (`-f`, `-s 80x24`, `-w 7`) is not parsed as options —
+the first such token quietly becomes the image filename, so `-f photo.png`
+exits 1 with an "unexpected argument" complaint about the value, and a bare
+`-v` exits 2 with `File not found: -v`. (Verified against the live bin.)
+
 **Input formats.** Still rendering accepts PNG, JPEG, GIF (87a/89a) and
 *static* WebP, recognised by magic bytes; BMP and other formats a built GD
 decodes but the magic list does not name ride the `getimagesize()` fallback.
