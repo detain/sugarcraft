@@ -363,7 +363,8 @@ share the byte-exact, case-sensitive semantics of exact ones.
 - `get` on a typo prints the closest key to stderr. On shared machines,
   remember key names can themselves be sensitive — stderr is still a log.
   Suggestions fire only within half the query's length; a far-from-anything
-  miss says just `key not found`.
+  miss says just `key not found: <the sanitized query>` (shipped string
+  `key not found: {key}`, `cli.key_not_found` in `lang/en.php`).
 - **Command lines are not secret storage.** Anything passed as an argument
   (`candy-kv set token "$SECRET"`) is visible to `ps`, shell history, and any
   process accounting. Piping the value via stdin keeps it out of argv — that
