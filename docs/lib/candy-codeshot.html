@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyCodeshot — SugarCraft</title>
-<meta name="description" content="CandyCodeshot: Code → SVG screenshot generator.">
+<meta name="description" content="CandyCodeshot: Code → SVG/PNG screenshot generator.">
 <meta property="og:title" content="CandyCodeshot — SugarCraft">
-<meta property="og:description" content="Code → SVG screenshot generator.">
+<meta property="og:description" content="Code → SVG/PNG screenshot generator.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-codeshot.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/candy-codeshot.html">
 <meta property="og:type" content="website">
@@ -41,26 +41,30 @@
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/candy-codeshot.png" alt="" aria-hidden="true">
       <div>
-        <h2>📸 CandyCodeshot</h2>
-        <p class="detail-sub">Code → SVG screenshot generator</p>
+        <h2><span aria-hidden="true">📸</span> CandyCodeshot</h2>
+        <p class="detail-sub">Code → SVG/PNG screenshot generator</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/freeze" style="color: inherit;">charmbracelet/freeze</a></span>
           <span class="tag-chip">svg</span>
           <span class="tag-chip">screenshots</span>
-          <span class="tag-chip">no-gd</span>
           <span class="tag-chip">ansi</span>
         </div>
       </div>
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-codeshot"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-codeshot" alt="CandyCodeshot code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Turn code or terminal output into an SVG or PNG screenshot. SVG needs no extensions — plain text output suitable for git diffs and CI artifacts; PNG renders through ext-gd (no Imagick). ANSI SGR (16 / 256 / 24-bit truecolor + bold / italic / underline) becomes <code>&lt;tspan&gt;</code> in the SVG, and colour bands on the PNG canvas.</p>
+    <p class="lede" style="margin-top: 28px;">Turn code or terminal output into an SVG or PNG screenshot. SVG needs no extensions — plain text output suitable for git diffs and CI artifacts; PNG renders through ext-gd (no Imagick). ANSI SGR (16 / 256 / 24-bit truecolor + bold / italic / underline) becomes per-segment <code>&lt;text&gt;</code> colour and font attributes plus <code>&lt;rect&gt;</code> background bands in the SVG; the PNG canvas paints the same foreground colours and background bands.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-codeshot:dev-master</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\CodeShot\SvgRenderer;
+
+$code = &lt;&lt;&lt;'PHP'
+&lt;?php
+echo "hello, world\n";
+PHP;
 
 $svg = SvgRenderer::dracula()
     -&gt;withLineNumbers(true)
@@ -70,19 +74,20 @@ $svg = SvgRenderer::dracula()
 
 file_put_contents('out.svg', $svg);
 
-// ANSI input is honoured — SGR colours become &lt;tspan&gt; segments.
+// ANSI input is honoured — SGR colours become per-segment &lt;text&gt; fills
+// and &lt;rect&gt; background bands.
 $svg = SvgRenderer::dark()
     -&gt;render("\x1b[31merror:\x1b[0m something broke");</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Pure-PHP SVG</strong><span>No raster pipeline. The output is a text file — diffable, grep-able.</span></div>
+      <div class="feature"><strong>Pure-PHP SVG</strong><span>The SVG path has no raster pipeline — its output is a text file, diffable, grep-able. PNG is a separate renderer behind ext-gd.</span></div>
       <div class="feature"><strong>Window chrome</strong><span>macOS-style traffic-light controls, optional drop shadow, configurable border radius.</span></div>
       <div class="feature"><strong>Line numbers</strong><span>Optional left-gutter line counter.</span></div>
       <div class="feature"><strong>Five themes</strong><span>dark, light, dracula, tokyo-night, nord.</span></div>
-      <div class="feature"><strong>ANSI honoured</strong><span>Pipe coloured terminal output through; SGR sequences become tspan colour spans.</span></div>
+      <div class="feature"><strong>ANSI honoured</strong><span>Pipe coloured terminal output through; SGR sequences become per-segment text colours, bold / italic / underline and background bands.</span></div>
       <div class="feature"><strong>Per-segment background</strong><span>ANSI background colours render as &lt;rect&gt; fills behind text.</span></div>
-      <div class="feature"><strong>Ligatures</strong><span>Enable font-variant-ligatures for code ligature rendering (→, &gt;=, !==, etc.).</span></div>
+      <div class="feature"><strong>Ligatures (SVG only)</strong><span>Enable font-variant-ligatures for code ligature rendering (→, &gt;=, !==, etc.).</span></div>
       <div class="feature"><strong>Language detection</strong><span>Heuristic detection from shebang, filename extension, and content signatures.</span></div>
       <div class="feature"><strong>CLI + library</strong><span><code>candy-codeshot input.php -o out.svg</code>, or <code>SvgRenderer::dracula()->render($code)</code>.</span></div>
     </div>
@@ -105,11 +110,22 @@ $svg = SvgRenderer::dark()
 <tr><td>SvgRenderer</td><td>withWindow(bool)</td><td>Show window chrome</td></tr>
 <tr><td>SvgRenderer</td><td>withPadding(pixels)</td><td>Set padding</td></tr>
 <tr><td>SvgRenderer</td><td>withLigatures(bool)</td><td>Enable font-variant-ligatures</td></tr>
-<tr><td>SvgRenderer</td><td>withBorderRadius(int)</td><td>Set corner radius</td></tr>
+<tr><td>SvgRenderer</td><td>withBorderRadius(int)</td><td>Set corner radius (0..256; the CLI refuses above 64)</td></tr>
+<tr><td>SvgRenderer</td><td>withShadow(bool) / withBorder(bool)</td><td>Toggle the drop shadow / the frame outline</td></tr>
+<tr><td>SvgRenderer</td><td>withWindowStyle(string|WindowStyle)</td><td>Chrome style: macos, windows-terminal, iterm, hyper, none</td></tr>
+<tr><td>SvgRenderer</td><td>withTheme(Theme)</td><td>Swap the whole palette</td></tr>
+<tr><td>SvgRenderer</td><td>withFont(?string)</td><td>Embed a TTF/OTF/WOFF/WOFF2 file (library checks existence only; the CLI additionally validates the signature)</td></tr>
+<tr><td>SvgRenderer</td><td>withHighlight(int, int, ?string)</td><td>Band-highlight lines start..end (SVG only)</td></tr>
+<tr><td>SvgRenderer</td><td>withTitle(string)</td><td>Set the window title text (SVG only)</td></tr>
 <tr><td>SvgRenderer</td><td>render(code)</td><td>Render code to SVG</td></tr>
-<tr><td>LanguageDetector</td><td>detect(content)</td><td>Detect language from content (shebang or signatures)</td></tr>
+<tr><td>PngRenderer</td><td>dark(), light(), dracula(), tokyoNight(), nord(), render(code)</td><td>GD raster sibling — same fluent surface minus the SVG-only setters; requires ext-gd, and withBorderRadius() is accepted but corners stay square</td></tr>
+<tr><td>Theme</td><td>dark(), light(), dracula(), tokyoNight(), nord()</td><td>Built-in palettes; new Theme(...) for custom colours</td></tr>
+<tr><td>VsCodeThemeLoader / ChromaThemeLoader</td><td>load(path), fromArray(data)</td><td>Build a Theme from VS Code or Chroma JSON</td></tr>
+<tr><td>CodeHighlighter</td><td>forTheme(Theme), highlight(code, language)</td><td>Turn plain code into ANSI-styled tokens using the theme palette</td></tr>
+<tr><td>LanguageDetector</td><td>detect(content)</td><td>Detect language from content (shebang or signatures; reads at most 1 MB)</td></tr>
 <tr><td>LanguageDetector</td><td>detectFromFilename(filename)</td><td>Detect language from filename extension</td></tr>
 <tr><td>Segment</td><td>withBg(?string)</td><td>Return segment with different background colour</td></tr>
+<tr><td>FileOutputWriter / StringOutputWriter</td><td>write(chunk), flush(), close() / result()</td><td>OutputWriter sinks behind the CLI and the examples</td></tr>
 </table>
   </div>
 </section>
@@ -117,17 +133,17 @@ $svg = SvgRenderer::dark()
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded GIF demos of the screenshot and ANSI-pipe flows. Regenerated in CI on pushes to master that change the library.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-codeshot/.vhs/screenshot.gif" alt="Screenshot" onerror="this.parentElement.style.display='none'">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-codeshot/.vhs/screenshot.gif" alt="Code screenshot with macOS window chrome and line numbers" onerror="this.parentElement.style.display='none'">
                 <h3>Screenshot</h3>
                 <span class="demo-caption">Code → SVG with traffic-light chrome + line numbers.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-codeshot/.vhs/ansi-input.gif" alt="ANSI input" onerror="this.parentElement.style.display='none'">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-codeshot/.vhs/ansi-input.gif" alt="ANSI-coloured error line rendered as coloured SVG text" onerror="this.parentElement.style.display='none'">
                 <h3>ANSI input</h3>
-                <span class="demo-caption">SGR foreground colors parsed and rendered as colored SVG spans.</span>
+                <span class="demo-caption">SGR foreground colours parsed and painted on per-segment SVG text.</span>
             </div>
         </div>
     </div>

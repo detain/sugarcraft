@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyGit — SugarCraft</title>
-<meta name="description" content="CandyGit: Terminal git client.">
+<meta name="description" content="CandyGit: Terminal Git client — a TUI for staging, branching, log, diff, stash, worktrees and rebase on the SugarCraft stack.">
 <meta property="og:title" content="CandyGit — SugarCraft">
-<meta property="og:description" content="Terminal git client.">
+<meta property="og:description" content="Terminal Git client — a TUI for staging, branching, log, diff, stash, worktrees and rebase.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-git.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/candy-git.html">
 <meta property="og:type" content="website">
@@ -41,27 +41,27 @@
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/candy-git.png" alt="" aria-hidden="true">
       <div>
-        <h2>🌿 CandyGit</h2>
-        <p class="detail-sub">Terminal git client</p>
+        <h2><span aria-hidden="true">🌿</span> CandyGit</h2>
+        <p class="detail-sub">Terminal Git client — staging, branching, log, diff, stash, worktrees, rebase</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/jesseduffield/lazygit" style="color: inherit;">jesseduffield/lazygit</a></span>
           <span class="tag-chip">git</span>
           <span class="tag-chip">tui</span>
           <span class="tag-chip">porcelain</span>
-          <span class="tag-chip">force-command-friendly</span>
+          <span class="tag-chip">hostile-clone trust boundary</span>
         </div>
       </div>
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-git"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-git" alt="CandyGit code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Three-pane git TUI on the SugarCraft stack — status / branches / log laid out side-by-side, single-key stage / unstage, refresh. Shells out to <code>git</code> for every mutation so users keep their existing aliases, hooks, and signing config.</p>
+    <p class="lede" style="margin-top: 28px;">Terminal Git client on the SugarCraft stack — a TUI for staging, branching, log, diff, stash, worktrees and rebase. Status, branches and log panes cycle with <code>tab</code>; <code>P</code> opens the diff viewer with per-hunk staging, and <code>u</code> / <code>Ctrl+r</code> undo and redo the last mutations through a 100-entry history. Every verb shells out to the user's own <code>git</code> — no reimplementation — so your existing hooks, GPG signing and credentials ride along; the plumbing verbs never consult git <em>aliases</em>, though, so they run git's built-ins exactly as typed.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-git</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell"># Run from any git working tree:
-candy-git</code></pre>
+vendor/bin/candy-git</code></pre>
     <pre class="code"><code class="language-php">// Or wire your own driver in PHP:
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
@@ -75,34 +75,46 @@ $git = new Git(getcwd());
     <div class="feature-grid">
       <div class="feature"><strong>Status pane</strong><span>Parses <code>git status --porcelain=v1 -b</code> with per-row index / work flags and a branch-summary header.</span></div>
       <div class="feature"><strong>Branches pane</strong><span><code>git for-each-ref</code> driven; current branch is highlighted + bold.</span></div>
-      <div class="feature"><strong>Log pane</strong><span>Last 20 commits with short SHA + subject + author + relative time.</span></div>
-      <div class="feature"><strong>Stage / unstage</strong><span><code>s</code> in the status pane toggles staging via <code>git add</code> / <code>git restore --staged</code>.</span></div>
+      <div class="feature"><strong>Log pane</strong><span>Recent commits — short SHA + subject painted; author and relative time arrive on the wire but are not rendered yet.</span></div>
+      <div class="feature"><strong>Stage / unstage / discard</strong><span><code>s</code> toggles staging via <code>git add</code> / <code>git restore --staged</code>, <code>a</code> stages all, <code>d</code> discards working-tree changes.</span></div>
+      <div class="feature"><strong>Diff viewer</strong><span><code>P</code> renders per-file diffs with syntax-highlighted hunks and per-hunk stage / unstage.</span></div>
+      <div class="feature"><strong>Commit / amend</strong><span><code>c</code> and <code>A</code> commit through your <code>git</code>, so hooks and signing config apply as they always do.</span></div>
+      <div class="feature"><strong>Stash</strong><span><code>S</code> pushes and pops the stash list via <code>git stash</code>.</span></div>
+      <div class="feature"><strong>Branch create / delete</strong><span><code>n</code> creates a branch, <code>D</code> deletes one; <code>space</code> checks out.</span></div>
+      <div class="feature"><strong>Worktrees</strong><span><code>w</code> lists worktrees and adds new ones via <code>git worktree</code>.</span></div>
+      <div class="feature"><strong>Merge / rebase / cherry-pick</strong><span><code>M</code> merges, <code>r</code> rebases, <code>i</code> drives interactive rebase, <code>V</code> cherry-picks.</span></div>
+      <div class="feature"><strong>Undo / redo</strong><span><code>u</code> / <code>Ctrl+r</code> step back and forward through <code>HistoryManager</code> (capped at <code>MAX_HISTORY = 100</code> entries).</span></div>
       <div class="feature"><strong>Pluggable driver</strong><span><code>GitDriver</code> interface lets tests inject a fixture-backed driver without staging real repos.</span></div>
       <div class="feature"><strong>Refresh on demand</strong><span><code>R</code> reloads from disk; cursors are clamped if the row count shrinks.</span></div>
       <div class="feature"><strong>Internationalization</strong><span>All user-facing strings use <code>Lang::t()</code> — key hints, error labels, empty-state messages, git error text.</span></div>
     </div>
 
+    <h3 style="margin-top: 32px;">Trust boundary</h3>
+    <p>Opening a repository executes its configuration unless told otherwise, and git has several config keys that name <em>executables</em>. CandyGit runs every git call through a fixed argument prelude — <code>-c core.quotepath=off -c core.fsmonitor=false</code> plus <code>--no-ext-diff</code> on diffs — that disarms the repo-controlled execution channels it can neutralize without breaking legitimate tooling; merge drivers are enumerated on the merged config scope and each overridden with <code>false</code> (resolved to the inert coreutils binary) before any merge-capable command, and a driver shape that cannot be re-expressed refuses the merge outright. Filter drivers (<code>clean</code> / <code>smudge</code> / <code>process</code>) are detected and announced on stderr rather than silently disarmed — git-lfs-class tooling depends on them working — with <code>CANDY_GIT_STRICT_FILTERS=1</code> turning the posture into a refusal. Children spawn through a single <code>proc_open</code> site with a pinned environment. A hostile clone can still reach a trusted global git-lfs driver through its <code>.gitattributes</code>: operate only repositories you trust. The full disclosure lives in the README's <em>Trust boundary</em> section.</p>
+
     <h3 style="margin-top: 32px;">Internationalization</h3>
-    <p>User-facing strings use <code>SugarCraft\Git\Lang::t()</code>. All keys are in <code>lang/en.php</code> under the <code>stash</code> namespace.</p>
+    <p>User-facing strings use <code>SugarCraft\Git\Lang::t()</code>. All keys are in <code>lang/en.php</code> under the <code>git</code> namespace — <code>Lang::t()</code> bakes the namespace into lookups, so <code>Lang::t('timeout')</code> resolves the registry key <code>git.timeout</code>; always call through <code>SugarCraft\Git\Lang</code> rather than the raw registry.</p>
     <table class="api-table">
 <tr><th>Key</th><th>Default</th><th>Parameters</th></tr>
 <tr><td>git.spawn_failed</td><td>git: failed to spawn</td><td>—</td></tr>
 <tr><td>git.error</td><td>git: {stderr}</td><td>{stderr}</td></tr>
-<tr><td>cli.not_a_repo</td><td>candy-git: not a git repository (no .git in {cwd})</td><td>{cwd}</td></tr>
+<tr><td>git.timeout</td><td>git: command timed out after {seconds}s</td><td>{seconds}</td></tr>
+<tr><td>cli.not_a_repo</td><td>candy-git: not a git repository: {cwd}</td><td>{cwd}</td></tr>
 <tr><td>ui.error_prefix</td><td>error: </td><td>—</td></tr>
 <tr><td>status.clean</td><td>clean working tree</td><td>—</td></tr>
 <tr><td>branches.empty</td><td>(no branches)</td><td>—</td></tr>
 <tr><td>log.empty</td><td>(empty log)</td><td>—</td></tr>
-<tr><td>help.keyhints</td><td>tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  R  refresh  ·  q  quit</td><td>—</td></tr>
+<tr><td>help.keyhints</td><td>S  stash  ·  V  cherry-pick  ·  i  rebase-i  ·  w  worktrees  ·  tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  P  diff  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  u  undo  ·  M  merge  ·  r  rebase  ·  ?  help  ·  q  quit</td><td>—</td></tr>
 </table>
-    <p>To localize, copy <code>lang/en.php</code> to <code>lang/&lt;code&gt;.php</code> and translate the values.</p>
+    <p>The table above is an excerpt; <code>lang/en.php</code> is the full roster of 137 keys. To localize, copy <code>lang/en.php</code> to <code>lang/&lt;code&gt;.php</code> and translate the values.</p>
+    <p>The <code>cli.not_a_repo</code> refusal fires when <code>git rev-parse --absolute-git-dir</code> fails for the working directory — linked worktrees, where <code>.git</code> is a file rather than a directory, are accepted.</p>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-git">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-git/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/candy-git/tree/master/examples">Runnable examples</a></li>
-      <li>Originally inspired by <a href="https://github.com/jesseduffield/lazygit">lazygit</a> (Go); SugarCraft is developed as a native PHP project.</li>
+      <li><a href="https://github.com/sugarcraft/candy-git/blob/master/examples">Runnable examples</a></li>
+      <li>Design antecedent: <a href="https://github.com/jesseduffield/lazygit">lazygit</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
@@ -110,12 +122,16 @@ $git = new Git(getcwd());
     <h3 style="margin-top: 32px;">Key Classes</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Git</td><td>new(cwd)</td><td>Create git driver</td></tr>
+<tr><td>Git</td><td>new(cwd)</td><td>Create the shell-out git driver</td></tr>
 <tr><td>Git</td><td>status()</td><td>Get working tree status</td></tr>
 <tr><td>Git</td><td>branches()</td><td>List branches</td></tr>
 <tr><td>Git</td><td>log()</td><td>Get commit log</td></tr>
 <tr><td>Git</td><td>stage(path)</td><td>Stage file</td></tr>
 <tr><td>Git</td><td>unstage(path)</td><td>Unstage file</td></tr>
+<tr><td>GitDriver</td><td>interface</td><td>Driver contract the App consumes; tests inject a fixture-backed implementation</td></tr>
+<tr><td>DiffViewer</td><td>currentHunkPatch() / hunkCount()</td><td>Per-file diff surface with per-hunk stage / unstage</td></tr>
+<tr><td>StashManager</td><td>fuzzyFilter(query)</td><td>Smith-Waterman-ranked stash list via sugar-fuzzy</td></tr>
+<tr><td>HistoryManager</td><td>push(entry)</td><td>Undo / redo lane, capped at <code>MAX_HISTORY = 100</code></td></tr>
 <tr><td>App</td><td>start(git)</td><td>Create app model</td></tr>
 </table>
   </div>
@@ -124,12 +140,12 @@ $git = new Git(getcwd());
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded GIF demos. <code>play.tape</code> drives <code>examples/play.php</code> — a hermetic, fixture-backed build of the TUI that renders identically on every machine — while <code>stage.tape</code> drives the real <code>./bin/candy-git</code> against the CI checkout, so its rows are environment-dependent.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-git/.vhs/play.gif" alt="Play" onerror="this.parentElement.style.display='none'">
                 <h3>Play</h3>
-                <span class="demo-caption">Three-pane TUI — switch panes, move cursor, stage / unstage.</span>
+                <span class="demo-caption">Pane tour — status / branches / log, cursor movement, stage / unstage.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-git/.vhs/stage.gif" alt="Stage" onerror="this.parentElement.style.display='none'">

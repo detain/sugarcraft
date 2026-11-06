@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarWidgets — SugarCraft</title>
-<meta name="description" content="SugarWidgets: A collection of ready-made TUI components — inputs, tables, spinners, progress bars, and more.">
+<meta name="description" content="SugarWidgets: A collection of ready-made TUI components — tables, tabs, trees, progress bars, spinners, inputs, and more.">
 <meta property="og:title" content="SugarWidgets — SugarCraft">
 <meta property="og:description" content="A collection of ready-made TUI components — inputs, tables, spinners, progress bars, and more.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-widgets.png">
@@ -41,8 +41,8 @@
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-widgets.png" alt="" aria-hidden="true">
       <div>
-        <h2>🧁 SugarWidgets</h2>
-        <p class="detail-sub">Ready-made TUI components — inputs, tables, spinners, and more</p>
+        <h2><span aria-hidden="true">🧁</span> SugarWidgets</h2>
+        <p class="detail-sub">Ready-made TUI components — tables, tabs, progress bars, spinners, and more</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/bubbles" style="color: inherit;">charmbracelet/bubbles</a></span>
           <span class="tag-chip">components</span>
@@ -54,14 +54,14 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-widgets"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-widgets" alt="SugarWidgets code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer and Stopwatch — first-party components — plus the btop render helpers <code>Input\TextEdit</code> and <code>Menu\OptionRow</code>, and nine <em>deprecated aliases</em> re-exported from <code>sugarcraft/sugar-forms</code> (TextInput, TextArea, ItemList, Viewport, FilePicker, Spinner, Cursor, Scrollbar): depend on <code>sugarcraft/sugar-forms</code> directly for those, the re-exports here exist only for migration. Everything you'd hand-roll on day one of a TUI project, ready to drop into your Model.</p>
+    <p class="lede" style="margin-top: 28px;">Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer and Stopwatch — first-party components — plus the btop render helpers <code>Input\TextEdit</code> and <code>Menu\OptionRow</code>, and the <em>deprecated alias</em> re-exports from <code>sugarcraft/sugar-forms</code> — the canonical counted inventory lives in the README: depend on <code>sugarcraft/sugar-forms</code> directly for those, the re-exports here exist only for migration. Everything you'd hand-roll on day one of a TUI project, ready to drop into your Model.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-widgets</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-php">use SugarCraft\Widgets\TextInput\TextInput;
-use SugarCraft\Widgets\Spinner\Spinner;
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Forms\TextInput\TextInput;
+use SugarCraft\Forms\Spinner\Spinner;
 use SugarCraft\Core\{Cmd, Model, Msg, Program, Subscriptions};
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\KeyType;
@@ -97,12 +97,12 @@ final class Search implements Model {
       <div class="feature"><strong>Spinner</strong><span>12 styles — line, dot, miniDot, points, pulse, globe, meter, jump, moon, monkey, hamburger, ellipsis.</span></div>
       <div class="feature"><strong>Progress</strong><span>Static <code>Progress</code> + spring-physics <code>AnimatedProgress</code> driven by SugarSpring.</span></div>
       <div class="feature"><strong>TextInput / TextArea</strong><span>Single + multi-line. Autocomplete, validators, <code>ValidateOn</code> timing control, keystroke <code>restrict</code> pattern filter, line numbers, soft-wrap, dynamic-height growth.</span></div>
-      <div class="feature"><strong>ItemList</strong><span>Selectable, scrollable, filterable. Status messages, custom delegates.</span></div>
-      <div class="feature"><strong>Table</strong><span>Selectable data table with Column DTOs, header highlight, vertical nav, per-cell <code>styleFunc(row, col) =&gt; Style</code>, multi-column sort with <code>withSort()</code> / <code>thenSortBy()</code> / <code>clearSort()</code>, filtering with <code>withFilterable()</code> / <code>withFilter()</code> / <code>withFilterPredicate()</code> (default: case-insensitive substring match on all visible columns), and pagination with <code>withPageSize()</code> / <code>paginator()</code> / <code>withPage()</code> / <code>nextPage()</code> / <code>prevPage()</code> / <code>pageFirst()</code> / <code>pageLast()</code> — integrates with sort and filter.</span></div>
+      <div class="feature"><strong>ItemList</strong><span>Selectable, scrollable, filterable — status messages and cursor tracking included.</span></div>
+      <div class="feature"><strong>Table</strong><span>Selectable data table with Column DTOs, header highlight, vertical nav, per-cell <code>styleFunc(row, col) =&gt; Style</code>, multi-column sort with <code>withSort()</code> / <code>thenSortBy()</code> / <code>clearSort()</code>, filtering with <code>withFilterable()</code> / <code>withFilter()</code> / <code>withFilterPredicate()</code> (default: case-insensitive substring match over every cell of every row), and pagination with <code>withPageSize()</code> / <code>paginator()</code> / <code>withPage()</code> / <code>nextPage()</code> / <code>prevPage()</code> / <code>pageFirst()</code> / <code>pageLast()</code> — integrates with sort and filter.</span></div>
       <div class="feature"><strong>Tree</strong><span>Interactive tree view — cursor nav, expand / collapse, viewport scroll, <code>g</code> / <code>G</code> jump.</span></div>
       <div class="feature"><strong>Viewport</strong><span>Scrollable text region. Mouse wheel, scrollbar, keyboard nav.</span></div>
       <div class="feature"><strong>FilePicker</strong><span>Directory browser with icons, size, sort modes.</span></div>
-      <div class="feature"><strong>TextEdit + OptionRow</strong><span>btop-derived helpers: <code>Input\TextEdit</code> is an immutable inline editor with an underline caret (no hardware cursor), grapheme-cluster editing, cell-budget windowing and a digits-only mode; <code>Menu\OptionRow::render()</code> draws btop's two-line options-menu row. <code>Progress::withColorFunc</code> closures also receive the bar width for position-coloured ramps.</span></div>
+      <div class="feature"><strong>TextEdit + OptionRow</strong><span>btop-derived helpers: <code>Input\TextEdit</code> is an immutable inline editor with an underline caret (no hardware cursor), grapheme-cluster editing, cell-budget windowing and a digits-only mode; <code>Menu\OptionRow::renderRow()</code> draws btop's one-line options row (the two-line <code>render()</code> is deprecated). <code>Progress::withColorFunc</code> closures also receive the bar width for position-coloured ramps.</span></div>
       <div class="feature"><strong>Paginator + Help + Key</strong><span>Dot / arabic page indicator, key-help footer, KeyMap binding DSL.</span></div>
     </div>
 
@@ -113,29 +113,29 @@ use SugarCraft\Widgets\Menu\OptionRow;
 $edit = TextEdit::new('firefox')-&gt;home()-&gt;right()-&gt;right();
 echo $edit-&gt;view();      // "fi\e[4mr\e[24mefox" — underline caret on "r"
 
-echo OptionRow::render('Update ms', TextEdit::new('2000', numeric: true),
+echo OptionRow::renderRow('Update ms', TextEdit::new('2000', numeric: true),
     selected: true, editing: true, hasArrows: true, editable: true);</code></pre>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-widgets">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-widgets/tree/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-widgets/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-widgets/tree/master/examples">Runnable examples</a></li>
       <li>Originally inspired by <a href="https://github.com/charmbracelet/bubbles">bubbles</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>TextInput</td><td>new()</td><td>Create a new text input instance <em>(deprecated alias — depend on sugarcraft/sugar-forms)_</em></td></tr>
+<tr><td>TextInput</td><td>new()</td><td>Create a new text input instance <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 <tr><td>TextInput</td><td>update(Msg)</td><td>Handle input events</td></tr>
-<tr><td>TextInput</td><td>withValidateOn(ValidateOn)</td><td>Set validation timing — None / Blur / Change / Submit</td></tr>
+<tr><td>TextInput</td><td>withValidateOn(ValidateOn)</td><td>Set validation timing — None (default) and Change validate on every edit; Blur and Submit defer validation</td></tr>
 <tr><td>TextInput</td><td>withRestrict(string $pattern)</td><td>PCRE regex filter — only matching keystrokes are accepted</td></tr>
-<tr><td>ValidateOn</td><td>enum</td><td>Cases: None / Blur / Change / Submit — controls when validation fires</td></tr>
-<tr><td>TextArea</td><td>new()</td><td>Create a multi-line text area <em>(deprecated alias — depend on sugarcraft/sugar-forms)_</em></td></tr>
-<tr><td>Spinner</td><td>new(Style)</td><td>Create spinner with given style <em>(deprecated alias — depend on sugarcraft/sugar-forms)_</em></td></tr>
+<tr><td>ValidateOn</td><td>enum</td><td>Cases: None (default) / Change — validate on every edit; Blur / Submit — deferred until focus loss or submit</td></tr>
+<tr><td>TextArea</td><td>new()</td><td>Create a multi-line text area <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
+<tr><td>Spinner</td><td>new(?Style $style = null)</td><td>Create spinner; style optional (defaults to line) <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 <tr><td>Spinner</td><td>tick()</td><td>Return tick command for animation</td></tr>
 <tr><td>Table</td><td>new(headers, rows)</td><td>Create data table</td></tr>
 <tr><td>Table</td><td>withSort(string $column, SortDirection $dir = Asc)</td><td>Set primary sort column and direction — clears prior sort chain</td></tr>
@@ -162,13 +162,15 @@ echo OptionRow::render('Update ms', TextEdit::new('2000', numeric: true),
 <tr><td>Table</td><td>currentPage(): int</td><td>Return the current zero-based page</td></tr>
 <tr><td>Paginator</td><td>totalPages(): int</td><td>Return total page count (via the table's paginator)</td></tr>
 <tr><td>Table</td><td>paginator(): Paginator</td><td>Return a Paginator wired to the table's current page state</td></tr>
-<tr><td>Tree</td><td>new(Node ...$roots)</td><td>Create tree view from root nodes (mutable: <code>new Tree(...)</code> is also supported)</td></tr>
+<tr><td>Tree</td><td>new(Node ...$roots)</td><td>Create tree view from root nodes via the <code>Tree::new()</code> factory — immutable-fluent; the constructor itself is private</td></tr>
 <tr><td>Tree</td><td>withStyle(...)</td><td>Immutable override of the chrome knobs — cursorPrefix / unselectedPrefix / expandedGlyph / collapsedGlyph / leafGlyph (sanitised to single-line)</td></tr>
-<tr><td>Viewport</td><td>new(width = 80, height = 24)</td><td>Create scrollable viewport; content arrives via <code>setContent(string)</code> <em>(deprecated alias — depend on sugarcraft/sugar-forms)_</em></td></tr>
+<tr><td>Viewport</td><td>new(width = 80, height = 24)</td><td>Create scrollable viewport; content arrives via <code>setContent(string)</code> <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 <tr><td>Progress</td><td>new(ratio)</td><td>Create progress bar from a 0.0–1.0 ratio (clamped; NaN renders 0%)</td></tr>
 <tr><td>Progress</td><td>withPercent(float)</td><td>Return a new bar at the given ratio (same clamp; accepts NaN → 0%)</td></tr>
 <tr><td>Progress</td><td>withColorFunc(?Closure)</td><td>Per-filled-cell colour <code>fn(int $i, int $filledCells, float $percent, int $barWidth): Color</code> — the 4th arg (true bar width) enables btop position-coloured ramps; 3-arg closures still work</td></tr>
-<tr><td>Timer</td><td>new(float $duration, float $interval = 1.0)</td><td>Countdown; duration is required. <code>tick()</code> emits a tick command; the <code>epoch</code> on each TickMsg refuses counts from stopped generations</td></tr>
+<tr><td>Progress</td><td>withRenderMode(ProgressRenderMode)</td><td>Switch the glyph set — Block / Line / Slim render modes</td></tr>
+<tr><td>Progress</td><td>withPercentFormat(string $fmt)</td><td>Custom % suffix printf format receiving the 0–100 integer (default <code>'%3d%%'</code>)</td></tr>
+<tr><td>Timer</td><td>new(float $duration, float $interval = 1.0)</td><td>Countdown; duration is required. <code>start()</code> returns the next [model, Cmd] pair and <code>subscriptions()</code> arms the tick loop; the <code>epoch</code> on each TickMsg refuses counts from stopped generations</td></tr>
 <tr><td>Stopwatch</td><td>new(float $interval = 1.0)</td><td>Count-up; elapsed is a tick-count accumulator (ticks × interval), not wall-clock</td></tr>
 <tr><td>Help</td><td>new(separator, keyDescGap, columnGap, showAll, maxWidth, ellipsis, fullSeparator, styles)</td><td>Keybinding help overlay — all params optional; <code>withKeyDescGap()</code> / <code>withColumnGap()</code> / <code>withWidth()</code> return new instances</td></tr>
 <tr><td>Paginator</td><td>withTotalPages(int)</td><td>Set page count directly (converts via perPage); <code>setTotalPages()</code> is the deprecated spelling</td></tr>
@@ -180,8 +182,8 @@ echo OptionRow::render('Update ms', TextEdit::new('2000', numeric: true),
 <tr><td>TextEdit</td><td>withNumeric(bool)</td><td>Digits-only mode — strips existing non-digits</td></tr>
 <tr><td>TextEdit</td><td>view(int $limit = 0)</td><td>Render with SGR 4 underline caret, windowed to $limit display cells</td></tr>
 <tr><td>OptionRow</td><td>render(name, value, selected, editing, hasArrows, …)</td><td>btop options-menu two-line row (bold centred name + <code>← value →</code> / <code>↵</code>) <em>(deprecated — use <code>renderRow()</code> for the width-correct single-line row)</em></td></tr>
-<tr><td>FilePicker</td><td>new(directory)</td><td>Create file picker <em>(deprecated alias — depend on sugarcraft/sugar-forms)_</em></td></tr>
-<tr><td>ItemList</td><td>new(items)</td><td>Create selectable item list; items are <code>Item</code>/<code>StringItem</code> values <em>(deprecated alias — depend on sugarcraft/sugar-forms)_</em></td></tr>
+<tr><td>FilePicker</td><td>new(?string $cwd = null, int $height = 10)</td><td>Create file picker — cwd optional (defaults to the process cwd), height in rows <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
+<tr><td>ItemList</td><td>new(items)</td><td>Create selectable item list; items are <code>Item</code>/<code>StringItem</code> values <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
 </table>
   </div>
 </section>
@@ -202,6 +204,11 @@ echo OptionRow::render('Update ms', TextEdit::new('2000', numeric: true),
                 <span class="demo-caption">Single-line input with autocomplete + placeholder.</span>
             </div>
             <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/text-input-enhanced.gif" alt="text-input-enhanced" onerror="this.parentElement.style.display='none'">
+                <h3>Enhanced TextInput</h3>
+                <span class="demo-caption">Custom placeholder styling, prefix and suffix variants.</span>
+            </div>
+            <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/text-area.gif" alt="TextArea" onerror="this.parentElement.style.display='none'">
                 <h3>TextArea</h3>
                 <span class="demo-caption">Multi-line editor with line numbers + soft-wrap.</span>
@@ -214,7 +221,7 @@ echo OptionRow::render('Update ms', TextEdit::new('2000', numeric: true),
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/table.gif" alt="Table" onerror="this.parentElement.style.display='none'">
                 <h3>Table</h3>
-                <span class="demo-caption">Selectable data table with column delegates + per-cell styleFunc.</span>
+                <span class="demo-caption">Selectable data table with per-cell styleFunc + sort/filter/pagination.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/tree.gif" alt="Tree" onerror="this.parentElement.style.display='none'">

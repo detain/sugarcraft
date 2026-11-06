@@ -41,7 +41,7 @@
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/candy-ansi-inspect.png" alt="" aria-hidden="true">
       <div>
-        <h2>🔍 CandyAnsiInspect</h2>
+        <h2><span aria-hidden="true">🔍</span> CandyAnsiInspect</h2>
         <p class="detail-sub">ANSI escape-sequence inspector</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/sequin" style="color: inherit;">charmbracelet/sequin</a></span>
@@ -62,8 +62,10 @@
     <pre class="code"><code class="language-text">$ printf '\e[31mhello\e[0m world\n' | candy-ansi-inspect
 ESC[31m  SGR foreground red
 hello
-ESC[0m   SGR reset
+ESC[0m  SGR reset
  world
+
+  C0 LF (line feed)
 
 $ printf '\e]0;new title\e\\' | candy-ansi-inspect
 ESC]0;new title  set window title to "new title"
@@ -78,7 +80,7 @@ ESC[?2026h  enable synchronized output</code></pre>
       <div class="feature"><strong>OSC</strong><span>Title (0/2), icon (1), palette (4), cwd (7), hyperlink (8).</span></div>
       <div class="feature"><strong>DEC private</strong><span>Cursor visibility, mouse modes (1000/1002/1003/1006/1015), focus reporting, alt screen, bracketed paste, sync output (2026).</span></div>
       <div class="feature"><strong>Kitty keyboard</strong><span>Query / push / pop progressive enhancement levels.</span></div>
-      <div class="feature"><strong>Library mode</strong><span><code>Inspector::parse(\$bytes)</code> yields <code>Segment</code> values you can iterate.</span></div>
+      <div class="feature"><strong>Library mode</strong><span><code>Inspector::parse($bytes)</code> yields <code>Segment</code> values you can iterate.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -95,9 +97,14 @@ ESC[?2026h  enable synchronized output</code></pre>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Inspector</td><td>parse(bytes)</td><td>Parse ANSI bytes into segments</td></tr>
-<tr><td>Segment</td><td>type</td><td>Segment type (SGR, CSI, OSC, etc.)</td></tr>
-<tr><td>Segment</td><td>content</td><td>Segment content</td></tr>
-<tr><td>Segment</td><td>description()</td><td>Human-readable description</td></tr>
+<tr><td>Inspector</td><td>reportAsJson(bytes)</td><td>Machine-readable JSON array of {type, content, description}</td></tr>
+<tr><td>Segment</td><td>raw()</td><td>Abstract — the segment's bytes verbatim (sequences in normalized form)</td></tr>
+<tr><td>Segment</td><td>describe()</td><td>Abstract — printable bytes + decoded label, or the text payload verbatim</td></tr>
+<tr><td>TextSegment</td><td>$value</td><td>Readonly property — visible text between escape sequences</td></tr>
+<tr><td>SequenceSegment</td><td>$bytes</td><td>Readonly property — the escape sequence's raw bytes</td></tr>
+<tr><td>SequenceSegment</td><td>$label</td><td>Readonly property — the decoded label (e.g. "SGR reset")</td></tr>
+<tr><td>StreamingInspector</td><td>feed(chunk)</td><td>Incremental parse — returns the segments this chunk completed</td></tr>
+<tr><td>StreamingInspector</td><td>finish()</td><td>Flush buffered text and report any dangling tail</td></tr>
 </table>
   </div>
 </section>

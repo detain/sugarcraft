@@ -41,7 +41,7 @@
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-markdown.png" alt="" aria-hidden="true">
       <div>
-        <h2>🌟 SugarMarkdown</h2>
+        <h2><span aria-hidden="true">🌟</span> SugarMarkdown</h2>
         <p class="detail-sub">Markdown → ANSI renderer</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/glamour" style="color: inherit;">charmbracelet/glamour</a></span>
@@ -62,6 +62,9 @@
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Markdown\{Renderer, Theme};
 
+// render() emits no trailing newline on purpose — those bytes are
+// exactly what stream() yields for a one-chunk document — so the
+// echo supplies its own "\n" as a second operand.
 echo (new Renderer())-&gt;render(&lt;&lt;&lt;MD
 # Welcome
 
@@ -75,22 +78,25 @@ A few **bold** and _italic_ words, with `inline code` and a
 ```php
 echo "hello world";
 ```
-MD);
+MD), "\n";
 
-// Custom theme
-$theme = Theme::fromJson('./themes/my-theme.json');
-echo (new Renderer($theme))-&gt;render($markdown);</code></pre>
+// Custom theme from inline JSON; for the file variant
+// (Theme::fromJson($path)) see examples/custom-theme.php.
+$theme = Theme::fromJsonString('{"heading1":{"bold":true}}');
+echo (new Renderer($theme))-&gt;render("# Styled\n");</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>CommonMark parser</strong><span>Headings, paragraphs, lists, blockquotes, code blocks, tables, rules, links, images, HTML inline + block.</span></div>
-      <div class="feature"><strong>Nine themes</strong><span>ansi, plain, notty, ascii, dark, light, dracula, tokyo-night, pink.</span></div>
-      <div class="feature"><strong>Custom JSON</strong><span><code>Theme::fromJson('./my-theme.json')</code> — element-keyed style overrides. An unreadable file throws <code>RuntimeException</code> carrying the read error, rather than leaking a PHP warning; <code>Theme::fromJsonString()</code> takes the JSON directly.</span></div>
+      <div class="feature"><strong>CommonMark parser</strong><span>Headings, paragraphs, lists, blockquotes, code blocks, tables, rules, links, images. Raw HTML (inline + block) passes through as inert literal text with theme styling, control-stripped regardless of the sanitize flag; refused URL schemes never open an OSC-8 target — see the README <a href="https://github.com/sugarcraft/sugar-markdown/blob/master/README.md#link-safety">Link safety</a> policy.</span></div>
+      <div class="feature"><strong>Nine presets (notty aliases plain)</strong><span>ansi, plain, notty, ascii, dark, light, dracula, tokyo-night, pink.</span></div>
+      <div class="feature"><strong>Custom JSON</strong><span><code>Theme::fromJsonString('{"heading1":{"bold":true}}')</code> takes the JSON directly and throws <code>InvalidArgumentException</code> on malformed JSON or a non-object payload; <code>Theme::fromJson($path)</code> reads the same shape from a file and throws <code>RuntimeException</code> carrying the read error, rather than leaking a PHP warning.</span></div>
       <div class="feature"><strong>Word-wrap</strong><span>Configurable column width; honours SGR + grapheme cluster widths. List items and blockquotes charge only their own indent or 2-cell bar, so nested lines fit the wrap width as in glamour.</span></div>
-      <div class="feature"><strong>OSC 8 hyperlinks</strong><span>Optional <code>--no-hyperlinks</code> toggle for terminals that don't support them. Email autolinks render the address hyperlinked to <code>mailto:</code> with no href suffix.</span></div>
-      <div class="feature"><strong>Streaming</strong><span><code>stream(iterable $chunks)</code> yields rendered sections as markdown arrives, byte-identical to <code>render()</code>. Link reference definitions carry across sections; a section with an unresolved <code>[..]</code> is held back until a later definition resolves it or the document ends.</span></div>
+      <div class="feature"><strong>OSC 8 hyperlinks</strong><span>Disable at the library with <code>withHyperlinks(false)</code> (short alias <code>hyperlinks(false)</code>) for terminals that don't support them; the <code>--no-hyperlinks</code> spelling belongs to the candy-mdview CLI. Email autolinks render the address hyperlinked to <code>mailto:</code> with no href suffix.</span></div>
+      <div class="feature"><strong>Streaming</strong><span><code>stream(iterable $chunks)</code> yields rendered sections as markdown arrives; for every split tested, chunk boundaries never change the assembled output — the stream equals <code>render()</code> byte for byte. Link reference definitions carry across sections; a section with an unresolved <code>[..]</code> is held back until a later definition resolves it or the document ends.</span></div>
       <div class="feature"><strong>Syntax highlighting</strong><span>Code blocks tokenised + coloured per language.</span></div>
     </div>
+
+    <p style="margin-top: 16px;">Every user-facing string goes through <code>Lang::t()</code> (<code>src/Lang.php</code>) with 16 locales shipped in <code>lang/</code> — consumers such as candy-mdview surface localized messages like <code>theme.read_failed</code>.</p>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
@@ -114,9 +120,10 @@ echo (new Renderer($theme))-&gt;render($markdown);</code></pre>
 <tr><td>Renderer</td><td>new Renderer(?Theme $theme = null, …)</td><td>Create renderer with optional theme (also Renderer::ansi() / plain() / ascii() / fromEnvironment())</td></tr>
 <tr><td>Renderer</td><td>render(markdown)</td><td>Render markdown to ANSI string; a reused Renderer starts every render from a clean block stack</td></tr>
 <tr><td>Renderer</td><td>stream(iterable $chunks): Generator / writer(StreamSink)</td><td>Incremental section-by-section rendering</td></tr>
-<tr><td>Renderer</td><td>withWordWrap(?int) / withHyperlinks() / withBaseURL() / withTableWrap() / withPreservedNewLines() / withEmoji() / withSanitize()</td><td>Immutable option setters; withPreservedNewLines() keeps the source's blank-line runs between blocks</td></tr>
-<tr><td>Theme</td><td>fromJson(path) / fromJsonString(json)</td><td>Load theme from a JSON file (RuntimeException with the read error on failure) or string</td></tr>
-<tr><td>Theme</td><td>ansi(), plain(), notty(), ascii(), dark(), light(), dracula(), tokyoNight(), pink()</td><td>Built-in theme presets; byName() looks one up by name</td></tr>
+<tr><td>Renderer</td><td>withTheme() / withSanitize() / withWordWrap() / withHyperlinks() / withBaseURL() / withTableWrap() / withInlineTableLinks() / withTableColumnBudget() / withFenceColumnBudget() / withPreservedNewLines() / withEmoji() / withStandardStyle() / withStyleSheet()</td><td>Immutable option setters — every option also has a short alias without the <code>with</code> prefix (e.g. <code>hyperlinks(false)</code>, <code>styleSheet($sheet)</code>); full descriptions in the README. withPreservedNewLines() keeps the source's blank-line runs between blocks</td></tr>
+<tr><td>Theme</td><td>fromJson(path) / fromJsonString(json)</td><td>Load theme from a JSON file (RuntimeException carrying the read error when unreadable) or from a string (InvalidArgumentException on malformed JSON or a non-object payload)</td></tr>
+<tr><td>Theme</td><td>ansi(), plain(), notty(), ascii(), dark(), light(), dracula(), tokyoNight(), pink()</td><td>Built-in theme presets; byName() returns <code>?Theme</code> — null on an unknown name</td></tr>
+<tr><td>Theme</td><td>mapStyles(callable $map): Theme</td><td>Returns a new theme with every style slot mapped through the callable (used to project palettes, e.g. candy-code's Theme::pair)</td></tr>
 </table>
   </div>
 </section>
@@ -124,12 +131,12 @@ echo (new Renderer($theme))-&gt;render($markdown);</code></pre>
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push to master that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-markdown/.vhs/render.gif" alt="Render" onerror="this.parentElement.style.display='none'">
                 <h3>Render</h3>
-                <span class="demo-caption">Markdown → ANSI with the default ansi theme.</span>
+                <span class="demo-caption">The same document through four stock themes (ansi, dracula, tokyo-night, pink).</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-markdown/.vhs/themes.gif" alt="Themes" onerror="this.parentElement.style.display='none'">

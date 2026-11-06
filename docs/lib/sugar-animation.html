@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarAnimation — SugarCraft</title>
-<meta name="description" content="SugarAnimation: ANSI/GIF animation toolkit.">
+<meta name="description" content="SugarAnimation: ANSI/GIF animation toolkit — ext-gd GIF decode to a cell grid, 24-bit truecolor playback, and .ansi art parsing and looping. The CLI viewer ships as candy-gifview.">
 <meta property="og:title" content="SugarAnimation — SugarCraft">
 <meta property="og:description" content="ANSI/GIF animation toolkit — GIF decode, frame playback, .ansi art. CLI: candy-gifview.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-animation.png">
@@ -41,7 +41,7 @@
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-animation.png" alt="" aria-hidden="true">
       <div>
-        <h2>🎞 SugarAnimation</h2>
+        <h2><span aria-hidden="true">🎞</span> SugarAnimation</h2>
         <p class="detail-sub">ANSI/GIF animation toolkit</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/namzug16/gifterm" style="color: inherit;">namzug16/gifterm</a></span>
@@ -54,7 +54,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-animation"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-animation" alt="SugarAnimation code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Decodes a <code>.gif</code> on disk via <code>ext-gd</code>, downsamples each frame to a configurable cell grid, and renders the animation as ANSI-coloured Unicode block-glyphs. Two presets: solid 24-bit blocks or a luminance-ramp ASCII rendering.</p>
+    <p class="lede" style="margin-top: 28px;">Two animators in one package: it decodes a <code>.gif</code> from disk via <code>ext-gd</code>, downsamples each frame to a configurable cell grid, and paints it with 24-bit ANSI color — as full-cell background color (space glyphs) or as an ASCII luminance ramp — and it parses and replays truecolor <code>.ansi</code> art files frame by frame. The ready-made viewer CLI ships separately as <code>candy-gifview</code>.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-animation</code></pre>
@@ -64,7 +64,7 @@
 #   composer require sugarcraft/candy-gifview
 #   candy-gifview my-animation.gif         # solid blocks (default)
 #   candy-gifview my-animation.gif density # luminance ramp</code></pre>
-    <pre class="code"><code class="language-php">// Programmatic:
+    <pre class="code"><code class="language-php">// Programmatic — "cat.gif" is just any .gif on disk:
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Animation\Decoder;
@@ -73,59 +73,78 @@ use SugarCraft\Animation\Player;
 $frames = Decoder::decode('cat.gif', cellsW: 80, cellsH: 30);
 (new Program(new Player($frames),
              new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
+    <pre class="code"><code class="language-php">// .ansi art — parse once, print one frame as SGR text:
+use SugarCraft\Animation\AnsiArt;
+
+$art = AnsiArt::fromFile('logo-neon-tc-72x9.ansi');
+echo $art-&gt;sgrText(0), PHP_EOL; // animated files: pick a frame index</code></pre>
+    <p>The bundled <code>examples/play.php</code> generates a tiny synthetic animated GIF and plays it end-to-end — a self-contained way to see the pipeline without supplying any files of your own.</p>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>ext-gd decode</strong><span>Walks the GIF byte stream for image-descriptor offsets, hands each frame to GD, area-average downsamples to cell space.</span></div>
-      <div class="feature"><strong>Area-average downsampling</strong><span>Higher quality than nearest-neighbor — averages all source pixels in each cell region, skipping transparent pixels. {@see SugarCraft\Animation\Downsampler}.</span></div>
-      <div class="feature"><strong>Floyd-Steinberg dithering</strong><span>Error-diffusion dithering against a fixed palette via {@see SugarCraft\Animation\Dither\FloydSteinberg}. Source image is not modified.</span></div>
-      <div class="feature"><strong>Local color tables</strong><span>Per-frame Local Color Table (LCT) extracted from the GIF Image Descriptor; falls back to the Global Color Table (GCT) when no LCT is present. Each frame is re-assembled in GIF89a order — Graphic Control Extension, Image Descriptor, LCT, LZW data — so LCT frames decode with their own colours.</span></div>
-      <div class="feature"><strong>GCE transparency + disposal</strong><span>Graphic Control Extension (GCE) transparent-color index and disposal method (none/restore-bg/restore-prev) tracked per-frame in {@see SugarCraft\Animation\Frame}.</span></div>
-      <div class="feature"><strong>Two presets</strong><span><code>solid</code> — full-cell <code>█</code> in 24-bit truecolor. <code>density</code> — luminance ramp <code>` .:-=+*#%@`</code>.</span></div>
+      <div class="feature"><strong>Area-average downsampling</strong><span>Higher quality than nearest-neighbor — each cell averages the fully-opaque source pixels covering it; the palette path skips pixels matching the transparent index.</span></div>
+      <div class="feature"><strong>ASCII luminance ramp</strong><span>The <code>density</code> preset maps each cell's luminance (0.299r + 0.587g + 0.114b) to a ramp glyph and carries the color as a 24-bit foreground — the shape still reads where color is stripped.</span></div>
+      <div class="feature"><strong>Local color tables</strong><span>Per-frame Local Color Table (LCT) extracted from the GIF Image Descriptor; falls back to the Global Color Table (GCT) when no LCT is present. Each frame is reassembled in GIF89a order — Graphic Control Extension, Image Descriptor, LCT, LZW data — so LCT frames decode with their own colors.</span></div>
+      <div class="feature"><strong>GCE transparency + disposal</strong><span>Graphic Control Extension (GCE) transparent-color index and disposal method (none/restore-bg/restore-prev) tracked per-frame in <code>Frame</code>.</span></div>
+      <div class="feature"><strong>Two presets</strong><span><code>solid</code> — full-cell 24-bit background color (space glyph). <code>density</code> — ASCII luminance ramp <code>' .:-=+*#%@'</code> with a 24-bit foreground.</span></div>
       <div class="feature"><strong>Pause + step</strong><span><code>Space</code> pauses; <code>←</code> / <code>→</code> step through frames manually.</span></div>
-      <div class="feature"><strong>Preset toggle</strong><span><code>d</code> swaps solid ↔ density without losing your position.</span></div>
-      <div class="feature"><strong>Adaptive sizing</strong><span><code>Renderer::withAdaptiveSize()</code> queries the TTY via <code>SizeIoctl</code> (ioctl <code>TIOCGWINSZ</code>) so the output never overflows the viewport. Call <code>withConstraints()</code> with explicit limits to test rendering at fixed dimensions.</span></div>
-      <div class="feature"><strong>Frame cache</strong><span>WeakMap-backed memoization caches rendered frame output by <code>Frame</code> object identity — repeated playback skips re-rendering, and entries are dropped automatically when the <code>Frame</code> is garbage-collected.</span></div>
-      <div class="feature"><strong>Frame cap</strong><span>Decoder caps at 256 frames so a runaway file can't OOM the runtime.</span></div>
-      <div class="feature"><strong>Cmd::tick driven</strong><span><code>Cmd::tick($interval, …)</code> schedules frame advance — no busy-waiting in the main fiber.</span></div>
+      <div class="feature"><strong>Preset toggle + quit</strong><span><code>d</code> swaps solid ↔ density without losing your position; <code>q</code>, <code>Esc</code> or Ctrl+C quits. The Player's keys are fixed — not rebindable.</span></div>
+      <div class="feature"><strong>Viewport-fit rendering</strong><span><code>Renderer::withAdaptiveSize()</code> queries the TTY via <code>SizeIoctl</code> (ioctl <code>TIOCGWINSZ</code>) and clips the art to the viewport. The cell grid is fixed at decode, so a resize clips — art never re-scales; the Player's ~78-column status line is not width-clamped, so playback looks its best at 82+ columns.</span></div>
+      <div class="feature"><strong>.ansi art playback</strong><span>Truecolor <code>.ansi</code> byte streams (SGR runs + glyphs, frame headers <code>ESC[&lt;n&gt;A</code>) parse into cell-grid frames via <code>AnsiArt</code>; <code>ArtLibrary</code> indexes a corpus and selects a slug at the deepest supported depth (<code>tc</code> → <code>256</code> → <code>16</code>), and <code>ArtLoop</code> turns elapsed seconds into frame indices.</span></div>
+      <div class="feature"><strong>Bounded playback</strong><span><code>playOnce()</code>, <code>withLoops(n)</code> and <code>withMaxSeconds(s)</code> cap a run; <code>withFixedFps()</code> pins advance to a uniform wall-clock cadence.</span></div>
+      <div class="feature"><strong>Decode caps</strong><span>One decode holds at most 256 frames, 2,000,000 total source pixels, and 100,000 output cells, so a runaway file can't balloon the runtime. The caps bound decoding and compositing; the file entry points additionally refuse any file larger than <code>Decoder::MAX_INPUT_BYTES</code> (64 MiB) on the stat, before reading. <code>decodeBytes()</code> and <code>AnsiArt::fromString()</code> take bytes you already hold — their size is your budget.</span></div>
+      <div class="feature"><strong>Cmd::tick driven</strong><span><code>Cmd::tick($seconds, …)</code> (sugar-core) schedules frame advance — no busy-waiting in the main fiber.</span></div>
     </div>
+
+    <h3 style="margin-top: 40px;">Untrusted .ansi input</h3>
+    <p>The parser is defensive but not a sandbox. Complete OSC sequences and unknown CSI bodies are dropped, not rendered, and <code>Frame</code>/<code>AnsiArt</code> keep only canonical SGR runs, so <code>sgrText()</code> never replays an escape the input carried. Two caveats stand: C0 control bytes that are not part of an escape sequence are preserved <em>as glyph data</em> — echoing <code>$cell-&gt;glyph</code> raw (or <code>sgrText()</code>) hands them to your terminal, an audible-and-cursor hazard on hostile files — and file ingress is bounded by stat before reading (<code>Decoder::MAX_INPUT_BYTES</code>, 64 MiB) at <code>AnsiArt::fromFile()</code> and <code>Decoder::readFile()</code> — but <code>fromString()</code> parses whatever bytes you hand it, with no cap, so bound the corpora you point <code>ArtLibrary</code> and the string APIs at.</p>
+
+    <h3 style="margin-top: 40px;">Reduced motion</h3>
+    <p>No <code>REDUCE_MOTION</code> (or other reduce-motion convention) is consulted anywhere in the library — autoplay is autoplay. The real mitigations are API-side: construct the <code>Player</code> paused (<code>new Player($frames, paused: true)</code>) so nothing moves until <code>Space</code>, step manually with <code>←</code>/<code>→</code>, slow the cadence with <code>withFixedFps()</code>, and bound the run with <code>playOnce()</code> / <code>withMaxSeconds()</code>. Consulting <code>REDUCE_MOTION</code> by default is a tracked code follow-up, not a current behavior.</p>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-animation">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-animation/blob/master/README.md">Full README</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-animation/tree/master/examples">Runnable examples</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-animation/blob/master/examples">Runnable examples</a></li>
       <li>Originally inspired by <a href="https://github.com/namzug16/gifterm">gifterm</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
-
-    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Decoder</td><td>decode(path, cellsW, cellsH)</td><td>Load and resize GIF</td></tr>
-<tr><td>FrameCache</td><td>new()</td><td>WeakMap-backed render cache</td></tr>
-<tr><td>FrameCache</td><td>get(frame) / set(frame, rendered) / has(frame) / delete(frame) / clear()</td><td>Cache read/write/reset</td></tr>
-<tr><td>Player</td><td>new(frames)</td><td>Create player</td></tr>
-<tr><td>Program</td><td>new(player, options)</td><td>Create program</td></tr>
-<tr><td>Program</td><td>run()</td><td>Start the event loop</td></tr>
-<tr><td>ProgramOptions</td><td>new(useAltScreen)</td><td>Configure terminal mode</td></tr>
-<tr><td>Renderer</td><td>withAdaptiveSize()</td><td>Query TTY size via SizeIoctl, clamp output</td></tr>
-<tr><td>Renderer</td><td>withConstraints(rows, cols)</td><td>Set explicit render limits (testing)</td></tr>
-<tr><td>Renderer</td><td>renderFrame(frame, preset)</td><td>Render a frame to ANSI string</td></tr>
+<tr><td>Decoder</td><td>decode(path, cellsW, cellsH)</td><td>Decode a GIF into a list of Frame objects — stretched to exactly cellsW×cellsH (no aspect-ratio fit); throws on cap breach, missing ext-gd, or non-GIF input.</td></tr>
+<tr><td>Decoder</td><td>decodeBytes(bytes, cellsW, cellsH, withCanvasRgba)</td><td>Decode from a byte string as a Generator; optionally carry full-canvas RGBA per frame.</td></tr>
+<tr><td>Decoder</td><td>readFile(path) / loopCount(bytes)</td><td>Read a file off disk / read the NETSCAPE loop count (null or 0 = infinite).</td></tr>
+<tr><td>Frame</td><td>__construct(cells, delay, disposal, transparent, rgba, …)</td><td>Value object: one frame's cells, centisecond delay, disposal method, transparency, optional RGBA.</td></tr>
+<tr><td>Player</td><td>__construct(frames, index = 0, paused = false, preset = Renderer::PRESET_SOLID, renderer = null, fixedFps = null, maxSeconds = null, loops = null)</td><td>Create the playback TEA model.</td></tr>
+<tr><td>Player</td><td>withFixedFps(fps)</td><td>Uniform cadence — positive finite; MAX_FPS (100,000) is a documented advisory ceiling the library does not enforce; hosts (candy-gifview) clamp.</td></tr>
+<tr><td>Player</td><td>withMaxSeconds(s) / withLoops(n) / playOnce()</td><td>Bound the run by time, repeat count, or a single pass.</td></tr>
+<tr><td>Player</td><td>withFrames(frames) / withWatch(probe)</td><td>Rebind the frame stream in place / install a reload probe closure.</td></tr>
+<tr><td>AnsiArt</td><td>fromFile(path) / fromString(bytes)</td><td>Parse a .ansi byte stream into cell-grid frames.</td></tr>
+<tr><td>AnsiArt</td><td>frameCells(i) / sgrText(i) / width() / height() / frameCount() / isAnimated()</td><td>One frame's AnsiCell grid / canonical SGR replay text / dimensions and frame metadata.</td></tr>
+<tr><td>AnsiCell</td><td>new(glyph, sgr)</td><td>One cell: glyph plus its canonical whole-state SGR (both public readonly).</td></tr>
+<tr><td>ArtLibrary</td><td>fromDir(dir) / pick(slug, depthTag) / randomSlug(depthTag) / mergeManifest(jsonl)</td><td>Index a .ansi corpus; select a slug at the deepest supported depth (tc → 256 → 16).</td></tr>
+<tr><td>ArtLoop</td><td>new(frameCount, frameSeconds, pauseSeconds) / frameAt(elapsed)</td><td>Elapsed-seconds frame cycling for banners and logos.</td></tr>
+<tr><td>Renderer</td><td>new() / withAdaptiveSize()</td><td>Unconstrained renderer / renderer that queries TTY size via SizeIoctl and clips output.</td></tr>
+<tr><td>Renderer</td><td>renderFrame(frame, preset)</td><td>Render one frame to an ANSI string, clipped to its rows/cols.</td></tr>
+<tr><td>Program (sugar-core)</td><td>__construct(model, options)</td><td>Create program.</td></tr>
+<tr><td>Program (sugar-core)</td><td>run()</td><td>Start the event loop.</td></tr>
+<tr><td>ProgramOptions (sugar-core)</td><td>__construct(useAltScreen: true, …)</td><td>Configure terminal mode.</td></tr>
 </table>
   </div>
 </section>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <h3>Demos</h3>
+        <p class="lede">VHS-recorded GIF of the example shipped with the library. Regenerated by CI on pushes that touch the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-animation/.vhs/play.gif" alt="Play" onerror="this.parentElement.style.display='none'">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-animation/.vhs/play.gif" alt="Terminal recording of examples/play.php animating a synthetic GIF through both render presets" onerror="this.parentElement.style.display='none'">
                 <h3>Play</h3>
-                <span class="demo-caption">Synthetic gif decoded + rendered through both presets.</span>
+                <span class="demo-caption">Synthetic animated GIF from examples/play.php — decoded, played, and toggled through both presets.</span>
             </div>
         </div>
     </div>

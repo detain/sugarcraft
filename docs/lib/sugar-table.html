@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarTable — SugarCraft</title>
-<meta name="description" content="SugarTable: Full-featured interactive data table.">
+<meta name="description" content="SugarTable: Customizable keyboard-driven data table with sorting, pagination, and a programmatic row cursor.">
 <meta property="og:title" content="SugarTable — SugarCraft">
-<meta property="og:description" content="Full-featured interactive data table.">
+<meta property="og:description" content="Customizable keyboard-driven data table with sorting, pagination, and a programmatic row cursor.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-table.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-table.html">
 <meta property="og:type" content="website">
@@ -41,8 +41,8 @@
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-table.png" alt="" aria-hidden="true">
       <div>
-        <h2>SugarTable</h2>
-        <p class="detail-sub">Full-featured interactive data table</p>
+        <h2><span aria-hidden="true">📋</span> SugarTable</h2>
+        <p class="detail-sub">Customizable keyboard-driven data table with sorting, pagination, and a programmatic row cursor</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/Evertras/bubble-table" style="color: inherit;">Evertras/bubble-table</a></span>
           <span class="tag-chip">table</span><span class="tag-chip">data</span><span class="tag-chip">grid</span><span class="tag-chip">interactive</span>
@@ -51,7 +51,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-table"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-table" alt="SugarTable code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Column-definition table with sortable columns, frozen columns, per-cell styling, pagination, and a programmatic row cursor. StyledCell supports full ANSI formatting.</p>
+    <p class="lede" style="margin-top: 28px;">Column-definition table with sortable columns, frozen columns, per-cell styling, pagination, and a programmatic row cursor. Per-cell styling rides a restricted SGR attribute set canonicalised to 24-bit at render.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-table</code></pre>
@@ -75,8 +75,8 @@ echo $table-&gt;View();</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Column definitions</strong><span>Width, alignment, frozen, sortable per column.</span></div>
-            <div class="feature"><strong>StyledCell</strong><span>Full ANSI SGR support in every cell — colors, bold, underline.</span></div>
+      <div class="feature"><strong>Column definitions</strong><span>Width, alignment, style, wrap per column; frozen columns and sorting handled at the table level.</span></div>
+            <div class="feature"><strong>StyledCell</strong><span>Per-cell SGR styling — bold, underline and colours from a restricted attribute set.</span></div>
             <div class="feature"><strong>Pagination</strong><span>Paginate large datasets, navigate between pages.</span></div>
             <div class="feature"><strong>Frozen columns</strong><span>Pin the leftmost columns with withFrozenCols([0..k]) so they stay put during horizontal scroll.</span></div>
             <div class="feature"><strong>Row selection</strong><span>Programmatic cursor - SelectNext/SelectPrevious/withSelectedIndex; handleKey(KEY_*) scrolls. No mouse handling: wire input events yourself.</span></div>
@@ -84,12 +84,19 @@ echo $table-&gt;View();</code></pre>
             <div class="feature"><strong>Column width modes</strong><span>ColumnWidth enum — Fixed, Percent, Dynamic, Content, Flex.</span></div>
             <div class="feature"><strong>Borderless + width-exact</strong><span>withBorderless() + withWidth() — compose inside another box at an exact width, with continuous reverse-video selection.</span></div>
             <div class="feature"><strong>Cell text wrapping</strong><span>WrapMode enum — None, WordWrap, Character.</span></div>
-            <div class="feature"><strong>Border styling</strong><span>withBorder(Border) — 8 border families from \SugarCraft\Style\Border.</span></div>
+            <div class="feature"><strong>Border styling</strong><span>withBorder(Border) — 8 border families from \SugarCraft\Style\Border; markdownBorder() is visual style only — its output is not GFM-parseable.</span></div>
             <div class="feature"><strong>Multi-line rows</strong><span>withMultilineMode(bool) — rows expand to max cell height.</span></div>
+            <div class="feature"><strong>Empty states</strong><span>No visible columns render as the empty string; no rows render a centered translatable No data line (header shown or not, borderless and footer-armed included).</span></div>
     </div>
 
     <h3 style="margin-top: 32px;">Accessors</h3>
-    <p>Property reads are bare: public <code>readonly</code> state (<code>$column-&gt;style</code>, <code>$row-&gt;data</code>, <code>$cell-&gt;value</code>) or bare methods (<code>Table::Rows()</code>, <code>scrollY()</code>). No <code>getFoo()</code>-form accessor ships in this lib — under the get*-era ruling (2026-10-24) there was nothing here to deprecate; <code>RowData::get()</code>/<code>::has()</code> and <code>Table::isExpanded()</code> stay ruled as keyed lookups and predicates, pinned by <code>tests/BareAccessorEraTest.php</code>.</p>
+    <p>Property reads are bare: public <code>readonly</code> state (<code>$column-&gt;style</code>, <code>$row-&gt;data</code>, <code>$cell-&gt;value</code>) or bare methods (<code>Table::Columns()</code>, <code>Table::CurrentRow()</code>, <code>Table::scrollY()</code>). No <code>getFoo()</code>-form accessor ships in this lib — under the get*-era ruling (2026-10-24) there was nothing here to deprecate; <code>RowData::get()</code>/<code>::has()</code> and <code>Table::isExpanded()</code> stay ruled as keyed lookups and predicates, pinned by <code>tests/BareAccessorEraTest.php</code>.</p>
+
+    <h3 style="margin-top: 32px;">Security &amp; untrusted content</h3>
+    <p>Every cell value, column title and expanded-detail line passes through <code>Sanitize::value()</code> before reaching the buffer: C0/DEL bytes become <code>·</code>, C1 is replaced, invalid UTF-8 repairs to <code>U+FFFD</code> (raw ANSI in a value paints as visible junk, never honored), sugar-mouse zone sentinels U+E000/U+E001 are stripped so forged click targets cannot ride untrusted data, and bidi overrides / zero-width space render as visible <code>&lt;U+XXXX&gt;</code> markers. Style channels are parse-restricted (SGR strings are parsed into a structured attribute set, canonicalised to 24-bit at render). Casting a <code>StyledCell</code> to string is the one deliberate bypass — it emits its raw value unsanitized; render untrusted content only through <code>View()</code>. See <a href="https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md">docs/TRUST-BOUNDARY.md</a>.</p>
+
+    <h3 style="margin-top: 32px;">Accessibility</h3>
+    <p>Selection is pure reverse video (<code>ESC[0;7m</code>) — colour-independent — and zebra striping is a fixed black-on-white inversion; both stay readable on any palette, and <code>withSelectable(false)</code> drops the highlight entirely. The empty-state message is translatable. There is no <code>NO_COLOR</code>, non-TTY or plain-text degrade path (SGR is always emitted); for assistive tech prefer <code>Border::ascii()</code> or <code>Border::hidden()</code> with <code>withHeaderStyle('')</code>, since box glyphs and the default TrueColor header add noise and light-theme contrast risk, and no semantic header/column association exists beyond visual alignment.</p>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
@@ -106,13 +113,22 @@ echo $table-&gt;View();</code></pre>
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Table</td><td>static fromColumns(columns) / withColumns(columns)</td><td>Create a table from its columns / replace them</td></tr>
 <tr><td>Table</td><td>withRows(rows)</td><td>Set table rows</td></tr>
+<tr><td>Table</td><td>addRow(row) / addRows(rows)</td><td>Append one row / a batch</td></tr>
+<tr><td>Table</td><td>withBaseStyle(style) / withHeaderStyle(style)</td><td>Base cell SGR / header-row SGR (default '1;37')</td></tr>
+<tr><td>Table</td><td>withShowHeader(bool) / withShowFooter(bool)</td><td>Toggle the header row / footer row</td></tr>
+<tr><td>Table</td><td>withZebra(bool)</td><td>Table-level alternating-row stripe</td></tr>
+<tr><td>Table</td><td>withStyleFunc(callable)</td><td>Per-cell style callback (row, col, value) → CellBuffer\Style|string</td></tr>
+<tr><td>Table</td><td>withMissingIndicator(text)</td><td>Placeholder for cells whose row has no entry (default '-')</td></tr>
 <tr><td>Table</td><td>withPageSize(size)</td><td>Set rows per page for pagination</td></tr>
 <tr><td>Table</td><td>withPage(n)</td><td>Jump to page n (0-based; PageFooter shows n+1)</td></tr>
+<tr><td>Table</td><td>SelectPage(n) / NextPage() / PreviousPage()</td><td>Page navigation (clamped to valid pages; cursor snaps to the page)</td></tr>
+<tr><td>Table</td><td>withFooterType(FooterType) / RowsFooter()</td><td>Choose footer content (Page|Rows|Both) / read the rows-count footer string</td></tr>
 <tr><td>Table</td><td>withViewportHeight(n)</td><td>Render only n visible rows (viewport virtualization)</td></tr>
 <tr><td>Table</td><td>withScrollY(n)</td><td>Set vertical scroll offset (row number)</td></tr>
 <tr><td>Table</td><td>scrollY()</td><td>Get current scroll offset</td></tr>
-<tr><td>Table</td><td>View()</td><td>Render the table to string</td></tr>
-<tr><td>Table</td><td>SortBy(key, ascending)</td><td>Sort rows by a column (plain-text comparison)</td></tr>
+<tr><td>Table</td><td>View()</td><td>Render the table to string — every value passes the <code>Sanitize::value()</code> ingress (see Security &amp; untrusted content)</td></tr>
+<tr><td>Table</td><td>SortBy(colKey, ascending, primary)</td><td>Sort rows by a column — numeric-aware when both values are numeric, case-insensitive otherwise; repeating the sole active sort key with the same direction toggles it</td></tr>
+<tr><td>Table</td><td>ClearSort()</td><td>Remove all sorting</td></tr>
 <tr><td>Table</td><td>Filter(key, text) / ClearFilter(key) / ClearAllFilters()</td><td>Per-column substring filter (filterable-marked columns only once any is marked)</td></tr>
 <tr><td>Table</td><td>search(text) / ClearSearch()</td><td>OR search across the scanned columns</td></tr>
 <tr><td>Table</td><td>handleKey(KEY_*)</td><td>Keyboard scrolling - KEY_ARROW_UP/DOWN, PAGE_UP/DOWN, HOME, END; clamps to maxScrollY()</td></tr>
@@ -132,9 +148,10 @@ echo $table-&gt;View();</code></pre>
 <tr><td>Row</td><td>new(rowData)</td><td>Create a row from RowData</td></tr>
 <tr><td>RowData</td><td>from(array)</td><td>Create from key-value array</td></tr>
 <tr><td>RowData</td><td>get(key) / has(key) / all() / with(key, value)</td><td>Keyed map lookup, presence test, full map, immutable set (ruling-3b keepers — not getFoo()-form accessors)</td></tr>
-<tr><td>StyledCell</td><td>new(value, style)</td><td>Create styled cell with ANSI style</td></tr>
+<tr><td>StyledCell</td><td>new(value, style)</td><td>Create styled cell with ANSI style; casting to string bypasses sanitization — render via Table::View()</td></tr>
 <tr><td>ColumnWidth</td><td>enum</td><td>Fixed | Percent | Dynamic | Content | Flex</td></tr>
 <tr><td>WrapMode</td><td>enum</td><td>None | WordWrap | Character</td></tr>
+<tr><td>FooterType</td><td>enum</td><td>Page | Rows | Both (footer renders only when pagination is active)</td></tr>
 </table>
   </div>
 </section>
@@ -146,14 +163,14 @@ echo $table-&gt;View();</code></pre>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-table/.vhs/features.gif" alt="Frozen + paginated" onerror="this.parentElement.style.display='none'">
-                <h3>Frozen + paginated</h3>
-                <span class="demo-caption">Wide host-telemetry table with pagination + frozen #.</span>
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-table/.vhs/features.gif" alt="Terminal GIF of the features example" onerror="this.parentElement.style.display='none'">
+                <h3><a href="https://github.com/detain/sugarcraft/tree/master/sugar-table/examples/features.php">Frozen + paginated</a></h3>
+                <span class="demo-caption">Wide host-telemetry table with pagination and a frozen first column.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-table/.vhs/basic.gif" alt="Basic + sort + filter" onerror="this.parentElement.style.display='none'">
-                <h3>Basic + sort + filter</h3>
-                <span class="demo-caption">Sort by score, filter `name` contains `a`, paginate.</span>
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-table/.vhs/basic.gif" alt="Terminal GIF of the basic example" onerror="this.parentElement.style.display='none'">
+                <h3><a href="https://github.com/detain/sugarcraft/tree/master/sugar-table/examples/basic.php">Basic + sort + filter</a></h3>
+                <span class="demo-caption">Sort by score, filter <code>name</code> contains <code>a</code>, paginate.</span>
             </div>
         </div>
     </div>

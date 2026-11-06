@@ -41,14 +41,17 @@
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/candy-flappy.png" alt="" aria-hidden="true">
       <div>
-        <h2>🐝 CandyFlappy</h2>
+        <h2><span aria-hidden="true">🐦</span> CandyFlappy</h2>
         <p class="detail-sub">Flappy-Bird in your terminal</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/kbrgl/flapioca" style="color: inherit;">kbrgl/flapioca</a></span>
+          <span class="tag-chip">tui</span>
           <span class="tag-chip">game</span>
           <span class="tag-chip">flappy</span>
-          <span class="tag-chip">flappy-bird</span>
+          <span class="tag-chip">flapioca</span>
+          <span class="tag-chip">sugar-spring</span>
           <span class="tag-chip">physics</span>
+          <span class="tag-chip">sugarcraft</span>
         </div>
       </div>
     </div>
@@ -57,10 +60,17 @@
     <p class="lede" style="margin-top: 28px;">Physics-driven flap game — the bird's vertical motion is a SugarSpring projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell. Pure-state Game class; the renderer is a one-pass canvas fill.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-flappy</code></pre>
+    <p>Pre-1.0 the package publishes a dev branch only, so pull it in explicitly as <code>:@dev</code>:</p>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-flappy:@dev</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell">./bin/candy-flappy</code></pre>
+    <pre class="code"><code class="language-shell"># Monorepo clone &mdash; per-lib install, then the checked-in bin:
+cd candy-flappy &amp;&amp; composer install &amp;&amp; ./bin/candy-flappy
+
+# Composer install &mdash; the vendored console bin:
+vendor/bin/candy-flappy
+
+# Or download the standalone .phar release from GitHub and run it with php.</code></pre>
     <pre class="code"><code class="language-php">// Programmatic:
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
@@ -73,7 +83,7 @@ use SugarCraft\Flappy\Game;
     <div class="feature-grid">
       <div class="feature"><strong>Real physics</strong><span>Bird movement is a <code>Projectile</code> with gravity vector. <code>flap()</code> rebuilds the projectile with an upward velocity kick — same trick the original flapioca uses, just expressed as projectile state.</span></div>
       <div class="feature"><strong>Pipe spawning</strong><span>A new pipe pair every <code>PIPE_EVERY</code> ticks; the gap row is sampled from the injected PRNG so tests pin layouts deterministically.</span></div>
-      <div class="feature"><strong>Tick-driven</strong><span><code>Cmd::tick(0.033, …)</code> ≈ 30 fps. Each tick advances physics + scrolls pipes + checks collision.</span></div>
+      <div class="feature"><strong>Tick-driven</strong><span><code>Game::subscriptions()</code> arms <code>Subscriptions::withTick('game-tick', Game::TICK_SECONDS)</code> — <code>TICK_SECONDS</code> is <code>1/Bird::TICKS_PER_SEC</code>, exactly 1/30 s. Each tick advances physics, scrolls pipes and checks collision; the subscription goes empty on crash, on a too-small viewport, and under the NoTty refusal posture.</span></div>
       <div class="feature"><strong>Per-cell collision</strong><span>Bird's row is rounded to a cell index; collision = bird column matches a pipe column AND the row is outside the open gap.</span></div>
       <div class="feature"><strong>Ready card</strong><span>The board opens frozen; the first flap starts the run. <code>r</code> reseeds (mid-flight too); <code>q</code> / <code>Esc</code> / <code>Ctrl+C</code> quit &mdash; a qualifying mid-flight score is settled before the process exits.</span></div>
       <div class="feature"><strong>Score on pass</strong><span>Every tick that moves a pipe past the bird's column bumps the score.</span></div>
@@ -93,13 +103,20 @@ use SugarCraft\Flappy\Game;
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Game</td><td>init()</td><td>TEA init hook — returns null; the tick cadence rides subscriptions()</td></tr>
 <tr><td>Game</td><td>start($rand, $configDir)</td><td>Build the ready board (world frozen until the first flap)</td></tr>
 <tr><td>Game</td><td>update($msg)</td><td>TEA reducer: keys/ticks/resize/profile &rarr; [new Game, optional Cmd]</td></tr>
 <tr><td>Game</td><td>view()</td><td>Full ANSI frame (delegates to Renderer::render)</td></tr>
-<tr><td>Game</td><td>subscriptions()</td><td>30 Hz tick subscription; empty when crashed or the terminal cannot play</td></tr>
+<tr><td>Game</td><td>subscriptions()</td><td>1/30 s tick subscription; empty when crashed or the terminal cannot play</td></tr>
+<tr><td>Game</td><td>withHighScore($score)</td><td>New Game with $score merged into the records if it beats the best (no disk write)</td></tr>
+<tr><td>Game</td><td>highScore() / highScores()</td><td>Current best / the kept top-ten record list</td></tr>
 <tr><td>Game</td><td>settleOnExit()</td><td>Idempotent process-boundary high-score save (signal-death safety net)</td></tr>
+<tr><td>Game</td><td>tickN($n)</td><td>Apply n physics ticks in sequence (deterministic test helper)</td></tr>
 <tr><td>Bird</td><td>flap() / tick()</td><td>Projectile velocity kick + one physics step (on Bird, not Game)</td></tr>
-<tr><td>Pipe</td><td>collides($row)</td><td>Per-cell test against the open gap band of the pair</td></tr>
+<tr><td>Bird</td><td>row()</td><td>Bird y rounded to its playfield row index</td></tr>
+<tr><td>Pipe</td><td>collides($col, $row)</td><td>Per-cell test against the open gap band of the pair</td></tr>
+<tr><td>Pipe</td><td>tick() / isOffScreen()</td><td>Slide the pair one cell / whether it has left the field</td></tr>
+<tr><td>PipeGenerator</td><td>gapHeightForScore($score)</td><td>Gap height for a score: starts at 6 cells, shrinks one every 5 points, floors at 3</td></tr>
 <tr><td>PipeGenerator</td><td>makePipe($score, $rand)</td><td>Spawn a pair; the gap shrinks 6&rarr;3 as score climbs</td></tr>
 <tr><td>Renderer</td><td>render($game)</td><td>Compose a frame for any Game state (static)</td></tr>
 <tr><td>Program</td><td>new($game, $options) / run()</td><td>sugar-core event loop; run() returns the final model</td></tr>
@@ -110,7 +127,7 @@ use SugarCraft\Flappy\Game;
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">The demo below is VHS-recorded by CI: the <code>.vhs/play.tape</code> script drives <code>./bin/candy-flappy</code> itself — not the <code>examples/</code> scripts — and the workflow re-renders the GIF on pushes that touch it.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-flappy/.vhs/play.gif" alt="Play" onerror="this.parentElement.style.display='none'">

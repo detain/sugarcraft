@@ -41,7 +41,7 @@
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-ansi-parser.png" alt="" aria-hidden="true">
       <div>
-        <h2>🍬 SugarAnsiParser</h2>
+        <h2><span aria-hidden="true">🍬</span> SugarAnsiParser</h2>
         <p class="detail-sub">ANSI escape-sequence parser and state machine</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/charmbracelet/x/tree/main/ansi" style="color: inherit;">charmbracelet/x/ansi</a></span>
@@ -54,7 +54,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-ansi-parser"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-ansi-parser" alt="SugarAnsiParser code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Parse ANSI escape sequences into structured state transitions — SGR attributes, cursor movement, erase operations, and DEC private modes — without coupling to terminal-cell-grid concerns. Used by SugarVterm to drive the VT500 state machine.</p>
+    <p class="lede" style="margin-top: 28px;">Parse ANSI escape sequences into structured state transitions — SGR attributes, cursor movement, erase operations, and DEC private modes — without coupling to terminal-cell-grid concerns. This is the VT500 state machine sugar-vterm consumes for its cell-grid rendering.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-ansi-parser</code></pre>
@@ -71,7 +71,7 @@ $parser-&gt;feed("31mHi\x1b[0m");
 $parser-&gt;flush();                        // end of stream: dispatches a pending string payload
 
 $handler-&gt;filter('csi');   // two csi entries: params [1, 31] then [0], final 'm' (109)
-$handler-&gt;filter('print'); // 'H', 'i'</code></pre>
+$handler-&gt;filter('print'); // rows with detail 'H', 'i'</code></pre>
 
     <p>To drive a cell grid, implement <code>CsiHandler</code> (cursor, erase, scroll, SGR, DEC modes) and <code>OscHandler</code> (title, hyperlink), then bridge them to the parser:</p>
     <pre class="code"><code class="language-php">use SugarCraft\AnsiParser\Parser\{HandlerAdapter, Parser};
@@ -83,16 +83,31 @@ $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</cod
     <div class="feature-grid">
       <div class="feature"><strong>VT500 state machine</strong><span><code>Parser</code> implements the Paul Williams DEC parser and dispatches abstract <code>Handler</code> events: printChar, execute, csiDispatch, escDispatch, oscDispatch, dcsDispatch, sosPmApcDispatch.</span></div>
       <div class="feature"><strong>Partial-input safe</strong><span>Feed any chunk size. Incomplete sequences and UTF-8 runes wait for the next <code>feed()</code>; <code>flush()</code> (or <code>parseComplete()</code>) settles a pending OSC/DCS/SOS/PM/APC string at end of stream — an in-flight CSI or ESC, and a half-finished DCS prelude, end undispatched.</span></div>
-      <div class="feature"><strong>CSI handler interface</strong><span><code>CsiHandler</code> covers the emulator CSI set: CUU/CUD/CUF/CUB/CUP/HVP, ED/EL, SU/SD, IL/DL, ICH/DCH, REP, SCO save/restore, CR/LF, DECSET/DECRST, DECSTBM, TBC/CHT/CBT and SGR. <code>HandlerAdapter</code> translates parser events into these calls.</span></div>
+      <div class="feature"><strong>CSI handler interface</strong><span><code>CsiHandler</code> covers the renderer's working CSI set (plus CR/LF routed from C0 executes): CUU/CUD/CUF/CUB/CUP/HVP, ED/EL, SU/SD, IL/DL, ICH/DCH, REP, SCO save/restore, DECSET/DECRST, DECSTBM, TBC/CHT/CBT and SGR. <code>HandlerAdapter</code> translates parser events into these calls.</span></div>
       <div class="feature"><strong>Sub-parameters</strong><span><code>subparams()</code> and <code>Parser::groupSubparameters()</code> keep ECMA-48 colon groups apart, so <code>CSI 4:3 m</code> (curly underline) is not confused with <code>CSI 4;3 m</code>. Handlers can opt in through <code>SubparamsAwareHandler</code>.</span></div>
-      <div class="feature"><strong>Bounded payloads</strong><span>DCS/OSC/SOS/PM/APC payloads are capped (64 KiB by default; the third constructor argument raises it), so a hostile stream cannot grow memory without limit. Past the cap the excess is dropped and decoders see a truncated payload; <code>Codec\Iterm1337</code> flags it as malformed when the declared <code>size=</code> contradicts the bytes collected.</span></div>
-      <div class="feature"><strong>DebugHandler</strong><span>Records every action as <code>['type' =&gt; …, 'detail' =&gt; …]</code> in <code>$log</code>; <code>filter($type)</code> selects one kind. Useful in tests and for stream inspection.</span></div>
+      <div class="feature"><strong>Bounded payloads</strong><span>DCS/OSC/SOS/PM/APC payloads are capped (64 KiB by default; the third constructor argument changes it — any positive int, so smaller values tighten the cap), so a hostile stream cannot grow the parser's buffers without limit. Past the cap the excess is dropped and decoders see a truncated payload; <code>Codec\Iterm1337</code> flags it as malformed only when fewer bytes arrive than its declared <code>size=</code> — a payload longer than declared passes unflagged, as the check is one-way.</span></div>
+      <div class="feature"><strong>DebugHandler</strong><span>Development mirror only — no payload cap: records every action as <code>['type' =&gt; …, 'detail' =&gt; …]</code> in <code>$log</code> (one row per dispatched action, forever); <code>filter($type)</code> selects one kind. Useful in tests and for stream inspection, never for hostile streams.</span></div>
     </div>
+
+    <h3 style="margin-top: 40px;">Limits &amp; hostile input</h3>
+    <ul>
+      <li><strong>Bounded accumulation</strong> — DCS/OSC/SOS/PM/APC payloads stop at 64 KiB (the third constructor argument changes it; smaller values tighten), CSI parameter lists cap at 32 slots with each value clamped at 65535.</li>
+      <li><strong>Byte-space fidelity</strong> — C0 bytes arriving <em>inside</em> an OSC string are dropped, so a payload can differ from the raw bytes sent; the <em>first</em> prefix byte survives and only the last intermediate is kept (disclosed parity deviations).</li>
+      <li><strong>Raw accessors are untrusted</strong> — <code>OscHandler::title()</code>/<code>hyperlink()</code>, <code>Iterm1337::name()</code>/<code>args()</code> (whose percent-decode can re-synthesize control bytes) and <code>KittyApc::control()</code> hand back wire text as dispatched; validate or reject before display or re-emission — the escape discipline is confined to <code>describe()</code>.</li>
+      <li><strong>UTF-8 policy splits by mode</strong> — completed runes pass verbatim by default; <code>$replaceMalformed</code> substitutes U+FFFD and also replaces incomplete runes dropped silently in the default mode. Lone C1 bytes never reach <code>printChar()</code>, but UTF-8-encoded C1 (<code>C2 80</code>-<code>C2 9F</code>) is legal text — consumers re-emitting printable text reject or replace U+0080-U+009F themselves.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Assistive / text-bridge notes</h3>
+    <ul>
+      <li><code>printChar()</code> delivers <strong>codepoints, not graphemes</strong> — buffer and cluster with <code>grapheme_str_split()</code>/ICU before re-voicing a stream.</li>
+      <li>Dropped bytes produce <em>no</em> character at all, so a reconstructed transcript may be shorter than the sender's intent; U+FFFD appears only in replacement mode.</li>
+      <li>Hyperlinks pair: an OSC 8 event opens a span and one with an empty URI closes it; through <code>HandlerAdapter</code> a malformed <code>8;…</code> payload closes the current link rather than being dropped.</li>
+    </ul>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>ANSI stream inspection</strong> — parse escape sequences into structured events without spawning a terminal.</li>
-      <li><strong>Feeding SugarVterm</strong> — drive the VT500 state machine by passing parsed events to the terminal emulator.</li>
+      <li><strong>Built into SugarVterm</strong> — give vterm raw bytes and it drives the machine for you.</li>
       <li><strong>SGR decoding</strong> — receive every SGR parameter list, colon sub-parameters included, as the stream arrives.</li>
     </ul>
 
@@ -117,10 +132,10 @@ $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</cod
 <tr><td>HandlerAdapter</td><td>__construct(CsiHandler, OscHandler, ?Handler $fallback = null)</td><td>Bridges parser events to the CSI and OSC handler interfaces; unhandled and non-emulator events (ESC/DCS/SOS/PM/APC, unmapped finals, extra executes) forward to the optional fallback</td></tr>
 <tr><td>CsiHandler</td><td>printable / cuu/cud/cuf/cub / cup / sgr / ed / el / decset / decrst / decstbm / tbc / cht / cbt / …</td><td>Emulator-facing CSI actions</td></tr>
 <tr><td>OscHandler</td><td>title(string) / hyperlink(uri, id)</td><td>Emulator-facing OSC actions; the adapter maps OSC 0/1/2 to title and OSC 8 (including the backtick <code>8;URI`</code> spelling) to hyperlink — a malformed <code>8;</code> payload closes the open link instead of dropping silently</td></tr>
-<tr><td>DebugHandler</td><td>$log / filter(type)</td><td>Records every action for inspection</td></tr>
+<tr><td>DebugHandler</td><td>$log / filter(type)</td><td>Development mirror only — no payload cap; records every action for inspection</td></tr>
 <tr><td>Codec\Dcs</td><td>static parse(final, params, prefix, intermediate, data) → kind() / isSixel() / isTruncated() / describe()</td><td>Typed DCS decoder: sixel, XTVERSION, DECRQSS/PSS, tmux, truncation</td></tr>
-<tr><td>Codec\Iterm1337</td><td>static parse(oscData) / static fromDcs(final, data)</td><td>iTerm2/WezTerm 1337 inline-image + control decoder; malformed() records, never throws</td></tr>
-<tr><td>Codec\KittyApc</td><td>static parse(apcData)</td><td>Kitty graphics frame decoder: control pairs, geometry labels, payload size</td></tr>
+<tr><td>Codec\Iterm1337</td><td>static parse(data) / static fromDcs(final, data)</td><td>iTerm2/WezTerm 1337 inline-image + control decoder; parse() returns null when the payload is not 1337; malformed() records on a rejected-as-mine payload, never throws</td></tr>
+<tr><td>Codec\KittyApc</td><td>static parse(data)</td><td>Kitty graphics frame decoder (null unless the frame opens with `G`, no space after the `G`): control pairs, geometry labels, payload size</td></tr>
 </table>
   </div>
 </section>

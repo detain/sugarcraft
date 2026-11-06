@@ -41,14 +41,14 @@
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/candy-minesweeper.png" alt="" aria-hidden="true">
       <div>
-        <h2>💣 CandyMinesweeper</h2>
+        <h2><span aria-hidden="true">💣</span> CandyMinesweeper</h2>
         <p class="detail-sub">Minesweeper on the SugarCraft stack</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/maxpaulus43/go-sweep" style="color: inherit;">maxpaulus43/go-sweep</a></span>
           <span class="tag-chip">game</span>
           <span class="tag-chip">minesweeper</span>
           <span class="tag-chip">sugarcraft</span>
-          <span class="tag-chip">deterministic-rng</span>
+          <span class="tag-chip">injectable-rng</span>
         </div>
       </div>
     </div>
@@ -57,33 +57,45 @@
     <p class="lede" style="margin-top: 28px;">Customisable board (width / height / mine count), iterative zero-flood-fill, win / lose detection. Pure-state Board class so every reveal is unit-testable without touching the runtime.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
-    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-minesweeper</code></pre>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/candy-minesweeper
+./vendor/bin/candy-minesweeper       # play straight from the dependency
+
+# or run the shipped binary from a clone:
+composer install
+./bin/candy-minesweeper
+
+# or grab the rolling development phar (rebuilt on every push to master):
+wget https://github.com/detain/sugarcraft/releases/download/candy-minesweeper/dev/candy-minesweeper.phar
+php candy-minesweeper.phar</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code class="language-shell">./bin/candy-minesweeper              # 10×10, 12 mines (defaults)
-./bin/candy-minesweeper 16 16 40     # custom board</code></pre>
+    <pre class="code"><code class="language-shell">./bin/candy-minesweeper                    # 10×10, 12 mines (defaults)
+./bin/candy-minesweeper 16 16 40           # positional args: width height mines</code></pre>
     <pre class="code"><code class="language-php">// Programmatic:
+use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Minesweeper\Game;
 
 (new Program(Game::start(width: 16, height: 16, mines: 40),
-             new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
+             new ProgramOptions(useAltScreen: true,
+                                mouseMode: MouseMode::CellMotion)))-&gt;run();</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>First-click safety</strong><span>Mines aren't placed until the first reveal, with the clicked cell's 3×3 neighbourhood excluded — every game gets a non-trivial flood-fill on click 1.</span></div>
-      <div class="feature"><strong>Iterative flood fill</strong><span>Zero-adjacency cells reveal their neighbours transitively, exactly like the original.</span></div>
+      <div class="feature"><strong>First-click safety</strong><span>Mines aren't placed until the first reveal, with the clicked cell's 3×3 neighbourhood excluded (6 or 4 cells at edges) — every game gets a non-trivial flood-fill on click 1. On densely customised boards that cannot spare a full 3×3 the exclusion falls back to the clicked cell alone, so the first click is still never a mine and every requested mine is placed.</span></div>
+      <div class="feature"><strong>Iterative flood fill</strong><span>Zero-adjacency cells reveal their neighbours transitively, exactly like classic Minesweeper.</span></div>
       <div class="feature"><strong>Vim-style movement</strong><span><code>hjkl</code> alongside arrows; cursor clamps at board edges.</span></div>
       <div class="feature"><strong>Flag toggle</strong><span><code>f</code> flags / unflags the cursor cell; flagged cells can't be revealed by accident.</span></div>
       <div class="feature"><strong>Chord click</strong><span><code>c</code> or middle-click on a satisfied number reveals all unflagged neighbours — mirrors classic left+right chord behaviour.</span></div>
-      <div class="feature"><strong>Sub-second timer</strong><span>Game timer uses <code>microtime(true)</code> for millisecond precision; frozen on win/lose and stored in stats.</span></div>
-      <div class="feature"><strong>Best-time persistence</strong><span><code>DifficultyStats</code> persists games/wins/best time per difficulty to JSON atomically via sugar-core <code>AtomicJsonFile</code> (flock sidecar, temp + rename) so crashes never corrupt the record.</span></div>
+      <div class="feature"><strong>Sub-second timer</strong><span>The clock reads <code>microtime(true)</code> internally, but every observable path — the status line and the persisted best times — is whole seconds; frozen on win/lose.</span></div>
+      <div class="feature"><strong>Best-time persistence</strong><span>Opt-in via <code>CANDY_MINESWEEPER_STATS=/path/stats.json</code> (off by default): <code>DifficultyStats</code> then persists games/wins/best time per difficulty to JSON atomically via sugar-core <code>AtomicJsonFile</code> (flock sidecar, temp + rename) so crashes never corrupt the record.</span></div>
       <div class="feature"><strong>Win + lose detection</strong><span><code>isWon</code> = every non-mine revealed; <code>exploded</code> = at least one mine was clicked. O(1) via <code>revealedCount</code> — no grid scan on each move.</span></div>
       <div class="feature"><strong>Restart key</strong><span><code>r</code> reseeds with a fresh layout, preserving the chosen board size.</span></div>
-      <div class="feature"><strong>Save / resume mid-game</strong><span>Press <code>S</code> to write the live board to <code>~/.config/candy-minesweeper/savegame.json</code> (mode 0600), <code>L</code> to restore it. Backed by <code>Board::serialize()</code> versioned JSON; <code>unserialize()</code> re-validates every shape, so tampered payloads are refused rather than half-parsed.</span></div>
-      <div class="feature"><strong>Localised interface</strong><span>Status line, win/lose banners and the help footer route through <code>Lang::t</code>; <code>LC_ALL</code>/<code>LANG</code> pick the locale from 16 shipped files.</span></div>
+      <div class="feature"><strong>Save / resume mid-game</strong><span>Press <code>S</code> to write the live board to the single save slot — <code>$XDG_CONFIG_HOME/candy-minesweeper/savegame.json</code> when set, <code>~/.config/candy-minesweeper/savegame.json</code> otherwise (mode 0600) — and <code>L</code> to restore it. The slot carries the full live mine layout: it is the answer key to the game in progress, so keep the file private if you sync dotfiles. Backed by <code>Board::serialize()</code> versioned JSON; <code>unserialize()</code> re-validates every shape and recomputes the counts, so tampered payloads are refused rather than half-parsed.</span></div>
+      <div class="feature"><strong>Localised interface</strong><span>Status line, win/lose banners and the help footer route through <code>Lang::t</code>; <code>LC_ALL</code>/<code>LC_MESSAGES</code>/<code>LANG</code> pick the locale from 16 shipped files.</span></div>
       <div class="feature"><strong>Custom difficulty</strong><span><code>Ui\CustomDifficulty</code> validates rows (2–50), cols (2–50), mines (1 to rows×cols−9) with i18n-aware error messages.</span></div>
+      <div class="feature"><strong>Terminal graceful downgrade</strong><span>Setting <code>NO_COLOR</code>, <code>CLICOLOR=0</code>, or <code>TERM=dumb</code> strips the foreground/background colours through the fleet colour authority; the game stays fully playable without them.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -99,20 +111,30 @@ use SugarCraft\Minesweeper\Game;
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Game</td><td>start(width, height, mines)</td><td>Start a new game</td></tr>
+<tr><td>Game</td><td>start(width, height, mines)</td><td>Start a new game (optional <code>$rand</code>, <code>$stats</code>, <code>$statsPath</code>, <code>$notice</code>)</td></tr>
 <tr><td>Game</td><td>withDifficulty(d)</td><td>Start with a preset difficulty</td></tr>
-<tr><td>Game</td><td>elapsed()</td><td>Elapsed time in seconds (sub-second precision)</td></tr>
+<tr><td>Game</td><td>withCustom(width, height, mines)</td><td>Start a custom-sized game; it tallies stats when its dimensions match a preset (via <code>difficulty()</code>) and plays without preset tallies otherwise</td></tr>
+<tr><td>Game</td><td>difficulty()</td><td>The <code>Difficulty</code> whose dimensions the board matches, or null for a custom shape</td></tr>
+<tr><td>Game</td><td>savePath()</td><td>Absolute save-slot path resolved at call time (<code>$XDG_CONFIG_HOME</code> wins, then <code>$HOME/.config</code>); null when neither is usable, degrading save/load to announced no-ops</td></tr>
+<tr><td>Game</td><td>elapsed()</td><td>Elapsed time as float seconds (the status line and stats carry whole seconds)</td></tr>
 <tr><td>Game</td><td>recordResult(elapsed)</td><td>Record win/loss and update stats</td></tr>
 <tr><td>Board</td><td>blank(width, height, mineCount)</td><td>Empty board; mines placed on the first reveal</td></tr>
 <tr><td>Board</td><td>cell(x, y)</td><td>Get cell at position</td></tr>
-<tr><td>Board</td><td>chord(x, y)</td><td>Chord-click — reveal safe neighbours of a satisfied number</td></tr>
+<tr><td>Board</td><td>reveal(x, y, rand)</td><td>Reveal the cursor cell — places mines on the first call, then floods; no-ops on revealed or flagged cells</td></tr>
+<tr><td>Board</td><td>toggleFlag(x, y)</td><td>Flag / unflag a cell; no-ops once the cell is revealed</td></tr>
+<tr><td>Board</td><td>chord(x, y)</td><td>Chord-click — reveals the unflagged neighbours of a satisfied number; a mis-flagged mine detonates through the flood</td></tr>
+<tr><td>Board</td><td>isWon()</td><td>True when every non-mine cell is revealed (O(1))</td></tr>
+<tr><td>Board</td><td>flagCount()</td><td>Live flag total (tracked incrementally)</td></tr>
 <tr><td>Board</td><td>serialize()</td><td>Emit versioned JSON string ({v:1, w, h, m, p, e, r, c}) — the save slot's board payload</td></tr>
-<tr><td>Board</td><td>unserialize(data)</td><td>Reconstruct a Board from a serialize() payload</td></tr>
-<tr><td>Ui\CustomDifficulty</td><td>fromInput(rows, cols, mines)</td><td>Validate custom board dimensions; throws with i18n key on violation</td></tr>
+<tr><td>Board</td><td>unserialize(data)</td><td>Reconstruct a Board from a serialize() payload, re-validating shapes and recomputing counts</td></tr>
+<tr><td>Difficulty</td><td>enum (EASY/STANDARD/MEDIUM/EXPERT)</td><td>The four shipped presets; <code>fromDimensions(w, h, m)</code> maps a board shape back to its preset (or null)</td></tr>
+<tr><td>Stats</td><td>pure value object</td><td>In-memory games/wins/best time per difficulty — <code>withGame(d, won, time)</code>, <code>gamesPlayed(d)</code>, <code>wins(d)</code>, <code>winRate(d)</code>, <code>bestTime(d)</code></td></tr>
+<tr><td>Ui\CustomDifficulty</td><td>fromInput(rows, cols, mines)</td><td>Validate custom board dimensions; throws the translated string via <code>Lang::t</code> on violation</td></tr>
 <tr><td>Ui\CustomDifficulty</td><td>defaults()</td><td>Factory — 9×9, 10 mines</td></tr>
-<tr><td>DifficultyStats</td><td>load(path)</td><td>Load stats from atomic JSON file (null if absent)</td></tr>
+<tr><td>DifficultyStats</td><td>load(path)</td><td>Load stats from atomic JSON file (null if absent; RuntimeException on an invalid or unsupported-version file)</td></tr>
 <tr><td>DifficultyStats</td><td>save(path)</td><td>Persist stats atomically via AtomicJsonFile (flock + temp + rename)</td></tr>
 <tr><td>DifficultyStats</td><td>withGame(d, won, time)</td><td>Return new DifficultyStats with the game recorded</td></tr>
+<tr><td>DifficultyStats</td><td>stats()</td><td>Read side as the pure <code>Stats</code> value object</td></tr>
 </table>
   </div>
 </section>
@@ -120,7 +142,7 @@ use SugarCraft\Minesweeper\Game;
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded GIFs of the shipped binary — each tape drives <code>./bin/candy-minesweeper</code> in a scripted session. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-minesweeper/.vhs/play.gif" alt="Play" onerror="this.parentElement.style.display='none'">

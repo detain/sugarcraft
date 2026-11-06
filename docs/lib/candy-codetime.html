@@ -41,12 +41,11 @@
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/candy-codetime.png" alt="" aria-hidden="true">
       <div>
-        <h2>⏰ CandyCodetime</h2>
+        <h2><span aria-hidden="true">⏰</span> CandyCodetime</h2>
         <p class="detail-sub">Privacy-first coding-time tracker</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/Rtarun3606k/TakaTime" style="color: inherit;">Rtarun3606k/TakaTime</a></span>
           <span class="tag-chip">time-tracking</span>
-          <span class="tag-chip">wakatime</span>
           <span class="tag-chip">jsonl</span>
           <span class="tag-chip">sqlite</span>
           <span class="tag-chip">dashboard</span>
@@ -62,23 +61,27 @@
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell"># Editor plugin / cron / git hook pushes a heartbeat:
-candy-codetime push sugarcraft php src/App.php 60
+vendor/bin/candy-codetime push sugarcraft php src/App.php 60
 
 # Open the dashboard:
-candy-codetime
+vendor/bin/candy-codetime
 
 # Override the data dir:
-CANDY_CODETIME_DIR=/var/data/codetime candy-codetime</code></pre>
-<p>Formerly shipped as <code>sugar-tick</code>: the old <code>SUGARTICK_DIR</code>
-env var and the <code>~/.local/share/sugar-tick</code> data directory are still
-honoured once and migrated automatically on first launch.</p> <!-- @rename-keep -->
+CANDY_CODETIME_DIR=/var/data/codetime vendor/bin/candy-codetime</code></pre>
+<p>Formerly shipped as <code>sugar-tick</code>: two separate compat mechanisms
+remain. Any <code>SUGARTICK_*</code> env export is imported under the
+<code>CANDY_CODETIME_*</code> name on <em>every</em> launch (new name wins, each
+import prints a deprecation notice on stderr). The one-time data-directory move
+from <code>~/.local/share/sugar-tick</code> runs on first launch only, and only
+when <code>CANDY_CODETIME_DIR</code> is unset — an explicit directory
+outranks the migration.</p> <!-- @rename-keep -->
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Heartbeat schema</strong><span><code>{time, project, language, file, duration, tags}</code> — JSONL, one beat per line; <code>tags</code> is reserved (no CLI command sets one yet).</span></div>
+      <div class="feature"><strong>Heartbeat schema</strong><span><code>{time, project, language, file, duration, tags}</code> — JSONL, one beat per line; <code>tags</code> is never set by the CLI; a plugin-written tag is honored on read and export.</span></div>
       <div class="feature"><strong>Per-day files</strong><span>Storage is one <code>YYYY-MM-DD.jsonl</code> per day — append-only, easy to ship to cold storage.</span></div>
-      <div class="feature"><strong>Top projects + languages</strong><span>Two ranking panes side-by-side, sorted by total time descending.</span></div>
-      <div class="feature"><strong>Daily timeline</strong><span>SugarCharts <code>Sparkline</code> driven by per-day minute buckets.</span></div>
+      <div class="feature"><strong>Top projects + languages</strong><span>Two ranking panes side-by-side from 62 columns up (they stack below that), sorted by total time descending.</span></div>
+      <div class="feature"><strong>Daily timeline</strong><span>SugarCharts <code>Sparkline</code> driven by one bucket per day, shown in minutes.</span></div>
       <div class="feature"><strong>Window navigation</strong><span><code>←</code> / <code>→</code> shift the 7-day window one day per press; <code>r</code> reloads.</span></div>
       <div class="feature"><strong>Milestones</strong><span><code>milestone add|list</code> markers — sqlite-only, and the dashboard never shows them.</span></div>
       <div class="feature"><strong>Pure folding</strong><span><code>Stats::compute</code> is total-input deterministic — every dashboard test runs against fixed beats.</span></div>
@@ -100,7 +103,7 @@ honoured once and migrated automatically on first launch.</p> <!-- @rename-keep 
 <tr><td>Store</td><td>append(heartbeat)</td><td>Record one heartbeat (fail-loud, private file modes)</td></tr>
 <tr><td>SqliteBackend</td><td>insert(heartbeat)</td><td>Record via the optional indexed backend</td></tr>
 <tr><td>Stats</td><td>compute(heartbeats, from, to)</td><td>Pure fold of totals and day buckets</td></tr>
-<tr><td>Heartbeat</td><td>new(time, project, language, file, duration)</td><td>Create a heartbeat</td></tr>
+<tr><td>Heartbeat</td><td>__construct(time, project, language, file, duration)</td><td>Create a heartbeat</td></tr>
 <tr><td>Dashboard</td><td>start(reader)</td><td>Load the window over any HeartbeatReader</td></tr>
 </table>
   </div>
