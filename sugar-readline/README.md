@@ -397,9 +397,12 @@ from disk) — zsh `HIST_IGNORE_ALL_DUPS` style — while plain
 `InMemoryHistory` collapses only **adjacent** duplicates (`HIST_IGNORE_DUPS`).
 All writers serialize on a sidecar `<file>.lock` (`flock` exclusive, held
 across read-write-rename), so two processes pushing at once never lose an
-entry; a write that cannot happen loudly throws rather than dropping the
-line. The rename makes torn reads impossible, but there is no `fsync` — a
-kernel crash can still lose the most recent writes.
+entry; a write that cannot happen throws rather than dropping the line —
+but that guarantee covers `push()` and explicit `flush()` calls only: the
+automatic flush in `__destruct` cannot throw usefully, so it degrades to an
+`error_log` line and any queued `$deferWrites` entries are lost at exit. The
+rename makes torn reads impossible, but there is no `fsync` — a kernel crash
+can still lose the most recent writes.
 
 Hidden prompts (`withHidden()`) never push their value: a secret stays out of
 both in-memory and on-disk history, and it never enters an attached
