@@ -68,7 +68,7 @@ $term-&gt;feed("\x1b[1;31mHello\x1b[0m world");
 $screen = $term-&gt;screen();
 $screen-&gt;cell(0, 0)-&gt;grapheme;       // 'H'
 $screen-&gt;cell(0, 0)-&gt;sgr-&gt;bold;      // true
-$screen-&gt;cell(0, 0)-&gt;foreground();   // 16-color red
+$screen-&gt;cell(0, 0)-&gt;foreground();   // a Color (kind 1 = Indexed16, value 1 — 16-color red)
 
 $term-&gt;feed("\x1b]2;Demo\x07");
 $term-&gt;windowTitle();                 // 'Demo'
