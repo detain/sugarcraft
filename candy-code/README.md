@@ -2980,8 +2980,9 @@ cd candy-code && composer install && vendor/bin/phpunit
 
 **30,576 tests / 758,516 assertions, 0 failures, 8 skipped** — the whole of
 `candy-code/tests/` (that suite only, not the monorepo) in one
-`vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6,
-in 22m51s (measured 2026-10-18). The skips are expected and rostered, and the
+`vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6.
+The 22m51s serial timing was taken on the earlier 24,863-test tree (2026-10-18);
+a timing for this pinned count is owed. The skips are expected and rostered, and the
 roster is a Linux figure that moves with the platform: each skip is a gate that
 self-skips by contract — a branch needing a file that cannot be read without
 mocking a built-in, a live-smoke or built-phar opt-in, a procfs or Windows-only
@@ -3012,10 +3013,12 @@ bash scripts/parallel-tests.sh \
   --against-json candy-code/tests/Config/Support/suite-figure.json
 ```
 
-K defaults to min(nproc, 24): measured 2026-10-18 on a 64-core box, the
-24,863-test suite medians are 185s at K=8, 108.5s at K=16, 102.5s at K=24,
+K defaults to min(nproc, 24). The medians below were measured 2026-10-18 on a
+64-core box against the then-current 24,863-test tree, not this page's pinned
+headline: 185s at K=8, 108.5s at K=16, 102.5s at K=24,
 and 105.5s at K=32 — wall time falls until the slowest single test file
-(KeyHelpTest, ~108s) becomes the floor, which it does from K=16 up. The old
+(KeyHelpTest, ~108s) becomes the floor, which it does from K=16 up. A re-measure
+of the sweep on the current count is owed. The old
 K=8 cap was a mis-measurement of the 11.5k-test era: K=8 measured WORSE
 (185s vs 102s) than every larger K tested, and light suites peak sooner still
 (candy-top's optimum is K=16, with K=24 costing it ~0.05s of noise). CI pins

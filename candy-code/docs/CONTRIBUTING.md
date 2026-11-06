@@ -1,7 +1,7 @@
 # Contributing to candy-code
 
 `candy-code` lives inside the SugarCraft monorepo: a PHP 8.3+ application
-under `src/`, a PHPUnit 10 suite of twenty thousand-plus tests under
+under `src/`, a PHPUnit 10 suite of tens of thousands of tests under
 `tests/`, and documentation pages that a battery of
 drift guards re-derives from the code on every run. This page is the working
 knowledge that repo-root `CONTRIBUTING.md` does not carry: how to get a
