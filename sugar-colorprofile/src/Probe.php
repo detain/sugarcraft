@@ -24,10 +24,13 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  * and {@see self::_reset()} clears the cap for tests.
  *
  * That cap bounds FREQUENCY, not the exec itself: a phase-2 shell-out is
- * un-timed and output-unbounded — @shell_exec blocks until infocmp exits and
- * slurps the whole dump. It is a CLI/startup-context face; inside a live
- * event loop or a request path use {@see AsyncProbe}, whose child carries a
- * deadline ladder and capped pipes instead.
+ * un-timed and output-unbounded — the proc_open child blocks until infocmp
+ * exits and its whole dump is slurped. It is a CLI/startup-context face;
+ * inside a live event loop or a request path use {@see AsyncProbe}, whose
+ * child carries a deadline ladder and capped pipes instead. What the child
+ * does get, at both surfaces, is only the shared minimal environment
+ * ({@see InfocmpBinary::childEnvironment()}) — parent TERMINFO,
+ * TERMINFO_DIRS and HOME never reach the database lookup.
  *
  * @see https://github.com/charmbracelet/colorprofile
  */
@@ -150,8 +153,25 @@ final class Probe
             return self::$terminfoUpgradeMemo[$key] = false;
         }
 
-        $output = @shell_exec($binary . ' -1 ' . escapeshellarg($term) . ' 2>/dev/null');
-        if ($output === null) {
+        // Minimal environment (shared builder): TERMINFO/TERMINFO_DIRS/HOME
+        // cannot steer the database lookup from the parent process.
+        $handle = @\proc_open(
+            $binary . ' -1 ' . escapeshellarg($term) . ' 2>/dev/null',
+            [1 => ['pipe', 'w']],
+            $pipes,
+            null,
+            InfocmpBinary::childEnvironment($term),
+        );
+
+        if (!\is_resource($handle)) {
+            return self::$terminfoUpgradeMemo[$key] = false;
+        }
+
+        $output = \stream_get_contents($pipes[1]);
+        \fclose($pipes[1]);
+        \proc_close($handle);
+
+        if ($output === false) {
             return self::$terminfoUpgradeMemo[$key] = false;
         }
 

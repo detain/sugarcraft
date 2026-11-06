@@ -111,4 +111,33 @@ final class AsyncProbeBoundedTest extends TestCase
         self::assertSame([], $slots->getValue());
         self::assertSame(1, $token->getValue());
     }
+
+    public function testEveryInfocmpLaunchPassesTheSharedMinimalEnvironment(): void
+    {
+        // M7 structural: all three exec sites must hand the child the shared
+        // minimal environment builder — the behavior pins live in
+        // tests/Probe/InfocmpEnvPurityTest.php; these needles make a silent
+        // slip back to an inherited-env launch red even if those hosts die.
+        $async = self::src();
+        self::assertStringContainsString(
+            'new Process($command, null, InfocmpBinary::childEnvironment($term))',
+            $async,
+            'the async child must launch with the minimal environment',
+        );
+
+        $root = \dirname(__DIR__);
+        $sync = (string) \file_get_contents($root . '/src/Probe.php');
+        self::assertStringContainsString(
+            'InfocmpBinary::childEnvironment($term)',
+            $sync,
+            'the sync phase-2 proc_open must carry the minimal environment',
+        );
+
+        $terminal = (string) \file_get_contents($root . '/src/Probe/TerminalProbe.php');
+        self::assertStringContainsString(
+            "InfocmpBinary::childEnvironment(\$this->getEnv('TERM'))",
+            $terminal,
+            'the terminal-probe base exec must carry the minimal environment',
+        );
+    }
 }

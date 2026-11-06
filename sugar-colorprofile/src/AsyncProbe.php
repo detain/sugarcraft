@@ -40,7 +40,10 @@ use SugarCraft\ColorProfile\Probe\TerminfoParser;
  *
  * Every spawned child is bounded: a wall-clock ceiling timer escalates
  * TERM → KILL and the exit/error handlers cancel BOTH rungs, so a settled
- * caller can never be followed by a stray SIGKILL. Both child pipes drain
+ * caller can never be followed by a stray SIGKILL. Each child runs under the
+ * shared minimal environment ({@see InfocmpBinary::childEnvironment()}) —
+ * `TERM` and a fixed `PATH`, never the parent's `TERMINFO`/`TERMINFO_DIRS`/
+ * `HOME`, which would steer the database lookup. Both child pipes drain
  * into keep-a-prefix 8 KiB buffers — past the ceiling the child is noise,
  * never an accumulator that grows with the pipe. Slots whose caller
  * abandoned the loop are reclaimed (child killed) by the next call — the
@@ -162,7 +165,7 @@ final class AsyncProbe
         $deferred = new Deferred();
         $command = $infocmpPath . ' -1 ' . escapeshellarg($term);
 
-        $process = new Process($command);
+        $process = new Process($command, null, InfocmpBinary::childEnvironment($term));
         $token = self::$nextToken++;
         self::$inFlight[$token] = [
             'process' => $process,

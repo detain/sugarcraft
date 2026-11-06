@@ -422,11 +422,33 @@ class TerminalProbe
      * Run a shell command and return the output.
      * Override in tests to inject mock output.
      *
+     * The base implementation launches under the shared minimal environment
+     * ({@see InfocmpBinary::childEnvironment()}) — the terminfo child must not
+     * inherit parent variables that steer its database lookup. An override
+     * takes over that responsibility too: the README's trust-boundary
+     * paragraph says the minimal environment is part of the contract.
+     *
      * @return string|null
      */
     protected function runCommand(string $cmd): ?string
     {
-        return @shell_exec($cmd);
+        $handle = @\proc_open(
+            $cmd,
+            [1 => ['pipe', 'w']],
+            $pipes,
+            null,
+            InfocmpBinary::childEnvironment($this->getEnv('TERM')),
+        );
+
+        if (!\is_resource($handle)) {
+            return null;
+        }
+
+        $output = \stream_get_contents($pipes[1]);
+        \fclose($pipes[1]);
+        \proc_close($handle);
+
+        return $output === false ? null : $output;
     }
 
     // -------------------------------------------------------------------------

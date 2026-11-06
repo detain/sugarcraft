@@ -349,20 +349,7 @@ if (Probe::reducedMotion()) {
 
 Detection's inputs are the env vars in the precedence table above — and,
 through phase 2, the terminfo database the `infocmp` child consults. The
-binary is launched from a fixed absolute-path roster, but the child **inherits
-the parent environment**, and it is that inherited environment which decides
-which database answers: `TERMINFO`, `TERMINFO_DIRS` and `HOME` all steer
-`infocmp`'s lookup (a search path you can inspect with `infocmp -1 -D`), and
-wherever an attacker can set environment variables the first two are
-attacker-writable. The name-position guard in `Probe\TerminfoParser` protects
-the *parse* from a hostile database; it does not vouch for the *source*. Treat
-every detection answer as a rendering hint, never as an authorization signal:
-enabling a feature, granting trust, or selecting a transport on the basis of a
-`Tc`/`RGB`/`Sixel` capability names a privilege the environment holds, not one
-this library holds. The planned code-hardening follow-up is to launch the child
-with a minimal environment (`TERM` and a fixed `PATH` only) so the database
-lookup cannot be steered at all; until it lands, assume phase-2 answers carry
-the trust level of whoever controls the process environment.
+binary is launched from a fixed absolute-path roster, and every exec surface hands the child a minimal environment built in one place (`Probe\InfocmpBinary::childEnvironment()`: the queried `TERM` and a fixed `PATH` only). `TERMINFO`, `TERMINFO_DIRS` and `HOME` all steer `infocmp`'s lookup (a search path you can inspect with `infocmp -1 -D`), and inheriting them from a parent whose environment an attacker controls would hand that attacker the database; they are therefore never passed. What remains outside this library's reach is the database itself: an attacker who can write to the system terminfo directories still owns the answer, so the name-position guard in `Probe\TerminfoParser` protects the *parse* from a hostile database but cannot vouch for the *source*. Treat every detection answer as a rendering hint, never as an authorization signal: enabling a feature, granting trust, or selecting a transport on the basis of a `Tc`/`RGB`/`Sixel` capability names a privilege the environment holds, not one this library holds.
 
 ## ColorProfile Enum
 

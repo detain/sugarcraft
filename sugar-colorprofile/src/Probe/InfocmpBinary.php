@@ -67,6 +67,30 @@ final class InfocmpBinary
     }
 
     /**
+     * The environment every infocmp child receives, at every exec surface.
+     *
+     * `TERMINFO`, `TERMINFO_DIRS` and `HOME` all steer infocmp's database
+     * lookup (a search path inspectable via `infocmp -1 -D`), so a child that
+     * inherits the parent environment answers from whichever database whoever
+     * controls that environment puts there. The minimal child carries only the
+     * terminal being queried and a fixed `PATH`; null/empty `$term` omits the
+     * key entirely. The README's trust-boundary paragraph is the prose home of
+     * this law — change one, change the other.
+     *
+     * @return array<string,string>
+     */
+    public static function childEnvironment(?string $term = null): array
+    {
+        $env = ['PATH' => '/usr/bin:/bin'];
+
+        if ($term !== null && $term !== '') {
+            $env = ['TERM' => $term] + $env;
+        }
+
+        return $env;
+    }
+
+    /**
      * Is $term shaped like a terminal name rather than an infocmp option?
      *
      * `escapeshellarg()` quotes a leading-dash value but cannot make it a
