@@ -244,7 +244,9 @@ public function hide(): self
 // MAX_FILTER_LENGTH (256) codepoints — compare filterText() to detect.
 public function type(string $char): self
 
-// Remove the last codepoint from the filter text. Unlike type(), the
+// Remove the last codepoint from the filter text — grapheme clusters such
+// as '👍🏽' span several codepoints, so clearing one may take several
+// backspaces. Unlike type(), the
 // cursor CLAMPS to the new list end instead of resetting — deliberate
 // asymmetry: narrowing preserves your place, widening does not.
 public function backspace(): self
