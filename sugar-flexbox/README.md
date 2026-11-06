@@ -163,13 +163,18 @@ cursor lands back inside.
 ```php
 use SugarCraft\Flexbox\Viewport;
 
-$viewport = Viewport::withContent(str_repeat("Line\n", 50), 80, 24);
+$lines = implode("\n", array_map(
+    static fn (int $i): string => sprintf('Line %02d', $i),
+    range(1, 50),
+)) . "\n";
+
+$viewport = Viewport::withContent($lines, 80, 24);
 $viewport = $viewport->withScrollbar(true);
 
 // Viewport is a plain immutable component, not a Core\Model: drive it from
 // your own Model's update() and render the view it returns.
 $viewport = $viewport->lineDown(3)->withStickyHeader(1);
-echo $viewport->view();                    // first content line stays pinned at top
+echo $viewport->view();                    // Line 01 stays pinned; the numbered body has scrolled past Line 04
 ```
 
 ## Trust boundary
