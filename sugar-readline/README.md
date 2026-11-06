@@ -17,7 +17,7 @@ sugar-readline — an interactive line-editing prompt library for terminal UIs o
 - **TextPrompt** — single-line input with validation, autocomplete, hidden/password mode, char limit, default value, history navigation, and an optional display-width viewport
 - **SelectionPrompt** — filtered list with type-to-filter, cursor navigation and pagination
 - **MultiSelectPrompt** — filtered multi-choice with min/max enforcement and FIFO rollover at the cap
-- **ConfirmationPrompt** — Yes/No with customizable labels: choose with arrows/Tab/Space, commit with Enter
+- **ConfirmationPrompt** — Yes/No with customisable labels: choose with arrows/Tab/Space, commit with Enter
 - **TextareaPrompt** — multi-line text input with line/column cursor and optional max-line cap; Enter submits, Shift+Enter and Ctrl+J break lines
 - **Immutable state** — every input-handling method returns a new instance; `view()` returns the ANSI string while each prompt exposes its own data accessor (`value()` on TextPrompt/TextareaPrompt, `selectedValue()` on SelectionPrompt, `selectedValues()` on MultiSelectPrompt, `result()` on ConfirmationPrompt), and the `Readline` pump owns all terminal writes
 - **Vim keybindings** — vi-mode (Insert/Normal, plus a motion-only Visual scaffold); `ViMode` delegates its key-to-operation mapping to `VimKeyHandler` in `sugar-forms` — the same handler that the `sugar-forms` widgets drive and whose widgets `sugar-widgets` re-exports through its `class_alias` facade; new bindings in the `VimAction` enum land in `sugar-forms` and benefit all three libs. Includes text objects: `ci"`, `di(`, `da{`, `yiw` and friends, with a working unnamed register (`x`/`dd`/`yy`/text-object yanks feed `p`)
@@ -249,7 +249,7 @@ fixture stream and arm `stop()` from your test when it runs dry.
 
 Bindings fire from both spellings: raw control bytes off a live stream and
 symbolic key names (`Key::` constants or plain strings like `'ctrl_a'`) are
-normalized to one canonical language at the choke point. The `Key` class
+normalised to one canonical language at the choke point. The `Key` class
 lists the primary bindings; it is not an exhaustive enumeration of every
 sequence a terminal can send.
 
@@ -329,7 +329,7 @@ its own state survives the prompt's immutable cloning.
   target — quotes (`"` `'` `` ` ``), brackets (`(` `)` `b`, `[` `]`,
   `{` `}` `B`, `<` `>`), or `w` for the word under the cursor. So `ci"`
   retypes a quoted string, `da{` deletes braces and contents, `diw`/`daw`
-  delete a word (aw takes the trailing space), `yi(` copies the parenthesized
+  delete a word (aw takes the trailing space), `yi(` copies the parenthesised
   text into the unnamed register and moves the cursor to its start.
   Resolution lives in sugar-forms
   (`TextObject::resolve()` via `VimKeyHandler::handleTextObject()`):
@@ -395,7 +395,7 @@ Dedup is stricter than the base `HistoryInterface` minimum: `FileHistory`
 skips a line equal to **any** entry already retained (including ones loaded
 from disk) — zsh `HIST_IGNORE_ALL_DUPS` style — while plain
 `InMemoryHistory` collapses only **adjacent** duplicates (`HIST_IGNORE_DUPS`).
-All writers serialize on a sidecar `<file>.lock` (`flock` exclusive, held
+All writers serialise on a sidecar `<file>.lock` (`flock` exclusive, held
 across read-write-rename), so two processes pushing at once never lose an
 entry; a write that cannot happen throws rather than dropping the line —
 but that guarantee covers `push()` and explicit `flush()` calls only: the
