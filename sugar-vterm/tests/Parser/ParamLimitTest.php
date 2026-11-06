@@ -172,7 +172,8 @@ final class ParamLimitTest extends TestCase
 
     /**
      * A parser built with the facade ceiling (as BOTH facades build theirs)
-     * truncates OSC payloads at MAX_STRING_BUFFER, not the 1 MiB default.
+     * truncates OSC payloads at MAX_STRING_BUFFER instead of letting them
+     * grow with the feed.
      */
     public function testFacadeStringBufferCapUsesTheSharedConstant(): void
     {
@@ -197,7 +198,7 @@ final class ParamLimitTest extends TestCase
         $this->assertLessThanOrEqual(
             65_536,
             $payloadLen,
-            'facade parsers must honour the 64 KiB ceiling, not the 1 MiB default'
+            'facade parsers must honour the 64 KiB ceiling'
         );
     }
 

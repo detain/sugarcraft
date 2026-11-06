@@ -58,10 +58,11 @@ final class Terminal
             scrollback: new Scrollback($scrollbackSize),
             onFocusEvent: $onFocusEvent,
         );
-        // 64 KiB string-buffer cap (sugar-ansi-parser default) bounds OSC/DCS payload
-        // memory; the ceiling is the shared
-        // \SugarCraft\Vterm\Terminal::MAX_STRING_BUFFER, reduced from
-        // sugar-ansi-parser's 1 MiB default as a security item.
+        // 64 KiB string-buffer cap bounds OSC/DCS payload memory. The value
+        // equals sugar-ansi-parser's Parser default (65536) today; the ceiling
+        // is pinned explicitly via the shared
+        // \SugarCraft\Vterm\Terminal::MAX_STRING_BUFFER so this security bound
+        // survives any future change to the parser's default.
         // The handler is the parser's sink AND a SubparamsAwareHandler, so the
         // colon continuation flags SGR needs arrive by push — no late-bound
         // back-reference to this parser is wired anywhere.

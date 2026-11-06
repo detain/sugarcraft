@@ -26,7 +26,8 @@ final class Terminal
      * String-buffer ceiling for the parser's OSC/DCS accumulation, shared by
      * BOTH facade parsers (renderer here, emulator in Terminal\Terminal) so
      * the hostile-payload memory bound is one constant, not two literals.
-     * Reduced from sugar-ansi-parser's 1 MiB default as a security item;
+     * Equal to sugar-ansi-parser's Parser default (64 KiB) today; pinned
+     * explicitly so this security bound survives parser-default drift, and
      * pinned by ParamLimitTest's facade legs.
      */
     public const MAX_STRING_BUFFER = 65536;
@@ -70,9 +71,10 @@ final class Terminal
         $osc = new OscHandlerImpl($csi);
 
         $handler = new RendererHandler($csi, new HandlerAdapter($csi, $osc));
-        // 64 KiB string-buffer cap (sugar-ansi-parser default) bounds OSC/DCS payload
-        // memory; the ceiling is self::MAX_STRING_BUFFER, reduced from
-        // sugar-ansi-parser's 1 MiB default as a security item.
+        // 64 KiB string-buffer cap bounds OSC/DCS payload memory. The value
+        // equals sugar-ansi-parser's Parser default (65536) today; it is
+        // pinned explicitly as self::MAX_STRING_BUFFER so this security bound
+        // survives any future change to the parser's default.
         // RendererHandler is the parser's sink and a SubparamsAwareHandler, so
         // the colon continuation flags SGR needs are pushed down to CsiHandlerImpl
         // on every dispatch — no late-bound back-reference to this parser exists.
