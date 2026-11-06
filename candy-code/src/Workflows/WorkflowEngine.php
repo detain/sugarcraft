@@ -2145,6 +2145,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 timeout: $verifier->timeout ?? $stageTimeout,
                 maxRetries: $maxRetriesForAttempt,
                 isolation: $verifier->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
+                outputSchema: $verifier->outputSchema,
+                // S2: the per-stage model ask; null keeps today's session-default dial.
+                model: $verifier->model,
                 permissionGate: $this->permissionGate,
             );
             $maxRetriesForAttempt = max(0, $maxAttempts - 1 - $attemptsUsed);
