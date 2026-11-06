@@ -521,18 +521,27 @@ use SugarCraft\Sql\Admin\Alerts\AlertManager;
 use SugarCraft\Sql\Admin\Alerts\AlertThresholds;
 use SugarCraft\Sql\Admin\Alerts\AlertNotifier;
 
+// AlertNotifier::withDefaults() is MUTED by default (muted: true), so an
+// un-advertised call wires a no-op notifier — pass muted: false (or see
+// Toast degradation below) for toasts that actually surface.
 $manager = AlertManager::new()
     ->withThresholds(AlertThresholds::default())
-    ->withNotifier(AlertNotifier::withDefaults());
+    ->withNotifier(AlertNotifier::withDefaults(muted: false));
 
-// Check connection counters and dispatch alerts
+// Or combine check + dispatch in one call. The manager owns the notifier
+// (there is no standalone $notifier in scope, and AlertManager has no
+// notify() method); checkAndDispatch does the immutable notify-loop for
+// you and hands back the updated notifier:
+['alerts' => $alerts, 'notifier' => $notifier] = $manager->checkAndDispatch($counters);
+
+// Manual loop when the alerts are needed before dispatch — seed the
+// notifier from the manager (nullable) and carry it through notify(),
+// which returns a new AlertNotifier rather than mutating:
 $alerts = $manager->checkConnectionUsage($counters);
+$notifier = $manager->notifier() ?? AlertNotifier::new();
 foreach ($alerts as $alert) {
     $notifier = $notifier->notify($alert);
 }
-
-// Or combine check + dispatch in one call
-['alerts' => $alerts, 'notifier' => $notifier] = $manager->checkAndDispatch($counters);
 ```
 
 ### Severity levels
