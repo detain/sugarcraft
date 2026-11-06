@@ -99,9 +99,17 @@ U+E000 (open) and U+E001 (close), anchored to sugar-core's
 `Sanitize::ZONE_SENTINEL_OPEN` / `::ZONE_SENTINEL_CLOSE` so a sanitizer sweep
 and the markup it defends against can never drift apart.
 
-**What they defend against.** ANSI escape sequences and ordinary ASCII UI
-text can never carry these bytes, so normal rendering cannot fabricate a
-zone boundary. But the PUA is not empty space: pasted foreign frames,
+**What they defend against.** Ordinary ASCII UI text cannot carry these
+bytes, and well-behaved renderers never emit them inside escape payloads, so
+normal rendering cannot fabricate a zone boundary. That is a policy of honest
+output, not a property of the wire grammar: escape payloads are arbitrary
+bytes (the decoder walks OSC/CSI runs as opaque pass-through, so a forged tag
+buried inside one is inert), while an unterminated CSI/OSC run swallows the
+rest of its frame — including *legitimate* markers — by design, so hostile
+input can still disturb recorded geometry. Sweeping untrusted bytes before
+composition is the consumer-side duty spelled out under **The consumer's
+duty** below (`Mark::untrusted()` /
+`Sanitize::untrustedForMarkedFrames()`). But the PUA is not empty space: pasted foreign frames,
 image-overlay payloads and Nerd Font / powerline glyph runs all live in the
 private-use area. Content that already contains `U+E000 <id> U+E001` is
 structurally indistinguishable from a marker this lib emitted — the sentinels
