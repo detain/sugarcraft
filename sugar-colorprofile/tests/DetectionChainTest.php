@@ -273,4 +273,24 @@ final class DetectionChainTest extends TestCase
 
         $this->assertSame(ColorProfile::Ascii, $chain->toColorProfile());
     }
+
+    public function testTermExportsAtMostTheByteCeiling(): void
+    {
+        // term() is where the ambient value leaves the chain; the docs
+        // attached a 128-byte bound to env interpolation, which never
+        // covered this accessor. An absurd TERM now clamps at the stated
+        // 256-byte ceiling instead of streaming out raw.
+        $chain = DetectionChain::detect(['TERM' => str_repeat('q', 100000)]);
+        $term = $chain->term();
+
+        $this->assertSame(256, strlen($term));
+        $this->assertSame(str_repeat('q', 256), $term);
+    }
+
+    public function testShortTermExposesByteIdentical(): void
+    {
+        $chain = DetectionChain::detect(['TERM' => 'xterm-256color']);
+
+        $this->assertSame('xterm-256color', $chain->term(), 'the clamp must not touch ordinary values');
+    }
 }

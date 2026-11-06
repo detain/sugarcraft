@@ -57,6 +57,16 @@ final class DetectionChain
     /** FORCE_COLOR spellings that mean "level 3" (compared lowercased). */
     private const FORCE_COLOR_TRUTHY_WORDS = ['true', 'yes', 'on'];
 
+    /**
+     * Byte ceiling for the TERM value exposed through {@see self::term()}.
+     * Detection itself compares the ambient TERM by equality, raw; the
+     * accessor is where the value leaves the chain, so it is where an
+     * absurdly long value gets a stated bound instead of streaming out
+     * unbounded (env interpolation elsewhere is separately capped by
+     * {@see Env::SOURCE_MAX_BYTES} — that cap never applied here).
+     */
+    private const TERM_MAX_BYTES = 256;
+
     private string $level;
     private string $source;
     private string $term;
@@ -225,11 +235,17 @@ final class DetectionChain
     }
 
     /**
-     * Get the TERM value used in detection.
+     * Get the TERM value used in detection. Values at or below
+     * {@see self::TERM_MAX_BYTES} come back byte-identical; a longer
+     * value is clamped to the ceiling here rather than exported raw —
+     * the accessor is where TERM leaves the chain, and detection itself
+     * already matched it by equality before any consumer could see it.
      */
     public function term(): string
     {
-        return $this->term;
+        return \strlen($this->term) > self::TERM_MAX_BYTES
+            ? \substr($this->term, 0, self::TERM_MAX_BYTES)
+            : $this->term;
     }
 
     /**

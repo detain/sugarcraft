@@ -16,8 +16,12 @@ namespace SugarCraft\ColorProfile;
  *  - A NON-EMPTY injected map is a COMPLETE, hermetic replacement. Ambient
  *    variables do NOT leak in. Callers who want layering merge explicitly.
  *  - An EMPTY injected map means "use the ambient environment": a single
- *    snapshot of $_ENV with getenv() values merged on top (getenv wins only
- *    where $_ENV lacks the key, because getenv() adds entries $_ENV omits).
+ *    snapshot built as `array_merge($_ENV, getenv() ?: [])`. The getenv()
+ *    side is the right operand, so it wins on EVERY key the two sources
+ *    share — and it also adds entries $_ENV omits. A value changed via
+ *    putenv() after process start therefore overrides the $_ENV copy of
+ *    the same key; that precedence is the contract, not an accident of
+ *    which source happens to carry the key.
  *
  * Values are always read via {@see self::value()} so that a false from a
  * hypothetical non-string source normalizes to null, matching the

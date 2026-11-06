@@ -296,4 +296,24 @@ final class EnvUnificationTest extends TestCase
         $this->assertSame(str_repeat('b', 128), Env::sanitize(str_repeat('b', 200)));
         $this->assertSame('', Env::sanitize("\u{0085}"), 'C1 code points (NEL) still go');
     }
+
+    public function testAmbientMergeLetsGetenvWinOnSharedKeys(): void
+    {
+        // resolve() merges as array_merge($_ENV, getenv()): the getenv()
+        // side is the right operand, so on a key BOTH sources carry the
+        // putenv()-made value wins outright — not merely where $_ENV
+        // lacks the key (the reading an earlier docblock claimed). setUp
+        // cleared the ambient TERM, so this is a clean dual-write.
+        $_ENV['TERM'] = 'xterm';
+        putenv('TERM=screen');
+        try {
+            $resolved = Env::resolve([]);
+            $this->assertSame('screen', $resolved['TERM'], 'getenv wins every shared key');
+            // The chain reads through the same merge, so its TERM agrees.
+            $this->assertSame('screen', DetectionChain::detect([])->term());
+        } finally {
+            putenv('TERM');
+            unset($_ENV['TERM']);
+        }
+    }
 }
