@@ -142,10 +142,7 @@ places — READMEs use `vendor/bin/…` and `./bin/…` for different ones:
 
 ## Accessibility & reduced motion
 
-- **`REDUCE_MOTION`** (or `PREFERS_REDUCED_MOTION`) set to any truthy value
-  is read by [`SugarCraft\ColorProfile\Probe::reducedMotion()`](../sugar-colorprofile/src/Probe.php)
-  and honoured by [`sugar-spring`](../sugar-spring/src/Spring.php): springs
-  snap straight to their target instead of animating.
+- **`REDUCE_MOTION`** / **`PREFERS_REDUCED_MOTION`** — either variable reading on (anything except empty, `0`, `false`, `no`, `off`, case-insensitively) is read by [`SugarCraft\ColorProfile\Probe::reducedMotion()`](../sugar-colorprofile/src/Probe.php) and honoured by [`sugar-spring`](../sugar-spring/src/Spring.php): spring-composed types snap straight to their target instead of animating (projectiles and easing curves are gate-yourself app-side; see the sugar-spring README).
 - **`NO_COLOR`**: color depth is detected fleet-wide by
   [`sugar-core`'s `ColorProfile::detect()`](../sugar-core/src/Util/ColorProfile.php)
   (TERM / `COLORTERM` / `NO_COLOR` / CI probes) and announced to every

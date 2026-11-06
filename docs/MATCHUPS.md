@@ -36,7 +36,7 @@ ships as `App\` — called out in the table below.
 | **SugarAsync** (`sugar-async/`) | 🟢 ready | Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps (withTimeout, withDeadline, cancellable, retry, debounce, throttle, all/race, onPending, singleFlight), TTL async cache. Dependents: sugar-forms, sugar-vterm, candy-sql, candy-mail, candy-git-server, candy-codetime. |
 | **SugarCraft** (`sugar-core/`) | 🟢 ready | MVC-style Model–Update–View runtime — Model / Msg / Cmd / Program. Namespace follows the suffix rule (`sugar-core` → `SugarCraft\Core\`). |
 | **SugarStyle** (`sugar-style/`) | 🟢 ready | Declarative styling + layout. |
-| **SugarSpring** (`sugar-spring/`) | 🟢 ready | Spring physics + Newtonian projectile sim. |
+| **SugarSpring** (`sugar-spring/`) | 🟢 ready | Damped spring physics + Newtonian projectile simulation. |
 | **SugarMouse** (`sugar-mouse/`) | 🟢 ready | Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication, plus the bubblezone-style `Zones` Manager (hover / drag / multi-click trackers) under `SugarCraft\Mouse\Zones` — the mouse foundation the rest of the stack builds on. |
 | **SugarWidgets** (`sugar-widgets/`) | 🟡 in progress | First-party components — Tabs, Tree, Table, Progress, Help, Key, Paginator, Stopwatch, Timer, Input\TextEdit, Menu\OptionRow — plus render helpers; the 8 alias families (Cursor, FilePicker, ItemList, Scrollbar, Spinner, TextArea, TextInput, Viewport) are deprecated re-exports of sugar-forms. Real gap: bubbles Delegate vocabulary unported. |
 | **SugarCharts** (`sugar-charts/`) | 🟡 in progress | Sparkline / Bar / Line / Heatmap / Scatter / TimeSeries / Streamline / Waveline / OHLC / Picture. |
