@@ -2914,9 +2914,9 @@ API and stay as-is. Boolean `is*()`/`has*()` predicates are convention-compliant
 | `Agents` | `Mailbox` | `getUnreadCount()` | `unreadCount()` |
 | `MCP` | `McpAuthStore` | `getServerStatus()` | `serverStatus()` |
 | `MCP` | `McpClient` | `getPrompt()` | `prompt()` |
-| `Tui\\Components` | `MenuBar` | `getActiveItem()` | `activeItem()` |
-| `Tui\\Components` | `MenuBar` | `getActiveMenu()` | `activeMenu()` |
-| `Tui\\Components` | `MenuBar` | `getMenuItems()` | `menuItems()` |
+| `Tui\Components` | `MenuBar` | `getActiveItem()` | `activeItem()` |
+| `Tui\Components` | `MenuBar` | `getActiveMenu()` | `activeMenu()` |
+| `Tui\Components` | `MenuBar` | `getMenuItems()` | `menuItems()` |
 | `Tui` | `MultiplexerSplitPane` | `getMultiplexerType()` | `multiplexerType()` |
 | `MCP` | `OAuthClientRegistration` | `getValidAuth()` | `validAuth()` |
 | `Tui` | `Renderer` | `getTerminalSize()` | `terminalSize()` |
