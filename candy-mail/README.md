@@ -149,6 +149,8 @@ $email2 = new Email(
 ## CLI
 
 ```bash
+# The examples below invoke the bare `candy-mail` (composer-global or phar bin);
+# in a monorepo checkout run them as `php candy-mail/bin/candy-mail`.
 candy-mail --from "me@example.com" --to "you@example.com" --subject "Hello"
 # Body read from STDIN. Both --flag value and --flag=value work.
 
