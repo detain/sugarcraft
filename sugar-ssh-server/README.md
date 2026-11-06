@@ -130,6 +130,34 @@ daemon; neither implements the SSH wire protocol itself.
 
 ## Quickstart
 
+### 0. Provision the account, the directory, and the package
+
+Everything below assumes three things a fresh host does not have. As root
+(Debian/Ubuntu spellings — RHEL-family differs in package and service
+names):
+
+```sh
+apt-get install -y openssh-server
+useradd -m -s /bin/bash wishuser
+install -d -m 0755 -o wishuser -g wishuser /opt/wish
+```
+
+- `wishuser` is the account the `Match` block in step 1 forces commands
+  on, and the account the entry script runs *as* — the step 2 paths are
+  provisioned for its uid.
+- `/opt/wish/vendor/autoload.php` is hard-required at the very first line
+  of the entry script below. Nothing in sshd's configuration creates it:
+  it is produced by a deploy-time install of this package **into
+  `/opt/wish`**, run as the same user that will own the directory:
+
+  ```sh
+  sudo -u wishuser sh -c 'cd /opt/wish && composer require sugarcraft/sugar-ssh-server'
+  ```
+
+Until that install completes, every forced connection lands on PHP's
+"Could not open input file" — which is exactly the failure the probe in
+step 1 teaches you to read.
+
 ### 1. Configure sshd
 
 Add to `/etc/ssh/sshd_config.d/wish.conf`:
