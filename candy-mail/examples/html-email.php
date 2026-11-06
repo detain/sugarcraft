@@ -47,6 +47,9 @@ if ($apiKey === null) {
 
 $mailer = new Mailer(new ResendTransport($apiKey));
 
+// The state glyphs in the echoes below are decorative: the words carry the
+// outcome, so success/failure reads correctly even where a screen reader,
+// font, or locale substitution never renders the mark itself.
 try {
     $mailer->send($email);
     echo "✓ HTML multi-recipient email sent.\n";
