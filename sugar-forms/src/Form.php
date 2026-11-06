@@ -1149,7 +1149,9 @@ final class Form implements Model
 
     /**
      * Currently-applicable key bindings rendered as `[label, keys]` rows
-     * suitable for a status / help bar. The four navigation rows are
+     * suitable for a HOST status / help bar — the form's own view() never
+     * draws them (the showHelp flag gates only the Step-of indicator).
+     * The four navigation rows are
      * derived live from {@see self::activeKeyMap()} (m21) — the labels follow
      * whatever map the form actually uses, including custom bindings —
      * followed by the fixed next-page / prev-page rows when the form spans
@@ -1178,7 +1180,9 @@ final class Form implements Model
 
     /**
      * Single-line help string composed from {@see keyBinds()}. Useful
-     * for status bars / footers. Mirrors huh's `Help()`.
+     * for host status bars / footers — like keyBinds(), the form's own
+     * view() never renders it; calling it is the host's choice.
+     * Mirrors huh's `Help()`.
      */
     public function help(): string
     {

@@ -438,6 +438,12 @@ final class ItemList implements Model
     public function withTitle(string $t): self           { return $this->mutate(title: $t); }
     public function withShowDescription(bool $on): self  { return $this->mutate(showDescription: $on); }
     public function withShowStatusBar(bool $on): self    { return $this->mutate(showStatusBar: $on); }
+    /**
+     * Reserved surface (SF-9, M18): the stored flag is never read — no
+     * ItemList render path draws a help row. Kept for shape stability;
+     * implement-then-keep or remove in 2.0.0 is an owner decision
+     * (recorded in the docs-fix 1104 lane report).
+     */
     public function withShowHelp(bool $on): self         { return $this->mutate(showHelp: $on); }
     public function withShowFilter(bool $on): self       { return $this->mutate(showFilter: $on); }
     public function withInfiniteScrolling(bool $on): self { return $this->mutate(infiniteScrolling: $on); }

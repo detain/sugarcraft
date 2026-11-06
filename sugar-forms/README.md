@@ -192,7 +192,7 @@ Form::groups(
 | ------ | ------------ |
 | `withTheme(Theme)` | Switch the colour palette. |
 | `withAccessible(bool)` | Render one `label: value` line for the focused field — for screen readers / dumb terminals. Echo-mode fields project their display characters via `displayValue()`; the stored secret is never read aloud. |
-| `withShowHelp(bool)` | Toggle the help footer. |
+| `withShowHelp(bool)` | Toggles the multi-group `Step X of Y` indicator (view() consults it only alongside more-than-one group and the group's own help flag). It renders no footer: `keyBinds()` / `help()` compose host-facing binding rows that view() never draws. |
 | `withShowErrors(bool)` | Toggle the inline `! error` line on validation failures. |
 | `withWidth(int)`, `withHeight(int)` | Pin the rendered geometry. |
 | `withTimeout(int $ms)` | Stores a wall-clock budget (ms) for the host runtime to consult; the `Form` model itself starts no timer. |
