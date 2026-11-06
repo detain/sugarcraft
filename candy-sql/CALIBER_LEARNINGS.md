@@ -167,7 +167,8 @@ Source: step 2.2 ai/candy-sql-query-contract-and-flavor
 
 ### 2026-06-03 — PreparedStatementInterface as driver-neutral statement contract (STEP 2.2)
 Pattern: `DatabaseInterface::prepare()` now returns `PreparedStatementInterface|null` instead of `mixed`. All three database implementations wrap their PDOStatement in `PdoPreparedStatement` before returning. This gives callers a uniform type (`execute()`/`fetch()`/`fetchAll()`/`rowCount()`/`closeCursor()`) without depending on the raw PDOStatement type, making it possible to mock statements in tests or swap drivers without changing call sites.
-Canonical: `PdoPreparedStatement` wraps `$pdo->prepare($sql)` and delegates all five interface methods; `SqlitePreparedStatement` does the same for the sqlite-specific path.
+Canonical: `PdoPreparedStatement` wraps `$pdo->prepare($sql)` and delegates all five interface methods — it is the ONLY statement wrapper; all three drivers use it, as this entry's own body states.
+Erratum 2026-11-06 (docs-fix PB-SQL-25): this line previously claimed `SqlitePreparedStatement` did the same for the sqlite-specific path. It never did — `SqliteDatabase::prepare()` returns `PdoPreparedStatement` like the other two, the class had zero src/bin consumers, and it was deleted as dead code in that step.
 Source: step 2.2 ai/candy-sql-query-contract-and-flavor
 
 ### 2026-06-03 — Flavor::detectFromDriver() companion to detectFromVersionString() (STEP 2.2)
