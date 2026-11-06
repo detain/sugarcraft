@@ -161,6 +161,11 @@ final class Table
     /**
      * Filter rows by text (case-insensitive substring match).
      *
+     * Matching runs against the stored raw cell strings, exactly as sort
+     * ordering does; the render-time sanitize pass never widens what can
+     * match. A value that must only match its cleaned form should be
+     * sanitized by the caller before being stored.
+     *
      * Resets cursorRow to 0: the visible row set changes identity, so the
      * old index would silently address a different record.
      */
