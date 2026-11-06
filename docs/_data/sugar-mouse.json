@@ -7,5 +7,5 @@
     "displayName": "SugarMouse",
     "tagline": "Mark/Scan/Get mouse hit-testing primitives plus the bubblezone-style Zones manager layer, in one package",
     "phpVersion": "8.3+",
-    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/lrstanley/bubblezone\" style=\"color: inherit;\">lrstanley/bubblezone</a></span>\n          <span class=\"tag-chip\">mouse</span>\n          <span class=\"tag-chip\">hit-testing</span>\n          <span class=\"tag-chip\">zones</span>\n          <span class=\"tag-chip\">zone-click-track</span>"
+    "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/lrstanley/bubblezone\" style=\"color: inherit;\">lrstanley/bubblezone</a></span>\n          <span class=\"tag-chip\">mouse</span>\n          <span class=\"tag-chip\">hit-testing</span>\n          <span class=\"tag-chip\">zones</span>\n          <span class=\"tag-chip\">click dedupe</span>"
 }
