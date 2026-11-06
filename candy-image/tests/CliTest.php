@@ -404,4 +404,22 @@ final class CliTest extends TestCase
         $this->assertSame(Cli::EXIT_INPUT, $exit);
         $this->assertStringContainsString('no such file', strtolower($err));
     }
+
+    public function testAnimateWithRenderDialsIsRefusedNamingEach(): void
+    {
+        [$exit, , $err] = self::drive(['--animate', '--work=9', '--format=half', '/nonexistent/candy-image-absent.gif']);
+
+        $this->assertSame(Cli::EXIT_USAGE, $exit);
+        $this->assertStringContainsString('--animate', $err);
+        $this->assertStringContainsString('--work', $err);
+        $this->assertStringContainsString('--format', $err);
+    }
+
+    public function testAnimateWithViewportBoxIsHonoredNotRefused(): void
+    {
+        [$exit, , $err] = self::drive(['--animate', '--size=40x12', '/nonexistent/candy-image-absent.gif']);
+
+        $this->assertSame(Cli::EXIT_INPUT, $exit, 'the box dials steer the animation path, so they must not join the refusal');
+        $this->assertStringNotContainsString('ignores', $err);
+    }
 }

@@ -25,4 +25,5 @@ return [
     'cli.passthrough_refused' => 'candy-image: --passthrough={value} is not available on this base (the GNU Screen and tmux passthrough envelopes are applied automatically by detection; they cannot be forced from here — use auto or none)',
     'cli.too_many'     => 'candy-image: unexpected argument \'{arg}\' (this viewer takes one image file)',
     'cli.no_frames'    => 'candy-image: no animation frames decoded from \'{path}\'',
+    'cli.animate_dials_refused' => 'candy-image: --animate ignores {flags} — they steer the still-image render path; drop them, or drop --animate',
 ];

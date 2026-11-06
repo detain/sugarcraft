@@ -36,6 +36,7 @@ final class LangTest extends TestCase
             'passthrough_refused' => ['cli.passthrough_refused'],
             'too_many' => ['cli.too_many'],
             'no_frames' => ['cli.no_frames'],
+            'animate_dials_refused' => ['cli.animate_dials_refused'],
         ];
     }
 

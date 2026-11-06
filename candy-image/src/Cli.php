@@ -118,6 +118,8 @@ final class Cli
         $canvas = null;
         $work = null;
         $sizeSeen = false;
+        /** @var array<string,true> render dials explicitly accepted this run */
+        $animateDials = [];
 
         foreach (array_slice($argv, 1) as $token) {
             if ($token === '--help' || $token === '-h') {
@@ -188,6 +190,7 @@ final class Cli
                             return self::EXIT_USAGE;
                         }
                         $format = strtolower($raw);
+                        $animateDials['--format'] = true;
                         break;
                     case 'width':
                         if ($sizeSeen) {
@@ -224,6 +227,7 @@ final class Cli
                             return $bad();
                         }
                         $scale = $case;
+                        $animateDials['--scale'] = true;
                         break;
                     case 'symbols':
                         // Chafa's tag-selector grammar; the
@@ -237,6 +241,7 @@ final class Cli
                             return self::EXIT_USAGE;
                         }
                         $symbols = $raw;
+                        $animateDials['--symbols'] = true;
                         break;
                     case 'canvas':
                         $mode = CanvasMode::tryFrom(strtolower($raw));
@@ -244,6 +249,7 @@ final class Cli
                             return $bad();
                         }
                         $canvas = $mode;
+                        $animateDials['--canvas'] = true;
                         break;
                     case 'work':
                         $factor = self::workDialToFactor($raw);
@@ -251,6 +257,7 @@ final class Cli
                             return $bad();
                         }
                         $work = $factor;
+                        $animateDials['--work'] = true;
                         break;
                     case 'passthrough':
                         $value = strtolower($raw);
@@ -283,6 +290,16 @@ final class Cli
 
         if ($file === null) {
             \fwrite($stderr, Lang::t('cli.usage') . "\n");
+
+            return self::EXIT_USAGE;
+        }
+
+        // The animation path steers only the viewport box: --width/--height/
+        // --size apply to it, while the render dials below speak only to the
+        // still-image path and would be silently dropped. Refuse the
+        // combination with the named list instead (M4).
+        if ($animate && $animateDials !== []) {
+            \fwrite($stderr, Lang::t('cli.animate_dials_refused', ['flags' => implode(', ', array_keys($animateDials))]) . "\n");
 
             return self::EXIT_USAGE;
         }
