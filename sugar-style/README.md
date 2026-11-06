@@ -237,22 +237,15 @@ echo Tree::new()
 
 ## Public API
 
-- **`Theme`** — 10 named factories (`dark()` / `light()` / `dracula()` / `tokyoNight()` / `oneDark()` / `githubDark()` / `solarizedDark()` / `solarizedLight()` / `ansi()` / `adaptive()`) and 13 colour slots (`foreground` / `background` / `primary` / `secondary` / `accent` / `muted` / `error` / `warning` / `success` / `info` / `border` / `separator` / `cursor`). `accent`/`muted` fall back to `primary`/`secondary` only in `dark()`; in
-`light()`, `accent` equals `primary` but `muted` is its own grey
-(`#6b7280`, while `secondary` is green `#10b981`), and in `ansi()` both
-slots are distinct palette colours (primary cyan `#00cdcd` vs accent
-magenta `#cd00cd`; secondary green `#00cd00` vs muted grey `#7f7f7f`).
-Every richer named theme (dracula, tokyoNight, oneDark, githubDark,
-solarizedDark/Light) sets them explicitly; consumers must NOT assume
-`$theme->accent === $theme->primary`. Every `with*($color)` setter returns a new `Theme`. `Theme::catalog()` enumerates the factory names as a `list<string>` for programmatic discovery. SSOT for theming across consumer libs.
+- **`Theme`** — the canonical colour palette: 10 named factories (`dark()` / `light()` / `dracula()` / `tokyoNight()` / `oneDark()` / `githubDark()` / `solarizedDark()` / `solarizedLight()` / `ansi()` / `adaptive()`) and 13 colour slots (`foreground` / `background` / `primary` / `secondary` / `accent` / `muted` / `error` / `warning` / `success` / `info` / `border` / `separator` / `cursor`). Every `with*($color)` setter returns a new `Theme`, and `Theme::catalog()` enumerates the factory names as a `list<string>` for programmatic discovery — see [Theme — canonical colour palette](#theme--canonical-colour-palette) below for the full `accent`/`muted` slot semantics, the single source of truth (SSOT) for theming across consumer libs.
 - **`Style`** — the immutable value object. Style is the fleet's legacy
   builder: its setters are bare-named (`bold()`, `fg()`, `width()`) rather
   than `with*()`-prefixed, yet each returns a **new** `Style` — measured
   2026-10: 72 fluent setters, 0 `with*()` methods, 34 getters (`get*` /
   `is*`), 31 `unset*()`. Re-derive with reflection over non-static public
   methods (return-`self` = setter; `get*`/`is*` = getter; `unset*` =
-  unsetter). Every fluent setter routes through the private 62-positional-parameter
-  `with()` choke; `inherit()`/`patch()` mint the merged instance directly
+  unsetter). Every fluent setter routes through the
+  private 62-positional-parameter `with()` choke; `inherit()`/`patch()` mint the merged instance directly
   (`new self(...)`, `src/Style.php:1013`/`:1178`) — the memo-reset consequence
   holds either way (fresh instance). Props covered: fg/bg/border
   colours (incl. per-side), bold/italic/underline/strikethrough/faint/blink/
@@ -594,9 +587,17 @@ Available factories:
 | `Theme::adaptive()` | Auto-detect via `COLORFGBG` env var |
 
 All themes expose 13 colour slots: `foreground`, `background`,
-`primary`, `secondary`, `accent`/`muted` (fall back to primary/secondary
-only in `dark()` — see the slot note under **Theme** above), `error`,
-`warning`, `success`, `info`, `border`, `separator`, `cursor`.
+`primary`, `secondary`, `accent`/`muted`, `error`, `warning`, `success`,
+`info`, `border`, `separator`, `cursor`.
+
+Slot semantics for `accent`/`muted`: they fall back to `primary`/`secondary`
+only in `dark()`. In `light()`, `accent` equals `primary` but `muted` is its
+own grey (`#6b7280`, while `secondary` is green `#10b981`), and in `ansi()`
+both slots are distinct palette colours (primary cyan `#00cdcd` vs accent
+magenta `#cd00cd`; secondary green `#00cd00` vs muted grey `#7f7f7f`). Every
+richer named theme (dracula, tokyoNight, oneDark, githubDark,
+solarizedDark/Light) sets them explicitly; consumers must NOT assume
+`$theme->accent === $theme->primary`.
 
 ## Measurement utilities
 
