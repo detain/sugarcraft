@@ -196,6 +196,13 @@ candy-kv import json - < backup.json
 > trimming, byte-for-byte (and without a size bound; see Import/export
 > memory).
 
+The `-` stdin sentinel is meaningful only as `import`'s path argument. Option
+parsing exempts a bare `-` from the dash prefix for **every** subcommand
+(`ArgParser::isOptionLike()`), so elsewhere it is literal data, never a stdin
+switch and never an error: `set k -` stores a one-character dash value,
+`get -` looks up a key literally named `-`, and `list -` is a pattern matching
+the single character `-`.
+
 ### Key naming, `@`, and escapes
 
 The rightmost **unescaped** `@` routes the key: `cache@notes` stores entry
