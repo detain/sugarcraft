@@ -179,6 +179,21 @@ never modifies the string; stripping what you print is the consumer's job)
 [Mouse-tracking modes](#mouse-tracking-modes) so assistive terminals are
 not flooded by leaked `?1003` motion reporting.
 
+Concrete parity rules:
+
+- Tab / Shift+Tab (or the arrow keys) move focus across the actionable
+  zones in reading order, and Enter fires the focused one — every zone
+  action needs this route, not just the click.
+- A hover affordance (tooltip, highlight, data-fetch-on-hover) needs a
+  focus-revealed twin: show on keyboard focus what `ZoneEnterMsg` shows on
+  pointer entry, hide on blur.
+- Drag needs a no-motion fallback — a select-then-choose-destination
+  keyboard flow — since terminals without `1002`/`1003` report no
+  cross-boundary moves at all.
+- Never gate a command on tracker state alone (hover zone, `ClickCounter`
+  streak): the keyboard path must reach the same command without pointer
+  history.
+
 ## Scan rules
 
 The instance method `parse()` (call it on a `new Scan()`, or go through
@@ -412,7 +427,9 @@ manager.
 `ZoneHoverTracker` wraps a `Manager` and tracks which zone the cursor
 is in across `MouseMsg` events. It emits `ZoneEnterMsg` when the cursor
 crosses into a zone and `ZoneExitMsg` when it leaves — ideal for
-tooltips, highlights, or data-fetch-on-hover. `update()` refuses wheel
+tooltips, highlights, or data-fetch-on-hover. Hover is a pointer-only
+affordance: pair every hover reveal with a keyboard-focus equivalent, see
+[Accessibility](#accessibility). `update()` refuses wheel
 reports (`MouseWheelMsg` — filtered by type, not by action) and hit-tests
 everything else: press, release AND motion all count. A plain mode-`1000`
 press inside a zone fires `ZoneEnterMsg`, scrolling does not; and because
@@ -458,8 +475,9 @@ the event there or you will spin.
 `DragTracker` wraps a `Manager` and tracks press → move → release
 drag sequences within and across zones. It emits a `ZoneDragStartMsg` on
 button-down inside a zone, `ZoneDragMoveMsg` when the cursor crosses a
-zone boundary while dragging, and `ZoneDragEndMsg` on button release.
-Cross-boundary moves only arrive when the terminal reports drag or all
+zone boundary while dragging, and `ZoneDragEndMsg` on button release. Drag
+is pointer-only: anything it triggers needs a keyboard alternative, see
+[Accessibility](#accessibility). Cross-boundary moves only arrive when the terminal reports drag or all
 motion (mode `1002` / `1003`, see
 [Mouse-tracking modes](#mouse-tracking-modes)):
 
