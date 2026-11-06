@@ -308,7 +308,7 @@ implements the superset.
 | `G` | CHA | (Handler) | Cursor to column N. |
 | `H` | CUP | `cup($row, $col)` | Move cursor to (row, col) 1-indexed. |
 | `I` | CHT | `cht($n=1)` | Cursor forward N tab stops (emulator honours the tab-stop table; the renderer offsets the column forward by N, clamped to the last column, ignoring tab stops entirely). Shadowed while `?1004 h` is set — the focus intercept consumes any `CSI Ps I` as focus-in before tab handling runs. |
-| `J` | ED | `ed($mode=0)` | Erase display: 0=cursor→end, 1=begin→cursor, 2=all, 3=all+scrollback (emulator clears the ring; the renderer has no ring, so 3 blanks the grid). |
+| `J` | ED | `ed($mode=0)` | Erase display: 0=cursor→end, 1=begin→cursor, 2=all, 3=all+scrollback (the emulator drains its scrollback ring and leaves the visible grid alone; the renderer has no ring and arms 0/1/2 only, so mode 3 is a no-op there). |
 | `K` | EL | `el($mode=0)` | Erase line: 0=cursor→eol, 1=bol→cursor, 2=full line. |
 | `L` | IL | `il($n=1)` | Insert N blank lines at cursor. |
 | `M` | DL | `dl($n=1)` | Delete N lines at cursor. |

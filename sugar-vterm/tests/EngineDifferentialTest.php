@@ -62,6 +62,11 @@ final class EngineDifferentialTest extends TestCase
             'cup and text' => ["\x1b[3;10Hplaced"],
             'erase line' => ["abcdef\r\x1b[2D\x1b[K"],
             'erase display' => ["fill1\r\nfill2\x1b[2J\x1b[Htail"],
+            // ED mode 3: the emulator drains its scrollback ring, the
+            // renderer has no ring and arms 0/1/2 only — the legitimate
+            // shared outcome is that neither visible grid changes. Pinned
+            // so neither engine ever starts blanking rows on mode 3.
+            'erase scrollback (ED 3)' => ["fill1\r\nfill2\x1b[3J"],
             'insert line' => ["row1\r\nrow2\x1b[1;1H\x1b[1Lgap"],
             'delete line' => ["row1\r\nrow2\r\nrow3\x1b[1;1H\x1b[1M"],
             'scroll up' => ["a\r\nb\r\nc\x1b[3;1H\x1b[1S"],
