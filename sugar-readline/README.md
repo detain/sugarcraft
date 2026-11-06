@@ -130,8 +130,8 @@ print_r($result->lines());  // edited multi-line text
 Keyboard contract: **Enter submits**, **Shift+Enter** and **Ctrl+J** insert a
 new line, **Ctrl+U** kills the text before the cursor on the current line
 only, Up/Down move between lines, Escape/Ctrl+C abort. When a `maxLines`
-cap is reached, further line breaks are refused and text accumulates on
-the last allowed line.
+cap is reached, further line breaks are silently refused wherever the cursor
+sits and text accumulates on the line under the cursor.
 
 ### Confirmation Prompt
 
