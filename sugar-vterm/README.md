@@ -302,7 +302,7 @@ implements the superset.
 | `r` | DECSTBM | `decstbm($top, $bottom)` | Set scroll region rows (1-indexed). |
 | `s` | DECSC | `scosc()` | Save cursor + Sgr + origin mode (emulator); the renderer saves the cursor position only. |
 | `u` | DECRC | `scorc()` | Restore cursor + Sgr + origin mode (emulator); the renderer restores the position only. |
-| `<n> SP q` | DECSCUSR | (Handler) | Cursor shape 0–6 (block/underline/bar × blink). |
+| `<n> SP q` | DECSCUSR | (Handler) | Cursor shape; the 0–6 vocabulary maps to block/underline/bar × blink, out-of-vocabulary values are stored verbatim (unclamped). |
 | `<n> I` / `<n> O` | Focus | (Handler) | Focus-in (`I`) / focus-out (`O`) report (under `?1004 h`). |
 
 `(Handler)` rows live in the full `Handler/ScreenHandler` dispatcher used
@@ -621,7 +621,7 @@ use SugarCraft\Vterm\Terminal\Terminal;
 $vt = Terminal::new(cols: 80, rows: 24);
 
 $mode = $vt->mode();
-var_dump($mode->cursorShape);  // int (0–6)
+var_dump($mode->cursorShape);  // int — 0–6 for well-formed input, stored verbatim otherwise
 
 // Build a new mode with a specific cursor shape.
 $bar = $mode->withCursorShape(CursorShape::SteadyBar->toInt());
@@ -639,6 +639,13 @@ vocabulary `0` means "default appearance" and is a blinking block, and
 | `SteadyUnderline`   | `4`          | `CSI 4 SP q`    | Steady underline      |
 | `BlinkingBar`       | `5`          | `CSI 5 SP q`    | Blinking vertical bar |
 | `SteadyBar`         | `6`          | `CSI 6 SP q`    | Steady vertical bar   |
+
+The 0–6 vocabulary is **not enforced** at parse time: the handler stores the
+raw `CSI Ps` parameter verbatim on both fields, so `CSI 9 SP q` records the
+integer `9`. Only readers that convert through `CursorShape::fromInt()` see an
+enum, and its default arm silently folds any unknown value onto
+`BlinkingBlock` — an adversarial shape parameter round-trips as a rewritten
+block rather than an error.
 
 Across the reset and screen-swap paths the shape follows xterm-411: RIS
 (`ESC c`) and DECSTR (`CSI ! p`) reset it to `0` on both fields, while DECALN
