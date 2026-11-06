@@ -68,6 +68,8 @@ final class Counter implements Model
 - `pcntl` (signal handling — POSIX only; not available on Windows)
 - `FFI` extension (required on Windows for raw TTY support)
 - `react/event-loop` ^1.6 (Composer)
+- `react/promise` ^3.3 (Composer) — the promise surface `Cmd` results and
+  worker dispatch (`WorkerCmd::run`) hand back.
 - `sugarcraft/sugar-pty` `dev-master` (the spelling this lib's committed manifest uses) — the runtime's raw-mode/termios backend. sugar-core and
   sugar-pty hard-require each other (sugar-pty consumes core's primitives); CI injects the
   path-repo closure so the cycle resolves inside the monorepo, and standalone installs take
