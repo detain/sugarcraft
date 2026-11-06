@@ -87,7 +87,10 @@ if ($click !== null) {
     <h3 style="margin-top: 40px;">Zones (bubblezone Manager layer)</h3>
     <p class="lede" style="margin-top: 28px;">Wrap rendered chunks with named markers, let SugarMouse discover their bounding boxes, then ask zones whether a MouseMsg fell inside them. Markers are sugar-mouse's private-use sentinel tags (U+E000 / U+E001) — zero-width to the scanner — and <code>scan()</code> strips them before the frame is printed, so the printed frame matches the measured one. Sweep untrusted labels with <code>Mark::untrusted()</code> first.</p>
 
-    <pre class="code"><code class="language-php">use SugarCraft\Mouse\Zones\Manager;
+    <pre class="code"><code class="language-php">use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\MouseAction;   // the WIRE enum (Press / Release / Motion)
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Mouse\Zones\Manager;
 
 $z = Manager::newGlobal();
 
@@ -101,8 +104,10 @@ $frame     = $btnOk . '   ' . $btnCancel;
 $displayable = $z-&gt;scan($frame);
 echo $displayable;
 
-// Later, when a MouseMsg arrives:
-if ($z-&gt;get('btn:ok')?-&gt;inBounds($mouseMsg)) {
+// Later, when a MouseMsg arrives (1-based col, row — the same grid get()
+// measures; here col 5 lands inside the six-cell "  OK  " button):
+$click = new MouseMsg(5, 1, MouseButton::Left, MouseAction::Press);
+if ($z-&gt;get('btn:ok')?-&gt;inBounds($click)) {
     // ...
 }</code></pre>
 
