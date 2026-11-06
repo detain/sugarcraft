@@ -22,6 +22,7 @@ sugar-readline — an interactive line-editing prompt library for terminal UIs o
 - **Immutable state** — every input-handling method returns a new instance; `view()` returns the ANSI string while each prompt exposes its own data accessor (`value()` on TextPrompt/TextareaPrompt, `selectedValue()` on SelectionPrompt, `selectedValues()` on MultiSelectPrompt, `result()` on ConfirmationPrompt), and the `Readline` pump owns all terminal writes
 - **Vim keybindings** — vi-mode (Insert/Normal, plus a motion-only Visual scaffold); `ViMode` delegates its key-to-operation mapping to `VimKeyHandler` in `sugar-forms` — the same handler that the `sugar-forms` widgets drive and whose widgets `sugar-widgets` re-exports through its `class_alias` facade; new bindings in the `VimAction` enum land in `sugar-forms` and benefit all three libs. Includes text objects: `ci"`, `di(`, `da{`, `yiw` and friends, with a working unnamed register (`x`/`dd`/`yy`/text-object yanks feed `p`)
 - **NO_COLOR respected** — when the `NO_COLOR` environment variable is set to a non-empty value, every decoration (colour and style alike) falls away and prompts print as plain text
+- **Terminal requirements** — the `Readline` pump repaints every frame with cursor escapes it emits unconditionally: carriage-return `\r`, cursor-up `CSI nA`, and clear-below `CSI 0J` (Ctrl+L adds `CSI 2J CSI H`). A real terminal consumes them silently; under `TERM=dumb` and inside some assistive or logging wrappers they pile up as visible noise — on those surfaces drive the prompts as pure state machines instead (see the Quick Start's terminal-free shape)
 
 ## Install
 
@@ -57,6 +58,11 @@ $prompt = $prompt->handleChar('h')->handleChar('i');
 $prompt = $prompt->handleKey(\SugarCraft\Readline\Key::Enter);
 $prompt->value();  // 'hi'
 ```
+
+That direct shape is also the screen-reader- and CI-friendly path: prompts
+never emit cursor escapes themselves — only `Readline`'s repaint loop does —
+so a host that feeds keys and renders `view()` through its own output channel
+gets identical state without the cursor traffic.
 
 ### Text Prompt
 
