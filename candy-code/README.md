@@ -2266,7 +2266,7 @@ constructed — the prefix is composed there exactly once, so two labelled lines
 never stack. `error.message` inside the JSON document carries the bare sentence
 on every path, and so does `--output-format text` on stdout, which also strips
 terminal control bytes: every escape sequence (a lone `ESC` included) and every
-C0 or DEL byte except `\t` and `\n`. The default answer used to pass the model's
+C0 or DEL byte except `\t`, `\n` and `\r`. The default answer used to pass the model's
 own text straight through, so a transcript carrying SGR or OSC sequences could
 restyle, scroll, or rename the caller's terminal; JSON was safe only because
 `json_encode` happened to escape those bytes, and every other format was not.
