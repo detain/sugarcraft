@@ -288,7 +288,18 @@ design: `Store::entry()`, `suggestionFor()`, `setWithTtl()`,
 `deleteDatabase()`, and the whole single-file surface (`Database::count()`,
 `raw()`, `allKeys()`, `pruneExpired()` on any database other than the
 default, `close()`) have no CLI verbs — the binary stays a thin front end
-for the everyday loop. Key-bearing commands route to a named
+for the everyday loop.
+
+Import and export keep that shape programmatically, not just as CLI verbs:
+`SugarCraft\Kv\Import\JsonImporter` and `SugarCraft\Kv\Import\YamlImporter` are
+public API — constructed with a `Store` (plus options such as `ttl`), each
+exposes `importFromFile(string $path, bool $atomic = true): int` and
+`importFromString(string $text, bool $atomic = true): int`, where `$atomic =
+false` is the `--no-atomic` skip-the-wrapping-transaction path. On the other
+side, `SugarCraft\Kv\Cli\ExportCommand` exposes `run(...): int` (writes to
+stdout, returns the exit code) and `exportToString(string $format, ?string
+$dbName = null, ?string $pattern = null): string` for callers that want the
+document as a value. Key-bearing commands route to a named
 database through the `key@dbname` suffix; `list` alone always scans the
 default database (patterns cannot select a db), while `export <format> [db]`
 takes an explicit database name.
