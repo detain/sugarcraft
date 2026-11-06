@@ -441,12 +441,13 @@ final class Cli
 
     /**
      * Any text echoed into a terminal must not smuggle control bytes: a
-     * filename or argv token can carry C0 characters and OSC introducers
-     * (`ls` completion of hostile names), and the engine's own messages
-     * interpolate raw paths — so EVERY interpolated echo (paths, argv
+     * filename or argv token can carry C0 controls (the OSC introducer
+     * ESC is one of them), so EVERY interpolated echo (paths, argv
      * tokens, and the relayed engine reason) funnels through this single
      * choke. Replacement keeps the echo readable without ever letting a
-     * quoted token redraw the screen.
+     * quoted token redraw the screen. The sweep is C0 + DEL only: C1
+     * bytes and bidi overrides such as U+202E ride through as ordinary
+     * printable text, a scope the app's surfaces were verified against.
      */
     private static function printable(string $text): string
     {
