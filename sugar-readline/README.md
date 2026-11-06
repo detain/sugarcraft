@@ -339,10 +339,12 @@ With no mode attached, `TextPrompt` still carries the default GNU-readline
 movement chords (Ctrl+A/E/B/F/P/N) plus arrows, Home/End, space,
 Ctrl+U/K/W/D/H/R/S, Ctrl+Z/Ctrl+Y undo/redo, Ctrl+L screen clear (via
 `Readline`), Tab completion with match cycling, and Escape/Ctrl+C abort.
-Attached modes read the current submode with `$prompt->mode()`; the mode
-state itself is not painted into `view()` — the prompt renders identically
-across vi submodes, so a host that needs a visible `--NORMAL--` marker must
-read `mode()` and paint it itself.
+Attached modes carry their own state, and `view()` never paints it:
+`mode()` returns the `ModeInterface` object (or null), and the vi submode
+string sits one hop behind it at `mode()?->viMode()` — an accessor only
+`ViMode` defines (`EmacsMode` has no submodes). The prompt renders
+identically across vi submodes, so a host that needs a visible
+`--NORMAL--` marker must read the submode and paint it itself.
 
 ### Incremental history search
 
