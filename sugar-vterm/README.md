@@ -20,6 +20,7 @@ output bytes into a `Terminal` instance.
 
 ## Contents
 
+- [Text units](#text-units)
 - [Install](#install)
 - [Quickstart](#quickstart)
 - [Architecture](#architecture)
@@ -46,6 +47,27 @@ output bytes into a `Terminal` instance.
 - [Snapshot tests](#snapshot-tests)
 - [Related](#related)
 - [Credits & inspiration](#credits--inspiration)
+
+## Text units
+
+Text moves through three levels, and this README uses one fixed term for
+each:
+
+- **code point** — a single Unicode scalar, the unit the parser decodes from
+  UTF-8 bytes. `printChar()` classifies every incoming code point by width,
+  and charset designation translates only 7-bit code points.
+- **grapheme** — a user-perceived character: a base code point plus the
+  zero-width marks that attach to it. The grid stores the base cluster in
+  `Cell::$char` (whose emulator-facing alias is `Cell::$grapheme`), with any
+  attached marks in `Cell::$combining`.
+- **cell** — one grid slot. A grapheme occupies one cell, or two when it is
+  wide; the second slot is a continuation cell.
+
+"Rune" and "graphic" are retired as unit names. Two spellings survive on
+purpose: `SGR` keeps its ECMA-48 expansion, "Select Graphic Rendition",
+because that names the sequence rather than a text unit, and code
+identifiers such as the `translate($charset, $rune)` parameter keep their
+own spelling.
 
 ## Install
 
@@ -372,10 +394,10 @@ glyphs are drawn and which glyphs a byte means:
 | `ESC # 3` | DECDHL top | Line renders as the top half of a double-height line. |
 | `ESC # 4` | DECDHL bottom | Line renders as the bottom half of a double-height line. |
 | `ESC # 5` | DECSWL | Line returns to single width/height (rendition `None`). |
-| `ESC # 6` | DECDWL | Line renders double-width (a continuation cell follows each printed graphic, when there is room). |
+| `ESC # 6` | DECDWL | Line renders double-width (a continuation cell follows each printed grapheme, when there is room). |
 | `ESC ( <b>` / `ESC ) <b>` / `ESC * <b>` / `ESC + <b>` | SCS | Designate charset `<b>` into slot G0/G1/G2/G3. |
-| `SO` (0x0E) / `SI` (0x0F) | LS1 / LS0 | Lock G1 (or back to G0) into the GL position for subsequent graphics. |
-| `SS2` / `SS3` (C1 0x8E/0x8F) | Single shift | Use G2/G3 for exactly the next graphic. |
+| `SO` (0x0E) / `SI` (0x0F) | LS1 / LS0 | Lock G1 (or back to G0) into the GL position for subsequent graphemes. |
+| `SS2` / `SS3` (C1 0x8E/0x8F) | Single shift | Use G2/G3 for exactly the next grapheme. |
 
 Line rendition is not a pen state — it is stamped on the cells
 (`Cell::$rendition`), so it scrolls with the content and rides every
@@ -385,7 +407,7 @@ diff payload. Both engines implement `ESC #` (the emulator in
 machinery is emulator-side only — `ScreenHandler` holds the four
 designatable slots (`$charsets`) plus the GL selection and pending
 SS2/SS3, and restores all four slots to ASCII on `RIS`, `DECSTR`, and
-`DECALN`. Only the GL-reachable designation translates 7-bit runes;
+`DECALN`. Only the GL-reachable designation translates 7-bit code points;
 multi-byte UTF-8 always passes through untranslated.
 `Charset\Charsets` carries the tables (ASCII `B`, DEC Special Graphics
 `0`, UK `A`, No-Break Space `U`) and the `translate()` entry point.
@@ -523,12 +545,12 @@ var_dump($mode->autoWrap);  // bool
 $wrapped = $mode->withAutoWrap(true);
 ```
 
-When auto-wrap is **on** (the default, matching xterm/VT/ANSI.SYS), a graphic landing in the
+When auto-wrap is **on** (the default, matching xterm/VT/ANSI.SYS), a grapheme landing in the
 rightmost column parks the cursor there arming a deferred (phantom)
-wrap; the next graphic consumes it, moving to column 0 of the next row
+wrap; the next grapheme consumes it, moving to column 0 of the next row
 before writing — and if that row is within a scroll region the region
 scrolls up by one line, matching VT100 behaviour. When **off**, the
-cursor clamps at the rightmost column and subsequent graphics overwrite
+cursor clamps at the rightmost column and subsequent graphemes overwrite
 it (the phantom flag is set by geometry alone, so a mid-stream `?7l` /
 `?7h` toggles like xterm).
 
@@ -720,15 +742,15 @@ pass an `onFocusEvent` callback to the constructor.
 
 ## Combining characters and wide characters
 
-`ScreenHandler::printChar()` categorises every incoming rune by width:
+`ScreenHandler::printChar()` categorises every incoming code point by width:
 
 - **Wide (width ≥ 2):** CJK and most emoji occupy 2 cells. A `Cell::continuation()`
   marker is written to the second cell and inherits SGR + hyperlink from the
   base cell. The cursor advances by the full width.
 - **Normal (width 1):** Written to a single cell.
-- **Combining mark (width 0):** Zero-width runes are not silently discarded.
+- **Combining mark (width 0):** Zero-width code points are not silently discarded.
   Attaching is driven by the sugar-core `Width::string` classification, not by
-  a fixed codepoint range: every zero-width rune (U+0300–U+036F plus the full
+  a fixed codepoint range: every zero-width code point (U+0300–U+036F plus the full
   U+1AB0–U+1AFF, U+1DC0–U+1DFF, U+20D0–U+20FF, U+FE00–U+FE0F, U+FE20–U+FE2F
   ranges, variation selectors, ZWJ/ZWNJ — anything `Width::string` scores 0)
   is attached to the preceding cell via `Cell::withCombining()` so the base
@@ -856,7 +878,7 @@ Each subdirectory of `src/` owns a small piece of VT state:
 | `Sgr\Sgr` | Pen state (fg, bg, attrs bitfield, underline style). | `empty()`, `withBold/Italic/Underline/Strikethrough/Blink/Reverse/Dim/Hidden($v)`, `withUnderlineStyle($style)`, `withForeground(?$color)`, `withBackground(?$color)`, `equals()`. |
 | `Sgr\UnderlineStyle` | Enum: `None`/`Single`/`Double`/`Curly`/`Dotted`/`Dashed`. | Backed int enum (`None`=0 … `Dashed`=5); `->value` is the CSI code (no `fromInt()`). |
 | `Rendition` (root enum) | Double-height/width line rendition (`ESC # 3`–`ESC # 6`), stamped on every cell of the line so it scrolls with content and rides each diff payload. | `None` (0) / `DoubleTop` (1) / `DoubleBottom` (2) / `DoubleWidth` (3), `isDoubleHeight()`. |
-| `Charset\Charsets` | SCS character-set tables — G0–G3 designations (`ESC ( ) * +`), locking SO/SI, single-shift SS2/SS3; emulator-side only, 7-bit runes translate through the GL-reachable set, UTF-8 never. | `ASCII` ('B'), `DEC_SPECIAL` ('0'), `UK` ('A'), `NO_BREAK_SPACE` ('U'), `translate($charset, $rune)`. |
+| `Charset\Charsets` | SCS character-set tables — G0–G3 designations (`ESC ( ) * +`), locking SO/SI, single-shift SS2/SS3; emulator-side only, 7-bit code points translate through the GL-reachable set, UTF-8 never. | `ASCII` ('B'), `DEC_SPECIAL` ('0'), `UK` ('A'), `NO_BREAK_SPACE` ('U'), `translate($charset, $rune)`. |
 | `Mode\Mode` | DEC private modes. `altScreenVariant` (consts `ALT_NONE`/`ALT_NO_SAVE`/`ALT_CURSOR_ONLY`/`ALT_FULL`) records which of the four alt-screen meanings (`47`/`1047` swap only, `1048` cursor save only, `1049` full save+restore) a switch came from; `withAltScreen(bool)` maps to `ALT_FULL`/`ALT_NONE`. | `withAltScreen/AltScreenVariant/CursorVisible/MouseEncoding/MouseHighlights/MouseAny/MouseCellMotion/MouseExtended/BracketedPaste/SyncUpdate/AutoWrap/OriginMode/CursorShape/ReportFocusEvents`, `isAltScreen()`, `isMouseReporting()`, `equals()`. |
 | `Hyperlink\Hyperlink` | OSC 8 URI + id state. | `fromRaw($id, $uri)`, `equals()`. |
 | `Msg\FocusInMsg` / `FocusOutMsg` | Focus event records — land in the emulator's bounded focus ring (DEC mode `1004`) and drain via `Terminal::focusEvents()`. | Plain DTOs. |
