@@ -111,8 +111,9 @@ The key table is fixed in the player model; keys are not rebindable.
   swap between them can still land more bytes than the cap announces, while
   FIFOs and devices are blocked by the engine's `is_file()` gate) and by a
   resident-cell budget (`Cli::MAX_RESIDENT_CELLS`, 6 million frame cells for the current
-  viewport). The engine separately caps a single frame at 100 000 cells and
-  the whole canvas at 2 million pixels.
+  viewport). The engine separately bounds the requested OUTPUT grid at
+  100 000 cells (`Decoder::MAX_CELLS`) and gates the source GIF's own
+  canvas at 2 million pixels (`Decoder::MAX_TOTAL_PIXELS`).
 - `--watch` reloads decode synchronously inside the poll tick — a large
   replacement file can stall one tick — and a reload that trips any cap
   above keeps the stale frames rather than blanking the screen.
