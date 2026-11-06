@@ -48,7 +48,7 @@ final class SmtpTransport implements Transport
     private string $lastResponse = '';
     /** Runtime flag: is the live channel currently encrypted? */
     private bool $encrypted = false;
-    /** EHLO capability snapshot — lastResponse is clobbered by later replies (M-DD). */
+    /** EHLO capability snapshot — lastResponse is clobbered by later replies. */
     private bool $serverSupports8Bit = false;
 
     public function __construct(
@@ -60,7 +60,7 @@ final class SmtpTransport implements Transport
         int $timeout = 30,
         string $heloHost = '',
     ) {
-        // C3 (lib-reviews-1102): heloHost is interpolated verbatim into
+        // heloHost is interpolated verbatim into
         // `EHLO {host}\r\n` — BEFORE STARTTLS and BEFORE AUTH — so a value
         // carrying one CRLF pair forges whole SMTP commands (MAIL FROM /
         // RCPT TO / DATA) on the protocol channel. The Message-ID path has
@@ -77,7 +77,7 @@ final class SmtpTransport implements Transport
         $this->password    = $password;
         $this->timeout     = $timeout;
         $this->implicitTls = ($port === 465);
-        // Secure by default (docs-fix-1023 S-1): a send that cannot reach an
+        // Secure by default: a send that cannot reach an
         // encrypted channel throws rather than leaking mail/credentials in
         // plaintext. Opt out explicitly with withRequireTls(false).
         $this->requireTls  = true;
@@ -87,7 +87,7 @@ final class SmtpTransport implements Transport
     /**
      * Control whether the send fails when the channel cannot be encrypted.
      *
-     * REQUIRED TLS is the constructor default (docs-fix-1023 S-1): with the
+     * REQUIRED TLS is the constructor default: with the
      * flag on, a server that does not offer STARTTLS (or a failed upgrade)
      * throws instead of sending credentials/mail in the clear. Pass false to
      * opt back into opportunistic behaviour — trusted networks only.
@@ -141,7 +141,7 @@ final class SmtpTransport implements Transport
      * Mask secrets so the SMTP password never leaks through var_dump() or
      * print_r() reflection of live object state.
      *
-     * C4 (lib-reviews-1102) truth-flip: the old sentence claimed this alone
+     * Truth-flip: the old sentence claimed this alone
      * covered "logging that reflects object state" — false. var_export() and
      * serialize() read real properties, and stack traces read call arguments;
      * those channels are sealed separately, and one honest remainder exists:
@@ -176,7 +176,7 @@ final class SmtpTransport implements Transport
     }
 
     /**
-     * Refuse serialization outright (C4): a serialized transport is a
+     * Refuse serialization outright: a serialized transport is a
      * plaintext credential on disk or in a cache, and unserialize() of it
      * resurrected a live credentialed sender. Transports are cheap to build
      * where they are used; there is nothing worth persisting in one.
@@ -189,7 +189,7 @@ final class SmtpTransport implements Transport
     }
 
     /**
-     * Refuse var_export() resurrection (C4) — see the __debugInfo contract
+     * Refuse var_export() resurrection — see the __debugInfo contract
      * above for what this does and does not seal.
      *
      * @throws \RuntimeException always
@@ -241,7 +241,7 @@ final class SmtpTransport implements Transport
             $this->startTlsIfNeeded();
             $this->authenticateIfNeeded();
 
-            // M-DD (lib-reviews-1102): 8-bit bodies are only negotiable when
+            // 8-bit bodies are only negotiable when
             // the server advertised 8BITMIME (RFC 6152). Without the
             // advertisement the envelope stays plain MAIL FROM and the
             // document is encoded 7-bit safe (quoted-printable text parts).
@@ -289,7 +289,7 @@ final class SmtpTransport implements Transport
         $this->socket = $socket;
         \stream_set_timeout($this->socket, $this->timeout);
 
-        // M-A (lib-reviews-1102): the encrypted flag used to be set once and
+        // The encrypted flag used to be set once and
         // never cleared — a second send() on the same instance skipped its
         // STARTTLS negotiation because the stale flag claimed the fresh
         // (plaintext) socket was already encrypted. Derive the flag from
@@ -317,7 +317,7 @@ final class SmtpTransport implements Transport
             $this->readResponse(250);
         }
 
-        // M-DD (lib-reviews-1102): snapshot the 8BITMIME advertisement NOW
+        // Snapshot the 8BITMIME advertisement NOW
         // (RFC 6152). lastResponse is overwritten by the AUTH reply and by
         // later responses, so a capability read at MAIL FROM time would
         // inspect the wrong server text. (A HELO session has no extension
@@ -411,7 +411,7 @@ final class SmtpTransport implements Transport
         $this->sendRaw("EHLO {$this->getHeloHost()}\r\n");
         $this->readResponse(250);
 
-        // M-DD: the plaintext EHLO's capability list is void after STARTTLS —
+        // The plaintext EHLO's capability list is void after STARTTLS —
         // re-snapshot from the post-upgrade EHLO (servers may advertise MORE
         // inside TLS, never assume the pre-TLS answer carries over).
         $this->serverSupports8Bit = $this->hasExtension('8BITMIME');
@@ -424,7 +424,7 @@ final class SmtpTransport implements Transport
         }
 
         if (!$this->encrypted) {
-            // docs-fix-1023 S-1: AUTH LOGIN ships base64 (not encrypted)
+            // AUTH LOGIN ships base64 (not encrypted)
             // credentials. A plaintext channel here is either a stripped
             // STARTTLS downgrade or an explicit withRequireTls(false) opt-out
             // — refuse either way rather than hand the network a password.
@@ -432,7 +432,7 @@ final class SmtpTransport implements Transport
         }
 
         if (!$this->hasExtension('AUTH')) {
-            // M-H (lib-reviews-1102): the old branch returned silently and sent
+            // The old branch returned silently and sent
             // the message ANONYMOUSLY — a server (or MITM) that strips the AUTH
             // advertisement got an unauthenticated relay while the caller
             // believed it had logged in. Fail loud instead; RFC 5321 §2.3.1
@@ -457,9 +457,9 @@ final class SmtpTransport implements Transport
             @\fclose($this->socket);
             $this->socket = null;
         }
-        // Belt-braces for M-A: a closed channel is never an encrypted one.
+        // Belt-braces: a closed channel is never an encrypted one.
         $this->encrypted = false;
-        // Capability state belongs to the socket we just threw away (M-DD).
+        // Capability state belongs to the socket we just threw away.
         $this->serverSupports8Bit = false;
     }
 
@@ -469,7 +469,7 @@ final class SmtpTransport implements Transport
             return;
         }
 
-        // M-D (lib-reviews-1102): by the time send() reaches quit() the message
+        // By the time send() reaches quit() the message
         // is already queued (DATA answered 250). A protocol blip during the
         // farewell — server closes without 221, write to a half-closed socket —
         // used to propagate and latch a FALSE smtp.send_failed over a
@@ -557,9 +557,9 @@ final class SmtpTransport implements Transport
      * `--render` dry-run) can inspect exactly what a send would transmit
      * without connecting. The single generated boundary is authoritative —
      * it is declared in the Content-Type header, opens every part, and
-     * closes the message (docs-fix-1023 C-1: a second random boundary used
-     * to open the body part, making every emitted message structurally
-     * invalid for strict parsers).
+     * closes the message: a second random boundary used to open the body
+     * part, making every emitted message structurally invalid for strict
+     * parsers.
      */
     public function buildMimeMessage(Email $email, bool $allow8Bit = true): string
     {
@@ -643,11 +643,11 @@ final class SmtpTransport implements Transport
     /**
      * Build MIME body parts (text and/or HTML).
      *
-     * M-R (lib-reviews-1102): a lone HTML body used to be wrapped in an empty
+     * A lone HTML body used to be wrapped in an empty
      * multipart/alternative whose first sub-part carried no headers at all —
      * malformed under strict parsers. Single representations now emit as one
      * part; only the genuine text+HTML pair gets the alternative wrapper,
-     * which declares its own boundary inside its own part header (C-1 law).
+     * which declares its own boundary inside its own part header.
      *
      * $allow8Bit=false (server did not advertise 8BITMIME, RFC 6152) forces
      * 8-bit text onto quoted-printable so the whole document stays 7-bit safe.
@@ -764,9 +764,9 @@ final class SmtpTransport implements Transport
             $encoded = \chunk_split(\base64_encode($content), 76, "\r\n");
 
             // RFC 2045 quoted-string: CRLF is refused at Attachment construction
-            // (docs-fix-1023 C-2); quotes and backslashes are escaped here so a
+            // already; quotes and backslashes are escaped here so a
             // name like a"b.txt cannot corrupt the quoted parameter. Non-ASCII
-            // names additionally ride the RFC 2231 extended form (M-CC).
+            // names additionally ride the RFC 2231 extended form.
             $name = self::mimeNameParams('filename', $att->filename);
             $type = self::mimeNameParams('name', $att->filename);
 
@@ -826,7 +826,7 @@ final class SmtpTransport implements Transport
      * "\n") so {@see hasExtension()} can inspect the full EHLO keyword list —
      * reading only the first line would hide advertised extensions like STARTTLS.
      *
-     * M-E (lib-reviews-1102): every reply is bounded — one line cannot exceed
+     * Every reply is bounded — one line cannot exceed
      * RESPONSE_LINE_MAX bytes, one reply cannot exceed RESPONSE_MAX_LINES
      * continuation lines, and the whole exchange must finish inside the
      * configured timeout. The bare fgets() this replaces grew an arbitrarily
@@ -971,7 +971,7 @@ final class SmtpTransport implements Transport
      * RFC 2047 §2 75-character limit is emitted as several encoded-words
      * joined by a space (each carries <= 45 raw bytes: 12 chars of "=?UTF-8?
      * B??=" overhead + 60 base64 chars = 72 <= 75). Long CJK subjects used to
-     * ride as one 400-character word that RFC-compliant receivers reject (M-J).
+     * ride as one 400-character word that RFC-compliant receivers reject.
      * ASCII values pass through untouched; folding is foldHeader()'s job.
      */
     private function encodeHeaderWord(string $word): string

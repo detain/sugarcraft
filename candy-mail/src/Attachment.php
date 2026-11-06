@@ -28,7 +28,7 @@ final class Attachment
      * servers cap messages around 25-50 MiB (RFC 1870 SIZE is advisory and
      * this client does not read it), and the base64 MIME transfer encoding
      * amplifies the wire by ~4/3 — an unbounded read here is memory
-     * exhaustion at the sender before the server ever says no (M-F).
+     * exhaustion at the sender before the server ever says no.
      */
     public const MAX_BYTES = 26_214_400;
 
@@ -82,9 +82,9 @@ final class Attachment
     {
         $name = $filename ?? \basename($path);
 
-        // C2: the ctor gate below is the choke for every path, but inline()
+        // The ctor gate below is the choke for every path, but inline()
         // additionally checks BEFORE reading the file so a forged cid is
-        // diagnosed even when the path would fail first (pre-C2 order kept).
+        // diagnosed even when the path would fail first (the earlier order is kept).
         self::refuseMalformedCid($cid);
 
         $mime = self::detectMimeType($path);
@@ -144,7 +144,7 @@ final class Attachment
      * Create a copy with an updated cid (for inline embedding).
      *
      * @throws \InvalidArgumentException if the CID is not a valid RFC 2392
-     *     format — the ctor choke validates every assignment (C2), so the
+     *     format — the ctor choke validates every assignment, so the
      *     forged-Content-ID path this method used to leave open is closed.
      */
     public function withCid(string $cid): self
@@ -160,7 +160,7 @@ final class Attachment
     }
 
     /**
-     * Debug-output shape (C4 doctrine, lib-reviews-1102): var_dump()/print_r()
+     * Debug-output shape: var_dump()/print_r()
      * of an Attachment used to spill up to MAX_BYTES raw payload bytes onto
      * the terminal. Identity stays inspectable; the bytes do not.
      *
@@ -183,7 +183,7 @@ final class Attachment
         string $encoding,
         ?string $cid,
     ) {
-        // docs-fix-1023 C-2: filename and mimeType are interpolated into MIME
+        // Filename and mimeType are interpolated into MIME
         // part headers at send time. The package already refuses CR/LF in
         // subjects and addresses (Email::sanitizeHeader); attachments rode the
         // same interpolation channel unguarded, letting an archive/web-upload
@@ -191,11 +191,11 @@ final class Attachment
         // outgoing mail. Fail loud at construction, not silent-strip at send.
         self::refuseHeaderInjection($filename, 'attachment filename');
         self::refuseHeaderInjection($mimeType, 'attachment MIME type');
-        // C-2 (step 36 extension): the CR/LF gate stops line breaks, but a
+        // The CR/LF gate stops line breaks, but a
         // parameter suffix smuggles onto the SAME wire line without one.
         self::refuseMalformedMimeType($mimeType);
 
-        // C2 (lib-reviews-1102): the cid is interpolated into
+        // The cid is interpolated into
         // `Content-ID: <cid>` verbatim, so it needs the SAME construction-time
         // gate — but a stronger one than CR/LF: an unquoted `>` or space lets
         // a crafted value close the angle bracket early and append headers on
@@ -205,7 +205,7 @@ final class Attachment
         // longer mint an unguarded value.
         self::refuseMalformedCid($cid);
 
-        // M-F: content arriving from memory (fromContent/with* re-constructs)
+        // Content arriving from memory (fromContent/with* re-constructs)
         // never passes readFileOrThrow's gate, so the cap is enforced here
         // too — every constructed attachment obeys MAX_BYTES.
         if ($content !== null && \strlen($content) > self::MAX_BYTES) {
@@ -287,7 +287,7 @@ final class Attachment
      */
     private static function readFileOrThrow(string $path): string
     {
-        // M-F: is_file() is true only for REGULAR files, which rejects in one
+        // is_file() is true only for REGULAR files, which rejects in one
         // gate the three probes that hurt: /dev/zero and friends (character
         // devices whose read never yields a short count — the old code
         // exhausted memory past the exception path), FIFOs (a permanent hang

@@ -58,7 +58,7 @@ final class Email
         $this->subject      = $this->sanitizeHeader($subject, 'subject');
         // Bodies ride the MIME document verbatim except for stray control
         // bytes: NUL/BEL/etc. inside text survive into wire bytes that
-        // downstream filters and terminals choke on (qa-m4, lib-reviews-1102).
+        // downstream filters and terminals choke on.
         // Tab and newlines are kept; CR exists only to form CRLF, which the
         // renderer normalizes anyway.
         $this->body         = self::stripStrayControl($body);
@@ -293,7 +293,7 @@ final class Email
     /**
      * Body text with signature appended (if set).
      *
-     * m8 (lib-reviews-1102): the signature joins the PLAIN-TEXT body only.
+     * The signature joins the PLAIN-TEXT body only.
      * An HTML-only mail returns null here and the renderer emits the HTML
      * part verbatim — appending raw text to markup would corrupt it, and
      * auto-wrapping the signature in <p> + escaping is a product decision
@@ -314,7 +314,7 @@ final class Email
     /**
      * All recipients combined (to + cc + bcc) for SMTP "RCPT TO" routing.
      *
-     * m7 (lib-reviews-1102): dedupe uses the SAME key as the address-list
+     * Dedupe uses the SAME key as the address-list
      * merge (local part verbatim, domain lower-cased — RFC 5321 §2.3.3 makes
      * the domain case-insensitive). The old raw array_unique let a to:
      * A@Example.com plus cc: a@example.com pair deliver twice.

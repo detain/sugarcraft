@@ -88,7 +88,7 @@ final class ResendTransport implements Transport
      * Mask the API key so var_dump()/print_r() of live object state shows
      * `****` (parity with SmtpTransport's password mask).
      *
-     * C4 (lib-reviews-1102) truth-flip: the old sentence promised reflection
+     * Truth-flip: the old sentence promised reflection
      * never exposes the credential — false. serialize() and the (array) cast
      * and ReflectionProperty::getValue all read real property bytes:
      * serialize() is refused by __serialize() below, var_export()
@@ -104,7 +104,7 @@ final class ResendTransport implements Transport
     }
 
     /**
-     * Refuse serialization outright (C4) — the API key would ride the wire
+     * Refuse serialization outright — the API key would ride the wire
      * of any cache/session that stored this transport. Build it where used.
      *
      * @throws \RuntimeException always
@@ -115,7 +115,7 @@ final class ResendTransport implements Transport
     }
 
     /**
-     * Refuse var_export() resurrection (C4).
+     * Refuse var_export() resurrection.
      *
      * @throws \RuntimeException always
      */
@@ -206,7 +206,7 @@ final class ResendTransport implements Transport
 
     private function firstAddr(array $addrs): string
     {
-        // M-C: 'unknown@localhost' was a fabrication — it mailed every
+        // 'unknown@localhost' was a fabrication — it mailed every
         // senderless Resend payload from a forged address. Refuse instead;
         // Mailer/Email already guarantee a real from on the normal path.
         $first = $addrs[0] ?? null;

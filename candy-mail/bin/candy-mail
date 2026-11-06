@@ -13,7 +13,7 @@ declare(strict_types=1);
  * Flags accept both `--flag value` and `--flag=value`; repeatable flags are
  * --to/--cc/--bcc/--attach. A value that begins with a dash rides the inline
  * `--flag=VALUE` form only — the separated form refuses to steal a switch
- * (M-G). --render prints the SMTP MIME message without any network I/O;
+ * --render prints the SMTP MIME message without any network I/O;
  * --version prints the package version.
  *
  * Env: RESEND_API_KEY, CANDY_MAIL_FROM, CANDY_MAIL_SMTP_HOST/PORT/USERNAME/PASSWORD,
@@ -21,13 +21,13 @@ declare(strict_types=1);
  *      CANDY_MAIL_SMTP_HELO, CANDY_MAIL_SMTP_CA_FILE, CANDY_MAIL_SMTP_TIMEOUT,
  *      CANDY_MAIL_SIGNATURE
  *
- * Embedding (M-T): require this file and exit(\SugarCraft\Mail\main($argv));
+ * Embedding: require this file and exit(\SugarCraft\Mail\main($argv));
  * auto-dispatch fires only when the file itself is the process entry script,
  * so a forgotten proxy never looks like a silent success.
  */
 namespace SugarCraft\Mail;
 
-// DST-1 (guard shape ported from candy-code/candy-top, measured on PHP 8.3.6):
+// Guard shape ported from candy-code/candy-top (measured on PHP 8.3.6):
 // when `php candy-mail.phar` runs, THIS file is the archive's stub and the
 // process is NOT inside the archive — Phar::running() answers '' in exactly
 // this context, and a bare '/x.phar/entry' path fails is_file()/require for
@@ -80,7 +80,7 @@ use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Mail\{Email, Lang, Mailer, MissingTransportConfig, ResendTransport, SmtpTransport};
 
 // Guard: only auto-dispatch when this file IS the entry script. Embedded or
-// proxied launches (M-T) must call main($argv) and exit with its status —
+// proxied launches must call main($argv) and exit with its status —
 // `php proxy.php --version` used to fall through silently with exit 0, the
 // false-success anti-pattern this replaces. Tests require this file for its
 // helper functions and stay untouched by the guard.
@@ -110,7 +110,7 @@ function main(array $argv): int
     // notice is plain English by design (help() too): error MESSAGES are
     // translated via Lang; the CLI's own usage text is not locale-routed.
     // Import any old-prefix exports under the new CANDY_MAIL_* name (new
-    // name always wins), then warn once per var. N1 (lib-reviews-1102):
+    // name always wins), then warn once per var.
     // only warn for vars whose renamed counterpart this program actually
     // reads — an off-roster POP_ANYTHING maps to a CANDY_MAIL_ANYTHING
     // that nothing consumes, and warning about it invented a migration
@@ -128,7 +128,7 @@ function main(array $argv): int
         if (!\in_array($suffix, $mailEnvRoster, true)) {
             continue;
         }
-        // C5 (lib-reviews-1102): env var NAMES are attacker-settable in any
+        // Env var NAMES are attacker-settable in any
         // process environment — an OSC/BEL-bearing name would ride this
         // warning raw to the terminal. Sweep at the egress choke.
         fwrite(STDERR, Sanitize::untrusted(sprintf("candy-mail: %s is deprecated; set CANDY_MAIL_%s instead.\n", $legacyVar, $suffix))); // @rename-keep
@@ -137,14 +137,14 @@ function main(array $argv): int
     try {
         $args = parseArgs($argv);
     } catch (\Throwable $e) {
-        // C5 (lib-reviews-1102): $e->getMessage() carries raw untrusted bytes
+        // $e->getMessage() carries raw untrusted bytes
         // here — argv tokens on parse refusals, file paths, and (downstream)
         // pre-STARTTLS server lines; sugar-core's untrusted choke strips
         // SGR/OSC/BEL before they reach the terminal.
         fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.error', ['message' => $e->getMessage()])) . "\n");
         return 1;
     }
-    // C5 (lib-reviews-1102): argv[0] is attacker-settable by any caller
+    // argv[0] is attacker-settable by any caller
     // (execve), and the usage banner echoes it to the terminal — sweep the
     // untrusted name at the choke instead of trusting the exec line.
     $bin = Sanitize::untrusted(basename($argv[0]));
@@ -172,7 +172,7 @@ function main(array $argv): int
     try {
         $email = buildEmail($args['opts'], $body);
     } catch (\Throwable $e) {
-        // C5 (lib-reviews-1102): $e->getMessage() carries raw untrusted bytes
+        // $e->getMessage() carries raw untrusted bytes
         // here — argv tokens on parse refusals, file paths, and (downstream)
         // pre-STARTTLS server lines; sugar-core's untrusted choke strips
         // SGR/OSC/BEL before they reach the terminal.
@@ -180,7 +180,7 @@ function main(array $argv): int
         return 1;
     }
 
-    // --render: print the RFC 822 envelope offline (M-V/M-Q rewrite). Only a
+    // --render: print the RFC 822 envelope offline. Only a
     // MISSING transport falls back to a non-connected localhost renderer; a
     // BROKEN transport config is a loud error — it used to be swallowed into
     // an exit-0 preview that certified a wire format which never ships. The
@@ -213,7 +213,7 @@ function main(array $argv): int
     try {
         $transport = buildTransport($args['opts']);
     } catch (\Throwable $e) {
-        // C5: transport errors embed the raw SMTP greeting/response bytes —
+        // Transport errors embed the raw SMTP greeting/response bytes —
         // attacker-controlled before STARTTLS. Sweep at the egress choke.
         fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.transport_error', ['message' => $e->getMessage()])) . "\n");
         return 1;
@@ -225,7 +225,7 @@ function main(array $argv): int
         $mailer->send($email);
         echo Lang::t('cli.email_sent', ['transport' => $mailer->transportName()]) . "\n";
     } catch (\Throwable $e) {
-        // C5: send failures carry server/Resend-response bytes verbatim.
+        // Send failures carry server/Resend-response bytes verbatim.
         fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.send_failed', ['message' => $e->getMessage()])) . "\n");
         return 1;
     }
@@ -248,7 +248,7 @@ function main(array $argv): int
  * rather than being silently dropped. `--` ends option parsing so later
  * tokens are positional recipients even if they start with a dash.
  * A value-taking flag never consumes the next token when that token is
- * missing or itself looks like a switch (M-G): `--subject --render` used
+ * missing or itself looks like a switch: `--subject --render` used
  * to silently steal the switch and mail an empty subject. Pass values
  * that begin with a dash via the inline `--flag=VALUE` form.
  *
@@ -299,7 +299,7 @@ function parseArgs(array $argv): array
 
         if ($name === null) {
             if (\str_starts_with($arg, '-')) {
-                // did-you-mean: nearest known long flag (B8 minor). Only for
+                // did-you-mean: nearest known long flag. Only for
                 // plain-ASCII probes — levenshtein() is byte-based and would
                 // score UTF-8 noise meaninglessly.
                 $probe   = \preg_replace('/^-+/', '', $arg) ?? '';
@@ -360,7 +360,7 @@ function parseArgs(array $argv): array
 }
 
 /**
- * The next token as a flag value (M-G). Refuses a missing value and refuses
+ * The next token as a flag value. Refuses a missing value and refuses
  * to eat a switch: only a token that does not begin with '-' (or the lone
  * '-') is eligible. Dash-leading data belongs in the inline form
  * `--flag=VALUE`, which never routes through here.
@@ -376,7 +376,7 @@ function nextValue(array $argv, int $i, string $flag): string
 }
 
 /**
- * The help gate (docs-fix-1023 M-5): bare invocation shows help, but an
+ * The help gate: bare invocation shows help, but an
  * env-provided sender or any recipient means the user meant to send —
  * `CANDY_MAIL_FROM=… candy-mail --to you@example.com` must not print help.
  */
@@ -386,7 +386,7 @@ function cliWantsHelp(array $args): bool
         return true;
     }
 
-    // qa m1: a cc/bcc-only invocation meant to send too — showing help with
+    // A cc/bcc-only invocation meant to send too — showing help with
     // exit 0 made silence look like progress. The gate yields; buildEmail
     // then refuses the missing --to loudly.
     $hasRecipients = $args['positional'] !== [] || isset($args['opts']['to'])
@@ -411,7 +411,7 @@ function senderFromEnvironment(): string
 /**
  * Boolean env switch: unset/empty keeps the default; '1'/'true'/'yes'/'on'
  * turn it on and '0'/'false'/'no'/'off' turn it off. Anything else throws
- * (M-B): a typo like 'ture' once silently disabled REQUIRE_TLS — the safe
+ * A typo like 'ture' once silently disabled REQUIRE_TLS — the safe
  * reading of an unrecognised switch is a loud refusal, never a guess.
  */
 function envFlag(string $name, bool $default): bool
@@ -453,7 +453,7 @@ function portFromEnvironment(): int
 function buildEmail(array $opts, string $stdinBody): Email
 {
     $envFrom = senderFromEnvironment();
-    // M-C: no flag and no CANDY_MAIL_FROM is a refusal, not a fabrication —
+    // No flag and no CANDY_MAIL_FROM is a refusal, not a fabrication —
     // 'unknown@localhost' once forged a real sender into every message.
     $from = $opts['from'] ?? ($envFrom !== '' ? $envFrom : null);
     if ($from === null) {
@@ -471,7 +471,7 @@ function buildEmail(array $opts, string $stdinBody): Email
     $email = new Email(
         from:     [$from],
         to:       $to,
-        // m6: no --subject means NO Subject header (buildHeaders skips null),
+        // No --subject means NO Subject header (buildHeaders skips null),
         // not a fabricated '(no subject)'. The Resend transport keeps its own
         // payload default — that is an API contract, not a header forgery.
         subject:  $opts['subject'] ?? null,
@@ -501,7 +501,7 @@ function buildEmail(array $opts, string $stdinBody): Email
 /**
  * Choose the transport from environment and (optionally) parsed CLI flags.
  *
- * M-AA/M-Q: --helo/CANDY_MAIL_SMTP_HELO, --ca-file/CANDY_MAIL_SMTP_CA_FILE
+ * Maps --helo/CANDY_MAIL_SMTP_HELO, --ca-file/CANDY_MAIL_SMTP_CA_FILE
  * and --timeout/CANDY_MAIL_SMTP_TIMEOUT close the gap where the README
  * advertised withCaFile() and the Message-ID identity while the CLI offered
  * no way to reach either. Flags win over env; envString() normalises the
@@ -511,7 +511,7 @@ function buildEmail(array $opts, string $stdinBody): Email
  */
 function buildTransport(array $flags = []): Transport
 {
-    // M-P: trim the raw value first — a whitespace-only RESEND_API_KEY used
+    // Trim the raw value first — a whitespace-only RESEND_API_KEY used
     // to hijack transport selection (resolving truthy while ignoring the
     // full SMTP config). An absent or blank key means "not configured".
     $apiKey = \trim(envString('RESEND_API_KEY'));
@@ -580,7 +580,7 @@ function timeoutSeconds(mixed $raw): int
 
 /**
  * The three archive identities, first answer wins (measured on PHP 8.3.6
- * while porting the candy-code DST-1 guard): {@see \Phar::running()} names
+ * while porting the candy-code archive guard): {@see \Phar::running()} names
  * the archive for any script executing from inside it; in the stub region of
  * a directly executed archive it answers '' and the archive is named by
  * `__FILE__` ending in `.phar`; a `phar://`-prefixed `__FILE__` covers the
@@ -607,13 +607,13 @@ function hostArchive(): string
 }
 
 /**
- * Package version for --version, phar-aware (DST-1 program, phf lane).
+ * Package version for --version, phar-aware.
  *
  * Inside an archive the build manifest written by tools/build-phar.php is the
  * AUTHORITY and wins outright: the packaged vendor/composer/installed.php is
  * FROZEN at build time, so InstalledVersions would keep answering the build
  * root's pretty_version (`dev-master`) for the entire life of the artifact —
- * the exact frozen-dev-master lie candy-code's DST-1 pinned. A bare
+ * the exact frozen-dev-master lie candy-code pinned. A bare
  * `dev-build` stamp is working-tree noise (no release tag was reachable at
  * build time) and falls through, fail-closed, like candy-code's
  * Version::fromPharMetadata(). Outside an archive nothing is consulted and
