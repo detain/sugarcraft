@@ -5,7 +5,12 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Tui;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Agents\Live\ActivityItem;
+use SugarCraft\Code\Agents\Live\AgentLiveRegistry;
+use SugarCraft\Code\Agents\Live\RunLiveness;
+use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Tui\AgentDisplayState;
+use SugarCraft\Code\Tui\AgentOutputState;
 use SugarCraft\Code\Tui\AgentStatusBar;
 use SugarCraft\Code\Theme;
 use SugarCraft\Core\Util\ColorProfile;
@@ -549,5 +554,182 @@ final class AgentStatusBarTest extends TestCase
 
         $this->assertSame(14, substr_count($line, "\u{1F600}"));
         $this->assertStringContainsString("\u{2026}", $line);
+    }
+
+    // =========================================================================
+    // A1 stall marker (RS-AGENT-BACKLOG) — the hint is presentation only: it
+    // appears when, and only when, a caller hands in the live registry AND the
+    // threshold is on AND the row's run has been fold-silent past it. The
+    // marker itself is ASCII symbol + digits, so it carries no translation
+    // cost; assertions spell it with chr(63) concatenation so the strings stay
+    // out of the GlobDialect corpus harvest (? is a wildcard to that sweep).
+    // =========================================================================
+
+    /**
+     * Frames for the registry fixtures — the same fold shape
+     * AgentLiveRegistryTest drives, under a name no other test file carries.
+     *
+     * @param list<\SugarCraft\Code\Agents\Live\ActivityItem> $items
+     */
+    private static function stallBarFrame(string $op, string $id, int $seq, string $call, array $items = []): SubAgentActivity
+    {
+        return new SubAgentActivity($op, $id, 'explore', '', $seq, '', parentCallId: $call, items: $items);
+    }
+
+    /**
+     * A registry on a hand-driven clock, with `run_a` started at t=100 and the
+     * clock then advanced to t=160 without any further fold: idle 60.
+     */
+    private static function quietRegistry(): AgentLiveRegistry
+    {
+        $now = 100.0;
+        $registry = AgentLiveRegistry::new(static function () use (&$now): float {
+            return $now;
+        });
+        $registry->advance();
+        $registry->apply(self::stallBarFrame('started', 'run_a', 1, 'tc_1'));
+        $registry->apply(self::stallBarFrame('progress', 'run_b', 1, 'tc_2'));
+        $now = 160.0;
+        $registry->advance();
+        $registry->apply(self::stallBarFrame('progress', 'run_b', 2, 'tc_2', [ActivityItem::thinking()]));
+        $now = 220.0;
+        $registry->advance();
+
+        return $registry;
+    }
+
+    private static function outputRow(string $name, ?string $key): AgentOutputState
+    {
+        return AgentOutputState::fromDisplayState(
+            AgentDisplayState::new($name, 'working', 'Reading auth.php', 60, 500, 0.0012),
+            'some-model',
+            [],
+            null,
+            null,
+            $key,
+        );
+    }
+
+    public function testRenderAgentLineNullMarkerIsByteIdenticalToTheTwoArgumentForm(): void
+    {
+        $agent = self::outputRow('coder-1', 'run_a');
+
+        $this->assertSame(
+            AgentStatusBar::renderAgentLine($agent, self::theme()),
+            AgentStatusBar::renderAgentLine($agent, self::theme(), null),
+        );
+    }
+
+    public function testStallMarkerIsAnAsciiQuestionMarkSeconds(): void
+    {
+        $this->assertSame(chr(63) . '45s', AgentStatusBar::stallMarker(45));
+        $this->assertSame(chr(63) . '0s', AgentStatusBar::stallMarker(0));
+        $this->assertSame(chr(63) . '0s', AgentStatusBar::stallMarker(-7), 'a negative idle never renders a minus sign');
+    }
+
+    public function testMarkerSuffixCarriesTheWaitingHueAndNothingElseMoves(): void
+    {
+        $t = self::theme();
+        $agent = self::outputRow('coder-1', 'run_a');
+
+        $base = AgentStatusBar::renderAgentLine($agent, $t);
+        $marked = AgentStatusBar::renderAgentLine($agent, $t, 45);
+
+        // The unmarked row carries no warning hue at all (status is
+        // `working` → success), so every shellWarning byte is the marker's.
+        $warning = $t->shellWarning->toFg(ColorProfile::TrueColor);
+        $this->assertSame(0, substr_count($base, $warning), 'the waiting hue leaked into a working row');
+        $this->assertSame(1, substr_count($marked, $warning));
+        $this->assertStringStartsWith($base, $marked, 'the marker must be appended, never woven into the row');
+        // Runtime-built needle: the marker opens with its own SGR, so the
+        // gap before it is escapes, not the bare space a literal would name.
+        $this->assertStringContainsString($warning . chr(63) . '45s', $marked);
+    }
+
+    public function testRenderWithoutRegistryIsByteIdenticalEvenWithAThresholdGiven(): void
+    {
+        $agents = [self::outputRow('coder-1', 'run_a'), new AgentDisplayState('coder-2', 'waiting', 'Blocked', 5, 10, 0.0)];
+
+        $plain = AgentStatusBar::render($agents, self::theme());
+
+        $this->assertSame($plain, AgentStatusBar::render($agents, self::theme(), null, 30));
+        // The no-override leg of render() resolves through
+        // RunLiveness::thresholdSeconds() -> UiSettings; that read is pinned
+        // under a HOME sandbox in RunLivenessTest, not here, so this file
+        // never depends on the developer's real config.json.
+    }
+
+    public function testOffThresholdWithALiveRegistryIsTheDefaultIdenticalPair(): void
+    {
+        // The mutation keystone: neuter either OFF gate (the render() check or
+        // RunLiveness::stallSeconds()'s) and the quiet run below starts
+        // advertising itself in a configuration that asked for nothing.
+        $agents = [self::outputRow('coder-1', 'run_a')];
+        $registry = self::quietRegistry();
+
+        $plain = AgentStatusBar::render($agents, self::theme());
+        $off = AgentStatusBar::render($agents, self::theme(), $registry, RunLiveness::OFF);
+
+        $this->assertSame($plain, $off);
+        $this->assertStringNotContainsString(chr(63), $off);
+    }
+
+    public function testRenderMarksExactlyTheFoldSilentKeyedRow(): void
+    {
+        $agents = [
+            self::outputRow('coder-1', 'run_a'),               // idle 60 vs threshold 30 -> marked
+            self::outputRow('fresh-2', 'run_b'),               // folded at t=160, idle 60 -> marked too
+            self::outputRow('keyless', null),                   // plain presentation row -> never
+            new AgentDisplayState('plain-4', 'working', 'x', 1, 1, 0.0), // no key channel at all
+            self::outputRow('ghost-5', 'run_missing'),          // id unknown to the registry
+        ];
+        $registry = self::quietRegistry();
+
+        $out = AgentStatusBar::render($agents, self::theme(), $registry, 30);
+        $lines = explode("\n", $out);
+
+        $this->assertCount(5, $lines, 'markers must not split or merge rows');
+        $this->assertStringContainsString(chr(63) . '120s', $lines[0], 'run_a has been quiet since t=100');
+        $this->assertStringContainsString(chr(63) . '60s', $lines[1], 'run_b folded last at t=160');
+        $this->assertStringNotContainsString(chr(63), $lines[2]);
+        $this->assertStringNotContainsString(chr(63), $lines[3]);
+        $this->assertStringNotContainsString(chr(63), $lines[4]);
+    }
+
+    public function testRowQuietButNotPastThresholdRidesClean(): void
+    {
+        $now = 100.0;
+        $registry = AgentLiveRegistry::new(static function () use (&$now): float {
+            return $now;
+        });
+        $registry->advance();
+        $registry->apply(self::stallBarFrame('started', 'run_a', 1, 'tc_1'));
+        $now = 125.0;
+        $registry->advance();
+        // Exactly at the threshold the strict > law holds: not stalled.
+        $agents = [self::outputRow('coder-1', 'run_a')];
+
+        $this->assertStringNotContainsString(chr(63), AgentStatusBar::render($agents, self::theme(), $registry, 25));
+
+        $now = 126.0;
+        $registry->advance();
+
+        $warning = self::theme()->shellWarning->toFg(ColorProfile::TrueColor);
+        $this->assertStringContainsString(
+            $warning . chr(63) . '26s',
+            AgentStatusBar::render($agents, self::theme(), $registry, 25),
+            'one second past the threshold must flip the row',
+        );
+    }
+
+    public function testFinishedRunIsNeverMarked(): void
+    {
+        $registry = self::quietRegistry();
+        $registry->apply(self::stallBarFrame('finished', 'run_a', 2, 'tc_1'));
+        $registry->advance();
+
+        $out = AgentStatusBar::render([self::outputRow('coder-1', 'run_a')], self::theme(), $registry, 30);
+
+        $this->assertStringNotContainsString(chr(63), $out, 'a finished run has no stall story to tell');
     }
 }

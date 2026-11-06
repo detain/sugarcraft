@@ -7,6 +7,8 @@ namespace SugarCraft\Code\Tui;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Code\Agents\Live\AgentLiveRegistry;
+use SugarCraft\Code\Agents\Live\RunLiveness;
 use SugarCraft\Code\Lang;
 use SugarCraft\Style\Style;
 use SugarCraft\Code\Theme;
@@ -26,6 +28,16 @@ use SugarCraft\Code\Theme;
  *   - `shellInfo`:    streaming output from the LLM / Streaming
  *   - `shellError`:   failed or encountered an error / Failed
  *   - `shellMuted`:   completed successfully or stopped / Completed
+ *
+ * Since A1 the bar can additionally carry a STALL HINT: {@see render()} takes
+ * an optional live {@see AgentLiveRegistry}, and a row whose run has gone
+ * longer than the configured threshold without an accepted activity fold is
+ * suffixed with {@see stallMarker()} in the waiting hue. The marker is
+ * presentation only — it schedules nothing, restarts nothing, and decides
+ * nothing; the verdict itself lives in {@see RunLiveness}, computed from
+ * recorded timestamps at observation time (E646: no timers ride this path).
+ * With no registry handed in — the shape every existing caller passes — the
+ * output is byte-identical to the pre-A1 bar.
  *
  * Mirrors the charmbracelet/crush agent view status indicator design.
  */
@@ -57,8 +69,14 @@ final class AgentStatusBar
      *
      * Returns an empty string when the agent list is empty (caller may
      * choose to suppress the bar entirely in that case).
+     *
+     * `$stalledSeconds` is the A1 stall hint: a non-null value (the run has
+     * been fold-silent that long, per {@see RunLiveness::stallSeconds()})
+     * suffixes the row with {@see stallMarker()} painted in the waiting hue;
+     * null — the only value pre-A1 callers can produce — leaves the bytes
+     * exactly as they were.
      */
-    public static function renderAgentLine(AgentDisplayState $agent, Theme $theme): string
+    public static function renderAgentLine(AgentDisplayState $agent, Theme $theme, ?int $stalledSeconds = null): string
     {
         $color = self::statusColor($agent->status, $theme);
         $dot = self::colouredDot($color);
@@ -68,7 +86,24 @@ final class AgentStatusBar
         $elapsed = Style::new()->foreground($theme->shellMuted)->render($agent->elapsedDisplay());
         $usage = Style::new()->foreground($theme->shellMuted)->render($agent->usageDisplay());
 
-        return "{$dot} {$name} {$status} {$operation} {$elapsed} {$usage}";
+        $line = "{$dot} {$name} {$status} {$operation} {$elapsed} {$usage}";
+
+        if ($stalledSeconds !== null) {
+            $line .= ' ' . Style::new()->foreground($theme->shellWarning)->render(self::stallMarker($stalledSeconds));
+        }
+
+        return $line;
+    }
+
+    /**
+     * The A1 stall hint itself: `?<seconds>s` — ASCII symbol plus digits,
+     * deliberately WORD-free so the hint ships with zero new translatable
+     * strings (the brief's constraint; the same shape as the strip's other
+     * numeral decorations). Painted by the caller, not here.
+     */
+    public static function stallMarker(int $secondsIdle): string
+    {
+        return '?' . max(0, $secondsIdle) . 's';
     }
 
     /**
@@ -77,17 +112,32 @@ final class AgentStatusBar
      * When the list is empty returns an empty string so callers can
      * suppress the bar without special-case logic in the renderer.
      *
+     * The A1 stall hint rides the last two parameters. When a
+     * {@see AgentLiveRegistry} is given, a row is marked iff its run id (the
+     * {@see AgentOutputState::$key} — plain display rows carry no id and can
+     * never be marked) folds quiet past the threshold. `$stallThresholdSeconds`
+     * pins the threshold at the call site; leaving it null resolves it once
+     * per render through {@see RunLiveness::thresholdSeconds()}, which reads
+     * `agentStallSeconds` (0 there means off, and off means byte-identical
+     * to the pre-A1 bar). Tests pass an explicit threshold to stay off the
+     * settings memo entirely.
+     *
      * @param list<AgentDisplayState> $agents
      */
-    public static function render(array $agents, Theme $theme): string
+    public static function render(array $agents, Theme $theme, ?AgentLiveRegistry $registry = null, ?int $stallThresholdSeconds = null): string
     {
         if ($agents === []) {
             return '';
         }
 
+        $threshold = $registry === null ? null : ($stallThresholdSeconds ?? RunLiveness::thresholdSeconds());
+
         $lines = [];
         foreach ($agents as $agent) {
-            $lines[] = self::renderAgentLine($agent, $theme);
+            $stalled = ($registry === null || $threshold === RunLiveness::OFF)
+                ? null
+                : RunLiveness::stallSeconds($registry, $agent instanceof AgentOutputState ? $agent->key : null, $threshold);
+            $lines[] = self::renderAgentLine($agent, $theme, $stalled);
         }
 
         return implode("\n", $lines);
