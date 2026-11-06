@@ -35,6 +35,8 @@ final readonly class Screen
 
     /**
      * Return the scrollback buffer holding rows that have scrolled off-screen.
+     * Null when this screen was composed via {@see self::fromBuffer()} without a
+     * ring; the full `Terminal\Terminal::screen()` path always wires one.
      */
     public function scrollback(): ?Scrollback
     {
