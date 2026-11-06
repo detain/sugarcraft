@@ -209,6 +209,9 @@ flag_management:
     - name: sugar-image
       paths: ["sugar-image/src/**"]
       carryforward: true
+    - name: sugar-vterm
+      paths: ["sugar-vterm/src/**"]
+      carryforward: true
 
 # ── Components ────────────────────────────────────────────────────────────────
 # Each component links to its flag via flag_regexes.  Because both
@@ -574,3 +577,9 @@ component_management:
         - "sugar-image/src/**"
       flag_regexes:
         - "^sugar-image$"
+    - component_id: sugar-vterm
+      name: sugar-vterm
+      paths:
+        - "sugar-vterm/src/**"
+      flag_regexes:
+        - "^sugar-vterm$"
