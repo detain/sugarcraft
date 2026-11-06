@@ -719,7 +719,7 @@ Attribute constants on `Theme` match `Cell::ATTR_*` for SGR bitfield constructio
 
 | Method | Returns |
 |--------|---------|
-| `$theme->color($index)` (instance) | `int` — packed 24-bit RGB for palette slot 0..255. Falls back through `Theme::rgb()` for grayscale (232..255) when a slot is absent. |
+| `$theme->color($index)` (instance) | `int` — packed 24-bit RGB for palette slot 0..255. When a slot is absent, falls back through `Theme::rgb()` for any index — the standard xterm mapping (cube 16..231 and grayscale 232..255), not only the grayscale ramp. |
 | `Theme::rgb($index)` | `array{int,int,int}` — `[R,G,B]` resolution for any 256-color index, including the 6x6x6 color cube (16..231) and the 24-step grayscale ramp (232..255). |
 | `Theme::fgIndex($slot)` | `int` — Map an ANSI 0..15 slot to its 256-color index (currently a no-op identity, kept for spec parity). |
 | `Theme::bgIndex($slot)` | `int` — Same for background slot. |
