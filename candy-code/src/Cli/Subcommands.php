@@ -4517,6 +4517,12 @@ final class Subcommands
         '--max-turns' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.max_turns'],
         '--json-schema' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.json_schema'],
         '--append-system-prompt' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.append_system_prompt'],
+        // D1/D2: the completion census in BinCandyCodeDispatchTest scrapes
+        // the parser's bare-arm spellings, so every recognized flag needs a
+        // row here. 'text' values, not 'format': that arm hardcodes the
+        // OUTPUT format words, which are the wrong set for input formats.
+        '--session-id' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.session_id'],
+        '--input-format' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.input_format'],
         '--continue' => ['short' => '-c', 'value' => null, 'desc' => 'cli.completion.option.continue'],
         '--resume' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.resume'],
         // C-AGT-6.c shipped the parser branch without this row, so no shell

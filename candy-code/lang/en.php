@@ -209,6 +209,7 @@ return [
     'cli.completion.option.continue' => 'Continue the most recent session',
     'cli.completion.option.help' => 'Show the help screen',
     'cli.completion.option.incognito' => 'Launch keeping nothing: no session row, no transcript, no memory writes',
+    'cli.completion.option.input_format' => 'Read stdin as stream-json NDJSON input events (default: text)',
     'cli.completion.option.json_schema' => 'Constrain the one-shot answer to a JSON Schema (inline or file path)',
     'cli.completion.option.max_cost' => 'Spend ceiling for the launch, in US dollars',
     'cli.completion.option.max_turns' => 'Tool-loop step ceiling for the launch',
@@ -220,6 +221,7 @@ return [
     'cli.completion.option.resume' => 'Resume a stored session by id or name',
     'cli.completion.option.root' => 'Use <dir> as the project root',
     'cli.completion.option.safe_mode' => 'Launch that ignores all trust: roots, bundles, foreign skills and commands',
+    'cli.completion.option.session_id' => 'Pre-allocate the id of the new one-shot session',
     'cli.completion.option.version' => 'Show the installed version',
 'cli.completion.option.worktree' => 'Run the session inside its own git worktree (name optional)',
     'cli.completion.unsupported_shell' => 'completion {shell}: unsupported shell',
@@ -610,6 +612,33 @@ Options:
                          Only with -p or the run verb: a launch with no
                          prompt to append to refuses with exit 2 rather than
                          silently ignoring the rules you gave.
+      --session-id <id>  Pre-allocate the id of the NEW session this one-shot
+                         run creates, so a driver can key artifacts to the
+                         session before the run finishes. The id must be 16
+                         lowercase hexadecimal characters — the form
+                         candy-code session list prints — and must not be
+                         stored already; a taken id refuses with exit 2
+                         rather than quietly resuming. --resume is the verb
+                         that reopens a session whose id is already decided.
+                         Only with -p or the run verb, and never beside
+                         --continue, --resume, --incognito or a subcommand:
+                         each combination would silently drop the id, so it
+                         refuses with exit 2 instead.
+      --input-format <fmt>
+                         How to read piped stdin with -p. The default text
+                         mode prepends the raw bytes as context above the
+                         prompt. stream-json instead parses stdin as NDJSON
+                         input events: one JSON object per line, each
+                         {"type":"user","content":"..."}; every accepted
+                         event becomes its own user turn, placed before the
+                         typed prompt. A malformed JSON line is a usage
+                         error (exit 2) naming the offending line number;
+                         non-user types and events without usable text
+                         content are counted, named once on stderr, and
+                         skipped. The 10 MiB stdin cap counts raw bytes
+                         before parsing, and a run with nothing to read
+                         refuses with exit 2. Requires -p or the run verb,
+                         and refuses beside a subcommand.
   -c, --continue         Reopen the most recently used session, transcript
                          and all, instead of starting a new one. Without it
                          every launch opens a new session; Up in an empty
