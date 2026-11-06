@@ -850,12 +850,14 @@ vendor/bin/php-cs-fixer fix --config=../.php-cs-fixer.dist.php  # lint + auto-fi
 
 ## Snapshot tests
 
-Render output is covered by golden-file snapshot tests. Fixture files live
-in `tests/fixtures/` with a `.golden` extension and are compared against
-actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
-To re-record a fixture after an intentional output change, delete it and
-re-run the test — `assertGoldenAnsi()` writes the file when it is missing
-(there is no env-var override):
+Render output is covered by golden-file snapshot tests. The fixture set is
+exactly two files in `tests/fixtures/` — `terminal-cleared.golden` and
+`terminal-parsed-text.golden` — both compared against actual ANSI byte
+output by `tests/GoldenRenderTest.php` via
+`SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`; no other
+fixture files are read. To re-record a fixture after an intentional output
+change, delete it and re-run the test — `assertGoldenAnsi()` writes the
+file when it is missing (there is no env-var override):
 
 ```sh
 rm tests/fixtures/<name>.golden
