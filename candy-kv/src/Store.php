@@ -37,14 +37,14 @@ use SugarCraft\Kv\Lang;
  * echo $kv->get('key');
  * foreach ($kv->list() as $entry) { ... }
  * ```
- *
- * Factories: Store/Database deliberately have no `::new()` convenience
- * constructor (unlike the value-object libs) — both are constructor-arg
- * service classes where the constructor IS the only sensible entry point,
- * mirroring upstream's `skate.New()` usage shape. <!-- @rename-keep -->
  */
 final class Store
 {
+    // Factories: Store/Database deliberately have no `::new()` convenience
+    // constructor (unlike the value-object libs) — both are constructor-arg
+    // service classes where the constructor IS the only sensible entry point,
+    // mirroring upstream's `skate.New()` usage shape. @rename-keep
+
     /** Default data directory relative to home. */
     public const DEFAULT_SUBDIR = '.config/skate';
 
