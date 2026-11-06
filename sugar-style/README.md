@@ -449,7 +449,7 @@ Style::setDefaultProfile($had); // always, e.g. in tearDown
 | `$c->blend($other, $t)` | linear LERP, t ∈ [0, 1] |
 | `$a->blend1d($b, $steps)` | list of N stops from $a to $b |
 | `$tl->blend2d($tr, $bl, $br, $rows, $cols)` | 2D gradient grid |
-| `$c->lighten($amount)` / `darken($amount)` | luminance ±amount |
+| `$c->lighten($amount)` / `darken($amount)` | HSL lightness ±amount (clamped) |
 | `$c->alpha($amount, $bg)` | composite (alpha-over) onto a backdrop; null backdrop = black; amount clamps to [0,1] |
 | `$c->complementary()` | hue + 180° |
 
