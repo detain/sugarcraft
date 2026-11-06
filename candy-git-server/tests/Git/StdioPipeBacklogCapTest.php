@@ -76,7 +76,11 @@ final class StdioPipeBacklogCapTest extends TestCase
      */
     public function testUnconsumedClientBacklogIsCappedAndFailsTheStream(): void
     {
-        $blob = \str_repeat('x', StdioPipe::PENDING_TO_CHILD_MAX_BYTES + StdioPipe::CHUNK_BYTES);
+        // Margin: the child's stdin pipe itself absorbs roughly one pipe
+        // buffer of the pile before stalling, so a cap+1 blob can leave the
+        // backlog one byte short of the breach under real timing. Four extra
+        // chunks make the overrun arithmetic, not race-conditions.
+        $blob = \str_repeat('x', StdioPipe::PENDING_TO_CHILD_MAX_BYTES + 4 * StdioPipe::CHUNK_BYTES);
         $in = $this->readPointer('blob.txt', $blob);
         $out = $this->filePointer('out2.txt', 'wb');
 
@@ -99,8 +103,8 @@ final class StdioPipeBacklogCapTest extends TestCase
      */
     public function testHealthyFlowUnderTheCapIsUnaffected(): void
     {
-        $in = $this->filePointer('in3.txt', 'wb');
-        $out = $this->filePointer('out3.txt', 'rb');
+        $in = $this->readPointer('in3.txt');
+        $out = $this->filePointer('out3.txt', 'wb');
 
         $code = StdioPipe::run(
             $in,
