@@ -290,7 +290,11 @@ Feeds master reads through sugar-input's `EscapeDecoder`:
 `new(MasterPty $master, ?EscapeDecoder $decoder = null, int $readChunk = 8192)`
 (a `null` decoder gets a fresh `EscapeDecoder`),
 `readEvents(float $timeout = 0.05): list<Event>` returns after one
-packet or one timeout (partial escape sequences buffer across calls),
+packet or one timeout (partial escape sequences buffer across calls) —
+an empty result is **ambiguous**, it means both "nothing yet" and "the
+stream ended". `isEof(): bool` is the ONLY end-of-stream signal: it
+latches once a read observed master EOF (`''`) and is cleared only by
+`reset()`, so a mux loop must poll it to tell wait-more from stop.
 `readEventsBlocking(?float $timeout = null)` keeps reading until it
 has events — a **null timeout blocks indefinitely**; pass a budget in
 request paths. `remainder()` exposes un-decoded trailing bytes,

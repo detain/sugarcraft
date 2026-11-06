@@ -180,7 +180,7 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
 <tr><td>ControllingTerminal</td><td>claim(fd)</td><td>Claim a fd as controlling terminal via setsid() + ioctl(TIOCSCTTY)</td></tr>
 <tr><td>Expect</td><td>on(master) / send() / expectAny() / expectPattern() / expectEof()</td><td>Bounded scripted automation over a master: needles, regex, stall-protected sends</td></tr>
 <tr><td>PtyPool</td><td>acquire(cols, rows) / release(pair) / drain()</td><td>Concurrency ceiling on live pairs (in-flight slots are weak — abandoned pairs free their slot)</td></tr>
-<tr><td>PtyInputDecoder</td><td>readEvents(timeout) / isEof()</td><td>Master bytes → key/mouse events via sugar-input's EscapeDecoder</td></tr>
+<tr><td>PtyInputDecoder</td><td>readEvents(timeout) / readEventsBlocking(timeout?) / isEof() / remainder() / reset()</td><td>Master bytes → key/mouse events via sugar-input's EscapeDecoder; empty readEvents() is ambiguous — <code>isEof()</code> is the only end-of-stream signal</td></tr>
 <tr><td>AnsiOutputParser + SgrHandler</td><td>feed(bytes) / state()</td><td>Optimistic SGR state tracking over output (POSIX masters; OSC not tracked)</td></tr>
 <tr><td>PosixProcess</td><td>wait() / kill() / exitCode() / stdoutBytes()</td><td>Plain proc_open child with pipe capture (no PTY)</td></tr>
 <tr><td>ReactPump</td><td>start() / stop()</td><td>The byte pump driven by the ReactPHP event loop instead of a blocking select</td></tr>
