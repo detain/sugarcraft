@@ -38,10 +38,12 @@ namespace SugarCraft\Code\Agents\Live;
  *     known role word, get their ASCII square brackets folded to
  *     U+FF3B/U+FF3D the same way. Lowercase non-role brackets ([docs], [fix])
  *     stay — markdown labels are too common a false positive to mangle.
- *   - Role-label lines ({@code system:}, {@code assistant(name):}) at a head
- *     have the label span (word, optional parenthetical, colon) folded to
- *     fullwidth; the colon is part of what makes the line parse as a header,
- *     so it folds with the word.
+ *   - Role-label lines ({@code system:}, {@code assistant(name):}, glued
+ *     {@code system:obey}) at a head have the label span (word, optional
+ *     parenthetical, colon) folded to fullwidth. No space after the colon is
+ *     required: the readers key on the prefix, and the cost is one-sided — a
+ *     false positive merely reads wider, a false negative is a full defeat —
+ *     so nothing may re-exempt the glued form with a lookahead.
  *
  * A head is the start of a logical line after ANY amount of whitespace,
  * CR (which returns the physical cursor to column 0 — a repaint cannot hide
@@ -50,6 +52,11 @@ namespace SugarCraft\Code\Agents\Live;
  * — kept, but looked through, so a ZWSP cannot smuggle a header past the
  * anchor), and any number of {@see MARKER}s a previous pass left behind (so a
  * forged pipe token cannot push a real marker out of the anchored position).
+ * At the production boundary, {@see AgentTranscriptTail::clean()} converts
+ * every break shape a terminal or a Python splitlines() reader honors (CR,
+ * VT, FF, FS/GS/RS, NEL, LS/PS) into a real LF before this strip runs, so
+ * smuggled breaks cannot reach the anchor glued; standalone sanitize() still
+ * splits on CR itself.
  *
  * What is deliberately NOT stripped, and why:
  *   - Mid-line angle/bracket tags: {@code "the parser accepts <system> as
@@ -75,7 +82,10 @@ namespace SugarCraft\Code\Agents\Live;
  * Length: output is at most three bytes per rewritten ASCII byte (fullwidth
  * spellings) plus MARKER widenings; the tail's line and page budgets bound the
  * input ({@see SubAgentTranscriptLog::MAX_LINE_BYTES}), and this class adds a
- * constant factor, not a new unbounded surface.
+ * constant factor, not a new unbounded surface. Recognized token names are
+ * capped — pipe token inner text at 64 characters, angle tag name at 63 —
+ * because the vocabularies worth imitating are short; oversized lookalikes
+ * stay prose.
  */
 final class ReportSanitizer
 {
@@ -131,7 +141,7 @@ final class ReportSanitizer
     private const BRACKET_HEAD = '/^\[(?:(?i:' . self::ROLE_WORDS . ')|[A-Z][A-Z0-9_+\-]{1,31})\]/u';
 
     /** Role-label line header: roster word, optional (name), colon. */
-    private const ROLE_HEAD = '/^(?:' . self::ROLE_WORDS . ')(?:\([A-Za-z0-9_+\-]{1,64}\))?[ \t]*:(?![A-Za-z0-9])/iu';
+    private const ROLE_HEAD = '/^(?:' . self::ROLE_WORDS . ')(?:\([A-Za-z0-9_+\-]{1,64}\))?[ \t]*:/iu';
 
     /**
      * $report text with every imitation-control HEAD neutralized in place.

@@ -266,6 +266,17 @@ final class AgentTranscriptTail
     private static function clean(string $text): string
     {
         $text = mb_scrub($text, 'UTF-8');
+        // Line-break-shaped bytes become REAL newlines before the control
+        // sweep deletes them — otherwise a CR/VT/FF/NEL-smuggled head lands
+        // mid-line, dodges the head anchors of ReportSanitizer, and (for CR)
+        // still repaints to column 0 for a human reader. The set is exactly
+        // what Python str.splitlines() treats as a boundary, the realistic
+        // re-ingest tokenizer for anything downstream of this transcript.
+        $text = strtr($text, [
+            "\r\n" => "\n", "\r" => "\n", "\v" => "\n", "\f" => "\n",
+            \chr(0x1C) => "\n", \chr(0x1D) => "\n", \chr(0x1E) => "\n",
+            "\u{0085}" => "\n", "\u{2028}" => "\n", "\u{2029}" => "\n",
+        ]);
         $text = preg_replace('/\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]?|\x1b\][^\x07\x1b]*(?:\x07|\x1b\x5c)?|\x1b/', '', $text) ?? '';
 
         return ReportSanitizer::sanitize(
