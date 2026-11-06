@@ -9,6 +9,7 @@ use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentStatus;
 use SugarCraft\Code\Agents\AgentWorkerPool;
+use SugarCraft\Code\Agents\BlankReturnResume;
 use SugarCraft\Code\Agents\ExecutorInterface;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Agents\SuspendedDelegations;
@@ -244,15 +245,17 @@ final class TaskSpendPropagationTest extends TestCase
     public function testAResumedRunBillsOnlyItsOwnStepsNotTheSavedOnes(): void
     {
         // First run: one $1 step, then the step cap and its $0.50 no-tools
-        // summary request (WAVE_PLAN_2 §5), which comes back empty so the run
-        // is still reportless; second (resume): one new $1 step, then a
-        // provider failure. The saved transcript's steps were billed by the
-        // FIRST Task call and must not be billed again.
+        // summary request (WAVE_PLAN_2 §5), which comes back empty — a blank
+        // return the policy re-asks with one "continue" per consecutive blank
+        // until the ten-attempt budget is spent. Each silent continue repeats
+        // that $0.50 blank reply, so the stalled first run bills its own step,
+        // its summary, and the nine continues it consumed — steps of the same
+        // run, nothing more. The explicit resume that follows answers at once
+        // and bills only its own $1 step: the saved transcript's billings ride
+        // the transcript, not the invoice.
         $provider = new ScriptedProvider([
             self::reply('', 100, 1.0, [new ToolCall('call_1', 'probe', [])]),
             self::reply('', 50, 0.5),
-            self::reply('', 100, 1.0, [new ToolCall('call_2', 'probe', [])]),
-            new \RuntimeException('provider went away'),
         ]);
         $manager = self::roster(maxTurns: 1);
         $store = new SuspendedDelegations($this->storeDir);
@@ -261,18 +264,25 @@ final class TaskSpendPropagationTest extends TestCase
 
         $first = $task->execute(self::taskArgs());
         $this->assertTrue($first->isError());
-        $this->assertEqualsWithDelta(1.5, $first->usage()?->costUsd ?? 0.0, 1e-9, 'a step-capped run without a report still billed, its summary request included');
+        $this->assertEqualsWithDelta(
+            1.5 + 0.5 * (BlankReturnResume::MAX_CONSECUTIVE_BLANKS - 1),
+            $first->usage()?->costUsd ?? 0.0,
+            1e-9,
+            'the stalled run billed its own step, its summary, and exactly the continue-attempts the policy allows — no more',
+        );
+        $this->assertStringContainsString('blank-return stall', $first->content());
         preg_match('/"resume": "([0-9a-f]{16})"/', $first->content(), $m);
         $this->assertArrayHasKey(1, $m, 'the refusal names a resume id');
 
+        $provider->then(self::reply('carry on and report', 100, 1.0));
         $manager2 = self::roster(maxTurns: 5);
         $resumed = (new TaskTool($manager2, suspended: $store))
             ->withEngine(EngineBackend::new($provider, 'm')->withTools([self::probeTool()]))
             ->execute(self::taskArgs(['resume' => $m[1]]));
 
-        $this->assertTrue($resumed->isError());
-        $this->assertStringContainsString('provider went away', $resumed->content());
-        $this->assertEqualsWithDelta(1.0, $resumed->usage()?->costUsd ?? 0.0, 1e-9, 'only the resumed run\'s own step');
+        $this->assertFalse($resumed->isError());
+        $this->assertStringContainsString('carry on and report', $resumed->content());
+        $this->assertEqualsWithDelta(1.0, $resumed->usage()?->costUsd ?? 0.0, 1e-9, 'only the resumed run\'s own step — the saved transcript\'s stall billings ride the transcript, not the invoice');
     }
 
     public function testTheCallingTurnMarksTheSubAgentsTokensAsItsDelegatedShare(): void
