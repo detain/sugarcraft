@@ -145,8 +145,8 @@ final class SessionStore
             $this->pdo->exec('PRAGMA journal_mode=WAL');
             // SQLite's default page cache is ~2 MiB; transcript and FTS reads
             // over a session database routinely exceed it, and every miss is a
-            // pread. 64 MiB (negative = kibibytes) keeps a resume's hot pages
-            // resident — a per-store decision the connect arm never arms.
+            // pread. 64,000 KiB (62.5 MiB; negative = kibibytes) keeps a resume's
+            // hot pages resident — a per-store decision the connect arm never arms.
             $this->pdo->exec('PRAGMA cache_size=-64000');
             // Foreign keys are OFF by default in SQLite and must be enabled per
             // connection. Without this the FK/ON DELETE CASCADE clauses below are

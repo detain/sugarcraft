@@ -372,9 +372,9 @@ final class TagCache
             // A derived cache: a crash may cost the last writes, never a
             // source file, so it does not pay for an fsync per commit.
             $pdo->exec('PRAGMA synchronous=NORMAL');
-            // 64 MiB page cache (negative = kibibytes) over the default ~2 MiB:
-            // tag lookups read whole B-tree pages per query, and this cache is
-            // reopened per process — a per-store decision, not the arm's.
+            // 64,000 KiB (62.5 MiB; negative = kibibytes) page cache over the
+            // default ~2 MiB: tag lookups read whole B-tree pages per query, and
+            // this cache is reopened per process — a per-store decision, not the arm's.
             $pdo->exec('PRAGMA cache_size=-64000');
             $pdo->exec('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
 
