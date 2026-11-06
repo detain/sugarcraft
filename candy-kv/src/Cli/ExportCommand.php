@@ -83,8 +83,15 @@ final class ExportCommand
             }
             // Exporting one named database qualifies its keys, so the dump
             // can be reimported into a store whose default database is
-            // different (the @ suffix is how Store routes on write).
-            $key = $dbName !== null ? "{$entry->key}@{$dbName}" : $entry->key;
+            // different (the @ suffix is how Store routes on write). A
+            // stored key carrying a literal @ must ride the document in the
+            // escaped spelling the key law defines: exported bare, "p@q"
+            // reimports as key "p" in a phantom database "q" with a clean
+            // exit. Only the ENTRY part is escaped — the suffix separator
+            // stays raw, because the rightmost unescaped @ is the one the
+            // importer must split on.
+            $entryKey = \str_replace('@', '\\@', $entry->key);
+            $key = $dbName !== null ? "{$entryKey}@{$dbName}" : $entryKey;
 
             // Fail loud on envelope collisions: exporting a key that looks
             // like a reserved metadata form for THIS format would silently

@@ -244,7 +244,9 @@ no separator stays in the default database, and a leading `@` (`@x`) is a
 literal key, never a database suffix. More than one unescaped `@` in the
 entry part (`a@b@c`) is refused rather than guessed. The same law is public
 in the library: `Store::splitKey('a\@b@db', 'default')` returns
-`['db', 'a@b']`.
+`['db', 'a@b']`. Export writes a stored key's literal `@` back in that
+escaped spelling (the `@database` suffix stays raw), so a dump reimports
+into the same key and database it came from.
 
 ### Import / Export
 

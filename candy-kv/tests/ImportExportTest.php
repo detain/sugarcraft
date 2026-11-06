@@ -515,6 +515,65 @@ final class ImportExportTest extends TestCase
         $this->assertStringContainsString('token@mydb', $output);
     }
 
+    public function testExportEscapesLiteralAtSoTheDocumentRoundTrips(): void
+    {
+        // A stored key carrying a literal @ used to export bare ("p@q"),
+        // and a pristine import split it — key "p" landing in a phantom
+        // database "q" with a clean exit. Export now writes the escaped
+        // spelling the key law defines, so the dump reimports into the
+        // same key and database it came from.
+        $this->store->set('p\\@q', 'v');
+        $this->assertSame('v', $this->store->get('p\\@q'));
+
+        $cli = new \SugarCraft\Kv\Cli\ExportCommand($this->store);
+        $json = $cli->exportToString('json');
+        $decoded = \json_decode($json, true);
+        $this->assertIsArray($decoded);
+        $this->assertSame(['p\\@q' => 'v'], $decoded);
+
+        $dirB = $this->tmpDir . '/escaped-roundtrip';
+        \mkdir($dirB, 0o700, true);
+        $storeB = new Store($dirB, 'testdb');
+        $count = (new JsonImporter($storeB))->importFromString($json, false);
+        $this->assertSame(1, $count);
+        $this->assertSame('v', $storeB->get('p\\@q'));
+        // The phantom database must never be minted by the reimport, and
+        // the head of the split must not exist either.
+        $this->assertFileDoesNotExist($dirB . '/q.db');
+        $this->assertSame('', $storeB->get('p'));
+    }
+
+    public function testExportUnderNamedDatabaseEscapesEntryAndKeepsSuffixRaw(): void
+    {
+        // The suffix leg stays unescaped: "a\@b@logs" spells entry "a@b"
+        // in database "logs". Quoting the separator too would strand the
+        // key in the default database and mint "logs" nowhere.
+        $this->store->set('a\\@b@logs', 'v');
+
+        $cli = new \SugarCraft\Kv\Cli\ExportCommand($this->store);
+        $json = $cli->exportToString('json', 'logs');
+        $decoded = \json_decode($json, true);
+        $this->assertSame(['a\\@b@logs' => 'v'], $decoded);
+
+        $dirB = $this->tmpDir . '/suffix-roundtrip';
+        \mkdir($dirB, 0o700, true);
+        $storeB = new Store($dirB, 'testdb');
+        (new JsonImporter($storeB))->importFromString($json, false);
+        $this->assertSame('v', $storeB->get('a\\@b@logs'));
+        $this->assertFileExists($dirB . '/logs.db');
+    }
+
+    public function testImportRefusesTwoUnescapedAtSignsLoudly(): void
+    {
+        // The law has teeth on the read side too: a hand-edited document
+        // whose key spells "a@b@logs" (two unescaped @) is ambiguous and
+        // refuses rather than guessing a split.
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Entry key 'a@b' cannot contain @");
+        $importer->importFromString('{"a@b@logs":"v"}', false);
+    }
+
     public function testExportRunReturnsTwoForUnknownFormat(): void
     {
         $cli = new \SugarCraft\Kv\Cli\ExportCommand($this->store);
