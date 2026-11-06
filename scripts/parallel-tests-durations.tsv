@@ -33,6 +33,7 @@ candy-code/tests/Tools/BuiltInToolCorpusTest.php	13.413	53
 candy-code/tests/Support/ForkedChildExitConventionTest.php	13.273	4
 candy-code/tests/Support/ProcessUniqueTempNameTest.php	13.172	17
 candy-code/tests/LSP/LspConnectionTest.php	12.978	17
+candy-code/tests/Agents/TaskToolForkContextTest.php	12.969	10
 candy-code/tests/Support/ChildWallClockBudgetTest.php	12.819	11
 candy-code/tests/Host/WebTwoHostCommandsTest.php	12.739	22
 candy-code/tests/Commands/CustomCommandShellAndFileFormsTest.php	12.542	42
@@ -52,6 +53,7 @@ candy-code/tests/Server/ServeStatusStopTest.php	11.251	7
 candy-code/tests/Chat/SelectionResizeArmTest.php	11.188	3
 candy-code/tests/Config/ManagedTierSettingsTest.php	11.175	15
 candy-code/tests/App/UntouchedDockWidthSweepTest.php	10.912	16
+candy-code/tests/Agents/AgentWorkerPoolPriorityTest.php	10.910	5
 candy-code/tests/Sessions/BackgroundShellRegistryTest.php	10.845	29
 candy-code/tests/Cli/HelpTest.php	10.723	106
 candy-code/tests/Renderer/FrameWidthClipTest.php	10.632	328
