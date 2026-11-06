@@ -1038,6 +1038,7 @@ candy-code/tests/Hooks/AuditHookDenialAndEscapingTest.php	0.046	10
 candy-code/tests/Backend/PostCompactionReinjectionTest.php	0.046	2
 candy-code/tests/Cli/BootstrapSubdirectoryLaunchTest.php	0.046	3
 candy-code/tests/Permissions/AskDiffPreviewTest.php	0.046	13
+candy-code/tests/Host/Commands/AgentsTreeCommandTest.php	0.046	10
 candy-code/tests/Commands/KeysReloadTest.php	0.045	11
 candy-code/tests/Context/Sections/MaximsSectionTest.php	0.045	9
 candy-code/tests/Cli/LoginKeychainTest.php	0.045	25
