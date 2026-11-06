@@ -144,14 +144,25 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
 <tr><td>Reel</td><td>withHeaders(headers)</td><td>Attach/replace request headers for remote sources</td></tr>
 <tr><td>Reel</td><td>withAllowedHosts(hosts)</td><td>Pin the remote host allowlist</td></tr>
 <tr><td>Reel</td><td>withCellPx(w, h)</td><td>Tell the player the terminal cell pixel size (graphics modes rasterise at cols&#183;w &#215; rows&#183;h)</td></tr>
+<tr><td>Reel</td><td>withAutoMode()</td><td>Switch to auto mode: the renderer ladder picks the best supported mode at open time</td></tr>
 <tr><td>Reel</td><td>toPlayer()</td><td>Build the Player (paused, ffmpeg child already spawned)</td></tr>
 <tr><td>Reel</td><td>play()</td><td>Run the player</td></tr>
-<tr><td>Player</td><td>::open(videoPath, cellsW, cellsH, ?fpsOverride, ?Mode, loop, ramp, cellPxW, cellPxH, subtitles, headers, frameBudgetMs)</td><td>Open a video source; a null <code>Mode</code> auto-detects terminal capability (the default)</td></tr>
+<tr><td>Player</td><td>::open(videoPath, cellsW, cellsH, ?fpsOverride, ?Mode, loop, ramp, cellPxW, cellPxH, subtitles, headers, frameBudgetMs, ?autoModeChooser)</td><td>Open a video source; a null <code>Mode</code> auto-detects terminal capability (the default)</td></tr>
 <tr><td>Player</td><td>::fromDecoder(decoder, cellsW, cellsH, fps, mode, &#x2026;)</td><td>Mount playback over any injected Decoder (server-transcoded streams, test doubles)</td></tr>
 <tr><td>Player</td><td>::openForTest(decoder, fps, totalFrames, cellsW, cellsH, &#x2026;)</td><td>Deprecated alias of ::fromDecoder() for HalfBlock test wiring</td></tr>
+<tr><td>Player</td><td>::withSubtitles(WebVtt)</td><td>Attach a parsed subtitle track to the player</td></tr>
+<tr><td>Player</td><td>::seekToSeconds(sec)</td><td>Seek to a timeline position in seconds</td></tr>
+<tr><td>Player</td><td>::position() / ::duration()</td><td>Current playhead and total duration in seconds</td></tr>
 <tr><td>WebVtt</td><td>::parse(text)</td><td>Parse a WebVTT (lenient SRT) track into cues; bounded at MAX_CUES</td></tr>
 <tr><td>WebVtt</td><td>cueAt(seconds)</td><td>Binary-search the active caption for a timeline position</td></tr>
 <tr><td>Synthetic</td><td>::generate(path = DEFAULT_PATH, w = 120, h = 60, frames = 16, delayCs = 8)</td><td>Write a looping rainbow-gradient test animation as one valid GIF89a stream (one header and global palette, NETSCAPE2.0 loop, a GCE on every frame and a local palette on each frame after the first, one trailer), so decoders read every frame; a 1&#215;1 GIF stands in when ext-gd is absent. The path defaults to the public <code>DEFAULT_PATH</code> constant, and the returned path — not the argument — is the source of truth: a refused target (e.g. a planted symlink) yields a private stand-in path.</td></tr>
+<tr><td>AudioPlayer</td><td>::start() / ::stop()</td><td>Spawn and reap the audio child (ffplay/mpv) for the reel&#8217;s source</td></tr>
+<tr><td>AudioPlayer</td><td>::pause() / ::resume()</td><td>Signal the audio child to pause and resume</td></tr>
+<tr><td>AudioPlayer</td><td>::position() / ::hasStarted() / ::isPlaying()</td><td>Child uptime in seconds, spawn state, and live-playback state</td></tr>
+<tr><td>AudioPlayer</td><td>::mute() / ::unmute() / ::isMuted() / ::exitCode()</td><td>Mute toggle, mute state, and the child&#8217;s exit code once reaped</td></tr>
+<tr><td>HttpHeaders</td><td>::none() / ::parse(headers)</td><td>The empty header set, and validation of a name =&gt; value map (refusing list-shaped input and C0/DEL control bytes)</td></tr>
+<tr><td>HttpHeaders</td><td>::isEmpty() / ::pairs() / ::userAgent()</td><td>Emptiness, validated name/value pairs, and the User-Agent override</td></tr>
+<tr><td>HttpHeaders</td><td>::toFfmpegHeaderString() / ::toMpvHeaderFields()</td><td>Render the set into each player&#8217;s CLI spelling</td></tr>
 <tr><td>LumaRamp</td><td>::char(luma, ramp)</td><td>Map 0-255 luminance to character</td></tr>
 <tr><td>LumaRamp</td><td>::compute(r, g, b)</td><td>Compute BT.601 luma from RGB</td></tr>
 </table>
