@@ -646,11 +646,18 @@ final class Store
         $entryKey = \substr($key, 0, $at);
 
         // Only ONE unescaped @ is meaningful; a leftover in the entry key
-        // ("a@b@c") is ambiguous and always a caller bug.
-        if (\strpos($entryKey, '@') !== false) {
-            throw new \InvalidArgumentException(
-                "Entry key '{$entryKey}' cannot contain @ (reserved as the database separator; spell a literal one '\\@')."
-            );
+        // ("a@b@c") is ambiguous and always a caller bug. An escaped \@ is
+        // not that leftover: re-apply the separator predicate itself (same
+        // positions >= 1 scan, same single-character backslash lookback)
+        // so "a\@b@db" routes to db + key "a@b" exactly as the README law
+        // spells it. A leading @ stays literal here too, mirroring the
+        // no-separator path.
+        for ($i = \strlen($entryKey) - 1; $i > 0; $i--) {
+            if ($entryKey[$i] === '@' && $entryKey[$i - 1] !== '\\') {
+                throw new \InvalidArgumentException(
+                    "Entry key '{$entryKey}' cannot contain @ (reserved as the database separator; spell a literal one '\\@')."
+                );
+            }
         }
 
         // "default@foo" means db=foo, key=default

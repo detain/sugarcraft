@@ -207,6 +207,36 @@ final class StorageContractTest extends TestCase
         $this->assertSame(['@x'], $this->keysMatching($store, '@*'));
     }
 
+    public function testSplitKeyAnswersTheReadmeLawExample(): void
+    {
+        // README 'Key naming, @, and escapes': Store::splitKey('a\@b@db',
+        // 'default') returns ['db', 'a@b']. The old raw-strpos guard saw
+        // the escaped \@ inside the entry part and refused the exact
+        // documented spelling.
+        $this->assertSame(['db', 'a@b'], Store::splitKey('a\\@b@db', 'default'));
+        $this->assertSame(['default', 'a@b'], Store::splitKey('a\\@b', 'default'), 'no-separator path decodes too');
+        $this->assertSame(['db', '@roo'], Store::splitKey('@roo@db', 'default'), 'leading @ stays literal, mirroring the no-separator law');
+    }
+
+    public function testSplitKeyStillRefusesASecondUnescapedAt(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Entry key 'a@b' cannot contain @");
+        Store::splitKey('a@b@c', 'default');
+    }
+
+    public function testEscapedAtRoutesThroughTheSuffixEndToEnd(): void
+    {
+        $store = $this->store();
+        $store->set('a\\@b@legacy', 'v');
+
+        $this->assertSame('v', $store->get('a\\@b@legacy'));
+        $entry = $store->entry('a\\@b@legacy');
+        $this->assertNotNull($entry);
+        $this->assertSame('a@b', $entry->key, 'entry part decoded, suffix stripped');
+        $this->assertNull($store->entry('a@b'), 'the unescaped spelling routes to a different database instead');
+    }
+
     public function testSuggestionsMeasureCodepointsNotBytes(): void
     {
         $store = $this->store();
