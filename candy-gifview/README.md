@@ -139,9 +139,10 @@ The key table is fixed in the player model; keys are not rebindable.
   (`←`/`→`) — motion is never mandatory to see content.
 - The player caps frame rate at its own scheduler floors; `--speed=max` is
   opt-in, never the default.
-- All CLI messages are localized via environment locale
-  (`LC_ALL`/`LC_MESSAGES`/`LANG`) across 16 languages; in-app playback
-  chrome (the status line) is currently English-only.
+- All CLI messages are localized: the bin shim calls `T::setLocale(T::detect())`
+  before its first message (there is no `--lang` flag), and `T::detect()`
+  consults `LC_ALL`, then `LC_MESSAGES`, then `LANG` — across 16 locales;
+  in-app playback chrome (the status line) is currently English-only.
 - **Reduced motion is not auto-detected**: unlike `sugar-spring` and
   `sugar-toast`, this viewer does NOT read
   `REDUCE_MOTION`/`PREFERS_REDUCED_MOTION` (nor
