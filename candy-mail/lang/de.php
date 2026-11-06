@@ -50,6 +50,7 @@ return [
     'email.crlf_in_address' => 'CRLF-Injection in E-Mail-Adresse erkannt',
     'email.invalid_address' => 'Ungültige E-Mail-Adresse: {addr}',
     'email.crlf_in_header' => 'CRLF-Injection im {field}-Header erkannt',
+    'email.invalid_mime_type' => 'Ungültiger Anhang-MIME-Typ (erwartet Typ/Subtyp): {mime}',
     'resend.send_cancelled' => 'Resend-Versand vor dem Start abgebrochen',
     'resend.curl_missing' => 'ext-curl wird für den Resend-Transport benötigt (der SMTP-Transport benötigt für einfaches SMTP keine Erweiterungen; für TLS ext-openssl)',
     'resend.no_api_key' => 'Der Resend-Transport hat keinen API-Schlüssel: übergeben Sie einen im Konstruktor oder setzen Sie RESEND_API_KEY',

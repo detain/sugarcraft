@@ -43,6 +43,7 @@ return [
     'email.crlf_in_address' => 'V e-mailové adrese zjištěno vložení CRLF',
     'email.invalid_address' => 'Neplatná e-mailová adresa: {addr}',
     'email.crlf_in_header' => 'V hlavičce {field} zjištěno vložení CRLF',
+    'email.invalid_mime_type' => 'Neplatný MIME typ přílohy (očekáván typ/podtyp): {mime}',
     'resend.send_cancelled' => 'Odeslání Resend zrušeno před zahájením',
     'resend.curl_missing' => 'Pro transport Resend je vyžadován ext-curl (SMTP transport žádné extenze pro obyčejné SMTP nevyžaduje; pro TLS ext-openssl)',
     'resend.no_api_key' => 'Transport Resend nemá API klíč: předejte ho konstruktoru nebo nastavte RESEND_API_KEY',

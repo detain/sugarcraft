@@ -43,6 +43,7 @@ return [
     'email.crlf_in_address' => 'Wykryto wstrzyknięcie CRLF w adresie e-mail',
     'email.invalid_address' => 'Nieprawidłowy adres e-mail: {addr}',
     'email.crlf_in_header' => 'Wykryto wstrzyknięcie CRLF w nagłówku {field}',
+    'email.invalid_mime_type' => 'Nieprawidłowy typ MIME załącznika (oczekiwano typu/podtypu): {mime}',
     'resend.send_cancelled' => 'Wysyłanie Resend anulowane przed rozpoczęciem',
     'resend.curl_missing' => 'ext-curl jest wymagany dla transportu Resend (transport SMTP nie potrzebuje rozszerzeń dla zwykłego SMTP; ext-openssl dla TLS)',
     'resend.no_api_key' => 'Transport Resend nie ma klucza API: przekaż go konstruktorowi lub ustaw RESEND_API_KEY',

@@ -43,6 +43,7 @@ return [
     'email.crlf_in_address' => '전자우편 주소에서 CRLF 삽입 감지',
     'email.invalid_address' => '잘못된 전자우편 주소: {addr}',
     'email.crlf_in_header' => '{field} 헤더에서 CRLF 삽입 감지',
+    'email.invalid_mime_type' => '첨부 MIME 유형이 잘못되었습니다(유형/하위 유형 형식 필요): {mime}',
     'resend.send_cancelled' => 'Resend 전송 시작 전에 취소됨',
     'resend.curl_missing' => 'Resend 전송에는 ext-curl이 필요함 (SMTP 전송은 평문 SMTP에서는 확장 불필요; TLS에는 ext-openssl 필요)',
     'resend.no_api_key' => 'Resend 전송에 API 키가 없습니다: 생성자에 키를 전달하거나 RESEND_API_KEY를 설정하세요',

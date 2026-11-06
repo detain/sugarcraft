@@ -191,6 +191,9 @@ final class Attachment
         // outgoing mail. Fail loud at construction, not silent-strip at send.
         self::refuseHeaderInjection($filename, 'attachment filename');
         self::refuseHeaderInjection($mimeType, 'attachment MIME type');
+        // C-2 (step 36 extension): the CR/LF gate stops line breaks, but a
+        // parameter suffix smuggles onto the SAME wire line without one.
+        self::refuseMalformedMimeType($mimeType);
 
         // C2 (lib-reviews-1102): the cid is interpolated into
         // `Content-ID: <cid>` verbatim, so it needs the SAME construction-time
@@ -226,6 +229,23 @@ final class Attachment
     {
         if (\preg_match('/[\r\n]/', $value)) {
             throw new \InvalidArgumentException(Lang::t('email.crlf_in_header', ['field' => $field]));
+        }
+    }
+
+    /**
+     * Refuse any MIME type outside the bare type/subtype token grammar.
+     *
+     * No internal producer (guesses, defaults, examples) ever emits anything
+     * but `token "/" token` (RFC 9110 §8.8.1 token set), so parameters,
+     * whitespace, angle brackets and control bytes alike are refused at
+     * construction instead of riding the part Content-Type line verbatim.
+     */
+    private static function refuseMalformedMimeType(string $mimeType): void
+    {
+        $token = "[!#$%&'*+.^_`|~0-9A-Za-z-]+";
+
+        if (\preg_match("@^{$token}/{$token}$@", $mimeType) !== 1) {
+            throw new \InvalidArgumentException(Lang::t('email.invalid_mime_type', ['mime' => $mimeType]));
         }
     }
 

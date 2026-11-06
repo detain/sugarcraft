@@ -50,6 +50,7 @@ return [
     'email.crlf_in_address' => 'Injection CRLF détectée dans l’adresse e-mail',
     'email.invalid_address' => 'Adresse e-mail invalide : {addr}',
     'email.crlf_in_header' => 'Injection CRLF détectée dans l’en-tête {field}',
+    'email.invalid_mime_type' => 'Type MIME de pièce jointe invalide (type/sous-type attendu) : {mime}',
     'resend.send_cancelled' => 'Envoi Resend annulé avant le démarrage',
     'resend.curl_missing' => 'ext-curl est requis pour le transport Resend (le transport SMTP ne nécessite aucune extension pour SMTP simple; ext-openssl pour TLS)',
     'resend.no_api_key' => 'Aucune clé API pour le transport Resend : passez-la au constructeur ou définissez RESEND_API_KEY',

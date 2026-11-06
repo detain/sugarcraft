@@ -324,6 +324,26 @@ final class SmtpSecurityTest extends TestCase
         \SugarCraft\Mail\Attachment::fromContent('x', 'a.txt', "text/plain\r\nX-Injected2: MIME");
     }
 
+    public function testAttachmentMimeTypeParameterSuffixIsRefused(): void
+    {
+        // Step 36 defense-in-depth: parameter smuggling needs no CRLF. A
+        // crafted 'text/plain; charset=x' would ride the part Content-Type
+        // verbatim onto the same wire line, so the type must match the bare
+        // RFC 9110 token/token grammar the library itself ever emits.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid attachment MIME type');
+
+        \SugarCraft\Mail\Attachment::fromContent('x', 'a.txt', 'text/plain; charset=x');
+    }
+
+    public function testLongVendorMimeTypesStayAccepted(): void
+    {
+        // Grammar must not reject what the internal guesser/default produce.
+        $doc = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        $this->assertNotNull(\SugarCraft\Mail\Attachment::fromContent('x', 'a.docx', $doc));
+        $this->assertNotNull(\SugarCraft\Mail\Attachment::fromContent('x', 'a.bin', 'application/octet-stream'));
+    }
+
     public function testInlineAttachmentForgedFilenameIsRefused(): void
     {
         $tmp = \tempnam(\sys_get_temp_dir(), 'sp-sec-inline-');

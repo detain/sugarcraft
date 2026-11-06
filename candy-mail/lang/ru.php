@@ -43,6 +43,7 @@ return [
     'email.crlf_in_address' => 'Обнаружена CRLF-инъекция в адресе электронной почты',
     'email.invalid_address' => 'Недопустимый адрес электронной почты: {addr}',
     'email.crlf_in_header' => 'Обнаружена CRLF-инъекция в заголовке {field}',
+    'email.invalid_mime_type' => 'Недопустимый MIME-тип вложения (ожидается тип/подтип): {mime}',
     'resend.send_cancelled' => 'Отправка Resend отменена до начала',
     'resend.curl_missing' => 'Для транспорта Resend требуется ext-curl (транспорт SMTP не требует расширений для обычного SMTP; для TLS требуется ext-openssl)',
     'resend.no_api_key' => 'Транспорт Resend не имеет API-ключа: передайте ключ в конструктор или установите RESEND_API_KEY',
