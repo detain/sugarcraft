@@ -51,6 +51,12 @@ use SugarCraft\Code\Tui\StallWarning;
  *  - Fail-safe in both directions: a missing or unreadable token file is a
  *    refusal, never a trust; the runner's command loop authenticates every
  *    connection the same way before honouring `STOP`.
+ *  - A7 put a major version on the wire: the greeting is now
+ *    `HELLO:v2:<id>:<pid>:<token>`, the unversioned four-field line still
+ *    parses as legacy major 1, and a greeter offering any other major is
+ *    refused LOUDLY (a named error, logged and surfaced) rather than joining
+ *    the silent malformed pile — misreading a future protocol as garbage is
+ *    the fallback this section exists to refuse.
  */
 final class BackgroundSupervisor implements SessionNotificationInterface, SessionStopNotificationInterface
 {
@@ -762,6 +768,10 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
         // identity, and on a shared /tmp it was not even a race the honest
         // daemon reliably won.
         $childPid = 0;
+        // Set when a greeter offered a major this code cannot speak (A7):
+        // the eventual timeout message must say WHY nothing authenticated,
+        // not launder the skew into generic silence.
+        $unknownMajor = null;
         $authDeadline = microtime(true) + self::SPAWN_AUTH_TIMEOUT_SECS;
         while (true) {
             $remaining = $authDeadline - microtime(true);
@@ -779,7 +789,19 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             $handshake = @fgets($clientSocket);
             fclose($clientSocket);
 
-            $parsed = self::parseHandshake(is_string($handshake) ? $handshake : '');
+            // A handshake naming a major this code cannot speak is protocol
+            // skew, not noise (A7): record it under its own bounded shape
+            // and keep listening. Laundering it into the fixed refusal below
+            // would hide a daemon newer than the supervisor inside ordinary
+            // garbage — the M5 rationale refuses that conflation.
+            try {
+                $parsed = self::parseHandshake(is_string($handshake) ? $handshake : '');
+            } catch (HandshakeMajorUnknown $skew) {
+                $unknownMajor = $skew->major;
+                @file_put_contents($logPath, self::spawnHandshakeRefusalRecord($skew->major), FILE_APPEND);
+                continue;
+            }
+
             if ($parsed === null
                 || $parsed['sessionId'] !== $sessionId
                 || !hash_equals($token, $parsed['token'])
@@ -810,7 +832,7 @@ final class BackgroundSupervisor implements SessionNotificationInterface, Sessio
             ProcessReaper::terminateAndClose($proc);
             fclose($serverSocket);
             $this->discardIpcFiles($socketPath, $bufferPath, $tokenPath, $logPath, ...($answerPath === null ? [] : [$answerPath]));
-            throw new \RuntimeException('Session process failed to authenticate on the IPC channel within timeout');
+            throw new \RuntimeException(self::spawnAuthFailureMessage($unknownMajor));
         }
 
         // Close the server socket — we only needed it to accept the connection
@@ -1034,8 +1056,8 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
     }
 
     /**
-     * Parse a `HELLO:<sessionId>:<pid>:<token>` handshake into its three
-     * payload fields, or null when the line is anything else.
+     * Parse a daemon greeting into its credential fields, or null when the
+     * line is a malformed shape.
      *
      * Parse-don't-validate at the trust boundary: the caller receives either a
      * fully-shaped credential triple it can verify against the minted token, or
@@ -1043,7 +1065,18 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
      * null HERE, and is therefore unauthenticated — arrival of an un-trusted
      * credential is a refusal, never a lesser trust.
      *
-     * @return array{sessionId: string, pid: int, token: string}|null
+     * A7 put a major on the wire: the current greeting is
+     * `HELLO:v2:<sessionId>:<pid>:<token>` and only
+     * {@see BackgroundSessionRunner::HANDSHAKE_MAJOR} is accepted. The
+     * unversioned four-field line keeps parsing — it is the real v1-era wire,
+     * recorded as version 1 — while a claimed major this code cannot speak
+     * THROWS instead of answering null: protocol skew is a different fact from
+     * garbage, and folding it into the silent malformed pile is exactly the
+     * fallback the audit M5 rationale in {@see BackgroundSessionRunner} refuses.
+     *
+     * @return array{sessionId: string, pid: int, token: string, version: int}|null
+     *
+     * @throws HandshakeMajorUnknown when the line names an unknown major
      */
     public static function parseHandshake(string $handshake): ?array
     {
@@ -1052,15 +1085,30 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
             return null;
         }
 
-        // Exactly four colon-separated parts: neither sessionId (date + hex)
-        // nor the pid nor a hex token can contain a colon, so a fifth part is
-        // hostile shape, not data to be lenient about.
-        $parts = explode(':', $handshake);
-        if (count($parts) !== 4) {
+        $payload = explode(':', substr($handshake, strlen(BackgroundSessionRunner::HANDSHAKE_PREFIX)));
+
+        // The major is shape-bound to 'v' plus at most four digits, so a
+        // session id that merely starts with 'v' (or an out-of-budget claim
+        // like v99999) keeps its legacy path instead of becoming noise.
+        if (1 === preg_match('/^v(\d{1,4})$/', $payload[0], $claimed)) {
+            $major = 'v' . $claimed[1];
+            if ($major !== BackgroundSessionRunner::HANDSHAKE_MAJOR) {
+                throw new HandshakeMajorUnknown($major);
+            }
+            $version = (int) $claimed[1];
+            array_shift($payload);
+        } else {
+            $version = 1;
+        }
+
+        // Arity stays strict per form: neither sessionId (date + hex) nor the
+        // pid nor a hex token can contain a colon, so a fifth part is hostile
+        // shape, not data to be lenient about.
+        if (3 !== count($payload)) {
             return null;
         }
 
-        [, $sessionId, $pid, $token] = $parts;
+        [$sessionId, $pid, $token] = $payload;
         if ($sessionId === ''
             || !ctype_digit($pid)
             || (int) $pid <= 0
@@ -1070,7 +1118,43 @@ exit(\SugarCraft\Code\Background\BackgroundSessionRunner::main(json_decode(%s, t
             return null;
         }
 
-        return ['sessionId' => $sessionId, 'pid' => (int) $pid, 'token' => $token];
+        return ['sessionId' => $sessionId, 'pid' => (int) $pid, 'token' => $token, 'version' => $version];
+    }
+
+    /**
+     * The sidecar log line recorded when a greeter offers a major this
+     * supervisor cannot speak (A7).
+     *
+     * WHY a builder instead of an inline literal: the accept loop already
+     * writes a fixed string on ordinary refusals (never attacker bytes), and
+     * this keeps that law intact while still naming the skew — $major carries
+     * only the parse-validated 'v' plus digits from {@see parseHandshake()}.
+     * Tests pin the record's exact bytes here without racing a live spawn.
+     */
+    public static function spawnHandshakeRefusalRecord(string $major): string
+    {
+        return "[session:auth:refused] spawn-handshake unknown-major {$major}\n";
+    }
+
+    /**
+     * The message {@see spawnSession()} throws when no peer authenticated in
+     * time. A7 widens it when one of them named a major this code cannot
+     * speak: silence about protocol skew is how a version mismatch comes to
+     * look like an unexplainable broken app.
+     *
+     * WHY a builder: the null branch is byte-identical to the pre-A7 message,
+     * and tests pin both branches without racing a live spawn.
+     */
+    public static function spawnAuthFailureMessage(?string $unknownMajor): string
+    {
+        $base = 'Session process failed to authenticate on the IPC channel within timeout';
+        if ($unknownMajor === null) {
+            return $base;
+        }
+
+        return $base
+            . ' — a peer offered handshake major ' . $unknownMajor
+            . '; this supervisor speaks ' . BackgroundSessionRunner::HANDSHAKE_MAJOR;
     }
 
     /**

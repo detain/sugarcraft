@@ -349,6 +349,15 @@ final class BackgroundSessionRunnerTest extends TestCase
             preg_match('/^HELLO:v2:sess_test_1:([1-9]\d*):abcdef0123456789$/', $wire),
             "the greeting does not carry the session id, a live pid and the token bytes after the major:\n" . $wire,
         );
+
+        // Greeter and gate must agree on the SAME wire bytes end to end.
+        // Each side could satisfy its own unit pin in isolation and still
+        // desync — this is the pair-check that keeps them one protocol.
+        $parsed = BackgroundSupervisor::parseHandshake($wire);
+        self::assertNotNull($parsed, 'the gate refused its own daemon greeting: ' . $wire);
+        self::assertSame(2, $parsed['version'], 'the gate did not read the greeting as major 2');
+        self::assertSame('sess_test_1', $parsed['sessionId']);
+        self::assertSame('abcdef0123456789', $parsed['token']);
     }
 
     /**

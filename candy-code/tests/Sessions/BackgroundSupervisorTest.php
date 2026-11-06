@@ -11,6 +11,7 @@ use SugarCraft\Code\Background\BackgroundSession;
 use SugarCraft\Code\Background\BackgroundSessionRunner;
 use SugarCraft\Code\Background\BackgroundSessionStatus;
 use SugarCraft\Code\Background\BackgroundSupervisor;
+use SugarCraft\Code\Background\HandshakeMajorUnknown;
 use SugarCraft\Code\Background\SessionNotificationInterface;
 
 final class BackgroundSupervisorTest extends TestCase
@@ -145,8 +146,12 @@ final class BackgroundSupervisorTest extends TestCase
     public function testParseHandshakeExtractsTheAuthenticatedCredentialTriple(): void
     {
         $token = bin2hex(random_bytes(16));
+        // A7: the unversioned four-part line keeps parsing — it is a FULL
+        // handshake, just one spoken before the version field existed — but
+        // the parse now records which major it heard: an absent version field
+        // is read as legacy major 1, never as silence about the protocol.
         $this->assertSame(
-            ['sessionId' => 'sess_x', 'pid' => 4321, 'token' => $token],
+            ['sessionId' => 'sess_x', 'pid' => 4321, 'token' => $token, 'version' => 1],
             BackgroundSupervisor::parseHandshake("HELLO:sess_x:4321:{$token}\n"),
         );
     }
@@ -156,7 +161,8 @@ final class BackgroundSupervisorTest extends TestCase
         // Audit M5: the pre-fix handshake was HELLO:<sessionId>:<pid> — first
         // connection trusted. It must parse to NULL (a refusal), never to a
         // lesser trust: an unauthenticated pid off the wire is exactly the
-        // spoof the token field exists to defeat.
+        // spoof the token field exists to defeat. A7 gave the line a version
+        // field; it did not re-open this door.
         $this->assertNull(BackgroundSupervisor::parseHandshake("HELLO:sess_x:4321\n"));
     }
 
@@ -171,6 +177,101 @@ final class BackgroundSupervisorTest extends TestCase
         $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:sess_x:4321:zzzz'));
         $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:sess_x:4321:abcd:extra'));
         $this->assertNull(BackgroundSupervisor::parseHandshake(''));
+    }
+
+    public function testParseHandshakeAcceptsTheVersionedMajorTwoForm(): void
+    {
+        // A7: the greeting the daemon emits today carries its major version
+        // right after HELLO:, so the gate can tell this protocol from the
+        // pre-version one — and from one that does not exist yet.
+        $token = bin2hex(random_bytes(16));
+        $this->assertSame(
+            ['sessionId' => 'sess_x', 'pid' => 4321, 'token' => $token, 'version' => 2],
+            BackgroundSupervisor::parseHandshake("HELLO:v2:sess_x:4321:{$token}\n"),
+        );
+    }
+
+    public function testParseHandshakeRefusesUnknownMajorsLoudly(): void
+    {
+        // A7: an unknown major is protocol skew, not garbage. The M5 rationale
+        // (BackgroundSessionRunner) refuses silent fallbacks on the trust
+        // channel, and laundering "a daemon newer than me" into the ordinary
+        // malformed-line pile is exactly such a fallback — it must raise,
+        // naming the major it heard. v1 is in the refusal list because the
+        // legacy era never spoke a versioned wire at all: a peer claiming
+        // "v1" is inventing a protocol, not describing an old one.
+        foreach (['v0', 'v1', 'v3', 'v9999'] as $major) {
+            $threw = null;
+            try {
+                BackgroundSupervisor::parseHandshake("HELLO:{$major}:sess_x:4321:abcdef0123456789\n");
+            } catch (HandshakeMajorUnknown $error) {
+                $threw = $error;
+            }
+            $this->assertNotNull($threw, "unknown major {$major} was accepted or silently refused");
+            $this->assertSame($major, $threw->major);
+        }
+    }
+
+    public function testParseHandshakeAppliesTheCredentialRulesToTheVersionedFormToo(): void
+    {
+        // The version field labels the protocol; it does not loosen a single
+        // credential rule. Every shape that fails the legacy field rules must
+        // fail the versioned one identically — a null refusal, never a throw
+        // (these are malformed lines, not a recognizable newer protocol).
+        $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:v2:sess_x:not-a-pid:abcdef0123456789'));
+        $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:v2:sess_x:0:abcdef0123456789'));
+        $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:v2:sess_x:4321:'));
+        $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:v2:sess_x:4321:zzzz'));
+        $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:v2:sess_x:4321:abcdef0123456789:extra'));
+        $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:v2:sess_x:4321'));
+        $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:v2:'));
+    }
+
+    public function testParseHandshakeTreatsNonVersionShapedFieldsAsLegacyIds(): void
+    {
+        // 'v'-prefixed identifiers that are NOT a major shape (double letter,
+        // more than four digits) must keep walking the legacy path — a session
+        // id may legally start with 'v', and stealing it as a version claim
+        // would misparse a genuine greeting. Over-long digit runs also cannot
+        // launder an unknown-major throw past the count rule: with five
+        // payload fields the legacy arity check refuses before any trust.
+        $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:vv2:sess_x:4321:abcdef0123456789'));
+        $this->assertNull(BackgroundSupervisor::parseHandshake('HELLO:v99999:sess_x:4321:abcdef0123456789'));
+        $this->assertSame(
+            ['sessionId' => 'v99999', 'pid' => 4321, 'token' => 'abcdef0123456789', 'version' => 1],
+            BackgroundSupervisor::parseHandshake("HELLO:v99999:4321:abcdef0123456789\n"),
+        );
+    }
+
+    /**
+     * The sidecar record for a handshake claiming a major this code cannot
+     * speak (A7). Byte-pinned: the record is operator forensics, so its
+     * shape is the contract — and it carries only the parse-validated
+     * 'v'-plus-digits token, never free bytes off the wire.
+     */
+    public function testSpawnHandshakeRefusalRecordNamesTheUnknownMajor(): void
+    {
+        $this->assertSame(
+            "[session:auth:refused] spawn-handshake unknown-major v3\n",
+            BackgroundSupervisor::spawnHandshakeRefusalRecord('v3'),
+        );
+    }
+
+    public function testSpawnAuthFailureMessageKeepsLegacyBytesAndNamesTheSkew(): void
+    {
+        // The pre-A7 timeout message survives byte-identical when no unknown
+        // major was seen: whatever pins or greps the old failure keeps
+        // working. When skew WAS seen, the user-facing failure says so —
+        // naming the peer's claim and our own major from one definition.
+        $this->assertSame(
+            'Session process failed to authenticate on the IPC channel within timeout',
+            BackgroundSupervisor::spawnAuthFailureMessage(null),
+        );
+        $this->assertSame(
+            'Session process failed to authenticate on the IPC channel within timeout'
+                . ' — a peer offered handshake major v3; this supervisor speaks ' . BackgroundSessionRunner::HANDSHAKE_MAJOR,
+            BackgroundSupervisor::spawnAuthFailureMessage('v3'),
+        );
     }
 
     public function testAutoloadPathResolvesToARealComposerAutoloader(): void
