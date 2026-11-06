@@ -266,7 +266,7 @@ final class BoardTest extends TestCase
         $this->assertNull(BoardEntry::fromArray('x'));
         $this->assertNull(BoardEntry::fromArray(['id' => 0] + $entry->toArray()));
         $this->assertNull(BoardEntry::fromArray(['kind' => 'SHOUT'] + $entry->toArray()));
-        $this->assertSame(['INFO', 'ASK', 'RESULT', 'HOLD', 'VETO'], BoardKind::values());
+        $this->assertSame(['INFO', 'ASK', 'RESULT', 'HOLD', 'VETO', 'CLAIM', 'RELEASE'], BoardKind::values());
     }
 
     public function testTheProcessBindingNestsAndEachSeatRestoresWhatItReplaced(): void
@@ -291,6 +291,176 @@ final class BoardTest extends TestCase
         unset($outer);
         $this->assertNull(ActiveBoard::current());
         $this->assertSame(0, ActiveBoard::noticed());
+    }
+
+    public function testAClaimCarriesItsPathsAcrossTheWireAndIntoTheRender(): void
+    {
+        $board = $this->board(['a', 'b']);
+        $a = $board->forMember('a-1');
+
+        $claim = $a->post(Board::ALL, BoardKind::Claim, 'touching auth now', null, [' src/Auth.php ', 'src/Auth.php', 'src/Util/Str.php']);
+
+        $this->assertSame(['src/Auth.php', 'src/Util/Str.php'], $claim->paths, 'trimmed and deduped in order');
+        $this->assertSame('#1 a-1 → ALL [CLAIM] (src/Auth.php, src/Util/Str.php) touching auth now', $claim->render());
+
+        $back = $board->entries();
+        $this->assertCount(1, $back);
+        $this->assertSame(BoardKind::Claim, $back[0]->kind);
+        $this->assertSame($claim->paths, $back[0]->paths, 'the paths ride the JSONL line');
+
+        $raw = (string) file_get_contents($board->path());
+        $this->assertStringContainsString('"paths":["src/Auth.php","src/Util/Str.php"]', $raw);
+    }
+
+    public function testALineWrittenBeforeThePairStillReadsWithNoPaths(): void
+    {
+        $board = $this->board(['a', 'b']);
+        file_put_contents(
+            $board->path(),
+            (string) json_encode(['id' => 1, 'from' => 'b-2', 'to' => Board::ALL, 'kind' => 'INFO', 'body' => 'older', 'reply_to' => null, 'at' => 1.0], JSON_UNESCAPED_SLASHES),
+        );
+
+        $entries = $board->entries();
+
+        $this->assertCount(1, $entries);
+        $this->assertSame([], $entries[0]->paths, 'a line from before the paths field reads as one with none');
+    }
+
+    public function testAGarbledPathsFieldIsCoercedAndNeverAccused(): void
+    {
+        $board = $this->board(['a', 'b']);
+        $row = [
+            'id' => 1,
+            'from' => 'b-2',
+            'to' => Board::ALL,
+            'kind' => 'CLAIM',
+            'body' => 'claimed',
+            'reply_to' => null,
+            'at' => 1.0,
+            'paths' => ['src/A.php', '  src/A.php  ', '   ', 42, ['src/B.php']],
+        ];
+        $notAList = ['id' => 2, 'from' => 'b-2', 'to' => Board::ALL, 'kind' => 'CLAIM', 'body' => 'a string', 'paths' => 'src/C.php'];
+        file_put_contents(
+            $board->path(),
+            json_encode($row, JSON_UNESCAPED_SLASHES) . "\n" . json_encode($notAList, JSON_UNESCAPED_SLASHES),
+        );
+
+        $entries = $board->entries();
+
+        $this->assertCount(2, $entries);
+        $this->assertSame(['src/A.php'], $entries[0]->paths, 'blanks, numbers and nests are dropped and duplicates fold');
+        $this->assertSame([], $entries[1]->paths, 'a paths field that is not a list reads as none');
+    }
+
+    public function testOutstandingClaimsFollowTheClaimAndReleasePair(): void
+    {
+        $board = $this->board(['a', 'b']);
+        $a = $board->forMember('a-1');
+        $b = $board->forMember('b-2');
+
+        $this->assertSame([], $a->outstandingClaims(), 'an empty board claims nothing');
+
+        $wide = $a->post(Board::ALL, BoardKind::Claim, 'two files', null, ['src/A.php', 'src/B.php']);
+        $narrow = $b->post('a-1', BoardKind::Claim, 'mine too', null, ['src/C.php']);
+
+        $this->assertSame([$wide->id, $narrow->id], array_map(static fn (BoardEntry $e): int => $e->id, $a->outstandingClaims()), 'oldest first');
+
+        $a->post(Board::ALL, BoardKind::Release, 'done with A', null, ['src/A.php']);
+
+        $claims = $a->outstandingClaims();
+        $this->assertCount(2, $claims);
+        $this->assertSame([$wide->id, $narrow->id], array_map(static fn (BoardEntry $e): int => $e->id, $claims));
+        $this->assertSame(['src/B.php'], $claims[0]->paths, 'the surviving CLAIM is narrowed to what its RELEASE left');
+
+        $b->post('a-1', BoardKind::Release, 'done', null, ['src/C.php']);
+        $a->post(Board::ALL, BoardKind::Release, 'done', null, ['src/B.php']);
+
+        $this->assertSame([], $a->outstandingClaims(), 'a cleared path leaves no trace');
+        $this->assertSame(5, $board->head(), 'the cleared CLAIMs and their RELEASEs stay on the board as posts');
+    }
+
+    public function testOneMembersReleaseClearsOnlyItsOwnClaims(): void
+    {
+        $board = $this->board(['a', 'b']);
+        $a = $board->forMember('a-1');
+        $b = $board->forMember('b-2');
+
+        $mine = $a->post(Board::ALL, BoardKind::Claim, 'I am touching this', null, ['src/Shared.php']);
+        $theirs = $b->post(Board::ALL, BoardKind::Claim, 'so am I', null, ['src/Shared.php']);
+
+        $this->assertSame(
+            [$mine->id, $theirs->id],
+            array_map(static fn (BoardEntry $e): int => $e->id, $a->outstandingClaims()),
+            'two claims of one path both stand: the board is a notice, never a lock',
+        );
+
+        $b->post(Board::ALL, BoardKind::Release, 'I am done', null, ['src/Shared.php']);
+
+        $claims = $a->outstandingClaims();
+        $this->assertCount(1, $claims);
+        $this->assertSame($mine->id, $claims[0]->id, 'a RELEASE speaks for its own claimant only');
+        $this->assertSame(['src/Shared.php'], $claims[0]->paths);
+    }
+
+    public function testTheLaterClaimOfAPathIsTheOneOnRecord(): void
+    {
+        $board = $this->board(['a', 'b']);
+        $a = $board->forMember('a-1');
+
+        $first = $a->post(Board::ALL, BoardKind::Claim, 'starting', null, ['src/A.php', 'src/Shared.php']);
+        $second = $a->post(Board::ALL, BoardKind::Claim, 'moved on', null, ['src/A.php']);
+
+        $claims = $a->outstandingClaims();
+        $this->assertSame([$first->id, $second->id], array_map(static fn (BoardEntry $e): int => $e->id, $claims));
+        $this->assertSame(['src/Shared.php'], $claims[0]->paths, 'the superseded CLAIM survives only for the path nobody re-claimed');
+        $this->assertSame(['src/A.php'], $claims[1]->paths);
+
+        $a->post(Board::ALL, BoardKind::Release, 'both done', null, ['src/A.php', 'src/Shared.php']);
+        $this->assertSame([], $a->outstandingClaims(), 'one RELEASE clears both CLAIMs it names');
+    }
+
+    public function testAPathSpelledLikeANumberStillReadsAsAPath(): void
+    {
+        $board = $this->board(['a', 'b']);
+        $a = $board->forMember('a-1');
+
+        $claim = $a->post(Board::ALL, BoardKind::Claim, 'odd names', null, ['404', 'src/2.php', 'src/Ok.php']);
+
+        $claims = $a->outstandingClaims();
+        $this->assertCount(1, $claims);
+        $this->assertSame($claim->id, $claims[0]->id);
+        $this->assertSame(['404', 'src/2.php', 'src/Ok.php'], $claims[0]->paths, 'numeric-looking paths come back as the strings they were posted as');
+    }
+
+    /**
+     * @return iterable<string, array{0: BoardKind, 1: list<mixed>, 2: string}>
+     */
+    public static function claimRefusals(): iterable
+    {
+        yield 'INFO carrying paths' => [BoardKind::Info, ['src/A.php'], 'paths belong to a CLAIM or a RELEASE'];
+        yield 'VETO carrying paths' => [BoardKind::Veto, ['src/A.php'], 'say what the VETO is about in its body'];
+        yield 'CLAIM with none' => [BoardKind::Claim, [], 'names the paths it is standing on'];
+        yield 'RELEASE with none' => [BoardKind::Release, [], 'names the paths it is clearing'];
+        yield 'a set too wide' => [BoardKind::Claim, array_fill(0, Board::MAX_CLAIM_PATHS + 1, 'src/A.php'), 'one post carries at most 64'];
+        yield 'a path too long' => [BoardKind::Claim, [str_repeat('x', Board::MAX_PATH_BYTES + 1)], 'a path runs 1025 bytes'];
+        yield 'a path that is not a string' => [BoardKind::Claim, [['src/A.php']], 'every path must be a string'];
+        yield 'a blank path' => [BoardKind::Claim, ['   '], 'name the file, not a blank'];
+    }
+
+    /**
+     * @dataProvider claimRefusals
+     */
+    public function testAClaimTheBoardCannotTakeIsRefusedAndNothingIsWritten(BoardKind $kind, array $paths, string $why): void
+    {
+        $board = $this->board(['a', 'b']);
+
+        try {
+            $board->forMember('a-1')->post(Board::ALL, $kind, 'body', null, $paths);
+            $this->fail('the post was accepted');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString($why, $e->getMessage());
+        }
+        $this->assertSame(0, $board->head());
     }
 
     /**

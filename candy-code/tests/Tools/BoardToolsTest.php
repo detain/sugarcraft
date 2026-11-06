@@ -69,7 +69,7 @@ final class BoardToolsTest extends TestCase
 
         foreach ([
             [['kind' => 'INFO', 'body' => 'x'], '`to` is required'],
-            [['to' => 'ALL', 'kind' => 'SHOUT', 'body' => 'x'], '`kind` must be one of INFO, ASK, RESULT, HOLD, VETO'],
+            [['to' => 'ALL', 'kind' => 'SHOUT', 'body' => 'x'], '`kind` must be one of INFO, ASK, RESULT, HOLD, VETO, CLAIM, RELEASE'],
             [['to' => 'ALL', 'kind' => 'INFO', 'body' => 'x', 'reply_to' => 'first'], '`reply_to` must be a post number'],
             [['to' => 'nobody-7', 'kind' => 'INFO', 'body' => 'x'], 'address one of tester-2, reviewer-3, or ALL'],
         ] as [$args, $why]) {
