@@ -229,13 +229,16 @@ final class TableRenderer
     /**
      * Apply one SGR parameter string to the accumulating state.
      *
-     * Attribute codes 1-9 set their ATTR_* bit and 22-29 clear the pair;
-     * 38;5;N / 38;2;R;G;B set the foreground and 48;* the background (RGB
-     * components clamp to 0-255); 39/49 reset one channel; '0' or an empty
-     * parameter string resets everything. Codes with no cell-buffer
-     * meaning (overline 53, fonts, hyperlinks) are no-ops — they must not
-     * materialize a Style, or every such frame churns the diff with
-     * invisible changes.
+     * Attribute codes 1-5 and 7-9 set their ATTR_* bit (6 is unused);
+     * the clear door is the exact set 22 (drops bold and faint together),
+     * 23, 24, 25, 27 and 29 — there is no 26 arm (undefined in the cell
+     * model) and no 28 arm, so an INVISIBLE (8) cell is only ever lifted
+     * by a full reset. 38;5;N / 38;2;R;G;B set the foreground and 48;*
+     * the background (RGB components clamp to 0-255); 39/49 reset one
+     * channel; '0' or an empty parameter string resets everything. Codes
+     * with no cell-buffer meaning (overline 53, fonts, hyperlinks) are
+     * no-ops — they must not materialize a Style, or every such frame
+     * churns the diff with invisible changes.
      *
      * @param array{attrs:int,fg:int|null,bg:int|null} $state
      */
