@@ -118,6 +118,10 @@ Save as `counter.php` in a project with `composer require sugarcraft/sugar-core`
 then run `php counter.php`:
 
 ```php
+<?php
+
+require __DIR__ . '/vendor/autoload.php';
+
 use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program, Subscriptions};
 use SugarCraft\Core\Msg\KeyMsg;
 
