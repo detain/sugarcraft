@@ -89,14 +89,23 @@ These demos resolve the autoloader from a repo checkout (the library's own `vend
 | `sixel` | Sixel graphics protocol (DEC) | Sixel-capable |
 | `kitty` | Kitty graphics protocol (APC `\x1b_G`) | Kitty-compatible — recognised via the `TERM=xterm-kitty` environment surrogate, no protocol handshake |
 | `iterm2` | iTerm2 inline image (OSC 1337) | iTerm2 / WezTerm |
-| `auto` | Selector, not a ninth mode: probes the terminal at open and picks the best mode it can render. There is no `Mode::Auto` case — `Mode::from('auto')` throws a `ValueError` | — |
+| `auto` | Selector, not a ninth mode: resolves the terminal from its environment at open and picks the best mode it can render — a lookup table, no protocol negotiation. There is no `Mode::Auto` case — `Mode::from('auto')` throws a `ValueError` | — |
 
-Auto mode probes the terminal using `Mosaic::diagnose()` (for sixel/kitty/
-iTerm2) and falls back to `SugarCraft\ColorProfile\Probe::colorProfile()` for
-ANSI modes. The kitty rung is environment-driven: `RendererFactory::supports()`
+Auto mode does not negotiate with the terminal. `Mosaic::diagnose()` (for
+sixel/kitty/iTerm2) delegates to sugar-colorprofile's `TerminalProbe`: a
+lookup table over `TERM_PROGRAM`/`TERM` and friends that, despite the
+historical name, issues no raw OSC query round-trips; the ANSI fallback
+reads `SugarCraft\ColorProfile\Probe::colorProfile()` and a pure `TermDb`
+match chain over the captured environment. The consequence is honest: seats
+that could render graphics but are absent from the table (foot, plain
+xterm, contour, kitty under tmux) never auto-ascend to a graphics rung.
+The kitty rung is environment-driven: `RendererFactory::supports()`
 consults sugar-colorprofile's `Capability::KittyKeyboard`, which its probe sets
 only when `TERM` equals `xterm-kitty` — the player never negotiates the Kitty
-graphics protocol itself.
+graphics protocol itself. For the live variant, sugar-image's
+`Mosaic::probe()`/`Mosaic::auto()` run the real negotiation (sixel query and
+XTWINOPS round-trips via `Detect::probe()`) — an explicit opt-in, outside
+the player's auto path.
 
 ### Luminance ramp selection
 

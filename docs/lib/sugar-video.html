@@ -91,7 +91,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
     <tr><td>sixel</td><td>Sixel raster graphics protocol (DEC)</td><td>Sixel-capable</td></tr>
     <tr><td>kitty</td><td>Kitty graphics protocol (APC)</td><td>Kitty-compatible</td></tr>
     <tr><td>iterm2</td><td>iTerm2 inline image (OSC 1337)</td><td>iTerm2 / WezTerm</td></tr>
-    <tr><td>auto</td><td>Probe terminal, pick best available (the default)</td><td>&#x2014;</td></tr>
+    <tr><td>auto</td><td>Resolve the terminal from its environment (lookup table, no protocol negotiation), pick best available (the default)</td><td>&#x2014;</td></tr>
     </tbody>
     </table>
 
@@ -129,7 +129,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Multi-format decode</strong><span>ffmpeg for mp4/avi/webm, pure-PHP + ext-gd for GIF and animated WebP (a RIFF container walk with per-frame GD decode). No external deps beyond the ffmpeg binaries for the video containers.</span></div>
-      <div class="feature"><strong>8 rendering modes + auto</strong><span>ascii, ansi256, truecolor, half-block, quarter-block, sixel, kitty, iTerm2 &#8212; <code>Player::open()</code> and <code>Reel</code> default to probing the terminal and picking the best available.</span></div>
+      <div class="feature"><strong>8 rendering modes + auto</strong><span>ascii, ansi256, truecolor, half-block, quarter-block, sixel, kitty, iTerm2 &#8212; <code>Player::open()</code> and <code>Reel</code> default to resolving the terminal from its environment (a lookup table, no protocol negotiation) and picking the best available.</span></div>
       <div class="feature"><strong>Auto terminal resize</strong><span>SIGWINCH handler re-scales video to fit the new terminal dimensions without restarting playback.</span></div>
       <div class="feature"><strong>Seek + speed control</strong><span>Keyboard-driven seek (arrows, 0-9) and speed control ([ / ]) with frame-skip resync; ffmpeg input seeking (<code>-ss</code> before <code>-i</code>) for instant jumps on long streams.</span></div>
       <div class="feature"><strong>WebVTT subtitles</strong><span><code>Reel::withSubtitles('clip.vtt')</code> parses WebVTT (lenient enough for most SRT files) and paints the active cue as one caption line under the frame in every mode.</span></div>
