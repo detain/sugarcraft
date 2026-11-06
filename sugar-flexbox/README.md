@@ -26,7 +26,7 @@ sugar-flexbox — layout building blocks for terminal UIs, for PHP 8.3+. Provide
 - **Ratio-based sizing** — items with grow ratios fill available space
 
 ### Table
-- **Sortable columns** — sortBy()/sortByNext() toggle ascending/descending (mouse wiring belongs to the app)
+- **Sortable columns** — sortBy()/sortByNext() toggle ascending/descending (mouse wiring belongs to the app); the sort arrow is prepended before the header is truncated, so a sorted column narrower than arrow plus text shows the arrow alone
 - **Filterable** — keeps rows where any cell contains a case-insensitive substring; matching runs on the stored raw strings, not the render-time sanitized text
 - **Configurable columns** — title, width, alignment, formatter (`Column::new()`, `withAlign()`, `withStyle()`, `withFormatter()`)
 - **Cell styling** — per-column ANSI style support
