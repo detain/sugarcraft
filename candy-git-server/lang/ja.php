@@ -71,4 +71,15 @@ return [
     'cli.serve_http_unknown_flag' => 'serve --http で {flag} は不明なフラグです',
     'cli.port_deprecated'      => '注意: --port は非推奨です。代わりに --http-port を使用してください（互換性のためエイリアスを維持）。',
     'cli.serve_http_banner' => 'smart-HTTP リスナー {addr} ({repos} リポジトリ、{published} 公開、{users} アカウント; 匿名読み取り={anon}; push も配信 — フック拒否は帯域内で伝達)',
+
+// bin/candy-git-server — Step 17: remaining CLI refusals
+    'cli.init_temp_open_failed' => 'init: 一時設定ファイルを開けません: {tmp}',
+    'cli.init_publish_failed' => 'init: 設定ファイルを公開できません: {data}/config.yaml',
+    'cli.token_no_config' => 'token: 読み取り可能な設定がありません {data}/config.yaml — init を実行するかデータパスを指定してください',
+    'cli.token_no_secret' => 'token: このデータパスに http.auth_secret が設定されていません。トークンを発行する前に config.yaml の http: セクションに設定してください',
+    'cli.password_flag_needs_value' => 'candy-git-server: --password には値が必要です (\'-\' は標準入力から読み込み)',
+    'cli.password_flag_empty' => 'candy-git-server: --password には空でない値が必要です',
+    'cli.username_invalid' => '無効なユーザー名: \'{username}\' (使用可能: 英数字、ドット、アンダースコア、ハイフン。ドットのみは不可)',
+    'cli.user_exists' => 'ユーザー \'{username}\' は {path} に既に存在します',
+    'cli.user_not_found' => 'ユーザー \'{username}\' は {path} に見つかりません — まず \'candy-git-server user add {username}\' を実行してください。',
 ];

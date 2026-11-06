@@ -71,4 +71,15 @@ return [
     'cli.serve_http_unknown_flag' => 'خيار غير معروف في serve --http: {flag}',
     'cli.port_deprecated'      => 'ملاحظة: --port مهجور؛ استخدم --http-port بدلاً منه (إبقاء الاسم المستعار للتوافق).',
     'cli.serve_http_banner' => 'مستمع smart-HTTP على {addr} ({repos} مستودعات، {published} منشورًا، {users} حسابات؛ القراءة المجهولة={anon}؛ الدفع مُقدَّم أيضًا — تُنقل رفض الخطافات داخل النطاق)',
+
+// bin/candy-git-server — Step 17: remaining CLI refusals
+    'cli.init_temp_open_failed' => 'init: تعذر فتح الإعداد المؤقت في {tmp}',
+    'cli.init_publish_failed' => 'init: تعذر نشر الإعداد في {data}/config.yaml',
+    'cli.token_no_config' => 'token: لا يوجد إعداد قابل للقراءة في {data}/config.yaml — شغّل init أو مرّر مسار بيانات',
+    'cli.token_no_secret' => 'token: http.auth_secret غير مُهيأ لمسار البيانات هذا؛ اضبطه تحت قسم http: في config.yaml قبل إصدار الرموز',
+    'cli.password_flag_needs_value' => 'candy-git-server: --password يتطلب قيمة (\'-\' تقرأ من stdin)',
+    'cli.password_flag_empty' => 'candy-git-server: --password يتطلب قيمة غير فارغة',
+    'cli.username_invalid' => 'اسم مستخدم غير صالح: \'{username}\' (حروف وأرقام ونقطة وشرطة سفلية وشرطة؛ ليس نقاطًا فقط)',
+    'cli.user_exists' => 'المستخدم \'{username}\' موجود بالفعل في {path}',
+    'cli.user_not_found' => 'لا يوجد مستخدم \'{username}\' في {path} — شغّل أولاً \'candy-git-server user add {username}\'.',
 ];

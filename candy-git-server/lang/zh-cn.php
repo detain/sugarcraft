@@ -71,4 +71,15 @@ return [
     'cli.serve_http_unknown_flag' => 'serve --http 未知选项：{flag}',
     'cli.port_deprecated'      => '注意：--port 已废弃；请改用 --http-port（为兼容性保留别名）。',
     'cli.serve_http_banner' => 'smart-HTTP 监听器于 {addr} ({repos} 个仓库, {published} 个公开, {users} 个账户; 匿名读取={anon}; 推送也在服务 — 钩子拒绝随带内传输)',
+
+// bin/candy-git-server — Step 17: remaining CLI refusals
+    'cli.init_temp_open_failed' => 'init: 无法打开临时配置 {tmp}',
+    'cli.init_publish_failed' => 'init: 无法发布配置 {data}/config.yaml',
+    'cli.token_no_config' => 'token: {data}/config.yaml 没有可读配置 — 请运行 init 或指定数据路径',
+    'cli.token_no_secret' => 'token: 此数据路径未配置 http.auth_secret；请在 config.yaml 的 http: 段中设置后再签发令牌',
+    'cli.password_flag_needs_value' => 'candy-git-server: --password 需要一个值（\'-\' 从标准输入读取）',
+    'cli.password_flag_empty' => 'candy-git-server: --password 需要非空值',
+    'cli.username_invalid' => '无效用户名：\'{username}\'（仅限字母、数字、点、下划线、连字符；不能全为点）',
+    'cli.user_exists' => '用户 \'{username}\' 已存在于 {path}',
+    'cli.user_not_found' => '{path} 中没有用户 \'{username}\' — 请先运行 \'candy-git-server user add {username}\'。',
 ];

@@ -71,4 +71,15 @@ return [
     'cli.serve_http_unknown_flag' => 'Onbekende vlag voor serve --http: {flag}',
     'cli.port_deprecated'      => 'Let op: --port is deprecated; gebruik --http-port (alias behouden voor compatibiliteit).',
     'cli.serve_http_banner' => 'smart-HTTP-listener op {addr} ({repos} repos, {published} gepubliceerd, {users} accounts; anoniem lezen={anon}; push wordt ook geserveerd — hook-afwijzingen reizen in-band)',
+
+// bin/candy-git-server — Step 17: remaining CLI refusals
+    'cli.init_temp_open_failed' => 'init: kan tijdelijke configuratie niet openen in {tmp}',
+    'cli.init_publish_failed' => 'init: kan configuratie niet publiceren in {data}/config.yaml',
+    'cli.token_no_config' => 'token: geen leesbare configuratie in {data}/config.yaml — voer init uit of geef een datapad op',
+    'cli.token_no_secret' => 'token: http.auth_secret is niet geconfigureerd voor dit datapad; stel het in onder het http:-deel van config.yaml voordat u tokens aanmaakt',
+    'cli.password_flag_needs_value' => 'candy-git-server: --password vereist een waarde (\'-\' leest van stdin)',
+    'cli.password_flag_empty' => 'candy-git-server: --password vereist een niet-lege waarde',
+    'cli.username_invalid' => 'Ongeldige gebruikersnaam: \'{username}\' (letters, cijfers, punt, underscore, koppelteken; niet alleen punten)',
+    'cli.user_exists' => 'Gebruiker \'{username}\' bestaat al in {path}',
+    'cli.user_not_found' => 'Geen gebruiker \'{username}\' in {path} — voer eerst \'candy-git-server user add {username}\' uit.',
 ];

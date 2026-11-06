@@ -71,4 +71,15 @@ return [
     'cli.serve_http_unknown_flag' => 'Neznámý příznak serve --http: {flag}',
     'cli.port_deprecated'      => 'Poznámka: --port je zastaralý; použijte --http-port (alias zachován pro kompatibilitu).',
     'cli.serve_http_banner' => 'smart-HTTP listener na {addr} ({repos} repozitářů, {published} zveřejněno, {users} účtů; anonymní čtení={anon}; push je také obsluhován — odmítnutí hooků jedou in-band)',
+
+// bin/candy-git-server — Step 17: remaining CLI refusals
+    'cli.init_temp_open_failed' => 'init: nelze otevřít dočasnou konfiguraci v {tmp}',
+    'cli.init_publish_failed' => 'init: nelze zveřejnit konfiguraci v {data}/config.yaml',
+    'cli.token_no_config' => 'token: není čitelná konfigurace v {data}/config.yaml — spusťte init nebo zadejte cestu k datům',
+    'cli.token_no_secret' => 'token: http.auth_secret není pro tuto datovou cestu nastaven; nastavte ji v sekci http: souboru config.yaml před vydáváním tokenů',
+    'cli.password_flag_needs_value' => 'candy-git-server: --password vyžaduje hodnotu (\'-\' čte ze stdin)',
+    'cli.password_flag_empty' => 'candy-git-server: --password vyžaduje neprázdnou hodnotu',
+    'cli.username_invalid' => 'Neplatné uživatelské jméno: \'{username}\' (písmena, číslice, tečka, podtržítko, pomlčka; ne pouze tečky)',
+    'cli.user_exists' => 'Uživatel \'{username}\' již v {path} existuje',
+    'cli.user_not_found' => 'Uživatel \'{username}\' v {path} neexistuje — nejprve spusťte \'candy-git-server user add {username}\'.',
 ];

@@ -401,7 +401,7 @@ YAML;
     $tmp = "{$dataPath}/config.yaml." . \bin2hex(\random_bytes(6)) . '.tmp';
     $handle = @\fopen($tmp, 'xb');
     if ($handle === false) {
-        return error("init: cannot open temp config at {$tmp}\n");
+        return error(Lang::t('cli.init_temp_open_failed', ['tmp' => $tmp]) . "\n");
     }
     $written = false;
     try {
@@ -415,7 +415,7 @@ YAML;
     }
     if (!$written || !@\rename($tmp, "{$dataPath}/config.yaml")) {
         @\unlink($tmp);
-        return error("init: cannot publish config at {$dataPath}/config.yaml\n");
+        return error(Lang::t('cli.init_publish_failed', ['data' => $dataPath]) . "\n");
     }
 
     echo Lang::t('cli.done') . "\n";
@@ -463,11 +463,11 @@ function cmdUserToken(array $args): int
     try {
         $config = Config::load($dataPath . '/config.yaml');
     } catch (RuntimeException | InvalidArgumentException $error) {
-        return error("token: no readable config at {$dataPath}/config.yaml — run init or pass a data-path\n");
+        return error(Lang::t('cli.token_no_config', ['data' => $dataPath]) . "\n");
     }
 
     if ($config->authSecret === '') {
-        return error("token: http.auth_secret is not configured for this data path; set it under the http: section of config.yaml before minting tokens\n");
+        return error(Lang::t('cli.token_no_secret') . "\n");
     }
 
     return say(\SugarCraft\GitServer\HttpSmartProtocol\Server::mintUserToken(
@@ -513,7 +513,7 @@ function cmdUserAdd(array $args): int
         if ($args[$i] === '--password') {
             $password = $args[$i + 1] ?? null;
             if ($password === null) {
-                return error("candy-git-server: --password requires a value ('-' reads from stdin)\n");
+                return error(Lang::t('cli.password_flag_needs_value') . "\n");
             }
             $i++;
             continue;
@@ -529,17 +529,17 @@ function cmdUserAdd(array $args): int
         $password = $raw === false ? '' : \rtrim($raw, "\r\n");
     }
     if ($password === '') {
-        return error("candy-git-server: --password requires a non-empty value\n");
+        return error(Lang::t('cli.password_flag_empty') . "\n");
     }
     $dataPath = bin_data_path($positional[0] ?? null);
     if (!bin_valid_account_name($username)) {
-        return error("Invalid username: '{$username}' (letters, digits, dot, underscore, hyphen; not all dots)\n");
+        return error(Lang::t('cli.username_invalid', ['username' => $username]) . "\n");
     }
 
     try {
         $store = UserStore::forDataPath($dataPath);
         if ($store->find($username) !== null) {
-            return error("User '{$username}' already exists in {$store->path()}\n");
+            return error(Lang::t('cli.user_exists', ['username' => $username, 'path' => $store->path()]) . "\n");
         }
         $user = User::new($username)->withAdmin(true);
         if ($password !== null) {
@@ -584,7 +584,7 @@ function cmdUserKey(array $args): int
         // persisted nothing.
         $user = $store->find($username);
         if ($user === null) {
-            return error("No such user '{$username}' in {$store->path()} — run 'candy-git-server user add {$username}' first.\n");
+            return error(Lang::t('cli.user_not_found', ['username' => $username, 'path' => $store->path()]) . "\n");
         }
         $updated = $user->addAuthorizedKey(\trim($key));
         $store->put($updated);

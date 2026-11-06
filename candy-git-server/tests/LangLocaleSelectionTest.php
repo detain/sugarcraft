@@ -90,6 +90,45 @@ final class LangLocaleSelectionTest extends TestCase
         }
     }
 
+    public function testRemainingCliRefusalsRouteThroughLang(): void
+    {
+        // Step 17: the init/token/password/username refusals that once were
+        // hardcoded English now reach the wire through Lang, and the English
+        // catalogue carries each of them. Bootstrap copy (autoload failure,
+        // the deprecated-env shim) and exception passthroughs deliberately
+        // stay raw — they are not translatable operator prose.
+        $bin = (string) \file_get_contents(\dirname(__DIR__) . '/bin/candy-git-server');
+        $en = include \dirname(__DIR__) . '/lang/en.php';
+        foreach ([
+            'cli.init_temp_open_failed' => ['tmp'],
+            'cli.init_publish_failed' => ['data'],
+            'cli.token_no_config' => ['data'],
+            'cli.token_no_secret' => [],
+            'cli.password_flag_needs_value' => [],
+            'cli.password_flag_empty' => [],
+            'cli.username_invalid' => ['username'],
+            'cli.user_exists' => ['username', 'path'],
+            'cli.user_not_found' => ['username', 'path'],
+        ] as $key => $params) {
+            self::assertStringContainsString(
+                "Lang::t('{$key}'",
+                $bin,
+                "CLI refusal copy must reach the wire via Lang ({$key})",
+            );
+            self::assertArrayHasKey($key, $en, "en.php must carry {$key}");
+            foreach ($params as $param) {
+                self::assertStringContainsString(
+                    '{' . $param . '}',
+                    (string) $en[$key],
+                    "{$key} must interpolate {{$param}}",
+                );
+            }
+        }
+
+        // The mint refusal still names the ONLY parsed signing key.
+        self::assertStringContainsString('http.auth_secret', (string) $en['cli.token_no_secret']);
+    }
+
     public function testInitNextStepsTeachTheWorkingRecipe(): void
     {
         $bin = (string) \file_get_contents(\dirname(__DIR__) . '/bin/candy-git-server');

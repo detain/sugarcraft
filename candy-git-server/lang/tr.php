@@ -71,4 +71,15 @@ return [
     'cli.serve_http_unknown_flag' => 'serve --http için bilinmeyen bayrak: {flag}',
     'cli.port_deprecated'      => 'Not: --port kullanım dışı; yerine --http-port kullanın (uyumluluk için takma ad korundu).',
     'cli.serve_http_banner' => 'smart-HTTP dinleyici {addr} üzerinde ({repos} depo, {published} herkese açık, {users} hesap; anonim okuma={anon}; push da sunuluyor — kanca redleri bant içinde taşınır)',
+
+// bin/candy-git-server — Step 17: remaining CLI refusals
+    'cli.init_temp_open_failed' => 'init: geçici yapılandırma açılamadı: {tmp}',
+    'cli.init_publish_failed' => 'init: yapılandırma yayınlanamadı: {data}/config.yaml',
+    'cli.token_no_config' => 'token: okunabilir yapılandırma yok: {data}/config.yaml — init çalıştırın veya bir veri yolu geçin',
+    'cli.token_no_secret' => 'token: bu veri yolu için http.auth_secret yapılandırılmamış; token basmadan önce config.yaml içindeki http: bölümünde ayarlayın',
+    'cli.password_flag_needs_value' => 'candy-git-server: --password bir değer gerektirir (\'-\' stdin\'den okur)',
+    'cli.password_flag_empty' => 'candy-git-server: --password boş olmayan bir değer gerektirir',
+    'cli.username_invalid' => 'Geçersiz kullanıcı adı: \'{username}\' (harfler, rakamlar, nokta, alt çizgi, tire; yalnızca nokta olamaz)',
+    'cli.user_exists' => 'Kullanıcı \'{username}\' zaten {path} içinde mevcut',
+    'cli.user_not_found' => '{path} içinde \'{username}\' adlı kullanıcı yok — önce \'candy-git-server user add {username}\' çalıştırın.',
 ];
