@@ -421,7 +421,7 @@ SugarCraft\ColorProfile\
 ├── Profile         — deprecated class_alias façade over ColorProfile
 ├── DetectionChain  — shared env ladder (the one precedence core; see the ladder above)
 ├── Env             — env resolution (hermetic-replace rule), value read, source sanitize
-├── Palette         — instance detection over the chain + degrade/strip; adds the stream TTY gate
+├── Palette         — instance detection over the chain + degrade/strip; adds the stream TTY gate and the describe()/comment() plain-language capability announcements
 ├── Probe           — static env-probe layer (colorProfile/isNoColor/isForceColor/reducedMotion)
 ├── AsyncProbe      — ReactPHP child-process infocmp probe (bounded children, settles from the chain)
 ├── Probe\TerminalProbe — phased capability report (env chain → terminfo → escape queries → fallbacks)

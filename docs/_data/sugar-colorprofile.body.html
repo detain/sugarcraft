@@ -58,16 +58,25 @@ ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</c
 <tr><td>Palette</td><td>__construct($stream = null, array $env = []) / profile() / withProfile(ColorProfile)</td><td>Detected profile, or an explicit one</td></tr>
 <tr><td>Palette</td><td>convert(Color) / static toProfile(Color, ColorProfile)</td><td>Downsample a color</td></tr>
 <tr><td>Palette</td><td>degrade(string) / static stripAnsi(string)</td><td>Rewrite or strip the escapes in a string</td></tr>
+<tr><td>Palette</td><td>describe() / comment()</td><td>Plain-language capability announcement instead of painting escapes (accessibility-friendly)</td></tr>
 <tr><td>Color</td><td>static parse('#rrggbb') / static fromHex(0xrrggbb) / new Color(r, g, b, a)</td><td>Construct a color</td></tr>
 <tr><td>Color</td><td>toHex() / toAnsi256Index() / toAnsi16Index() / toAnsiForeground() / toAnsi256Foreground() / toAnsi16Foreground()</td><td>Encode a color</td></tr>
-<tr><td>ColorProfile</td><td>TrueColor, Ansi256, Ansi240, Ansi, Ansi8, Fgbg, Ascii, NoTTY / label() / maxColors() / degradedTo()</td><td>Enum of color profiles</td></tr>
+<tr><td>Color</td><td>toAnsiBackground() / toAnsi16Background() / toAnsi8Index() / static ansi16Sgr(int, bool) / static fromAnsi256Index(int)</td><td>Background escapes, the 8-color index, SGR pairing and reverse decoding</td></tr>
+<tr><td>Color</td><td>equals(Color) / perceivedBrightness() / isDark() / convert(ColorProfile)</td><td>Compare, measure and downsample a color</td></tr>
+<tr><td>ColorProfile</td><td>TrueColor, Ansi256, Ansi240, Ansi, Ansi8, Fgbg, Ascii, NoTTY / label() / description() / maxColors() / degradedTo() / allowsColor()</td><td>Enum of color profiles</td></tr>
 <tr><td>ProfileWriter</td><td>static wrap($stream, array $env = []) / write(string) / printf(format, ...)</td><td>Stream that degrades color on write</td></tr>
 <tr><td>StandardColors</td><td><code>all()</code>, <code>fromIndex(int)</code>, <code>catalog()</code></td><td>The 16 ANSI colors (non-mutating read API; the <code>$black</code>…<code>$brightWhite</code> statics are deprecated — see README)</td></tr>
-<tr><td>DetectionChain</td><td>static detect(array $env = []) → level() / source() / term() / toColorProfile()</td><td>The shared 13-step env ladder every detector agrees on; on the <code>TMUX</code>/<code>STY</code> rung the inner <code>TERM</code> <em>is</em> the base — no re-anchoring happens</td></tr>
+<tr><td>DetectionChain</td><td>static detect(array $env = []) → level() / source() / term() / allowsColor() / toColorProfile()</td><td>The shared 13-step env ladder every detector agrees on; on the <code>TMUX</code>/<code>STY</code> rung the inner <code>TERM</code> <em>is</em> the base — no re-anchoring happens</td></tr>
 <tr><td>Probe</td><td>static colorProfile() / isNoColor() / isForceColor() / reducedMotion()</td><td>Static env-probe layer + infocmp upgrade</td></tr>
 <tr><td>Env</td><td>static resolve(array $injected) / value(resolved, key) / sanitize(value)</td><td>Env resolution (a non-empty injected map fully replaces the ambient env) + sanitized source strings</td></tr>
 <tr><td>AsyncProbe</td><td>static colorProfile(): PromiseInterface</td><td>Bounded ReactPHP infocmp child; every settle answers from the detection chain</td></tr>
 <tr><td>Probe\TerminalProbe</td><td>run() / runProbe() → ProbeReport</td><td>Phased capability report (TrueColor/Color256/Color16/NoColor/BasicAscii + Sixel, KittyKeyboard, ITerm2, Hyperlinks; BracketedPaste/FocusEvents reserved) with per-capability sources</td></tr>
+<tr><td>Probe\ProbeReport</td><td>has(Capability) / hasTrueColor() / hasColor256() / hasNoColor() / all() / allWithSource() / colorDescription() / toColorProfile()</td><td>Per-capability verdicts with the source that set each one</td></tr>
+<tr><td>ColorMath</td><td>static toLab(int, int, int) / rgbToXyz / srgbToLinear / linearToXyz / xyzToLab</td><td>sRGB → CIELAB conversion building blocks</td></tr>
+<tr><td>ColorDistance</td><td>between(Color, Color) / betweenLab(array, array): float</td><td>The selected ΔE metric (Euclidean / Cie76 / Cie94 / Cie2000) applied to colors or Lab triples</td></tr>
+<tr><td>DeltaE</td><td>static cie76(array, array) / cie94(array, array) / cie2000(array, array): float</td><td>The three perceptual-distance formulas</td></tr>
+<tr><td>NearestColor</td><td>__construct(ColorDistance) / ansi256(Color) / ansi16(Color) / closest(Color, array) / withError(Color, ?&err) / metric() / static palette256() / palette256Lab() / palette16Lab()</td><td>Opt-in nearest-palette matcher over the cached Lab palettes</td></tr>
+<tr><td>PaletteIndex</td><td>static fromPalette(array, ColorDistance) / nearest(Color) / metric() / palette() / count()</td><td>Precomputed Lab index over any fixed palette</td></tr>
 </table>
   </div>
 </section>
