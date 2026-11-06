@@ -1584,6 +1584,14 @@ final class WorkflowRegistry
                 if (array_key_exists('model', $agent)) {
                     $b = $b->model($this->requireModel($agent['model'], "{$where} agent #{$agentIndex}"));
                 }
+                // O3: the host resource this agent's stage serializes on,
+                // plus its wait bound — checked spellings, refused here.
+                if (array_key_exists('resource', $agent)) {
+                    $b = $b->resource($this->requireResource($agent['resource'], "{$where} agent #{$agentIndex}"));
+                }
+                if (array_key_exists('lockWaitSeconds', $agent)) {
+                    $b = $b->lockWaitSeconds($this->requireLockWaitSeconds($agent['lockWaitSeconds'], "{$where} agent #{$agentIndex}"));
+                }
                 $builders[] = $b;
             }
             return $builders;
@@ -1616,6 +1624,15 @@ final class WorkflowRegistry
             $b = $b->model($this->requireModel($stage['model'], $where));
         }
 
+        // O3: resource + wait bound for a one-task stage; the two keys read
+        // exactly as their per-agent and per-task spellings do.
+        if (array_key_exists('resource', $stage)) {
+            $b = $b->resource($this->requireResource($stage['resource'], $where));
+        }
+        if (array_key_exists('lockWaitSeconds', $stage)) {
+            $b = $b->lockWaitSeconds($this->requireLockWaitSeconds($stage['lockWaitSeconds'], $where));
+        }
+
         return $b;
     }
 
@@ -1634,7 +1651,7 @@ final class WorkflowRegistry
      */
     private function parseYamlTaskList(array $stage, string $where): array
     {
-        foreach (['agent', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model'] as $key) {
+        foreach (['agent', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds'] as $key) {
             if (array_key_exists($key, $stage)) {
                 throw new WorkflowLoadException(
                     "{$where} lists \"tasks\", so \"{$key}\" belongs on each task, not on the stage"
@@ -1682,6 +1699,14 @@ final class WorkflowRegistry
             // stage and parallel-agent arms above.
             if (array_key_exists('model', $task)) {
                 $b = $b->model($this->requireModel($task['model'], $at));
+            }
+            // O3: per-task resource spelling — the stage's lock set is the
+            // union of its tasks' declarations, read at dispatch.
+            if (array_key_exists('resource', $task)) {
+                $b = $b->resource($this->requireResource($task['resource'], $at));
+            }
+            if (array_key_exists('lockWaitSeconds', $task)) {
+                $b = $b->lockWaitSeconds($this->requireLockWaitSeconds($task['lockWaitSeconds'], $at));
             }
             $builders[] = $b;
         }
@@ -1835,6 +1860,63 @@ final class WorkflowRegistry
         }
 
         return $asked;
+    }
+
+    /**
+     * A task's `resource:` (O3) — the host resource its stage serializes
+     * on, trimmed to a non-empty string, with the same refuse-a-blank law
+     * `model:` holds: a key the author wrote must name something. Which
+     * process currently HOLDS the name is the lock's own question, answered
+     * at dispatch, never here.
+     *
+     * @throws WorkflowLoadException When the value is not a string, or is
+     *                               only whitespace.
+     */
+    private function requireResource(mixed $value, string $where): string
+    {
+        if (!is_string($value)) {
+            throw new WorkflowLoadException(
+                "{$where} \"resource\" must be a string naming a host resource, got " . get_debug_type($value)
+            );
+        }
+
+        $asked = trim($value);
+        if ($asked === '') {
+            throw new WorkflowLoadException("{$where} \"resource\" names no resource");
+        }
+
+        return $asked;
+    }
+
+    /**
+     * A task's `lockWaitSeconds:` (O3) — how long its stage may wait for a
+     * contended resource before failing loudly. A whole number >= 0 with
+     * requireRetryCount's quoted-integer acceptance; 0 is the legitimate
+     * ask-once-and-give-up. Refused rather than coerced for the retry
+     * count's reason: a bound the author typed and the loader quietly
+     * dropped is a wait silently not happening.
+     *
+     * @throws WorkflowLoadException When the value is not a whole number,
+     *                               or is negative.
+     */
+    private function requireLockWaitSeconds(mixed $value, string $where): int
+    {
+        $int = null;
+        if (is_int($value)) {
+            $int = $value;
+        } elseif (is_string($value) && preg_match('/^-?\d+$/', trim($value)) === 1) {
+            $int = (int) trim($value);
+        }
+
+        if ($int === null) {
+            throw new WorkflowLoadException("{$where} \"lockWaitSeconds\" must be a whole number, got " . get_debug_type($value));
+        }
+
+        if ($int < 0) {
+            throw new WorkflowLoadException("{$where} \"lockWaitSeconds\" must be at least 0, got {$int}");
+        }
+
+        return $int;
     }
 
     /**

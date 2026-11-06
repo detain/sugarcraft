@@ -83,6 +83,15 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private const PAUSE_DIR = '.running';
 
     /**
+     * O3: how long a stage waits for a contended host resource before it
+     * fails loudly, when the task did not ask for a bound of its own.
+     */
+    private const DEFAULT_STAGE_LOCK_WAIT_SECONDS = 60;
+
+    /** Lazily-built store for O3 resource locks, rooted beside the registry. */
+    private ?StageResourceLocks $stageLocks = null;
+
+    /**
      * The context entry that holds every agent's output by result name, for
      * `{{name.results}}` (AUDIT WF-3).
      *
@@ -1624,7 +1633,20 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // AFTER an agent ran still hands that agent's tokens and output
                 // to the failed StageResult below instead of dropping them.
                 $dispatched = [];
+                $heldLocks = [];
+
                 try {
+                    // O3: host-resource serialization. Before anything is
+                    // dispatched, take an exclusive flock on every distinct
+                    // resource this stage's tasks declare, in sorted name
+                    // order so two engines reaching for the same pair cannot
+                    // deadlock each other. A stage that cannot get the lock
+                    // within its bounded wait throws into the shared catch
+                    // below: the stage fails LOUD, naming the resource and
+                    // the wait, and the ordinary pause/resume machinery
+                    // treats it like any other failed stage.
+                    $heldLocks = $this->acquireStageResources($stage, $stageType);
+
                     if ($stageType === 'parallel') {
                         $stageResult = $this->executeParallelStage($stage, $context, $workflow, $dispatched);
                     } elseif ($stageType === 'stage') {
@@ -1643,6 +1665,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
                         startedAt: $stageStartedAt,
                         completedAt: new \DateTimeImmutable(),
                     );
+                } finally {
+                    // O3: every lock this stage took goes back on every exit
+                    // path — success, failure, throw, pause-request return.
+                    $this->releaseStageResources($heldLocks);
                 }
 
                 // This stage's output and its agents' results, for downstream
@@ -1730,6 +1756,121 @@ final class WorkflowEngine implements WorkflowEngineInterface
             if ($previousAsyncSignals !== null) {
                 $this->restoreInterruptHandlers($previousAsyncSignals);
             }
+        }
+    }
+
+    /**
+     * The O3 host-resource lock store. The directory lives BESIDE the
+     * registry's workflows directory — production `~/.candy-code/locks`,
+     * wherever a deliberately-trusted registry points, and the suite's temp
+     * dir in tests. Never a per-lib path: these locks serialize the HOST,
+     * across registries, engines and processes.
+     */
+    private function stageResourceLocks(): StageResourceLocks
+    {
+        return $this->stageLocks ??= new StageResourceLocks(
+            \dirname($this->registry->workflowsPath()) . '/locks',
+        );
+    }
+
+    /**
+     * Every WorkflowTask whose dispatch belongs to this stage: the task list
+     * for stage/parallel, both slots of a verification stage, and the nested
+     * task lists of a pipeline. Entries that are not tasks are skipped — they
+     * fail their own stage's validation a moment later.
+     *
+     * @param array<string, mixed> $stage
+     * @return list<WorkflowTask>
+     */
+    private function collectStageTasks(array $stage, string $stageType): array
+    {
+        $candidates = [];
+
+        if ($stageType === 'verification') {
+            $candidates = [$stage['task'] ?? null, $stage['verifier'] ?? null];
+        } elseif ($stageType === 'pipeline') {
+            foreach ($stage['stages'] ?? [] as $nested) {
+                if (is_array($nested)) {
+                    foreach ($nested['tasks'] ?? [] as $task) {
+                        $candidates[] = $task;
+                    }
+                }
+            }
+        } elseif (is_array($stage['tasks'] ?? null)) {
+            $candidates = $stage['tasks'];
+        }
+
+        $tasks = [];
+        foreach ($candidates as $task) {
+            if ($task instanceof WorkflowTask) {
+                $tasks[] = $task;
+            }
+        }
+
+        return $tasks;
+    }
+
+    /**
+     * Acquire every distinct resource a stage declares. Each resource waits
+     * the LONGEST bound its declaring tasks asked for (absent bounds fall to
+     * {@see DEFAULT_STAGE_LOCK_WAIT_SECONDS}), and names are taken in sorted
+     * order so concurrent engines converge instead of deadlocking. A timeout
+     * releases what was already held and rethrows — the engine loop's catch
+     * turns it into the loudly-failed stage. A stage that declares nothing
+     * opens nothing: the pre-O3 path, byte-identical.
+     *
+     * @param array<string, mixed> $stage
+     * @return list<resource>
+     */
+    private function acquireStageResources(array $stage, string $stageType): array
+    {
+        $waits = [];
+        foreach ($this->collectStageTasks($stage, $stageType) as $task) {
+            if ($task->resource === null) {
+                continue;
+            }
+
+            $asked = $task->lockWaitSeconds ?? self::DEFAULT_STAGE_LOCK_WAIT_SECONDS;
+            $waits[$task->resource] = max($asked, $waits[$task->resource] ?? 0);
+        }
+
+        if ($waits === []) {
+            return [];
+        }
+
+        ksort($waits);
+
+        $locks = $this->stageResourceLocks();
+        $held = [];
+        foreach ($waits as $resource => $waitSeconds) {
+            try {
+                $held[] = $locks->acquire($resource, (float) $waitSeconds);
+            } catch (\Throwable $e) {
+                $this->releaseStageResources($held);
+
+                throw $e;
+            }
+        }
+
+        return $held;
+    }
+
+    /**
+     * Give back every lock a stage took. Success, failure, throw and the
+     * cooperative-stop return all pass through here; a dead process's locks
+     * go with its descriptors, which is what makes a crashed run self-clear.
+     *
+     * @param list<resource> $held
+     */
+    private function releaseStageResources(array $held): void
+    {
+        if ($held === []) {
+            return;
+        }
+
+        $locks = $this->stageResourceLocks();
+        foreach ($held as $handle) {
+            $locks->release($handle);
         }
     }
 

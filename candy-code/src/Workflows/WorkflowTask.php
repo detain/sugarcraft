@@ -44,5 +44,23 @@ final readonly class WorkflowTask
          * {@see $reject} is set.
          */
         public int $rejectMinOccurrences = 1,
+        /**
+         * O3 host-resource serialization: the name of the exclusive lock this
+         * task's STAGE holds while it dispatches (e.g. 'gpu'). Null (the
+         * default) takes no lock at all — byte-identical to every pre-O3
+         * workflow. The lock is per stage: tasks in one stage that name the
+         * same resource acquire it once, distinct names are held together,
+         * taken in sorted name order.
+         */
+        public ?string $resource = null,
+        /**
+         * How many seconds a stage may WAIT for {@see $resource} before the
+         * stage fails loudly (0 gives up at once). Null falls to the engine's
+         * default bound. Only consulted when {@see $resource} is set;
+         * validity is enforced at {@see TaskBuilder} set time and by the YAML
+         * loader — a hand-built negative can only ever tighten the wait to an
+         * immediate loud refusal, never widen it.
+         */
+        public ?int $lockWaitSeconds = null,
     ) {}
 }

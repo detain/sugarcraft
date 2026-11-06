@@ -1539,6 +1539,12 @@ final class ReadPathCensusTest extends TestCase
                 . 'to the shouldOffer()/markDismissed() seam); an unreadable or empty body reads as '
                 . '"no stamp" and fails soft toward OFFERING the wizard again, never as data consumed',
         ],
+        'Workflows/StageResourceLocks.php|fopen' => [
+            'SELF_LOCATED — an O3 host-resource lock file the class itself '
+                . 'creates (mode c+, private lock dir, TimedFileLock over the '
+                . 'handle). What it holds is lock bookkeeping, and a planted '
+                . 'lock reads to its holder as the same lock it wanted',
+        ],
         'Workflows/WorkflowEngine.php|file_get_contents' => [
             'SELF_LOCATED — a pause file this engine wrote',
             'SELF_LOCATED — the same, on resume',

@@ -91,6 +91,8 @@ stages:                          # a LIST, never a map
       type: object
     isolation: worktree          # optional; own git worktree for this task (or none)
     model: claude-sonnet-4-5     # optional; run this task on a named model
+    resource: gpu                  # optional; exclusive host lock held for this task's stage
+    lockWaitSeconds: 60            # optional; seconds to wait for that lock before the stage fails
 
   - name: fix
     parallel: true
@@ -256,6 +258,39 @@ provider's real capability).
   with `outputSchema:` and `isolation:` — a fast model drafts, a strong model
   verifies, in the same stage list.
 
+### `resource` serializes a stage against the host
+
+`resource: <name>` on a stage (or on one agent of a parallel stage, or on one
+task in a `tasks:` list) — or `->resource($name)` on a PHP task — makes the
+engine hold an **exclusive host lock** on that name for the whole stage, from
+before its first dispatch until its last settles. A GPU, a display, a
+benchmark battery the host has exactly one of: serialization becomes
+mechanical instead of a convention somebody remembered to write down.
+
+- **The lock belongs to the host, not to a lib:** `<dir beside the registry>/
+  locks/<slug>-<fingerprint>.lock` — production `~/.candy-code/locks/`, or
+  wherever a deliberately trusted registry points, never a per-package path.
+  File names are a readable slug plus a sha1 fingerprint, so two resource
+  names that slug alike cannot silently share a lock.
+- **Contention waits, then fails loud:** a competing stage on the same
+  resource blocks up to `lockWaitSeconds:` (default 60; `0` asks once and
+  gives up), then its stage FAILS with an error naming the resource and the
+  bound waited — the same failed-stage shape the retry, pause and resume
+  machinery already handles, so a resumed run re-runs just that stage.
+- **Release is on every exit path:** success, failure, throw and the
+  cooperative stop all pass one `finally`; a process that dies takes its
+  locks down with it, because the kernel releases on descriptor close — a
+  killed or crashed run never strands a resource for the next one.
+- **Sorted, so engines cannot deadlock each other:** a stage naming several
+  resources takes them in sorted name order, and tasks in one stage that
+  name the same resource share a single acquire. (A forked parallel worker
+  INHERITS the held descriptor, so the lock outlives the engine close until
+  that worker exits too — the stage pool joins every worker before the
+  stage returns, which is exactly why this is a stage lock, not a worker
+  lock.)
+- **Absent means untouched:** a stage whose tasks name no resource opens no
+  lock file at all — pre-O3 runs, byte for byte.
+
 ### Everything malformed is refused, not coerced
 
 `WorkflowRegistry::parseYamlWorkflow()` raises `WorkflowLoadException` for each
@@ -284,6 +319,11 @@ of these rather than loading a workflow that quietly does less:
   fails the load (a key the author wrote must name something; blanks are
   never silently read as "session"); writing it on a stage that already
   carries a `tasks:` list is refused (`belongs on each task`) likewise.
+- `resource:` is not a non-empty string (same blank-name law as `model:`),
+  or `lockWaitSeconds:` is not a whole number `>= 0` (quoted integers are
+  accepted exactly as for `retries:`; `0` is the legitimate ask-once bound);
+  both are refused on a stage that already carries a `tasks:` list, like
+  their sibling keys.
   Whether a *well-formed* name is servable is a dispatch-time refusal, not
   a load-time one — the ladder lives in `ModelChoice`, never duplicated.
 - `parallel: true` with `agents:` that is not a list.
@@ -535,7 +575,7 @@ error result.
 **1. A stage's tasks run one after another, never at once.** A regular stage
 may hold several tasks — a list in PHP, `->stage('work', [Tasks::agent('architect')->name('plan'), Tasks::agent('coder')])`,
 or a `tasks:` list in YAML, whose entries take the one-task stage's keys
-(`agent`, `name`, `prompt`, `tools`, `retries`, `outputSchema`, `isolation`, `model`):
+(`agent`, `name`, `prompt`, `tools`, `retries`, `outputSchema`, `isolation`, `model`, `resource`, `lockWaitSeconds`):
 
 ```yaml
 - name: fix
@@ -612,7 +652,8 @@ return (new WorkflowBuilder())
 ```
 
 `TaskBuilder` carries `agent()`, `prompt()`, `tools()`, `timeout()`,
-`retries()`, `isolation()`, `name()`, `outputSchema()`, `model()` and `reject()`. `timeout` and `reject` have
+`retries()`, `isolation()`, `name()`, `outputSchema()`, `model()`, `reject()`,
+`resource()` and `lockWaitSeconds()`. `timeout` and `reject` have
 **no
 YAML spelling**, so a YAML-declared task never carries them; `retries`,
 `outputSchema` and `isolation` are the `retries:`, `outputSchema:` and
@@ -643,6 +684,12 @@ uses for a delegated run: a servable name pins the stage's dial and the run
 reports it, an unservable one fails the stage loudly before anything is
 dialed — a stage that names a model means that model, as
 [`model` runs one stage on a different model](#model-runs-one-stage-on-a-different-model)
+describes.
+`resource()` and `lockWaitSeconds()` — spelled `resource:` and
+`lockWaitSeconds:` in YAML — reach `WorkflowTask::$resource` /
+`::$lockWaitSeconds`, and the engine takes (and always gives back) the host
+lock around the stage exactly as
+[`resource` serializes a stage against the host](#resource-serializes-a-stage-against-the-host)
 describes.
 
 ### `reject()` fails a stage on the verifier verdict

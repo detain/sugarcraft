@@ -30,6 +30,8 @@ final class TaskBuilder
     private ?string $model = null;
     private ?string $reject = null;
     private int $rejectAtLeast = 1;
+    private ?string $resource = null;
+    private ?int $lockWaitSeconds = null;
 
     /**
      * Set the agent type (e.g. 'architect', 'coder', 'reviewer').
@@ -166,6 +168,41 @@ final class TaskBuilder
         return $this;
     }
 
+    /**
+     * O3: serialize this task's stage against every other stage naming the
+     * same host resource ('gpu', 'display', …). A blank name names nothing
+     * and is refused HERE, not silently dropped at the lock.
+     */
+    public function resource(string $resource): self
+    {
+        $asked = trim($resource);
+        if ($asked === '') {
+            throw new \InvalidArgumentException(
+                'resource: names no resource — give the host resource this stage serializes on (e.g. "gpu"), or omit it',
+            );
+        }
+
+        $this->resource = $asked;
+        return $this;
+    }
+
+    /**
+     * How many seconds to wait for {@see resource()} before the stage fails
+     * loudly. Negative bounds are refused at build time; 0 is a legitimate
+     * ask-once-and-give-up.
+     */
+    public function lockWaitSeconds(int $seconds): self
+    {
+        if ($seconds < 0) {
+            throw new \InvalidArgumentException(
+                "lockWaitSeconds cannot be negative, got {$seconds}",
+            );
+        }
+
+        $this->lockWaitSeconds = $seconds;
+        return $this;
+    }
+
     /** Last PCRE compile failure as readable text (shared with the engine's fail-closed scan). */
     public static function pcreErrorText(): string
     {
@@ -197,6 +234,8 @@ final class TaskBuilder
             model: self::trustedModel($this->model),
             reject: $this->reject,
             rejectMinOccurrences: $this->rejectAtLeast,
+            resource: $this->resource,
+            lockWaitSeconds: $this->lockWaitSeconds,
         );
     }
 
