@@ -57,6 +57,8 @@ the same slot as `--fps`, so the last of that pair wins, and `--speed=max`
 silently discards any explicit `--fps`. An unknown preset token (a typo like
 `densiy`) is refused with an explicit message — the two valid tokens are
 `solid` and `density`; a third positional argument is likewise refused.
+Stdin is not read: a bare `-` falls through to the positional ladder as a
+file path and is refused as `could not play '-'`.
 
 A GIF's authored NETSCAPE loop count is honoured by default: `raw N`
 means N extra repeats after the first play (so N+1 total passes) and `raw 0`
