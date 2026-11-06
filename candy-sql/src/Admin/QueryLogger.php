@@ -60,6 +60,9 @@ final class QueryLogger
      * Patterns run in order (each on the previous result), so the function form
      * is handled before the bare `PASSWORD '...'` form. The quoted-string body
      * tolerates backslash escapes so an embedded quote doesn't cut redaction short.
+     * Each pattern's quote character class accepts both `'...'` and `"..."`
+     * literals: MySQL accepts double-quoted strings by default, so
+     * `IDENTIFIED BY "secret"` must redact exactly like the single-quoted form.
      */
     private static function redact(string $sql): string
     {
