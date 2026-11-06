@@ -43,7 +43,9 @@ pane build one on top of `Store::list()`.
 composer require sugarcraft/candy-kv
 ```
 
-The CLI lands at `vendor/bin/candy-kv`; invoke it as `vendor/bin/candy-kv` or
+candy-kv needs PHP 8.3+ and the SQLite3 extension (`ext-sqlite3`, declared in
+`composer.json`): the store is a plain SQLite file and there is no fallback
+engine. The CLI lands at `vendor/bin/candy-kv`; invoke it as `vendor/bin/candy-kv` or
 add `vendor/bin` to your `$PATH`. A rolling dev-channel phar (self-contained,
 stamped `dev-<sha>`) is also published:
 
