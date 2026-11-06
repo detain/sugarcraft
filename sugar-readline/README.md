@@ -319,7 +319,7 @@ sequence a terminal can send.
 - Ctrl+Z / Ctrl+Y — undo / redo the last edit run (a run of consecutive typing collapses into one undo step)
 - Ctrl+L — `Readline` clears the screen and repaints the prompt
 - `Key::PageUp` / `Key::PageDown` — jump the selection list by one page
-- `Key::Escape` / `Key::CtrlC` — abort. Inside an attached `EmacsMode`, Escape is the meta prefix instead (a second Escape cancels it); use Ctrl+C to abort there.
+- `Key::Escape` / `Key::CtrlC` — abort. Inside an attached `EmacsMode`, Escape is the meta prefix instead (a second Escape cancels it); use Ctrl+C to abort there. While an incremental history search is active, Ctrl+C is reclaimed by the search: it cancels back to the pre-search line rather than aborting.
 
 Not every `Ctrl+X` shown has a matching `Key::` constant — there is no
 `Key::CtrlD`, `CtrlL`, `CtrlZ` or `CtrlY`, for example. Those bindings are
@@ -416,7 +416,9 @@ With a history attached (`withHistory()`), Ctrl+R enters reverse
 incremental search and Ctrl+S forward search, in any mode. Typed characters
 refine the query, repeated Ctrl+R/Ctrl+S steps through older/newer matches,
 Enter accepts the match into the buffer (without submitting), and
-Escape/Ctrl+G cancels back to the original line. The prompt renders a
+Escape/Ctrl+G cancels back to the original line — and so does Ctrl+C while a
+search is active: it cancels the search, not the prompt, and only the next
+keypress can abort. The prompt renders a
 `(reverse-i-search)`query': match` indicator, switching to `(failed
 reverse-i-search)` when nothing matches (including empty history). On a
 hidden prompt the line masks query and match alike, in the same idiom.
@@ -491,7 +493,7 @@ what you type as a query never appears in clear text.
 Each prompt is a state machine with three states: pending, submitted, aborted.
 
 - `submit()` finalises the prompt; for `MultiSelectPrompt` it only succeeds when `canSubmit()` is true.
-- `abort()` (or feeding `Key::Escape` / `Key::CtrlC` on the default bindings; inside an attached `EmacsMode`, Ctrl+C) discards the prompt; `value()` / `selectedValues()` then return empty.
+- `abort()` (or feeding `Key::Escape` / `Key::CtrlC` on the default bindings; inside an attached `EmacsMode`, Ctrl+C) discards the prompt; `value()` / `selectedValues()` then return empty. During an active incremental history search these keys cancel the search back to the original line instead — abort resumes ownership on the next keypress.
 - `isSubmitted()` / `isAborted()` report status. `currentValue()` (Confirmation) always reflects the current choice, submitted or not. `selectedValue()` (Selection) tracks the cursor while one exists, but returns `null` after an abort and whenever the filter matches no choice — with no cursor to point at, there is no value to report, submitted state or not.
 - True end-of-input: when `Readline` owns the stdin pump and the stream reaches EOF after the decoder drains, `run()` returns the prompt in its current state — neither submitted nor aborted. The pump is per-`Readline`-instance, **not** per-`run()`: calling `run()` again feeds the next prompt from wherever the stream stands, so `printf 'a\nb\n' | php app.php` drives two successive prompts with `a` and `b`; once EOF is seen it stays seen. Injected drivers report EOF and "nothing yet" identically, so they cannot trigger this exit; end those loops by submitting, aborting, or `stop()`.
 - `stop()` requests the loop exit; it lands within one idle poll interval (capped at 20 ms) **when the driver's read is non-blocking** (`min 1 time 0`, or an injected driver that returns `null` promptly). A driver blocking in `read()` is not interrupted — the stop takes effect on the first pass after it wakes.
