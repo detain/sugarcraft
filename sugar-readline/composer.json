@@ -23,7 +23,8 @@
     ],
     "support": {
         "issues": "https://github.com/sugarcraft/sugar-readline/issues",
-        "source": "https://github.com/sugarcraft/sugar-readline"
+        "source": "https://github.com/sugarcraft/sugar-readline",
+        "docs": "https://sugarcraft.github.io/lib/sugar-readline.html"
     },
     "require": {
         "php": "^8.3",
