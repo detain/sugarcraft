@@ -611,8 +611,8 @@ environment variable to select which PTY backend to use:
 Unrecognised values throw `\InvalidArgumentException` naming the
 valid options.
 
- The termios backend follows a similar pattern via `SUGARCRAFT_TERMIOS`
- — see [Termios backends](#termios-backends).
+The termios backend follows a similar pattern via `SUGARCRAFT_TERMIOS`
+— see [Termios backends](#termios-backends).
 
 ### Termios backends
 
