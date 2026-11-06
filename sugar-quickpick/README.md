@@ -294,7 +294,7 @@ public function view(string $backgroundView): string
 The method was originally declared `View()`. It is now lowercase `view()`,
 matching PSR-1 and the Model–Update–View render contract of {@see Model::view()}. Nothing to
 migrate: PHP resolves method names case-insensitively, so an existing
-`$hermit->View($bg)` call still binds here.
+`$h->View($bg)` call still binds here.
 
 ## API — Item interface
 
