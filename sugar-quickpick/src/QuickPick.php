@@ -203,7 +203,16 @@ final class QuickPick
 
     /**
      * Set the overlay window height in ROWS of the frame — header and
-     * separator included, so the visible item count is $h - 2.
+     * separator included, so the visible item count is $h - 2, minus one
+     * more row when the overflow marker is needed (and only while more
+     * than one row would remain).
+     *
+     * Two chrome states live in the item area: the overflow marker
+     * '  ↕ showing %d-%d of %d' and, when a non-empty filter matches
+     * nothing, '  no matches'. Item rows are truncateAnsi-clipped to the
+     * frame; these two are pad-only, so on a frame narrower than the text
+     * they spill past the right border rather than clipping (cosmetic
+     * overflow; clipping would change behavior — owner call).
      *
      * Clamped to a minimum of 2: below that no item row can ever exist
      * (the frame would be nothing but chrome). helpBar/statusBar rows

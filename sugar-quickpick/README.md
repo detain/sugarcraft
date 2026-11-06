@@ -209,8 +209,14 @@ public function setPrompt(string $prompt): self
 public function setMatchStyle(string $ansiStyle): self
 
 // Set overlay window height in rows INCLUDING header+separator, so the
-// visible item count is height − 2 (clamped to a minimum of 2). HelpBar and
-// StatusBar rows append BELOW this height.
+// visible item count is height − 2 (clamped to a minimum of 2) — minus one
+// more row when the overflow marker is needed. Two chrome states live in
+// the item area and consume an item row: the marker `  ↕ showing %d-%d of
+// %d` (1-based visible window, on overflow) and, when a non-empty filter
+// matches nothing, `  no matches`. Both are pad-only — never truncated to
+// width — so on a frame narrower than the text they spill past the right
+// border instead of clipping (cosmetic; clipping them would be a behavior
+// change, owner call). HelpBar and StatusBar rows append BELOW this height.
 public function setWindowHeight(int $h): self
 
 // Set overlay width. 0 (default) = auto: the computed prompt+items width is
