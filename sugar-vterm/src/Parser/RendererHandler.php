@@ -12,9 +12,10 @@ use SugarCraft\AnsiParser\Parser\SubparamsAwareHandler;
  * Renderer-path {@see Handler} that finally routes ESC bytes to the grid.
  *
  * sugar-ansi-parser's {@see HandlerAdapter} — the shared bridge from the parser to a
- * {@see CsiHandlerImpl} + OSC handler pair — implements `escDispatch()` as an
- * empty no-op (sugar-ansi-parser/src/Parser/HandlerAdapter.php:128-130). Every
- * two-byte escape therefore vanished on the vcr renderer path: `ESC 7`/`ESC 8`
+ * {@see CsiHandlerImpl} + OSC handler pair — handles `escDispatch()` by forwarding
+ * it to an optional fallback handler (sugar-ansi-parser/src/Parser/HandlerAdapter.php:143-148);
+ * the renderer path wires no fallback (`src/Terminal.php:73`), so every
+ * two-byte escape was dropped there: `ESC 7`/`ESC 8`
  * (DECSC/DECRC), `ESC D`/`E`/`M` (IND/NEL/RI), `ESC H` (HTS), `ESC c` (RIS)
  * and the whole `ESC # …` line-rendition family never reached the cells, even
  * though the emulator handles all of them.
