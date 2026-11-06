@@ -166,6 +166,19 @@ the bytes actually written to the terminal is the consumer's job (e.g.
 candy-code's renderer scans, then strips; `Manager::scan()` returns the
 stripped, display-ready frame).
 
+## Accessibility
+
+Zone tags are private-use-area codepoints: screen readers announce them as
+Dotted-Circle garbage or "unknown character" noise, and the mouse
+trackers (hover, drag, multi-click) are pointer-only affordances. Ship a
+keyboard path for every zone-driven action, print ONLY the stripped frame —
+at the `Zones\Manager` layer `scan()` returns it display-ready, and at the
+primitive layer the standalone tag remover is `Scan::strip()` (`Scanner`
+never modifies the string; stripping what you print is the consumer's job)
+— never `echo` marked bytes. Follow the mode-lifecycle rules under
+[Mouse-tracking modes](#mouse-tracking-modes) so assistive terminals are
+not flooded by leaked `?1003` motion reporting.
+
 ## Scan rules
 
 The instance method `parse()` (call it on a `new Scan()`, or go through
@@ -580,16 +593,6 @@ text selection is addressed like a file:
 
 `SelectionRange`'s promoted fields are named (`startRow`, `startCol`, …),
 so construction from a `range()` result is unambiguous.
-
-### Accessibility
-
-Zone tags are private-use-area codepoints: screen readers announce them as
-Dotted-Circle garbage or "unknown character" noise, and the mouse
-trackers (hover, drag, multi-click) are pointer-only affordances. Ship a
-keyboard path for every zone-driven action, print ONLY the stripped frame
-(`Manager::scan()` returns it display-ready — never `echo` marked bytes),
-and follow the mode-lifecycle rules above so assistive terminals are not
-flooded by leaked `?1003` motion reporting.
 
 ### Tips
 
