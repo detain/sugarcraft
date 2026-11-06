@@ -830,11 +830,15 @@ behind it. See [`PERMISSIONS.md`](PERMISSIONS.md) and [`HOOKS.md`](HOOKS.md).
 
 ## Tools
 
-`src/Tools/BuiltIn/` holds **forty-four** concrete `Tool` classes: <!-- tools:class-list:begin -->`AdvisorTool`, `ApplyPatch`, `AskUserTool`, `Bash`, `BoardPostTool`, `BoardReadTool`, `CanvasTool`, `Compress`, `Doctor`, `Edit`, `GenerateImage`, `GenerateVideo`, `Glob`, `Grep`, `InterruptAgentTool`, `Ls`, `LspTool`, `McpCallTool`, `McpListTool`, `MemoryTool`, `NotebookEdit`, `PlanExitTool`, `Prune`, `PtyRun`, `Read`, `Recall`, `RepoMapTool`, `ScheduleTool`, `ScriptTool`, `SendMessageTool`, `ShellOutput`, `ShellSend`, `ShellStop`, `SkillTool`, `SkillWorkshop`, `SkillsSearch`, `SubagentsTool`, `TaskTool`, `TeamTool`, `Todo`, `WebFetch`, `WebSearch`, `WorkflowTool`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` ships forty-two of them —
-`Task` last, gated on the launch holding an `AgentManager` — plus one
-`McpToolBridge` per advertised MCP tool. The other two, `BoardReadTool` and
-`BoardPostTool`, are on no launch: `TaskTool` hands them, bound to the batch's
-shared board, to the runs of a parallel `Task` batch's members.
+`src/Tools/BuiltIn/` holds **forty-four** concrete `Tool` classes: <!-- tools:class-list:begin -->`AdvisorTool`, `ApplyPatch`, `AskUserTool`, `Bash`, `BoardPostTool`, `BoardReadTool`, `CanvasTool`, `Compress`, `Doctor`, `Edit`, `GenerateImage`, `GenerateVideo`, `Glob`, `Grep`, `InterruptAgentTool`, `Ls`, `LspTool`, `McpCallTool`, `McpListTool`, `MemoryTool`, `NotebookEdit`, `PlanExitTool`, `Prune`, `PtyRun`, `Read`, `Recall`, `RepoMapTool`, `ScheduleTool`, `ScriptTool`, `SendMessageTool`, `ShellOutput`, `ShellSend`, `ShellStop`, `SkillTool`, `SkillWorkshop`, `SkillsSearch`, `SubagentsTool`, `TaskTool`, `TeamTool`, `Todo`, `WebFetch`, `WebSearch`, `WorkflowTool`, `Write`<!-- tools:class-list:end -->. `Bootstrap::tools()` can carry forty-two of them — the `ToolCatalog::onLaunch()`
+set. Thirty-eight ship on every launch; the other four join conditionally:
+`McpListTool`, `McpCallTool` and `AdvisorTool` (the three
+`ToolCatalog::CONDITIONAL_BUILDS`, reached only on the deferred-MCP shape and a
+resolved `advisorModel`) and `Task`, last, gated on the launch holding an
+`AgentManager` — plus one `McpToolBridge` per advertised MCP tool. The other
+two, `BoardReadTool` and `BoardPostTool`, are on no launch: `TaskTool` hands
+them, bound to the batch's shared board, to the runs of a parallel `Task`
+batch's members.
 
 Domain matters here: **forty-four is the count of *wired* tools, not of *usable*
 ones.** `LspTool` is reachable on every launch but answers every call with a "no
