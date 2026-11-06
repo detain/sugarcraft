@@ -64,7 +64,9 @@ use SugarCraft\Sql\Core\Msg\ReloadReportMsg;
 use SugarCraft\Sql\Core\Msg\TableRowsLoadedMsg;
 
 /**
- * SQLite browser as a SugarCraft Model. Three panes:
+ * SQL client as a SugarCraft Model - speaks SQLite, MySQL, MariaDB and
+ * PostgreSQL through the PDO drivers, with Workbench-style admin panels.
+ * Four focus panes:
  *
  *   - Tables: a list of tables. Enter loads its rows into the
  *             rows pane; the rows pane's title updates accordingly.
@@ -72,8 +74,14 @@ use SugarCraft\Sql\Core\Msg\TableRowsLoadedMsg;
  *   - Query:  an editor — type SQL, Ctrl+Enter to run. Errors land
  *             on a status line; the rowset replaces the rows pane.
  *
+ *   - Admin:  server-introspection dashboard pages (process list,
+ *             variables, status, query stats, dashboard, table stats,
+ *             Performance Schema, debug). Needs a MySQL or PostgreSQL
+ *             server; on SQLite the server context is empty.
+ *
  * Tab cycles focus; j/k or arrows move the cursor in list panes;
- * `q` quits.
+ * `q` quits from the Tables and Rows panes and returns to Tables
+ * from the Admin pane (App::handleKey routing).
  *
  * Query editor:
  *   - The Query pane is backed by a sugar-forms {@see TextArea} — it owns

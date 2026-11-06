@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Sql;
 
 /**
- * Which of the three panes (tables list, rows preview, query editor)
- * has focus in the candy-sql shell. Tab cycles through them in the
- * order returned by {@see next()}.
+ * Which of the four panes (tables list, rows preview, query editor,
+ * admin dashboard) has focus in the candy-sql shell. Tab cycles through
+ * them in the order returned by {@see next()}.
  *
  * When Pane::Admin is active, the admin dashboard page is shown
  * instead of the normal query browser.

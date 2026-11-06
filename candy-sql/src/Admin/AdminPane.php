@@ -6,8 +6,11 @@ namespace SugarCraft\Sql\Admin;
 
 /**
  * Admin dashboard pages split into two sections:
- * - Management: process list, variables, status
- * - Performance: query stats, connection stats, table stats
+ * - Management: process list, variables, status, debug
+ * - Performance: query stats, dashboard, table stats, performance schema
+ *
+ * Section membership is the truth of section(); no "connection stats"
+ * page exists - per-connection data lives on the Process List page.
  */
 enum AdminPane: string
 {
