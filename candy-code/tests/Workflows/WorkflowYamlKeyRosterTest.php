@@ -266,7 +266,9 @@ final class WorkflowYamlKeyRosterTest extends TestCase
             'the stage-shape vocabulary is one pinned list'
         );
 
-        $source = \file_get_contents(__DIR__ . '/../../src/Workflows/WorkflowRegistry.php');
+        // The roster lives on this class; read the file reflection says it was
+        // compiled from — never a hand-spelled path that could drift.
+        $source = (string) \file_get_contents($registry->getFileName());
         self::assertIsString($source);
         // The mutual-exclusion loop must consume the roster, not re-list it;
         // a second hand-copied 12-key array would let a new arm silently

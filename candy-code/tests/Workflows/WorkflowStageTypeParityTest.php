@@ -51,8 +51,10 @@ final class WorkflowStageTypeParityTest extends TestCase
 
     public function testTheEngineAndTheLinterBothConsumeTheSharedList(): void
     {
-        $engine = (string) file_get_contents(__DIR__ . '/../../src/Workflows/WorkflowEngine.php');
-        $linter = (string) file_get_contents(__DIR__ . '/../../src/Workflows/WorkflowLinter.php');
+        // Read each class' OWN file (reflection), not a hand-spelled path: the
+        // pin must follow the source it guards even if the tree is rearranged.
+        $engine = (string) file_get_contents((new \ReflectionClass(WorkflowEngine::class))->getFileName());
+        $linter = (string) file_get_contents((new \ReflectionClass(WorkflowLinter::class))->getFileName());
 
         self::assertStringContainsString('in_array($stageType, Workflow::STAGE_TYPES, true)', $engine);
         self::assertStringContainsString('= Workflow::STAGE_TYPES;', $linter);
