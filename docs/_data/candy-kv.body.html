@@ -6,7 +6,7 @@
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Kv\Store;
 
-$store = new Store();                       // SQLite files under ~/.config/skate
+$store = new Store();                       // SQLite files under $XDG_CONFIG_HOME/skate (else ~/.config/skate)
 
 $store-&gt;set('user:1', 'Alice');
 $store-&gt;set('user:2', 'Bob');
@@ -35,7 +35,7 @@ candy-kv import json backup.json     # atomic across databases by default</code>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>SQLite storage</strong><span>One SQLite file per named database under the data directory (<code>~/.config/skate</code> by default, files at <code>0600</code>); <code>key@db</code> picks the database and reads never create files.</span></div>
+      <div class="feature"><strong>SQLite storage</strong><span>One SQLite file per named database under the data directory (<code>$XDG_CONFIG_HOME/skate</code>, else <code>~/.config/skate</code>; files at <code>0600</code>); <code>key@db</code> picks the database and reads never create files.</span></div>
       <div class="feature"><strong>Glob and fuzzy listing</strong><span>Case-sensitive <code>*</code> / <code>?</code> glob patterns (<code>\*</code> spells a literal star), reverse order, keys-only or values-only modes, and <code>fuzzyFilter()</code>.</span></div>
       <div class="feature"><strong>TTL support</strong><span>Expire keys after a set time; expired rows are invisible to readers immediately and stay on disk until <code>pruneExpired()</code> reclaims them.</span></div>
       <div class="feature"><strong>Binary values and transactions</strong><span>Store raw bytes as binary entries (<code>rawValue()</code> decodes them) and group writes in a transaction.</span></div>
