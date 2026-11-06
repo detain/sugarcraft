@@ -69,9 +69,10 @@ Controls:
   m            cycle through rendering modes
   q / Esc      quit
 
-Environment variables:
-  SUGAR_VIDEO_COLS  terminal width in cells (default: auto-detect)
-  SUGAR_VIDEO_ROWS  terminal height in rows (default: auto-detect)
+Environment variables (this example always seeds an explicit size; the
+library auto-detects only when a Reel opens without withSize()):
+  SUGAR_VIDEO_COLS  terminal width in cells (default: 80, clamped to 10-200)
+  SUGAR_VIDEO_ROWS  terminal height in rows (default: 24, clamped to 5-80)
 
 Examples:
   php {$prog}
