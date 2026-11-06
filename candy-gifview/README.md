@@ -110,7 +110,8 @@ The key table is fixed in the player model; keys are not rebindable.
   replacement file can stall one tick — and a reload that trips any cap
   above keeps the stale frames rather than blanking the screen.
 - Frames are decoded at the launch size: growing the window reveals no
-  extra detail until the next file-change reload, while shrinking
+  extra detail — and not even on a `--watch` reload, which re-decodes at the
+  frozen launch budget; only a restart re-queries the terminal. Shrinking
   re-clamps and hides.
 - Startup decodes before the first frame is painted; a line announcing the
   decode is written to stderr first, so a long wait is at least not silent.
