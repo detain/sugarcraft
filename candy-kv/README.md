@@ -57,8 +57,7 @@ chmod +x candy-kv
 YAML import/export works out of the box with candy-kv's own flat YAML dialect.
 Installing [symfony/yaml](https://packagist.org/packages/symfony/yaml)
 (`composer require symfony/yaml`) upgrades the YAML route to the full
-component — same data contract, sturdier quoting. Source-tree builds report
-`--version` as `dev-master`; phar builds carry their stamped version.
+component — same data contract, sturdier quoting.
 
 ## Quick Start
 
@@ -129,6 +128,9 @@ candy-kv --version
   is not an error either — it keeps the tab default, unlike the
   value-hungry flags, which refuse a missing or flag-like next token loudly
   (exit 2).
+- `--version` reports the phar build's stamped version when the archive
+  carries one; source-tree and checkout builds honestly report `dev-master`
+  rather than inventing a semver for unreleased code.
 
 ### Exit codes
 
