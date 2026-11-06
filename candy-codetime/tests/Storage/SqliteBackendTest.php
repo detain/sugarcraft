@@ -29,6 +29,13 @@ final class SqliteBackendTest extends TestCase
         if (is_file($this->dbPath)) {
             unlink($this->dbPath);
         }
+        // The WAL posture leaves sidecars behind; the temp dir stays clean.
+        foreach (['-wal', '-shm'] as $suffix) {
+            $sidecar = $this->dbPath . $suffix;
+            if (is_file($sidecar)) {
+                unlink($sidecar);
+            }
+        }
     }
 
     public function testInsertAndQuery(): void
@@ -191,5 +198,45 @@ final class SqliteBackendTest extends TestCase
         );
         sort($projects);
         $this->assertSame(['holder', 'waiter'], $projects);
+    }
+
+    /**
+     * The ctor's pragma posture must be live on the connection it hands out.
+     * synchronous and cache_size are per-connection settings, so they are
+     * read back through the backend's own handle — a second connection would
+     * answer with SQLite's defaults, not the ctor's arms (journal_mode=WAL
+     * is persistent in the file header, so it would survive either way).
+     */
+    public function testTheConstructorArmsThePragmaPostureOnItsOwnConnection(): void
+    {
+        $db = (new \ReflectionProperty(SqliteBackend::class, 'db'))->getValue($this->backend);
+        $this->assertInstanceOf(\SQLite3::class, $db);
+        $this->assertSame('wal', strtolower((string) $db->querySingle('PRAGMA journal_mode')));
+        // SQLITE_BRIEF-free numbering: 1 == NORMAL, 2 == FULL, 3 == EXTRA.
+        $this->assertSame(1, (int) $db->querySingle('PRAGMA synchronous'));
+        // Spelled back exactly: negative cache_size is kibibytes (64 MB).
+        $this->assertSame(-64000, (int) $db->querySingle('PRAGMA cache_size'));
+    }
+
+    /**
+     * Privacy sweep over the WAL sidecars: a -wal file left loose by an
+     * earlier build (or an umask that let SQLite create it 0644) is
+     * tightened by the next open, like the main database already was.
+     */
+    public function testALooseWalSidecarIsTightenedByTheNextOpen(): void
+    {
+        $this->backend->insert(new Heartbeat(time: 1718900000, project: 'p', language: 'php', file: 'a.php'));
+        $sidecar = $this->dbPath . '-wal';
+        // The first write in WAL mode materialises the sidecar while this
+        // connection stays open — fail loud, never skip, if that changes.
+        $this->assertFileExists($sidecar);
+        $this->assertTrue(chmod($sidecar, 0o644));
+        clearstatcache(true, $sidecar);
+        $this->assertSame(0o644, fileperms($sidecar) & 0o777);
+
+        new SqliteBackend($this->dbPath); // second open runs the sweep
+
+        clearstatcache(true, $sidecar);
+        $this->assertSame(0o600, fileperms($sidecar) & 0o777);
     }
 }
