@@ -60,11 +60,12 @@ final class Cli
 
     /**
      * Frame-count × viewport-cells budget for the resident frame list,
-     * checked while draining the decoder. At the engine's 256-frame window
-     * this allows a full 60000-cell (1000×60-style) animation before
-     * refusing; it exists so a wide-terminal decode of a 256-frame file
-     * stays bounded well before the engine's own per-frame grid ceilings
-     * (Decoder::MAX_CELLS / MAX_TOTAL_PIXELS) become the only defence.
+     * checked while draining the decoder. The 6 million cells cover the
+     * engine's full 256-frame window only up to about 23,437 cells per
+     * frame (256 × 23,438 crosses the budget); at a 60,000-cell viewport a
+     * 256-frame file therefore refuses on frame 101. It exists so a wide
+     * terminal's decode stays bounded well before the engine's own per-frame
+     * grid ceilings (Decoder::MAX_CELLS / MAX_TOTAL_PIXELS) become the only defence.
      */
     public const MAX_RESIDENT_CELLS = 6_000_000;
 
