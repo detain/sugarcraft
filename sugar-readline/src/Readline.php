@@ -252,12 +252,16 @@ final class Readline
      * echoes typed characters itself, so multi-key chords (arrows, Ctrl
      * combos, vi/emacs bindings) only work on a real terminal after the
      * CALLER puts the TTY in raw mode — the switch is
-     * `stty -icanon -echo -isig min 1 time 0`: `-isig` MUST be off,
+     * `stty -icanon -echo -isig -ixon min 1 time 0`: `-isig` MUST be off,
      * otherwise Ctrl+C (and Ctrl+\\ / Ctrl+Z) are intercepted by the
      * discipline as signals BEFORE the library ever sees them, a SIGINT
      * death skips the caller's restore, and the shell is left in a broken
      * cooked state. With ISIG off, ctrl_c arrives as a key the prompt
-     * handles as an abort. Restore the saved state on EVERY exit path —
+     * handles as an abort. `-ixon` MUST be off for the same reason on the
+     * output side: with flow control enabled the discipline swallows
+     * Ctrl+S (0x13, XOFF) as a stop-output request instead of letting
+     * forward history search open, and the terminal freezes until Ctrl+Q
+     * (0x11, XON) resumes it. Restore the saved state on EVERY exit path —
      * capture `$saved=$(stty -g)` before the switch and run `stty "$saved"`
      * in a finally block. examples/interactive.php shows the guarded recipe, and
      * sugar-core\Util\RawMode / sugar-pty offer turnkey versions. Piped or

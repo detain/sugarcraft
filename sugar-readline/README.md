@@ -251,7 +251,7 @@ the terminal in non-canonical mode around the loop and restore it afterwards:
 $isTty = stream_isatty(STDIN);
 $saved = $isTty ? trim((string) shell_exec('stty -g')) : '';
 if ($isTty) {
-    shell_exec('stty -icanon -echo -isig min 1 time 0');
+    shell_exec('stty -icanon -echo -isig -ixon min 1 time 0');
 }
 try {
     $prompt = Readline::fromStdin()->run(TextPrompt::new('> '), STDOUT);
@@ -272,6 +272,12 @@ is also POSIX-only — there is no such command on Windows.
 kills the process **before** the `finally` restore runs — the shell is then
 left with echo and canonical mode off. With `-isig`, Ctrl+C arrives as an
 ordinary byte the prompt aborts on, and the restore always executes.
+
+`-ixon` matters for the same reason: with output flow control left enabled,
+the discipline swallows Ctrl+S (0x13, XOFF) as a stop-output request before
+the prompt ever sees it, so forward history search is unreachable and the
+terminal simply freezes until Ctrl+Q (0x11, XON) resumes it. With `-ixon`,
+Ctrl+S arrives as an ordinary byte and the prompt opens forward search.
 
 The captured `-g` string is implementation-specific — GNU `stty` prints it as
 dense single tokens (`-icanon`) while BSD/macOS `stty` uses space-separated
@@ -321,7 +327,7 @@ sequence a terminal can send.
 - `y` / `n` (any case) — set Yes/No directly in ConfirmationPrompt (Enter still commits); there the Left/Right arrows alias to the same one-keystroke Yes/No picks
 - `Key::Backspace` / `Key::Delete` — delete characters; Ctrl+H erases before the cursor (both the BS 0x08 and DEL 0x7F spellings bind to Backspace); Ctrl+D deletes under the cursor and, on an empty buffer, aborts (like GNU `delete-char-or-eof`)
 - `Key::CtrlU` / `Key::CtrlK` — delete to start / end of line; Ctrl+W deletes the previous word
-- `Key::CtrlR` / `Key::CtrlS` — reverse / forward incremental history search
+- `Key::CtrlR` / `Key::CtrlS` — reverse / forward incremental history search; without the `-ixon` recipe (see *Terminal mode* above) the discipline intercepts Ctrl+S as XOFF and freezes output instead of opening forward search — Ctrl+Q (XON) unfreezes it
 - Ctrl+Z / Ctrl+Y — undo / redo the last edit run (a run of consecutive typing collapses into one undo step)
 - Ctrl+L — `Readline` clears the screen and repaints the prompt
 - `Key::PageUp` / `Key::PageDown` — jump the selection list by one page
@@ -419,7 +425,10 @@ identically across vi submodes, so a host that needs a visible
 ### Incremental history search
 
 With a history attached (`withHistory()`), Ctrl+R enters reverse
-incremental search and Ctrl+S forward search, in any mode. Typed characters
+incremental search and Ctrl+S forward search, in any mode. Ctrl+S only
+arrives at all on a terminal with flow control switched off (the `-ixon`
+recipe above): otherwise the discipline takes 0x13 as an XOFF stop-output
+request and Ctrl+Q sends XON to resume. Typed characters
 refine the query, repeated Ctrl+R/Ctrl+S steps through older/newer matches,
 Enter accepts the match into the buffer (without submitting), and
 Escape/Ctrl+G cancels back to the original line — and so does Ctrl+C while a

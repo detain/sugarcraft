@@ -36,11 +36,15 @@ echo "Type 'quit' to exit.\n\n";
 // raises SIGINT and kills this process BEFORE the shutdown restore runs,
 // leaving the shell with echo off. With -isig, Ctrl+C arrives as an ordinary
 // byte that the prompt aborts on.
+// -ixon is REQUIRED for the Ctrl+S story: with flow control left on, the
+// discipline swallows 0x13 as an XOFF stop-output request — forward history
+// search never opens and output freezes until Ctrl+Q sends XON. With -ixon,
+// Ctrl+S arrives as an ordinary byte that opens forward search.
 $isTty = stream_isatty(STDIN);
 $savedMode = '';
 if ($isTty) {
     $savedMode = trim((string) shell_exec('stty -g'));
-    shell_exec('stty -icanon -echo -isig min 1 time 0');
+    shell_exec('stty -icanon -echo -isig -ixon min 1 time 0');
     register_shutdown_function(static function () use ($isTty, $savedMode): void {
         if ($isTty && $savedMode !== '') {
             shell_exec('stty ' . escapeshellarg($savedMode));
