@@ -16,11 +16,12 @@ zone a mouse event landed in. One package, two layers:
   is under this cell"), `Scanner`, `ZoneClickTracker` press/release dedup, and the
   `Selection` / `SelectionRange` text-selection machine. No Manager wiring
   needed; each consumer owns its own `Scanner` instance.
-- **Zones façade (`SugarCraft\Mouse\Zones`)** — the app-facing bubblezone
-  surface: a `Manager` that owns a zone registry, the package-level `Zones`
-  facade, and the hover / drag / multi-click trackers. The façade delegates
-  marker encoding and geometry to the primitive layer **in this same
-  package** — the wire format lives in exactly one place.
+- **Zones `Manager` layer (`SugarCraft\Mouse\Zones`)** — the app-facing
+  bubblezone surface: a `Zones\Manager` that owns a zone registry, the
+  package-level `Zones` facade, and the hover / drag / multi-click trackers.
+  The `Manager` layer delegates marker encoding and geometry to the
+  primitive layer **in this same package** — the wire format lives in
+  exactly one place.
 
 ```
 composer require sugarcraft/sugar-mouse
@@ -265,7 +266,7 @@ Interop floor: `1002`/`1003` are the xterm family — Konsole ships no 1003
 and tmux re-encodes reports — so design for `1000`-only degradation when
 motion reports never arrive.
 
-## Zones façade (`SugarCraft\Mouse\Zones`)
+## Zones `Manager` layer (`SugarCraft\Mouse\Zones`)
 
 Wrap rendered chunks with named markers, let the `Manager` discover their
 bounding boxes, then ask zones whether a
@@ -487,7 +488,7 @@ ends the drag, even when the origin zone has vanished from the manager
 **Click vs. zero-distance drag:** a press and release in the same spot of
 the same zone satisfies both state machines — `ClickCounter` counts it and
 `DragTracker` emits `ZoneDragStartMsg` followed by `ZoneDragEndMsg` with
-`currentZone === originZone`. The façade ships no travel threshold
+`currentZone === originZone`. Neither tracker ships a travel threshold
 (bubblezone has none either); if a widget wants EITHER a click OR a drag
 per gesture, gate drag effects on a start/end box difference or on at
 least one emitted `ZoneDragMoveMsg`.
@@ -678,7 +679,7 @@ Runnable, self-explanatory files under `examples/` (after
 ## Where this fits
 
 The whole stack consumes this package through one of its two layers:
-sugar-widgets and sugar-gallery drive the `Zones` façade; candy-code's TUI
+sugar-widgets and sugar-gallery drive `Zones\Manager` instances; candy-code's TUI
 runs the primitive `Selection` / `SelectionRange` machine for its
 mouse text-selection, and its renderer owns the sentinel sweep described
 above.
