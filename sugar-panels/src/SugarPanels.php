@@ -53,7 +53,10 @@ final class SugarPanels
     private const MAX_PENDING_ESCAPES = 8192;
 
     /**
-     * Absolute cursor home (CUP to row 1, column 1) prefixed to EVERY frame.
+     * Absolute cursor home (CUP to row 1, column 1) prefixed to every frame with
+     * at least one column. A zero-width render is the degenerate case: its rows
+     * are empty strings joined by bare newlines, with no protocol at all (pinned
+     * in EdgeCaseTest and FrameProtocolTest).
      *
      * A frame is only replayable if the terminal knows where it starts. Diff
      * ops address cells absolutely, but the encoder skips a leading CUP when
@@ -182,7 +185,8 @@ final class SugarPanels
      * On subsequent renders with the same dimensions, emits only the
      * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
      *
-     * FRAME PROTOCOL — every returned string is self-positioning: it opens with
+     * FRAME PROTOCOL — every frame with at least one column is self-positioning:
+     * it opens with
      * an absolute cursor home (ESC [ H), so a full frame and a delta both paint
      * from row 1 column 1 of the viewport no matter where the previous frame
      * left the cursor. Diff ops address cells absolutely but the encoder omits a

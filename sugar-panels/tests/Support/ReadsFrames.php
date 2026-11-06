@@ -7,7 +7,8 @@ namespace SugarCraft\Panels\Tests\Support;
 /**
  * Peels the frame protocol off a rendered string so layout tests can read cells.
  *
- * Every frame returned by SugarPanels::render() is self-positioning: it opens
+ * Every frame returned by SugarPanels::render() with at least one column is
+ * self-positioning: it opens
  * with an erase-in-display (only after a viewport resize) and then a cursor
  * home. Those tokens are protocol, not content, and the pins that use this
  * helper are about which glyph lands in which cell — so they compare the body.

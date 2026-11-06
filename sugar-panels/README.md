@@ -27,7 +27,7 @@ sugar-panels — a box-drawing layout engine that composes terminal content into
 - **Natural sizing** — `totalWidth()` / `totalHeight()` report the footprint a node asks for, measured from content
 - **Constraint-solved sizing** — flex distribution and the legacy `min*` hint split share one engine: `SugarCraft\Constraints\GreedySolver` from `sugarcraft/sugar-constraints` solves both dispatch paths, so a row's child regions tile the available span by the same arithmetic
 - **Leaf content** — leaf nodes take `string` (cast a `Stringable` yourself; the signature is strict)
-- **Stateful diff renderer** — first paint and every resize emit the full frame; later same-size renders emit only diff ops from the per-instance frame cache. Every frame is self-positioning (see *Frame protocol*). Call `resetPreviousFrame()` whenever terminal state may be unknown (clear, alt-screen switch, text capture). Outputs plain ANSI strings; works with any TUI framework
+- **Stateful diff renderer** — first paint and every resize emit the full frame; later same-size renders emit only diff ops from the per-instance frame cache. Every frame with at least one column is self-positioning (see *Frame protocol*). Call `resetPreviousFrame()` whenever terminal state may be unknown (clear, alt-screen switch, text capture). Outputs plain ANSI strings; works with any TUI framework
 - **Immutable nodes** — every `with*()` returns a *new* `Node`; an existing node is never modified, so keep the chained result
 
 ## Install
@@ -290,7 +290,8 @@ spans stay intact), computes `current->diff(previous)` (from
 the delta ANSI ops through the cellbuffer `DiffEncoder`. The current frame then
 replaces the stored one for the next render.
 
-**Frame protocol — every returned string is self-positioning.** Each frame opens
+**Frame protocol — every frame with at least one column is self-positioning.**
+Such a frame opens
 with a cursor home (`ESC [ H`), because diff ops address cells absolutely and the
 encoder omits the move when the first change is already at (0,0): without the
 home, a frame paints wherever the last one happened to leave the cursor. A full
@@ -318,7 +319,7 @@ the whole grid.
 | Input | Behaviour |
 |-------|-----------|
 | `render()` viewport width/height | Negative, or larger than `MAX_VIEWPORT_DIMENSION` per side, or more than `MAX_VIEWPORT_CELLS` in total → `InvalidArgumentException` **before** anything is allocated. A viewport is host input (a winsize read, a tmux resize), so the failure is loud rather than an out-of-memory death |
-| `render()` zero width or height | Valid: the frame paints empty, costs no protocol bytes, and leaves no diff state behind — a collapsed pane cannot poison the next size |
+| `render()` zero width or height | Valid: nothing paints, no escape bytes are emitted, and no diff state is left behind — a collapsed pane cannot poison the next size. The raw shape is degenerate though: zero height returns the empty string, zero width returns `height − 1` bare newlines — still no protocol, but a host that writes them to a real terminal will scroll |
 | `withMin*` / `withMax*` / `withPadding` / `withSpacing` / `withMargin` / `withFlex` | Negative values clamp to `0`; `max*` of `0` means "no cap". Nothing throws — a hint is a hint |
 | A container whose children collapse to zero columns | The container's own frame is painted first, then the children are skipped, so the layout still reads as a panel |
 | Leaf / title content | Repaired, not rejected (see *Trust boundary*) |
