@@ -278,6 +278,25 @@ if (Probe::reducedMotion()) {
 }
 ```
 
+### Trust boundary
+
+Detection's inputs are the env vars in the precedence table above — and,
+through phase 2, the terminfo database the `infocmp` child consults. The
+binary is launched from a fixed absolute-path roster, but the child **inherits
+the parent environment**, and it is that inherited environment which decides
+which database answers: `TERMINFO`, `TERMINFO_DIRS` and `HOME` all steer
+`infocmp`'s lookup (a search path you can inspect with `infocmp -1 -D`), and
+wherever an attacker can set environment variables the first two are
+attacker-writable. The name-position guard in `Probe\TerminfoParser` protects
+the *parse* from a hostile database; it does not vouch for the *source*. Treat
+every detection answer as a rendering hint, never as an authorization signal:
+enabling a feature, granting trust, or selecting a transport on the basis of a
+`Tc`/`RGB`/`Sixel` capability names a privilege the environment holds, not one
+this library holds. The planned code-hardening follow-up is to launch the child
+with a minimal environment (`TERM` and a fixed `PATH` only) so the database
+lookup cannot be steered at all; until it lands, assume phase-2 answers carry
+the trust level of whoever controls the process environment.
+
 ## ColorProfile Enum
 
 `ColorProfile` is the single shared color-depth vocabulary: the detection chain speaks it, `Palette`/`ProfileWriter` degrade against it, and libs that need the raw profile value consume it directly (live roster, derived from `use SugarCraft\ColorProfile\` imports: sugar-log, sugar-image, sugar-spring, sugar-video, candy-mdview). `Profile` remains only as a deprecated `class_alias` façade over it. Five of the arms are detection-emittable (`TrueColor`/`Ansi256`/`Ansi`/`Ascii`/`NoTTY` — `Ascii` lands from a falsy `FORCE_COLOR` spelling, step 2 of the ladder); `Ansi240`, `Ansi8` and `Fgbg` are request-side vocabulary only.
