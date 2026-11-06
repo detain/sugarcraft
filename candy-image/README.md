@@ -84,7 +84,7 @@ the asset for verification.
 
 | chafa flag       | status here | reason |
 |------------------|-------------|--------|
-| `--format`       | ✅ subset    | every `Mosaic::fromModeString()` arm except `chafa` (refused by design — the whole point is a viewer that never shells out). |
+| `--format`       | ✅ subset    | The CLI allow-list is `auto` `sixel` `kitty` `iterm2` `half` (`halfblock`) `quarter` (`quarterblock`) `ascii` `ansi16` `ansi256` `truecolor` `symbols`. `Mosaic::fromModeString()` knows two arms more than the CLI accepts: `chafa` (its own refusal message by design — the whole point is a viewer that never shells out) and `ansi` (halfBlock's legacy alias — refused as an unknown format). Both exit 1. |
 | `--size`         | ✅          | cells; `--width`/`--height` as explicit-leg aliases. |
 | `--dump-detect`  | ✅          | chafa's debugging gold, re-expressed over `Detect` + `TermDb` + the palette probe. |
 | `--passthrough`  | ✅ `auto`/`none` | The GNU Screen envelope **has** landed — sugar-image's `Passthrough\ScreenPassthrough` is applied automatically by detection. What refuses (exit 1, with a pointer mirroring `lang/en.php`) is *forcing* it: `tmux` and `screen` are not accepted values here; use `auto` or `none`. |
