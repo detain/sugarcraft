@@ -333,6 +333,9 @@ sugar-forms is built on five shared packages:
   widgets run on it — TextInput single-line, TextArea multi-line (TUI-3B:
   `j`/`k` rows, `v` visual selection) — and sugar-widgets and
   sugar-readline delegate to it — new bindings benefit all consumers at once.
+  In `VisualLine` mode, however, `j`/`k` step between ENTRIES (the pinned
+  horizontal CursorLeft/CursorRight vocabulary of the E736 3.2 owner ruling),
+  not rows, and `V` currently aliases `v` into character-wise selection.
   Text objects (`ci"`, `da{`, `yiw`, …) resolve through
   `VimKeyHandler::handleTextObject()`: `VimOperator` (c/d/y) +
   `TextObjectScope` (i/a) + a target key feed `TextObject::resolve()`,

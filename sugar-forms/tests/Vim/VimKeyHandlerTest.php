@@ -103,6 +103,21 @@ final class VimKeyHandlerTest extends TestCase
         $this->assertSame(VimAction::EnterInsertMode, VimKeyHandler::handle('I', VimState::Normal));
     }
 
+    public function testShiftedInsertCharsReachTheirOwnArmsNotTheFold(): void
+    {
+        // SF-6 (m18): before the dispatch fix handle() lower-cased 'A'/'I'
+        // into the shared 'a' arm, so their own arms were dead code. The
+        // visible contract stays identical (all four return
+        // EnterInsertMode — the append-at-EOL / insert-at-BOL behaviour
+        // rides the original rune into the consumer), but NOW deleting the
+        // 'A'/'I' arms reddens this pin, which it silently could not before.
+        // Insert mode must not leak character arms either way.
+        $this->assertSame(VimAction::EnterInsertMode, VimKeyHandler::handle('A', VimState::Normal));
+        $this->assertSame(VimAction::EnterInsertMode, VimKeyHandler::handle('I', VimState::Normal));
+        $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('A', VimState::Insert, VimKeyHandler::FEAT_INSERT));
+        $this->assertSame(VimAction::NoOp, VimKeyHandler::handle('I', VimState::Insert, VimKeyHandler::FEAT_INSERT));
+    }
+
     public function testNormalModeVimVisualIsNoOpWithoutVisualFeature(): void
     {
         // 'v' without FEAT_VISUAL returns NoOp

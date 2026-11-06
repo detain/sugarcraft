@@ -14,10 +14,28 @@ use SugarCraft\Core\Msg\KeyMsg;
  * VimState, and returns the corresponding VimAction to be executed by the
  * consuming model. This collapses 4 independent vim-mode codepaths into 1.
  *
- * Key format for string keys:
- *   - Single characters: 'h', 'j', 'k', 'l', 'w', 'b', '0', '$', 'x', 'i', 'a', 'A', 'I', 'v', 'd', 'y', 'p', 'u'
- *   - Special keys: 'left', 'right', 'up', 'down', 'home', 'end', 'esc', 'backspace', 'delete',
- *                   'ctrl_a', 'ctrl_e', 'ctrl_u', 'ctrl_k', 'ctrl_p', 'ctrl_n', 'ctrl_r'
+ * Key format for string keys. Only 'A' and 'I' are matched case-sensitively
+ * (their own arms, SF-6); every other single character is lower-cased before
+ * dispatch, so 'H' behaves as 'h' and 'V' as 'v'.
+ *   - Normal mode: 'h' 'l' 'j' 'k' 'w' 'b' '0' '$' 'i' 'a' 'A' 'I' 'v' 'x'
+ *     'd' 'y' 'c' 'u' 'p'; arrows 'left' 'right' 'up' 'down' (up/down step
+ *     history); 'esc' stays put. The ctrl chords match bare 'p' / 'n' / 'r'
+ *     with $ctrl = true — the single-char call form. normalizeKeyMsg() emits
+ *     'ctrl_p' etc. for the KeyMsg path, so from real keystrokes the
+ *     normal-mode chords do NOT fire (the insert-mode chords below do).
+ *   - Insert mode: 'esc'; 'left' 'right' 'up' 'down' 'home' 'end'; and the
+ *     'ctrl_*' chords 'ctrl_a' 'ctrl_e' 'ctrl_u' 'ctrl_k' (line edges,
+ *     kill-to) + 'ctrl_p' 'ctrl_n' (history) — the names normalizeKeyMsg()
+ *     actually produces, reachable from the KeyMsg path.
+ *   - Visual mode: motions 'h' 'l' 'j' 'k' 'w' 'b' '0' '$'; operators 'd'/'x'
+ *     delete the span, 'y' yanks it; 'esc' cancels.
+ *   - Visual-line mode: 'j'/'k' step between ENTRIES through CursorLeft/
+ *     CursorRight — the pinned horizontal vocabulary of the E736 3.2 / R4
+ *     owner ruling (row motion is deliberately NOT claimed here); '0' '$';
+ *     'esc' cancels.
+ *   - Names normalizeKeyMsg() may emit that reach no arm in any mode —
+ *     'backspace', 'delete', 'tab', 'enter', 'space', 'pageup', 'pagedown',
+ *     'f1'-'f12' — they land on the modes' default no-op.
  *
  * Mirrors Charmbracelet/bubbles TextInput vim mode and erikgeiser/promptkit ViMode.
  *
@@ -54,8 +72,14 @@ final class VimKeyHandler
      */
     public static function handle(string $key, VimState $state, int $features = self::FEAT_ALL, bool $ctrl = false): ?VimAction
     {
-        // Normalize the key to lowercase for matching
-        $keyLower = strtolower($key);
+        // SF-6 (m18): 'A' (append at EOL) and 'I' (insert at BOL) have their
+        // own Normal-mode arms — the distinct behaviour rides the original
+        // rune into the consuming model — so they must keep their case on
+        // dispatch; blanket lowercasing made both arms unreachable. Every
+        // other key keeps the lowercase normalisation, so multi-char
+        // spellings ('ESC') and the uppercase aliases of the remaining
+        // single chars ('H' === 'h', 'V' === 'v') stay byte-stable.
+        $keyLower = ($key === 'A' || $key === 'I') ? $key : strtolower($key);
 
         return match ($state) {
             VimState::Insert => self::handleInsertMode($keyLower, $features, $ctrl),
