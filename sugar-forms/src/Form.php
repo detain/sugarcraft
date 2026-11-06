@@ -1152,11 +1152,11 @@ final class Form implements Model
      * suitable for a status / help bar. The four navigation rows are
      * derived live from {@see self::activeKeyMap()} (m21) — the labels follow
      * whatever map the form actually uses, including custom bindings —
-     * plus any extras
-     * the focused field exposes via {@see Field::keyBindings()} when
-     * implemented (currently only used by the standard navigation set
-     * since per-field bindings vary). Mirrors the surface of huh's
-     * `KeyBinds()`.
+     * followed by the fixed next-page / prev-page rows when the form spans
+     * groups. There is no per-field extras channel: keys a field consumes
+     * beyond the map live in that field's own update() (the README
+     * field-types table inventories them) and are deliberately not rendered
+     * here. Mirrors the surface of huh's `KeyBinds()`.
      *
      * @return list<array{0:string, 1:string}>
      */

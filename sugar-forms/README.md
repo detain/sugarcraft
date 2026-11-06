@@ -105,20 +105,20 @@ $form = Form::new(
 
 ### Field types
 
-| Field         | Description                                                 | Notable knobs |
-| ------------- | ----------------------------------------------------------- | ------------- |
-| `Input`       | Single-line text (wraps `SugarCraft\Forms\TextInput\TextInput`)     | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(Validator|\Closure)`, `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool, string $echo = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` |
-| `Text`        | Multi-line text editor                                      | `withCharLimit`, `withHeight`, `withWidth`, `withValidator` |
-| `Confirm`     | Yes/no boolean                                              | `withLabels(affirmative, negative)`, `withDefault(bool)`, `withValidator(Validator|\Closure(bool):?string|null)`, `withTitleFunc`, `withDescriptionFunc` |
-| `Select`      | Single-choice list (wraps `SugarCraft\Forms\ItemList\ItemList`)     | `withOptions(...)`, `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)`, `withEnum(\BackedEnum::class)` |
-| `MultiSelect` | Multi-choice list (j/k vim keys + space to toggle)          | `withOptions(...)`, `withLimit(int)` |
-| `Note`        | Read-only paragraph; skipped by tab navigation              | `withTitle`, `withDescription`, `withHeight(int)`, `withNext(bool)`, `withNextLabel(string)` (turns it into an interactive button page) |
-| `FilePicker`  | Filesystem picker (wraps `SugarCraft\Forms\FilePicker\FilePicker`) | `withDirAllowed`, `withFileAllowed`, `withAllowedExtensions`, `withShowHidden` (starting directory via `FilePicker::new($key, $cwd)`) |
-| `Date`        | Calendar-grid date picker (`YYYY-MM-DD` value, arrow-walked grid) | `withValue(?string)`, `withValidator(Validator|\Closure|null)` |
-| `Slider`      | Numeric range slider (keyboard drag, snapping step)         | `withMin` / `withMax` / `withStep`, `withValue(int|float)`, `withValidator` |
-| `Color`       | Hex color picker with swatch preview                        | `withValue(string $hex)`, `withTruecolor(bool)` |
-| `NumberField` | Bounded numeric input — draft + committed int64-safe value on a step lattice | `withMin` / `withMax` / `withStep`, `withValue(int\|float)`, `withoutValue()` (never-set ≠ 0), `withPlaceholder`, `withWidth` |
-| `RadioPills`  | Horizontal pill row, single choice by arrows or mouse; windows the roster around the selection when a width is set | `withOptions(...)`, `withValue(label)`, `withTitle`, `withDescription`, `withTitleFunc` / `withDescriptionFunc`, `withWidth` |
+| Field         | Description                                                 | Notable knobs  Keys consumed |
+| ------------- | ----------------------------------------------------------- | -------------  ----------------- |
+| `Input`       | Single-line text (wraps `SugarCraft\Forms\TextInput\TextInput`)     | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(Validator|\Closure)`, `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool, string $echo = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)`  typing, Home/End, Left/Right, Backspace/Delete, ctrl+a / ctrl+e / ctrl+u / ctrl+k; Up/Down history recall and the Enter submit-validator run only when a custom map frees those keys (nav by default); paste not consumed |
+| `Text`        | Multi-line text editor                                      | `withCharLimit`, `withHeight`, `withWidth`, `withValidator`  full buffer editing; Enter newline and Up/Down caret rows are claimed (they arrive despite nav); ctrl+a/e/u/k + ctrl+c/x/o chords; a host PasteMsg replaces the selection; Tab indents only when a custom map frees it (default: Tab navigates) |
+| `Confirm`     | Yes/no boolean                                              | `withLabels(affirmative, negative)`, `withDefault(bool)`, `withValidator(Validator|\Closure(bool):?string|null)`, `withTitleFunc`, `withDescriptionFunc`  Left/Right or h/l answer, y / n answer; Tab toggles only when a custom map frees it (default: Tab navigates) |
+| `Select`      | Single-choice list (wraps `SugarCraft\Forms\ItemList\ItemList`)     | `withOptions(...)`, `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)`, `withEnum(\BackedEnum::class)`  list keys Up/Down or j/k, PageUp/PageDown, Home/g, End/G; the / key opens the filter (typing + Backspace narrow, Enter/Escape end it - claimed); click to position when focused |
+| `MultiSelect` | Multi-choice list (j/k vim keys + space to toggle)          | `withOptions(...)`, `withLimit(int)`  Up/Down or k/j, Home/g, End/G, Space toggles the cursor, digits 1-9 jump-toggle |
+| `Note`        | Read-only paragraph; skipped by tab navigation              | `withTitle`, `withDescription`, `withHeight(int)`, `withNext(bool)`, `withNextLabel(string)` (turns it into an interactive button page)  none (inert) |
+| `FilePicker`  | Filesystem picker (wraps `SugarCraft\Forms\FilePicker\FilePicker`) | `withDirAllowed`, `withFileAllowed`, `withAllowedExtensions`, `withShowHidden` (starting directory via `FilePicker::new($key, $cwd)`)  Up/Down, Home/End, Enter selects or enters a directory, Backspace/Left ascend, Right enters; no filter typing, no mouse |
+| `Date`        | Calendar-grid date picker (`YYYY-MM-DD` value, arrow-walked grid) | `withValue(?string)`, `withValidator(Validator|\Closure|null)`  Left/Right or h/j day, Up/Down or k/j week (claimed arrows); Shift+Left/Right and PageUp/PageDown month, Home/End month edges, Space commits; movement auto-commits |
+| `Slider`      | Numeric range slider (keyboard drag, snapping step)         | `withMin` / `withMax` / `withStep`, `withValue(int|float)`, `withValidator`  Left/Right or h/l step, Home/End clamp; mouse only when the host routes MouseMsg or calls the zone-drag API - the widget never negotiates drag itself |
+| `Color`       | Hex color picker with swatch preview                        | `withValue(string $hex)`, `withTruecolor(bool)`  Left/Right or h/l green, Up/Down or k/j blue (claimed arrows); PageUp/PageDown red, Home/End clamp green |
+| `NumberField` | Bounded numeric input — draft + committed int64-safe value on a step lattice | `withMin` / `withMax` / `withStep`, `withValue(int\|float)`, `withoutValue()` (never-set ≠ 0), `withPlaceholder`, `withWidth`  Up/Down plus or minus 1 (claimed arrows), PageUp/PageDown by tens, Home/End clamp; typing and editing ride the inner Input; Enter commits only when a custom map frees it (default: Enter submits or advances) |
+| `RadioPills`  | Horizontal pill row, single choice by arrows or mouse; windows the roster around the selection when a width is set | `withOptions(...)`, `withValue(label)`, `withTitle`, `withDescription`, `withTitleFunc` / `withDescriptionFunc`, `withWidth`  Left/Right or h/l, Home/End; pill-zone clicks when the host routes MouseMsg (press, drag and release equivalent) |
 
 All fields share a common navigation contract: `Tab` / `↓` advances,
 `Shift+Tab` / `↑` retreats (Shift+Tab arrives on the wire as CSI `Z`,
@@ -128,6 +128,33 @@ aborts. Skippable fields (e.g. plain `Note`s) are passed over silently.
 The bindings live in a {@see \SugarCraft\Forms\KeyMap} — pass your own
 via `Form::withKeyMap()` and {@see \SugarCraft\Forms\Form::keyBinds()}
 renders the active set, never the defaults.
+
+#### Keyboard & wire shapes
+
+- **Form-level chords** come from the active KeyMap (defaults: tab,
+  shift+tab — with alt+tab kept as a legacy alias entry — enter, esc and
+  ctrl+c; `keyBinds()` renders the live set, see `Form::withKeyMap()`).
+- **Wire spellings:** Shift+Tab arrives on the wire as the two-byte CSI Z
+  sequence (`\x1b[Z`) which the host decoder turns into Tab carrying shift;
+  sugar-forms itself negotiates no kitty keyboard-protocol flags, so
+  whether disambiguated chord forms (CSI 27;5u-style) ever arrive is the
+  host reader's decision.
+- **The eat order:** a field that claims a nav-bound key through
+  `consumes()` sees it *before* the form (Text, FilePicker and the focused
+  Select filter claim Enter; Date, Color, MultiSelect, NumberField and
+  Select claim the arrows). A field with `consumes() === false` — Input,
+  Confirm, Slider, RadioPills, Note — can never see a default-bound key:
+  tab, enter, esc, ctrl+c and the arrows stop at the form door. Pass a
+  custom map via `withKeyMap()` to free a key for the field; the
+  field-types table above marks which arms need that.
+  `tests/FormKeyDispatchTest.php` pins both polarities.
+- **Paste:** the host reader delivers a PasteMsg; only TextArea consumes
+  it (replacing the selection). TextInput — and NumberField's typing
+  surface — accept KeyMsg events only and drop PasteMsg (v1 limitation).
+- **History recall:** TextInput's Up/Down browse a host-populated list
+  (`withHistory()` / `addToHistory()` feed it); under the default map the
+  arrows are navigation, so recall needs a freed map (or vim-insert's
+  ctrl+p / ctrl+n chords where the host drives the VimKeyHandler).
 
 ### Forms and groups
 
