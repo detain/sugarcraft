@@ -11,7 +11,9 @@ use SugarCraft\Vterm\Cell;
  * Readonly snapshot of the terminal grid, optionally carrying the
  * scrollback ring that holds the scrolled-off rows.
  *
- * Constructed from a Buffer copy. Screen instances are always immutable.
+ * Constructed from a Buffer copy AND a cloned ring — {@see self::fromBuffer()}
+ * freezes both surfaces, so later emulator scrolling never retro-mutates a
+ * snapshot. Screen instances are always immutable.
  * Mirrors charmbracelet/x/vt Screen.
  */
 final readonly class Screen
@@ -27,10 +29,18 @@ final readonly class Screen
 
     /**
      * Build a Screen snapshot from the current Buffer state.
+     *
+     * The ring is CLONED, not stored by reference: a Screen captured at
+     * time T must keep showing the scrollback as it was at T, and the
+     * emulator keeps pushing into its live ring on every later scroll.
+     * PHP clone copies the scalar/readonly fields and detaches the
+     * `$rows` array via copy-on-write, freezing head/tail/count — the
+     * Cell objects inside ride the same value-equality law the grid copy
+     * already relies on (mutate-style APIs hand back new instances).
      */
     public static function fromBuffer(Buffer $buf, ?Scrollback $scrollback = null): self
     {
-        return new self($buf->copy(), $buf->cols, $buf->rows, $scrollback);
+        return new self($buf->copy(), $buf->cols, $buf->rows, $scrollback === null ? null : clone $scrollback);
     }
 
     /**

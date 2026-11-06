@@ -151,6 +151,34 @@ final class ScreenTest extends TestCase
         );
     }
 
+    public function testScreenSnapshotFreezesScrollbackAgainstLaterScrolling(): void
+    {
+        $terminal = new \SugarCraft\Vterm\Terminal\Terminal(cols: 4, rows: 2, scrollbackSize: 10);
+        $terminal->feed("1\r\n2\r\n3\r\n4");
+
+        $snapshot = $terminal->screen();
+        $frozenRing = $snapshot->scrollback();
+        $this->assertNotNull($frozenRing);
+        $frozenRows = $frozenRing->all();
+        $frozenLines = iterator_to_array($snapshot->linesWithHistory());
+        $this->assertSame(['1   ', '2   ', '3   ', '4   '], $frozenLines);
+
+        // More scrolling: the emulator's live ring grows, the captured
+        // snapshot must not.
+        $terminal->feed("\r\n5\r\n6");
+        $later = $terminal->screen();
+
+        $this->assertSame($frozenRows, $frozenRing->all());
+        $this->assertSame($frozenLines, iterator_to_array($snapshot->linesWithHistory()));
+        // The second capture saw the extra history — without this leg the
+        // equality pins above would stay green even if feed() never scrolled.
+        $this->assertNotSame($frozenLines, iterator_to_array($later->linesWithHistory()));
+        $this->assertCount(6, iterator_to_array($later->linesWithHistory()));
+        // Identity: each capture carries its OWN ring (pre-clone both
+        // screens held the single live ring and this assert went red).
+        $this->assertNotSame($snapshot->scrollback(), $later->scrollback());
+    }
+
     public function testLinesWithHistoryWithoutRingEqualsLines(): void
     {
         $buf = new Buffer(3, 2);
