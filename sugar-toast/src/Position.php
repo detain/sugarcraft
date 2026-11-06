@@ -41,7 +41,12 @@ enum Position
      * Compute the Y offset in a viewport of given dimensions.
      *
      * @param int $alertHeight  Number of lines this alert takes
-     * @param int $viewportHeight  Total viewport height
+     * @param int $viewportHeight  Total viewport height. Callers from
+     *                              Toast::layout() pass the COMPOSED frame
+     *                              height — max(background lines, viewport,
+     *                              stack) — not the raw viewport, so
+     *                              hit-testing with different arguments than
+     *                              view() rendered changes the rows returned.
      * @param int $stackedHeightBefore  Cumulative height of the alerts placed
      *                                  BEFORE this one: top families stack
      *                                  downward from it, while bottom and

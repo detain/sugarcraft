@@ -397,6 +397,16 @@ foreach ($toast->actionRects($background, $cols, $rows) as $n => $rect) {
 `actionRects()`/`actionAt()`/`activeAlerts()` all ignore expired alerts, so
 the clickable set is exactly what is on screen.
 
+**Pass the same frame you rendered.** These hit-tests recompute the layout
+from the arguments you give them — they do not read a saved last-frame —
+and the composed frame is `max(background lines, viewportHeight, total
+stack height)`. Calling them with the `''` / 80 / 24 defaults after
+`view($bg, $cols, $rows)` painted over a taller background therefore lays
+the boxes out against a SHORTER frame: bottom and middle rows shift, and
+the rectangles no longer describe the screen the user sees. The defaults are
+a convenience for hosts that never composite over a background; everyone
+else repeats their three `view()` arguments verbatim.
+
 ## Styled Alerts
 
 Each alert accepts explicit background, foreground, and border colours,

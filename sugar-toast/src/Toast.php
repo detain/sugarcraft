@@ -977,7 +977,13 @@ final class Toast
     /**
      * Hit-test rectangles for every rendered action button, in the same
      * coordinate system {@see view()} composites in (absolute frame rows /
-     * columns, 0-based). Zone-neutral by design: sugar-toast carries no
+     * columns, 0-based). The layout is RECOMPUTED from the arguments given —
+     * there is no saved last-frame — over a frame of max(background lines,
+     * viewportHeight, total stack height): a host that painted with a
+     * non-empty $background must pass the same three arguments here, or the
+     * default ''/80/24 assumes a shorter frame and every bottom/middle row
+     * shifts out of register with the screen. Zone-neutral by design:
+     * sugar-toast carries no
      * sugar-mouse dependency and forges no zone sentinels — hosts map their
      * own mouse events through actionAt() (or drive keyboards from this same
      * surface) and invoke the returned Action's callback themselves.
@@ -1029,8 +1035,10 @@ final class Toast
     /**
      * Which Action (if any) covers frame position ($col, $row)? Where two
      * boxes share rows, the top-most one wins; a position with no button
-     * returns null. This is the dispatch door the README's host-side
-     * mouse/keyboard recipe calls.
+     * returns null. The frame arguments are used to RECOMPUTE the layout —
+     * pass the same ones {@see view()} rendered, or the rows shift (see
+     * {@see actionRects()}). This is the dispatch door the README's
+     * host-side mouse/keyboard recipe calls.
      */
     public function actionAt(int $col, int $row, string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): ?Action
     {
