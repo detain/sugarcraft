@@ -291,7 +291,7 @@ their `401`/`426` for free; junk cookie attempts always count. The strike that
 trips a lockout is logged once.
 
 **Ingress hardening.** `ClientAddressGuard` (`--allowed-ips` /
-`--require-token`) and the `Host` check run immediately after header parsing,
+`server.allowedIps`) and the `Host` check run immediately after header parsing,
 before any body is buffered. Every request gets a 10 s header/body read
 deadline — a stalled body is answered `408` with `Connection: close` and the
 socket is torn down (idle pre-first-byte connections are dropped too) — and a
