@@ -230,6 +230,27 @@ final class ConfigTest extends TestCase
         Config::load($configPath);
     }
 
+    /**
+     * A half-configured TLS pair used to load silently: the guard demanded
+     * both keys, so an operator who set only tls_cert_path got a server
+     * that quietly stayed plain HTTP — the same false-sense-of-TLS the
+     * both-set refusal exists to prevent, reachable by one typo less.
+     */
+    public function testEitherTlsPathAloneThrows(): void
+    {
+        foreach (['tls_key_path', 'tls_cert_path'] as $half) {
+            $configPath = $this->tmpDir . '/tls-' . $half . '.yaml';
+            \file_put_contents($configPath, "http: { {$half}: \"/etc/ssl/{$half}\" }\n");
+
+            try {
+                Config::load($configPath);
+                $this->fail("setting only {$half} loaded without refusal");
+            } catch (\InvalidArgumentException $error) {
+                $this->assertStringContainsString('does NOT enable TLS', $error->getMessage());
+            }
+        }
+    }
+
     public function testTlsPathsUnsetDoesNotThrow(): void
     {
         // Defaults leave both empty — construction must succeed.

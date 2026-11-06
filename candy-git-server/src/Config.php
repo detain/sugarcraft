@@ -189,8 +189,11 @@ final class Config
 
         // No silent failures (CONTRIBUTING.md): there is no HTTPS listener yet,
         // so a configured key+cert would be a silent no-op — an operator would
-        // believe TLS is on when it is not. Fail loudly instead of pretending.
-        if ($this->tlsKeyPath !== '' && $this->tlsCertPath !== '') {
+        // believe TLS is on when it is not. Half a pair is the same lie with
+        // fewer words: a lone key_path or lone cert_path can never serve
+        // anything, and a config that loads with one set has quietly decided
+        // the operator meant plain HTTP. Refuse on either side.
+        if ($this->tlsKeyPath !== '' || $this->tlsCertPath !== '') {
             throw new \InvalidArgumentException(Lang::t('config.tls_not_supported'));
         }
 

@@ -192,7 +192,7 @@ nothing.
 | `git.allow_anonymous_read` | yes | the anonymous-read lever (default off) |
 | `http.listen_addr` | yes | **flags only** — `serve --http` binds `--http-host`/`--http-port`, never this key |
 | `http.public_url` | yes | LFS batch hrefs |
-| `http.tls_key_path`, `http.tls_cert_path` | yes | validation only — both set refuses at load (`config.tls_not_supported`); the lib never terminates TLS |
+| `http.tls_key_path`, `http.tls_cert_path` | yes | validation only — either one set refuses at load (`config.tls_not_supported`); the lib never terminates TLS |
 | `http.max_pack_bytes` | yes | the single request-body cap (pack POST + LFS object PUT) |
 | `http.user_trust_mode`, `http.trusted_proxies`, `http.auth_secret` | yes | header identity trust modes (see Authentication) |
 | `lfs.enabled` | yes | the LFS route gate |
