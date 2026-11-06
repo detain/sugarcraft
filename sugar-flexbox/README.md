@@ -271,3 +271,4 @@ MIT
 ## Credits & inspiration
 
 Design antecedent: [76creates/stickers](https://github.com/76creates/stickers); SugarCraft is developed as a native PHP project.
+The badges and CI above live in the [SugarCraft monorepo](https://github.com/detain/sugarcraft) where this library is developed; the package is published standalone as `sugarcraft/sugar-flexbox`.
