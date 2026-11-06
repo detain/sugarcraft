@@ -1775,6 +1775,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 maxRetries: $task->retries ?? 0,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $task->outputSchema,
+                // S2: the per-stage model ask; null keeps today's session-default dial.
+                model: $task->model,
                 permissionGate: $this->permissionGate,
             );
 
@@ -1928,6 +1930,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 maxRetries: $task->retries ?? 0,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $task->outputSchema,
+                // S2: the per-stage model ask; null keeps today's session-default dial.
+                model: $task->model,
                 permissionGate: $this->permissionGate,
             );
 
@@ -2062,6 +2066,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
             maxRetries: $task->retries ?? 0,
             isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
             outputSchema: $task->outputSchema,
+            // S2: the per-stage model ask; null keeps today's session-default dial.
+            model: $task->model,
             permissionGate: $this->permissionGate,
         );
 
@@ -2434,6 +2440,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 maxRetries: $task->retries ?? 0,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $task->outputSchema,
+                // S2: the per-stage model ask; null keeps today's session-default dial.
+                model: $task->model,
                 permissionGate: $this->permissionGate,
             );
             $subAgents[] = $subAgent;

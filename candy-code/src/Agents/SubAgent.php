@@ -126,6 +126,11 @@ final class SubAgent
         public readonly ?string $teammateId = null,
         // G3: decoded-trusted JSON-schema document constraining this run's terminal turn; null = free-text report.
         public readonly ?array $outputSchema = null,
+        // S2: the model THIS stage asked to dial on (the ladder in ModelChoice
+        // judges it at dispatch; a stage ask that cannot be honoured refuses).
+        // Distinct from $runModel (what actually ran) and $agent->model (preset
+        // ask); null keeps today's session-default path byte-identical.
+        public readonly ?string $model = null,
     ) {
         $this->isolation = $isolation ?? $agent->isolation ?? Isolation::None;
         $this->status = self::STATUS_PENDING;
@@ -230,6 +235,7 @@ final class SubAgent
             'team_id' => $this->teamId,
             'teammate_id' => $this->teammateId,
             'output_schema' => $this->outputSchema,
+            'model' => $this->model,
         ];
     }
 }

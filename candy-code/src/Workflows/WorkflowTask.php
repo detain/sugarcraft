@@ -24,6 +24,8 @@ final readonly class WorkflowTask
         public ?string $name = null,
         // G3: decoded-trusted JSON-schema document constraining this task's terminal turn; null = free-text report.
         public ?array $outputSchema = null,
+        // S2: the model this task asked to run on; null keeps the session's own — the ladder that judges a non-null ask lives in Agents\ModelChoice.
+        public ?string $model = null,
         /**
          * Verdict rejection, for a verification stage's verifier slot only:
          * a PCRE pattern whose MATCH against the verifier's completed output

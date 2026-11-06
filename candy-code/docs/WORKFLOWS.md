@@ -90,6 +90,7 @@ stages:                          # a LIST, never a map
     outputSchema:                # optional; map, inline JSON string, or file path
       type: object
     isolation: worktree          # optional; own git worktree for this task (or none)
+    model: claude-sonnet-4-5     # optional; run this task on a named model
 
   - name: fix
     parallel: true
@@ -229,6 +230,32 @@ never edited by an isolated run.
   that stack — a schema-constrained verifier can work in its own tree, and
   its machine-readable verdict arrives beside the note naming that tree.
 
+### `model` runs one stage on a different model
+
+`model: <id>` on a stage (or on one agent of a parallel stage, or on one
+task in a `tasks:` list) — or `->model($id)` on a PHP task — dials **that
+agent** on a named model instead of the session's. The value is trimmed and
+must name something at load; whether the session can actually SERVE the name
+is decided at dispatch by the same ladder a delegation consults (`TaskTool`'s
+model choice — one shared copy: session equality, Claude tier names, and the
+provider's real capability).
+
+- **A stage refuses; a delegation degrades.** When the ask cannot be
+  honoured, a delegated run says so in its result and continues on the
+  session's model — but a STAGE fails loudly, before the model is dialed at
+  all (`the run was not started`). A plan author who pinned a model's answer
+  never silently gets another model's.
+- **The ladder:** the stage's ask wins; `inherit` defers to the agent's own
+  preset model; naming the session's model pins nothing and changes nothing.
+  A task without `model:` dials exactly what it dials today, byte for byte.
+- **The run reports it:** an isolated ask that runs writes its dialed model
+  into the run's reported `model`, the way a Task result's note names the
+  model that actually answered.
+- **It composes:** headless `-p --model` pins one model for a whole lane; a
+  stage `model:` pins ONE agent's dial. The option is independent and stacks
+  with `outputSchema:` and `isolation:` — a fast model drafts, a strong model
+  verifies, in the same stage list.
+
 ### Everything malformed is refused, not coerced
 
 `WorkflowRegistry::parseYamlWorkflow()` raises `WorkflowLoadException` for each
@@ -253,6 +280,12 @@ of these rather than loading a workflow that quietly does less:
   `none` and `worktree` (trim- and case-insensitive): the load fails naming
   the supported spellings, and writing it on a stage that already carries a
   `tasks:` list is refused (`belongs on each task`) like its sibling keys.
+- `model:` is not a non-empty string: a number, a list, or a blank value
+  fails the load (a key the author wrote must name something; blanks are
+  never silently read as "session"); writing it on a stage that already
+  carries a `tasks:` list is refused (`belongs on each task`) likewise.
+  Whether a *well-formed* name is servable is a dispatch-time refusal, not
+  a load-time one — the ladder lives in `ModelChoice`, never duplicated.
 - `parallel: true` with `agents:` that is not a list.
 - any key present but of the wrong type. The check is `array_key_exists()`, not
   `isset()`, so `prompt: ~` is refused as the wrong shape rather than silently
@@ -491,7 +524,7 @@ error result.
 **1. A stage's tasks run one after another, never at once.** A regular stage
 may hold several tasks — a list in PHP, `->stage('work', [Tasks::agent('architect')->name('plan'), Tasks::agent('coder')])`,
 or a `tasks:` list in YAML, whose entries take the one-task stage's keys
-(`agent`, `name`, `prompt`, `tools`, `retries`, `outputSchema`, `isolation`):
+(`agent`, `name`, `prompt`, `tools`, `retries`, `outputSchema`, `isolation`, `model`):
 
 ```yaml
 - name: fix
@@ -568,7 +601,7 @@ return (new WorkflowBuilder())
 ```
 
 `TaskBuilder` carries `agent()`, `prompt()`, `tools()`, `timeout()`,
-`retries()`, `isolation()`, `name()`, `outputSchema()` and `reject()`. `timeout` and `reject` have
+`retries()`, `isolation()`, `name()`, `outputSchema()`, `model()` and `reject()`. `timeout` and `reject` have
 **no
 YAML spelling**, so a YAML-declared task never carries them; `retries`,
 `outputSchema` and `isolation` are the `retries:`, `outputSchema:` and
@@ -592,6 +625,13 @@ WorktreeIsolation machinery `TaskTool` uses for a delegated run: own tree per
 stage agent, a refusal (never the shared checkout) when a tree cannot be
 made, and the stage text names the tree and branch when work was kept, as
 [`isolation` runs a stage agent in its own git worktree](#isolation-runs-a-stage-agent-in-its-own-git-worktree)
+describes.
+`model()` — spelled `model:` in YAML — reaches `SubAgent::$model`, and
+`EngineExecutor` decides it with the same `ModelChoice` ladder `TaskTool`
+uses for a delegated run: a servable name pins the stage's dial and the run
+reports it, an unservable one fails the stage loudly before anything is
+dialed — a stage that names a model means that model, as
+[`model` runs one stage on a different model](#model-runs-one-stage-on-a-different-model)
 describes.
 
 ### `reject()` fails a stage on the verifier verdict

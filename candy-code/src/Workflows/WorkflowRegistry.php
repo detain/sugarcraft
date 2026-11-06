@@ -1578,6 +1578,12 @@ final class WorkflowRegistry
                 if (array_key_exists('isolation', $agent)) {
                     $b = $b->isolation($this->requireIsolation($agent['isolation'], "{$where} agent #{$agentIndex}"));
                 }
+                // S2 (wf-g2g3): the per-stage model ask — a trimmed non-empty
+                // string here; whether the session can SERVE it is the ONE
+                // ladder's job at dispatch (ModelChoice), never a second here.
+                if (array_key_exists('model', $agent)) {
+                    $b = $b->model($this->requireModel($agent['model'], "{$where} agent #{$agentIndex}"));
+                }
                 $builders[] = $b;
             }
             return $builders;
@@ -1604,6 +1610,11 @@ final class WorkflowRegistry
         if (array_key_exists('isolation', $stage)) {
             $b = $b->isolation($this->requireIsolation($stage['isolation'], $where));
         }
+        // S2 (wf-g2g3): the per-stage model ask, same spelling law as the
+        // parallel-agent and task-list arms below.
+        if (array_key_exists('model', $stage)) {
+            $b = $b->model($this->requireModel($stage['model'], $where));
+        }
 
         return $b;
     }
@@ -1623,7 +1634,7 @@ final class WorkflowRegistry
      */
     private function parseYamlTaskList(array $stage, string $where): array
     {
-        foreach (['agent', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation'] as $key) {
+        foreach (['agent', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model'] as $key) {
             if (array_key_exists($key, $stage)) {
                 throw new WorkflowLoadException(
                     "{$where} lists \"tasks\", so \"{$key}\" belongs on each task, not on the stage"
@@ -1666,6 +1677,11 @@ final class WorkflowRegistry
             }
             if (array_key_exists('isolation', $task)) {
                 $b = $b->isolation($this->requireIsolation($task['isolation'], $at));
+            }
+            // S2 (wf-g2g3): the per-stage model ask, same spelling law as the
+            // stage and parallel-agent arms above.
+            if (array_key_exists('model', $task)) {
+                $b = $b->model($this->requireModel($task['model'], $at));
             }
             $builders[] = $b;
         }
@@ -1787,6 +1803,38 @@ final class WorkflowRegistry
                 "{$where} declares isolation: {$raw}; supported spellings are 'none' and 'worktree'"
             ),
         };
+    }
+
+    /**
+     * A task's `model:` (S2) — the model the stage author asks the run to
+     * dial, trimmed to a non-empty string.
+     *
+     * Parse at the boundary, trust inside: the trim happens HERE so every
+     * downstream reader (the {@see \SugarCraft\Code\Agents\ModelChoice}
+     * ladder, the report) sees the same exact id. Blank is refused, never
+     * read as "session": a key the author wrote must name something, and a
+     * silent default is the one outcome worse than an error — the same law
+     * the isolation spelling check enforces. Whether a named model is
+     * SERVABLE is not checked here — that is the one ladder's job at
+     * dispatch, and duplicating its view here would be a second copy.
+     *
+     * @throws WorkflowLoadException When the value is not a string, or is
+     *                               only whitespace.
+     */
+    private function requireModel(mixed $value, string $where): string
+    {
+        if (!is_string($value)) {
+            throw new WorkflowLoadException(
+                "{$where} \"model\" must be a string naming a model, got " . get_debug_type($value)
+            );
+        }
+
+        $asked = trim($value);
+        if ($asked === '') {
+            throw new WorkflowLoadException("{$where} \"model\" names no model");
+        }
+
+        return $asked;
     }
 
     /**

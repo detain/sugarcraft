@@ -267,6 +267,33 @@ final class EngineExecutor implements ExecutorInterface
             );
         }
 
+        // S2 (wf-g2g3): a stage that asks for a model by name rides the SAME
+        // ladder a delegation consults (ModelChoice — session equality, tier
+        // aliases, server feasibility), but the stage door phrases the
+        // outcome the way G3 phrases an unservable schema: REFUSE, never
+        // dial a stand-in. A plan author who pinned `model:` asked for that
+        // model's answer; silently answering from a different one is exactly
+        // the 'runtime-ignored' shape the model spec bans. Checked before the
+        // worktree enter: a refused stage builds no tree and never calls.
+        $runModel = null;
+        if ($agent->model !== null) {
+            [$pin, $unservable] = ModelChoice::decide($this->engine, $agent->agent, $agent->model);
+            if ($unservable !== null) {
+                return self::failed(
+                    $agent,
+                    $startedAt,
+                    sprintf(
+                        'agent "%s" asks to run on model "%s", %s; the run was not started, because a stage that names a model means that model (this session runs "%s")',
+                        $agent->agent->name,
+                        $unservable['asked'],
+                        $unservable['why'],
+                        $this->engine->servedModel() ?? $this->engine->model(),
+                    ),
+                );
+            }
+            $runModel = $pin;
+        }
+
         // R4-m1 disclosure: delegation tools (DelegatesToEngine — Task, and
         // every *Section drive-through) are excluded from the sub-agent
         // toolset. Their body is itself a delegated turn, and inside this
@@ -360,6 +387,22 @@ final class EngineExecutor implements ExecutorInterface
         $engine = $this->engine
             ->withTools($tools)
             ->withMaxSteps($maxTurns);
+
+        // S2: the stage's model pin rides the SAME channel a delegation uses —
+        // EngineBackend::withModel, which the Runtime stamps onto every
+        // request's App (the dial-side model). Null (no ask, or the ask is
+        // the session's own) means the line is never touched, so an ordinary
+        // stage dials exactly what it dials today.
+        if ($runModel !== null) {
+            $engine = $engine->withModel($runModel);
+        }
+
+        // S2: what actually got dialed is the run's truth, recorded the way
+        // TaskTool records it for a delegation (post-binding, before the
+        // first request) so the row and the resume read the same model.
+        if ($agent->model !== null) {
+            $agent->runModel = $engine->model();
+        }
 
         // G2: re-jail the engine's tool set onto the stage's worktree —
         // withWorktreeRoot maps every current tool through its own worktree

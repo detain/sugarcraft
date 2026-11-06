@@ -27,6 +27,7 @@ final class TaskBuilder
     private ?Isolation $isolation = null;
     private ?string $name = null;
     private array|string|null $outputSchema = null;
+    private ?string $model = null;
     private ?string $reject = null;
     private int $rejectAtLeast = 1;
 
@@ -113,6 +114,21 @@ final class TaskBuilder
     }
 
     /**
+     * The model THIS task runs on (S2). The registry hands over the trimmed
+     * YAML string; `null` keeps the session's model byte-identical to today.
+     * Whether a named id is servable is decided ONCE, at dispatch, by the
+     * same ladder a delegation consults ({@see \SugarCraft\Code\Agents\ModelChoice});
+     * a stage whose ask cannot be honoured refuses rather than dialing a
+     * stand-in. `inherit` is the delegation spelling kept alive here: it
+     * defers to the agent's own preset model, exactly as it does for a Task.
+     */
+    public function model(?string $model): self
+    {
+        $this->model = $model;
+        return $this;
+    }
+
+    /**
      * Reject the verifier's verdict when its completed output MATCHES a pattern.
      *
      * POLARITY, LOUD: this is a REJECT pattern, not an expectation — a MATCH
@@ -178,9 +194,31 @@ final class TaskBuilder
             isolation: $this->isolation,
             name: $this->name,
             outputSchema: self::trustedSchema($this->outputSchema),
+            model: self::trustedModel($this->model),
             reject: $this->reject,
             rejectMinOccurrences: $this->rejectAtLeast,
         );
+    }
+
+    /**
+     * S2 parse-don't-validate: `null` is the session default, any other value
+     * must actually NAME a model — a blank string names nothing, and it fails
+     * CLOSED here, where it was declared, rather than reaching the ladder and
+     * quietly reading as `inherit`.
+     */
+    private static function trustedModel(?string $model): ?string
+    {
+        if ($model === null) {
+            return null;
+        }
+        $asked = trim($model);
+        if ($asked === '') {
+            throw new \InvalidArgumentException(
+                'model: names no model — give a model id (or "inherit" for the agent preset), or omit it to run on the session\'s',
+            );
+        }
+
+        return $asked;
     }
 
     /**

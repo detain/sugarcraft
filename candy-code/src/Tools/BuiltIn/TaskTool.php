@@ -233,7 +233,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      * serves an id by that name, so it resolves only where the session's own
      * model is of that tier, and runs on the session's model everywhere else.
      */
-    public const CLAUDE_MODEL_ALIASES = ['sonnet', 'opus', 'haiku'];
+    public const CLAUDE_MODEL_ALIASES = \SugarCraft\Code\Agents\ModelChoice::ALIASES;
 
     /** The instruction a resume continues with when the caller gives no better one. */
     public const DEFAULT_RESUME_PROMPT = 'Continue the task from where you stopped. When it is done, reply with your final report.';
@@ -2480,56 +2480,27 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
      */
     private static function chooseModel(EngineBackend $engine, \SugarCraft\Code\Agents\Agent $agent, string $requested): array
     {
-        $model = trim($requested);
-        $origin = 'this Task call';
-        if ($model === '' || $model === 'inherit') {
-            if ($agent->inheritsModel || trim($agent->model) === '' || $agent->model === 'inherit') {
-                return [null, null];
-            }
-            $model = trim($agent->model);
-            $origin = sprintf('agent "%s"', $agent->name);
+        // S2 (wf-g2g3): the ladder itself lives in {@see \SugarCraft\Code\Agents\ModelChoice}
+        // — the one copy a workflow stage consults too. This wrapper only phrases
+        // the fallback the way a delegation phrases it: an annotated note that
+        // runs continues past, byte-identical to the sentence this method always
+        // composed. The stage door instead refuses; the difference is law per
+        // door, not a second copy of the reasoning.
+        [$pin, $fallback] = \SugarCraft\Code\Agents\ModelChoice::decide($engine, $agent, $requested);
+        if ($fallback === null) {
+            return [$pin, null];
         }
 
-        $session = $engine->model();
-        if ($model === $session) {
-            return [null, null];
-        }
-
-        $provider = $engine->provider()->name();
-        $fallback = static fn (string $why): array => [null, [
-            'asked' => $model,
+        return [null, [
+            'asked' => $fallback['asked'],
             'note' => sprintf(
                 'model: %s (%s asked for "%s", %s; the run used this session\'s model instead)',
-                $engine->servedModel() ?? $session,
-                $origin,
-                $model,
-                $why,
+                $engine->servedModel() ?? $engine->model(),
+                $fallback['origin'],
+                $fallback['asked'],
+                $fallback['why'],
             ),
         ]];
-
-        if (preg_match('/[\s[:cntrl:]]/', $model) === 1) {
-            return $fallback('which is not a model id');
-        }
-
-        if (\in_array(strtolower($model), self::CLAUDE_MODEL_ALIASES, true)) {
-            if (str_contains(strtolower($session), strtolower($model))) {
-                return [null, null];
-            }
-
-            return $fallback(sprintf('a Claude Code tier name no %s model answers to', $provider));
-        }
-
-        $served = $engine->servedModel();
-        if ($served !== null) {
-            return $served === $model
-                ? [$model, null]
-                : $fallback(sprintf('which this %s server does not serve', $provider));
-        }
-        if ($engine->servesOneModel()) {
-            return $fallback(sprintf('which this %s server does not serve: it runs one model', $provider));
-        }
-
-        return [$model, null];
     }
 
     /**
