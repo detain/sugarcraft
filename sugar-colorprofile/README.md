@@ -144,7 +144,13 @@ carries an accessibility cost, spelled out under the env-var precedence table
 below.
 Interpolated env values that ride in source strings are sanitized via
 `Env::sanitize()` — `TERM` and friends are attacker-influenced over SSH and a
-source string gets printed by downstream diagnostics.
+source string gets printed by downstream diagnostics. The guarantee it gives
+is exact: the output is always **valid UTF-8** of **at most 128 bytes** —
+C0/C1/DEL are stripped as code points (so multibyte characters whose UTF-8
+form merely *contains* a 0x80-0x9F byte, like `€`, survive intact), hostile
+malformed input is scrubbed to U+FFFD-substituted well-formed text instead of
+emitting orphan lead bytes that would break `json_encode()` of a probe report,
+and the length cap lands on a character boundary, never mid-sequence.
 
 ### Step 0 — the output-stream TTY gate
 

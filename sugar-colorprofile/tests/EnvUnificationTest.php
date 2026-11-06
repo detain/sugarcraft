@@ -7,6 +7,7 @@ namespace SugarCraft\ColorProfile\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\ColorProfile\ColorProfile;
 use SugarCraft\ColorProfile\DetectionChain;
+use SugarCraft\ColorProfile\Env;
 use SugarCraft\ColorProfile\Palette;
 use SugarCraft\ColorProfile\Probe;
 use SugarCraft\ColorProfile\Probe\Capability;
@@ -246,5 +247,53 @@ final class EnvUnificationTest extends TestCase
         $chain = DetectionChain::detect(['COLORTERM' => "truecolor\x1b[31m", 'TERM' => 'xterm']);
         $this->assertSame(DetectionChain::LEVEL_ANSI, $chain->level());
         $this->assertStringNotContainsString("\x1b", $chain->source());
+    }
+
+    public function testSanitizeRepairsOrphanLeadBytesIntoValidUtf8(): void
+    {
+        // [M8] The old byte-wise control sweep stripped the 0x82 inside `€`
+        // (E2 82 AC) and let orphaned lead bytes of a truncated sequence
+        // survive — the result failed mb_check_encoding() and broke
+        // json_encode() of any probe report carrying it.
+        $orphan = Env::sanitize("abc\xE2\x80");
+        $this->assertTrue(
+            mb_check_encoding($orphan, 'UTF-8'),
+            'orphan lead bytes must not survive: ' . bin2hex($orphan),
+        );
+        $this->assertNotFalse(json_encode(['term' => $orphan]));
+
+        $euro = Env::sanitize("\u{20AC}");
+        $this->assertSame(
+            "\u{20AC}",
+            $euro,
+            'C1 is matched by CODE POINT now: a valid character merely CONTAINING a 0x82 byte survives',
+        );
+
+        $mixed = Env::sanitize("caf\u{E9}\x1b[31m tail");
+        $this->assertTrue(mb_check_encoding($mixed, 'UTF-8'));
+        $this->assertStringNotContainsString("\x1b", $mixed);
+        $this->assertStringContainsString('caf', $mixed);
+    }
+
+    public function testSanitizeCapLandsOnCharacterBoundary(): void
+    {
+        // The 128-byte cap used plain substr(), which could split a
+        // multibyte sequence straddling the boundary — the same invalidity
+        // the sweep itself used to introduce.
+        $straddle = str_repeat('a', 126) . "\u{20AC}x";
+        $capped = Env::sanitize($straddle);
+        $this->assertLessThanOrEqual(128, strlen($capped));
+        $this->assertTrue(mb_check_encoding($capped, 'UTF-8'), 'cap must not orphan a straddling sequence');
+        $this->assertSame(str_repeat('a', 126), $capped, 'the cap backs off to the character boundary');
+    }
+
+    public function testSanitizeIsByteIdenticalForCleanInput(): void
+    {
+        // Regression: the common path stays a plain control sweep plus cap.
+        $this->assertSame('xterm-256color', Env::sanitize('xterm-256color'));
+        $this->assertSame('', Env::sanitize("\x00\x1F\x7F"));
+        $this->assertSame('', Env::sanitize(''));
+        $this->assertSame(str_repeat('b', 128), Env::sanitize(str_repeat('b', 200)));
+        $this->assertSame('', Env::sanitize("\u{0085}"), 'C1 code points (NEL) still go');
     }
 }

@@ -74,15 +74,35 @@ final class Env
      * Make an untrusted environment value safe to interpolate into a source
      * string: strip C0/C1/DEL control bytes (which could forge escape
      * sequences downstream consumers print) and cap the length.
+     *
+     * The output is guaranteed valid UTF-8 of at most
+     * {@see SOURCE_MAX_BYTES} bytes. Both halves of that guarantee needed
+     * repair: a byte-wise control sweep strips the 0x80-0x9F BYTES, which
+     * are legal continuation bytes of valid characters (the euro sign
+     * `E2 82 AC` lost its middle byte, orphaning `E2 AC`), and the result
+     * then broke `json_encode()` of reports carrying it; a plain `substr()`
+     * cap could split a character straddling the boundary. The /u pattern
+     * matches C1 as CODE POINTS (U+0080-U+009F) instead, malformed input
+     * (where /u refuses to match at all) is scrubbed by a byte pass plus
+     * `mb_convert_encoding()`'s substitution of invalid sequences, and the
+     * cap runs through `mb_strcut()` so it lands on a character boundary.
      */
     public static function sanitize(string $value): string
     {
-        $clean = preg_replace('/[\x00-\x1F\x7F-\x9F]/', '', $value) ?? '';
+        $clean = preg_replace('/[\x00-\x1F\x7F-\x9F]/u', '', $value);
 
-        if (strlen($clean) > self::SOURCE_MAX_BYTES) {
-            $clean = substr($clean, 0, self::SOURCE_MAX_BYTES);
+        if ($clean === null) {
+            // Invalid UTF-8 in: /u-mode matching refuses the whole subject.
+            // Sweep the control bytes byte-wise, then let
+            // mb_convert_encoding() replace every remaining invalid
+            // sequence. The byte sweep may clip a valid character riding
+            // inside the garbage (0x80-0x9F are legal continuation bytes);
+            // inside hostile malformed input that costs substitution of
+            // that character, never invalid output.
+            $byteSwept = preg_replace('/[\x00-\x1F\x7F-\x9F]/', '', $value) ?? '';
+            $clean = \mb_convert_encoding($byteSwept, 'UTF-8', 'UTF-8');
         }
 
-        return $clean;
+        return \mb_strcut($clean, 0, self::SOURCE_MAX_BYTES, 'UTF-8');
     }
 }
