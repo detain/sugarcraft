@@ -542,7 +542,7 @@ final class ServerTest extends TestCase
 
         $answers = [];
         foreach (['ghost:whatever', 'authtest:wrong-password', 'keyonly:whatever'] as $credential) {
-            $answers[$credential] = $this->basicAuthInfoRefs($credential);
+            $answers[$credential] = $this->withoutVolatileDate($this->basicAuthInfoRefs($credential));
         }
         self::assertSame($answers['ghost:whatever'], $answers['authtest:wrong-password']);
         self::assertSame($answers['ghost:whatever'], $answers['keyonly:whatever']);
@@ -564,6 +564,26 @@ final class ServerTest extends TestCase
             ['Authorization' => 'Basic ' . \base64_encode($credential)],
             '',
         );
+    }
+
+    /**
+     * Strip the one volatile byte from an otherwise static refusal: the
+     * second-granularity 'Date' header every request stamps from gmdate()
+     * (src/HttpSmartProtocol/Server.php:178). Under CPU load the three
+     * refused legs straddle a second boundary and the triad equality ends up
+     * comparing wall-clock noise. Nothing else is dropped — status, every
+     * other header and the body stay in the compared payload, so a genuine
+     * refusal divergence (the user-enumeration oracle this guards) still
+     * reddens the test.
+     *
+     * @param array{status: int, headers: array<string, string>, body: string} $answer
+     * @return array{status: int, headers: array<string, string>, body: string}
+     */
+    private function withoutVolatileDate(array $answer): array
+    {
+        unset($answer['headers']['Date']);
+
+        return $answer;
     }
 
     // -------------------------------------------------------------------------
