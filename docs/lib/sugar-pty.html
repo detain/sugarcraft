@@ -91,7 +91,7 @@ SignalForwarder::attachSigwinch(
     $master,
     fn () =&gt; $tty-&gt;size(),               // ['cols' =&gt; N, 'rows' =&gt; N]
 );
-// Now every host SIGWINCH triggers $pty-&gt;resize($cols, $rows).
+// Now every host SIGWINCH triggers $master-&gt;resize($cols, $rows).
 
 // For raw /dev/tty fds (no MasterPty object):
 $ttyFd = \SugarCraft\Pty\Libc::lib()-&gt;open('/dev/tty', 0x0002); // O_RDWR
@@ -126,12 +126,14 @@ SignalForwarder::attachSigwinchToFd(
 
     <h3 style="margin-top: 40px;">Controlling terminal (Ctrl+C, job control)</h3>
     <p>Pass <code>controllingTerminal: true</code> to <code>spawn()</code> when you need <code>Ctrl+C</code> typed at the master to deliver <code>SIGINT</code> to the child — required for interactive shells (<code>bash -i</code>), editors (<code>vim</code>, <code>less</code>), and anything else that uses tty-driven job control.</p>
-    <pre class="code"><code class="language-php">$child = $pty-&gt;spawn(
+    <pre class="code"><code class="language-php">$system = PtySystemFactory::new();
+$pair   = $system-&gt;open();
+$child  = $pair-&gt;slave()-&gt;spawn(
     ['/bin/bash', '-i'],
     env: [...(array) getenv(), 'TERM' =&gt; 'xterm-256color'],
     controllingTerminal: true,    // claim slave as the child's ctty
 );
-$pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></pre>
+$pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code></pre>
     <p>Routes the spawn through <code>bin/pty-shim.php</code>, which does <code>setsid()</code> + <code>ioctl(0, TIOCSCTTY, 0)</code> + <code>pcntl_exec()</code> between <code>proc_open</code> and the actual cmd. Requires <code>ext-pcntl</code>. Costs single-digit-to-low-double-digit milliseconds of shim startup per spawn (an unmeasured estimate — treat as order-of-magnitude) — opt-in because non-interactive spawns don't benefit.</p>
 
     <h3 style="margin-top: 40px;">Known limitations</h3>

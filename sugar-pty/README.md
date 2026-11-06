@@ -173,10 +173,10 @@ use SugarCraft\Core\Util\Tty;
 
 $hostTty = new Tty(STDIN);                // instance — size() is NOT static
 SignalForwarder::attachSigwinch(
-    $pty,
+    $master,                              // the Contract\MasterPty from your open
     fn () => $hostTty->size(),            // returns ['cols' => N, 'rows' => N]
 );
-// Now every host SIGWINCH triggers $pty->resize($cols, $rows).
+// Now every host SIGWINCH triggers $master->resize($cols, $rows).
 ```
 
 For callers that hold a raw `/dev/tty` fd (no `MasterPty` object),
@@ -611,12 +611,14 @@ required for interactive shells (`bash -i`), editors (`vim`,
 `less`), and anything else that uses tty-driven job control.
 
 ```php
-$child = $pty->spawn(
+$system = PtySystemFactory::new();
+$pair   = $system->open();
+$child  = $pair->slave()->spawn(
     ['/bin/bash', '-i'],
     env: [...(array) getenv(), 'TERM' => 'xterm-256color'],  // merge — non-null replaces
     controllingTerminal: true,    // claim slave as the child's ctty
 );
-$pty->write("\x03");              // Ctrl+C → SIGINT to the child
+$pair->master()->write("\x03");  // Ctrl+C → SIGINT to the child
 ```
 
 Routes the spawn through `bin/pty-shim.php`, which does
