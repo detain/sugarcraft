@@ -285,14 +285,14 @@ solarizedDark/Light) sets them explicitly; consumers must NOT assume
   `joinHorizontal`, `joinVertical`, `joinHorizontalWithSpacing`,
   `joinVerticalWithSpacing`, `width`, `height`, `size` (all plain-string
   layout primitives from lipgloss). The lowercase spellings are canonical;
-  capitalized calls compile identically because PHP resolves method names
-  case-insensitively. Note there are **two** `Layout` classes: this
-  package-level primitive facade (`SugarCraft\Style\Layout`) and the
-  constraint solver in the sub-namespace (`SugarCraft\Style\Layout\Layout`,
-  imported as `use SugarCraft\Style\Layout\Layout;`).
+  capitalized calls resolve identically per the case-insensitivity note
+  under **Layout helpers**.
 - **`Position`** — `TOP / LEFT / CENTER / RIGHT / BOTTOM` floats for layout
   anchors.
-- **`Layout`** (sub-namespace) — ratatui-inspired constraint solver:
+- **`Layout`** (sub-namespace) — ratatui-inspired constraint solver — the
+  second of the lib's two `Layout` classes (the package-level one above is
+  the primitive facade; this one is imported as
+  `use SugarCraft\Style\Layout\Layout;`):
   `Layout::horizontal($constraints)->split($area)` and
   `Layout::vertical($constraints)->split($area)` return `Rect[]`.
   Constraints: `Constraint::length/min/max/percentage/ratio/fill`.
@@ -585,8 +585,8 @@ helpers from lipgloss's package level:
 - `Layout::size($s)` — `[width, height]` tuple.
 
 (The capitalized `Width` / `Height` / `Size` spellings resolve to the same
-functions — PHP method names are case-insensitive — but only the lowercase
-names are declared.)
+functions per the case-insensitivity note under **Layout helpers** — only
+the lowercase names are declared.)
 
 All three strip ANSI escapes before measuring, honour East-Asian
 wide cells, and round the same way `Style::render()` does — so
