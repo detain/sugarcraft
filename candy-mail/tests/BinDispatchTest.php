@@ -442,6 +442,97 @@ final class BinDispatchTest extends TestCase
         }
     }
 
+    public function testSendSuccessExitsZeroAfterDeliveredMail(): void
+    {
+        if (!\function_exists('pcntl_fork') || !\function_exists('pcntl_waitpid')) {
+            $this->markTestSkipped('pcntl not available');
+        }
+
+        $errno  = 0;
+        $errstr = '';
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        if ($server === false) {
+            $this->markTestSkipped("cannot bind loopback server: {$errstr}");
+        }
+        $name = \stream_socket_get_name($server, false);
+        $port = (int) \substr((string) $name, \strrpos((string) $name, ':') + 1);
+
+        $pid = \pcntl_fork();
+        if ($pid === -1) {
+            @\fclose($server);
+            $this->markTestSkipped('pcntl_fork failed');
+        }
+        if ($pid === 0) {
+            // Child: a plain (no-STARTTLS, no-extensions) fake that queues the
+            // one message it is handed. Loopback only; never dials out.
+            $conn = @\stream_socket_accept($server, 10);
+            if ($conn !== false) {
+                @\fwrite($conn, "220 fake ESMTP\r\n");
+                $deadline = \microtime(true) + 15.0;
+                $inData   = false;
+                while (\microtime(true) < $deadline && !\feof($conn)) {
+                    $line = \fgets($conn, 4096);
+                    if ($line === false) {
+                        break;
+                    }
+                    $trim = \rtrim($line, "\r\n");
+                    if ($inData) {
+                        if ($trim === '.') {
+                            $inData = false;
+                            @\fwrite($conn, "250 OK queued\r\n");
+                        }
+                        continue;
+                    }
+                    $up = \strtoupper($trim);
+                    if (\str_starts_with($up, 'EHLO') || \str_starts_with($up, 'HELO')) {
+                        @\fwrite($conn, "250 fake\r\n");
+                    } elseif (\str_starts_with($up, 'MAIL') || \str_starts_with($up, 'RCPT')) {
+                        @\fwrite($conn, "250 OK\r\n");
+                    } elseif (\str_starts_with($up, 'DATA')) {
+                        $inData = true;
+                        @\fwrite($conn, "354 Send\r\n");
+                    } elseif (\str_starts_with($up, 'QUIT')) {
+                        @\fwrite($conn, "221 Bye\r\n");
+                        break;
+                    } else {
+                        @\fwrite($conn, "250 OK\r\n");
+                    }
+                }
+                @\fclose($conn);
+            }
+            @\fclose($server);
+            // Hard-exit: skip inherited PHPUnit shutdown handlers (SmtpSecurityTest idiom).
+            if (\function_exists('posix_kill')) {
+                \posix_kill(\getmypid(), \SIGKILL);
+            }
+            exit(0);
+        }
+        @\fclose($server); // parent drives the client only; child owns accept()
+
+        try {
+            $result = $this->runCli(
+                ['--to', 'b@example.com'],
+                'hello body',
+                [
+                    'CANDY_MAIL_FROM'            => 'a@example.com',
+                    'CANDY_MAIL_SMTP_HOST'       => '127.0.0.1',
+                    'CANDY_MAIL_SMTP_PORT'       => (string) $port,
+                    'CANDY_MAIL_SMTP_REQUIRE_TLS' => '0',
+                ]
+            );
+
+            // The documented contract is '0 success, 1 any refusal'. Before
+            // the fix main() fell off its end after a DELIVERED send: the
+            // declared int return type turned that into a TypeError exit 255
+            // printed after '✓ Email sent' — delivery succeeded, status lied.
+            $this->assertSame(0, $result['status'], 'a delivered send must exit 0, not 255');
+            $this->assertStringContainsString('Email sent', $result['out']);
+            $this->assertStringNotContainsString('TypeError', $result['err']);
+        } finally {
+            $this->reapHostileServer($pid);
+        }
+    }
+
     // ------------------------------------------------------------------
     // B4b (lib-reviews-1102 fix wave): M-B / M-C / M-G / M-P end to end.
     // ------------------------------------------------------------------

@@ -229,6 +229,10 @@ function main(array $argv): int
         fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.send_failed', ['message' => $e->getMessage()])) . "\n");
         return 1;
     }
+
+    // main() declares an int return type; falling off the end here TypeError'd
+    // with exit 255 AFTER the mail was already delivered and announced.
+    return 0;
 }
 
 // ---------------------------------------------------------------------------
