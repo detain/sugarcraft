@@ -99,12 +99,14 @@ the asset for verification.
 | Code | Meaning |
 |------|---------|
 | 0    | success (including `--help` / `--version` / `--dump-detect`) |
-| 1    | usage error — unknown flag, bad value, refused format (`chafa`/`ansi`), **no** file argument (usage is printed), a second file argument |
+| 1    | usage error — unknown flag, bad value, refused format (`chafa`/`ansi`), **no** file argument (usage is printed), a second file argument; separately, the bin exits 1 printing `cannot find composer autoload.php` when no autoloader resolves |
 | 2    | input/decode error — the file path is unreadable or not decodable (a **missing** file lands here, not on the usage path), undecodable image, empty animation, render failure |
 
 ## Architecture
 
-`bin/candy-image` is a two-line shim; all branches live in
+`bin/candy-image` is a thin shim by design — an autoload probe with
+phar-identity resolution (a phar bundle outranks a working-tree vendor) and a
+one-line `Cli::main()` hand-off; all branches live in
 `SugarCraft\CandyImage\Cli` and are driven in-process by the tests (in-memory
 pipes, plus a `?\Closure $play` seam for the animation loop). Detection,
 protocol selection, decode, and scaling are **only ever** sugar-image calls
