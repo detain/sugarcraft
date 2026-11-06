@@ -1726,7 +1726,7 @@ the rule grammar and the sandbox are in
 | `default` | run | ask — except a shell line made only of read-only commands (`ls`, `git log`, `grep` …), which runs | the **TUI's** and **`-p`'s** default: the y/n/a modal asks for every write, other shell command and network call; `-p` asks on stderr at a terminal and refuses an unattended ask with a hint naming `--permission-mode` |
 | `accept-edits` | run | in-project `Edit`/`Write` and read-only shell lines run; most other shell commands ask | |
 | `plan` | run | refused, except a Markdown plan in `.candy-code/plans/` and read-only `Bash` | toggle with **`Alt+M`** between turns; the model leaves it with `PlanExit`, which asks you to approve the plan |
-| `auto` | classified | classified by `SafetyClassifier`: a security finding (fetched code into a shell, data sent out, credentials, policy files) asks; any other flagged call is refused — or first reviewed by the reviewer model (`titleModel`, or your `autoReviewModel`) with `autoReview`, which with that switch on also puts the passed calls `autoReviewScope` names through it — shell commands by default — and asks after three blocks in a row or twenty in all | |
+| `auto` | classified | classified by `SafetyClassifier`: a security finding (fetched code into a shell, data sent out, credentials, policy files) asks; any other flagged call is refused — or first reviewed by the reviewer model (`titleModel`, or your `autoReviewModel`) with `autoReview`, which is **on by default whenever a reviewable model exists** — a config that never mentions the key still gets its flagged calls reviewed, and every review is a paid model call, so an explicit `"autoReview": false` in your own settings is the opt-out — which with the reviewer on also puts the passed calls `autoReviewScope` names through it — shell commands by default — and asks after three blocks in a row or twenty in all | |
 | `dont-ask` | run | refused | never prompts |
 | `bypass-permissions` | run | run | the default for locally spawned `/bg` sessions, which have no terminal to ask at for the whole life of the run — daemons `serve` spawns run in the server's admitted mode |
 
@@ -1769,11 +1769,15 @@ command inside bubblewrap, writable only in the project.
   words, `n` declines. An approved plan returns to the mode plan was entered
   from when the turn ends. Where nobody can answer (`-p`, `dont-ask`) `AskUser`
   tells the model to decide and say what it assumed, and `PlanExit` refuses.
-- **`"autoReview": true`** (your own settings only — every review is a paid
+- **`autoReview`** (your own settings only — every review is a paid
   call) sends each non-security call `auto` flags to the reviewer model — the
   title model, unless `autoReviewModel` names another `provider/model` to answer
-  on (one that cannot be built warns once and leaves the reviewer off) — and,
-  with the switch on, every other call the pattern list passed that
+  on (one that cannot be built warns once and leaves the reviewer off). The
+  reviewer is **on by default whenever a reviewable model exists**: a config
+  that never mentions `autoReview` still gets its flagged calls reviewed, and
+  the launch that engages that implicit default says so once — an explicit
+  `"autoReview": false` in your own settings is the opt-out. With the reviewer
+  on, every other call the pattern list passed that
   `autoReviewScope` names too, flagged or not: `shell` (the default) covers every
   non-read-only shell command, `writes` adds `Edit`, `Write`, `ApplyPatch` and
   `WebFetch` shown with their capped pending diff for the write tools

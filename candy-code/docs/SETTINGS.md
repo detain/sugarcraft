@@ -1311,7 +1311,7 @@ project-settable.
 | `contextPruning.mode` | Context & Compaction | enum | `auto` | C | `CANDY_CODE_CONTEXT_PRUNING` | next turn | tuning |
 | `permissionMode` | Permissions | enum | `default` (TUI, `-p`); `bypass-permissions` (daemon) | U C | `CANDY_CODE_PERMISSION_MODE`, `--permission-mode` | restart | security |
 | `permissionRules` | Permissions | JSON | `[]` | U C | — | restart | security |
-| `autoReview` | Permissions | bool | `false` | U C | — | restart | spend |
+| `autoReview` | Permissions | bool | `false` stored; UNSET still engages whenever a reviewable model exists (every review is a paid call) — an explicit `false` is the opt-out | U C | — | restart | spend |
 | `autoReviewScope` | Permissions | enum | `shell` | U C | — | live | spend |
 | `autoReviewModel` | Permissions | string | `` | U C | — | restart | spend |
 | `permissions.autoStrikeLimit` | Permissions | int | `3` | U C | — | next turn | security |
