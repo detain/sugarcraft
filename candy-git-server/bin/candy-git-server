@@ -267,8 +267,14 @@ function cmdServeHttp(array $args): int
     // OFF); accounts come from the persisted store so `user add` and
     // `user key` actually reach the wire. A corrupt store refuses the
     // launch loudly rather than serving an auth-less server.
-    \SugarCraft\GitServer\AccessControl::getInstance()
-        ->setAllowAnonymousRead($config->allowAnonymousRead);
+    //
+    // Raise-only, mirroring Server's and GitDaemon's own arms: config OFF
+    // never LOWERS a lever another component already honoured — the
+    // transport that parsed this config decides its own posture, and the
+    // process-global AccessControl singleton is armed upward only.
+    if ($config->allowAnonymousRead) {
+        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(true);
+    }
 
     try {
         // all() reads (and validates) the persisted store: a corrupt file

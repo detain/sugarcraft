@@ -407,8 +407,6 @@ final class GitDaemon
         // Set socket to non-blocking for timeout handling
         \socket_set_nonblock($client);
 
-        $this->stats()->recordConnection();
-
         // Capacity refuses the NEWCOMER (git-daemon's own behavior); the
         // old code killed the OLDEST established connection instead, so
         // any number of probing sockets could serially evict every real
@@ -419,6 +417,11 @@ final class GitDaemon
 
             return;
         }
+
+        // Recorded only once the socket is SEATED: a newcomer refused at
+        // capacity was never served, and counting it lets an
+        // over-capacity probe inflate the handled-connections figure.
+        $this->stats()->recordConnection();
 
         $this->clients[] = [
             'socket' => $client,
@@ -445,18 +448,18 @@ final class GitDaemon
         }
         \stream_set_blocking($client, false);
 
-        $this->stats()->recordConnection();
-
         // Capacity refuses the NEWCOMER, never an established client
         // (same capacity policy as the blocking transport). The check must
-        // run BEFORE the list is appended: recording a row for the
-        // socket it then closed burned a permanent seat on every
-        // over-capacity probe.
+        // run BEFORE both the stats record and the list append: a row
+        // recorded for the socket it then closed let every over-capacity
+        // probe inflate the handled-connections figure.
         if (\count($this->clients) >= $this->config->gitMaxConnections) {
             @\fclose($client);
 
             return;
         }
+
+        $this->stats()->recordConnection();
 
         $this->clients[] = [
             'socket' => $client,

@@ -10,6 +10,7 @@ use SugarCraft\Async\Subscription;
 use SugarCraft\GitServer\Config;
 use SugarCraft\GitServer\Git\GitDaemon;
 use SugarCraft\GitServer\Repo;
+use SugarCraft\GitServer\Stats;
 
 /**
  * Async (event-loop) mode of the Git daemon — plan item 6.1.
@@ -282,5 +283,97 @@ final class GitDaemonAsyncTest extends TestCase
             $daemon1->shutdown();
             $loop->run();
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Capacity accounting (n14)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Structural pin: BOTH accept paths must run the capacity gate before
+     * recording the connection in Stats. The blocking transport's e2e runs
+     * in a child process whose counters the parent cannot read, so the
+     * ordering law for both paths is pinned at the source level; the async
+     * path additionally gets the behavioral pin below.
+     */
+    public function testBothAcceptPathsGateCapacityBeforeRecordingTheConnection(): void
+    {
+        $source = (string) \file_get_contents((new \ReflectionClass(GitDaemon::class))->getFileName());
+        foreach (['acceptConnection', 'acceptAsyncConnection'] as $method) {
+            $start = \strpos($source, "private function {$method}(): void");
+            $this->assertIsInt($start, "{$method} must keep its private declaration");
+            $next = \strpos($source, 'private function', $start + 1);
+            $body = \substr($source, $start, $next === false ? null : $next - $start);
+
+            $this->assertSame(
+                1,
+                \substr_count($body, 'recordConnection'),
+                "{$method} must carry exactly one connection record",
+            );
+            $gate = \strpos($body, 'gitMaxConnections');
+            $record = \strpos($body, 'recordConnection');
+            $this->assertIsInt($gate, "{$method} must consult the capacity limit");
+            $this->assertLessThan(
+                $record,
+                $gate,
+                "{$method} must refuse at capacity BEFORE recording: an over-capacity probe must not bump the handled-connections figure",
+            );
+        }
+    }
+
+    public function testACapacityRefusedNewcomerIsNotCountedAsHandled(): void
+    {
+        $dir = $this->tmpDir . '/cap';
+        \mkdir($dir, 0755, true);
+        \file_put_contents(
+            $dir . '/config.yaml',
+            "git: { listen_addr: \"127.0.0.1:0\", idle_timeout: 30, max_connections: 1 }\n"
+        );
+
+        $daemon = new GitDaemon(Config::load($dir . '/config.yaml'));
+        $stats = new Stats();
+        $daemon->setStats($stats);
+
+        $loop = new StreamSelectLoop();
+        $promise = $daemon->serveAsync($loop);
+        $promise->then(null, static fn () => null);
+        $addr = $daemon->listenAddress();
+        $this->assertNotNull($addr);
+
+        // All socket work rides loop timers so the accept ordering (seat A,
+        // then refuse B) is driven by the very loop under test.
+        $a = null;
+        $b = null;
+        $refused = null;
+        $loop->addTimer(0.2, static function () use ($addr, &$a): void {
+            $a = @\stream_socket_client("tcp://{$addr}", $errno, $errstr, 2.0);
+        });
+        $loop->addTimer(0.5, static function () use ($addr, &$b): void {
+            $b = @\stream_socket_client("tcp://{$addr}", $errno, $errstr, 2.0);
+        });
+        $loop->addTimer(1.0, static function () use (&$b, &$refused, $loop): void {
+            $chunk = $b === null ? null : @\fread($b, 16);
+            $refused = ($chunk === false || ($chunk === '' && \feof($b)));
+            $loop->stop();
+        });
+        $safety = $loop->addTimer(4.0, static fn () => $loop->stop());
+        $loop->run();
+        $loop->cancelTimer($safety);
+
+        $daemon->shutdown();
+        $loop->run();
+        if (\is_resource($a)) {
+            \fclose($a);
+        }
+        if (\is_resource($b)) {
+            \fclose($b);
+        }
+
+        $this->assertTrue($refused === true, 'the over-capacity newcomer must be closed unseated');
+        $this->assertSame(
+            1,
+            $stats->connections(),
+            'only the seated connection counts as handled; the refused newcomer must not bump the counter',
+        );
     }
 }

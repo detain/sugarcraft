@@ -138,4 +138,30 @@ final class BinServeRefusalTest extends TestCase
         $this->assertSame(0, $list['rc']);
         $this->assertStringContainsString('probe-repo', $list['out']);
     }
+
+    /**
+     * n13: the serve-time anonymous-read arm must be RAISE-ONLY, mirroring
+     * Server and GitDaemon. A raw `setAllowAnonymousRead($bool)` call would
+     * let a config-off launch LOWER a lever another component already
+     * honoured; in a fresh CLI process the two shapes are equivalent, so
+     * the law is pinned at the source level (the probe child's counters and
+     * singletons are invisible to this process anyway).
+     */
+    public function testServeHttpArmsTheAnonymousReadLeverRaiseOnly(): void
+    {
+        $source = (string) \file_get_contents($this->bin);
+        $arm = 'if ($config->allowAnonymousRead) {'
+            . "\n        \\SugarCraft\\GitServer\\AccessControl::getInstance()->setAllowAnonymousRead(true);\n    }";
+
+        $this->assertStringContainsString(
+            $arm,
+            $source,
+            'serve --http must raise the lever only when config says on',
+        );
+        $this->assertStringNotContainsString(
+            '->setAllowAnonymousRead($config->allowAnonymousRead)',
+            $source,
+            'the raw-bool lowering shape must not return to the bin',
+        );
+    }
 }
