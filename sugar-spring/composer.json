@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-spring",
-    "description": "Damped spring physics for PHP TUIs \u2014 spring core ported from charmbracelet/harmonica, extended with projectile simulation, easing/bezier timing, spring chains, collections and reduced-motion awareness.",
+    "description": "Damped spring physics for PHP TUIs \u2014 spring core mirrors charmbracelet/harmonica, extended with projectile simulation, easing/bezier timing, spring chains, collections and reduced-motion awareness.",
     "type": "library",
     "license": "MIT",
     "keywords": [
