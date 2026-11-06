@@ -51,7 +51,7 @@ return [
     'email.invalid_address' => 'Adresse e-mail invalide : {addr}',
     'email.crlf_in_header' => 'Injection CRLF détectée dans l’en-tête {field}',
     'resend.send_cancelled' => 'Envoi Resend annulé avant le démarrage',
-    'resend.curl_missing' => 'ext-curl est requis pour le transport Resend (le transport SMTP ne nécessite aucune extension)',
+    'resend.curl_missing' => 'ext-curl est requis pour le transport Resend (le transport SMTP ne nécessite aucune extension pour SMTP simple; ext-openssl pour TLS)',
     'attachment.unreadable' => 'Le fichier joint n’est pas lisible : {path}',
     'attachment.no_path' => 'Un chemin de fichier doit être fourni lors de l’ajout par nom de fichier',
     'attachment.invalid_cid' => 'Format de Content-ID invalide : {cid} (la RFC 2392 exige le format msg-id)',

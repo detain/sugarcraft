@@ -44,7 +44,7 @@ return [
     'email.invalid_address' => 'Neplatná e-mailová adresa: {addr}',
     'email.crlf_in_header' => 'V hlavičce {field} zjištěno vložení CRLF',
     'resend.send_cancelled' => 'Odeslání Resend zrušeno před zahájením',
-    'resend.curl_missing' => 'Pro transport Resend je vyžadován ext-curl (SMTP transport žádné extenze nevyžaduje)',
+    'resend.curl_missing' => 'Pro transport Resend je vyžadován ext-curl (SMTP transport žádné extenze pro obyčejné SMTP nevyžaduje; pro TLS ext-openssl)',
     'attachment.unreadable' => 'Soubor přílohy není čitelný: {path}',
     'attachment.no_path' => 'Při přikládání podle názvu souboru musí být zadána cesta k souboru',
     'attachment.invalid_cid' => 'Neplatný formát Content-ID: {cid} (RFC 2392 vyžaduje formát msg-id)',

@@ -44,7 +44,7 @@ return [
     'email.invalid_address' => 'Ongeldig e-mailadres: {addr}',
     'email.crlf_in_header' => 'CRLF-injectie gedetecteerd in {field}-header',
     'resend.send_cancelled' => 'Resend-verzending geannuleerd voordat deze begon',
-    'resend.curl_missing' => 'ext-curl is vereist voor de Resend-transport (SMTP-transport heeft geen extensies nodig)',
+    'resend.curl_missing' => 'ext-curl is vereist voor de Resend-transport (SMTP-transport heeft geen extensies nodig voor onbeveiligd SMTP; ext-openssl voor TLS)',
     'attachment.unreadable' => 'Bijlagebestand is niet leesbaar: {path}',
     'attachment.no_path' => 'Er moet een bestandspad worden opgegeven bij bijvoegen via bestandsnaam',
     'attachment.invalid_cid' => 'Ongeldige Content-ID-indeling: {cid} (RFC 2392 vereist de msg-id-indeling)',

@@ -51,7 +51,7 @@ return [
     'email.invalid_address' => 'Ungültige E-Mail-Adresse: {addr}',
     'email.crlf_in_header' => 'CRLF-Injection im {field}-Header erkannt',
     'resend.send_cancelled' => 'Resend-Versand vor dem Start abgebrochen',
-    'resend.curl_missing' => 'ext-curl wird für den Resend-Transport benötigt (der SMTP-Transport benötigt keine Erweiterungen)',
+    'resend.curl_missing' => 'ext-curl wird für den Resend-Transport benötigt (der SMTP-Transport benötigt für einfaches SMTP keine Erweiterungen; für TLS ext-openssl)',
     'attachment.unreadable' => 'Anhangsdatei ist nicht lesbar: {path}',
     'attachment.no_path' => 'Beim Anhängen über einen Dateinamen muss ein Dateipfad angegeben werden',
     'attachment.invalid_cid' => 'Ungültiges Content-ID-Format: {cid} (RFC 2392 verlangt das msg-id-Format)',
