@@ -117,8 +117,7 @@ behaviour. `Enqueue`'s surplus is NOT transient: persistent (non-expiring)
 alerts accumulate in the queue and stay there until the host clears or
 replaces them, so under `Enqueue` the queue length only ever grows.
 
-Per-alert SIZE is bounded too (lib-reviews-1102 M6: one hostile 32 KB string
-measured 14 s inside `view()`): `Toast::MAX_MESSAGE_CELLS` (fixed at 8192)
+Per-alert SIZE is bounded too: `Toast::MAX_MESSAGE_CELLS` (fixed at 8192)
 truncates an over-long message with a visible `" …[truncated]"` marker, and
 `Toast::MAX_ACTIONS_PER_ALERT` (fixed at 64) paints only the first 64 buttons
 — the rest fold into a visible `"[+N more]"` row. The caps bind the RENDER
