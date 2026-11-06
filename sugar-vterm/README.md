@@ -342,7 +342,8 @@ by N and ignores tab stops entirely, and `TBC` no-ops), `b` REP (renderer
 only, the emulator discards it), and BCE
 background-colour erase (`X` ECH and mode-3 scrollback clearing are
 emulator-only). The renderer honours the same DECAWM/DECTCEM private
-modes, origin-mode clamps, and SGR set as the emulator.
+modes and origin-mode clamps as the emulator, but only part of the SGR
+set — see "SGR attributes" below.
 
 ### DECSET/DECRST mode roster (emulator `ModeHandler`)
 
@@ -441,19 +442,25 @@ DEC 2026 sections below.
 
 ## SGR attributes
 
-`Sgr\Sgr` tracks the current pen state. Supported attributes:
+`Sgr\Sgr` tracks the current pen state. Supported attributes (the emulator
+pen carries the full roster, but the renderer's `CsiHandlerImpl` lights
+only the five `Cell::ATTR_*` bits: `2`/`5`/`6`/`8` have no renderer arm
+and are accepted as parity no-ops, and every underline style collapses
+onto the single underline bit. Consumers that paint from the renderer's
+grid — candy-vcr's `TapeToGif` included — therefore draw faint, blinking
+and hidden text at full brightness):
 
 | SGR param | Effect |
 |-----------|--------|
 | `0` | Reset all attributes. |
 | `1` | Bold. |
-| `2` | Faint. |
+| `2` | Faint (pen bit only — no renderer arm). |
 | `3` | Italic. |
 | `4` (or `4:1`) | Single underline. |
 | `4:2` / `4:3` / `4:4` / `4:5` | Double / Curly / Dotted / Dashed underline. |
-| `5` / `6` | Blink (slow and rapid fold onto one bit). |
+| `5` / `6` | Blink (slow and rapid fold onto one pen bit; no renderer arm). |
 | `7` | Inverse (swap fg/bg). |
-| `8` | Hidden (conceal) — emulator tracks it, but `Screen::lines()` is a TEXT channel: concealed text still appears in extracted content, so spoiler/secrets hygiene is the consuming host's job. |
+| `8` | Hidden (conceal) — tracked on the pen, no renderer arm. `Screen::lines()` is a TEXT channel: concealed text still appears in extracted content, so spoiler/secrets hygiene is the consuming host's job. |
 | `9` | Strikethrough. |
 | `21` | Accepted and ignored — the SGR handler has no arm for it. |
 | `22` | Reset bold + faint. |
