@@ -59,20 +59,23 @@ use SugarCraft\SshServer\StreamHelper;
  * If a secret must not be visible, collect it over a channel you control
  * instead of this one.
  *
- * Line format (RFC-4256-shaped, plaintext):
+ * Line format (RFC-4256-shaped, plaintext). Challenges are emitted with
+ * LF line endings only; a client may answer with CRLF, and each response
+ * line is read whole and its trailing CR trimmed, so both shapes land as
+ * the same value:
  *
- *     Name\r\n
- *     Instruction\r\n
- *     NumberOfPrompts\r\n
- *     Prompt1\r\n
- *     Echo1\r\n        <-- 'true' or 'false', a label only
- *     Prompt2\r\n
- *     Echo2\r\n        <-- 'true' or 'false', a label only
+ *     Name\n
+ *     Instruction\n
+ *     NumberOfPrompts\n
+ *     Prompt1\n
+ *     Echo1\n          <-- 'true' or 'false', a label only
+ *     Prompt2\n
+ *     Echo2\n          <-- 'true' or 'false', a label only
  *     ...
  *     [warning line]   <-- only when some challenge has echo: false
  *
- *     Response1\r\n
- *     Response2\r\n
+ *     Response1\n
+ *     Response2\n
  *     ...
  */
 final class KeyboardInteractive implements Middleware
