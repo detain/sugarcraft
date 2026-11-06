@@ -168,6 +168,22 @@ final class BinRepoCommandsTest extends TestCase
 
         $list = $this->runBin(['repo', 'list', $this->tmpDir]);
         $this->assertMatchesRegularExpression('/showcase\s*\(public\)/', $list['out']);
+
+        // The create note must be state-aware: the operator already passed
+        // --public, so repeating "private until --public" names an action
+        // they have taken and hides the knob that actually gates them.
+        $this->assertStringContainsString('published via its marker', $created['out']);
+        $this->assertStringNotContainsString('private until --public', $created['out']);
+    }
+
+    public function testRepoCreatePrivateNoteStillNamesThePendingPublishAction(): void
+    {
+        $created = $this->runBin(['repo', 'create', 'quiet', $this->tmpDir]);
+        $this->assertSame(0, $created['rc'], $created['out'] . $created['err']);
+
+        $this->assertStringContainsString('private until --public', $created['out']);
+        $this->assertStringContainsString('git.allow_anonymous_read', $created['out']);
+        $this->assertStringNotContainsString('published via its marker', $created['out']);
     }
 
 

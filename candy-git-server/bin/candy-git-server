@@ -415,7 +415,10 @@ function cmdUser(array $args): int
 /**
  * Mint an HTTP proxy-token signature for the `token` trust mode: the
  * "<expiry-unix>.<hex-hmac>" string the server's verifyUserToken accepts.
- * Requires the data path's config.yaml to define a non-empty auth.secret.
+ * Requires the data path's config.yaml to define a non-empty
+ * http.auth_secret — that is the only secret key the loader parses
+ * (Config reads it off the `http:` block), so a top-level `auth:` section
+ * would be silently dead and mint nothing.
  */
 function cmdUserToken(array $args): int
 {
@@ -434,7 +437,7 @@ function cmdUserToken(array $args): int
     }
 
     if ($config->authSecret === '') {
-        return error("token: auth.secret is not configured for this data path; set it in config.yaml before minting tokens\n");
+        return error("token: http.auth_secret is not configured for this data path; set it under the http: section of config.yaml before minting tokens\n");
     }
 
     return say(\SugarCraft\GitServer\HttpSmartProtocol\Server::mintUserToken(
@@ -707,8 +710,15 @@ function cmdRepoCreate(array $args): int
     // running server, and a "Clone URL: ssh://…" line invites users to
     // believe the repo is reachable before one is (i18n law — raw string,
     // all 16 locales stay untouched and the cli.repo_clone_url key goes
-    // unused). The hint names the command that actually serves it.
-    echo "Note: start a listener to serve it: candy-git-server serve --http --repo-root {$dataPath}/repositories (private until --public; anonymous-read needs git.allow_anonymous_read).\n";
+    // unused). The hint names the command that actually serves it. The
+    // visibility clause is state-aware: an operator who passed --public
+    // has already satisfied "private until --public", so telling them to
+    // do it again while the lever they still need is git.allow_anonymous_read
+    // would send them hunting the wrong knob.
+    $visibilityNote = $makePublic
+        ? "published via its marker; anonymous-read still needs git.allow_anonymous_read on"
+        : 'private until --public; anonymous-read needs git.allow_anonymous_read';
+    echo "Note: start a listener to serve it: candy-git-server serve --http --repo-root {$dataPath}/repositories ({$visibilityNote}).\n";
 
     return 0;
 }

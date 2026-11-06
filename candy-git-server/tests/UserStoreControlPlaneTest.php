@@ -246,4 +246,26 @@ final class UserStoreControlPlaneTest extends TestCase
         $this->assertSame(1, $r['rc']);
         $this->assertStringContainsString('corrupt', $r['err']);
     }
+
+    /**
+     * The refusal wording used to name `auth.secret` — a key the loader
+     * never parses. Operators following it would add a dead top-level
+     * section; the only parsed home for the secret is http.auth_secret.
+     */
+    public function testUserTokenRefusalNamesTheParsedConfigKeyNotADeadOne(): void
+    {
+        \file_put_contents($this->tmpDir . '/config.yaml', "http:\n  listen_addr: \":0\"\n");
+        $r = $this->runBin(['user', 'token', 'alice'], ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir]);
+        $this->assertSame(1, $r['rc']);
+        $this->assertStringContainsString('http.auth_secret', $r['err']);
+        $this->assertStringNotContainsString('token: auth.secret', $r['err']);
+    }
+
+    public function testUserTokenMintsWhenSecretSitsUnderHttp(): void
+    {
+        \file_put_contents($this->tmpDir . '/config.yaml', "http:\n  auth_secret: \"s3cr3t\"\n");
+        $r = $this->runBin(['user', 'token', 'alice'], ['CANDY_GIT_SERVER_DATA_PATH' => $this->tmpDir]);
+        $this->assertSame(0, $r['rc'], $r['out'] . $r['err']);
+        $this->assertMatchesRegularExpression('/^\d+\.[0-9a-f]{64}$/', \trim($r['out']));
+    }
 }
