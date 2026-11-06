@@ -79,7 +79,9 @@ The key table is fixed in the player model; keys are not rebindable.
 
 - **ext-gd** decodes the GIF (declared as a `suggest`). The CLI checks for it
   before touching the file and exits non-zero with a clear message.
-- Both presets emit 24-bit truecolor SGR (`38;2`/`48;2`). There is no
+- Both presets emit 24-bit truecolor SGR: `solid` paints the cell background
+  (`48;2`) with a space glyph, `density` paints the foreground (`38;2`) on a
+  ramp character. There is no
   256-color fallback ladder and no `NO_COLOR` / monochrome mode. On a
   terminal without truecolor the blocks degrade (often to default or
   nearby-index colour); the `density` preset's character ramp stays
