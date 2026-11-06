@@ -242,6 +242,19 @@ see `MouseWheelMsg` gates). Press-free hover needs motion reporting
 (`1003`); the drag tracker's cross-boundary moves need at least `1002`;
 click trackers work on plain `1000` reporting alone.
 
+One caveat on that last sentence: "`1000` alone" means the terminal sends
+`1000`-style press/release/wheel reports, not that `?1000h` by itself is
+enough to enable. On the default stack the reading side is sugar-core's
+`InputReader`, which decodes the SGR form `CSI < b ; x ; y M|m` and nothing
+else — there is no X10 (mode-9/1000 legacy `CSI M b x y`) decoder here. So
+turning on `?1000h` without its SGR companion produces **zero** mouse
+messages this lib can see; the two go together, which is exactly what core's
+`Ansi::mouseAllOn()` emits (`?1000h ?1006h`), and core's
+`mouseCellMotionOn()` / `mouseAllMotionOn()` pair `?1002h` / `?1003h` with
+the same `?1006h` companion. Readers that do speak X10 live outside this dependency set: sugar-mouse
+requires `sugarcraft/sugar-core` only, and sugar-input's X10 path is an opt-in
+host arrangement, not something this lib relies on.
+
 **Mode lifecycle.** This lib never touches the TTY, so it cannot undo what
 it never wrote: whoever enables `1000`/`1002`/`1003`/`1006` owns the
 disable on every exit path — including crashes (a `register_shutdown` hook
