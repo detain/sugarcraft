@@ -621,10 +621,12 @@ final class Toast
     }
 
     /**
-     * Extend the auto-dismiss timer on the alert at $index (a
-     * {@see activeAlerts()} index — the live queue) by $additionalSeconds
-     * from now. Has no effect if $index is out of bounds or the alert never expires — a
-     * persistent alert has no timer to extend (mirrors {@see extendAll()}).
+     * Re-arm the auto-dismiss timer on the alert at $index (a
+     * {@see activeAlerts()} index — the live queue) to $additionalSeconds
+     * from now. This is a reset, not a push-back: extending an alert that
+     * still has 30 s left by 5 s leaves it with 5 s. Has no effect if $index
+     * is out of bounds or the alert never expires — a persistent alert has
+     * no timer to extend (mirrors {@see extendAll()}).
      */
     public function extendAlert(int $index, float $additionalSeconds): self
     {
@@ -642,7 +644,8 @@ final class Toast
     }
 
     /**
-     * Extend the auto-dismiss timer on all alerts by $additionalSeconds from now.
+     * Re-arm the auto-dismiss timer on every expiring alert to
+     * $additionalSeconds from now (a reset — see {@see extendAlert()}).
      * Only affects alerts that have an expiry; non-expiring alerts are unchanged.
      */
     public function extendAll(float $additionalSeconds): self

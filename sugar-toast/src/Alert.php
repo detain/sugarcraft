@@ -109,7 +109,10 @@ final class Alert
     }
 
     /**
-     * Extend the expiry by $additionalSeconds from now.
+     * Re-arm the expiry: the alert now expires $additionalSeconds from NOW.
+     * This is a reset, not a push-back — extending an alert that still has
+     * 30 s left by 5 s leaves it with 5 s, the behaviour a pointer-hover
+     * re-show wants. Clears persistence alongside (a timer was asked for).
      */
     public function withExtendedExpiry(float $additionalSeconds): self
     {

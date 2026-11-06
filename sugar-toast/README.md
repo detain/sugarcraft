@@ -469,8 +469,8 @@ already over the new cap survive until the next push evicts them.
 | `->push(Alert $alert): self` | Enqueue a pre-built `Alert` (styled/actioned) |
 | `->cancelAlert(int $index): self` | Make a queued alert persistent (never auto-dismisses) |
 | `->removeAlert(string $id): self` | Retire the queued alert with this id, unrecorded (companion of id updates) |
-| `->extendAlert(int $index, float $additionalSeconds): self` | Push one queued alert's expiry later |
-| `->extendAll(float $additionalSeconds): self` | Push every expiring alert's expiry later |
+| `->extendAlert(int $index, float $additionalSeconds): self` | Re-arm one queued alert's timer to N seconds from NOW (a reset, not a push-back: 30 s left + extend(5) ⇒ 5 s left) |
+| `->extendAll(float $additionalSeconds): self` | Re-arm every expiring alert's timer to N seconds from NOW |
 | `->allowEscToClose(): bool` | Read the Escape-dismiss preference flag (host consumes it; the renderer handles no input) |
 | `->accessibleText(): bool` | Read the accessible-text preference flag |
 | `->error(string $message): self` | Convenience queue for `ToastType::Error` (inherits duration/expiry rules of `alert()`) |
@@ -507,7 +507,7 @@ already over the new cap survive until the next push evicts them.
 | `Alert` | `->id: ?string` | Stable identity for update-in-place: re-queuing an alert with the same id through `alert()`/`progressToast()`/`push()` REPLACES the live alert at its queue position instead of appending a second box; `null` = anonymous, always appends |
 | `Alert` | `withoutExpiry()` | Make this alert persistent (never auto-dismisses) — alias of `withCancelledExpiry()`, sets the explicit sentinel |
 | `Alert` | `withCancelledExpiry()` | Set the persistent sentinel + clear the expiry (used by `Toast::cancelAlert()`) |
-| `Alert` | `withExtendedExpiry(float)` | Move the expiry later by N seconds |
+| `Alert` | `withExtendedExpiry(float)` | Reset the expiry to N seconds from NOW |
 | `Alert` | `withBackgroundColor(?Color)` | Override box background (`null` = type default) |
 | `Alert` | `withForegroundColor(?Color)` | Override text colour (`null` = type default) |
 | `Alert` | `withBorderColor(?Color)` | Override border colour (`null` = type default) |

@@ -57,7 +57,7 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><td>Toast</td><td>progressToast(ToastType|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)</td><td>Add alert with progress bar (finite 0.0–1.0; out-of-range clamps, NAN/INF throw); same expiry semantics as alert(); re-calling with the same $id advances one box instead of appending</td></tr>
 <tr><td>Toast</td><td>push(Alert $alert)</td><td>Enqueue a pre-built Alert (styled/actioned)</td></tr>
 <tr><td>Toast</td><td>cancelAlert(int $index)</td><td>Make a queued alert persistent (never auto-dismisses); $index addresses the <code>activeAlerts()</code> order</td></tr>
-<tr><td>Toast</td><td>extendAlert(int $index, float $additionalSeconds) / extendAll(float)</td><td>Push one (in <code>activeAlerts()</code> order) / every expiring alert's expiry later</td></tr>
+<tr><td>Toast</td><td>extendAlert(int $index, float $additionalSeconds) / extendAll(float)</td><td>Re-arm one (in <code>activeAlerts()</code> order) / every expiring alert's timer to <code>$additionalSeconds</code> from now — a reset, not a push-back</td></tr>
 <tr><td>Toast</td><td>allowEscToClose(): bool</td><td>Read the Escape-dismiss preference flag</td></tr>
 <tr><td>Toast</td><td>error(string), warning(string), info(string), success(string)</td><td>Convenience alert helpers</td></tr>
 <tr><td>Toast</td><td>hasActiveAlert(): bool</td><td>Returns true if non-expired alerts are queued</td></tr>
@@ -80,7 +80,7 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><td>Alert</td><td>isExpired(): bool</td><td>Check expiry</td></tr>
 <tr><td>Alert</td><td>withExpiry(float $duration)</td><td>Set expiry from now</td></tr>
 <tr><td>Alert</td><td>withoutExpiry() / withCancelledExpiry()</td><td>Make the alert persistent (never auto-dismisses)</td></tr>
-<tr><td>Alert</td><td>withExtendedExpiry(float)</td><td>Move the expiry later by N seconds</td></tr>
+<tr><td>Alert</td><td>withExtendedExpiry(float)</td><td>Reset the expiry to N seconds from NOW</td></tr>
 <tr><td>Alert</td><td>withBackgroundColor(?Color) / withForegroundColor(?Color) / withBorderColor(?Color)</td><td>Per-alert colour overrides (<code>null</code> = type default)</td></tr>
 <tr><td>Action</td><td>new(string $label, \Closure(): void $callback)</td><td>Factory</td></tr>
 <tr><td>Action</td><td>$label: non-empty-string</td><td>User-visible button label (readonly; normalised at construction — inline SGR kept, other control/escape constructs stripped, printable-empty refused)</td></tr>
