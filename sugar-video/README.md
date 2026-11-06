@@ -70,6 +70,8 @@ php examples/play.php video.mp4 auto
 SUGAR_VIDEO_COLS=120 SUGAR_VIDEO_ROWS=40 php examples/play.php synthetic
 ```
 
+These demos resolve the autoloader from a repo checkout (the library's own `vendor/` or the monorepo root) and exit with an actionable error elsewhere — when sugar-video is consumed as a Composer dependency, `examples/` ships inside `vendor/sugarcraft/sugar-video/` and works the same way only if that copy's own dependencies are installed; for your project, script the API below instead.
+
 ### Rendering modes
 
 | Mode | Description | Terminal requirement |
