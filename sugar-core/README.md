@@ -427,7 +427,7 @@ single `fr.php` automatically serves `fr-fr`, `fr-ca`, `fr-be`, etc. —
 only add a regional file (e.g. `pt-br.php`) when the wording genuinely
 diverges from the base language. A key missing from your locale file falls
 back to the English value, so partial locales surface as mixed-language
-text, never a fatal error; `tests/LocaleKeyParityTest` fails the build when
+text, never a fatal error; `tests/I18n/LocaleKeyParityTest.php` fails the build when
 a shipped locale drifts from the `en` key set.
 
 See [`LOCALES.md`](https://github.com/detain/sugarcraft/blob/master/LOCALES.md)
