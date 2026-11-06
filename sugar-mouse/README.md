@@ -76,7 +76,7 @@ if ($click !== null) {
 | `Sentinel` | The two framing codepoints (`U+E000` open / `U+E001` close), anchored to sugar-core |
 | `ClickResult` | The agreed press+release pair `ZoneClickTracker::track()` returns on a confirmed click |
 | `Lang` | Refusal-message lookup for this package's catalogue (`lang/`, `sugar-mouse:`-prefixed keys) |
-| `Zones\Msg\MsgZoneInBounds` | Zone-bound Msg emitted by `Manager::anyInBoundsAndUpdate()` into a Model's `update()` |
+| `Zones\MsgZoneInBounds` | Zone-bound Msg emitted by `Manager::anyInBoundsAndUpdate()` into a Model's `update()` — the only Zones-layer message that lives outside the `Msg\` namespace |
 
 `Selection` / `SelectionRange` were ported from candy-code's
 `Tui\TextSelection`, and candy-code now runs on them: `Tui\TextSelection` is
