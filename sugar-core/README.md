@@ -806,7 +806,7 @@ echo $action->label;          // 'delete foo'
 
 ## Atomic durable JSON files (`Util\AtomicJsonFile`)
 
-The pattern eight sibling libs consolidate onto: `AtomicJsonFile::path($file)
+The sibling-lib pattern it was built for: `AtomicJsonFile::path($file)
 ->write($data)` serialises to a `0600` temp inode, `fsync`s, then
 `rename()`s, so a reader never sees a half-written file, and takes a
 `Semaphore`-guarded lock so concurrent processes serialise.
