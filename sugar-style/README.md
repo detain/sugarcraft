@@ -577,7 +577,7 @@ Available factories:
 
 | Method | Palette |
 |---|---|
-| `Theme::dark()` | Dark, high-contrast |
+| `Theme::dark()` | Dark; high-contrast **text** (measured fg/bg 11.6:1, AAA) — border/separator slots are decorative non-text (~1.5:1) by design |
 | `Theme::light()` | Light theme |
 | `Theme::dracula()` | Dracula |
 | `Theme::tokyoNight()` | Tokyo Night |
