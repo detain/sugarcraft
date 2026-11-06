@@ -172,7 +172,7 @@ $pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></p
 <tr><td>PumpOptions</td><td>withOnChildExit(fn(code))</td><td>Register child-exit callback</td></tr>
 <tr><td>PumpOptions</td><td>withRecorder(recorder)</td><td>Attach session recorder (tee stdin/master bytes)</td></tr>
 <tr><td>PumpOptions</td><td>sshDefault()</td><td>Identity preset — returns the stock defaults (the values InProcessTransport hardcodes); kept for call-site intent</td></tr>
-<tr><td>Child</td><td>pid()</td><td>Child process ID (a method — reading <code>-&gt;pid</code> as a property is a fatal)</td></tr>
+<tr><td>Child</td><td>pid()</td><td>Child process ID — the contract type <code>Contract\Child</code> declares only the method; the <code>public readonly int $pid</code> property exists on the concrete <code>PosixChild</code>/<code>Child</code> classes but fatals behind a contract type</td></tr>
 <tr><td>Child</td><td>exited(), wait()</td><td>Check/await child exit (wait() probes via WNOHANG first; signal deaths surface as 128+signo)</td></tr>
 <tr><td>Child</td><td>kill(signal)</td><td>Signal the child; no-op once reaped, PtyException when the kill(2) itself fails</td></tr>
 <tr><td>ControllingTerminal</td><td>claim(fd)</td><td>Claim a fd as controlling terminal via setsid() + ioctl(TIOCSCTTY)</td></tr>
@@ -182,7 +182,7 @@ $pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></p
 <tr><td>AnsiOutputParser + SgrHandler</td><td>feed(bytes) / state()</td><td>Optimistic SGR state tracking over output (POSIX masters; OSC not tracked)</td></tr>
 <tr><td>PosixProcess</td><td>wait() / kill() / exitCode() / stdoutBytes()</td><td>Plain proc_open child with pipe capture (no PTY)</td></tr>
 <tr><td>ReactPump</td><td>start() / stop()</td><td>The byte pump driven by the ReactPHP event loop instead of a blocking select</td></tr>
-<tr><td>MultiPump</td><td>add(session) / tick() / runAsync()</td><td>Multiplex many sessions on one loop (sync tick delivers keepalive; callbacks ride PosixPump/ReactPump)</td></tr>
+<tr><td>MultiPump</td><td>add(master, stdoutSink, child?, opts?) / tick() / runAsync()</td><td>Multiplex many sessions on one loop (sync tick delivers keepalive; callbacks ride PosixPump/ReactPump)</td></tr>
 </table>
   </div>
 </section>
