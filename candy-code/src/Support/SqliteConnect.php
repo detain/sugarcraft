@@ -25,9 +25,9 @@ use PDO;
  * per-cache `ATTR_TIMEOUT` dials (2 s and 5 s, each its own guess at the same
  * knob), and it is the spelling the docblock has always named.
  *
- * WHAT THIS DOES NOT OWN: journal mode, foreign keys, synchronous, umask —
- * those are per-store decisions and stay at the stores. This arms the floor
- * every store stands on. `Cli\DoctorChecks::pdoDriverProbe()` is the one raw
+ * WHAT THIS DOES NOT OWN: journal mode, foreign keys, synchronous, page
+ * cache size, umask — those are per-store decisions and stay at the stores.
+ * This arms the floor every store stands on. `Cli\DoctorChecks::pdoDriverProbe()` is the one raw
  * `new \PDO` left in `src/` and must stay raw: its whole job is to throw
  * `could not find driver` for a DSN no driver claims, before any statement
  * could run. The census pin is `tests/Session/SqliteConnectCensusTest`.
