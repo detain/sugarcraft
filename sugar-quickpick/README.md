@@ -372,9 +372,10 @@ final readonly class FilteredItem implements Item {
 use SugarCraft\QuickPick\History\FileHistory;
 use SugarCraft\QuickPick\FilteredItem;
 
-// Point at a history file. Nothing touches the filesystem yet — the file is
-// created lazily on the first append() via exclusive-open, then chmod'ed 0600
-// before the first payload line. That chmod is best-effort: if the filesystem
+// Point at a history file. Without a baseDir, nothing touches the filesystem
+// yet — the file is created lazily on the first append() via exclusive-open,
+// then chmod'ed 0600 before the first payload line. That chmod is
+// best-effort: if the filesystem
 // refuses it, the mode follows the process umask and nothing is signalled.
 // Use a path you own; on shared hosts, never a predictable
 // world-writable location such as /tmp (a planted symlink there is refused
@@ -383,9 +384,12 @@ use SugarCraft\QuickPick\FilteredItem;
 // missing parent surfaces as a RuntimeException on the first append().
 $history = new FileHistory(getenv('HOME') . '/.myapp/history.jsonl');
 
-// Optionally jail the file inside a private base directory: paths that
-// resolve outside it (via '..', an absolute path elsewhere, a symlinked
-// parent — or a symlink at the file itself) are rejected at construction.
+// Optionally jail the file inside a private base directory. That check is
+// EAGER, not lazy: the constructor realpath-confines the path immediately,
+// rejects anything resolving outside the base (via '..', an absolute path
+// elsewhere, a symlinked parent — or a symlink at the file itself), and
+// throws InvalidArgumentException when the base directory itself does not
+// exist.
 $history = new FileHistory('history.jsonl', baseDir: getenv('HOME') . '/.myapp');
 
 // Append an Item (stored as a JSON line: {"n":1,"v":"apple"}\n).
