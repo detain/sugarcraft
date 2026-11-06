@@ -11,6 +11,10 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * @covers \SugarCraft\ColorProfile\DetectionChain
+ *
+ * The 1-13 ladder numbering asserted throughout this file is the enumeration
+ * in DetectionChain's class docblock and the README ladder section — the three
+ * are parallel-maintained; change the ladder and you change all three.
  */
 final class DetectionChainTest extends TestCase
 {

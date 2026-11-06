@@ -116,7 +116,10 @@ raise, never the ceiling. Measured: `{TERM_PROGRAM: WezTerm, TERM: xterm}`
 answers Ansi on `Palette` but TrueColor on `TerminalProbe` (Phase-3 upgrade).
 `README`, the `DetectionChain` docblock and the tests follow this one numbering
 (the chain levels `truecolor`/`ansi256`/`ansi`/`ascii`/`none` map to the enum
-cases `TrueColor`/`Ansi256`/`Ansi`/`Ascii`/`NoTTY` respectively):
+cases `TrueColor`/`Ansi256`/`Ansi`/`Ascii`/`NoTTY` respectively). The numbered
+list below is duplicated in `DetectionChain`'s class docblock — that docblock
+carries the enumeration beside this prose; a ladder change must edit both (no
+drift pin guards this genre yet):
 
 1. `CLICOLOR_FORCE=1` → TrueColor (overrides every env leg — step 0 can still outrank it)
 2. `FORCE_COLOR` (non-empty) → level: numeric 3+ → TrueColor (as do `true`/`yes`/`on` in any case), `2` → Ansi256, `1` → Ansi; every other spelling (`0`/`false`/`off`/…) → `Ascii` floor (color reduced to the black/white pair, decoration kept)
@@ -473,6 +476,10 @@ Beyond the env ladder above, the library exposes a richer capability surface:
 - A `Palette`/`TerminalProbe` constructed with a non-empty injected `$env` map
   is **hermetic**: the map completely replaces the ambient environment
   (`Env::resolve()`), it does not overlay it — pass every key you care about.
+- The **empty** map is not hermetic: `Env::resolve([])` falls through to the
+  ambient environment — `[]` means "use what the process already has", never
+  "no environment". A test wanting a controlled env must inject at least one
+  key (this trap was hit live during review).
 
 ## Deprecation: StandardColors mutable statics
 
