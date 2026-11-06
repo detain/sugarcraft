@@ -481,7 +481,7 @@ leaving the child and PTY for the caller to reap:
 |---|---|---|
 | `keepalive` | idle tick (stream_select → 0) | Legacy heartbeat alias; prefer `onIdle` |
 | `onIdle` | idle tick — every `stream_select` timeout | Keepalive pings, polling housekeeping, any periodic task |
-| `onSigwinch` | terminal dimensions change | Forward host resize into child's TIOCSWINSZ |
+| `onSigwinch` | the pump *observes* `MasterPty::size()` differing from the last-known size on an idle tick — polled between reads, never signalled | React to a resize the consumer's `SignalForwarder` already applied; the pump itself never writes TIOCSWINSZ |
 | `onChildExit` | child process exits | Resource cleanup, notification |
 
 `PumpOptions::sshDefault(): self` — identity preset. Returns stock
@@ -498,10 +498,15 @@ $opts = PumpOptions::sshDefault()->withOnIdle(fn () => error_log('alive'));
 
 **`onIdle` vs `onSigwinch`:** These are independent hooks.
 `onIdle` fires on *every* idle tick (no I/O ready). `onSigwinch`
-fires only when `MasterPty::size()` differs from the last known size
-— driven by the consumer's `SignalForwarder` callback. Do not conflate
-them: if you were passing `onSigwinch(0, 0)` as a fake idle tick,
-migrate to `onIdle`.
+fires only when `MasterPty::size()` differs from the last known size —
+a **polled size-diff observer**, not a signal hook: the SIGWINCH itself
+is consumed by the consumer's own `SignalForwarder` wiring, and the
+pump merely notices the resulting size change between reads. Two
+consequences: a session that opened at 0×0 (a refused ioctl at open)
+never fires it until a real size is established, and `MultiPump` does
+not deliver it at all (`tick()`/`runAsync()` drive `keepalive` only).
+Do not conflate them: if you were passing `onSigwinch(0, 0)` as a fake
+idle tick, migrate to `onIdle`.
 
 ```php
 use SugarCraft\Pty\Posix\PosixPump;
