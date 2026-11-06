@@ -449,8 +449,8 @@ grace is "this long with no progress", not a cut-off mid-delivery.
 ## Pump callbacks
 
 `PumpOptions` exposes four optional callbacks covering the pump loop
-lifecycle, plus a `sshDefault()` named constructor for SSH-session-tuned
-behaviour and a `withPumpDeadlineUs(?int)` wall-clock bound — the pump
+lifecycle, plus a `sshDefault()` identity preset kept for call-site
+intent and a `withPumpDeadlineUs(?int)` wall-clock bound — the pump
 raises NO blanket I/O timeout; on expiry the run resolves with the
 still-running code (`-1` for `ReactPump`/`PosixPump` semantics),
 leaving the child and PTY for the caller to reap:
@@ -462,11 +462,13 @@ leaving the child and PTY for the caller to reap:
 | `onSigwinch` | terminal dimensions change | Forward host resize into child's TIOCSWINSZ |
 | `onChildExit` | child process exits | Resource cleanup, notification |
 
-`PumpOptions::sshDefault(): self` — SSH-session-tuned preset. Returns a
-`PumpOptions` with the same defaults (`chunkBytes`, `selectTimeoutUs`,
-`flushDeadlineSec`, `stdinEofGraceSec`, `veof`) previously hardcoded in
-`InProcessTransport`. Use when you need SSH-session behaviour outside
-the `sugar-ssh-server` transport layer:
+`PumpOptions::sshDefault(): self` — identity preset. Returns stock
+`PumpOptions` defaults: the values (`chunkBytes`, `selectTimeoutUs`,
+`flushDeadlineSec`, `stdinEofGraceSec`, `veof`) that `InProcessTransport`
+previously hardcoded have since become the class defaults, so the body is
+literally `return new self()`. Kept as a named entry point for call sites
+that mean "pump an interactive SSH session", including outside the
+`sugar-ssh-server` transport layer:
 
 ```php
 $opts = PumpOptions::sshDefault()->withOnIdle(fn () => error_log('alive'));
@@ -497,7 +499,7 @@ $opts = (new PumpOptions())
 - [`examples/pump-output.php`](examples/pump-output.php) — Long-running counter; demonstrates non-blocking read with timeout, line-by-line pumping.
 - [`examples/resize-forwarding.php`](examples/resize-forwarding.php) — Wire `SignalForwarder` to deliver host SIGWINCH into the child PTY's TIOCSWINSZ; observe the child's `tput cols / lines` flip mid-stream.
 - [`examples/multi-pump.php`](examples/multi-pump.php) — Multiplex several PTY sessions through one `MultiPump` tick loop with per-session prefixes.
-- [`examples/expect-login.php`](examples/expect-login.php) — `Expect` round-trip: send a token through the master, match it inside a bounded timeout, tear the child down on the house ladder.
+- [`examples/expect-login.php`](examples/expect-login.php) — `Expect` round-trip: send a token through the master, match it inside a bounded timeout, tear the child down with an explicit kill + wait, then close the master.
 
 ## Internationalization
 
