@@ -535,6 +535,19 @@ final class BinDispatchTest extends TestCase
         $this->assertStringNotContainsString('MIME-Version', $result['out']);
     }
 
+    public function testRenderFallbackIsPinnedByTypeNotMessageText(): void
+    {
+        // PB-MAIL-37: the render fallback used to compare $e->getMessage()
+        // against Lang::t('cli.no_transport') — a locale flip or a re-word of
+        // that key silently rerouted every broken config into the localhost
+        // preview. The absence is now its own type; pin the wiring so it
+        // cannot regress back into text matching.
+        $bin = (string) file_get_contents(__DIR__ . '/../bin/candy-mail');
+        $this->assertStringContainsString("new MissingTransportConfig(Lang::t('cli.no_transport'))", $bin);
+        $this->assertStringContainsString('catch (MissingTransportConfig)', $bin);
+        $this->assertStringNotContainsString("!== Lang::t('cli.no_transport')", $bin);
+    }
+
     public function testRenderStampsTheResendDivergence(): void
     {
         // M-V: Resend posts a JSON payload; the MIME preview must say so

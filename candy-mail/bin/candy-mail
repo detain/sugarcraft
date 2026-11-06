@@ -77,7 +77,7 @@ if ($archive !== '') {
 }
 
 use SugarCraft\Core\Util\Sanitize;
-use SugarCraft\Mail\{Email, Lang, Mailer, ResendTransport, SmtpTransport};
+use SugarCraft\Mail\{Email, Lang, Mailer, MissingTransportConfig, ResendTransport, SmtpTransport};
 
 // Guard: only auto-dispatch when this file IS the entry script. Embedded or
 // proxied launches (M-T) must call main($argv) and exit with its status —
@@ -190,11 +190,10 @@ function main(array $argv): int
     if ($args['render']) {
         try {
             $configured = buildTransport($args['opts']);
-        } catch (\RuntimeException $e) {
-            if ($e->getMessage() !== Lang::t('cli.no_transport')) {
-                fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.transport_error', ['message' => $e->getMessage()])) . "\n");
-                return 1;
-            }
+        } catch (MissingTransportConfig) {
+            // The absence is typed, not text-matched: a locale flip or a
+            // re-word of cli.no_transport can no longer reroute the loud
+            // broken-config path into the silent localhost preview.
             $configured = null; // preview without credentials stays possible
         } catch (\Throwable $e) {
             fwrite(STDERR, Sanitize::untrusted(Lang::t('cli.transport_error', ['message' => $e->getMessage()])) . "\n");
@@ -546,7 +545,7 @@ function buildTransport(array $flags = []): Transport
         return $transport;
     }
 
-    throw new \RuntimeException(Lang::t('cli.no_transport'));
+    throw new MissingTransportConfig(Lang::t('cli.no_transport'));
 }
 
 /** A string env value; absent-or-false reads as '' (the getenv() trap). */
