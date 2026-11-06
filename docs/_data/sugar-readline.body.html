@@ -63,7 +63,7 @@ $prompt-&gt;isSubmitted();                          // false (pending) on Esc/Ct
 <tr><td>Readline</td><td>fromStdin() / new StreamInputDriver($stream) / onKey(name, handler) / onMouse() / onFocus() / onPaste() / stop() / run(prompt, output)</td><td>TTY loop: feeds key events into any prompt and repaints it</td></tr>
 <tr><td>Mode\EmacsMode · Mode\ViMode</td><td>attach via TextPrompt::withMode()</td><td>Editing modes; vi normal drives history (j/k), edits (x/D), the unnamed register (yy/dd/diw → p) and undo (u)</td></tr>
 <tr><td>History\InMemoryHistory</td><td>new(maxHistory = 0) / push() / previous() / next() / search(query, fromIndex, direction) / reset() / clear()</td><td>Per-process store; collapses adjacent duplicates</td></tr>
-<tr><td>History\FileHistory</td><td>new(path, maxHistory = 0, tempDir = '', deferWrites = false) / push() / flush() / clear() / search()</td><td>Cross-process history: 0600 file, escaped one-line entries, sidecar-locked bounded writes, symlinked paths refused</td></tr>
+<tr><td>History\FileHistory</td><td>new(path, maxHistory = 0, tempDir = '', deferWrites = false) / push() / flush() / clear() / search()</td><td>Cross-process history: 0600 file, escaped one-line entries, sidecar-locked bounded writes, symlinked paths refused; deferred pushes stay queued until flush() and are lost on a hard kill (SIGKILL)</td></tr>
 <tr><td>UndoManager</td><td>push(state) / undo() / redo() / canUndo() / canRedo()</td><td>Immutable bounded (512) snapshot stack; attach via withUndoManager()</td></tr>
 <tr><td>Key</td><td>Up, Down, Enter, Space, Escape, CtrlC, …</td><td>Canonical key names for handleKey() — raw control bytes normalize to the same language</td></tr>
 </table>

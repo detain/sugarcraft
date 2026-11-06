@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarReadline — SugarCraft</title>
-<meta name="description" content="SugarReadline: Interactive prompts — text, confirm, select, multi-select, textarea.">
+<meta name="description" content="Interactive line-editing prompts for terminal UIs — text, selection, confirmation, multi-selection and textarea.">
 <meta property="og:title" content="SugarReadline — SugarCraft">
-<meta property="og:description" content="Interactive prompts — text, confirm, select, multi-select, textarea.">
+<meta property="og:description" content="Interactive line-editing prompts for terminal UIs — text, selection, confirmation, multi-selection and textarea.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-readline.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-readline.html">
 <meta property="og:type" content="website">
@@ -42,7 +42,7 @@
       <img class="detail-icon" src="../img/icons/sugar-readline.png" alt="" aria-hidden="true">
       <div>
         <h2>SugarReadline</h2>
-        <p class="detail-sub">Interactive prompts — text, confirm, select, multi-select, textarea</p>
+        <p class="detail-sub">Interactive line-editing prompts for terminal UIs — text, selection, confirmation, multi-selection and textarea</p>
         <div class="detail-meta">
           <span class="tag-chip accent">inspired by <a href="https://github.com/erikgeiser/promptkit" style="color: inherit;">erikgeiser/promptkit</a></span>
           <span class="tag-chip">prompt</span><span class="tag-chip">input</span><span class="tag-chip">readline</span><span class="tag-chip">interactive</span>
@@ -82,7 +82,7 @@ $tools-&gt;selectedValues();                       // ['vim', 'git']</code></pre
     <pre class="code"><code class="language-php">use SugarCraft\Readline\{Readline, TextPrompt};
 
 $prompt = Readline::fromStdin()-&gt;run(TextPrompt::new('Your name: '), STDOUT);
-$prompt-&gt;isSubmitted();                          // false on Esc / Ctrl+C / EOF</code></pre>
+$prompt-&gt;isSubmitted();                          // false (pending) on Esc/Ctrl+C; left unsubmitted at EOF when Readline owns the pump</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -116,7 +116,7 @@ $prompt-&gt;isSubmitted();                          // false on Esc / Ctrl+C / E
 <tr><td>Readline</td><td>fromStdin() / new StreamInputDriver($stream) / onKey(name, handler) / onMouse() / onFocus() / onPaste() / stop() / run(prompt, output)</td><td>TTY loop: feeds key events into any prompt and repaints it</td></tr>
 <tr><td>Mode\EmacsMode · Mode\ViMode</td><td>attach via TextPrompt::withMode()</td><td>Editing modes; vi normal drives history (j/k), edits (x/D), the unnamed register (yy/dd/diw → p) and undo (u)</td></tr>
 <tr><td>History\InMemoryHistory</td><td>new(maxHistory = 0) / push() / previous() / next() / search(query, fromIndex, direction) / reset() / clear()</td><td>Per-process store; collapses adjacent duplicates</td></tr>
-<tr><td>History\FileHistory</td><td>new(path, maxHistory = 0, tempDir = '', deferWrites = false) / push() / flush() / clear() / search()</td><td>Cross-process history: 0600 file, escaped one-line entries, sidecar-locked bounded writes, symlinked paths refused</td></tr>
+<tr><td>History\FileHistory</td><td>new(path, maxHistory = 0, tempDir = '', deferWrites = false) / push() / flush() / clear() / search()</td><td>Cross-process history: 0600 file, escaped one-line entries, sidecar-locked bounded writes, symlinked paths refused; deferred pushes stay queued until flush() and are lost on a hard kill (SIGKILL)</td></tr>
 <tr><td>UndoManager</td><td>push(state) / undo() / redo() / canUndo() / canRedo()</td><td>Immutable bounded (512) snapshot stack; attach via withUndoManager()</td></tr>
 <tr><td>Key</td><td>Up, Down, Enter, Space, Escape, CtrlC, …</td><td>Canonical key names for handleKey() — raw control bytes normalize to the same language</td></tr>
 </table>
@@ -132,7 +132,7 @@ $prompt-&gt;isSubmitted();                          // false on Esc / Ctrl+C / E
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-readline/.vhs/basic.gif" alt="Text prompt" onerror="this.parentElement.style.display='none'">
                 <h3>Text prompt</h3>
-                <span class="demo-caption">Single-line text prompt with autocomplete.</span>
+                <span class="demo-caption">A guided tour of the four shipped prompt types: text, selection, confirmation and textarea.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-readline/.vhs/multi-select.gif" alt="Multi-select" onerror="this.parentElement.style.display='none'">

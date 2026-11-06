@@ -362,7 +362,9 @@ for the process lifetime; `FileHistory` persists them across processes —
 `new FileHistory($path, $maxHistory, $tempDir, $deferWrites)`: the file is
 created (or tightened, if it exists) at mode `0600`, loaded on construction,
 and flushed at the latest on destruction. With `$deferWrites = true`, pushes
-queue in memory until `flush()` batch-writes them. Pass a `$maxHistory` and
+queue in memory until `flush()` batch-writes them — queued entries are lost
+if the process dies before any flush runs (e.g. SIGKILL), so call `flush()`
+at each submit if the history must survive a hard kill. Pass a `$maxHistory` and
 the cap bounds the **file** too: bounded stores rewrite the whole file on
 each push, merging anything another process appended in between.
 
