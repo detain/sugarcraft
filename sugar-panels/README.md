@@ -429,9 +429,9 @@ written.
 
 | File | Shows |
 |------|-------|
-| `examples/basic.php` | Nested H/V layout with padding and titles |
+| `examples/basic.php` | Two separate single-level splits — a three-column horizontal row and a two-pane vertical stack, sized by `min*` hints |
 | `examples/borders.php` | Every `Border` preset, side by side with their names |
-| `examples/nested.php` | Deep nesting, including a `noBorder()` subtree |
+| `examples/nested.php` | A three-level vertical/horizontal/vertical nest — every box is bordered |
 | `examples/flex.php` | Fixed sidebar sized by its content plus a growing pane |
 | `examples/diff.php` | The stateful loop: full frame, delta frame, resize frame |
 
