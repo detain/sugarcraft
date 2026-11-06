@@ -2492,6 +2492,8 @@ candy-code lsp list                  # every installable language: pinned versio
                                      #   "not installed", and whether a release exists for this machine
 candy-code serve                     # WebSocket + HTTP server for the web UI, until Ctrl+C
                                      #   [--host IP] [--port N] [--allow-remote] [--allowed-origin LIST]
+                                     #   [--allowed-host HOST] [--allowed-ips LIST] [--allow-dir-browse]
+                                     #   [--tls-cert FILE --tls-key FILE]
                                      #   [--web-root DIR] [--no-web] [--allow-bypass] [--allow-root]
                                      #   [--detach] [--parent-pid PID]
 candy-code serve status|stop|logs|url|token
