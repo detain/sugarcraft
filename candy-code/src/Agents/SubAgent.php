@@ -91,6 +91,18 @@ final class SubAgent
     public array $inheritedContext = [];
 
     /**
+     * Dispatch priority when a width cap queues launches (see
+     * {@see AgentWorkerPool::dequeueNext()}): a higher value takes a freed
+     * seat ahead of lower-priority waiters, equal priorities keep submission
+     * order, and the field is inert without a cap — no cap means no
+     * contention, every submission dispatches immediately as before. It
+     * never queues anything that today would be refused: the refuse-vs-queue
+     * door and a halted batch are untouched by priority. 0 is normal, the
+     * pre-priority default that keeps every existing dispatch byte-identical.
+     */
+    public int $priority = 0;
+
+    /**
      * Where the run works (roadmap 4.9; honored by workflow stages since 4.10):
      * {@see Isolation::Worktree} gives it a git worktree of its own —
      * {@see \SugarCraft\Code\Tools\BuiltIn\TaskTool} for delegated runs and
