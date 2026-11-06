@@ -673,8 +673,11 @@ The launcher records the admin poll snapshots to SQLite — on by default, opt o
 SQL statement text is never persisted. The in-memory query history stores SQL statement TEXT — trimmed, with consecutive
 repeats de-duped at the record site (`App::runQuery()`, src/App.php:479-483; the second record site at :575-578 shares the law) —
 never result rows, and it is session-scoped only.
-The store speaks through the core `SQLite3` class, so `ext-sqlite3` is a hard requirement alongside `ext-pdo_sqlite`; a corrupt
-or unwritable history file now degrades loudly (`history recording DISABLED` on stderr at launch) instead of bricking the session.
+The store speaks through the core `SQLite3` class, so `ext-sqlite3` is a hard requirement alongside `ext-pdo_sqlite`. Faults
+degrade through two channels, never a crash: at launch a corrupt or unwritable file warns loudly on stderr (`history recording
+DISABLED`, bin/candy-sql:86-101) and the session runs history-less; a persist that fails mid-session drops to the in-app query
+log instead (`HistoryRecorder::record()` catches the store failure and logs it via `QueryLogger`, so the live dashboard and
+in-memory snapshots stay authoritative — src/Admin/History/HistoryRecorder.php:43-46).
 
 ```php
 use SugarCraft\Sql\Admin\History\SqliteHistoryStore;
