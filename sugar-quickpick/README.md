@@ -509,6 +509,13 @@ if ($h->attachSigwinch() === false) {
 }
 ```
 
+Attach binds the object you called it on. The handler closes over the
+attach-time QuickPick instance and invalidates that instance's width cache —
+in a fluent-clone library that matters: after `$h = $h->with…(...)` replaces
+your variable, the live instance never sees the resize and the discarded
+clone re-probes geometry nobody renders. Attach LAST, after the pipeline
+settles, or re-attach whenever you replace the instance.
+
 Signals are process-global. In a long-lived host (PHP-FPM worker, ReactPHP
 daemon, test suite) detach them at session teardown with
 `SugarCraft\Pty\SignalForwarder::reset()`.
