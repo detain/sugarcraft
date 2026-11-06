@@ -99,8 +99,8 @@ the asset for verification.
 | Code | Meaning |
 |------|---------|
 | 0    | success (including `--help` / `--version` / `--dump-detect`) |
-| 1    | usage error — unknown flag, bad value, refused format, too many files |
-| 2    | input/decode error — missing file, undecodable image, empty animation, render failure |
+| 1    | usage error — unknown flag, bad value, refused format (`chafa`/`ansi`), **no** file argument (usage is printed), a second file argument |
+| 2    | input/decode error — the file path is unreadable or not decodable (a **missing** file lands here, not on the usage path), undecodable image, empty animation, render failure |
 
 ## Architecture
 
