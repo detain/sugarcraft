@@ -374,6 +374,7 @@ candy-code/tests/Permissions/ForgedRefusalTest.php	1.263	13
 candy-code/tests/Protocol/ContextTrustPromptTest.php	1.254	12
 candy-code/tests/Backend/EngineBackendEmptyReplyTest.php	1.251	7
 candy-code/tests/Backend/TurnIdleTimeoutSettingTest.php	1.244	23
+candy-code/tests/Workflows/StageWorktreeIsolationTest.php	1.243	12
 candy-code/tests/Tools/TaskToolBackgroundTest.php	1.234	5
 candy-code/tests/SuiteSkipRosterTest.php	1.226	28
 candy-code/tests/Cli/HeadlessPermissionPromptAttachmentTest.php	1.217	29
@@ -395,6 +396,7 @@ candy-code/tests/Chat/ToolChildReapTest.php	1.140	5
 candy-code/tests/Support/ReapsForkedChildrenTraitTest.php	1.135	7
 candy-code/tests/Integration/StreamingWiringTest.php	1.134	20
 candy-code/tests/Workspace/CheckpointDiffFilesTest.php	1.133	7
+candy-code/tests/Workflows/StageModelSelectionTest.php	1.132	15
 candy-code/tests/Providers/RuntimeLengthStopFoldTest.php	1.116	5
 candy-code/tests/Protocol/AudioTranscribeMethodTest.php	1.112	10
 candy-code/tests/Cli/NonInteractiveProviderFailureTest.php	1.111	21
@@ -431,6 +433,7 @@ candy-code/tests/Chat/BangShellTest.php	0.963	11
 candy-code/tests/Runtime/ParallelTaskActivityRelayTest.php	0.960	4
 candy-code/tests/Session/TranscriptSchemaV2MigrationTest.php	0.956	10
 candy-code/tests/Tui/TrustDialogTest.php	0.955	12
+candy-code/tests/Workflows/StageOutputSchemaTest.php	0.952	17
 candy-code/tests/Server/AttachPagingTest.php	0.947	2
 candy-code/tests/Chat/ResumeCostGuardTest.php	0.946	8
 candy-code/tests/MCP/McpLazyToolLoadingTest.php	0.944	5
