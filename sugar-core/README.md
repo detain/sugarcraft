@@ -166,6 +166,67 @@ once `setupTerminal()` runs. There is no plain-text degraded path in the
 runtime, inline mode included. (The same scope applies to the terminal
 recovery backstop under **Status** — it is control machinery, not colour.)
 
+Where the detected profile goes: `detect()` is only the read half. During
+startup `run()` dispatches the answer once as a `ColorProfileMsg` (right
+after `WindowSizeMsg` and `EnvMsg`; an explicit `ProgramOptions` profile
+wins over auto-detection), and a model that cares about the tier reacts to
+that message in `update()`. Applying it is three classes' work:
+`Color::toFg()` / `toBg()` / `toUnderline()` take a profile and quantise a
+24-bit pick down to its tier; `Util\Palettes` holds raw-hex single-source
+theme schemes that consumers key by name and swap per tier; and inside the
+renderer `SgrState` carries the running attribute set so each emitted line
+is only the delta from the last. None of this downgrades the renderer's own
+output — see the Colour note above.
+
+## Security and the trust boundary
+
+This runtime sits between an adversarial terminal and your `update()`, and it
+owns the untrusted-input contract for the whole SugarCraft fleet. The short
+version: **what comes off the keyboard is transformed before your model sees
+it**, and the knobs are explicit.
+
+**Paste is sanitized by default.** A bracketed-paste envelope (`CSI 200~` …
+`CSI 201~`) is collected raw, then its payload passes through
+`Sanitize::untrustedForMarkedFrames()` before surfacing as a `PasteMsg`
+(`src/InputReader.php`). That strips every escape sequence — including C1
+controls in both their raw 8-bit and UTF-8-encoded forms — and sweeps the
+zone sentinels (below). Two bounds keep a broken terminal from wedging the
+pump: a paste larger than `InputReader::MAX_PASTE_BYTES` (1 MiB) surfaces in
+chunks instead of being buffered forever, and an envelope whose end marker
+never arrives is force-closed after `InputReader::PASTE_IDLE_TIMEOUT` (1 s)
+of input silence so the keyboard comes back. Opting out is a deliberate act:
+`ProgramOptions::$sanitizePaste = false` (or the `InputReader` constructor
+parameter) ships raw bytes and puts containment in your hands.
+
+Plain-text and automation consumers should read the disclosure half: a
+`PasteMsg` is not guaranteed to be byte-identical to what was typed. The
+default is chosen for terminal safety, not paste fidelity — zero-width and
+bidi override characters survive precisely so real text round-trips through
+editors, while escapes and marker bytes do not.
+
+**The marker arena.** Mouse zones and image overlays ride the Unicode
+Private Use Area: `U+E000`/`U+E001` are the zone open/close sentinels
+(declared by sugar-mouse's `Mark`/`Scan`), image cell markers start at
+`U+E002`, and the whole reservation runs `U+E000`–`U+F8FF`. Hostile pasted
+text can carry those codepoints as ordinary valid UTF-8 that a plain escape
+strip passes right through, which is why the marked-frames variant sweeps
+them — un-swept, a model reply composed from pasted text could forge click
+targets or desynchronise the renderer's marker parse.
+
+**Spawn discipline.** Every process launch from user-supplied data uses
+`proc_open()`'s argv form: `Util\Open` never interpolates a URL into a shell
+command line, and `Util\Executable\Locator`'s capability probes pass array
+argv too. Shell quoting appears only in fixed lookup probes (`where`,
+`command -v`), never around user data.
+
+`Sanitize` is public API for a reason — reuse it wherever untrusted strings
+enter your app: `controlChars()` (C0 stripped, ESC among them; newline/CR/tab
+map to spaces), `cellValue()` (glyph replacement and UTF-8 repair for cell
+grids), `untrusted()` (full escape strip), `untrustedForMarkedFrames()`
+(`untrusted()` plus the sentinel sweep), `untrustedForDisplay()` (adds CR
+line-end normalisation and renders bidi/zero-width characters as visible
+`<U+XXXX>` markers), and `visibleControls()` (renders every control inert).
+
 ## Architecture
 
 - **`Model`** — your app implements `init()`, `update(Msg)`, `view()`, `subscriptions()`. `view()` returns `string|View`: a plain string is the whole frame (auto-wrapped); a `View` struct carries the frame body plus declarative extras — cursor position, window title, progress-bar state (OSC 9;4), default fg/bg (OSC 10/11), mouse mode, focus reporting, bracketed paste, images — each emitted only when it changes.
@@ -177,10 +238,11 @@ recovery backstop under **Status** — it is control machinery, not colour.)
 - **Timers in tests** — a PHPUnit process runs the loop in short bursts with long synchronous gaps, which is the same hazard writ large: a safety timer can fire instantly. Suites that arm one should pin a clock-fresh loop from `tests/bootstrap.php` with sugar-testing's `SugarCraft\Testing\LoopPin::pinStableClock()`.
 - **`InputReader`** — stateful byte-stream parser; handles split escape sequences across reads.
 - **`Renderer`** — line-diff full-screen renderer by default (repaints only changed rows inside a DEC 2026 synchronized-output update); pass `cellDiffRenderer: true` for the per-cell "cursed" diff. Both are implemented; there is no plain full-repaint mode.
-- **`Util/`** — `Ansi`, `Color`, `ColorProfile`, `Width`, `Tty`, `TtyDetect`, `RawMode`, `Open` foundation utilities, shared with SugarStyle. `RawMode::enable($stream)` / `RawMode::disable($stream)` is the portable `stty`-based raw-mode toggle for the controlling terminal — a safe no-op on non-tty streams.
+- **`Util/`** — `Ansi`, `Color`, `ColorProfile`, `Width`, `Tty`, `TtyDetect`, `RawMode`, `Sanitize`, `Open` foundation utilities, shared with SugarStyle. `RawMode::enable($stream)` / `RawMode::disable($stream)` is the portable `stty`-based raw-mode toggle for the controlling terminal — a safe no-op on non-tty streams.
 - **`KeyBindings`** (in `Keys/`) — immutable action→tokens key registry: named actions each own a lowercase token set, `matches(KeyMsg, id)` answers "does this press actuate that action" (press-only, case-folded; both space wire shapes normalize to `space`), `withOverride(id, ...tokens)` returns a new registry, and `label(id)` renders the derived display column help text is composed from — so a user remap lands in dispatch AND the UI from one map. Modifier chords are a declared non-goal (bare letters match as they always did).
 - **`Semaphore`** (in `Util/`) — bounded-concurrency permit pool over ReactPHP promises: `Semaphore::new(6)->run(fn() => fetch($url))` caps in-flight work, parks the rest FIFO, and returns each permit when its promise settles. Share one pool across every component touching the same scarce resource, and `close()` it when the owner is retired so parked waiters fail (with `SemaphoreClosedException`) instead of pending. Distinct from `WorkerPool` (subprocess concurrency) — see its docblock.
 - **`LruMap`** (in `Util/`) — fixed-capacity least-recently-used map: `get()` promotes, `peek()` reads without disturbing recency, `put()` evicts the longest-unused entry past the cap, `evictions()` reports how often that happened, and an optional `maxCapacity` growth guard caps `resize()`. Iterates most-recently-used first; `keys()` is the string-safe key view. The size bound that complements a TTL cache; it does not replace one.
+- **`Sanitize`** (in `Util/`) — the fleet's untrusted-string vocabulary; the contract and the method-by-method list live in [Security and the trust boundary](#security-and-the-trust-boundary).
 - **`Subscription`** — value object: id, Kind, params, produce closure.
 - **`Subscriptions`** — immutable collection with `withTick()`, `withKey()`, `withSignal()`, `withCustom()`, `all()`, `has()`.
 - **`Kind`** — pure enum: Tick (periodic timer, `seconds`) / Key (a fixed 0.1 s polling timer — see Subscriptions) / Signal (handlers for the requested signals) / Custom (periodic timer, `interval` defaulting to 1.0 s).
