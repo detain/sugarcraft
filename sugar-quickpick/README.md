@@ -123,7 +123,7 @@ A custom `setFilterFn()` predicate still applies on top of the ranker.
 | **Overlay compositing** | Background view renders underneath; overlay chars replace background at specified positions |
 | **Background continues updating** | The QuickPick doesn't block the underlying view |
 | **Fully styleable** | Custom filter prompt, item format, matching highlight, window dimensions |
-| **String renderer** | `view()` returns strings you manage; the only terminal I/O is the opt-in `attachSigwinch()` resize attach (an `ioctl` + `pcntl` handler), which you never have to call |
+| **String renderer** | `view()` returns strings you manage; the only terminal I/O is the STDIN geometry probe the auto-width path runs on a width-cache miss (see `setWindowWidth` — pick a fixed width and renders are ioctl-free) and the opt-in `attachSigwinch()` resize attach (an `ioctl` + `pcntl` handler), which you never have to call |
 | **Item interface** | Work with structured `Item` objects instead of raw strings |
 | **Persistent history** | `FileHistory` stores items as JSONL for session persistence |
 | **Custom filter predicates** | `setFilterFn()` lets you filter items by arbitrary criteria |
@@ -187,9 +187,16 @@ public function setMatchStyle(string $ansiStyle): self
 // StatusBar rows append BELOW this height.
 public function setWindowHeight(int $h): self
 
-// Set overlay width (0 = auto from prompt + items, clamped to the terminal
-// column count; a positive value is the OUTER width — a border consumes two
-// of those cells)
+// Set overlay width. 0 (default) = auto: the computed prompt+items width is
+// clamped to min(computed, max(20, cols)) — a 20-column floor guards
+// degenerate probes. Every width-cache miss on the auto path PROBED the
+// terminal: sugar-core Tty on STDIN (FFI ioctl TIOCSWINSZ, stty shell-out
+// fallback), and a non-interactive STDIN answers the 80×24 default, so a
+// piped run renders at phantom width. The cache invalidates on every
+// mutation that can change the width (filter edits, item/prompt swaps), so
+// chained auto-mode builders re-probe per affected operation. A positive
+// value is the OUTER width (a border consumes two of those cells) and makes
+// renders ioctl-free: no probe, no fallback, fully deterministic.
 public function setWindowWidth(int $w): self
 
 // Position the overlay at (x, y). Pure placement: visibility is unchanged
