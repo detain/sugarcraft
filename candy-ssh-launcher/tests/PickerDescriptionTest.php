@@ -49,24 +49,38 @@ final class PickerDescriptionTest extends TestCase
         rewind($out);
         $output = stream_get_contents($out);
         $this->assertStringContainsString('Primary production server', $output);
-        // Description is wrapped in ANSI dim codes
+        // Description is wrapped in ANSI dark-gray codes (F-26)
         $this->assertStringContainsString("\x1b[0m", $output); // reset
     }
 
-    public function testDescriptionWrappedInRealDimEscapeBytes(): void
+    public function testDescriptionWrappedInRealDarkGrayEscapeBytes(): void
     {
-        // Regression: Picker once built this with a single-quoted string,
-        // so '\x1b[2m' emitted the literal characters backslash-x-1-b
-        // instead of the dim SGR escape. Assert the REAL ESC byte (0x1b)
-        // wraps the description, and that no literal backslash-x leaks.
+        // F-26: the description tier rides SGR 90 (dark gray), not SGR 2
+        // (faint) — faint is near-invisible on many terminals, so the
+        // "dimmed text" the docs promise was effectively hidden.
+        // Regression pair: Picker once built this with a single-quoted
+        // string, so '\x1b[2m' emitted the literal characters
+        // backslash-x-1-b instead of a real SGR escape — assert the REAL
+        // ESC byte (0x1b) wraps the description and no literal backslash-x leaks.
         $description = 'Primary production server';
         [, $out, $p] = $this->makePicker("\r");
         $endpoints = $this->endpointsWithDescriptions();
         $p->pick([$endpoints[0]]);
         rewind($out);
         $output = stream_get_contents($out);
-        $this->assertStringContainsString("\x1b[2m" . $description . "\x1b[0m", $output);
+        $this->assertStringContainsString("\x1b[90m" . $description . "\x1b[0m", $output);
         $this->assertStringNotContainsString('\x1b', $output);
+    }
+
+    public function testDescriptionCarriesNoFaintGrade(): void
+    {
+        // F-26: faint (SGR 2) must not return to the description tier.
+        $endpoint = new Endpoint(name: 'prod', host: 'prod.example.com', description: 'Test description');
+        [, $out, $p] = $this->makePicker("\r");
+        $p->pick([$endpoint]);
+        rewind($out);
+        $output = stream_get_contents($out);
+        $this->assertStringNotContainsString("\x1b[2m", $output);
     }
 
     public function testDescriptionNotRenderedWhenNull(): void
@@ -76,7 +90,7 @@ final class PickerDescriptionTest extends TestCase
         $p->pick([$endpoint]);
         rewind($out);
         $output = stream_get_contents($out);
-        $this->assertStringNotContainsString("\x1b[2m", $output);
+        $this->assertStringNotContainsString("\x1b[90m", $output);
     }
 
     public function testDescriptionNotRenderedWhenEmpty(): void
@@ -86,7 +100,7 @@ final class PickerDescriptionTest extends TestCase
         $p->pick([$endpoint]);
         rewind($out);
         $output = stream_get_contents($out);
-        $this->assertStringNotContainsString("\x1b[2m", $output);
+        $this->assertStringNotContainsString("\x1b[90m", $output);
     }
 
     public function testDescriptionAppendedAfterDisplayLine(): void

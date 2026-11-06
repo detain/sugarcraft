@@ -43,6 +43,14 @@ class Picker
     private const UNSELECTED_MARKER = "  ";
     private const FILTER_COLOR = "\x1b[36m";
     /**
+     * The description tier's dim grade (F-26): SGR 90 dark gray, not SGR 2
+     * faint. Faint is near-invisible on many terminals (and renders as a
+     * transparency trick on those that honor it), so the "dimmed text"
+     * documented for descriptions was effectively hidden. Dark gray is the
+     * usable dim grade the four-color palette always has.
+     */
+    private const DESCRIPTION_COLOR = "\x1b[90m";
+    /**
      * Rows the visible window shows at once (F-25). A frame with more rows
      * than the terminal has soft-wraps and strands chrome; ten keeps the
      * picker inside any real window and gives PgUp/PgDn a page to scroll.
@@ -366,7 +374,7 @@ class Picker
             // The displayLine is already sanitized from filterMatches()
             $line = $this->highlightLine($record['displayLine'], $record['result']);
             if ($e->description !== null && $e->description !== '') {
-                $line .= '  ' . Ansi::sgr(Ansi::FAINT) . $this->stripControls($e->description) . Ansi::reset();
+                $line .= '  ' . self::DESCRIPTION_COLOR . $this->stripControls($e->description) . Ansi::reset();
             }
             fwrite($this->out, $this->clampRow("{$marker}{$line}") . "\r\n");
         }
