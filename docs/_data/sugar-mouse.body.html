@@ -18,8 +18,8 @@ $rendered = Mark::zone('btn-ok', '  OK  ')
 // 2. Scan after rendering to populate the zone registry.
 $scanner = Scanner::new()->scan($rendered);
 
-// 3. Reverse-lookup on mouse events.
-$zone = $scanner->hit($mouseX, $mouseY); // ?Zone
+// 3. Reverse-lookup on mouse events ('  OK  ' spans cols 1-6 on row 1).
+$zone = $scanner->hit(4, 1); // Zone 'btn-ok'
 
 // 4. A click fires only when the release's fresh re-hit agrees with the
 //    press zone on id AND box — resolve each event against the frame it
