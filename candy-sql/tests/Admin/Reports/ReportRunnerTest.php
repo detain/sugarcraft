@@ -252,4 +252,158 @@ final class ReportRunnerTest extends TestCase
         $this->assertSame(1, $result->rowCount);
         $this->assertTrue($result->limited);
     }
+
+    /**
+     * PB-SQL-21: the report's view name reaches the wire as literal SQL - MySQL
+     * cannot parameterise table names, so the safety mechanism is
+     * Identifier::quote()'s escaping, not preparation. These pins fail if the
+     * query string ever regresses to raw interpolation (the literal backticks
+     * the old splice carried were decoration, not escaping).
+     */
+    public function testRunEscapesHostileCatalogViewName(): void
+    {
+        $dir = sys_get_temp_dir() . '/candy-sql-hostile-' . getmypid() . '-' . uniqid('', true);
+        mkdir($dir, 0700, true);
+        try {
+            $catalog = Catalog::new($dir);
+            $this->plantHostileCatalog($dir);
+            $catalog->load();
+            $db = $this->createCaptureDatabase();
+            $runner = ReportRunner::new($db, $catalog, AvailabilityChecker::new($db));
+
+            $runner->run('hostile');
+
+            // Raw name evil`probe\tail: backtick doubles to ``, backslash doubles
+            // to \\ , then the whole identifier is wrapped in single backticks.
+            $this->assertSame(
+                'SELECT * FROM `sys`.`evil``probe\\\\tail` LIMIT 1000',
+                $db->captured[0] ?? '(nothing captured)'
+            );
+        } finally {
+            @unlink($dir . '/sys_reports.json');
+            @rmdir($dir);
+        }
+    }
+
+    public function testRunRawEscapesHostileCatalogViewName(): void
+    {
+        $dir = sys_get_temp_dir() . '/candy-sql-hostile-raw-' . getmypid() . '-' . uniqid('', true);
+        mkdir($dir, 0700, true);
+        try {
+            $catalog = Catalog::new($dir);
+            $this->plantHostileCatalog($dir);
+            $catalog->load();
+            $db = $this->createCaptureDatabase();
+            $runner = ReportRunner::new($db, $catalog, AvailabilityChecker::new($db));
+
+            // runRaw() skips the availability gate - the escaping law must hold
+            // on this path too, not just where the catalog lookup pre-screens.
+            $runner->runRaw('hostile');
+
+            $this->assertSame(
+                'SELECT * FROM `sys`.`evil``probe\\\\tail` LIMIT 1000',
+                $db->captured[0] ?? '(nothing captured)'
+            );
+        } finally {
+            @unlink($dir . '/sys_reports.json');
+            @rmdir($dir);
+        }
+    }
+
+    private function plantHostileCatalog(string $dir): void
+    {
+        file_put_contents($dir . '/sys_reports.json', json_encode([
+            'hostile' => [
+                'name' => 'evil`probe\tail',
+                'category' => 'problems',
+                'caption' => 'Hostile probe',
+                'description' => 'View name carrying a backtick and a backslash.',
+                'query' => 'SELECT * FROM sys.x$statement_analysis',
+                'columns' => [['name' => 'col', 'type' => 'string', 'width' => 10]],
+            ],
+        ], JSON_THROW_ON_ERROR));
+    }
+
+    private function createCaptureDatabase(): DatabaseInterface
+    {
+        return new class implements DatabaseInterface {
+            /** @var list<string> */
+            public array $captured = [];
+
+            public function tables(): array
+            {
+                return [];
+            }
+
+            public function rows(string $table, int $limit = 100): array
+            {
+                return [];
+            }
+
+            public function query(string $sql): ?array
+            {
+                if (str_contains($sql, 'SHOW FULL TABLES FROM sys')) {
+                    // Answer the availability gate without polluting the capture.
+                    return [['Tables_in_sys' => 'hostile']];
+                }
+                $this->captured[] = $sql;
+
+                return [];
+            }
+
+            public function lastInsertId(): string|int
+            {
+                return 0;
+            }
+
+            public function quote(string $value): string
+            {
+                return "'" . addslashes($value) . "'";
+            }
+
+            public function exec(string $sql): int
+            {
+                return 0;
+            }
+
+            public function close(): void
+            {
+            }
+
+            public function serverVersion(): string
+            {
+                return '8.0.32';
+            }
+
+            public function driverName(): string
+            {
+                return 'mysql';
+            }
+
+            public function ping(): bool
+            {
+                return true;
+            }
+
+            public function databases(): array
+            {
+                return ['test'];
+            }
+
+            public function prepare(string $sql): ?PreparedStatementInterface
+            {
+                return null;
+            }
+
+            public function dsn(): string
+            {
+                return '';
+            }
+
+            public function username(): string
+            {
+                return '';
+            }
+        };
+    }
 }

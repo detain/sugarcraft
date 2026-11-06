@@ -5,12 +5,19 @@ declare(strict_types=1);
 namespace SugarCraft\Sql\Admin\Reports;
 
 use SugarCraft\Sql\Db\DatabaseInterface;
+use SugarCraft\Sql\Db\Flavor;
+use SugarCraft\Sql\Db\Identifier;
 
 /**
  * Executes performance report queries against the MySQL sys schema.
  *
- * Runs `SELECT * FROM sys.<view> [LIMIT n]` for reports defined in the catalog.
- * Uses prepared statements with backtick-quoted view names for safety.
+ * Runs a single-armed `SELECT * FROM sys.<view> LIMIT n` for reports defined
+ * in the catalog, as literal SQL text — MySQL cannot parameterise table names
+ * in a prepared statement. The safety mechanism is identifier escaping, not
+ * preparation: the schema and view names ride {@see Identifier::quote()}'s
+ * MySQL arm (backslashes doubled, backticks doubled), so a hostile name
+ * arriving through the JSON data file cannot splice the statement, and the
+ * limit is cast to int before interpolation.
  * Applies unit formatting to time and byte columns based on column metadata.
  *
  * @see Mirrors mysql-workbench wb_admin_perfschema_reports report execution
@@ -67,7 +74,7 @@ final class ReportRunner
 
         // Use the report's actual view name (from catalog) for the query,
         // not the lookup key, since they may differ (e.g. 'statement_analysis' vs 'x$statement_analysis')
-        $query = "SELECT * FROM `sys`.`{$report->name}` LIMIT " . (int) $limit;
+        $query = $this->selectFor($report, $limit);
         $rows = $this->db->query($query);
 
         $formattedRows = $this->formatRows($rows, $report);
@@ -102,7 +109,7 @@ final class ReportRunner
 
         // Use the report's actual view name (from catalog) for the query,
         // not the lookup key, since they may differ (e.g. 'statement_analysis' vs 'x$statement_analysis')
-        $query = "SELECT * FROM `sys`.`{$report->name}` LIMIT " . (int) $limit;
+        $query = $this->selectFor($report, $limit);
         $rows = $this->db->query($query);
 
         return new ReportResult(
@@ -127,6 +134,22 @@ final class ReportRunner
         }
 
         return $this->availability->isViewAvailable($viewName);
+    }
+
+    /**
+     * Build the single-armed SELECT for a catalog report definition.
+     *
+     * Both identifiers ride Identifier::quote()'s MySQL arm — the literal
+     * backticks the first revision carried were decoration, not escaping: a
+     * name containing a backtick or trailing backslash spliced the statement.
+     */
+    private function selectFor(ReportDefinition $report, int $limit): string
+    {
+        return 'SELECT * FROM '
+            . Identifier::quote(Flavor::MySQL, 'sys')
+            . '.'
+            . Identifier::quote(Flavor::MySQL, $report->name)
+            . ' LIMIT ' . $limit;
     }
 
     /**
