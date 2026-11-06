@@ -114,6 +114,14 @@ $mode = $modeArg === 'auto'
     ? null
     : Mode::from($modeArg);
 
+// Playback paints a live terminal UI, so EVERY invocation - bare, file,
+// synthetic, env-sized, explicit mode or auto - needs a TTY on stdout.
+// Refuse a pipe up front, before generating or reading any source.
+if (!stream_isatty(STDOUT)) {
+    fwrite(STDERR, "playback needs a terminal (TTY) on stdout; piping renders nothing useful\n");
+    exit(1);
+}
+
 // ── Terminal dimensions ───────────────────────────────────────────────────────
 
 $cols = (int) (getenv('SUGAR_VIDEO_COLS') ?: 80);
@@ -146,11 +154,6 @@ $reel = Reel::open($path)
 // Apply mode override if explicitly requested via CLI.
 if ($mode !== null) {
     $reel = $reel->withMode($mode);
-
-if (!stream_isatty(STDOUT)) {
-    fwrite(STDERR, "playback needs a terminal (TTY) on stdout; piping renders nothing useful\n");
-    exit(1);
-}
 }
 
 $reel->play();
