@@ -12,9 +12,9 @@ final class WorkflowStatusTest extends TestCase
     public function testAllCasesExist(): void
     {
         $statuses = WorkflowStatus::cases();
-        $this->assertCount(8, $statuses);
+        $this->assertCount(9, $statuses);
 
-        $expectedNames = ['Draft', 'Pending', 'Running', 'Paused', 'Resuming', 'Completed', 'Failed', 'Cancelled'];
+        $expectedNames = ['Draft', 'Pending', 'Running', 'Paused', 'Orphaned', 'Resuming', 'Completed', 'Failed', 'Cancelled'];
         $actualNames = array_map(fn($s) => $s->name, $statuses);
         $this->assertSame($expectedNames, $actualNames);
     }
@@ -25,6 +25,7 @@ final class WorkflowStatusTest extends TestCase
         $this->assertSame('pending', WorkflowStatus::Pending->value);
         $this->assertSame('running', WorkflowStatus::Running->value);
         $this->assertSame('paused', WorkflowStatus::Paused->value);
+        $this->assertSame('orphaned', WorkflowStatus::Orphaned->value);
         $this->assertSame('resuming', WorkflowStatus::Resuming->value);
         $this->assertSame('completed', WorkflowStatus::Completed->value);
         $this->assertSame('failed', WorkflowStatus::Failed->value);
@@ -39,6 +40,7 @@ final class WorkflowStatusTest extends TestCase
             WorkflowStatus::Pending,
             WorkflowStatus::Running,
             WorkflowStatus::Paused,
+            WorkflowStatus::Orphaned,
             WorkflowStatus::Resuming,
         ];
 
@@ -53,7 +55,7 @@ final class WorkflowStatusTest extends TestCase
 
     public function testIsActive(): void
     {
-        $activeCases = [WorkflowStatus::Running, WorkflowStatus::Paused];
+        $activeCases = [WorkflowStatus::Running, WorkflowStatus::Paused, WorkflowStatus::Orphaned];
         $inactiveCases = [
             WorkflowStatus::Draft,
             WorkflowStatus::Pending,

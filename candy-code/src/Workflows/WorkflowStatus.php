@@ -8,6 +8,9 @@ namespace SugarCraft\Code\Workflows;
  * Represents the execution status of a workflow within the candy-code system.
  *
  * Mirrors workflow lifecycle: draft -> pending -> running -> paused/resuming -> completed/failed/cancelled.
+ * {@see WorkflowStatus::Orphaned} is the crash-class sibling of paused: the
+ * run's process died without a cooperative stop, its on-disk record still
+ * holds the progress, and a resume can pick it up.
  */
 enum WorkflowStatus: string
 {
@@ -15,6 +18,7 @@ enum WorkflowStatus: string
     case Pending = 'pending';
     case Running = 'running';
     case Paused = 'paused';
+    case Orphaned = 'orphaned';
     case Resuming = 'resuming';
     case Completed = 'completed';
     case Failed = 'failed';
@@ -32,12 +36,14 @@ enum WorkflowStatus: string
     }
 
     /**
-     * Returns true when the workflow is actively executing or paused.
+     * Returns true when the workflow is actively executing, paused, or
+     * orphaned — the in-flight class a resume can still act on, as opposed to
+     * a terminal state.
      */
     public function isActive(): bool
     {
         return match ($this) {
-            self::Running, self::Paused => true,
+            self::Running, self::Paused, self::Orphaned => true,
             default => false,
         };
     }
