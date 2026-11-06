@@ -187,6 +187,10 @@ at once, and sources routed through ffmpeg (`mp4`/`avi`/`webm`, plus remote
 `.gif`/`.webp`) spawn their `ffmpeg` decoder child immediately — a host that
 mounts and never starts must still call `stop()` to release it. Locally
 decoded GIFs and animated WebP ride pure PHP/GD in-process and cost no child.
+Under the full-frame contract, `Player::view()` returns the entire current frame
+on every call and diffs nothing itself; repaint efficiency comes from sugar-core's
+`Renderer` (changed rows re-sent by default, per-cell diffing only under the
+opt-in `cellDiffRenderer`), never from the model.
 
 ```php
 $player = Reel::openUrl($url, $headers)->toPlayer(); // paused; decoder child already spawned
@@ -369,7 +373,7 @@ video file (mp4/gif/avi/webm)
 ```
 
 - **Decode:** `FfmpegDecoder` shells out to `ffmpeg` for raw RGB frames (pre-scaled to cell dimensions). `GifDecoder` wraps sugar-animation's pure-PHP GIF decoder.
-- **Render:** Delegates to sugar-image for sixel/kitty/iTerm2. Uses sugar-colorprofile for color mapping. Delta repaint via sugar-cellbuffer.
+- **Render:** Delegates to sugar-image for sixel/kitty/iTerm2. Uses sugar-colorprofile for color mapping. Text modes assemble their SGR cell grid with sugar-cellbuffer; the delta repaint belongs to sugar-core's `Renderer`, which re-sends only the rows that changed by default and switches to per-cell diffing only when the host opts into `ProgramOptions::$cellDiffRenderer`.
 - **Pace:** `Cmd::tick()` wall-clock alignment via `Sync`, no busy-waiting.
 - **Audio:** `AudioPlayer` shells out to `ffplay` or `mpv --no-video` as the audio output companion; the Player's own wall clock stays master (audio may drift; it is never the pacing source).
 
@@ -385,7 +389,7 @@ three terminal-video projects, credited here:
 The rendering stack is reused from the SugarCraft ecosystem rather than
 reinvented: [sugar-image](../sugar-image) (image → cell renderers),
 [sugar-animation](../sugar-animation) (downsampling / dithering), [sugar-colorprofile](../sugar-colorprofile)
-(color mapping), [sugar-core](../sugar-core) (Model–Update–View runtime + frame pacing), and [sugar-cellbuffer](../sugar-cellbuffer) (the delta-repaint cell grid the renderer replays frames onto).
+(color mapping), [sugar-core](../sugar-core) (Model–Update–View runtime + frame pacing + the row-diffing renderer), and [sugar-cellbuffer](../sugar-cellbuffer) (the cell grid the text-mode renderer assembles each frame onto).
 
 **Sixel encoding is pure PHP (no external accelerator).** `sixel` mode encodes through sugar-image's `SixelRenderer`; the former preference for an external `chafa` binary on PATH was retired once `candy-image` shipped as the chafa frontend, leaving sugar-image as the single sixel encoder in the ecosystem. Frames are decoded at the pixel grid each mode asks for (graphics modes at cells·cellPx, text modes at the mode cell grid), so the pure-PHP encoder needs no upscaling, and the DCS stream it emits is protocol-conformant output of exactly the shape a sixel-capable terminal expects.
 
