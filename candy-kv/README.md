@@ -307,10 +307,11 @@ and parses the identical flat shape (plus `!!binary` tags for stray control
 bytes, which the fallback parser also reads). A single process always uses
 one engine, and the two are not interchangeable parsers: the fallback
 refuses an unquoted colon-containing key that symfony accepts (`e:f: hey`
-becomes key `e:f` there), and it keeps `true` / `755`-style value tokens as
-literal text where symfony decodes them to bool/int — the importer refuses
-such typed values, so the same document can import as plain strings on one
-engine and be refused on the other. The fallback also refuses constructs
+becomes key `e:f` there), and it keeps `true`-style value tokens as
+literal text where symfony decodes them to a bool — the importer refuses
+bools, so a document carrying `true` imports on one engine and is refused
+on the other (a decoded int is stringified on import and lands identically
+either way). The fallback also refuses constructs
 only symfony wraps for very long
 plain scalars, and it says which line failed. Export refuses keys that would
 collide with the reserved shapes **of the format being written** — `_ttl` /
