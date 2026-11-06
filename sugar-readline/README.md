@@ -90,7 +90,11 @@ in normal mode). `ConfirmationPrompt::withHint(string)` paints a hint row
 
 Type to filter the list as you go; Backspace edits the filter, Ctrl+U clears
 it, and Space acts on the row under the cursor — a second Enter in
-SelectionPrompt (it submits the match), a mark toggle in MultiSelectPrompt:
+SelectionPrompt (it submits the match), a mark toggle in MultiSelectPrompt.
+Space never joins the filter — it is a bound key, so a filter containing a
+space is unreachable and typing one acts on the row under the cursor
+instead. While the filter matches nothing, the list renders `(no matches)`
+and Enter/Space are refused until Backspace restores a match:
 
 ```php
 use SugarCraft\Readline\Readline;
