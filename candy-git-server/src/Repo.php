@@ -145,7 +145,12 @@ final class Repo
     public function writeVisibilityMarker(): void
     {
         $gitDir = $this->gitDir();
-        if (!\is_dir($gitDir) && !@\mkdir($gitDir, 0777, true) && !\is_dir($gitDir)) {
+        // n15: mkdir runs only when the directory does not exist yet (an
+        // existing .git keeps the mode its creator chose — re-chmodding
+        // someone else's git dir is not this method's business). The 0700
+        // request states the intent: a fresh marker directory must never
+        // land group/world-accessible on a permissive-umask accident.
+        if (!\is_dir($gitDir) && !@\mkdir($gitDir, 0700, true) && !\is_dir($gitDir)) {
             throw new \RuntimeException(Lang::t('repo.visibility_marker_unwritable', ['file' => $gitDir]));
         }
         $file = $gitDir . '/' . self::VISIBILITY_MARKER;

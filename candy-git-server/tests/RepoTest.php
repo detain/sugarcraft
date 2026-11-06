@@ -6,6 +6,7 @@ namespace SugarCraft\GitServer\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\GitServer\Repo;
+use SugarCraft\GitServer\Visibility;
 
 /**
  * @covers \SugarCraft\GitServer\Repo
@@ -110,5 +111,19 @@ final class RepoTest extends TestCase
         $r = Repo::new('not-init', $path);
 
         $this->assertFalse($r->exists());
+    }
+
+    /**
+     * n15: writeVisibilityMarker creates the marker directory fresh; the
+     * mkdir must state owner-only intent, not inherit a permissive umask.
+     */
+    public function testAFreshlyCreatedMarkerDirectoryIsOwnerOnly(): void
+    {
+        $bare = $this->tmpDir . '/fresh-cap.git';
+
+        Repo::new('fresh-cap', $bare)->withPublic(true)->writeVisibilityMarker();
+
+        $this->assertSame(0700, \fileperms($bare . '/.git') & 0777, 'the fresh marker directory is owner-only regardless of process umask');
+        $this->assertSame(Visibility::Public, Repo::markerVisibility($bare . '/.git'), 'the marker still round-trips through the reader');
     }
 }
