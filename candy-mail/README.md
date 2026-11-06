@@ -160,8 +160,10 @@ candy-mail --to you@example.com --render < message.txt
 # RFC 2046-valid structure) and sends nothing — no transport env required.
 ```
 
-`--version` prints the package version, `--help` the usage, repeat `--to/--cc/--bcc/--attach`
+`--version` prints the package version, `--help` (or `-h`) the usage, repeat `--to/--cc/--bcc/--attach`
 to accumulate, and a bare `--` ends option parsing (later addresses are positional recipients).
+Short aliases `-f` (`--from`), `-t` (`--to`), `-s` (`--subject`) and `-a` (`--attach`) are accepted
+as `-f value`; the inline `=` form is long-option only (so `-f=x` is refused, use `--from=x` or `-f x`).
 Positional recipients fill `--to` only when `--to` is absent — if you also pass `--to`, the
 positional addresses after `--` are silently dropped (mixing is not additive).
 Unknown options are rejected loudly, with a did-you-mean hint when a known flag is a

@@ -685,6 +685,8 @@ Options:
                        Resend-configured send is stamped as a divergence)
   --version            Print the package version and exit
   --help, -h           Show this help
+  Short aliases: -f/--from, -t/--to, -s/--subject, -a/--attach (space form
+  only — a value glued with "=" needs the long option, e.g. --from=value).
 
 Environment variables:
   RESEND_API_KEY                   Resend API key (preferred transport)
