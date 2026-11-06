@@ -100,15 +100,20 @@ final readonly class ParsedArgs
         'attach' => [
             '--url' => true,
         ],
-        // `gc` (gc-cli-1106 B1): storage inspection and reclaim. `-f` is the
-        // alias of `--force`; which ACTION each flag belongs to is
-        // {@see Subcommands::GC_ACTION_FLAGS}, not the parser's concern.
+        // `gc` (gc-cli-1106 B1+B2): storage inspection, per-session fold and
+        // reclaim. `-f` is the alias of `--force`; which ACTION each flag
+        // belongs to is {@see Subcommands::GC_ACTION_FLAGS}, not the parser's
+        // concern. B2 adds the `sessions` fold flags.
         'gc' => [
+            '--archived' => false,
             '--check' => false,
+            '--children' => false,
             '-f' => false,
             '--force' => false,
             '--format' => true,
             '--incremental' => false,
+            '--limit' => true,
+            '--sort' => true,
         ],
         // `import` (C-TUI-5.b): `--project` adds the project's own
         // `.claude/settings.json` to the read; `--yes` skips the interactive

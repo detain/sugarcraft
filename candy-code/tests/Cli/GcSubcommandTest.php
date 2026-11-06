@@ -19,9 +19,10 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * In-process, the way {@see SessionSubcommandsTest} drives its verb:
  * ArgvParser -> Subcommands::dispatch with `HOME` pointed at a private
  * directory, so {@see Subcommands}' `gc` path reads the fixture database
- * this file seeds. `sessions`, `analyze` and `purge` are B2/B3 rungs of the
- * same verb: TODAY they must answer the unknown-action door at exit 2, and
- * the cases below pin exactly that (they flip when the rungs land).
+ * this file seeds. `analyze` and `purge` are later rungs of the same verb:
+ * TODAY they must answer the unknown-action door at exit 2, and the cases
+ * below pin exactly that (they flip when the rungs land). `sessions` landed
+ * with B2 — its fold cases live in their own section below.
  *
  * stdout is ob-captured; stderr is not capturable in-process, so every
  * failure arm is asserted through the `--output-format json` document.
@@ -172,9 +173,11 @@ final class GcSubcommandTest extends TestCase
 
     public function testLaterRungActionsAreUsageErrorsToday(): void
     {
-        // B2/B3 rungs: `sessions`, `analyze` and `purge` arrive later in the
-        // program. TODAY the honest answer is the unknown-action door.
-        foreach (['sessions', 'analyze', 'purge'] as $action) {
+        // B3 rung: only `purge` remains unimplemented TODAY — the honest
+        // answer is the unknown-action door. (`sessions` landed with B2 and
+        // `analyze` lands with C3 of this same program; their pins live in
+        // the sections below.)
+        foreach (['purge'] as $action) {
             [$rc, $doc] = $this->gcJsonDoor([$action]);
             self::assertSame(NonInteractive::EXIT_CONFIG, $rc, $action);
             self::assertIsArray($doc, $action);
@@ -188,6 +191,206 @@ final class GcSubcommandTest extends TestCase
 
         self::assertSame(NonInteractive::EXIT_CONFIG, $rc);
         self::assertIsArray($doc);
+    }
+
+    // ── gc sessions: the B2 fold ──────────────────────────────────────────
+
+    public function testSessionsTextDefaultSortsBySizeDescAndHidesArchived(): void
+    {
+        $this->gcSeedStore();
+        $this->gcSeedMessageBytes();
+
+        [$rc, $out] = $this->gcDispatch(['sessions']);
+
+        self::assertSame(NonInteractive::EXIT_OK, $rc);
+        self::assertStringContainsString('candy-code gc sessions', $out);
+        self::assertStringContainsString('ID', $out);
+        // The fat session leads; the archived one is hidden by default
+        // (mirrors `session list --archived`).
+        self::assertLessThan(
+            (int) strpos($out, $this->gcChildClip()),
+            (int) strpos($out, 'gc-main'),
+            'default sort is size descending',
+        );
+        self::assertStringNotContainsString('gc-arch', $out, 'archives stay hidden without --archived');
+        self::assertStringContainsString('of table census', $out);
+    }
+
+    public function testSessionsArchivedDoorRevealsTheArchive(): void
+    {
+        $this->gcSeedStore();
+
+        [$rc, $doc] = $this->gcJsonDoor(['sessions', '--archived']);
+        self::assertSame(NonInteractive::EXIT_OK, $rc);
+        self::assertSame(3, $doc['result']['session_count']);
+        self::assertTrue($doc['result']['include_archived']);
+
+        [$rc, $text] = $this->gcDispatch(['sessions', '--archived']);
+        self::assertSame(NonInteractive::EXIT_OK, $rc);
+        self::assertStringContainsString('gc-arch', $text);
+        self::assertStringContainsString('root A', $text, 'the flags cell marks the revealed archive (not just its title)');
+    }
+
+    public function testSessionsChildrenRestrictsToSubagentRows(): void
+    {
+        $this->gcSeedStore();
+
+        [$rc, $doc] = $this->gcJsonDoor(['sessions', '--children']);
+        self::assertSame(NonInteractive::EXIT_OK, $rc);
+        self::assertSame(1, $doc['result']['shown']);
+        self::assertSame('subagent', $doc['result']['rows'][0]['kind']);
+        self::assertSame('gc-main', $doc['result']['rows'][0]['parent_id']);
+
+        [$rc, $out] = $this->gcDispatch(['sessions', '--children']);
+        self::assertStringNotContainsString('gc-main ', $out, 'root rows leave the --children listing');
+    }
+
+    public function testSessionsLimitKeepsTheHeadOfTheSortedList(): void
+    {
+        $this->gcSeedStore();
+        $this->gcSeedMessageBytes();
+
+        [$rc, $doc] = $this->gcJsonDoor(['sessions', '--limit', '1']);
+        self::assertSame(NonInteractive::EXIT_OK, $rc);
+        self::assertSame(1, $doc['result']['shown']);
+        self::assertSame(2, $doc['result']['session_count'], 'the limit slices, it does not filter');
+        self::assertSame('gc-main', $doc['result']['rows'][0]['id'], 'the largest session leads');
+    }
+
+    public function testSessionsSortAgePutsOldestFirst(): void
+    {
+        $this->gcSeedStore();
+        $child = $this->gcChildId();
+        $connection = SqliteConnect::open($this->dbPath);
+        $connection->prepare('UPDATE sessions SET created_at = ? WHERE id = ?')
+            ->execute([time() - 100000, 'gc-main']);
+        $connection->prepare('UPDATE sessions SET created_at = ? WHERE id = ?')
+            ->execute([time() - 200, $child]);
+        $connection->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+        unset($connection);
+
+        [$rc, $out] = $this->gcDispatch(['sessions', '--sort', 'age']);
+        self::assertSame(NonInteractive::EXIT_OK, $rc);
+        self::assertLessThan((int) strpos($out, \substr($child, 0, 12)), (int) strpos($out, 'gc-main'), 'age sorts oldest first');
+        self::assertStringContainsString('1d', $out, 'the day-scale age cell rides the histogram vocabulary');
+    }
+
+    public function testSessionsSortNameIsAlphabeticalOnTheShownTitle(): void
+    {
+        $this->gcSeedStore();
+        $child = $this->gcChildId();
+        $connection = SqliteConnect::open($this->dbPath);
+        $connection->prepare('UPDATE sessions SET name = ? WHERE id = ?')
+            ->execute(['Alpha Child', $child]);
+        $connection->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+        unset($connection);
+
+        [$rc, $out] = $this->gcDispatch(['sessions', '--sort', 'name']);
+        self::assertSame(NonInteractive::EXIT_OK, $rc);
+        self::assertLessThan((int) strpos($out, 'Named Main'), (int) strpos($out, 'Alpha Child'), 'name sorts A before N');
+    }
+
+    public function testSessionsClipIdAndTitle(): void
+    {
+        $this->gcSeedStore();
+        $child = $this->gcChildId();
+        $connection = SqliteConnect::open($this->dbPath);
+        $connection->prepare('UPDATE sessions SET name = ? WHERE id = ?')
+            ->execute([\str_repeat('n', 60), 'gc-main']);
+        $connection->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+        unset($connection);
+
+        [$rc, $out] = $this->gcDispatch(['sessions']);
+        self::assertSame(NonInteractive::EXIT_OK, $rc);
+        self::assertStringNotContainsString($child, $out, 'a 32-hex id never prints unclipped');
+        self::assertStringContainsString(\substr($child, 0, 12), $out, 'the clipped 12-char head prints');
+        self::assertStringNotContainsString(\str_repeat('n', 60), $out, 'the 60-char title never prints raw');
+        self::assertStringContainsString(\str_repeat('n', 39) . '…', $out, 'the title clips at 40 with an ellipsis');
+    }
+
+    public function testSessionsJsonReconcilesFoldAgainstTheCensus(): void
+    {
+        $this->gcSeedStore();
+
+        [$rc, $doc] = $this->gcJsonDoor(['sessions']);
+        self::assertSame(NonInteractive::EXIT_OK, $rc);
+        self::assertSame(1, $doc['schema']);
+        self::assertSame('gc', $doc['verb']);
+        self::assertSame('sessions', $doc['action']);
+
+        $fold = $doc['result']['fold'];
+        $census = (int) $doc['result']['totals']['census_table_bytes'];
+        self::assertGreaterThan(0, $census);
+        self::assertSame(
+            $census,
+            $fold['attributed_db_bytes'] + $fold['unattributed_db_bytes']
+                + $fold['fts_residual_bytes'] + $fold['tombstone_bytes'],
+            'the fold and the status census must reconcile exactly',
+        );
+        self::assertIsArray($doc['result']['rows'][0]);
+        self::assertArrayHasKey('journal_bytes', $doc['result']['rows'][0]);
+        self::assertArrayHasKey('shadow_dir_count', $doc['result']['rows'][0]);
+    }
+
+    public function testSessionsAttributeJournalAndShadowBytes(): void
+    {
+        $this->gcSeedStore();
+        self::assertTrue(mkdir($this->home . '/.candy-code/transcripts/s-1', 0700, true));
+        file_put_contents($this->home . '/.candy-code/transcripts/s-1/gc-main.jsonl', \str_repeat('j', 1024));
+
+        $project = $this->home . '/proj';
+        self::assertTrue(mkdir($project, 0700, true));
+        $real = (string) realpath($project);
+        $shadow = $this->home . '/.candy-code/checkpoints/' . \sha1($real);
+        self::assertTrue(mkdir($shadow, 0700, true));
+        file_put_contents($shadow . '/data', \str_repeat('s', 101));
+        $connection = SqliteConnect::open($this->dbPath);
+        $connection->prepare('UPDATE sessions SET cwd = ? WHERE id IN (?, ?)')
+            ->execute([$real, 'gc-arch', 'gc-main']);
+        $connection->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+        unset($connection);
+
+        [$rc, $doc] = $this->gcJsonDoor(['sessions', '--archived']);
+        self::assertSame(NonInteractive::EXIT_OK, $rc);
+        $byId = [];
+        foreach ($doc['result']['rows'] as $row) {
+            $byId[(string) $row['id']] = $row;
+        }
+        self::assertSame(1024, (int) $byId['gc-main']['journal_bytes'], 'the journal file rides its session');
+        // Even split of 101 bytes between the two owners sorted by id:
+        // gc-arch is first, so the one-byte remainder lands there (pinned
+        // scheme — see GcSessionSizes::splitShadowDirectories).
+        self::assertSame(51, (int) $byId['gc-arch']['shadow_bytes']);
+        self::assertSame(50, (int) $byId['gc-main']['shadow_bytes']);
+        self::assertSame(1, (int) $byId['gc-main']['shadow_dir_count']);
+        self::assertSame(0, (int) $byId['gc-arch']['journal_bytes']);
+    }
+
+    public function testSessionsBadSortLimitAndWrongFlagAreUsageErrors(): void
+    {
+        $this->gcSeedStore();
+
+        foreach ([
+            ['sessions', '--sort', 'weight'],
+            ['sessions', '--limit', 'abc'],
+            ['sessions', '--limit', '0.5'],
+            ['sessions', '--force'],
+            ['sessions', '--format', 'yaml'],
+        ] as $argv) {
+            [$rc, $doc] = $this->gcJsonDoor($argv);
+            self::assertSame(NonInteractive::EXIT_CONFIG, $rc, \implode(' ', $argv));
+            self::assertIsArray($doc, \implode(' ', $argv));
+        }
+    }
+
+    public function testSessionsMissingStoreExitsOneThroughTheSharedFunnel(): void
+    {
+        [$rc, $doc] = $this->gcJsonDoor(['sessions']);
+
+        self::assertSame(NonInteractive::EXIT_FAILURE, $rc);
+        self::assertFalse($doc['result']['opened']);
+        self::assertSame('sessions', $doc['action']);
+        self::assertStringContainsString('cannot open the session store', (string) $doc['result']['reason']);
     }
 
     // ── gc vacuum: the no-rewrite doors ───────────────────────────────────
@@ -384,6 +587,41 @@ final class GcSubcommandTest extends TestCase
         [$rc, $out] = $this->gcDispatch(\array_merge($argv, ['--output-format', 'json']));
 
         return [$rc, json_decode($out, true)];
+    }
+
+    /**
+     * One fat message for the main session and a thin one for its child:
+     * the default size-descending order then has a real byte gap to sort on
+     * instead of two rows within one page of each other.
+     */
+    private function gcSeedMessageBytes(): void
+    {
+        $child = $this->gcChildId();
+        $connection = SqliteConnect::open($this->dbPath);
+        $insert = $connection->prepare('INSERT INTO messages (session_id, role, content, tool_calls, tool_results, model, tokens_used, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+        $insert->execute(['gc-main', 'user', \str_repeat('a', 4000), '', '', 'gpt-4o', 10, time()]);
+        $insert->execute([$child, 'user', \str_repeat('b', 100), '', '', 'gpt-4o', 1, time()]);
+        $connection->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+        unset($connection);
+    }
+
+    /**
+     * The seeded child's id — the listing cases need the 32-hex identity to
+     * locate its (clipped) row.
+     */
+    private function gcChildId(): string
+    {
+        $connection = SqliteConnect::open($this->dbPath);
+        $id = (string) $connection->query('SELECT id FROM sessions WHERE parent_id IS NOT NULL LIMIT 1')->fetchColumn();
+        unset($connection);
+        self::assertNotSame('', $id, 'gcSeedStore always leaves exactly one child row');
+
+        return $id;
+    }
+
+    private function gcChildClip(): string
+    {
+        return \substr($this->gcChildId(), 0, 12);
     }
 
     /**

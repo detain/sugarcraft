@@ -20,6 +20,7 @@ use SugarCraft\Code\MCP\Serve\McpServeRoster;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\Gc\GcInventory;
+use SugarCraft\Code\Session\Gc\GcSessionSizes;
 use SugarCraft\Code\Session\Gc\GcStoreFiles;
 use SugarCraft\Code\Session\Gc\GcVacuum;
 use SugarCraft\Code\Bundles\Bundle;
@@ -1010,10 +1011,11 @@ final class Subcommands
      *
      * The action door mirrors {@see self::session()}: no action is a usage
      * error, an unknown action is a usage error, and a flag the action does
-     * not speak is refused rather than silently ignored. `sessions`,
-     * `analyze` and `purge` are later rungs of the same verb — TODAY they
-     * fall through this unknown-action door, which is the honest answer for
-     * an action the store tools do not implement yet.
+     * not speak is refused rather than silently ignored. `sessions` landed
+     * with B2 (the per-session byte fold); `analyze` and `purge` are later
+     * rungs of the same verb — TODAY they fall through this unknown-action
+     * door, which is the honest answer for an action the store tools do not
+     * implement yet.
      *
      * Nothing here prunes: every read runs over a read-only connection, and
      * the only writes the verb performs are the VACUUM rewrites its own
@@ -1046,6 +1048,7 @@ final class Subcommands
 
         return match ($verb) {
             'status' => self::gcStatus($args),
+            'sessions' => self::gcSessions($args),
             default => self::gcVacuum($args),
         };
     }
@@ -1188,6 +1191,251 @@ final class Subcommands
         }
 
         return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * `gc sessions`: every session's REAL folded bytes (gc-cli-1106 B2).
+     *
+     * The fold ({@see GcSessionSizes}) attributes DB rows, transcript
+     * journals and shadow-repo bytes to the session that owns them, using
+     * the SAME column rosters the status census reads — so
+     * `Σ rows.db_bytes + unattributed + fts residual + tombstones` equals
+     * the status table-census total and the two actions reconcile (pinned
+     * by test). Doors, chosen to mirror the session verb:
+     *
+     * - archived sessions are HIDDEN by default and `--archived` INCLUDES
+     *   them (exactly the `candy-code session list --archived` semantics —
+     *   the janitor shows what it can currently reclaim-by-decision; the
+     *   user's kept archives appear only on request);
+     * - `--children` RESTRICTS the listing to `parent_id IS NOT NULL`
+     *   subagent rows (the requested sub-agent audit surface);
+     * - `--sort size` (default) is descending bytes, `age` is OLDEST first
+     *   (the ocgc convention — the janitor asks what has been around
+     *   longest), `name` is alphabetical on the shown title with the id as
+     *   tie-break so the order is total;
+     * - `--limit N` keeps the first N rows of the SORTED list (0/all unset
+     *   means everything); a non-positive-integer spelling is a usage
+     *   error, never a silent clamp.
+     *
+     * The share percentage is over the DB side only: shown rows' db bytes
+     * against the whole table census — on-disk files live outside the
+     * SQLite numbers that percentage describes. Strictly read-only: one
+     * shared `mode=ro` connect arm, zero writes, zero pruning.
+     */
+    private static function gcSessions(ParsedArgs $args): int
+    {
+        $spelled = isset($args->subcommandFlags['--format']) ? (string) $args->subcommandFlags['--format'] : NonInteractive::FORMAT_TEXT;
+        if ($spelled !== NonInteractive::FORMAT_TEXT && $spelled !== NonInteractive::FORMAT_JSON) {
+            return NonInteractive::failUsage('candy-code: ' . Lang::t('cli.gc.bad_format', ['format' => $spelled]), $args->outputFormat, self::gcUsage());
+        }
+        $asJson = $spelled === NonInteractive::FORMAT_JSON || $args->outputFormat === NonInteractive::FORMAT_JSON;
+
+        $sort = isset($args->subcommandFlags['--sort']) ? \strtolower((string) $args->subcommandFlags['--sort']) : 'size';
+        if (!\in_array($sort, ['size', 'age', 'name'], true)) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.gc.bad_sort', ['sort' => (string) $args->subcommandFlags['--sort']]),
+                $args->outputFormat,
+                self::gcUsage(),
+            );
+        }
+        $limitSpelled = isset($args->subcommandFlags['--limit']) ? (string) $args->subcommandFlags['--limit'] : '0';
+        if (\preg_match('/^(0|[1-9]\d{0,8})$/', $limitSpelled) !== 1) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.gc.bad_limit', ['limit' => $limitSpelled]),
+                $args->outputFormat,
+                self::gcUsage(),
+            );
+        }
+        $limit = (int) $limitSpelled;
+        $includeArchived = isset($args->subcommandFlags['--archived']);
+        $onlyChildren = isset($args->subcommandFlags['--children']);
+
+        $storePath = self::gcStorePath();
+        try {
+            $inventory = new GcInventory($storePath);
+            $census = $inventory->collect(Bootstrap::sessionRetentionDays());
+            $fold = (new GcSessionSizes($inventory->openReadOnly(), \dirname($storePath)))->fold();
+        } catch (\PDOException $e) {
+            return self::gcStoreUnavailable($args, $asJson, 'sessions', $e->getMessage());
+        }
+
+        $rows = [];
+        foreach ($fold['sessions'] as $row) {
+            if (!$includeArchived && $row['archived']) {
+                continue;
+            }
+            if ($onlyChildren && $row['parent_id'] === null) {
+                continue;
+            }
+            $row['title'] = self::gcSessionTitle($row);
+            $row['created_epoch'] = self::gcEpoch($row['created_at']);
+            $rows[] = $row;
+        }
+        $compare = match ($sort) {
+            'age' => static fn (array $a, array $b): int
+                => ($a['created_epoch'] ?? \PHP_INT_MAX) <=> ($b['created_epoch'] ?? \PHP_INT_MAX)
+                    ?: \strcmp((string) $a['id'], (string) $b['id']),
+            'name' => static fn (array $a, array $b): int
+                => \strcasecmp((string) $a['title'], (string) $b['title'])
+                    ?: \strcmp((string) $a['id'], (string) $b['id']),
+            default => static fn (array $a, array $b): int
+                => $b['total_bytes'] <=> $a['total_bytes']
+                    ?: \strcmp((string) $a['id'], (string) $b['id']),
+        };
+        \usort($rows, $compare);
+        $shown = $limit > 0 ? \array_slice($rows, 0, $limit) : $rows;
+
+        $dbBytes = $journalBytes = $shadowBytes = 0;
+        foreach ($shown as $row) {
+            $dbBytes += (int) $row['db_bytes'];
+            $journalBytes += (int) $row['journal_bytes'];
+            $shadowBytes += (int) $row['shadow_bytes'];
+        }
+        $censusBytes = 0;
+        foreach ($census['tables'] as $table) {
+            $censusBytes += (int) $table['bytes'];
+        }
+        $totalBytes = $dbBytes + $journalBytes + $shadowBytes;
+        $share = $censusBytes > 0 ? \round(100.0 * $dbBytes / $censusBytes, 1) : 0.0;
+        $now = \time();
+
+        if ($asJson) {
+            $document = [];
+            foreach ($shown as $row) {
+                $document[] = [
+                    'id' => (string) $row['id'],
+                    'kind' => (string) $row['kind'],
+                    'parent_id' => $row['parent_id'],
+                    'pinned' => (bool) $row['pinned'],
+                    'archived' => (bool) $row['archived'],
+                    'created_at' => $row['created_at'],
+                    'title' => (string) $row['title'],
+                    'db_bytes' => (int) $row['db_bytes'],
+                    'journal_bytes' => (int) $row['journal_bytes'],
+                    'shadow_bytes' => (int) $row['shadow_bytes'],
+                    'shadow_dir_count' => (int) $row['shadow_dir_count'],
+                    'total_bytes' => (int) $row['total_bytes'],
+                ];
+            }
+            self::emitDocument([
+                'verb' => 'gc',
+                'action' => 'sessions',
+                'result' => [
+                    'sort' => $sort,
+                    'limit' => $limit,
+                    'include_archived' => $includeArchived,
+                    'only_children' => $onlyChildren,
+                    'shown' => \count($shown),
+                    'session_count' => \count($rows),
+                    'rows' => $document,
+                    'totals' => [
+                        'db_bytes' => $dbBytes,
+                        'journal_bytes' => $journalBytes,
+                        'shadow_bytes' => $shadowBytes,
+                        'total_bytes' => $totalBytes,
+                        'census_table_bytes' => $censusBytes,
+                        'db_share_percent' => $share,
+                    ],
+                    'fold' => [
+                        'attributed_db_bytes' => (int) $fold['attributed_db_bytes'],
+                        'unattributed_db_bytes' => (int) $fold['unattributed_db_bytes'],
+                        'fts_attributed_bytes' => (int) $fold['fts_attributed_bytes'],
+                        'fts_residual_bytes' => (int) $fold['fts_residual_bytes'],
+                        'tombstone_bytes' => (int) $fold['tombstone_bytes'],
+                    ],
+                ],
+            ]);
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        echo 'candy-code gc sessions', \PHP_EOL;
+        echo \sprintf('%-12s  %-8s  %-8s  %-40s  %s', 'ID', 'FLAGS', 'AGE', 'TITLE', 'SIZE  (db / on-disk)'), \PHP_EOL;
+        foreach ($shown as $row) {
+            $flags = $row['parent_id'] === null ? 'root' : 'sub';
+            if ($row['pinned']) {
+                $flags .= ' *';
+            }
+            if ($row['archived']) {
+                $flags .= ' A';
+            }
+            echo Lang::t('cli.gc.sessions_flags', [
+                'id' => \str_pad(\mb_strimwidth((string) $row['id'], 0, 12, ''), 12),
+                'flags' => \str_pad($flags, 8),
+                'age' => \str_pad(self::gcHumanAge($row['created_epoch'], $now), 8, ' ', STR_PAD_LEFT),
+                'title' => \str_pad(\mb_strimwidth((string) $row['title'], 0, 40, '…'), 40),
+                'size' => \str_pad(self::gcFormatBytes((int) $row['total_bytes']), 10, ' ', STR_PAD_LEFT),
+                'db' => self::gcFormatBytes((int) $row['db_bytes']),
+                'disk' => self::gcFormatBytes((int) $row['journal_bytes'] + (int) $row['shadow_bytes']),
+            ]), \PHP_EOL;
+        }
+        echo Lang::t('cli.gc.sessions_total', [
+            'shown' => (string) \count($shown),
+            'count' => (string) \count($rows),
+            'size' => self::gcFormatBytes($totalBytes),
+            'db' => self::gcFormatBytes($dbBytes),
+            'disk' => self::gcFormatBytes($journalBytes + $shadowBytes),
+            'share' => \number_format($share, 1),
+        ]), \PHP_EOL;
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * The shown title of a session: its name when it carries one, else the
+     * first line of the stored preview (never the last message body — the
+     * fold never reads message payloads beyond LENGTH()).
+     */
+    private static function gcSessionTitle(array $row): string
+    {
+        $name = \trim((string) ($row['name'] ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+        $preview = \trim((string) ($row['last_preview'] ?? ''));
+
+        return \trim(\explode("\n", $preview)[0] ?? '');
+    }
+
+    /**
+     * Epoch from whatever a legacy row carries: an int/numeric string stays
+     * itself, a DATETIME string parses, anything unparseable is null (age
+     * then reads '-'). No timezone games: strtotime's answer is the display.
+     */
+    private static function gcEpoch(mixed $value): ?int
+    {
+        if ($value === null) {
+            return null;
+        }
+        $text = (string) $value;
+        if (\ctype_digit($text)) {
+            return (int) $text;
+        }
+        $parsed = \strtotime($text);
+
+        return $parsed === false ? null : $parsed;
+    }
+
+    /**
+     * Coarse age cell in the status histogram's vocabulary: d/h/m/s.
+     */
+    private static function gcHumanAge(?int $createdAt, int $now): string
+    {
+        if ($createdAt === null) {
+            return '-';
+        }
+        $seconds = \max(0, $now - $createdAt);
+        if ($seconds >= 86400) {
+            return \intdiv($seconds, 86400) . 'd';
+        }
+        if ($seconds >= 3600) {
+            return \intdiv($seconds, 3600) . 'h';
+        }
+        if ($seconds >= 60) {
+            return \intdiv($seconds, 60) . 'm';
+        }
+
+        return $seconds . 's';
     }
 
     /**
@@ -1441,6 +1689,7 @@ final class Subcommands
      */
     private const GC_ACTION_FLAGS = [
         'status' => ['--format'],
+        'sessions' => ['--sort', '--limit', '--archived', '--children', '--format'],
         'vacuum' => ['--check', '--incremental', '--force', '-f'],
     ];
 
@@ -5017,9 +5266,9 @@ final class Subcommands
         // C-SES-7.b: 'import' sits with the verbs that CREATE rows — it never
         // needs a <target>, its operand is a transcript file.
         'session' => ['list', 'show', 'import', 'rename', 'delete', 'pin', 'unpin', 'archive', 'unarchive'],
-        // gc-cli-1106 B1: only the two actions that exist TODAY are listed;
-        // sessions/analyze/purge ride later rungs.
-        'gc' => ['status', 'vacuum'],
+        // gc-cli-1106: only the actions that exist TODAY are listed;
+        // analyze and purge ride later rungs.
+        'gc' => ['status', 'sessions', 'vacuum'],
         'bundles' => ['list', 'install', 'marketplace', 'update', 'search', 'recommend'],
         'lsp' => ['install', 'list'],
         'mcp' => ['list', 'auth', 'import', 'trust', 'serve'],

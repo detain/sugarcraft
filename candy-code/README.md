@@ -2494,6 +2494,9 @@ store instead. Binding anything but loopback additionally needs the explicit
 candy-code doctor                    # check this installation, exit 1 if anything FAILs
 candy-code gc status                   # inspect the session store: per-table bytes, reclaimable pages,
                                        #   session counts, age histogram, storage dirs, retention — read-only
+candy-code gc sessions [--sort size|age|name] [--limit N] [--archived] [--children]
+                                       #   per-session real bytes: db fold + transcript journals + shadow dirs;
+                                       #   archived hidden unless --archived, --children restricts to subagents
 candy-code gc vacuum [--check]         # report free pages; rewrites only with --force
                                        #   --incremental --force flips auto_vacuum once, then drains
 candy-code import claude               # preview the Claude Code settings translation; --project adds the project file, --yes writes the user tier
