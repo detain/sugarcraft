@@ -15,6 +15,7 @@ use SugarCraft\Code\Config\Settings\SettingType;
 use SugarCraft\Code\Config\Settings\Validator\SpendCapValidator;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Runtime;
+use SugarCraft\Code\Tools\BuiltIn\Bash;
 
 /**
  * The "Agent loop" category's keys. One file per category so a step adding a
@@ -41,6 +42,15 @@ final class AgentLoopSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.parallelToolCalls.label'))
                 ->withHelp(Lang::t('settings.parallelToolCalls.help'))
                 ->withReaderSymbol(EngineBackend::class . '::complete'),
+            // The wall-clock ceiling of a parallel batch's group deadline. It
+            // tracks Bash::MAX_TIMEOUT_SECONDS — the per-call ceiling of the
+            // longest legitimate group member — so an operator can lift a whole
+            // batch to the hour scale (tool-timeouts follow-up). The reader
+            // honours a value only below `turnIdleTimeoutSeconds`: a group
+            // deadline has to fit inside the turn's idle window. That key is
+            // user-tier with a 120 s default, so an hour-scale deadline takes
+            // effect paired with a raised idle ceiling; an unpaired one falls
+            // back to the default below rather than being refused at save.
             SettingDefinition::new('parallelToolDeadlineSeconds', SettingType::Int, Runtime::PARALLEL_TOOL_DEADLINE_SECONDS)
                 ->withCategory(SettingCategory::AgentLoop)
                 ->withRiskClass(RiskClass::Tuning)
@@ -48,7 +58,7 @@ final class AgentLoopSettings implements SettingDefinitionSet
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::NextTurn)
                 ->withEnvVar('CANDY_CODE_PARALLEL_TOOL_DEADLINE')
-                ->withRange(1)
+                ->withRange(1, Bash::MAX_TIMEOUT_SECONDS)
                 ->withLabel(Lang::t('settings.parallelToolDeadlineSeconds.label'))
                 ->withHelp(Lang::t('settings.parallelToolDeadlineSeconds.help'))
                 ->withReaderSymbol(EngineBackend::class . '::complete'),
