@@ -340,6 +340,16 @@ final class FlexBox
         return $measured;
     }
 
+    /**
+     * Natural content width of an item — the widest raw line. Measurement
+     * runs on the UNSWEPT string (measureHeight shares this property): the
+     * sanitize sweep happens per line later, inside renderRow()/
+     * renderColumn(). Escape/control bytes in content therefore inflate
+     * measured geometry — and with it the ratio split — even though the
+     * emitted frame carries only the swept text; the renderer's final
+     * Width::truncateAnsi keeps every printed line within the box. The
+     * README "Trust boundary" section discloses this asymmetry to users.
+     */
     private function measureWidth(FlexItem $item): int
     {
         $lines = \explode("\n", $item->content);
@@ -347,6 +357,7 @@ final class FlexBox
         return $widths === [] ? 0 : \max($widths);
     }
 
+    /** Natural content height — number of raw content lines (same raw-measurement ingress as measureWidth()). */
     private function measureHeight(FlexItem $item): int
     {
         return \count(\explode("\n", $item->content));
