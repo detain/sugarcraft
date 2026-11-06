@@ -359,10 +359,11 @@ depth of **every** `Style` the process mints afterwards:
 | `CLICOLOR_FORCE` | The libcli-family spelling of the same switch as `FORCE_COLOR`; either one truthy forces the same way. |
 | `CLICOLOR` | The BSD/libcli "disable colour without unsetting it" switch: exactly `0` (no other value) drops the profile to `Ascii` like `NO_COLOR`. Unlike `NO_COLOR` it does **not** outrank the force variables — `CLICOLOR=0` with `CLICOLOR_FORCE=1` still publishes colour. |
 
-The ladder reads only the four variables above for colour decisions. `TERM`,
-`TERM_PROGRAM`, `COLORTERM`,
-`WT_SESSION` and the CI-family variables ride the same ladder as capability
-hints, but `TERM` and `TERM_PROGRAM` keep their own rows in the
+The ladder picks colour from the four variables above plus the capability hints
+named here: `TERM`, `TERM_PROGRAM`, `COLORTERM`,
+`WT_SESSION` and the CI-family variables ride the same ladder and steer the
+chosen profile, not just the rest of the launch's beliefs. `TERM` and
+`TERM_PROGRAM` keep their own rows in the
 [OS variables](#os-variables) table, where their multiplexer and dumb-terminal
 meanings are described.
 
