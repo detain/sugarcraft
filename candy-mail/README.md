@@ -194,8 +194,9 @@ export CANDY_MAIL_SIGNATURE="Sent with CandyMail"  # Appended to body
 # Pre-rename POP_* exports are imported onto CANDY_MAIL_* equivalents whole-prefix
 # (an already-set CANDY_MAIL_* wins); the 11 names this program reads also emit a
 # one-time deprecation warning — off-roster POP_* vars map to names nothing consumes,
-# staying inert and silent. // @rename-keep
+# staying inert and silent.
 ```
+<!-- @rename-keep -->
 
 Error **messages** follow the standard `LC_ALL`/`LC_MESSAGES`/`LANG` environment (16
 locales ship); the usage/help text is English by design. Examples under `examples/`
