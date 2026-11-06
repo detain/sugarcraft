@@ -867,14 +867,14 @@ EXCEPTION paragraph.
 | `getCaps()` | `caps(string $left, string $right): self` |
 | `getFillChar()` | `fillChar(string $char): self` |
 
-## Test
+## Testing
 
 ```sh
 cd sugar-style && composer install && vendor/bin/phpunit
 ```
 
-Suite at the 2026-11-03 docs-fidelity lane close:
-987 tests, 3,438 assertions, 0 failures (cited figure is a point-in-time
+The suite is around 1,000 tests and over 3,400 assertions, green at the
+2026-11-03 docs-fidelity lane close (cited figure is a point-in-time
 measurement, not a live-pinned number).
 
 ## Demos
