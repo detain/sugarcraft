@@ -351,27 +351,29 @@ echo Tree::new()
   `.vhs/canvas.gif`).
 - **`Bar\StatusBar` / `Bar\HelpBar`** — one-line chrome widgets: StatusBar
   holds left/center/right `Segment` lists with separator/style/width knobs;
-  HelpBar binds key→label pairs (`fromMap`) with key/label styles.
-
-  ```php
-  use SugarCraft\Style\Bar\{Segment, StatusBar};
-  use SugarCraft\Style\Style;
-
-  echo StatusBar::new()
-      ->width(80)
-      ->style(Style::new()->fg('#cdd6f4')->on('#1e1e2e'))
-      ->left('main()', Segment::of('2 modified', Style::new()->fg('#e0af68')))
-      ->right('142 tests')
-      ->render() . "\n";
-  ```
-
-  Trap: a bar-wide background `style()` and per-segment styles can be
-  combined, but a per-segment style that ends in an SGR reset interrupts the
-  bar background from that segment on — the two modes (bar-wide colour vs
-  per-segment colour) are normally used one at a time.
-
+  HelpBar binds key→label pairs (`fromMap`) with key/label styles (see
+  [StatusBar example](#statusbar-example) below).
 - **`TitleSgr`** — `@internal` border-title alignment enum; not part of the
   public surface.
+
+### StatusBar example
+
+```php
+use SugarCraft\Style\Bar\{Segment, StatusBar};
+use SugarCraft\Style\Style;
+
+echo StatusBar::new()
+    ->width(80)
+    ->style(Style::new()->fg('#cdd6f4')->on('#1e1e2e'))
+    ->left('main()', Segment::of('2 modified', Style::new()->fg('#e0af68')))
+    ->right('142 tests')
+    ->render() . "\n";
+```
+
+Trap: a bar-wide background `style()` and per-segment styles can be
+combined, but a per-segment style that ends in an SGR reset interrupts the
+bar background from that segment on — the two modes (bar-wide colour vs
+per-segment colour) are normally used one at a time.
 
 ## Custom Renderer & color-profile
 
