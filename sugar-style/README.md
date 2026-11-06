@@ -290,7 +290,8 @@ solarizedDark/Light) sets them explicitly; consumers must NOT assume
   capitalized calls resolve identically per the case-insensitivity note
   under **Layout helpers**.
 - **`Position`** — `TOP / LEFT / CENTER / RIGHT / BOTTOM` floats for layout
-  anchors.
+  anchors (start/center/end values: `TOP` names *start* for vertical joins,
+  `LEFT` for horizontal — the five anchors are three distinct values).
 - **`Layout`** (sub-namespace) — ratatui-inspired constraint solver — the
   second of the lib's two `Layout` classes (the package-level one above is
   the primitive facade; this one is imported as
