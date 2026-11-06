@@ -235,7 +235,7 @@ mid-flight cancellation would require an async transport (documented in
 ## Tests
 
 ```bash
-cd candy-mail && vendor/bin/phpunit -c phpunit.xml
+cd candy-mail && composer install && vendor/bin/phpunit -c phpunit.xml
 ```
 
 308 tests, 1,125 assertions (PHP 8.3, PHPUnit 10.5). The suite includes fork-based
