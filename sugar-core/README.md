@@ -358,7 +358,8 @@ the cut.
 ## Status
 
 - **Foundation utilities**: 🟢 complete.
-- **Runtime**: 🟢 Program loop, mouse (cell-motion + all-motion + SGR 1006), focus / blur, bracketed paste, full function-key set including F13–F63 and the Kitty PUA range, the cell-diff "cursed" renderer (synchronized output 2026 + unicode mode 2027), inline-mode rendering, declarative `View` struct, plus the Cmd surface (`Suspend` / `Interrupt` / `Exec` / `Sequence` / `Every` / `Printf` / `Raw` and more — a resume is deliberately not a Cmd: SIGCONT dispatches a `ResumeMsg` from the runtime) and the Program control methods (`wait` / `kill` / `releaseTerminal` / `restoreTerminal`).
+- **Runtime**: 🟢 Program loop, mouse (cell-motion + all-motion + SGR 1006), focus / blur, bracketed paste, full function-key set including F13–F63 and the Kitty PUA range, the cell-diff "cursed" renderer (synchronized output 2026 + unicode mode 2027), inline-mode rendering, declarative `View` struct, plus the Cmd surface (`Suspend` / `Interrupt` / `Exec` / `Sequence` / `Every` / `Printf` / `Raw` and more — full factory index under **Composing Cmds**;
+a resume is deliberately not a Cmd: SIGCONT dispatches a `ResumeMsg` from the runtime) and the Program control methods (`wait` / `kill` / `releaseTerminal` / `restoreTerminal`).
 - **Terminal recovery**: 🟢 `setupTerminal()` arms a one-shot shutdown backstop. `run()`'s `finally` restores the terminal on every path it can see; a `die()`, `exit()` or zend bailout that skips pending `finally` blocks still lands on the registered shutdown function, so the library that entered the alt screen is the library that leaves it and consumers do not need to write their own `bin` guard. The hook holds a `WeakReference` and compares the install pid at fire time — finished Programs are never pinned alive by the shutdown queue, and a forked child exiting never releases the parent's terminal. The arming is gated on `catchPanics` (`ProgramOptions`, default `true`): constructing with `catchPanics: false` — the debugger-owner case that does its own state capture — registers no hook, though an explicit `Program::armTerminalRelease()` before the run is a considered opt-in and is honored either way.
 
 
@@ -493,6 +494,70 @@ tick), [`sequence`](examples/sequence.php) (`Cmd::sequence`),
 [`window-size`](examples/window-size.php), [`print-key`](examples/print-key.php),
 [`set-window-title`](examples/set-window-title.php), and
 [`prevent-quit`](examples/prevent-quit.php).
+
+### Complete Cmd factory index
+
+Every `public static` factory on `Cmd` (45 as of this writing), by family —
+the discovery index so capability checks do not need a grep of
+`src/Cmd.php`. The cheat-sheet above stays the start-here view.
+
+**Lifecycle / control**
+- `quit()` — end the program.
+- `suspend()` — release the terminal, re-raise SIGTSTP on the process group; SIGCONT restores and dispatches a `ResumeMsg`.
+- `interrupt()` — SIGINT-style stop, same teardown as Ctrl-C but distinguishable from a graceful `quit()`.
+
+**Composition / scheduling**
+- `batch(...$cmds)` — run concurrently, each returned Msg dispatched independently; `null` entries dropped.
+- `sequence(...$cmds)` — run one after another, ordered (a mode request lands before the colour-dependent render that follows).
+- `tick($seconds, $produce)` — fire `$produce` once after a delay.
+- `every($seconds, $produce)` — fire on wall-clock multiples of `$seconds` (synchronised animations).
+- `send($msg)` — dispatch a Msg right away.
+- `promise($factory)` — run an async closure off the loop; its resolved Msg is dispatched on settle (wraps `AsyncCmd`).
+
+**Output**
+- `println($text)` / `printf($fmt, ...$args)` — print above the program region (inline-mode logging without disturbing the view).
+- `raw($bytes)` — drop raw bytes on the wire; the diff state is *not* invalidated (cursor-area-neutral effects; call `Renderer::reset()` if you clobber the painted region).
+- `exec($commandOrArgv, captureOutput:, onComplete:)` — run an external program (`$EDITOR`); a string runs via the shell, an argv list does not.
+
+**Terminal queries (the reply surfaces as a Msg)**
+- `requestCursorPosition()` → `CursorPositionMsg`
+- `requestForegroundColor()` → `ForegroundColorMsg` (OSC 10)
+- `requestBackgroundColor()` → `BackgroundColorMsg` (OSC 11; pair with `BackgroundColorMsg::isDark()`)
+- `requestCursorColor()` → `CursorColorMsg` (OSC 12)
+- `requestTerminalVersion()` → `TerminalVersionMsg` (XTVERSION DCS reply)
+- `requestMode($mode, $private = true)` → `ModeReportMsg` (`$private`: DEC private modes; false for ANSI)
+- `requestKittyKeyboard()` → `KeyboardEnhancementsMsg`
+
+**Clipboard / title / cwd / progress (OSC)**
+- `setClipboard($text, $selection = 'c')` — OSC 52 copy (`c` clipboard, `p` X11 primary, `s` secondary).
+- `readClipboard($selection = 'c')` → `ClipboardMsg` with the decoded text.
+- `setWindowTitle($title, $icon = false)` — OSC 2; `$icon: true` emits OSC 0 (icon + title).
+- `setWorkingDirectory($path, $host = '')` — OSC 7 (iTerm2/Terminal.app/WezTerm new-tab "same cwd").
+- `setProgressBar($state, $percent = 0)` — OSC 9;4; `$percent` clamped 0–100, meaningful for Normal/Error/Warning; `ProgressBarState::Remove` clears it.
+
+**Kitty keyboard protocol**
+- `pushKittyKeyboard($flags)` — push a flag layer (REPORT_EVENT_TYPES / REPORT_ALTERNATES / REPORT_ALL_AS_ESC / REPORT_ASSOCIATED).
+- `popKittyKeyboard($n = 1)` — pop `$n` flag layers.
+
+**Screen / cursor / scroll**
+- `enterAltScreen()` (`CSI ?1049h`) / `exitAltScreen()` (`CSI ?1049l`)
+- `clearScreen()` — erase everything and home the cursor.
+- `showCursor()` / `hideCursor()` (`CSI ?25h` / `CSI ?25l`)
+- `scrollUp($n = 1)` / `scrollDown($n = 1)` — scroll the active region.
+
+**Wire-mode toggles**
+- `enableMouseCellMotion()` (button-only motion, SGR encoding) / `enableMouseAllMotion()` (every move) / `disableMouse()` (clears both; safe when nothing is active)
+- `enableReportFocus()` / `disableReportFocus()` (focus-in/out reporting)
+- `enableBracketedPaste()` / `disableBracketedPaste()` (bracketed paste mode)
+
+**Default-colour overrides**
+- `setForegroundColor($r, $g, $b)` / `setBackgroundColor($r, $g, $b)` — OSC 10/11; persist for the rest of the program (terminals do not auto-restore on exit).
+- `resetForegroundColor()` / `resetBackgroundColor()` — OSC 110/111, back to the user's profile defaults.
+
+Not `Cmd` factories but the remaining two rows of the cheat-sheet:
+`WorkerCmd::run($pool, $task)` (offload to a worker subprocess →
+`WorkerResultMsg`) and `new SubscribeCmd($subscriptions)` (replace the
+subscription set for this cycle).
 
 ## Message catalogue
 
