@@ -551,6 +551,16 @@ Semantics, precisely:
   pattern and the matched line (control bytes stripped, long lines clipped), so
   resume output reads like a mechanical failure: `verdict rejected: verifier
   output matched /REJECT/ on: "…"`.
+- **Occurrence threshold (`atLeast`).** `reject('/…/i', atLeast: 2)` fails the
+  verdict only when the pattern matches **at least** that many times — for
+  reviewers that grade several findings per run, one stray quoted "REJECT"
+  then no longer sinks the stage. The threshold pairs with the pattern in the
+  same call (there is no standalone `rejectCount()`); it is meaningless without
+  `reject()`. At the default `1` the behavior and the reason string are
+  byte-identical to match-once; above it the reason counts matches
+  (`matched /REJECT/ 3 of at least 2 matches on: "…"`). A threshold below 1
+  throws at the builder boundary like a broken pattern, and a hand-built DTO
+  carrying one fails CLOSED at the scan.
 - **`retries` is one shared budget.** Verdict re-runs and the pool's mechanical
   re-runs draw from the same `retries(N)` allowance — `N` is attempts beyond
   the first, whichever way they failed. Each re-run is a fresh verifier agent

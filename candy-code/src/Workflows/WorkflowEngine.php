@@ -2142,7 +2142,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 break;
             }
 
-            $verdict = self::scanVerdict($verifier->reject, $verifierResult->output, $attemptsUsed);
+            $verdict = self::scanVerdict($verifier->reject, $verifierResult->output, $attemptsUsed, $verifier->rejectMinOccurrences);
         } while ($verdict['kind'] === self::VERDICT_REJECTED && $attemptsUsed < $maxAttempts);
 
         // A pattern that reaches the scan unable to compile (only possible
@@ -2864,16 +2864,32 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * A pattern that cannot compile at scan time reports INVALID, never
      * CLEAN: a rule that did not run must not read as a pass. (The common
      * path cannot reach here with such a pattern — TaskBuilder::reject()
-     * refuses it at set time; a hand-built DTO cannot slip silently.)
+     * refuses it at set time; a hand-built DTO cannot slip silently.) A
+     * hand-built occurrence threshold below 1 reports INVALID for the same
+     * reason: a rule that can never read clean must not read as clean.
+     *
+     * `atLeast` is the occurrence threshold carried from reject(): the
+     * verdict is rejected only when the pattern matches at least that many
+     * times. 1 — the default — is the match-once behavior, reason string
+     * byte-identical.
      *
      * @return array{kind: string, reason: string}
      */
-    private static function scanVerdict(string $pattern, ?string $output, int $attemptsUsed): array
+    private static function scanVerdict(string $pattern, ?string $output, int $attemptsUsed, int $atLeast = 1): array
     {
         $text = $output ?? '';
-        $matched = @preg_match($pattern, $text, $hits, PREG_OFFSET_CAPTURE);
 
-        if ($matched === false) {
+        if ($atLeast < 1) {
+            return [
+                'kind' => self::VERDICT_INVALID,
+                'reason' => "verdict scan failed closed: reject occurrence threshold {$atLeast} is not a positive"
+                    . ' number of matches [the stage cannot pass under a rule that can never read clean]',
+            ];
+        }
+
+        $count = @preg_match_all($pattern, $text, $hits, PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+
+        if ($count === false) {
             return [
                 'kind' => self::VERDICT_INVALID,
                 'reason' => "verdict scan failed closed: reject pattern '{$pattern}' is not a valid PCRE: "
@@ -2881,16 +2897,19 @@ final class WorkflowEngine implements WorkflowEngineInterface
             ];
         }
 
-        if ($matched !== 1) {
+        if ($count < $atLeast) {
             return ['kind' => self::VERDICT_CLEAN, 'reason' => ''];
         }
 
-        $line = self::matchedLine($text, (int) ($hits[0][1] ?? 0));
+        $line = self::matchedLine($text, (int) ($hits[0][0][1] ?? 0));
         $attempts = $attemptsUsed > 1 ? " [failed on all {$attemptsUsed} attempts]" : '';
+        // The threshold clause rides only the multi-occurrence form; the
+        // default-1 reason stays byte-identical to the match-once wording.
+        $threshold = $atLeast > 1 ? " {$count} of at least {$atLeast} matches" : '';
 
         return [
             'kind' => self::VERDICT_REJECTED,
-            'reason' => "verdict rejected: verifier output matched {$pattern} on: \"{$line}\"{$attempts}",
+            'reason' => "verdict rejected: verifier output matched {$pattern}{$threshold} on: \"{$line}\"{$attempts}",
         ];
     }
 

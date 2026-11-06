@@ -25,6 +25,7 @@ final class TaskBuilder
     private ?Isolation $isolation = null;
     private ?string $name = null;
     private ?string $reject = null;
+    private int $rejectAtLeast = 1;
 
     /**
      * Set the agent type (e.g. 'architect', 'coder', 'reviewer').
@@ -104,8 +105,13 @@ final class TaskBuilder
      * (e.g. '/REJECT/', '/\bNEEDS-FIX\b/i'). Validity is checked here, at
      * set time — a pattern that cannot compile throws instead of being born
      * into a workflow where its scan could only ever fail closed.
+     *
+     * `atLeast` is the occurrence threshold: the verdict is rejected only
+     * when the pattern matches AT LEAST that many times (default 1 — the
+     * match-once behavior, byte-identical). A threshold below 1 throws here,
+     * the same fail-closed rule as an uncompilable pattern.
      */
-    public function reject(string $pattern): self
+    public function reject(string $pattern, int $atLeast = 1): self
     {
         if (@preg_match($pattern, '') === false) {
             throw new \InvalidArgumentException(
@@ -113,7 +119,14 @@ final class TaskBuilder
             );
         }
 
+        if ($atLeast < 1) {
+            throw new \InvalidArgumentException(
+                "reject() atLeast must be at least 1 occurrence, got {$atLeast}",
+            );
+        }
+
         $this->reject = $pattern;
+        $this->rejectAtLeast = $atLeast;
         return $this;
     }
 
@@ -145,6 +158,7 @@ final class TaskBuilder
             isolation: $this->isolation,
             name: $this->name,
             reject: $this->reject,
+            rejectMinOccurrences: $this->rejectAtLeast,
         );
     }
 }

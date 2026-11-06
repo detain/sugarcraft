@@ -31,5 +31,14 @@ final readonly class WorkflowTask
          * malformed pattern still fails CLOSED at the scan.
          */
         public ?string $reject = null,
+        /**
+         * Occurrence threshold paired with {@see $reject}: the verdict is
+         * rejected only when the pattern matches AT LEAST this many times.
+         * The default 1 is the match-once behavior byte-identical; a
+         * hand-built value below 1 fails CLOSED at the scan (a rule that can
+         * never read clean must not read as one). Only consulted when
+         * {@see $reject} is set.
+         */
+        public int $rejectMinOccurrences = 1,
     ) {}
 }

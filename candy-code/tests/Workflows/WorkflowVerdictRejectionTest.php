@@ -505,6 +505,118 @@ YAML;
         $this->assertStringContainsString('REJECT ' . str_repeat('x', 150) . '...', $error);
     }
 
+    // ------------------------------------------------- occurrence threshold
+
+    public function testASingleMatchStaysBelowAnAtLeastTwoThreshold(): void
+    {
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('threshold')
+                ->description('build then verdict')
+                ->withVerification(
+                    'check',
+                    Tasks::agent('coder')->prompt('do the work'),
+                    Tasks::agent('reviewer')->prompt('review {{prevResult}}')->reject('/REJECT/', atLeast: 2),
+                )
+                ->build(),
+        );
+        $this->scriptVerdict('review', static fn (int $n): string => "notes\nREJECT: one stray quoted word\nend");
+
+        $run = $this->engine->run('threshold');
+
+        $this->assertSame(WorkflowStatus::Completed, $run->status, 'one match must not sink an atLeast:2 verdict');
+        $this->assertCount(2, $this->prompts, 'a below-threshold verdict never re-dispatches');
+    }
+
+    public function testTheThresholdTripsExactlyAtTheCountedMatchesAndCitesTheTally(): void
+    {
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('threshold')
+                ->description('build then verdict')
+                ->withVerification(
+                    'check',
+                    Tasks::agent('coder')->prompt('do the work'),
+                    Tasks::agent('reviewer')->prompt('review {{prevResult}}')->reject('/REJECT/', atLeast: 2),
+                )
+                ->build(),
+        );
+        $this->scriptVerdict('review', static fn (int $n): string => "notes\nREJECT: first finding\nREJECT: second finding\nend");
+
+        $run = $this->engine->run('threshold');
+
+        $error = (string) $run->stageResults[0]->error;
+        $this->assertSame(WorkflowStatus::Failed, $run->status, 'the non-vacuity pair of the test above');
+        $this->assertStringContainsString('2 of at least 2 matches', $error, 'the reason counts the matches');
+        $this->assertStringContainsString('/REJECT/', $error);
+        $this->assertStringContainsString('REJECT: first finding', $error, 'the reason quotes the FIRST matched line');
+        $this->assertStringNotContainsString('second finding', $error);
+    }
+
+    public function testTheDefaultThresholdReasonIsByteIdenticalToMatchOnce(): void
+    {
+        // atLeast: 1 is the default; the reason gains no tally clause, so the
+        // pinned reason shape from the match-once tests stands verbatim.
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('threshold')
+                ->description('build then verdict')
+                ->withVerification(
+                    'check',
+                    Tasks::agent('coder')->prompt('do the work'),
+                    Tasks::agent('reviewer')->prompt('review {{prevResult}}')->reject('/REJECT/', atLeast: 1),
+                )
+                ->build(),
+        );
+        $this->scriptVerdict('review', static fn (int $n): string => "notes\nREJECT: missing error handling\nend");
+
+        $run = $this->engine->run('threshold');
+
+        $error = (string) $run->stageResults[0]->error;
+        $this->assertSame(WorkflowStatus::Failed, $run->status);
+        $this->assertStringNotContainsString('of at least', $error, 'threshold 1 must not decorate the legacy reason');
+        $this->assertStringContainsString('matched /REJECT/ on: "REJECT: missing error handling"', $error);
+    }
+
+    public function testAZeroAndANegativeThresholdAreRefusedAtTheBuilderBoundary(): void
+    {
+        foreach ([0, -5] as $n) {
+            try {
+                Tasks::agent('reviewer')->prompt('p')->reject('/REJECT/', atLeast: $n);
+                $this->fail('atLeast ' . $n . ' must throw');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('atLeast', $e->getMessage());
+                $this->assertStringContainsString((string) $n, $e->getMessage());
+            }
+        }
+
+        $this->assertSame(3, Tasks::agent('r')->prompt('p')->reject('/x/i', atLeast: 3)->build()->rejectMinOccurrences);
+    }
+
+    public function testAHandBuiltNonPositiveThresholdFailsTheStageClosedAtTheScan(): void
+    {
+        $workflow = new Workflow(
+            name: 'raw-threshold',
+            description: 'bypasses the builder guard',
+            stages: [[
+                'name' => 'check',
+                'type' => 'verification',
+                'task' => new WorkflowTask('coder', 'do the work'),
+                'verifier' => new WorkflowTask('reviewer', 'review {{prevResult}}', reject: '/REJECT/', rejectMinOccurrences: 0),
+            ]],
+        );
+        $this->scriptVerdict('review', static fn (int $n): string => 'REJECT: whatever');
+
+        $run = $this->engine->runFromPhp(static fn (): Workflow => $workflow);
+
+        $this->assertSame(WorkflowStatus::Failed, $run->status);
+        $error = (string) $run->stageResults[0]->error;
+        $this->assertStringContainsString('verdict scan failed closed', $error);
+        $this->assertStringContainsString('occurrence threshold 0', $error);
+        $this->assertStringContainsString('can never read clean', $error);
+        $this->assertCount(2, $this->prompts, 'an invalid threshold must not burn a retry loop');
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {
