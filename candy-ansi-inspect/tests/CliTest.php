@@ -78,6 +78,34 @@ final class CliTest extends TestCase
         $this->assertSame('', $stdout);
     }
 
+    public function testRejectsExistingButUnreadableFile(): void
+    {
+        // M2 (option (i)): an existing file that cannot be read used to slip
+        // past the is_file()-only gate — the bare read emitted a PHP warning
+        // and the empty content took the empty-source branch, exiting 0 as if
+        // the inspection succeeded. The widened gate refuses it with the same
+        // sanitized refusal and exit 1. chmod 000 is the working shape on this
+        // box (setpriv/su unavailable); under root is_readable() lies, so the
+        // pin skips instead of false-greening.
+        if (\function_exists('posix_geteuid') && \posix_geteuid() === 0) {
+            $this->markTestSkipped('root bypasses file permissions: is_readable() would lie');
+        }
+        $tmp = tempnam(sys_get_temp_dir(), 'inspect-unreadable');
+        $this->assertIsString($tmp);
+        file_put_contents($tmp, "\x1b[31mred");
+        chmod($tmp, 0o000);
+        try {
+            [$code, $stdout, $stderr] = self::runCli($tmp);
+            $this->assertSame(1, $code, 'unreadable file must exit 1, got: ' . $stderr);
+            $this->assertStringContainsString('not a readable file', $stderr);
+            $this->assertStringNotContainsString('PHP Warning', $stderr);
+            $this->assertSame('', $stdout);
+        } finally {
+            chmod($tmp, 0o600);
+            unlink($tmp);
+        }
+    }
+
     /**
      * Run the CLI with piped stdin (never a TTY) and optional file argument.
      *

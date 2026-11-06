@@ -63,13 +63,13 @@ printed nothing, yields an empty report and exit status **0**, so
 stderr with exit status **1** only when no source was named at all (no file
 argument and no piped stdin), and a path argument that is not a local file —
 including a stream wrapper such as `php://` or `data://` — is refused with the
-same exit status rather than being read or fetched. An existing file that cannot
-be read is different: the read fails with a PHP warning on stderr and the tool
-exits **0** with an empty report (the gate is "is this a file", not "can we
-read it"), so a zero exit status after a warning means "inspected nothing", not
-"inspected the file". The refusal string's wording is
-`not a readable file: {path}`, but it only ever fires for paths that are not a
-file at all.
+same exit status rather than being read or fetched. An existing file that
+cannot be read is refused the same way (the gate is "is this a readable regular
+file", not "can we fake an empty report"): exit status **1** with the refusal
+on stderr, never a PHP warning followed by a misleading zero. The refusal
+string's wording is
+`not a readable file: {path}`, and it fires for every path that is not a
+readable file — not-a-file and not-readable alike.
 
 ## Library
 
