@@ -271,7 +271,13 @@ final class Database
         $now = (new \DateTimeImmutable())->format(\DATE_ATOM);
 
         // Expiry is stored as an absolute epoch integer; created/modified
-        // stay DATE_ATOM because they are display metadata only.
+        // stay DATE_ATOM because they are display metadata only. The DO
+        // UPDATE clause deliberately omits `created`: an overwrite refreshes
+        // `modified` only, so Entry::$createdAt keeps its documented
+        // "first created" meaning. The :created binding lands solely on the
+        // INSERT path — reading the bind list without the SET list makes
+        // this upsert look like it re-stamps creation time on every write,
+        // which it does not.
         $expiresAt = null;
         if ($ttlSeconds !== null && $ttlSeconds > 0) {
             $expiresAt = \time() + $ttlSeconds;
