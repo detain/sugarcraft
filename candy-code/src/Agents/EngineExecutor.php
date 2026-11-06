@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Agents;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Backend\TranscriptTurn;
 use SugarCraft\Code\Backend\TurnInterrupted;
+use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook;
 use SugarCraft\Code\Hooks\HookManager;
@@ -244,6 +245,23 @@ final class EngineExecutor implements ExecutorInterface
             );
         }
 
+        // G3: a stage that declares outputSchema needs its terminal answer
+        // CONSTRAINED — the headless `-p --json-schema` gate mirrored: an
+        // unsupported provider refuses the run rather than degrading to a
+        // free-text report dressed up as a schema verdict, because the whole
+        // point of the schema is a machine-readable result for drivers.
+        if ($agent->outputSchema !== null && !$this->engine->provider()->supportsJsonSchema()) {
+            return self::failed(
+                $agent,
+                $startedAt,
+                sprintf(
+                    'agent "%s" declares an outputSchema, but its provider (%s) cannot constrain the answer to a schema, so the run was not started',
+                    $agent->agent->name,
+                    $this->engine->provider()->name(),
+                ),
+            );
+        }
+
         // R4-m1 disclosure: delegation tools (DelegatesToEngine — Task, and
         // every *Section drive-through) are excluded from the sub-agent
         // toolset. Their body is itself a delegated turn, and inside this
@@ -277,6 +295,12 @@ final class EngineExecutor implements ExecutorInterface
         };
 
         $heartbeat = $this->heartbeat;
+        // G3 honesty mirror: headless tracks whether any tool result landed in
+        // the transcript (json_schema_unapplied); a consumed tool round means
+        // the terminal turn's constrained answer was preceded by free-form
+        // tool steps, so drivers must know the schema may not have pinned the
+        // reply. Bound by reference into the event sink below.
+        $sawTool = false;
         $onProgress = static function () use ($guard, $checkDeadline, $heartbeat): void {
             $guard();
             $checkDeadline();
@@ -284,11 +308,14 @@ final class EngineExecutor implements ExecutorInterface
                 $heartbeat();
             }
         };
-        $onEvent = static function (object $event) use ($guard, $checkDeadline, $onToolStarted, $heartbeat): void {
+        $onEvent = static function (object $event) use ($guard, $checkDeadline, $onToolStarted, $heartbeat, &$sawTool): void {
             $guard();
             $checkDeadline();
             if ($heartbeat !== null) {
                 $heartbeat();
+            }
+            if ($event instanceof ToolFinished) {
+                $sawTool = true;
             }
             if ($onToolStarted !== null && $event instanceof ToolStarted) {
                 $onToolStarted($event);
@@ -307,11 +334,21 @@ final class EngineExecutor implements ExecutorInterface
         // model reads and works around, never a failed stage.
         $engine = $this->engine
             ->withTools($tools)
-            ->withMaxSteps($maxTurns)
-            ->withSubAgentGrant(new SubAgentGrantHook(
-                $this->grantManager ?? new AgentManager($this->engine->provider(), new SkillRegistry()),
-                $agent,
-            ));
+            ->withMaxSteps($maxTurns);
+
+        // G3: the decoded document rides the SAME leg as the headless
+        // `--json-schema` flag — EngineBackend stamps it onto requests and
+        // Runtime's terminal-turn gate (jsonSchemaFor) lets it apply only once
+        // no tool round is outstanding. Untouched (never called) when absent,
+        // so a legacy stage's wire shape is byte-identical.
+        if ($agent->outputSchema !== null) {
+            $engine = $engine->withJsonSchema($agent->outputSchema);
+        }
+
+        $engine = $engine->withSubAgentGrant(new SubAgentGrantHook(
+            $this->grantManager ?? new AgentManager($this->engine->provider(), new SkillRegistry()),
+            $agent,
+        ));
 
         try {
             // A delegated run (step 3.D-2): the turn ends on `SubagentStop`,
@@ -354,6 +391,15 @@ final class EngineExecutor implements ExecutorInterface
                 'the agent ended without a final report (step cap %d); any work it did is in the tree but was not summarised',
                 $maxTurns,
             ), $turn->reply->usage);
+        }
+
+        // G3 honesty mirror of headless json_schema_unapplied: the stage
+        // channel has no stderr for the driver, so the disclosure rides the
+        // tail of the very text the driver reads — a schema-declared stage
+        // whose model ran tools may not have its reply constrained, and a
+        // consumer that JSON-parses it must learn that before it fails to.
+        if ($agent->outputSchema !== null && $sawTool) {
+            $output .= "\n\n[the reply was not constrained to the output schema because the model ran tools before answering]";
         }
 
         return new AgentResult(

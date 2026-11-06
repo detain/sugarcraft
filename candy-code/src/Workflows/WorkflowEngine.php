@@ -1774,6 +1774,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 timeout: $task->timeout ?? $stageTimeout,
                 maxRetries: $task->retries ?? 0,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
+                outputSchema: $task->outputSchema,
                 permissionGate: $this->permissionGate,
             );
 
@@ -1926,6 +1927,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 timeout: $task->timeout ?? $stageTimeout,
                 maxRetries: $task->retries ?? 0,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
+                outputSchema: $task->outputSchema,
                 permissionGate: $this->permissionGate,
             );
 
@@ -2059,6 +2061,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             timeout: $task->timeout ?? $stageTimeout,
             maxRetries: $task->retries ?? 0,
             isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
+            outputSchema: $task->outputSchema,
             permissionGate: $this->permissionGate,
         );
 
@@ -2430,6 +2433,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 timeout: $task->timeout ?? $workflow->timeout,
                 maxRetries: $task->retries ?? 0,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
+                outputSchema: $task->outputSchema,
                 permissionGate: $this->permissionGate,
             );
             $subAgents[] = $subAgent;

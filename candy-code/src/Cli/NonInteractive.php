@@ -22,6 +22,7 @@ use SugarCraft\Code\Skills\SkillRegistry;
 use SugarCraft\Code\Skills\SkillSlashInvocation;
 use SugarCraft\Code\Support\Daemonize;
 use SugarCraft\Code\Support\ForkedChild;
+use SugarCraft\Code\Support\JsonSchemaArgument;
 use SugarCraft\Code\Tools\BuiltIn\AskUserTool;
 use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
 use SugarCraft\Code\Tools\BuiltIn\PlanExitTool;
@@ -1230,56 +1231,17 @@ final class NonInteractive
      * AUT-4: parse `--json-schema`'s raw token at the boundary — inline
      * object if it opens with `{`, otherwise a file to read — and refuse
      * anything that is not a JSON object with a usage error BEFORE a call
-     * is billed. `array_is_list()` refuses `[]` and any array form: a JSON
-     * Schema is an object, and the one empty-object shape that parses to a
-     * PHP list-like structure (an empty schema `{}` decodes to `[]`) is
-     * special-cased by re-reading the trimmed text, so the permissive empty
-     * schema stays usable while `[1,2]` does not.
+     * is billed. G3 (wf-g2g3): the parse now lives in ONE copy at
+     * {@see JsonSchemaArgument::decode()}, shared with the workflow stage's
+     * `outputSchema:` so the same token means the same schema on both
+     * surfaces; see that class for the list-refusal and unreadable-file
+     * law.
      *
      * @return array<string, mixed>|null
      */
     private static function decodeJsonSchema(?string $raw): ?array
     {
-        if ($raw === null) {
-            return null;
-        }
-
-        $text = \trim($raw);
-        if (\str_starts_with($text, '[')) {
-            // An inline JSON LIST: clearly a document, clearly not a schema.
-            // Calling it a missing file — which the path arm would otherwise
-            // do — is the confusing half of fail-loud.
-            throw new \InvalidArgumentException(Lang::t('cli.noninteractive.json_schema_not_object'));
-        }
-
-        try {
-            if (\str_starts_with($text, '{')) {
-                $decoded = \json_decode($text, true, 512, \JSON_THROW_ON_ERROR);
-            } else {
-                // Checked before reading: file_get_contents() raises a PHP
-                // WARNING on a miss (the suite fails on warnings), and a
-                // TOCTOU loss between check and read still lands on the
-                // same honest refusal via the false arm.
-                if (!\is_file($text) || !\is_readable($text)) {
-                    throw new \InvalidArgumentException(Lang::t('cli.noninteractive.json_schema_unreadable', ['path' => $text]));
-                }
-
-                $contents = \file_get_contents($text);
-                if ($contents === false) {
-                    throw new \InvalidArgumentException(Lang::t('cli.noninteractive.json_schema_unreadable', ['path' => $text]));
-                }
-
-                $decoded = \json_decode($contents, true, 512, \JSON_THROW_ON_ERROR);
-            }
-        } catch (\JsonException $e) {
-            throw new \InvalidArgumentException(Lang::t('cli.noninteractive.json_schema_invalid', ['error' => $e->getMessage()]), 0, $e);
-        }
-
-        if (!\is_array($decoded) || (\array_is_list($decoded) && $decoded !== [])) {
-            throw new \InvalidArgumentException(Lang::t('cli.noninteractive.json_schema_not_object'));
-        }
-
-        return $decoded;
+        return JsonSchemaArgument::decode($raw);
     }
 
     /**

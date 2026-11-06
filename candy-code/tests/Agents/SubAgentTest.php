@@ -89,6 +89,7 @@ final class SubAgentTest extends TestCase
         $this->assertSame(300, $subAgent->timeout);
         $this->assertSame(0, $subAgent->maxRetries);
         $this->assertSame(Isolation::None, $subAgent->isolation);
+        $this->assertNull($subAgent->outputSchema, 'G3: no task declared a schema — the free-text shape is the default');
     }
 
     public function testConstructorWithDefaultCreatedAt(): void
@@ -324,6 +325,7 @@ final class SubAgentTest extends TestCase
         $this->assertSame(300, $array['timeout']);
         $this->assertSame(0, $array['max_retries']);
         $this->assertSame('none', $array['isolation']);
+        $this->assertNull($array['output_schema']);
     }
 
     public function testToArrayWithError(): void

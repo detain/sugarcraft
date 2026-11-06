@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Workflows;
 
 use SugarCraft\Code\Support\ContainedPath;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\JsonSchemaArgument;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -1570,6 +1571,9 @@ final class WorkflowRegistry
                 if (array_key_exists('retries', $agent)) {
                     $b = $b->retries($this->requireRetryCount($agent['retries'], "{$where} agent #{$agentIndex}"));
                 }
+                if (array_key_exists('outputSchema', $agent)) {
+                    $b = $b->outputSchema($this->requireSchema($agent['outputSchema'], "{$where} agent #{$agentIndex}"));
+                }
                 $builders[] = $b;
             }
             return $builders;
@@ -1587,6 +1591,10 @@ final class WorkflowRegistry
 
         if (array_key_exists('retries', $stage)) {
             $b = $b->retries($this->requireRetryCount($stage['retries'], $where));
+        }
+
+        if (array_key_exists('outputSchema', $stage)) {
+            $b = $b->outputSchema($this->requireSchema($stage['outputSchema'], $where));
         }
 
         return $b;
@@ -1607,7 +1615,7 @@ final class WorkflowRegistry
      */
     private function parseYamlTaskList(array $stage, string $where): array
     {
-        foreach (['agent', 'prompt', 'tools', 'retries'] as $key) {
+        foreach (['agent', 'prompt', 'tools', 'retries', 'outputSchema'] as $key) {
             if (array_key_exists($key, $stage)) {
                 throw new WorkflowLoadException(
                     "{$where} lists \"tasks\", so \"{$key}\" belongs on each task, not on the stage"
@@ -1645,6 +1653,9 @@ final class WorkflowRegistry
             if (array_key_exists('retries', $task)) {
                 $b = $b->retries($this->requireRetryCount($task['retries'], $at));
             }
+            if (array_key_exists('outputSchema', $task)) {
+                $b = $b->outputSchema($this->requireSchema($task['outputSchema'], $at));
+            }
             $builders[] = $b;
         }
 
@@ -1681,6 +1692,57 @@ final class WorkflowRegistry
         }
 
         return $int;
+    }
+
+    /**
+     * A task's `outputSchema:` (G3) — the JSON schema document that constrains
+     * this stage agent's terminal turn, the workflow spelling of headless
+     * `--json-schema`. Either a native YAML map (a schema written inline in the
+     * document; the empty map `{}` passes through as the empty schema exactly
+     * as headless passes `{}`) or a string carrying headless's token: inline
+     * JSON starting with `{`, or a path to a schema file — read through the ONE
+     * shared decoder {@see JsonSchemaArgument::decode()} so the same token
+     * means the same schema on both surfaces. Refused, never ignored: a schema
+     * that cannot be read would silently degrade the verdict back to free
+     * text, which is the very thing the option exists to prevent.
+     *
+     * @return array<mixed> the decoded-trusted schema document
+     *
+     * @throws WorkflowLoadException When the value is neither a map nor a
+     *         decodable schema token.
+     */
+    private function requireSchema(mixed $value, string $where): array
+    {
+        if (is_array($value)) {
+            if (array_is_list($value) && $value !== []) {
+                throw new WorkflowLoadException(
+                    "{$where} \"outputSchema\" must be a JSON object (a schema); a list or a scalar is not one"
+                );
+            }
+
+            return $value;
+        }
+
+        if (is_string($value)) {
+            try {
+                $decoded = JsonSchemaArgument::decode($value);
+            } catch (\InvalidArgumentException $e) {
+                throw new WorkflowLoadException("{$where} \"outputSchema\": {$e->getMessage()}", 0, $e);
+            }
+
+            if ($decoded === null) {
+                // Unreachable for a string token (decode() nulls only null);
+                // refused here so no future caller mistake reads "no schema".
+                throw new WorkflowLoadException("{$where} \"outputSchema\" must not be empty");
+            }
+
+            return $decoded;
+        }
+
+        throw new WorkflowLoadException(
+            "{$where} \"outputSchema\" must be a schema map or a string (inline JSON or a file path), got "
+            . get_debug_type($value)
+        );
     }
 
     /**

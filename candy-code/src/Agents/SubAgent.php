@@ -120,6 +120,8 @@ final class SubAgent
         public readonly ?PermissionGate $permissionGate = null,
         public readonly ?string $teamId = null,
         public readonly ?string $teammateId = null,
+        // G3: decoded-trusted JSON-schema document constraining this run's terminal turn; null = free-text report.
+        public readonly ?array $outputSchema = null,
     ) {
         $this->isolation = $isolation ?? $agent->isolation ?? Isolation::None;
         $this->status = self::STATUS_PENDING;
@@ -223,6 +225,7 @@ final class SubAgent
             'has_permission_gate' => $this->permissionGate !== null,
             'team_id' => $this->teamId,
             'teammate_id' => $this->teammateId,
+            'output_schema' => $this->outputSchema,
         ];
     }
 }

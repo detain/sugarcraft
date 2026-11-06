@@ -87,6 +87,8 @@ stages:                          # a LIST, never a map
       Review the diff at {{scope}} …
     tools: [Read, Grep, Glob, Bash]
     retries: 1                   # whole number >= 0; default 0
+    outputSchema:                # optional; map, inline JSON string, or file path
+      type: object
 
   - name: fix
     parallel: true
@@ -171,6 +173,32 @@ fixer that edits files may apply a change twice. `AgentPoolConfig::$maxRetries`
 gives every agent of a pool at least that many retries. It defaults to 0, and
 the launch leaves it there.
 
+### `outputSchema` gives a stage a structured verdict
+
+`outputSchema:` on a stage (or on one agent of a parallel stage, or on one task
+in a `tasks:` list) — or `->outputSchema($schema)` on a PHP task — constrains
+that agent's terminal answer to a JSON schema, on the same leg as the headless
+`-p --json-schema` flag. The value is the same shape the flag accepts: a YAML
+map (written inline), a string of inline JSON starting with `{`, or a path to a
+readable file containing one. Anything else — a sequence, malformed JSON, an
+unreadable path — is refused at load or build time, never coerced.
+
+- **What the stage sees:** the agent's report is the schema-constrained JSON
+  document itself, byte for byte what `-p --json-schema` prints as the answer,
+  so `{{name.output}}` and `{{name.results}}` readers parse it directly.
+- **The schema rides the first request only** — exactly as it does headless: a
+  model that answers with a tool call ends the turn unconstrained. When that
+  happens the stage output carries the same disclosure the headless run prints
+  on stderr: `[the reply was not constrained to the output schema because the
+  model ran tools before answering]`. A prompt that wants a verdict, not a
+  change, says so; a reviewer whose tools list is empty cannot take that branch.
+- **Capability is checked before the run:** a provider that cannot honour a
+  JSON schema refuses the stage loudly (`was not started`) rather than billing
+  for a structured answer and collecting prose.
+- **And it composes:** a verification stage's accept/reject pattern and an
+  `outputSchema` are independent features that stack — give the verifier a
+  schema and its verdict arrives machine-readable, not pattern-matched prose.
+
 ### Everything malformed is refused, not coerced
 
 `WorkflowRegistry::parseYamlWorkflow()` raises `WorkflowLoadException` for each
@@ -186,6 +214,11 @@ of these rather than loading a workflow that quietly does less:
 - `config:` not a map; `maxConcurrent` not a whole number >= 0 (0 means no cap);
   `timeout` not a positive integer.
 - `retries:` not a whole number of at least 0 (`retries: -1`, `retries: lots`).
+- `outputSchema:` is not a schema-shaped value: a sequence, a bare number,
+  malformed inline JSON, or a path that names no readable file (`WorkflowLoadException`
+  at load; the same refusals fire at `build()` for `->outputSchema('…')` strings),
+  and writing it on a stage that already carries a `tasks:` list is refused
+  (`belongs on each task`) rather than silently ignored.
 - `parallel: true` with `agents:` that is not a list.
 - any key present but of the wrong type. The check is `array_key_exists()`, not
   `isset()`, so `prompt: ~` is refused as the wrong shape rather than silently
@@ -501,9 +534,9 @@ return (new WorkflowBuilder())
 ```
 
 `TaskBuilder` carries `agent()`, `prompt()`, `tools()`, `timeout()`,
-`retries()`, `isolation()`, `name()` and `reject()`. `timeout`, `isolation` and
+`retries()`, `isolation()`, `name()`, `outputSchema()` and `reject()`. `timeout`, `isolation` and
 `reject` have **no YAML spelling**, so a YAML-declared task never carries them;
-`retries` is the `retries:` key above. `WorkflowEngine` substitutes defaults for whatever a task
+`retries` and `outputSchema` are the `retries:` and `outputSchema:` keys above. `WorkflowEngine` substitutes defaults for whatever a task
 leaves unset when it builds the `SubAgent`:
 `$task->timeout ?? config.timeout` seconds, `$task->retries ?? 0`,
 `$task->isolation ?? Isolation::None`. A task without its own `timeout()` is
@@ -512,6 +545,11 @@ seconds); see [`timeout` is a per-stage wall-clock budget](#timeout-is-a-per-sta
 
 `retries()` reaches `SubAgent::$maxRetries`, and the pool re-runs the agent as
 [`retries` re-runs a failed agent](#retries-re-runs-a-failed-agent) describes.
+`outputSchema()` — spelled `outputSchema:` in YAML — reaches
+`SubAgent::$outputSchema` decoded, and `EngineExecutor` puts it on the engine
+exactly as `-p --json-schema` does, as
+[`outputSchema` gives a stage a structured verdict](#outputschema-gives-a-stage-a-structured-verdict)
+describes.
 
 ### `reject()` fails a stage on the verifier verdict
 

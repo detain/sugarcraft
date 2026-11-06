@@ -22,6 +22,8 @@ final readonly class WorkflowTask
         public ?int $retries = null,
         public ?Isolation $isolation = null,
         public ?string $name = null,
+        // G3: decoded-trusted JSON-schema document constraining this task's terminal turn; null = free-text report.
+        public ?array $outputSchema = null,
         /**
          * Verdict rejection, for a verification stage's verifier slot only:
          * a PCRE pattern whose MATCH against the verifier's completed output

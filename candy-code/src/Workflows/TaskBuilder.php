@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Workflows;
 
 use SugarCraft\Code\Agents\Isolation;
+use SugarCraft\Code\Lang;
+use SugarCraft\Code\Support\JsonSchemaArgument;
 
 /**
  * Fluent builder for assembling a WorkflowTask.
@@ -24,6 +26,7 @@ final class TaskBuilder
     private ?int $retries = null;
     private ?Isolation $isolation = null;
     private ?string $name = null;
+    private array|string|null $outputSchema = null;
     private ?string $reject = null;
     private int $rejectAtLeast = 1;
 
@@ -93,6 +96,23 @@ final class TaskBuilder
     }
 
     /**
+     * Constrain this task's terminal turn to a JSON schema.
+     *
+     * Accepts a decoded schema document (an associative array — the shape the
+     * YAML loader hands over), or the raw headless spelling: an inline JSON
+     * object or a path to a schema file, decoded at build() time exactly like
+     * the `-p --json-schema` flag decodes it. An invalid schema fails closed
+     * here, at build time, never at dispatch.
+     *
+     * @param array<string, mixed>|string|null $schema
+     */
+    public function outputSchema(array|string|null $schema): self
+    {
+        $this->outputSchema = $schema;
+        return $this;
+    }
+
+    /**
      * Reject the verifier's verdict when its completed output MATCHES a pattern.
      *
      * POLARITY, LOUD: this is a REJECT pattern, not an expectation — a MATCH
@@ -157,8 +177,33 @@ final class TaskBuilder
             retries: $this->retries,
             isolation: $this->isolation,
             name: $this->name,
+            outputSchema: self::trustedSchema($this->outputSchema),
             reject: $this->reject,
             rejectMinOccurrences: $this->rejectAtLeast,
         );
+    }
+
+    /**
+     * G3: the builder's parse-don't-validate gate. A raw string (inline JSON
+     * or a file path) decodes exactly like the `-p --json-schema` flag; an
+     * array arrives as a decoded map and must actually be one — a list is
+     * not a schema and fails CLOSED here, where the caller declared it, so
+     * nothing downstream has to re-check.
+     *
+     * @param array<array-key, mixed>|string|null $schema
+     *
+     * @return array<array-key, mixed>|null
+     */
+    private static function trustedSchema(array|string|null $schema): ?array
+    {
+        if (is_string($schema)) {
+            return JsonSchemaArgument::decode($schema);
+        }
+
+        if ($schema !== null && array_is_list($schema) && $schema !== []) {
+            throw new \InvalidArgumentException(Lang::t('cli.noninteractive.json_schema_not_object'));
+        }
+
+        return $schema;
     }
 }
