@@ -22,7 +22,8 @@
     ],
     "support": {
         "issues": "https://github.com/sugarcraft/candy-git-server/issues",
-        "source": "https://github.com/sugarcraft/candy-git-server"
+        "source": "https://github.com/sugarcraft/candy-git-server",
+        "docs": "https://sugarcraft.github.io/lib/candy-git-server.html"
     },
     "require": {
         "php": "^8.3",
@@ -43,10 +44,7 @@
     },
     "autoload": {
         "psr-4": {
-            "SugarCraft\\GitServer\\": "src/",
-            "SugarCraft\\GitServer\\SSH\\": "src/SSH/",
-            "SugarCraft\\GitServer\\Git\\": "src/Git/",
-            "SugarCraft\\GitServer\\LFS\\": "src/LFS/"
+            "SugarCraft\\GitServer\\": "src/"
         }
     },
     "autoload-dev": {
@@ -60,6 +58,6 @@
     "minimum-stability": "dev",
     "prefer-stable": true,
     "scripts": {
-        "serve": "php bin/candy-git-server serve"
+        "serve": "php bin/candy-git-server serve --http"
     }
 }

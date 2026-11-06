@@ -171,6 +171,14 @@ receive-pack relay child and its post-receive hooks all run through it.
 Without a `git` on `PATH`, `serve --http` starts but every request answers
 500 and the protocol pins skip loudly.
 
+The `ext-sockets` entry in `require` is a hard floor, not a formality:
+`Git\GitDaemon`'s blocking listen path calls `socket_create()` directly,
+and a missing socket extension is an undefined-function fatal at the call,
+not a refusal the class can answer with — there is no load-time guard that
+would let it live in `suggest`. (The opt-in async daemon mode and the
+smart-HTTP listener bind through core `stream_socket_server` and never
+touch ext-sockets; it is the blocking daemon seat that pins the require.)
+
 ## Configuration
 
 Create `config.yaml` in your data directory (`candy-git-server init`
