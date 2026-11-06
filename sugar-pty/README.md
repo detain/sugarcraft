@@ -253,7 +253,9 @@ bytes the master refuses to accept for the whole `SEND_STALL_BUDGET_SEC`
 
 ### `PtyPool` — a concurrency ceiling, not a handle cache
 
-`new(?PtySystem = null, int $maxSize = 50)`; `acquire($cols = 80, $rows = 24): PtyPair`
+`new(?PtySystem = null, int $maxSize = self::DEFAULT_MAX_SIZE)` —
+`DEFAULT_MAX_SIZE` is 50 and a `maxSize < 1` throws
+`\InvalidArgumentException`. `acquire($cols = 80, $rows = 24): PtyPair`
 opens a *fresh* pair (PTY pairs are 1:1 with their slave path and
 cannot be reused once a child has been spawned against the slave —
 and `open()` costs tens of microseconds anyway once the FFI bindings
@@ -261,6 +263,12 @@ are warm in the process — a cold factory build is dearer), throwing
 `PoolExhaustedException` past the cap; `release(PtyPair)` closes the
 master and frees the slot; `inFlight()` / `available()` /
 `totalAcquired()` report; `drain()` closes every outstanding pair.
+In-flight slots are weak references, so a pair abandoned *without*
+`release()` stops occupying a slot once collected (dead slots are swept
+at the head of every bookkeeping call) — but `PosixPtyPair` is a plain
+value object with no destructor, so an abandoned pair leaks its master
+fd until the process exits even though its slot frees. `release()` (or
+`drain()` at shutdown) is the contract, not the collector.
 
 ### `PtyInputDecoder` — key/mouse events straight off the master
 
