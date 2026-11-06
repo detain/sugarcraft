@@ -576,18 +576,12 @@ final class Toast
     }
 
     /**
-     * Cancel the auto-dismiss timer on the alert at $index, making it
-     * persistent ($index addresses {@see activeAlerts()} — the live queue,
-     * not the raw array), via the explicit sentinel {@see
-     * Alert::withoutExpiry()}). Indexes the raw queue, which may still hold
-     * expired alerts that leave on the next write or prune. Has no effect if
-     * $index is out of bounds or the alert is already persistent.
-     */
-    /**
      * Map a host-visible {@see activeAlerts()} index onto the raw queue
-     * offset (lib-reviews-1102 m1: cancelAlert()/extendAlert() used to index
-     * the RAW queue, so a11y P5's proof — an expired invisible entry at slot
-     * 0 — silently shifted every later index and cancelled the WRONG alert).
+     * offset: an expired entry in the raw queue is invisible to the host,
+     * so counting live alerts is the only mapping that can cancel the alert
+     * the host believes it addressed (cancelAlert()/extendAlert() once
+     * indexed the raw array, so an expired entry at slot 0 silently shifted
+     * every later index and cancelled the WRONG alert).
      * Null when the index names no live alert.
      */
     private function queuedIndexAt(int $index): ?int
@@ -608,6 +602,13 @@ final class Toast
         return null;
     }
 
+    /**
+     * Cancel the expiry on the alert at $index, making it persistent —
+     * $index addresses {@see activeAlerts()} (the live queue, not the raw
+     * array), and the change goes through the explicit sentinel {@see
+     * Alert::withoutExpiry()}. Has no effect if $index is out of bounds or
+     * the alert is already persistent.
+     */
     public function cancelAlert(int $index): self
     {
         $target = $this->queuedIndexAt($index);
@@ -1177,10 +1178,12 @@ final class Toast
         $iconCells = Width::string($prefix);
         if ($inner < $iconCells + 1) {
             // A box narrower than icon + one content cell must ELLIPSIZE,
-            // never DELETE (lib-reviews-1102 M4: at cols<=4 the styled prefix
-            // consumed the whole inner width and the message's leading
-            // characters vanished silently). Dropping the icon is the
-            // honest degrade — the severity still shows in the border colour.
+            // never DELETE: at cols<=4 the styled prefix consumed the whole
+            // inner width and the message's leading characters vanished
+            // silently. Dropping the icon is the honest degrade — while
+            // colour is live the severity still shows in the border; under
+            // NO_COLOR (or a CLICOLOR-disabled host) the icon was the only
+            // severity channel left, so the narrow box loses it too.
             $prefix = '';
             $iconCells = 0;
         }
@@ -1770,10 +1773,13 @@ final class Toast
      * fork measured emoji (U+1F300+) and other EAW-wide ranges as 1 cell,
      * desynchronising box padding from every other SugarCraft renderer (a
      * padded row then overflowed its own border by one cell). Two
-     * grid-specific divergences stay deliberate and documented: a TAB occupies
-     * ONE spacer cell (Width charges TAB_WIDTH = 4, which a fixed cell grid
-     * cannot represent), and the result is clamped into the Cell contract's
-     * 0–2 so a multi-cell cluster can never blow the grid.
+     * grid-specific divergences stay deliberate and documented: control bytes
+     * never occupy a cell — a TAB included, which Width charges
+     * TAB_WIDTH = 4 but a fixed cell grid cannot represent, so it scores 0
+     * here and is skipped at placement (the old one-cell TAB special-case put
+     * raw 0x09 on the wire and desynced the terminal's own tab stops) — and
+     * the result is clamped into the Cell contract's 0–2 so a multi-cell
+     * cluster can never blow the grid.
      */
     private function graphemeWidth(string $g): int
     {
