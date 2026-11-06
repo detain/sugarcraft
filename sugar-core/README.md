@@ -158,7 +158,7 @@ when that's more convenient.
 properties). Pass it as `Program`'s second argument:
 
 ```php
-use SugarCraft\Core\{Program, ProgramOptions};
+use SugarCraft\Core\{MouseMode, Program, ProgramOptions};
 
 $program = new Program(
     new Counter(),
