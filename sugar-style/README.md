@@ -267,10 +267,14 @@ echo Tree::new()
   `withEmbeddedTitle()` (btop-style `─┐cpu┌─`); `embedJunctions()` and
   `seam()` answer junction runes — see
   [Embedded border titles + seam junctions](#embedded-border-titles--seam-junctions).
-- **`BorderGradientBlend`** — `fromColors(Color ...$colors)` accepts 1–5
+- **`Border\BorderGradientBlend`** — `fromColors(Color ...$colors)` accepts 1–5
   colors and returns a blend whose `sides(): list<Color>` (top / right / bottom /
-  left) are interpolated around the perimeter. Apply via
-  `Style::borderForegroundBlend()` or the per-side `Style::border*Foreground()`.
+  left) are interpolated around the perimeter. No setter takes the blend
+  object: apply its four colours via the per-side
+  `Style::borderTopForeground()` / `borderRightForeground()` /
+  `borderBottomForeground()` / `borderLeftForeground()`.
+  `Style::borderForegroundBlend($start, $end)` is a two-colour shorthand
+  that builds the same perimeter interpolation internally.
 - **`AdaptiveColor` / `CompleteColor` / `CompleteAdaptiveColor`** — value
   holders carrying per-profile (TrueColor / 256 / Ansi) and dark-vs-light
   colour choices. Truth about resolution: `Style` stores and `render()` reads
