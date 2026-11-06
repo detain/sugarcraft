@@ -552,7 +552,9 @@ final class Cli
      * seam), so the reserve is exact for the initial paint.
      *
      * Descriptor 1 is spelled as the literal: `(int) STDOUT` is the RESOURCE
-     * ID 2, which names STDERR — the same defect fixed in
+     * ID, not the descriptor — usually a different number that names STDERR,
+     * and context-dependent under a runner that reopens the STD streams —
+     * the same defect fixed in
      * Renderer::withAdaptiveSize() and pinned by BinSizeQueryPolarityTest.
      * stream_isatty() is core PHP, so the gate needs no ext-posix either.
      *
