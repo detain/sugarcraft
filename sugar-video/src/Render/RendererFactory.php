@@ -203,12 +203,12 @@ final class RendererFactory
      *                        recover the cell footprint and size the sixel canvas)
      * @param int    $cellPxH Pixel height of a terminal cell
      *
-     * @throws \RuntimeException when the mode is unsupported here (M1 door)
+     * @throws \RuntimeException when the mode is unsupported on this terminal
      */
     public static function new(Mode $mode, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20): FrameRenderer
     {
-        // m34: the graphics rungs delegate to ext-gd encode paths upstream;
-        // refuse typed here instead of fataling on an undefined GD function.
+        // Graphics rungs delegate to ext-gd encode paths upstream; refuse with a
+        // typed error here instead of fataling on an undefined GD function.
         if ($mode->isGraphics() && !function_exists('imagecreatetruecolor')) {
             throw new \RuntimeException(Lang::t('decoder.gd_missing'));
         }

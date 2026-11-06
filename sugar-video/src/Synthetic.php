@@ -172,7 +172,7 @@ final class Synthetic
     }
 
     /**
-     * Direct-write fallback that never writes THROUGH a planted symlink (M13).
+     * Direct-write fallback that never writes THROUGH a planted symlink.
      *
      * The old fallback landed the bytes at $path itself with a plain
      * file_put_contents(): on a shared /tmp an attacker who symlinks the

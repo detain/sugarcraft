@@ -48,7 +48,7 @@ final class VideoSource
     private const PROBE_EXIT_GRACE_SECONDS = 1.0;
 
     /**
-     * m10: hard ceiling on drained ffprobe stdout — a pathological or hostile
+     * Hard ceiling on drained ffprobe stdout — a pathological or hostile
      * probe emitting endlessly cannot pin unbounded bytes in the parent.
      */
     private const MAX_PROBE_OUTPUT_BYTES = 8 * 1024 * 1024;
