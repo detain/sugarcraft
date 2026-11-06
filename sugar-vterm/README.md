@@ -925,7 +925,9 @@ Each subdirectory of `src/` owns a small piece of VT state:
 ## Trust boundary and hostile input
 
 Both facades exist to parse bytes emitted by UNTRUSTED programs, so every
-unbounded channel is capped and nothing leaves the grid unsanitised:
+unbounded channel is capped and nothing leaves the grid's *text* unsanitised
+(stored side-channels — attacker-controlled strings kept verbatim, such as
+window titles and OSC 8 URIs riding on grid cells — are called out below):
 
 - **Parser string buffer** — `Terminal::MAX_STRING_BUFFER` (64 KiB, shared by
   both facade parsers). OSC/DCS payloads past the cap are truncated, so no
