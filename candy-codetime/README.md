@@ -151,7 +151,12 @@ The data directory and every file in it are owner-private: directories are
 Directories are created under a
 narrowed umask, so they never exist world-readable; regular files are
 created-then-tightened — mode `0600` is settled before any payload is written,
-and until then the file is empty and shielded by the `0700` directory. A
+and until then the file is empty and shielded by the `0700` directory. The WAL
+sidecars are the exception to that timing: SQLite creates them mid-transaction,
+so on a fresh database the first beats can land on a `-wal` microseconds before
+the constructor's sweep tightens it — there, the `0700` directory is the
+protection window. The sweep tightens every sidecar visible at open and
+re-asserts on every subsequent open. A
 directory or file left loose by an older version is tightened on the next
 write; if that fails, the write aborts rather than storing your data in the
 open. Every `print`/`echo` of a stored project or file name goes through a
