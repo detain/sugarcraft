@@ -16,6 +16,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Style\Style;
 
 /**
@@ -1102,10 +1103,15 @@ final class TextInput implements Model
      */
     public function displayedValue(): string
     {
+        // SF-3 (M8): the projection is the display contract, so hostile
+        // control bytes (screen clears, OSC payloads) are stripped HERE —
+        // every consumer (view(), Input::displayValue(), the accessible
+        // line) inherits it. The buffer keeps its bytes verbatim; only
+        // what reaches the screen is sanitised.
         return match ($this->echoMode) {
-            EchoMode::Normal   => $this->value,
+            EchoMode::Normal   => RenderSafe::clean($this->value),
             EchoMode::Password => str_repeat($this->echoChar, $this->length()),
-            EchoMode::Mask     => $this->maskedValue(),
+            EchoMode::Mask     => RenderSafe::clean($this->maskedValue()),
             EchoMode::None     => '',
         };
     }

@@ -16,6 +16,7 @@ use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Forms\Util\RenderSafe;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\PasteMsg;
 use SugarCraft\Core\Util\Ansi;
@@ -649,7 +650,10 @@ final class TextArea implements Model
         // path. `-1` marks the unfocused render so no piece is treated as the
         // caret row and no span is queried.
         $relRow = $this->focused ? $this->row - $start : -1;
-        return implode("\n", $this->renderRows($rows, $start, $relRow));
+        // SF-3 (M8): buffer rows can carry pasted control bytes; the render
+        // output is sanitised at this single display choke. Our own styling
+        // is true SGR and survives; the buffer keeps its bytes verbatim.
+        return RenderSafe::clean(implode("\n", $this->renderRows($rows, $start, $relRow)));
     }
 
     /**

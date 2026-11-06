@@ -15,6 +15,7 @@ use SugarCraft\Constraints\Direction;
 use SugarCraft\Constraints\LayoutSolver;
 use SugarCraft\Constraints\Region;
 use SugarCraft\Forms\Field\Input;
+use SugarCraft\Forms\Util\RenderSafe;
 
 /**
  * Top-level form container.
@@ -521,7 +522,9 @@ final class Form implements Model
             : (self::coerceString($field->value()) ?? '');
         $err   = $field->error();
         $line  = $title === '' ? $value : ($title . ': ' . $value);
-        return $err !== null ? $line . "\n! " . $err : $line;
+        // SF-3 (M8): titles/errors/values all reach a terminal surface.
+        $line = RenderSafe::clean($line);
+        return $err !== null ? $line . "\n! " . RenderSafe::clean($err) : $line;
     }
 
     /**
@@ -534,7 +537,10 @@ final class Form implements Model
         foreach ($this->errors() as $key => $error) {
             $field = $this->findFieldByKey($key);
             $title = $field !== null ? $field->getTitle() : $key;
-            $lines[] = $theme->error->render($title . ': ' . $error);
+            // SF-3 (M8): validator error strings are built from untrusted
+            // input — clean before styling so the theme's own SGR is the
+            // only escape sequence that reaches the terminal.
+            $lines[] = $theme->error->render(RenderSafe::clean($title . ': ' . $error));
         }
         return implode("\n", $lines);
     }
