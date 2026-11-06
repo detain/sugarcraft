@@ -110,6 +110,41 @@ final class SpringConfigTest extends TestCase
         new SpringConfig(tension: 1e308, friction: 1.0, mass: 1e-308);
     }
 
+    public function testUnderflowedRootIsRefusedByTheGuardNotByDivisionByZero(): void
+    {
+        // Step 34 (docs-fix-1104 M3): tension*mass underflows to 0.0, so the
+        // ζ division hits a zero root — PHP 8.3 raises a raw
+        // DivisionByZeroError OUTSIDE the derived guard. The IEEE answer is
+        // INF damping; the guard must own the refusal (spring.config_derived),
+        // never the arithmetic fault.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('SpringConfig derived a non-converging spring');
+
+        new SpringConfig(tension: 1e-200, friction: 1.0, mass: 1e-200);
+    }
+
+    public function testNumericallyDegenerateDampingIsRefused(): void
+    {
+        // Step 34 (docs-fix-1104 M3): ω=1e150 and ζ=5e149 are both finite and
+        // positive, yet past ζ ≈ 2^26.5 the float sum ζ² − 1 rounds back to
+        // ζ², the two over-damped roots collapse to one number, and the baked
+        // coefficients freeze the position forever (measured: 600 ticks,
+        // pos=0 vel=0 settled=false). A frozen spring is illegal, not slow.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('SpringConfig derived a non-converging spring');
+
+        new SpringConfig(tension: 1.0, friction: 1.0, mass: 1e-300);
+    }
+
+    public function testHighButRepresentableDampingIsStillAccepted(): void
+    {
+        // The refuse line is float resolution (ζ² − 1 ≠ ζ²), not plausibility:
+        // ζ = 1e7 keeps the two roots distinguishable and must construct.
+        $config = new SpringConfig(tension: 1.0, friction: 2.0e7, mass: 1.0);
+        $this->assertSame(1.0, $config->angularFrequency);
+        $this->assertSame(1.0e7, $config->dampingRatio);
+    }
+
     public function testSpringThreadsReducedMotionOverride(): void
     {
         $config = new SpringConfig(tension: 100.0, friction: 10.0, mass: 1.0);

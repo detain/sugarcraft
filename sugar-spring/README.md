@@ -249,7 +249,11 @@ $spring30 = Spring::fromPreset(SpringPreset::Gentle, Spring::fps(30));
 
 `SpringConfig` accepts physical parameters (tension / friction / mass — all
 finite and greater than zero) and derives the `angularFrequency` and
-`dampingRatio` consumed by `Spring`:
+`dampingRatio` consumed by `Spring`. Extreme-but-finite triples are refused
+when the derived ω/ζ are non-finite, non-positive, or numerically degenerate
+(past ζ ≈ 2^26.5 the float sum ζ² − 1 rounds back to ζ², both over-damped
+roots collapse to one number, and the spring would freeze — illegal, not
+slow):
 
 ```
 angularFrequency = sqrt(tension / mass)
@@ -573,7 +577,9 @@ back-flavoured control points — same honesty rule as `Easing`.
 - **`SpringPreset`** — `Gentle` / `Wobbly` / `Stiff` / `Slow` / `Molasses`.
   `resolve()` returns a `SpringConfig`.
 - **`SpringConfig`** — `__construct(tension, friction, mass)` (all finite and
-  positive) with public readonly `$angularFrequency` / `$dampingRatio` /
+  positive; extreme-but-finite triples are refused when the derived ω/ζ are
+  non-finite, non-positive, or numerically degenerate) with public readonly
+  `$angularFrequency` / `$dampingRatio` /
   `spring(float $deltaTime = 1/60, ?bool $reducedMotionOverride = null)` /
   `springAt60Fps(?bool $reducedMotionOverride = null)`.
 - **`Projectile`** — `Projectile::new(...)` / `update()` / `position()` /

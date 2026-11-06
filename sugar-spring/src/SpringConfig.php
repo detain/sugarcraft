@@ -55,15 +55,23 @@ final readonly class SpringConfig
 
         $root = sqrt($tension * $mass);
         $this->angularFrequency = sqrt($tension / $mass);
-        $this->dampingRatio     = $friction / (2.0 * $root);
+        // An underflowed zero root must not reach the raw float division —
+        // PHP 8.3 faults that as DivisionByZeroError, which would escape the
+        // constructor un-guarded. The IEEE answer is infinite damping; hand
+        // that honest value to the derived guard below and let it refuse.
+        $this->dampingRatio = $root === 0.0 ? INF : $friction / (2.0 * $root);
 
         // Extreme-but-finite triples (tension/mass overflow, underflow to a
         // zero root) can still derive a non-converging spring; the derived
-        // props are public, so they must not escape poisoned.
+        // props are public, so they must not escape poisoned. Huge ζ joins
+        // them: once ζ² − 1 rounds back to ζ² (ζ ≥ 2^26.5), the two
+        // over-damped roots are numerically indistinguishable and the baked
+        // coefficients freeze the position forever — illegal, not slow.
         if (!is_finite($this->angularFrequency)
             || !is_finite($this->dampingRatio)
             || $this->angularFrequency <= 0.0
             || $this->dampingRatio <= 0.0
+            || ($this->dampingRatio * $this->dampingRatio - 1.0) === ($this->dampingRatio * $this->dampingRatio)
         ) {
             throw new \InvalidArgumentException(Lang::t('spring.config_derived', [
                 'tension' => $tension,
