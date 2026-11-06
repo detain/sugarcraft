@@ -20,6 +20,7 @@ use SugarCraft\Code\MCP\Serve\McpServeRoster;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\Gc\GcInventory;
+use SugarCraft\Code\Session\Gc\GcOrphanCensus;
 use SugarCraft\Code\Session\Gc\GcSessionSizes;
 use SugarCraft\Code\Session\Gc\GcStoreFiles;
 use SugarCraft\Code\Session\Gc\GcVacuum;
@@ -1011,11 +1012,11 @@ final class Subcommands
      *
      * The action door mirrors {@see self::session()}: no action is a usage
      * error, an unknown action is a usage error, and a flag the action does
-     * not speak is refused rather than silently ignored. `sessions` landed
-     * with B2 (the per-session byte fold); `analyze` and `purge` are later
-     * rungs of the same verb — TODAY they fall through this unknown-action
-     * door, which is the honest answer for an action the store tools do not
-     * implement yet.
+     * not speak is refused rather than silently ignored. `sessions` and
+     * `analyze` landed with B2 (the per-session byte fold and its analysis
+     * surface); `purge` is the one later rung of the same verb — TODAY it
+     * falls through this unknown-action door, which is the honest answer
+     * for an action the store tools do not implement yet.
      *
      * Nothing here prunes: every read runs over a read-only connection, and
      * the only writes the verb performs are the VACUUM rewrites its own
@@ -1049,6 +1050,7 @@ final class Subcommands
         return match ($verb) {
             'status' => self::gcStatus($args),
             'sessions' => self::gcSessions($args),
+            'analyze' => self::gcAnalyze($args),
             default => self::gcVacuum($args),
         };
     }
@@ -1260,15 +1262,13 @@ final class Subcommands
         }
 
         $rows = [];
-        foreach ($fold['sessions'] as $row) {
+        foreach (self::gcDisplayRows($fold['sessions']) as $row) {
             if (!$includeArchived && $row['archived']) {
                 continue;
             }
             if ($onlyChildren && $row['parent_id'] === null) {
                 continue;
             }
-            $row['title'] = self::gcSessionTitle($row);
-            $row['created_epoch'] = self::gcEpoch($row['created_at']);
             $rows[] = $row;
         }
         $compare = match ($sort) {
@@ -1278,9 +1278,7 @@ final class Subcommands
             'name' => static fn (array $a, array $b): int
                 => \strcasecmp((string) $a['title'], (string) $b['title'])
                     ?: \strcmp((string) $a['id'], (string) $b['id']),
-            default => static fn (array $a, array $b): int
-                => $b['total_bytes'] <=> $a['total_bytes']
-                    ?: \strcmp((string) $a['id'], (string) $b['id']),
+            default => self::gcCompareBySize(...),
         };
         \usort($rows, $compare);
         $shown = $limit > 0 ? \array_slice($rows, 0, $limit) : $rows;
@@ -1352,19 +1350,13 @@ final class Subcommands
         echo 'candy-code gc sessions', \PHP_EOL;
         echo \sprintf('%-12s  %-8s  %-8s  %-40s  %s', 'ID', 'FLAGS', 'AGE', 'TITLE', 'SIZE  (db / on-disk)'), \PHP_EOL;
         foreach ($shown as $row) {
-            $flags = $row['parent_id'] === null ? 'root' : 'sub';
-            if ($row['pinned']) {
-                $flags .= ' *';
-            }
-            if ($row['archived']) {
-                $flags .= ' A';
-            }
+            $cells = self::gcRowCells($row, $now);
             echo Lang::t('cli.gc.sessions_flags', [
-                'id' => \str_pad(\mb_strimwidth((string) $row['id'], 0, 12, ''), 12),
-                'flags' => \str_pad($flags, 8),
-                'age' => \str_pad(self::gcHumanAge($row['created_epoch'], $now), 8, ' ', STR_PAD_LEFT),
-                'title' => \str_pad(\mb_strimwidth((string) $row['title'], 0, 40, '…'), 40),
-                'size' => \str_pad(self::gcFormatBytes((int) $row['total_bytes']), 10, ' ', STR_PAD_LEFT),
+                'id' => $cells['id'],
+                'flags' => $cells['flags'],
+                'age' => $cells['age'],
+                'title' => $cells['title'],
+                'size' => $cells['size'],
                 'db' => self::gcFormatBytes((int) $row['db_bytes']),
                 'disk' => self::gcFormatBytes((int) $row['journal_bytes'] + (int) $row['shadow_bytes']),
             ]), \PHP_EOL;
@@ -1379,6 +1371,62 @@ final class Subcommands
         ]), \PHP_EOL;
 
         return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * Decorate fold rows with the display fields every gc table needs:
+     * the shown title and the epoch the age cell reads. ONE decoration
+     * path for both gcSessions and gcAnalyze — no second copy.
+     *
+     * @param  list<array<string,mixed>> $foldRows
+     * @return list<array<string,mixed>>
+     */
+    private static function gcDisplayRows(array $foldRows): array
+    {
+        $rows = [];
+        foreach ($foldRows as $row) {
+            $row['title'] = self::gcSessionTitle($row);
+            $row['created_epoch'] = self::gcEpoch($row['created_at']);
+            $rows[] = $row;
+        }
+
+        return $rows;
+    }
+
+    /**
+     * The size comparator (biggest first, id tiebreak) shared by the
+     * gcSessions default sort and the gcAnalyze top-N ordering.
+     */
+    private static function gcCompareBySize(array $a, array $b): int
+    {
+        return (int) $b['total_bytes'] <=> (int) $a['total_bytes']
+            ?: \strcmp((string) $a['id'], (string) $b['id']);
+    }
+
+    /**
+     * The fixed-width cells both tables print: clipped id (12), kind and
+     * flag stars, coarse age, clipped title (40), size column.
+     *
+     * @param  array<string,mixed> $row a gcDisplayRows()-decorated row
+     * @return array{id:string,flags:string,age:string,title:string,size:string}
+     */
+    private static function gcRowCells(array $row, int $now): array
+    {
+        $flags = $row['parent_id'] === null ? 'root' : 'sub';
+        if ($row['pinned']) {
+            $flags .= ' *';
+        }
+        if ($row['archived']) {
+            $flags .= ' A';
+        }
+
+        return [
+            'id' => \str_pad(\mb_strimwidth((string) $row['id'], 0, 12, ''), 12),
+            'flags' => \str_pad($flags, 8),
+            'age' => \str_pad(self::gcHumanAge($row['created_epoch'], $now), 8, ' ', STR_PAD_LEFT),
+            'title' => \str_pad(\mb_strimwidth((string) $row['title'], 0, 40, '…'), 40),
+            'size' => \str_pad(self::gcFormatBytes((int) $row['total_bytes']), 10, ' ', STR_PAD_LEFT),
+        ];
     }
 
     /**
@@ -1436,6 +1484,259 @@ final class Subcommands
         }
 
         return $seconds . 's';
+    }
+
+    /**
+     * `gc analyze`: the janitor overview — top sessions by real bytes,
+     * a labeled growth rate, per-table and per-storage bars, the
+     * root-vs-subagent split, and the ORPHAN census (report-only).
+     *
+     * Deliberate asymmetry with `gc sessions`: analyze shows EVERY
+     * session, archives included — a janitor deciding what to purge must
+     * see the whole floor, and the archived flag is right there in the
+     * FLAGS column. The growth line measures ONLY the bytes the
+     * usage_records and session_events tables carry (the labeled scope)
+     * and needs at least two distinct active days, or it says honestly
+     * that growth is not measurable. The orphan sections mirror the
+     * tombstone law of {@see GcOrphanCensus}: a row whose session died
+     * inside the grace window is NOT-yet-orphan. Every section prints
+     * COUNT + BYTES so `gc purge` (the last rung) has its target
+     * surface defined here; cleanup itself NEVER happens in this verb —
+     * diagnostics prune nothing. The teams rows are REPORT-ONLY by owner
+     * ruling (gc-cli-1106 4b): the count is shown, no cleanup is
+     * promised, and `--clean-teams` deliberately does not exist — the
+     * action door refuses it like any flag `analyze` does not speak.
+     */
+    private static function gcAnalyze(ParsedArgs $args): int
+    {
+        $spelled = isset($args->subcommandFlags['--format']) ? (string) $args->subcommandFlags['--format'] : NonInteractive::FORMAT_TEXT;
+        if ($spelled !== NonInteractive::FORMAT_TEXT && $spelled !== NonInteractive::FORMAT_JSON) {
+            return NonInteractive::failUsage('candy-code: ' . Lang::t('cli.gc.bad_format', ['format' => $spelled]), $args->outputFormat, self::gcUsage());
+        }
+        $asJson = $spelled === NonInteractive::FORMAT_JSON || $args->outputFormat === NonInteractive::FORMAT_JSON;
+
+        $topSpelled = isset($args->subcommandFlags['--top']) ? (string) $args->subcommandFlags['--top'] : '10';
+        if (\preg_match('/^[1-9]\d{0,8}$/', $topSpelled) !== 1) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.gc.bad_top', ['top' => $topSpelled]),
+                $args->outputFormat,
+                self::gcUsage(),
+            );
+        }
+        $top = (int) $topSpelled;
+
+        $storePath = self::gcStorePath();
+        $now = \time();
+        try {
+            $inventory = new GcInventory($storePath);
+            $census = $inventory->collect(Bootstrap::sessionRetentionDays());
+            $connection = $inventory->openReadOnly();
+            $fold = (new GcSessionSizes($connection, \dirname($storePath)))->fold();
+            $orphans = (new GcOrphanCensus($connection, \dirname($storePath)))->census($now);
+        } catch (\PDOException $e) {
+            return self::gcStoreUnavailable($args, $asJson, 'analyze', $e->getMessage());
+        }
+
+        $rows = self::gcDisplayRows($fold['sessions']);
+        \usort($rows, self::gcCompareBySize(...));
+
+        $dbBytes = $journalBytes = $shadowBytes = $grandTotal = 0;
+        $rootCount = $subagentCount = 0;
+        $rootBytes = $subagentBytes = 0;
+        foreach ($rows as $row) {
+            $dbBytes += (int) $row['db_bytes'];
+            $journalBytes += (int) $row['journal_bytes'];
+            $shadowBytes += (int) $row['shadow_bytes'];
+            $grandTotal += (int) $row['total_bytes'];
+            if ($row['parent_id'] === null) {
+                ++$rootCount;
+                $rootBytes += (int) $row['db_bytes'];
+            } else {
+                ++$subagentCount;
+                $subagentBytes += (int) $row['db_bytes'];
+            }
+        }
+        $censusBytes = 0;
+        $tableBytes = [];
+        foreach ($census['tables'] as $table) {
+            $censusBytes += (int) $table['bytes'];
+            $tableBytes[(string) $table['name']] = (int) $table['bytes'];
+        }
+        $share = $censusBytes > 0 ? \round(100.0 * $dbBytes / $censusBytes, 1) : 0.0;
+        $topRows = \array_slice($rows, 0, $top);
+        $teams = $census['storage']['teams'] ?? null;
+
+        // Growth is measured on the ledger tables whose rows accrue per
+        // activity (usage_records + session_events) — NOT the whole file,
+        // which a single VACUUM reset would make meaningless. The scope
+        // travels in the output line so nobody misreads the rate.
+        $growth = null;
+        $growthScope = ($tableBytes['usage_records'] ?? 0) + ($tableBytes['session_events'] ?? 0);
+        if (GcInventory::tablePresent($connection, 'usage_records')) {
+            $span = $connection->query('SELECT MIN(ts), MAX(ts), COUNT(DISTINCT DATE(ts, \'unixepoch\')) FROM "usage_records"')->fetch(\PDO::FETCH_NUM);
+            $activeDays = $span === false ? 0 : (int) $span[2];
+            if ($span !== false && $span[0] !== null && $activeDays >= 2) {
+                $growth = [
+                    'measured_bytes' => $growthScope,
+                    'active_days' => $activeDays,
+                    'min_ts' => (int) $span[0],
+                    'max_ts' => (int) $span[1],
+                    'rate_bytes_per_day' => (int) \round($growthScope / $activeDays),
+                ];
+            }
+        }
+
+        if ($asJson) {
+            $document = [];
+            foreach ($topRows as $row) {
+                $entry = [
+                    'id' => (string) $row['id'],
+                    'kind' => (string) $row['kind'],
+                    'parent_id' => $row['parent_id'],
+                    'pinned' => (bool) $row['pinned'],
+                    'archived' => (bool) $row['archived'],
+                    'created_at' => $row['created_at'],
+                    'title' => (string) $row['title'],
+                    'db_bytes' => (int) $row['db_bytes'],
+                    'journal_bytes' => (int) $row['journal_bytes'],
+                    'shadow_bytes' => (int) $row['shadow_bytes'],
+                    'shadow_dir_count' => (int) $row['shadow_dir_count'],
+                    'total_bytes' => (int) $row['total_bytes'],
+                ];
+                $entry['percent'] = $grandTotal > 0 ? \round(100.0 * (int) $row['total_bytes'] / $grandTotal, 1) : 0.0;
+                $document[] = $entry;
+            }
+            self::emitDocument([
+                'verb' => 'gc',
+                'action' => 'analyze',
+                'result' => [
+                    'top_requested' => $top,
+                    'session_count' => \count($rows),
+                    'grand_total_bytes' => $grandTotal,
+                    'top' => $document,
+                    'totals' => [
+                        'db_bytes' => $dbBytes,
+                        'journal_bytes' => $journalBytes,
+                        'shadow_bytes' => $shadowBytes,
+                        'total_bytes' => $grandTotal,
+                        'census_table_bytes' => $censusBytes,
+                        'db_share_percent' => $share,
+                    ],
+                    'growth' => $growth,
+                    'tables' => $census['tables'],
+                    'storage' => $census['storage'],
+                    'kinds' => [
+                        'root' => ['count' => $rootCount, 'bytes' => $rootBytes],
+                        'subagent' => ['count' => $subagentCount, 'bytes' => $subagentBytes],
+                    ],
+                    'orphans' => $orphans + [
+                        'teams' => [
+                            'count' => (int) ($teams['files'] ?? 0),
+                            'bytes' => (int) ($teams['bytes'] ?? 0),
+                        ],
+                    ],
+                    'fold' => [
+                        'attributed_db_bytes' => (int) $fold['attributed_db_bytes'],
+                        'unattributed_db_bytes' => (int) $fold['unattributed_db_bytes'],
+                        'fts_attributed_bytes' => (int) $fold['fts_attributed_bytes'],
+                        'fts_residual_bytes' => (int) $fold['fts_residual_bytes'],
+                        'tombstone_bytes' => (int) $fold['tombstone_bytes'],
+                    ],
+                ],
+            ]);
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        echo 'candy-code gc analyze', \PHP_EOL;
+        echo Lang::t('cli.gc.analyze_top', [
+            'top' => (string) \count($topRows),
+            'count' => (string) \count($rows),
+            'total' => self::gcFormatBytes($grandTotal),
+        ]), \PHP_EOL;
+        echo \sprintf('%-12s  %-8s  %-8s  %-40s  %10s  %6s', 'ID', 'FLAGS', 'AGE', 'TITLE', 'SIZE', 'SHARE'), \PHP_EOL;
+        foreach ($topRows as $row) {
+            $cells = self::gcRowCells($row, $now);
+            echo Lang::t('cli.gc.analyze_flags', [
+                'id' => $cells['id'],
+                'flags' => $cells['flags'],
+                'age' => $cells['age'],
+                'title' => $cells['title'],
+                'size' => $cells['size'],
+                'percent' => \number_format($grandTotal > 0 ? 100.0 * (int) $row['total_bytes'] / $grandTotal : 0.0, 1),
+            ]), \PHP_EOL;
+        }
+
+        echo \PHP_EOL;
+        if ($growth !== null) {
+            echo Lang::t('cli.gc.analyze_growth', [
+                'scope' => 'usage_records + session_events',
+                'rate' => self::gcFormatBytes((int) $growth['rate_bytes_per_day']),
+                'days' => (string) $growth['active_days'],
+                'window' => \date('Y-m-d', (int) $growth['min_ts']) . ' .. ' . \date('Y-m-d', (int) $growth['max_ts']),
+            ]), \PHP_EOL;
+        } else {
+            echo Lang::t('cli.gc.analyze_growth_none'), \PHP_EOL;
+        }
+
+        echo Lang::t('cli.gc.analyze_tables_header'), \PHP_EOL;
+        $largestTable = 0;
+        foreach ($census['tables'] as $table) {
+            $largestTable = \max($largestTable, (int) $table['bytes']);
+        }
+        foreach ($census['tables'] as $table) {
+            if (!$table['present']) {
+                continue;
+            }
+            echo \sprintf(
+                '  %-24s  %10s  %s',
+                (string) $table['name'],
+                self::gcFormatBytes((int) $table['bytes']),
+                self::gcBar((int) $table['bytes'], $largestTable, (int) $census['bar_cells']),
+            ), \PHP_EOL;
+        }
+
+        echo Lang::t('cli.gc.analyze_storage_header'), \PHP_EOL;
+        $largestFamily = 0;
+        foreach ($census['storage'] as $family) {
+            $largestFamily = \max($largestFamily, (int) $family['bytes']);
+        }
+        foreach ($census['storage'] as $name => $family) {
+            if (!$family['present']) {
+                continue;
+            }
+            echo \sprintf(
+                '  %-14s  %10s  %s',
+                (string) $name,
+                self::gcFormatBytes((int) $family['bytes']),
+                self::gcBar((int) $family['bytes'], $largestFamily, (int) $census['bar_cells']),
+            ), \PHP_EOL;
+        }
+
+        echo Lang::t('cli.gc.analyze_kinds_header'), \PHP_EOL;
+        echo Lang::t('cli.gc.analyze_kind_row', ['kind' => 'root', 'count' => (string) $rootCount, 'bytes' => self::gcFormatBytes($rootBytes)]), \PHP_EOL;
+        echo Lang::t('cli.gc.analyze_kind_row', ['kind' => 'subagent', 'count' => (string) $subagentCount, 'bytes' => self::gcFormatBytes($subagentBytes)]), \PHP_EOL;
+
+        echo Lang::t('cli.gc.analyze_orphans_header'), \PHP_EOL;
+        $orphanRows = [
+            'cli.gc.orphans_journals' => $orphans['journals'],
+            'cli.gc.orphans_events' => $orphans['events'],
+            'cli.gc.orphans_usage_records' => $orphans['usage_records'],
+            'cli.gc.orphans_session_imports' => $orphans['session_imports'],
+            'cli.gc.orphans_stale_locks' => $orphans['stale_locks'],
+            'cli.gc.orphans_stale_shares' => $orphans['stale_shares'],
+            'cli.gc.orphans_abandoned_shadows' => $orphans['abandoned_shadows'],
+            'cli.gc.orphans_expired_tombstones' => $orphans['expired_tombstones'],
+        ];
+        foreach ($orphanRows as $key => $cell) {
+            echo Lang::t($key, ['count' => (string) $cell['count'], 'bytes' => self::gcFormatBytes((int) $cell['bytes'])]), \PHP_EOL;
+        }
+        echo Lang::t('cli.gc.orphans_teams', [
+            'count' => (string) (int) ($teams['files'] ?? 0),
+            'bytes' => self::gcFormatBytes((int) ($teams['bytes'] ?? 0)),
+        ]), \PHP_EOL;
+
+        return NonInteractive::EXIT_OK;
     }
 
     /**
@@ -1690,6 +1991,7 @@ final class Subcommands
     private const GC_ACTION_FLAGS = [
         'status' => ['--format'],
         'sessions' => ['--sort', '--limit', '--archived', '--children', '--format'],
+        'analyze' => ['--top', '--format'],
         'vacuum' => ['--check', '--incremental', '--force', '-f'],
     ];
 
@@ -5267,8 +5569,8 @@ final class Subcommands
         // needs a <target>, its operand is a transcript file.
         'session' => ['list', 'show', 'import', 'rename', 'delete', 'pin', 'unpin', 'archive', 'unarchive'],
         // gc-cli-1106: only the actions that exist TODAY are listed;
-        // analyze and purge ride later rungs.
-        'gc' => ['status', 'sessions', 'vacuum'],
+        // purge rides the last rung.
+        'gc' => ['status', 'sessions', 'analyze', 'vacuum'],
         'bundles' => ['list', 'install', 'marketplace', 'update', 'search', 'recommend'],
         'lsp' => ['install', 'list'],
         'mcp' => ['list', 'auth', 'import', 'trust', 'serve'],

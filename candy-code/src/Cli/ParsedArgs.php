@@ -114,6 +114,7 @@ final readonly class ParsedArgs
             '--incremental' => false,
             '--limit' => true,
             '--sort' => true,
+            '--top' => true,
         ],
         // `import` (C-TUI-5.b): `--project` adds the project's own
         // `.claude/settings.json` to the read; `--yes` skips the interactive

@@ -2497,6 +2497,8 @@ candy-code gc status                   # inspect the session store: per-table by
 candy-code gc sessions [--sort size|age|name] [--limit N] [--archived] [--children]
                                        #   per-session real bytes: db fold + transcript journals + shadow dirs;
                                        #   archived hidden unless --archived, --children restricts to subagents
+candy-code gc analyze [--top N]        # top sessions by real bytes, a labeled growth rate,
+                                       #   per-table/storage bars, root-vs-subagent, orphan census
 candy-code gc vacuum [--check]         # report free pages; rewrites only with --force
                                        #   --incremental --force flips auto_vacuum once, then drains
 candy-code import claude               # preview the Claude Code settings translation; --project adds the project file, --yes writes the user tier
