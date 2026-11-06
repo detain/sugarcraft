@@ -14,12 +14,30 @@
                     "Terminal AI coding agent (TUI) — eleven provider type keys over nine engines (OpenAI / Anthropic / Claude Code / Codex / SGLang / Bedrock / Vertex / Gemini / custom), thirty-eight built-in tools on every launch behind permission modes, sub-agents, teams and workflows, MCP client and server, hooks, skills and image/video generation — plus an offline echo backend for demos."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "eleven provider type keys over nine engines, 38"
+                ],
+                "dead": []
             }
         },
         "candy-code-web": {
             "readme": {
                 "needles": [
                     "Browser UI for CandyCode's server mode — Vite + Vue 3 bundle committed as `dist/`, located by a one-class PHP shim so `candy-code serve` needs no Node. Multi-session live: up to twelve tabs, and a tiled grid of up to nine sessions, with tool cards, diffs and approvals."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Multi-session live: twelve tabs"
+                ],
+                "dead": []
+            },
+            "index": {
+                "needles": [
+                    "one-class PHP shim, so candy-code serve needs no Node."
                 ],
                 "dead": []
             }
@@ -38,6 +56,14 @@
                     "Privacy-first coding-time tracker — heartbeats in JSONL day-files by default, optional SQLite backend (`--backend`), SugarCharts-driven dashboard, no cloud."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "day-files by default, optional"
+                ],
+                "dead": [
+                    "heartbeats in"
+                ]
             }
         },
         "candy-files": {
@@ -70,6 +96,14 @@
                     "Terminal Git client — a TUI for diff/hunk staging, branching, log, stash, worktrees and rebase; shells out to `git` for every mutation."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Terminal Git client"
+                ],
+                "dead": [
+                    "Three-pane git"
+                ]
             }
         },
         "candy-git-server": {
@@ -86,6 +120,12 @@
                 "dead": [
                     "Git daemon, and HTTP"
                 ]
+            },
+            "matchups": {
+                "needles": [
+                    "smart-HTTP clone/fetch/push via `serve --http`;"
+                ],
+                "dead": []
             }
         },
         "candy-image": {
@@ -94,12 +134,36 @@
                     "Terminal image viewer — the chafa-independent CLI over sugar-image: protocol tiers (sixel/kitty/iTerm2), half/quarter block and text tiers with colored-character modes, cell sizing with `--scale`, `--canvas`/`--work` dials, GIF animation, `--dump-detect`."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "the full format ladder (auto, sixel/kitty/iTerm2"
+                ],
+                "dead": []
+            },
+            "index": {
+                "needles": [
+                    "auto-detection down"
+                ],
+                "dead": []
             }
         },
         "candy-kv": {
             "readme": {
                 "needles": [
                     "Personal key/value store — one SQLite file per database, glob + fuzzy listing, TTL, binary-safe values, JSON/YAML import/export."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "one SQLite file per database, glob + fuzzy"
+                ],
+                "dead": []
+            },
+            "index": {
+                "needles": [
+                    "file per database"
                 ],
                 "dead": []
             }
@@ -132,6 +196,12 @@
                     "Minesweeper — first-click safety, iterative flood-fill, flag toggle, win/lose detection, deterministic-RNG injectable."
                 ],
                 "dead": []
+            },
+            "index": {
+                "needles": [
+                    "iterative flood-fill"
+                ],
+                "dead": []
             }
         },
         "candy-scriptui": {
@@ -140,6 +210,14 @@
                     "Composer-installable CLI of 13 presentation subcommands (choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write) — scriptable terminal UI in one-liners."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "presentation"
+                ],
+                "dead": [
+                    "one-shot"
+                ]
             }
         },
         "candy-sql": {
@@ -148,12 +226,26 @@
                     "Terminal SQL client — SQLite, MySQL and PostgreSQL: schema browsing, row browsing, ad-hoc queries, EXPLAIN plans (PDO + `:memory:` test fixtures)."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "status history + in-session"
+                ],
+                "dead": [
+                    "history."
+                ]
             }
         },
         "candy-ssh-launcher": {
             "readme": {
                 "needles": [
                     "TUI directory of SSH endpoints — YAML/JSON config + `pcntl_exec` into the chosen `ssh`."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "endpoints)."
                 ],
                 "dead": []
             }
@@ -164,12 +256,24 @@
                     "`composer create-project sugarcraft/candy-starter my-app --stability=dev` — bootstrap skeleton with a working counter Model (Packagist carries only dev-master until a `candy-starter/*` tag exists)."
                 ],
                 "dead": []
+            },
+            "index": {
+                "needles": [
+                    "--stability=dev"
+                ],
+                "dead": []
             }
         },
         "candy-tetris": {
             "readme": {
                 "needles": [
                     "Tetris clone — SRS rules, 7-bag, ghost piece, NES-style base scoring with Guideline bonuses, level-driven gravity."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "base + Guideline bonuses."
                 ],
                 "dead": []
             }
@@ -180,12 +284,36 @@
                     "Terminal system monitor — cpu / mem+disks / net / process boxes with braille, block and sextant graphs, gradient meters; up to six AMD/Intel GPU and Intel/AMD NPU boxes, an ipmi BMC band and a VM dashboard; battery readouts, menus, presets, 43 themes (42 ported from btop plus candy-top's own pastel), and btop-compatible config with save/reload, over Linux `/proc` + `/sys` and FreeBSD collectors."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "up to six multi-vendor GPU/NPU boxes, an ipmi BMC band"
+                ],
+                "dead": []
+            },
+            "index": {
+                "needles": [
+                    "up to six GPU/NPU boxes, an ipmi BMC band"
+                ],
+                "dead": []
             }
         },
         "candy-vcr": {
             "readme": {
                 "needles": [
                     "Record + replay sugar-core sessions — JSONL/YAML cassettes, Recorder hook (`setRecorder`/`withRecorder`), `Player` with byte + cell-grid assertions, `.tape`→GIF renderer, CLI."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "hook (`setRecorder`/`withRecorder`),"
+                ],
+                "dead": []
+            },
+            "index": {
+                "needles": [
+                    "Program::setRecorder(),"
                 ],
                 "dead": []
             }
@@ -218,6 +346,12 @@
                     "singleFlight"
                 ],
                 "dead": []
+            },
+            "index": {
+                "needles": [
+                    "withDeadline, cancellable,"
+                ],
+                "dead": []
             }
         },
         "sugar-cellbuffer": {
@@ -234,6 +368,14 @@
                     "Canvas + Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, Picture (Sixel/Kitty/iTerm2) + Aggregation toolbox."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "🟢 ready"
+                ],
+                "dead": [
+                    "🟡 in progress"
+                ]
             }
         },
         "sugar-cli": {
@@ -242,6 +384,20 @@
                     "CLI presentation helpers — StatusLine, Banner, Section, Stage, HelpText, Frame, Logo, and themes."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "HelpText / Frame / Logo"
+                ],
+                "dead": []
+            },
+            "index": {
+                "needles": [
+                    "Terminal UI building blocks"
+                ],
+                "dead": [
+                    "CLI presentation helpers"
+                ]
             }
         },
         "sugar-colorprofile": {
@@ -250,12 +406,32 @@
                     "Detects the terminal's color profile and degrades colors, strings and whole streams one-way down the ladder (reads TERM/COLORTERM/NO_COLOR…, may exec infocmp). StandardColors, ProfileWriter and an opt-in perceptual matcher."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "one-way ladder TrueColor→Ansi256→Ansi240"
+                ],
+                "dead": []
             }
         },
         "sugar-constraints": {
             "readme": {
                 "needles": [
                     "Constraint-based layout solver — `LayoutSolver` interface with a deterministic `GreedySolver` engine (`CassowarySolver` kept only as a deprecated shim)."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "🟢 ready"
+                ],
+                "dead": [
+                    "🟡 in progress"
+                ]
+            },
+            "index": {
+                "needles": [
+                    "Swap solver classes"
                 ],
                 "dead": []
             }
@@ -274,6 +450,14 @@
                     "Dashboard TUI library — column grid, constraint layout, ratio grid, data grid, tree, modal, status bar, tabs, plot/canvas, and a module/plugin system."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "grid, constraint layout, ratio grid"
+                ],
+                "dead": [
+                    "framed panels"
+                ]
             }
         },
         "sugar-datepicker": {
@@ -282,12 +466,32 @@
                     "Interactive month-grid date picker — keyboard navigation, min/max date constraints, locale-ready day names (English ships today), ANSI rendering; weeks start Monday (firstDayOfWeek is not configurable)."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "locale-ready day names"
+                ],
+                "dead": []
+            },
+            "index": {
+                "needles": [
+                    "DatePicker, Calendar and TimePicker widgets with"
+                ],
+                "dead": [
+                    "Interactive month-grid"
+                ]
             }
         },
         "sugar-diff": {
             "readme": {
                 "needles": [
                     "Unified-diff engine — LCS line diff, `diff -u` hunks, writer + line-number scanner. Extracted from candy-code."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "delegates its scan half here)."
                 ],
                 "dead": []
             }
@@ -298,6 +502,14 @@
                     "FlexBox layout engine + delta-rendering Table (sort/filter/cursor) + sticky Viewport + Scrollbar. Ratio-based sizing, gap, align, per-column styling."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "delta-rendering Table (sort/filter/cursor)"
+                ],
+                "dead": [
+                    "simple sort/filter table"
+                ]
             }
         },
         "sugar-focus": {
@@ -354,6 +566,14 @@
                     "Terminal input decoder — raw TTY bytes to typed events: keyboard (Kitty progressive protocol, xterm modifyOtherKeys, legacy encodings) and mouse (SGR, urxvt, X10) via `InputDriver` / `EscapeDecoder`."
                 ],
                 "dead": []
+            },
+            "index": {
+                "needles": [
+                    "SGR/urxvt/X10"
+                ],
+                "dead": [
+                    "SGR 1006"
+                ]
             }
         },
         "sugar-log": {
@@ -378,12 +598,26 @@
                     "Model Context Protocol (MCP) client core — JSON-RPC 2.0 codec, stdio transport with bounded child lifecycle, initialize/tools handshake, deny-before-allow SERVER narrowing (tool rosters follow servers). Extracted from candy-code."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "SERVER narrowing (tool rosters follow servers)."
+                ],
+                "dead": [
+                    "tool narrowing."
+                ]
             }
         },
         "sugar-metrics": {
             "readme": {
                 "needles": [
                     "Telemetry primitives — counters, gauges, histograms, UpDownCounters, AsyncCounters, AsyncGauges across five backends (InMemory, JsonStream, StatsD, Prometheus textfile, Multi fan-out), plus drop-in SSH session middleware for SugarSshServer."
+                ],
+                "dead": []
+            },
+            "index": {
+                "needles": [
+                    "primitives — six instrument kinds"
                 ],
                 "dead": []
             }
@@ -394,6 +628,14 @@
                     "Mouse hit-testing — mark rendered regions, scan the frame, hit-test the event; `ZoneClickTracker` for press/release dedupe, plus the absorbed bubblezone-style `Zones` facade and the `Zones\\Manager` layer (hover / drag / multi-click) under `SugarCraft\\Mouse\\Zones`. Shared default via `Zones::defaultManager()`; `newGlobal()` mints a fresh independent one. Pointer-driven; keyboard paths are consumer-owned — see sugar-mouse README Accessibility."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "(tag"
+                ],
+                "dead": [
+                    "Mark/Scan/Get"
+                ]
             }
         },
         "sugar-navstack": {
@@ -408,6 +650,12 @@
             "readme": {
                 "needles": [
                     "Terminal overlay compositor — composites Veil overlays with backdrop dimming, z-stack ordering, positioning, and click-outside hit-testing; opt-in `Veil::withUntrustedContent()` at the veil boundary."
+                ],
+                "dead": []
+            },
+            "index": {
+                "needles": [
+                    "Composites Veil overlays"
                 ],
                 "dead": []
             }
@@ -444,12 +692,32 @@
                     "Pseudo-terminal primitives — `PtySystemFactory` → `Contract\\PtySystem` master/slave: POSIX via FFI to libc (Linux/macOS, opt-in controlling terminal) plus a Windows ConPTY backend (`CreatePseudoConsole`; beware its empty-`$env` full-parent inversion). Legacy `Pty` facade @deprecated through v1.x."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "implementations over FFI to libc, with sanctioned"
+                ],
+                "dead": []
+            },
+            "index": {
+                "needles": [
+                    "Pseudo-terminal primitives"
+                ],
+                "dead": [
+                    "PTY primitive"
+                ]
             }
         },
         "sugar-quickpick": {
             "readme": {
                 "needles": [
                     "Fuzzy finder / quick-pick overlay for terminal UIs — embeds into your app via the package-local Model contract: your loop decodes keys and forwards them (type()/cursorUp()/Down(); Enter reads selected())."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "/ quick-pick overlay — embeds"
                 ],
                 "dead": []
             }
@@ -468,6 +736,20 @@
                     "Damped spring physics + Newtonian projectile simulation."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "Damped spring physics + Newtonian projectile simulation."
+                ],
+                "dead": [
+                    "projectile sim."
+                ]
+            },
+            "index": {
+                "needles": [
+                    "candy-flappy's bird and"
+                ],
+                "dead": []
             }
         },
         "sugar-ssh-server": {
@@ -482,6 +764,12 @@
             "readme": {
                 "needles": [
                     "Declarative styling + layout — `Style`, `Border`, `Table\\Table`, `Listing\\ItemList`, `Tree\\Tree`, `Layout::joinHorizontal`/`joinVertical`, `Layout::place`, multi-layer `Canvas`, `Theme`."
+                ],
+                "dead": []
+            },
+            "index": {
+                "needles": [
+                    "Table\\Table, Listing\\ItemList"
                 ],
                 "dead": []
             }
@@ -500,6 +788,14 @@
                     "Test harness for SugarCraft programs — ProgramSimulator, scripted input, golden/snapshot assertions, VHS tape building, graphics-stream decoding."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "programs"
+                ],
+                "dead": [
+                    "apps"
+                ]
             }
         },
         "sugar-toast": {
@@ -528,12 +824,26 @@
                     "List view with box-drawing prefixes, cursor navigation, word-wrap, and live filtering (host-driven)."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "List"
+                ],
+                "dead": [
+                    "Tree/list"
+                ]
             }
         },
         "sugar-video": {
             "readme": {
                 "needles": [
                     "Terminal video player — pipes mp4/webm/avi (and more) through `ffmpeg`/`ffprobe` on the fly and renders to ASCII / ANSI / truecolor half- and quarter-block / sixel / kitty / iTerm2 (GIF and animated WebP via ext-gd, no ffmpeg)."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "(mp4/webm/avi/gif/webp(animated)"
                 ],
                 "dead": []
             }
@@ -544,12 +854,26 @@
                     "Virtual terminal emulator — ANSI byte stream → cell grid + cursor + mode state."
                 ],
                 "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "🟢 ready"
+                ],
+                "dead": [
+                    "🟡"
+                ]
             }
         },
         "sugar-widgets": {
             "readme": {
                 "needles": [
                     "Components: Tabs, Tree, Table, Progress, Help, Key, Paginator, Stopwatch, Timer, TextEdit, OptionRow; plus 8 deprecated sugar-forms re-export alias families (Cursor, FilePicker, ItemList, Scrollbar, Spinner, TextArea, TextInput, Viewport) — prefer sugar-forms."
+                ],
+                "dead": []
+            },
+            "matchups": {
+                "needles": [
+                    "First-party components"
                 ],
                 "dead": []
             }
