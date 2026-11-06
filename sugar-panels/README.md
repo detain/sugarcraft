@@ -125,8 +125,9 @@ home
 about
 ```
 
-The sidebar is five columns wide because `about` is its widest line, plus the one
-column of spacing — `main` starts on column six. Escape runs cost no columns
+The sidebar is five columns wide because `about` is its widest line, then comes the
+one column of spacing — six columns are consumed before `main` starts on column
+seven. Escape runs cost no columns
 (`Width::string` sees the visible text), and a CJK glyph charges two.
 
 ## Layout API
