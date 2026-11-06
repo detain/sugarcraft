@@ -354,6 +354,25 @@ into your own view.
 | `subtitles` | Attached at open time via `Reel::withSubtitles()` (no keyboard shortcut) |
 | `audio` | No key toggles audio: on/off is chosen at open time via `Reel::withAudio()`, and `AudioPlayer::pause()` / `resume()` (or `mute()` / `unmute()`) are the only levers, never bound to a key |
 
+## Accessibility
+
+- The caption line is the one real-text channel in this player. When a track
+  is attached with `Reel::withSubtitles()`, the active cue renders as plain
+  text one row below the frame **in every rendering mode** — that row is
+  what a screen reader, a terminal text capture, or a transcript tool can
+  read. The image protocols (sixel, kitty, iTerm2) draw frames as graphics
+  and emit no text at all, so a video without a caption track is opaque to
+  assistive technology: the track is the text alternative for the visual
+  channel in the WCAG 1.2 sense.
+- Everything is operable from the keyboard (see
+  [Keyboard controls](#keyboard-controls)); no pointer is required, and
+  what has no key — loop, subtitles, audio — is fixed at open time. There
+  is deliberately **no audio-mute key**: sound is the host's open-time
+  decision, not something a stray keystroke changes mid-playback.
+- Motion is never imposed: playback starts paused and waits for `Space`.
+  A reduced-motion host is honored by that law, stated in full under
+  [Reduced motion and paused start](#reduced-motion-and-paused-start).
+
 ## Architecture
 
 ```
