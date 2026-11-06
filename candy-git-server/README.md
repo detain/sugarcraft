@@ -25,7 +25,11 @@ This package is a PHP port of pieces of the charmbracelet/soft-serve Go
 project. The domain classes are real and individually tested, and the
 **smart-HTTP transport is a running service**: `serve --http` starts a
 listener that real `git clone`, `git fetch`, and `git push` succeed
-against, with LFS batch and object routes alongside. Every other
+against, with LFS batch and object routes alongside — and the e2e suite
+drives the launched `bin/candy-git-server` process itself over a live
+socket (`tests/HttpSmartProtocol/BinServeLiveE2ETest.php`), covering
+anonymous clone, authenticated push, fail-closed refusal, and graceful
+SIGTERM shutdown. Every other
 transport stays assembly-less: the default `serve` still refuses, and so
 do `--daemon`/`--pid-file`:
 
