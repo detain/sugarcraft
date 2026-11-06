@@ -214,8 +214,10 @@ $node = $node->withAlignV(VAlign::Bottom);
 echo $panels->render($node, 40, 10);
 ```
 
-A border or style set on a container paints that container's own frame; content
-styling belongs to the leaf. There is no focus or active-panel facet — see
+A container's `withBorderStyle()` picks the glyphs of its own frame; `withStyle()`
+colours only leaf content — a style set on a container never reaches the frame
+glyphs, they are always painted unstyled. Content styling belongs to the leaf.
+There is no focus or active-panel facet — see
 *Accessibility*.
 
 ## API Reference
