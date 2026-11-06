@@ -22,6 +22,14 @@ use SugarCraft\Async\CancellationToken;
  * The MysqlClient is lazy: it opens the underlying socket on the first query
  * and resolves/rejects the per-query promise on the React loop.
  *
+ * Dependency pin (law note, docs-reviews-1104 PB-SQL-13): composer.json pins
+ * react/mysql to `0.7.x-dev` deliberately — the `MysqlClient`/`MysqlResult`
+ * API used here first ships on the UNRELEASED 0.7.x branch (probe: v0.6.0, the
+ * newest tag, contains neither class, and no `^0.7` caret range can resolve
+ * until upstream tags a release). Widening to `^0.6` is not an option: the
+ * constraint would admit zero versions that compile this file. Revisit at the
+ * first friends-of-reactphp/mysql tag that carries MysqlClient.
+ *
  * Cancellation semantics (plan 5.1): react/mysql's query promise has no
  * client-side cancellation and the driver does not expose the connection's
  * thread id, so the wrapper fetches `SELECT CONNECTION_ID()` as the very

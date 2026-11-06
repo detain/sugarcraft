@@ -30,7 +30,7 @@
         "bin/candy-sql"
     ],
     "require": {
-        "php": ">=8.3",
+        "php": "^8.3",
         "sugarcraft/sugar-async": "dev-master",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-forms": "dev-master",
