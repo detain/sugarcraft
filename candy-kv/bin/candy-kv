@@ -72,8 +72,9 @@ if ($argc < 2) {
     exit(0);
 }
 
-// Answered BEFORE the Store is constructed: opening the store mkdirs the
-// data directory, and a diagnostic flag must not touch the filesystem.
+// Answered BEFORE the Store is constructed: construction is lazy (no mkdir,
+// no file opens until the first write), but a diagnostic flag must not need
+// a store object at all.
 if (($argv[1] ?? '') === '--version') {
     fwrite(STDOUT, Version::line());
     exit(0);
