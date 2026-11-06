@@ -415,6 +415,16 @@ of these rather than loading a workflow that quietly does less:
 - any key present but of the wrong type. The check is `array_key_exists()`, not
   `isset()`, so `prompt: ~` is refused as the wrong shape rather than silently
   taking the default: a key the author wrote is a key the author meant.
+- **an unknown key** — at stage level, inside a `tasks:` entry, a parallel
+  `agents:` entry, a `type: verification` sub-map, or a `type: pipeline` step,
+  a key the parser never reads now fails the load naming itself
+  (`has unknown key "colour"; supported keys: …`) instead of being silently
+  ignored. The supported set is the parsed-key roster itself
+  (`WorkflowRegistry::YAML_TASK_KEYS`), so an arm and its refusal are added
+  in one place or the roster guard test reddens. Parallel agents spell their
+  label `type:`; the task-level `agent:` spelling is refused there, not
+  ignored. Placement of a *known* key on the wrong shape (a `prompt:` beside
+  a `tasks:` list) stays the dedicated per-shape refusals' job.
 
 Stage numbering in messages is **0-based** (the list index), while the comments
 in `examples/workflows/` number stages from 1. That is worth knowing when reading

@@ -29,6 +29,23 @@ use Symfony\Component\Yaml\Yaml;
  */
 final class WorkflowRegistry
 {
+    /**
+     * The keys a task map may carry, listed once (the rider law): the parse
+     * arms read these keys, and the unknown-key refusal allows exactly these,
+     * so a spelling the parser never reads can never ride into a workflow
+     * silently and quietly do less. An arm added here without its refusal
+     * update is caught by {@see \SugarCraft\Code\Tests\Workflows\WorkflowYamlKeyRosterTest}.
+     */
+    public const YAML_TASK_KEYS = ['agent', 'name', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds', 'timeout', 'reject', 'rejectMinOccurrences'];
+
+    /**
+     * The stage-shape vocabulary (names, flags and the nested containers the
+     * stage arms consume). Stage-level refusal allows this list PLUS
+     * {@see self::YAML_TASK_KEYS}, because a single-task stage legitimately
+     * carries its task keys at stage level.
+     */
+    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages'];
+
     /** @var array<string, Workflow> */
     private array $registered = [];
 
@@ -1366,6 +1383,14 @@ final class WorkflowRegistry
                 $seenStageNames[$stageName] = $index;
 
                 $where = "Workflow file {$yamlPath} stage '{$stageName}'";
+                // The stage map itself answers to the roster (rider): shape
+                // keys and tail task keys, one merged allowed list. Nested
+                // sub-maps are checked where they are read (readTaskMap).
+                $this->requireNoUnknownTaskKeys(
+                    $stage,
+                    $where,
+                    array_merge(self::YAML_STAGE_KEYS, self::YAML_TASK_KEYS)
+                );
                 $flaggedParallel = $this->requireParallelFlag($stage, $where);
                 // C1: the stage's shape is decided once, here, from either
                 // spelling — the `parallel: true` flag or the `type:` key —
@@ -1742,6 +1767,16 @@ final class WorkflowRegistry
                     );
                 }
 
+                // Parallel agents spell their label "type"; the task-map "agent"
+                // key has no meaning here, so it is refused as an unknown key
+                // rather than ignored (rider law, applied to this surface's
+                // spelling variant of the roster).
+                $this->requireNoUnknownTaskKeys(
+                    $agent,
+                    "{$where} agent #{$agentIndex}",
+                    array_values(array_merge(['type'], array_diff(self::YAML_TASK_KEYS, ['agent'])))
+                );
+
                 $b = Tasks::agent($this->requireString($agent, 'type', 'coder', "{$where} agent #{$agentIndex}"));
                 if (array_key_exists('name', $agent)) {
                     $b = $b->name($this->requireString($agent, 'name', '', "{$where} agent #{$agentIndex}"));
@@ -1839,9 +1874,10 @@ final class WorkflowRegistry
     {
         // C1: the list grew with the surface — a stage that chooses `tasks:`
         // keeps the new per-task verdict keys at task level too, so the
-        // stage-level spelling of timeout/reject/rejectMinOccurrences is
-        // refused exactly like the nine that came before it.
-        foreach (['agent', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds', 'timeout', 'reject', 'rejectMinOccurrences'] as $key) {
+        // stage-level spelling of every roster key (minus `name`, which is
+        // legitimately both) is refused exactly like the nine that came
+        // before it. The rider consolidated this from the parsed-key roster.
+        foreach (array_diff(self::YAML_TASK_KEYS, ['name']) as $key) {
             if (array_key_exists($key, $stage)) {
                 throw new WorkflowLoadException(
                     "{$where} lists \"tasks\", so \"{$key}\" belongs on each task, not on the stage"
@@ -1886,6 +1922,11 @@ final class WorkflowRegistry
      */
     private function readTaskMap(array $map, string $at): TaskBuilder
     {
+        // One door for every surface that reaches here — tasks-list entries,
+        // verification sub-maps, pipeline steps (C1 unified them on this
+        // reader): the same roster, the same refusal, on all three.
+        $this->requireNoUnknownTaskKeys($map, $at, self::YAML_TASK_KEYS);
+
         $b = Tasks::agent($this->requireString($map, 'agent', 'coder', $at));
         if (array_key_exists('name', $map)) {
             $b = $b->name($this->requireString($map, 'name', '', $at));
@@ -2295,6 +2336,29 @@ final class WorkflowRegistry
         }
 
         return $names;
+    }
+
+    /**
+     * Fail closed on any key this parser does not read (the rider law, from
+     * the wftpl review NIT-1): a key the author wrote but the loader silently
+     * dropped is a workflow that quietly does less than it looks like — the
+     * exact coercion class every sibling refusal in this file rejects. The
+     * first offender is named, and the supported set is named with it, so the
+     * refusal is also the fix. Placement of ROSTER-KNOWN keys on the wrong
+     * surface stays the per-shape refusals' job (parallel+tasks, tasks+tail);
+     * this door only closes the vocabulary itself.
+     *
+     * @param list<string> $allowed
+     */
+    private function requireNoUnknownTaskKeys(array $map, string $where, array $allowed): void
+    {
+        foreach (array_keys($map) as $key) {
+            if (!in_array($key, $allowed, true)) {
+                throw new WorkflowLoadException(
+                    "{$where} has unknown key \"{$key}\"; supported keys: " . implode(', ', $allowed)
+                );
+            }
+        }
     }
 
     /**
