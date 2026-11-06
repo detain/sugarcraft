@@ -430,7 +430,22 @@ dispatched, and `/workflow run` prints it as an error.
 /workflow pause <id>
 /workflow resume <id>
 /workflow status <id>
+/workflow lint <name|file>
 ```
+
+`/workflow lint <name|file>` runs the static `WorkflowLinter` over a plan
+WITHOUT dispatching — it never starts the engine and never pauses. It reports
+errors first as `- severity [stage] message`, then a verdict line
+`N error(s), M warning(s)`. On the slash surface the plan's row is flagged an
+error ONLY when the plan HAS ERRORS (`WorkflowCommand` flags on `hasErrors()`,
+not `hasFindings()`): a warning-only plan prints its verdict line but is not
+flagged — errors flag the row, warnings surface in the verdict line only. A
+`.php` path is refused (it would execute at load); a `.yaml` or `.yml` path is
+read as DATA (`fromYamlString`); any other argument resolves the name from the
+registry. ERRORS: unsupported stage types, unknown or forward `.results`
+references, `reject` outside the verifier slot, non-compiling PCRE,
+out-of-universe tool patterns, and bound violations. WARNINGS: bare unknown
+`{{token}}`, an empty prompt, and retries above the warn ceiling.
 
 **2026-09-10 (the seam fully closed): what `/workflow run`
 reports for a sub-agent changed under you, and the change is on purpose.**
@@ -528,6 +543,15 @@ name; both resolve to the same run.
 - **`status`** reports a live run as `running` (or `paused` once a pause is
   requested), then the pause file's status, then a finished run's final status
   (`completed` / `failed`) for runs this session performed.
+  When a session `CommandContext` is supplied and the workflow's PAUSED ledger
+  resolves from HOME, `status` additionally appends a per-stage ledger
+  (Stage | Status | Duration | Spend | Tokens | Attempts) plus a Totals line,
+  DERIVED ONLY from that resolved paused ledger via `readPauseLedger` —
+  live-running per-stage detail remains engine-private and is NOT shown.
+  3-arg callers and absent ledgers keep the original plain row. An absent
+  `attempts` field renders `—` (never a fabricated 0), and a missing or
+  unreadable ledger fails soft: no columns, no crash. Path-shaped workflow
+  identifiers are refused before any filesystem access.
 
 Granularity is still one whole stage. A `parallel` stage that is still running
 when an interrupt lands is re-run from scratch on resume. The run's context,

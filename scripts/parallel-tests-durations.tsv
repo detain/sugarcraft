@@ -863,6 +863,7 @@ candy-code/tests/Tools/BuiltIn/GlobTest.php	0.103	69
 candy-code/tests/Backend/InTurnCompressionTest.php	0.102	6
 candy-code/tests/Chat/CacheReusingSummaryRouteTest.php	0.102	9
 candy-code/tests/Protocol/WebStringsTest.php	0.102	7
+candy-code/tests/Host/Commands/WorkflowStatusDetailTest.php	0.102	9
 candy-code/tests/MCP/McpAuthStoreTest.php	0.101	20
 candy-code/tests/Session/ThinkingBlocksTranscriptRoundTripTest.php	0.101	4
 candy-code/tests/Cli/PolicyFreshnessQuarantineTest.php	0.100	6
@@ -889,6 +890,7 @@ candy-code/tests/Backend/LengthStopContinuationTest.php	0.092	7
 candy-code/tests/Backend/EngineBackendLedgerFrameTest.php	0.092	5
 candy-code/tests/Tools/BuiltIn/GitignoreAwarenessTest.php	0.091	26
 candy-code/tests/Providers/ClaudeCodeInvocationThrowTest.php	0.091	2
+candy-code/tests/Host/Commands/WorkflowLintCommandTest.php	0.091	8
 candy-code/tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php	0.090	22
 candy-code/tests/Tools/BashPromptGuidanceTest.php	0.090	7
 candy-code/tests/Support/ProjectRootTest.php	0.090	6
@@ -943,6 +945,7 @@ candy-code/tests/Hooks/ScriptHookSystemMessageNoticeTest.php	0.069	12
 candy-code/tests/Hooks/BuiltIn/PostEditFormatHookTest.php	0.069	14
 candy-code/tests/Host/Commands/ContextRawDumpTest.php	0.069	7
 candy-code/tests/Tools/PathJailContractParityTest.php	0.068	52
+candy-code/tests/Host/Commands/WorkflowCommandRunContextTest.php	0.068	12
 candy-code/tests/Commands/GenerateCommandTest.php	0.066	23
 candy-code/tests/Tui/MediaForm/MediaFormNarrowTest.php	0.066	4
 candy-code/tests/Skills/ProposedSkillsTest.php	0.066	14
@@ -962,6 +965,7 @@ candy-code/tests/MCP/McpClientUserMergeTest.php	0.063	9
 candy-code/tests/Tui/AmbientColorProfileTest.php	0.063	5
 candy-code/tests/Context/CompactionSettingsTest.php	0.063	44
 candy-code/tests/Config/ReadmeSettingsTierClaimTest.php	0.063	6
+candy-code/tests/Workflows/WorkflowLinterTest.php	0.063	11
 candy-code/tests/Chat/MouseTextSelectionTest.php	0.062	9
 candy-code/tests/Providers/SseDecodeFrameBoundTest.php	0.062	4
 candy-code/tests/Memory/MemorySearchIndexTest.php	0.062	15
