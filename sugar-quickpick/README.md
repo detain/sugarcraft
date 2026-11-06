@@ -12,7 +12,7 @@
 
 > Formerly published as `sugarcraft/candy-hermit` (renamed 2026-10). <!-- @rename-keep -->
 
-sugar-quickpick — a fuzzy finder / quick-pick overlay for terminal UIs, for PHP 8.3+. Renders a filterable list overlay on top of a background view while the background continues to update.
+sugar-quickpick — a fuzzy finder / quick-pick overlay for terminal UIs (PHP 8.3+). Renders a filterable list overlay on top of a background view while the background continues to update.
 
 ## Install
 
