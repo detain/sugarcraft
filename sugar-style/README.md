@@ -424,6 +424,12 @@ Style::setDefaultProfile(null);                    // back to TrueColor
 $was = Style::defaultProfile();                     // read what is in force
 ```
 
+`defaultProfile()` returns `?ColorProfile` — `null` when nothing was
+negotiated, i.e. the ambient TrueColor default is in force. `null`
+round-trips harmlessly through the save/restore pattern below, but
+dereferencing it (`$was->name`) on a fresh process is a fatal error on
+`null`.
+
 Because the setting leaks across object boundaries, **tests must save and
 restore it** around any change:
 
