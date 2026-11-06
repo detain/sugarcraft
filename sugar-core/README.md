@@ -642,9 +642,16 @@ subscription set for this cycle).
 
 ## Message catalogue
 
-Built-in `Msg` classes under `SugarCraft\Core\Msg\` (all implement the
-`Msg` marker interface; addressed messages implement
-`ComponentAddressedMsg` so a `Composite` can route by child address):
+Every shipped message implements the `Msg` marker interface. The
+marker itself — and the orchestration messages below — live at the
+**root** namespace `SugarCraft\Core\`; terminal and event traffic lives
+under `SugarCraft\Core\Msg\`. Addressed messages implement
+`ComponentAddressedMsg` (also root) so a `Composite` can route by child
+address. Import accordingly: `use SugarCraft\Core\Msg\KeyMsg;` for the
+first group, `use SugarCraft\Core\BatchMsg;` for the second — the
+`use SugarCraft\Core\Msg\BatchMsg;` spelling is a fatal error.
+
+**Under `SugarCraft\Core\Msg\`:**
 
 | Group | Classes |
 |---|---|
@@ -655,8 +662,15 @@ Built-in `Msg` classes under `SugarCraft\Core\Msg\` (all implement the
 | Terminal | `WindowSizeMsg` (`$cols`/`$rows`), `CursorPositionMsg`, `BackgroundColorMsg`, `ForegroundColorMsg`, `CursorColorMsg`, `ColorProfileMsg`, `TerminalVersionMsg`, `ModeReportMsg`, `CapabilityMsg`, `KeyboardEnhancementsMsg`, `ClipboardMsg` |
 | Focus | `FocusGainedMsg`, `FocusLostMsg` |
 | Screen stack | `ScreenStackPushedMsg`, `ScreenStackPoppedMsg` |
-| Composition | `AddComponentMsg`, `RemoveComponentMsg`, `ComponentAddressedMsg` (interface) |
-| Async / infra | `ExceptionMsg`, `ExecMsg`, `EnvMsg`, `PrintMsg`, `RawMsg` (stdout side-channel: the Program intercepts it and writes the bytes verbatim without disturbing the renderer's diff state), `BatchMsg`, `SequenceMsg`, `SubscriptionsMsg`, `SuggestionsReadyMsg`, `TickRequest` (`@internal` request shape — no BC promise, do not construct in user code), `ExecRequest` (the `Cmd::exec` request the Program intercepts), `WorkerResultMsg` |
+| Async | `ExceptionMsg`, `ExecMsg`, `EnvMsg`, `SubscriptionsMsg`, `SuggestionsReadyMsg`, `WorkerResultMsg` |
+
+**At the root namespace `SugarCraft\Core\`** (no `Msg\` path segment):
+
+| Group | Classes |
+|---|---|
+| Output / sequencing | `PrintMsg`, `RawMsg` (stdout side-channel: the Program intercepts it and writes the bytes verbatim without disturbing the renderer's diff state), `BatchMsg`, `SequenceMsg` |
+| Composition | `AddComponentMsg`, `RemoveComponentMsg` — both implement `ComponentAddressedMsg` |
+| Internal requests | `TickRequest` (`@internal` request shape — no BC promise, do not construct in user code), `ExecRequest` (the `Cmd::exec` request the Program intercepts) |
 
 ## Alt-screen vs inline mode
 
