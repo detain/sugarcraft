@@ -6,6 +6,7 @@ namespace SugarCraft\Dashboard\Output;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 /**
  * Helper for rendering progress bars.
@@ -25,9 +26,10 @@ final class RenderBar
      * @param Color|null $filledColor Color for filled portion
      * @param Color|null $emptyColor Color for empty portion
      * @param ColorProfile|null $profile Colour tier to emit for; null follows
-     *        the terminal's detected capability via `ColorProfile::detect()`
-     *        — the same choke the Plot renderers use, so NO_COLOR strips the
-     *        escapes instead of this helper overriding the user's setting.
+     *        the process-wide `ColorMode` capability — the single funnel
+     *        every renderer in the library asks (finding M-7), so NO_COLOR
+     *        strips the escapes instead of this helper overriding the user's
+     *        setting.
      * @return string Rendered bar
      */
     public static function render(
@@ -43,7 +45,7 @@ final class RenderBar
             return '';
         }
 
-        $profile ??= ColorProfile::detect();
+        $profile ??= ColorMode::profile();
         $percentage = max(0.0, min(1.0, $percentage));
         $filledWidth = (int) round($percentage * $width);
         $emptyWidth = $width - $filledWidth;
@@ -91,7 +93,7 @@ final class RenderBar
      * @param int $width Total width in cells
      * @param Color|null $color Color for the bar
      * @param ColorProfile|null $profile Colour tier to emit for; null follows
-     *        the terminal's detected capability via `ColorProfile::detect()`.
+     *        the process-wide `ColorMode` capability.
      * @return string Rendered bar
      */
     public static function renderSegmented(
@@ -104,7 +106,7 @@ final class RenderBar
             return '';
         }
 
-        $profile ??= ColorProfile::detect();
+        $profile ??= ColorMode::profile();
 
         $percentage = max(0.0, min(1.0, $percentage));
         $blocks = ['░', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];

@@ -8,9 +8,26 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Dashboard\Foundation\Style;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 
 final class StyleTest extends TestCase
 {
+    /**
+     * Style::toAnsi() without an explicit tier reads the process-wide
+     * ColorMode funnel (finding M-7: the default used to be a hardcoded
+     * TrueColor). Every structural SGR-shape assertion below is written
+     * against TrueColor bytes, so pin the tier hermetically.
+     */
+    protected function setUp(): void
+    {
+        ColorMode::use(ColorProfile::TrueColor);
+    }
+
+    protected function tearDown(): void
+    {
+        ColorMode::resetForTesting();
+    }
+
     public function testDefaultConstruction(): void
     {
         $style = new Style();

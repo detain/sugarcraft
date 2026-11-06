@@ -277,16 +277,18 @@ final class Theme
     /**
      * Get the ANSI escape sequence for the foreground color.
      *
-     * With no explicit tier the escape is emitted for the terminal's DETECTED
-     * capability (`ColorProfile::detect()`), not a hardcoded TrueColor — the
-     * same choke `Plot\Braille\DualSampleGraph::render()` uses, so `NO_COLOR`
+     * With no explicit tier the escape is emitted for the process-wide
+     * `ColorMode` capability — the single funnel every renderer in the
+     * library asks (finding M-7: this used to call
+     * `ColorProfile::detect()` on its own and split-brain against
+     * `ColorMode::use()` hosts), not a hardcoded TrueColor. `NO_COLOR`
      * downgrades the theme colors to plain text instead of this helper
-     * overriding the user's request. On a COLORTERM=truecolor terminal the
-     * detected tier IS TrueColor and the bytes are unchanged.
+     * overriding the user's request; on the TrueColor floor the bytes are
+     * unchanged.
      */
     public function fg(?ColorProfile $profile = null): string
     {
-        $profile ??= ColorProfile::detect();
+        $profile ??= ColorMode::profile();
 
         return $this->foreground->toFg($profile);
     }
@@ -294,11 +296,11 @@ final class Theme
     /**
      * Get the ANSI escape sequence for the background color.
      *
-     * Null follows the detected capability per {@see fg()}.
+     * Null follows the process-wide ColorMode capability per {@see fg()}.
      */
     public function bg(?ColorProfile $profile = null): string
     {
-        $profile ??= ColorProfile::detect();
+        $profile ??= ColorMode::profile();
 
         return $this->background->toBg($profile);
     }

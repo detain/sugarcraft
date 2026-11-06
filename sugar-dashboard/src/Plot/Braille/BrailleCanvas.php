@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dashboard\Plot\Braille;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Dashboard\Foundation\SizedItem;
 use SugarCraft\Dashboard\Plot\Gradient101;
@@ -261,7 +262,7 @@ final class BrailleCanvas implements SizedItem
      */
     public function render(?ColorProfile $profile = null): string
     {
-        $profile ??= ColorProfile::detect();
+        $profile ??= ColorMode::profile();
 
         $lines = [];
 

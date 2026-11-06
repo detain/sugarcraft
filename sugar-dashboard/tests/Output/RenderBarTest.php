@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Tests\Output;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 use SugarCraft\Dashboard\Output\RenderBar;
 
 /**
@@ -140,8 +141,8 @@ final class RenderBarTest extends TestCase
     }
 
     /**
-     * NO_COLOR must strip the color layer entirely: the detected profile
-     * routes through ColorProfile::detect() (Ascii under NO_COLOR), whose
+     * NO_COLOR must strip the color layer entirely: the default profile
+     * routes through the process ColorMode funnel (Ascii under NO_COLOR), whose
      * toFg() answers '' — so a coloured bar renders as plain blocks with no
      * escape bytes at all, not even a lone reset.
      */
@@ -149,6 +150,7 @@ final class RenderBarTest extends TestCase
     {
         $prior = getenv('NO_COLOR');
         putenv('NO_COLOR=1');
+        ColorMode::resetForTesting();
         try {
             $plain = RenderBar::render(
                 1.0,
@@ -165,17 +167,20 @@ final class RenderBarTest extends TestCase
             $this->assertStringNotContainsString("\x1b", $segmented);
         } finally {
             putenv($prior === false ? 'NO_COLOR' : 'NO_COLOR=' . $prior);
+            ColorMode::resetForTesting();
         }
     }
 
     /**
-     * The default-parameter route IS the detection: calling without a
-     * profile must equal calling with the explicitly detected one, under
-     * whatever environment the suite runs in.
+     * The default-parameter route IS the single authority: calling without
+     * a profile must equal calling with the explicitly resolved ColorMode
+     * one, under whatever environment the suite runs in (finding M-7: the
+     * fallback used to be an independent ColorProfile::detect() call).
      */
     public function testDefaultProfileIsTheDetectedProfile(): void
     {
-        $detected = ColorProfile::detect();
+        ColorMode::resetForTesting();
+        $detected = ColorMode::profile();
 
         $this->assertSame(
             RenderBar::render(0.5, 4, '█', '░', Color::hex('#FF0000'), null, $detected),

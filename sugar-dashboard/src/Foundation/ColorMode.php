@@ -16,15 +16,29 @@ use SugarCraft\Core\Util\ColorProfile;
  * Resolution order:
  *   1. An explicit override — hosts that know their real destination should
  *      seed the full chain with `ColorMode::use(ColorProfile::detect(null, $stdout))`.
- *   2. `NO_COLOR` set to ANY non-empty value → `Ascii` (no-color.org: colour
- *      off, decoration kept; an empty value does NOT disable).
- *   3. `TERM=dumb` → `Ascii`.
- *   4. Otherwise `TrueColor` — the historical default, so piped and
+ *   2. `CLICOLOR_FORCE`/`FORCE_COLOR` truthy → skips 3-5 (the forcing
+ *      convention shared with `ColorProfile::detect()`).
+ *   3. `TERM=dumb` → `NoTty` — the SAME answer `ColorProfile::detect()`
+ *      gives, checked before `NO_COLOR` exactly as detect orders them, so the
+ *      two chains can never split-brain a dumb terminal (finding M-7:
+ *      renderers used to ask `detect()` directly and collapse to plain text
+ *      here while this chain kept emitting TrueColor bytes).
+ *   4. `NO_COLOR` set to ANY non-empty value → `Ascii` (no-color.org: colour
+ *      off, decoration kept; an empty value does NOT disable). Deliberately
+ *      presence-based: unlike `ColorProfile::detect()`'s truthiness test this
+ *      honours `NO_COLOR=0`, matching the spec's "present, regardless of
+ *      value" wording.
+ *   5. `CLICOLOR=0` (the BSD opt-out) → `Ascii`.
+ *   6. Otherwise `TrueColor` — the historical default, so piped and
  *      unconfigured output stays byte-identical to every pre-fix capture.
+ *      `COLORTERM`, `TERM=*256color*` and CI hosts all land on this floor:
+ *      the library funnels capability, it does not sub-tier negotiate it.
  *
  * The answer is memoised: an environment snapshot is taken once per process
  * (or per resetForTesting()/use() call) because flipping capability
- * mid-frame would desync a running dashboard's repaints.
+ * mid-frame would desync a running dashboard's repaints. Every emission
+ * site in src/ reads this class — none may call `ColorProfile::detect()`
+ * on its own (pinned by tests/Foundation/ColorModeFunnelTest.php).
  */
 final class ColorMode
 {
@@ -58,15 +72,34 @@ final class ColorMode
 
     private static function chain(): ColorProfile
     {
-        $noColor = getenv('NO_COLOR');
-        if ($noColor !== false && $noColor !== '') {
-            return ColorProfile::Ascii;
-        }
+        $force = self::envTruthy('CLICOLOR_FORCE') || self::envTruthy('FORCE_COLOR');
 
-        if (getenv('TERM') === 'dumb') {
-            return ColorProfile::Ascii;
+        if (!$force) {
+            // Lowercased compare mirrors detect's strtolower — 'DUMB' too.
+            if (strtolower((string) (getenv('TERM') ?: '')) === 'dumb') {
+                return ColorProfile::NoTty;
+            }
+
+            $noColor = getenv('NO_COLOR');
+            if ($noColor !== false && $noColor !== '') {
+                return ColorProfile::Ascii;
+            }
+
+            if (getenv('CLICOLOR') === '0') {
+                return ColorProfile::Ascii;
+            }
         }
 
         return ColorProfile::TrueColor;
+    }
+
+    /**
+     * The forcing convention shared with ColorProfile::detect(): anything
+     * set except '', '0' or 'false' counts.
+     */
+    private static function envTruthy(string $key): bool
+    {
+        $value = getenv($key);
+        return $value !== false && $value !== '' && $value !== '0' && strtolower($value) !== 'false';
     }
 }

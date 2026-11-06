@@ -52,8 +52,8 @@ composer require sugarcraft/sugar-dashboard
 | `Style` | Terminal styling (inline foreground/background Color slots) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Style` (padding/margin/borders) | `withForeground()`, `withBackground()`, `withBold()`, `toAnsi()` |
 | `StyleParser` | Parses `[text](fg:red,bg:blue)` into Dash Cell arrays — sugar-dashboard SSOT, NOT drop-in compatible with `\SugarCraft\Style\StyleParser` | |
 | `Color` | Backward-compat alias for `\SugarCraft\Core\Util\Color` (true duplicate, replaced by `class_alias` shim — prefer Core import in new code) | |
-| `Theme` | Pre-defined theme palettes (9 colour slots + helpers; `fg()`/`bg()` emit at the detected capability, `NO_COLOR` → empty string) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Theme` (13 slots, readonly properties, immutable `with*()` builders, no render helpers) | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
-| `ColorMode` | Process-wide colour capability gate for every renderer in the library — charts, gauges and chrome route through it instead of each deciding on its own whether to honour TrueColor, `NO_COLOR` and `TERM=dumb` | `use(?ColorProfile): void`, `profile(): ColorProfile` |
+| `Theme` | Pre-defined theme palettes (9 colour slots + helpers; `fg()`/`bg()` emit at the process-wide `ColorMode` capability, `NO_COLOR` → empty string) — sugar-dashboard SSOT, distinct from `\SugarCraft\Style\Theme` (13 slots, readonly properties, immutable `with*()` builders, no render helpers) | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
+| `ColorMode` | Process-wide colour capability gate for every renderer in the library — charts, gauges and chrome route through it instead of each deciding on its own — the chain answers what `ColorProfile::detect()` answers (finding M-7, one capability authority) | `use(?ColorProfile): void`, `profile(): ColorProfile` |
 | `Threshold` | Maps a numeric value (typically a 0..1 ratio) to a `Color` via ordered stops — the shared "green below 60%, yellow below 80%, red above" pattern that gauges, meters and status indicators would otherwise each reinvent; `health()` is the preset triple | `of(array $stops)`, `health(?ok, ?warn, ?critical)`, `colorFor(float): Color`, `stops()` |
 | `EdgeStyle` | String enum `Solid`/`Dashed`/`Dotted`/`Bold` — currently dormant: no consumers in the library (the live tree-edge variant is `Components\Tree\EdgeStyle`, which carries `Double` in place of `Bold` and is consumed by `Network`) | |
 | `Segment` | 7-segment display component (digital-clock/calculator style) — renders characters from horizontal and vertical segments | `new(string)`, `withDigitWidth()`, `withShowColon()`, `withOnColor()`, `withOffColor()`, `withContent()` |
@@ -759,7 +759,7 @@ in the same namespace are its value parts.
 | Type | Description | Key Methods |
 |------|-------------|-------------|
 | `Truncate` | String truncation with ANSI awareness |
-| `RenderBar` | Bar rendering helper — colour follows the detected terminal capability (`?ColorProfile` parameter; `NO_COLOR` strips every escape) |
+| `RenderBar` | Bar rendering helper — colour follows the process-wide `ColorMode` capability (`?ColorProfile` parameter; `NO_COLOR` strips every escape) |
 | `WrapCells` | Cell-aware text wrapping |
 
 ## Module Namespace (Module Interface)
@@ -849,10 +849,17 @@ in the same namespace are its value parts.
 > signal is a host-policy decision (the candy-top app owns that precedent),
 > and the frames above stay valid no matter which way that ruling lands.
 >
-> **Color environment.** Every color emission routes through
-> `Foundation\ColorMode`: `NO_COLOR` set to any non-empty value and `TERM=dumb`
-> collapse to plain ASCII; otherwise TrueColor. `ColorMode::use($profile)`
-> overrides the detection for tests or embedding hosts.
+> **Color environment.** Every color emission funnels through
+> `Foundation\ColorMode`, and the chain answers exactly what
+> `ColorProfile::detect()` answers (finding M-7 — one capability authority):
+> `TERM=dumb` collapses to plain text (no colour, no bold — the same `NoTty`
+> the detector reports), `NO_COLOR` set to any non-empty value disables colour
+> while keeping decoration, and `CLICOLOR=0` opts out — `CLICOLOR_FORCE` or
+> `FORCE_COLOR` set truthy beats all three. Everything else lands on the
+> TrueColor floor, so piped and unconfigured bytes are unchanged. An explicit
+> profile argument always wins over the process mode, and embedding hosts that
+> know the real destination can seed the full detector tier with
+> `ColorMode::use(ColorProfile::detect(null, $stdout))`.
 >
 > **Sizing.** The library never reads the terminal itself: hosts forward
 > `Core\Msg\WindowSizeMsg` to the root model, which is what `LegacyModuleAdapter`

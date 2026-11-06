@@ -7,6 +7,7 @@ namespace SugarCraft\Dashboard\Plot\Braille;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 use SugarCraft\Dashboard\Foundation\SizedItem;
 use SugarCraft\Dashboard\Foundation\Sizer;
 use SugarCraft\Dashboard\Plot\Gradient101;
@@ -282,7 +283,7 @@ final class DualSampleGraph implements SizedItem
         if ($cells < 1) {
             return '';
         }
-        $profile ??= ColorProfile::detect();
+        $profile ??= ColorMode::profile();
         $glyphs = str_repeat(self::SYMBOLS[$family . '_up'][self::UNDERLAY_INDEX], $cells);
         if (!$profile->supportsAnsi()) {
             return $glyphs;
@@ -292,7 +293,7 @@ final class DualSampleGraph implements SizedItem
 
     public function render(?ColorProfile $profile = null): string
     {
-        $profile ??= ColorProfile::detect();
+        $profile ??= ColorMode::profile();
         $ansi = $profile->supportsAnsi();
         $frame = $this->frame();
 

@@ -33,9 +33,15 @@ final readonly class Style
 
     /**
      * Render this style as ANSI SGR sequences.
+     *
+     * With no explicit tier the sequence is emitted for the process-wide
+     * `ColorMode` capability (finding M-7: the default used to be a
+     * hardcoded `ColorProfile::TrueColor`, bypassing NO_COLOR/TERM=dumb
+     * hosts). On the TrueColor floor the bytes are unchanged.
      */
-    public function toAnsi(ColorProfile $profile = ColorProfile::TrueColor): string
+    public function toAnsi(?ColorProfile $profile = null): string
     {
+        $profile ??= ColorMode::profile();
         $codes = [];
 
         if ($this->foreground !== null) {

@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dashboard\Foundation\ColorMode;
 use SugarCraft\Dashboard\Plot\Braille\DualSampleGraph;
 use SugarCraft\Dashboard\Plot\DistanceFade;
 
@@ -174,7 +175,7 @@ final class ProcRowComposer
         if ($graph !== null && $graph->height() !== 1) {
             throw new \InvalidArgumentException('ProcRowComposer graphs must be one row tall');
         }
-        $profile ??= ColorProfile::detect();
+        $profile ??= ColorMode::profile();
         $p = $this->palette;
         $c = $this->columns;
         $highlight = $followed || ($row + 1 === $selected);
