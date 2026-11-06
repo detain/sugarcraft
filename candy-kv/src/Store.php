@@ -370,7 +370,11 @@ final class Store
      * @param string       $dbName    Database name. Default = the store's default database.
      * @param bool         $reverse   Reverse sort order.
      * @param 'all'|'keys'|'values' $mode  What to yield per result.
-     * @param string       $delimiter Delimiter between key and value when mode='all'.
+     * @param string       $delimiter Accepted for signature compatibility only —
+     *                                no library path applies it (mode='all' yields
+     *                                `Entry` objects; row joining is the caller's
+     *                                concern, as `bin/candy-kv` does). Slated for
+     *                                v2 removal. See README API table.
      * @return \Generator<Entry|string>
      */
     public function list(

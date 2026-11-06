@@ -333,7 +333,10 @@ final class Database
      * @param string|null   $pattern   Glob pattern (* and ? wildcards), or null for all
      * @param bool          $reverse   Sort in reverse (descending) order
      * @param 'all'|'keys'|'values' $mode  What to return per entry
-     * @param string        $delimiter Delimiter between key and value when mode='all'
+     * @param string        $delimiter Accepted for signature compatibility only —
+     *                                 this body never reads it (mode 'all' yields
+     *                                 `Entry`; row joining is a renderer-side
+     *                                 concern). Slated for v2 removal.
      * @return \Generator<Entry|string> Yields Entry objects, or string keys/values
      */
     public function list(
