@@ -56,7 +56,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
       <div class="feature"><strong>Multi-page Groups</strong><span><code>Group::new()</code> stacks Forms into a wizard. Conditional <code>->withSkipFn()</code>.</span></div>
       <div class="feature"><strong>Seven themes</strong><span>ansi (default), plain, charm, dracula, catppuccin, base16, base. Custom error summary slot via <code>Theme::$errorSummary</code>.</span></div>
       <div class="feature"><strong>Tab nav</strong><span>Tab / Shift+Tab between fields, Enter on the last submits, Esc / Ctrl+C aborts.</span></div>
-      <div class="feature"><strong>Submit hook</strong><span><code>$form->getValue('name')</code> after the Program ends — typed value retrieval.</span></div>
+      <div class="feature"><strong>Read at the run boundary</strong><span><code>$form->values()</code> or typed accessors <code>string()</code> / <code>int()</code> / <code>bool()</code> / <code>array()</code> / <code>get(string $key, mixed $default = null)</code> once the Program ends — no submit-hook callback API exists.</span></div>
       <div class="feature"><strong>Form-level KeyMap</strong><span><code>Form::keyMap($keymap)</code> rebinds Next / Prev / Submit / Quit per form.</span></div>
       <div class="feature"><strong>ActionSpinner</strong><span>Fork-isolated spinner action (<code>ActionSpinner</code>) with a bounded runtime ceiling — the long-running spin primitive folded in from the retired prompt façade.</span></div>
     </div>
@@ -85,7 +85,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 <tr><td>Form</td><td>new(Field ...$fields)</td><td>Create a single-group form with fields</td></tr>
 <tr><td>Form</td><td>groups(Group ...$groups)</td><td>Create a multi-page form</td></tr>
 <tr><td>Form</td><td>values() / string() / int() / bool() / array()</td><td>Submitted values of visible fields; hidden fields and hidden groups are excluded (legacy <code>getString()</code> &amp; friends are deprecated forwarders, removed in 2.0.0)</td></tr>
-<tr><td>Form</td><td>getValue(name)</td><td>Get field value after submit</td></tr>
+<tr><td>Form</td><td>get(key, default = null)</td><td>Value of one field, or the fallback when the key is absent</td></tr>
 <tr><td>Form</td><td>validateAll()</td><td>Run all field validators, return [fieldKey => errorMessage]</td></tr>
 <tr><td>Form</td><td>withErrorSummary(bool)</td><td>Show all errors at once on submit failure</td></tr>
 <tr><td>Form</td><td>keyMap($keymap)</td><td>Rebind Next / Prev / Submit / Quit per form</td></tr>
