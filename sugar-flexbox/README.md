@@ -214,7 +214,8 @@ logged.
 companion that maintains the previous frame as a `SugarCraft\CellBuffer\Buffer` and emits
 deltas instead. On each `render()` it builds the current Buffer, computes `current->diff(previous)`
 (from [sugar-cellbuffer](https://github.com/detain/sugarcraft/tree/master/sugar-cellbuffer)),
-and returns only the changed cells' ANSI ops via `DiffEncoder::encode($ops)`; the current frame
+and returns only the changed cells' ANSI ops via `encode($ops)` on a per-render `DiffEncoder`
+instance; the current frame
 then replaces the previous one. Style changes are visible to the diff (colors are carried per
 cell), and a dimension change resets the state so the next frame is complete again.
 
