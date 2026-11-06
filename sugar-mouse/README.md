@@ -144,10 +144,14 @@ structurally indistinguishable from a marker this lib emitted — the sentinels
 
 **The consumer's duty.** Anything pasted or otherwise untrusted must be
 swept *before* it is composed into a marked frame. This package re-exports
-the surgical sweep as `Mark::untrusted()`; sugar-core's
-`Sanitize::stripZoneSentinels()` / `Sanitize::untrustedForMarkedFrames()`
-are the same operation (candy-code's renderer does exactly this on its
-input path). Any other host of marked frames owns the same responsibility —
+the surgical sweep as `Mark::untrusted()`, which **is** sugar-core's
+`Sanitize::stripZoneSentinels()` — a `str_replace` of the two sentinel
+codepoints and nothing else. `Sanitize::untrustedForMarkedFrames()` is NOT
+the same operation but its superset: the ANSI/C0 sweep `Sanitize::untrusted()`
+first, then the sentinel sweep (`stripZoneSentinels(untrusted($s))`) — and it
+is that composed policy candy-code's renderer runs on its input path. Mind the
+near-miss names: `Mark::untrusted()` strips *sentinels only*, while
+`Sanitize::untrusted()` strips *ANSI* — different sweeps, one word. Any other host of marked frames owns the same responsibility —
 the fleet-wide write-up is `docs/TRUST-BOUNDARY.md` in the sugarcraft
 monorepo. The reservation is fleet-wide: image-overlay markers were moved to
 U+E002+ so they can never collide **as tags** with this arena by
