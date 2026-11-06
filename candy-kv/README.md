@@ -258,7 +258,10 @@ The shape contract is strict in both directions. A top-level JSON list or
 YAML sequence is refused ("got a list/sequence") instead of importing
 indices as keys; values that cannot round-trip as stored text (booleans,
 arrays, objects) refuse the whole import **before** anything is written —
-no silent drops, no partial loads. `"_ttl"` entries must be whole seconds; a
+no silent drops, no partial loads. That guarantee is about the data rows;
+the envelope metadata is best-effort — a `"_ttl"` or binary member naming a
+key the document does not otherwise carry is simply ignored, not an error.
+`"_ttl"` entries must be whole seconds; a
 zero/negative TTL on an entry refuses that import too (a forever entry omits
 the TTL instead). An atomic import that would write to more than one database
 refuses unless `--no-atomic` (library: `atomic: false`) is given, so the
