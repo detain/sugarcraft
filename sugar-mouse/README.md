@@ -65,7 +65,7 @@ if ($click !== null) {
 | Class | Role |
 |---|---|
 | `Mark` | Wrap content with private-use sentinel tags (`Mark::new()`, `Mark::zone()`, `Mark::disabled()`; `Mark::isValidId()` is the id predicate both encoder and decoder share; `Mark::untrusted()` sweeps foreign framing bytes off untrusted labels; `Mark::escapeForMessage()` renders hostile ids safely in errors) |
-| `Scan` | Stateless, reentrant decoder behind `Scanner` — `parse($rendered, ?$width)` returns `id => Zone`; `Scan::strip($rendered)` is the public byte-wise marker remover |
+| `Scan` | Stateless, reentrant decoder behind `Scanner` — an instance method: `(new Scan())->parse($rendered, $width)` returns `id => Zone`; `Scan::strip($rendered)` is the public static byte-wise marker remover |
 | `Scanner` | Parse sentinels; `get(id)` and `hit(col, row)` lookups |
 | `Zone` | Readonly bounding box (start/end col/row) with `width()` / `height()` and `inBounds(MouseEvent)` |
 | `ZoneClickTracker` | Press+Release dedup per button |
@@ -126,7 +126,7 @@ structurally indistinguishable from a marker this lib emitted — the sentinels
   `U+E000` and a distant `U+E001` is rejected in O(1);
   `Mark::MAX_CONTENT_BYTES` (1 MiB) caps what `Mark` will emit around a
   chunk. Both caps bound the EMIT side; parsing is linear single-pass with
-  no cap of its own, so feed `Scan::parse()` frames you expect to be
+  no cap of its own, so feed `->parse()` frames you expect to be
   terminal-sized — a hostile multi-megabyte blob (or an unterminated CSI/OSC
   run, which swallows the rest of its frame by design) is caller input-trust
   like everything else untrusted.
@@ -151,12 +151,13 @@ stripped, display-ready frame).
 
 ## Scan rules
 
-`Scan::parse()` decodes exactly the grammar `Mark` encodes: a tag is
-`U+E000 [/] <id> U+E001` with an id `Mark::isValidId()` accepts, and every
+The instance method `parse()` (call it on a `new Scan()`, or go through
+`Scanner::new()->scan()`) decodes exactly the grammar `Mark` encodes: a tag
+is `U+E000 [/] <id> U+E001` with an id `Mark::isValidId()` accepts, and every
 byte of a tag is zero-width. Anything else is measured as text, so a stray
 sentinel cannot re-rectangle the zones after it (see the identity-vs-width
-caveat above). `Scan::strip()` removes exactly the well-formed tags — the
-public half of the parse/strip pair:
+caveat above). The static `Scan::strip()` removes exactly the well-formed
+tags — the public half of the parse/strip pair:
 
 | Input to `parse()` | Result |
 |---|---|
@@ -245,7 +246,8 @@ the app-facing surface; the marker scheme and its parser live once in the
 primitive `Mark` / `Scan` classes of this same package and are reused by
 every SugarCraft zone consumer. `mark()` encodes through
 `SugarCraft\Mouse\Mark::zone()` (which validates via `wrap()`), and `scan()`
-takes its bounding boxes from `SugarCraft\Mouse\Scan::parse()`, then strips
+takes its bounding boxes from the instance `parse()` method of a constructed
+`SugarCraft\Mouse\Scan`, then strips
 the markers so the returned frame is display-ready.
 
 ```php
@@ -568,7 +570,8 @@ flooded by leaked `?1003` motion reporting.
 - `scan()` is synchronous (no background worker), so
   `close()` is purely a state reset / disable rather than a thread
   join.
-- `scan()` strips exactly the tags the primitive `Scan::parse()` decodes:
+- `scan()` strips exactly the tags the primitive `Scan`'s instance `parse()`
+  decodes:
   `U+E000 [/] <id> U+E001` where `<id>` passes `Mark::isValidId()` (or is
   empty) is removed whole. Any other sentinel — an open `U+E000` with no
   closing `U+E001`, one whose would-be id holds a space/newline/CR/escape/
