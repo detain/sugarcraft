@@ -64,10 +64,15 @@ final class Identifier
      * grammar. This helper is pure and connection-free (PreviewQuery and friends
      * build SQL statically); escape semantics:
      *   - MySQL arm: double `\` and `'` (both grammars safe; identical results to
-     *     mysql_real_escape_string for the ASCII-significant characters). Assumes
-     *     a UTF-8-family connection charset, which ConnectionFactory sets — under
-     *     a GBK-style charset a byte-level prefix collision would need
-     *     PDO::quote's charset awareness instead.
+     *     mysql_real_escape_string for the ASCII-significant characters). The
+     *     doubling is only quote-safe when the connection really negotiates a
+     *     UTF-8-family (or single-byte) charset — and this library does NOT set
+     *     one: ConnectionFactory sends no SET NAMES, no MYSQL_ATTR_INIT_COMMAND
+     *     and takes no DSN charset= parameter, so the effective charset is the
+     *     server's default_character_set from the handshake. Under a GBK- or
+     *     SJIS-style server default a byte-level prefix collision could re-open
+     *     the quote and PDO::quote's charset awareness would be required; the
+     *     live-handle preference below is the mitigation, not a doc fiction.
      *   - Postgres/SQLite arm: standard SQL, double `'` only (backslash is not an
      *     escape inside standard literals with standard_conforming_strings=on).
      *
