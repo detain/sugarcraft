@@ -412,6 +412,21 @@ final class ReadlineTest extends TestCase
         $this->assertSame('b', $p->selectedValue());
     }
 
+    public function testSelectionEmacsAliasesNavigateList(): void
+    {
+        // Raw 0x0E/0x10/0x01 and symbolic spellings both canonicalise at
+        // Key::normalize(), so the alias arms fire through either wiring.
+        $p = SelectionPrompt::new('Pick:', ['a', 'b', 'c']);
+        $p = $p->handleKey("\x0e")->handleKey("\x0e");   // ctrl-n twice → last
+        $this->assertSame('c', $p->selectedValue());
+        $p = $p->handleKey('ctrl_p');                     // symbolic → back one
+        $this->assertSame('b', $p->selectedValue());
+        $p = $p->handleKey("\x01");                      // ctrl-a → first
+        $this->assertSame('a', $p->selectedValue());
+        $p = $p->handleKey('ctrl_e');                     // ctrl-e → last
+        $this->assertSame('c', $p->selectedValue());
+    }
+
     public function testSelectionDownClampsAtEnd(): void
     {
         $p = SelectionPrompt::new('Pick:', ['a', 'b']);
@@ -511,6 +526,20 @@ final class ReadlineTest extends TestCase
         $p = MultiSelectPrompt::new('Pick:', ['a', 'b'])
             ->handleKey(Key::Space)->handleKey(Key::Space);
         $this->assertSame([], $p->selectedValues());
+    }
+
+    public function testMultiSelectEmacsAliasesNavigateList(): void
+    {
+        $p = MultiSelectPrompt::new('Pick:', ['a', 'b', 'c']);
+        $this->assertSame(0, $p->cursor());
+        $p = $p->handleKey("\x0e");                      // ctrl-n → row 1
+        $this->assertSame(1, $p->cursor());
+        $p = $p->handleKey('ctrl_p');                    // ctrl-p → row 0
+        $this->assertSame(0, $p->cursor());
+        $p = $p->handleKey('ctrl_e');                    // ctrl-e → last row
+        $this->assertSame(2, $p->cursor());
+        $p = $p->handleKey("\x01");                     // ctrl-a → first row
+        $this->assertSame(0, $p->cursor());
     }
 
     public function testMultiSelectMaxRolloverFifo(): void
@@ -684,6 +713,24 @@ final class ReadlineTest extends TestCase
         $this->assertSame(1, $p->lineCount());
         $this->assertSame(0, $p->cursorLine());
         $this->assertSame(0, $p->cursorCol());
+    }
+
+    public function testTextareaEmacsAliasesMoveAcrossLinesAndEnds(): void
+    {
+        // Three-line buffer; cursor sits at line 2, col 1 after typing 'c'.
+        $p = TextareaPrompt::new('> ')
+            ->handleChar('a')->handleKey('ctrl_j')
+            ->handleChar('b')->handleKey('ctrl_j')
+            ->handleChar('c');
+        $this->assertSame(2, $p->cursorLine());
+        $p = $p->handleKey("\x10");                     // ctrl-p → line 1
+        $this->assertSame(1, $p->cursorLine());
+        $p = $p->handleKey('ctrl_n');                    // ctrl-n → line 2
+        $this->assertSame(2, $p->cursorLine());
+        $p = $p->handleKey("\x01");                     // ctrl-a → col 0
+        $this->assertSame(0, $p->cursorCol());
+        $p = $p->handleKey('ctrl_e');                    // ctrl-e → end of 'c'
+        $this->assertSame(1, $p->cursorCol());
     }
 
     public function testTextareaAbortsOnRawCtrlCByte(): void

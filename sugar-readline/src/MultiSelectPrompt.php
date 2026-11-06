@@ -103,12 +103,14 @@ final class MultiSelectPrompt
         $key = Key::normalize($key);
 
         return match ($key) {
-            Key::Up       => $this->moveCursor(-1),
-            Key::Down     => $this->moveCursor(1),
-            Key::PageUp   => $this->changePage(-1),
-            Key::PageDown => $this->changePage(1),
-            Key::Home     => $this->moveCursorTo(0),
-            Key::End      => $this->moveCursorTo(count($this->filtered) - 1),
+            // GNU-readline movement aliases (see SelectionPrompt for the
+            // deliberate exclusion of the Ctrl+B/F spellings).
+            Key::Up, 'ctrl_p'     => $this->moveCursor(-1),
+            Key::Down, 'ctrl_n'   => $this->moveCursor(1),
+            Key::PageUp           => $this->changePage(-1),
+            Key::PageDown         => $this->changePage(1),
+            Key::Home, 'ctrl_a'   => $this->moveCursorTo(0),
+            Key::End, 'ctrl_e'    => $this->moveCursorTo(count($this->filtered) - 1),
             Key::Space    => $this->toggleCurrent(),
             Key::Enter    => $this->submit(),
             Key::Escape, Key::CtrlC => $this->abort(),

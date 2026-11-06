@@ -332,9 +332,9 @@ normalised to one canonical language at the choke point. The `Key` class
 lists the primary bindings; it is not an exhaustive enumeration of every
 sequence a terminal can send.
 
-- `Key::Left` / `Key::Right` — move cursor (text input); also Ctrl+B / Ctrl+F
-- `Key::Up` / `Key::Down` — navigate selection list / history / textarea line; Ctrl+P / Ctrl+N alias them on `TextPrompt` only
-- `Key::Home` / `Key::End` — jump within the current line / list; Ctrl+A / Ctrl+E alias them on `TextPrompt` only
+- `Key::Left` / `Key::Right` — move cursor (text input); Ctrl+B / Ctrl+F alias them on `TextPrompt`
+- `Key::Up` / `Key::Down` — navigate selection list / history / textarea line; also Ctrl+P / Ctrl+N on every text and list surface
+- `Key::Home` / `Key::End` — jump within the current line / list; also Ctrl+A / Ctrl+E on every text and list surface
 - `Key::Enter` — submit text or select current choice (in the textarea, Shift+Enter and Ctrl+J break a line instead — reported as chords on terminals that honor the pump's kitty-protocol push, and plain Enter submits where the wire never distinguishes them)
 - `Key::Space` — a second Enter in SelectionPrompt (submits the row under the cursor); toggles the mark in MultiSelectPrompt; toggles Yes/No in ConfirmationPrompt; inserts a literal space in text inputs
 - `Key::Tab` — autocomplete or toggle confirmation value; pressing Tab again cycles the matches (first Tab extends to their longest common prefix)

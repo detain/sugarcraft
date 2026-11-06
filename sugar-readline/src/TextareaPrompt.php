@@ -143,12 +143,16 @@ final class TextareaPrompt
         $key = Key::normalize($key);
 
         return match ($key) {
-            Key::Up        => $this->moveLine(-1),
-            Key::Down      => $this->moveLine(1),
-            Key::Left      => $this->moveCol(-1),
-            Key::Right     => $this->moveCol(1),
-            Key::Home      => $this->moveColTo(0),
-            Key::End       => $this->moveColTo(self::charCount($this->lines[$this->line])),
+            // GNU-readline movement aliases on the multi-line surface:
+            // Ctrl+P/N walk lines, Ctrl+A/E jump line ends. Ctrl+B/F stay
+            // out here — mirroring them would widen the step's scope and
+            // the arrows already own the column moves.
+            Key::Up, 'ctrl_p'      => $this->moveLine(-1),
+            Key::Down, 'ctrl_n'    => $this->moveLine(1),
+            Key::Left              => $this->moveCol(-1),
+            Key::Right             => $this->moveCol(1),
+            Key::Home, 'ctrl_a'    => $this->moveColTo(0),
+            Key::End, 'ctrl_e'     => $this->moveColTo(self::charCount($this->lines[$this->line])),
             Key::Backspace => $this->deleteBeforeCursor(),
             Key::Delete    => $this->deleteUnderCursor(),
             // Enter submits the conversation (a keyboard must be able to

@@ -84,12 +84,15 @@ final class SelectionPrompt
         $key = Key::normalize($key);
 
         return match ($key) {
-            Key::Up       => $this->moveCursor(-1),
-            Key::Down     => $this->moveCursor(1),
-            Key::PageUp   => $this->changePage(-1),
-            Key::PageDown => $this->changePage(1),
-            Key::Home     => $this->moveCursorTo(0),
-            Key::End      => $this->moveCursorTo(count($this->filtered) - 1),
+            // GNU-readline movement aliases, mirroring TextPrompt's default
+            // keymap on the list surface. Ctrl+B/F stay out: the single-row
+            // selection has no Left/Right arms to alias.
+            Key::Up, 'ctrl_p'     => $this->moveCursor(-1),
+            Key::Down, 'ctrl_n'   => $this->moveCursor(1),
+            Key::PageUp           => $this->changePage(-1),
+            Key::PageDown         => $this->changePage(1),
+            Key::Home, 'ctrl_a'   => $this->moveCursorTo(0),
+            Key::End, 'ctrl_e'    => $this->moveCursorTo(count($this->filtered) - 1),
             Key::Enter, Key::Space => $this->submit(),
             Key::Escape, Key::CtrlC => $this->abort(),
             // Filter editing — mirrors the [filter] bar the view renders.
