@@ -408,16 +408,19 @@ final class DiffGutterTest extends TestCase
      * D1a refuse-earlier: a row inside an open hunk that carries none of the
      * `' '`, `'-'`, `'+'` or `'\'` markers is corruption. The shared scanner
      * ends the hunk there; the git-era twin numbered straight through it, so
-     * everything below the corruption rode confident wrong numbers.
+     * everything below the corruption rode confident wrong numbers. The
+     * refusal is minted load-bearing: with a `@@ -1,2 +1,2 @@` BOTH declared
+     * budgets are still open at the corrupt row, so no spent-count rule ends
+     * the hunk there — only the marker rule can.
      */
     public function testACorruptRowEndsTheHunkInsteadOfBeingNumberedAsContext(): void
     {
-        $lines = ['@@ -1,1 +1,2 @@', ' ok', 'xcorrupt', ' under'];
+        $lines = ['@@ -1,2 +1,2 @@', ' ctx', 'xcorrupt', ' after'];
 
         $this->assertSame(
             ['   │ ', '1 1│ ', '   │ ', '   │ '],
             $this->prefixes($lines),
-            'the declared old side is spent by the first context row, and the unmarked row closes the hunk',
+            'an unmarked corrupt row closes the hunk while both declared budgets are still open',
         );
 
         $this->assertSame(
