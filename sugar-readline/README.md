@@ -82,7 +82,12 @@ $prompt = Readline::fromStdin()->run(
 The remaining prompt surface (all fluent, all returning new instances):
 `withValidator(callable)` gates `submit()` on a rule, `withCharLimit(int)`
 caps the buffer, `withHidden()` masks input (secrets) and disables history
-pushes and completion echoes, `withAutoSuggest(bool)` proposes the most
+pushes and completion echoes — the masked frame renders one glyph per typed
+character (`*` by default; the setter's `$mask` argument changes the glyph),
+so assistive output perceives the length of what is typed but never its
+content; when even a growing mask run is unwanted, drive the prompt through
+the pure state-machine API and render whatever subset you choose,
+`withAutoSuggest(bool)` proposes the most
 recent matching history entry as a dim row under the prompt (on by default
 whenever history is attached — the setter's practical use is turning it off,
 and the proposal scans the whole history on each repaint), and
