@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Workflows;
 use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\PrivateDir;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentManager;
@@ -87,6 +88,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * fails loudly, when the task did not ask for a bound of its own.
      */
     private const DEFAULT_STAGE_LOCK_WAIT_SECONDS = 60;
+
+    /**
+     * S3: how many bytes of a captured stage's output reach downstream
+     * prompts alongside the capture file's path. Bounded on purpose: the
+     * point of capture is a stable prompt envelope, so the preview must not
+     * reintroduce the unbounded dump it replaces.
+     */
+    public const CAPTURE_PREVIEW_BYTES = 2048;
 
     /** Lazily-built store for O3 resource locks, rooted beside the registry. */
     private ?StageResourceLocks $stageLocks = null;
@@ -1674,7 +1683,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // This stage's output and its agents' results, for downstream
                 // interpolation — written here, once the stage has settled, so
                 // a live pause's snapshot never holds half a stage.
-                $context[$stageResult->stageName . '.output'] = $stageResult->output ?? '';
+                //
+                // S3: a captured stage hands downstream the capture file's
+                // PATH plus a bounded preview, not the whole dump — the file
+                // holds every byte for whoever needs detail, the prompt
+                // envelope stays cache-stable, and no reader inherits a
+                // length-truncation hazard. Uncaptured runs take the right
+                // side of the ternary: byte-identical to before S3.
+                $context[$stageResult->stageName . '.output'] = ($stage['capture'] ?? false) === true && !$stageResult->isFailure()
+                    ? $this->captureStageOutput($interruptId, $stageIndex, $stageResult)
+                    : $stageResult->output ?? '';
                 $context = self::withResults($context, $dispatched);
 
                 $stageResults[] = $stageResult;
@@ -1872,6 +1890,92 @@ final class WorkflowEngine implements WorkflowEngineInterface
         foreach ($held as $handle) {
             $locks->release($handle);
         }
+    }
+
+    /**
+     * S3: write a captured stage's FULL output to the run-scoped capture
+     * file, and return the text downstream stages see in its place: the
+     * file's path, up to {@see CAPTURE_PREVIEW_BYTES} bytes of the output,
+     * and — when the output was longer — a marked truncation naming the
+     * file's size. The write publishes by rename, the same discipline as
+     * the pause file: a reader never sees half a capture.
+     *
+     * A failed capture write degrades LOUDLY — the returned context carries
+     * the full dump plus the failure, because the stage's work must survive
+     * the loss of the file the author asked for. 0600: the capture is the
+     * agent's raw work product, the same trust class as the pause record.
+     */
+    public function captureStageOutput(string $interruptId, int $stageIndex, StageResult $stageResult): string
+    {
+        $output = $stageResult->output ?? '';
+        $file = self::stageCapturePath(
+            \dirname($this->getPauseFilePath($interruptId)),
+            $interruptId,
+            $stageIndex,
+            $stageResult->stageName,
+        );
+
+        try {
+            PrivateDir::ensure(\dirname($file), 'workflow stage captures');
+
+            $partial = $file . '.partial';
+            if (@file_put_contents($partial, $output) === false) {
+                throw new \RuntimeException("could not write the capture for stage '{$stageResult->stageName}'");
+            }
+
+            @chmod($partial, 0600);
+
+            if (!rename($partial, $file)) {
+                @unlink($partial);
+
+                throw new \RuntimeException("could not publish the capture file for stage '{$stageResult->stageName}'");
+            }
+        } catch (\Throwable $e) {
+            return $output . "\n[capture FAILED: {$e->getMessage()} — full output inline above instead]";
+        }
+
+        $preview = self::previewOf($output);
+        if ($preview === $output) {
+            return "[output captured to {$file}]\n{$output}";
+        }
+
+        return "[output captured to {$file}]\n{$preview}\n"
+            . '[…prompt preview only: the full ' . strlen($output) . ' bytes are in the file]';
+    }
+
+    /**
+     * Where a captured stage's output lands: a run-scoped directory beside
+     * the pause record — `<pause-dir>/<id>.stages/<index>-<stage-slug>.txt`.
+     * Public so a reader (a test, a follow-up agent told the path) can
+     * resolve the layout from the run's own facts, not from a second copy
+     * of the naming rule. Capture files OUTLIVE the run's clean terminal:
+     * withdrawal removes the pause record, not the work products — see
+     * WORKFLOWS.md.
+     */
+    public static function stageCapturePath(string $pauseDir, string $interruptId, int $stageIndex, string $stageName): string
+    {
+        $slug = preg_replace('/[^A-Za-z0-9._-]+/', '-', $stageName) ?? $stageName;
+
+        return $pauseDir . '/' . $interruptId . '.stages/' . $stageIndex . '-' . trim($slug, '-.') . '.txt';
+    }
+
+    /**
+     * The bounded preview: a byte prefix of at most the limit, cut back to
+     * the last whole UTF-8 character — the slice of a valid string can only
+     * break at its tail.
+     */
+    private static function previewOf(string $output): string
+    {
+        if (strlen($output) <= self::CAPTURE_PREVIEW_BYTES) {
+            return $output;
+        }
+
+        $bytes = substr($output, 0, self::CAPTURE_PREVIEW_BYTES);
+        while ($bytes !== '' && preg_match('//u', $bytes) !== 1) {
+            $bytes = substr($bytes, 0, -1);
+        }
+
+        return $bytes;
     }
 
     /**

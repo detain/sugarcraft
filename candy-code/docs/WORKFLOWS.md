@@ -93,6 +93,7 @@ stages:                          # a LIST, never a map
     model: claude-sonnet-4-5     # optional; run this task on a named model
     resource: gpu                  # optional; exclusive host lock held for this task's stage
     lockWaitSeconds: 60            # optional; seconds to wait for that lock before the stage fails
+    capture: true                  # optional; publish this stage's full output to a file (downstream sees path + preview)
 
   - name: fix
     parallel: true
@@ -291,6 +292,34 @@ mechanical instead of a convention somebody remembered to write down.
 - **Absent means untouched:** a stage whose tasks name no resource opens no
   lock file at all — pre-O3 runs, byte for byte.
 
+### `capture` moves a stage's output into a file
+
+`capture: true` on a stage — or `->stage($name, $tasks, capture: true)` in
+PHP — publishes that stage's FULL output to a run-scoped file the moment the
+stage settles, and hands downstream stages the file's path plus a bounded
+preview (the first 2 KiB) in place of the whole dump. It is a STAGE flag in
+this grammar — stages are the unit YAML lists and the unit results are named
+by — so the flag lives on the stage map (legal beside a `tasks:` list, like
+`parallel:`), not on the workflow config.
+
+- **Why:** the self-contained-lane law. A downstream agent that needs detail
+  reads the file; the prompt envelope stays cache-stable and small, and no
+  length cap is silently truncating an agent's input (the hazards a raw
+  multi-KiB dump into every prompt carries). The stage's own result and the
+  pause record still store the full output — capture changes only what the
+  PROMPT next receives, never what the run recorded.
+- **The layout:** `<pause dir>/<run id>.stages/<index>-<stage-slug>.txt` —
+  production `<workflowsPath>/.running/three-1a2b3c4d.stages/0-plan.txt`,
+  always beside the pause record, 0600 files in a 0700 directory, published
+  by rename so a reader never sees half a capture. The files OUTLIVE a clean
+  terminal on purpose: withdrawal removes the pause RECORD, and the capture
+  is the work product whoever was handed the path still wants.
+- **Fail loud, degrade honest:** if the file cannot be written, downstream
+  gets the full inline dump PLUS a `[capture FAILED: …]` note — the stage's
+  work is never lost to the loss of a file.
+- **Absent means untouched:** a stage without `capture:` interpolates today's
+  full output, byte for byte — and writes nothing anywhere new.
+
 ### Everything malformed is refused, not coerced
 
 `WorkflowRegistry::parseYamlWorkflow()` raises `WorkflowLoadException` for each
@@ -324,6 +353,8 @@ of these rather than loading a workflow that quietly does less:
   accepted exactly as for `retries:`; `0` is the legitimate ask-once bound);
   both are refused on a stage that already carries a `tasks:` list, like
   their sibling keys.
+- `capture:` is not a boolean — `true`/`false` unquoted, the exact spelling
+  law `parallel:` holds; `'yes'` and `1` are refused, not coerced.
   Whether a *well-formed* name is servable is a dispatch-time refusal, not
   a load-time one — the ladder lives in `ModelChoice`, never duplicated.
 - `parallel: true` with `agents:` that is not a list.
@@ -575,7 +606,9 @@ error result.
 **1. A stage's tasks run one after another, never at once.** A regular stage
 may hold several tasks — a list in PHP, `->stage('work', [Tasks::agent('architect')->name('plan'), Tasks::agent('coder')])`,
 or a `tasks:` list in YAML, whose entries take the one-task stage's keys
-(`agent`, `name`, `prompt`, `tools`, `retries`, `outputSchema`, `isolation`, `model`, `resource`, `lockWaitSeconds`):
+(`agent`, `name`, `prompt`, `tools`, `retries`, `outputSchema`, `isolation`, `model`, `resource`, `lockWaitSeconds`);
+`capture` is the stage's own flag, not a task key, so it lives on the stage
+map even when the stage lists `tasks:`:
 
 ```yaml
 - name: fix

@@ -62,11 +62,15 @@ final class WorkflowBuilder
      * same time use {@see parallel()} instead.
      *
      * @param TaskBuilder|list<TaskBuilder> $tasks
+     * @param bool $capture S3: write this stage's FULL output to the run's
+     *        capture file and hand downstream stages the path plus a bounded
+     *        preview instead of the dump — see
+     *        {@see WorkflowEngine::captureStageOutput()}.
      *
      * @throws \InvalidArgumentException When $tasks is an empty list or holds
      *         something other than TaskBuilders.
      */
-    public function stage(string $name, TaskBuilder|array $tasks): self
+    public function stage(string $name, TaskBuilder|array $tasks, bool $capture = false): self
     {
         $tasks = $tasks instanceof TaskBuilder ? [$tasks] : array_values($tasks);
         if ($tasks === []) {
@@ -90,7 +94,7 @@ final class WorkflowBuilder
             'name' => $name,
             'type' => 'stage',
             'tasks' => $built,
-        ];
+        ] + ($capture === true ? ['capture' => true] : []);
 
         return $this;
     }
@@ -107,7 +111,7 @@ final class WorkflowBuilder
      *
      * @param TaskBuilder[] $tasks
      */
-    public function parallel(string $name, array $tasks): self
+    public function parallel(string $name, array $tasks, bool $capture = false): self
     {
         $builtTasks = array_map(
             static fn(TaskBuilder $t) => $t->build(),
@@ -118,7 +122,7 @@ final class WorkflowBuilder
             'name' => $name,
             'type' => 'parallel',
             'tasks' => $builtTasks,
-        ];
+        ] + ($capture === true ? ['capture' => true] : []);
 
         return $this;
     }
@@ -132,7 +136,7 @@ final class WorkflowBuilder
      * @param TaskBuilder[]|array[] $stages Each element is a TaskBuilder instance or a plain array
      *                                     with 'name', 'type', 'tasks' keys.
      */
-    public function pipeline(string $name, array $stages): self
+    public function pipeline(string $name, array $stages, bool $capture = false): self
     {
         $nestedStageArrays = [];
         foreach ($stages as $index => $stage) {
@@ -155,7 +159,7 @@ final class WorkflowBuilder
             'name' => $name,
             'type' => 'pipeline',
             'stages' => $nestedStageArrays,
-        ];
+        ] + ($capture === true ? ['capture' => true] : []);
 
         return $this;
     }

@@ -1306,6 +1306,10 @@ final class WorkflowRegistry
                 $seenStageNames[$stageName] = $index;
 
                 $isParallel = $this->requireParallelFlag($stage, "Workflow file {$yamlPath} stage '{$stageName}'");
+                // S3: the capture flag is stage-scoped like `parallel:` — a
+                // key the author wrote beside `tasks:` is legitimate, not a
+                // task key misplaced.
+                $capture = $this->requireCaptureFlag($stage, "Workflow file {$yamlPath} stage '{$stageName}'");
                 $parsed = $this->parseYamlStage($stage, $stageName, $yamlPath, $isParallel);
 
                 if ($isParallel) {
@@ -1314,11 +1318,11 @@ final class WorkflowRegistry
                     // executeParallelStage() in WorkflowEngine.php.  The full
                     // parallel() primitive chain spans: WorkflowEngine,
                     // WorkflowBuilder, Workflow, WorkflowRegistry, AgentWorkerPool.
-                    $builder = $builder->parallel($stageName, $parsed);
+                    $builder = $builder->parallel($stageName, $parsed, capture: $capture);
                 } else {
                     // $parsed is a single TaskBuilder for a regular stage, or
                     // a list of them for a `tasks:` stage run in sequence.
-                    $builder = $builder->stage($stageName, $parsed);
+                    $builder = $builder->stage($stageName, $parsed, capture: $capture);
                 }
             }
         }
@@ -1392,6 +1396,27 @@ final class WorkflowRegistry
         }
 
         return $stage['parallel'];
+    }
+
+    /**
+     * A stage's `capture:` flag (S3) — strict boolean, the same spelling law
+     * as `parallel:`: `capture: true` or `capture: false` unquoted, anything
+     * else is the author's intent mangled, so it is refused, not coerced.
+     */
+    private function requireCaptureFlag(array $stage, string $where): bool
+    {
+        if (!array_key_exists('capture', $stage)) {
+            return false;
+        }
+
+        if (!is_bool($stage['capture'])) {
+            throw new WorkflowLoadException(
+                "{$where} \"capture\" must be a boolean (true or false, unquoted), got "
+                . get_debug_type($stage['capture'])
+            );
+        }
+
+        return $stage['capture'];
     }
 
     /**
