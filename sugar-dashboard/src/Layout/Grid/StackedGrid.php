@@ -92,17 +92,28 @@ final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
             return $this->renderColumn($columns[0], $this->width);
         }
 
-        // fitScreen=true divides the frame evenly; false lets columns keep
-        // their natural width BUT clamps each to its even share, so the
-        // horizontal join can never exceed the frame (finding M-33: the old
-        // false arm handed every column the FULL width, overflowing the grid
-        // by a factor of its own column count).
+        // fitScreen=true divides the frame evenly; false lets short columns
+        // keep their natural width so the joined frame stops where the
+        // content stops (finding m-17: the false arm used to be inert — it
+        // padded every column to the even share exactly like the true arm,
+        // so the documented "does not attempt to fill the width" never
+        // happened). Every false-arm column is still capped at its even
+        // share, so the horizontal join can never exceed the frame (finding
+        // M-33: the original false arm handed every column the FULL width,
+        // overflowing the grid by a factor of its own column count).
         $share = (int) floor($this->width / $colCount);
-        $colWidth = $this->options->fitScreen ? $share : max(1, $share);
+        if ($this->options->fitScreen) {
+            $colWidths = array_fill(0, $colCount, $share);
+        } else {
+            $colWidths = array_map(
+                fn (array $colItems): int => max(1, min($share, $this->columnNaturalWidth($colItems))),
+                $columns,
+            );
+        }
 
         $renderedColumns = [];
-        foreach ($columns as $colItems) {
-            $renderedColumns[] = $this->renderColumn($colItems, $colWidth);
+        foreach ($columns as $columnIndex => $colItems) {
+            $renderedColumns[] = $this->renderColumn($colItems, $colWidths[$columnIndex]);
         }
 
         return Layout::joinHorizontal(Position::TOP, ...$renderedColumns);
@@ -130,6 +141,35 @@ final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
 
         ksort($columns);
         return array_values($columns);
+    }
+
+    /**
+     * Natural rendered width of a column: the widest line among its plain
+     * items, before any grid-driven padding. A column holding a child that
+     * is sized by its recipient (a nested grid or any Sizer) has no such
+     * measurement — those children render to whatever box they are handed —
+     * so the column takes its full share instead (the caller's min() caps
+     * the sentinel this returns back to the share).
+     *
+     * @param ItemWithOptions[] $items
+     */
+    private function columnNaturalWidth(array $items): int
+    {
+        $natural = 0;
+        foreach ($items as $itemWithOpts) {
+            $item = $itemWithOpts->item;
+            if ($item instanceof self || $item instanceof \SugarCraft\Dashboard\Foundation\Sizer) {
+                return PHP_INT_MAX;
+            }
+            foreach (explode("\n", $item->render()) as $line) {
+                $lineWidth = \SugarCraft\Core\Util\Width::string($line);
+                if ($lineWidth > $natural) {
+                    $natural = $lineWidth;
+                }
+            }
+        }
+
+        return $natural;
     }
 
     /**
@@ -171,9 +211,12 @@ final class StackedGrid implements \SugarCraft\Dashboard\Foundation\Sizer
         $renderedItems = [];
         foreach ($items as $i => $itemWithOpts) {
             $item = $itemWithOpts->item;
-            $itemHeight = $itemHeight = $item instanceof self
-                ? $this->getItemNaturalHeight($item)
-                : $this->getItemNaturalHeight($item);
+            // Finding n-11: this line used to read
+            // `$itemHeight = $itemHeight = $item instanceof self ? A : A` —
+            // a doubled assignment with two identical ternary arms, dead
+            // weight over a call getItemNaturalHeight() already dispatches
+            // on internally.
+            $itemHeight = $this->getItemNaturalHeight($item);
 
             if ($itemWithOpts->options->expandVertical) {
                 $itemHeight = $heightPerExpanding;

@@ -134,7 +134,7 @@ its `Layout\Grid\` option value parts.
 
 | Type | Description | Key Properties |
 |------|-------------|----------------|
-| `Options` | Grid-level configuration options | `$fitScreen: bool` (default: true) |
+| `Options` | Grid-level configuration options — `fitScreen: false` keeps short columns at their natural width (capped at the even share, so the frame never overflows); true (default) pads every column to the even share | `$fitScreen: bool` (default: true) |
 | `ItemOptions` | Per-item placement options within StackedGrid | `$column: int` (0-based), `$expandVertical: bool` |
 | `ItemWithOptions` | Internal pairing of Item + ItemOptions | `$item: Item`, `$options: ItemOptions` |
 

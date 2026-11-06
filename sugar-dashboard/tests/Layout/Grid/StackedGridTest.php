@@ -305,4 +305,79 @@ final class StackedGridTest extends TestCase
         $this->assertSame(60, substr_count($lines[0], 'B'));
     }
 
+    public function testFalseFitScreenKeepsShortColumnsNatural(): void
+    {
+        // Finding m-17: fitScreen=false used to be inert — the arm padded
+        // every column to the even share exactly like fitScreen=true, so a
+        // 'Short' column still shipped 100 cells of blank after it and the
+        // joined frame always filled the width. False must now stop the
+        // frame where the content stops: 5 + 11 natural cells, not 200.
+        // 200 keeps the grid on the multi-column path (90 would collapse).
+        $grid = new StackedGrid(new Options(fitScreen: false));
+        $grid->addItem($this->strItem('Short'), new ItemOptions(column: 0));
+        $grid->addItem($this->strItem('LongContent'), new ItemOptions(column: 1));
+        $grid->setSize(200, 3);
+
+        $lines = explode("\n", $grid->render());
+        // Plain non-expanding items occupy their natural one line each;
+        // the grid pads only within a column's stack, not to full height.
+        $this->assertNotEmpty($lines);
+        foreach ($lines as $line) {
+            $this->assertSame(
+                16,
+                \SugarCraft\Core\Util\Width::string($line),
+                'fitScreen=false must join natural column widths, not fill the frame',
+            );
+        }
+        $this->assertSame('Short', substr($lines[0], 0, 5));
+        $this->assertSame('LongContent', substr($lines[0], 5, 11));
+    }
+
+    public function testTrueFitScreenStillDividesTheFrameEvenly(): void
+    {
+        // Byte-freeze of the default arm beside the m-17 flip: identical
+        // content under fitScreen=true must still pad both columns to the
+        // even share and fill the frame (100 + 100 = 200), so the natural
+        // widths asserted above can only ever come from the flag, never
+        // from a regression in the default path.
+        $grid = new StackedGrid(new Options(fitScreen: true));
+        $grid->addItem($this->strItem('Short'), new ItemOptions(column: 0));
+        $grid->addItem($this->strItem('LongContent'), new ItemOptions(column: 1));
+        $grid->setSize(200, 3);
+
+        $lines = explode("\n", $grid->render());
+        foreach ($lines as $line) {
+            $this->assertSame(200, \SugarCraft\Core\Util\Width::string($line));
+        }
+        $this->assertSame('Short', substr($lines[0], 0, 5));
+        $this->assertSame('LongContent', substr($lines[0], 100, 11));
+    }
+
+    public function testFalseFitScreenSizedColumnTakesFullShare(): void
+    {
+        // A column whose child is sized by its recipient (here a nested
+        // grid) has no natural width to measure — it renders to whatever
+        // box it is handed — so under fitScreen=false it keeps the full
+        // even share (100) while the plain column beside it stays natural
+        // (11): joined 111, filling neither 200 nor collapsing to 1.
+        $inner = new StackedGrid();
+        $inner->addItem($this->strItem('Inner'), new ItemOptions(column: 0));
+
+        $grid = new StackedGrid(new Options(fitScreen: false));
+        $grid->addItem($inner, new ItemOptions(column: 0));
+        $grid->addItem($this->strItem('LongContent'), new ItemOptions(column: 1));
+        $grid->setSize(200, 3);
+
+        $lines = explode("\n", $grid->render());
+        $this->assertStringContainsString('Inner', $lines[0]);
+        $this->assertStringContainsString('LongContent', $lines[0]);
+        foreach ($lines as $line) {
+            $this->assertSame(
+                111,
+                \SugarCraft\Core\Util\Width::string($line),
+                'a Sizer/nested-grid column must take the full share even under fitScreen=false',
+            );
+        }
+    }
+
 }
