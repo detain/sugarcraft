@@ -297,7 +297,7 @@ video file (mp4/gif/avi/webm)
         ▼
 ┌───────────────────┐     ┌─────────────────┐
 │ VideoSource::probe│     │ DecoderFactory  │
-│   (ffprobe JSON)  │────▶│ create()        │
+│   (ffprobe JSON)  │────▶│ ::new()         │
 └───────────────────┘     └────────┬─────────┘
                                  │
                     ┌────────────┴────────────┐
