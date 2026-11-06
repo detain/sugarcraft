@@ -292,8 +292,10 @@ sugar-forms is built on five shared packages:
   rendering glyphs and styles to ANSI bytes. TextInput / TextArea use the buffer
   path internally; their snapshot tests pin byte-for-byte output.
 - **[sugar-constraints](https://github.com/sugarcraft/sugar-constraints)** — `LayoutSolver` + constraint types
-  (`Constraint::length`, `Constraint::fill`, etc.). `Form::withConstraints()` routes
-  through the solver when an explicit constraint set is provided.
+  (`Constraint::length`, `Constraint::fill`, etc.). `Form::withConstraints()` stores
+  an explicit constraint set on the form; solver region routing is a reserved
+  surface — `Form::view()` does not consult it yet, so greedy vertical stacking
+  is always used today.
 - **[sugar-testing](https://github.com/sugarcraft/sugar-testing)** — `Assertions::assertGoldenAnsi` and
   `Assertions::assertCellGrid` snapshot helpers. Render fixtures live in
   `tests/fixtures/`; set `UPDATE_GOLDENS=1` to regenerate them.
@@ -384,7 +386,7 @@ Runtime requires (see `composer.json`):
 - `sugarcraft/sugar-style` — Declarative styling
 - `sugarcraft/sugar-async` — async suggestion support (cancellation sources)
 - `sugarcraft/sugar-cellbuffer` — cell-grid rendering for the raw widgets
-- `sugarcraft/sugar-constraints` — layout solving for `Form::withConstraints()`
+- `sugarcraft/sugar-constraints` — constraint types stored by `Form::withConstraints()` (solver routing reserved, not yet wired)
 - `sugarcraft/sugar-fuzzy` — Smith-Waterman suggestion scoring
 
 (`sugarcraft/sugar-testing` is a dev-only require, used by the golden

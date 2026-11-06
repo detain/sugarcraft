@@ -11,9 +11,6 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Constraints\Constraint\Constraint;
-use SugarCraft\Constraints\Direction;
-use SugarCraft\Constraints\LayoutSolver;
-use SugarCraft\Constraints\Region;
 use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Util\RenderSafe;
 
@@ -245,14 +242,18 @@ final class Form implements Model
     }
 
     /**
-     * Apply an explicit constraint set from sugar-constraints to govern how
-     * the form's fields are sized and positioned. When set, the form's
-     * {@see view()} uses {@see LayoutSolver} to compute a region per
-     * field before rendering. Pass null (or leave unset) to keep the
-     * default greedy-vertical stacking.
+     * Store an explicit constraint set from sugar-constraints.
+     *
+     * Reserved surface (SF-7, C6): the setter stores the list on the
+     * immutable snapshot and {@see view()} does NOT route it — fields are
+     * laid out by the default greedy-vertical stacking regardless of what
+     * is set here. The store semantics are pinned by
+     * tests/FormTest.php (immutability + null-clears); whether solver
+     * region routing is ever implemented, or the knob is deprecated and
+     * removed in 2.0.0, is an open product decision — the sugar-constraints
+     * dependency exists solely to type this surface in the meantime.
      *
      * @param list<Constraint>|null $constraints
-     * @see LayoutSolver
      */
     public function withConstraints(?array $constraints): self
     {
