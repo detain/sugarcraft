@@ -151,10 +151,10 @@ final readonly class CubicBezier
      * NOT rejected and NOT clamped — the Newton solve walks the polynomial
      * outside [0, 1] (the binary fallback stays inside it), so the result is
      * a curve-dependent extrapolation. The RETURN value is likewise unclamped: control points with y
-     * outside [0, 1] (back/elastic style curves — the `Easing` enum's Back and
-     * Elastic cases are computed that way; CubicBezier ships no Back preset
-     * itself) legitimately overshoot beyond 0..1 progress, and clamping
-     * would flatten exactly the motion those presets exist to express.
+     * outside [0, 1] (the back/elastic style of control point) legitimately overshoot
+     * beyond 0..1 progress — note that the `Easing` enum's Back and Elastic cases are
+     * analytic overshoots, not beziers, and CubicBezier ships no Back preset itself —
+     * and clamping would flatten exactly the motion those curves exist to express.
      */
     public function evaluate(float $t): float
     {
