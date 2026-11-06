@@ -136,6 +136,8 @@ Flat list of endpoint objects (YAML subset or JSON). The reader format follows t
 
 Limits of the embedded YAML reader: flat entries only, and a nested list is written one `- item` line at a time — any number of items accumulates, but each must be a scalar. **Inline flow collections** (`options: [a, b]`) are refused with a message that names the fix — write the nested list form; block mappings indented under a list field are refused by name, field and line. A `#` after whitespace starts a comment, and stripping is quote-aware: outside quotes only, so `description: "fix #1"` keeps its hash. Booleans (`name: yes`) are refused at any string field rather than reaching ssh as `"1"`.
 
+**Tilde expansion is identity-only.** A leading `~` on `identityFiles` / `identity_file` / `identityFile` is expanded by the launcher itself — on both ingest paths (wishlist and ssh_config import), against `$HOME` first, the passwd entry as fallback, and a loud refusal naming the path when neither exists; `~user` resolves via passwd and stays literal for an unresolvable user. Every other field — `host`, `proxyJump`, `options`, and tildes anywhere but the start of a path (`a~b`, `/x/~/y`) — is passed to ssh exactly as written. Expansion of those is then client-dependent: OpenSSH expands `-i` argv against the *passwd* home (not `$HOME`), and dropbear/busybox never expand at all — which is why identity paths are expanded here and absolute paths remain the portable spelling.
+
 ## Keybindings
 
 | Key       | Action                          |

@@ -327,17 +327,21 @@ final class Config
             $opts[] = (string) $o;
         }
         $identityFiles = [];
+        // F-4: a leading ~ on an identity path expands here, against $HOME
+        // (passwd fallback, loud refusal) — the same semantics the ssh_config
+        // importer applies, now shared via IdentityPath. Everything else,
+        // including every other field, passes verbatim to the argv.
         if (isset($row['identityFiles'])) {
             foreach (self::normalizeList($row['identityFiles']) as $f) {
                 self::assertScalar('identityFiles', $f);
-                $identityFiles[] = (string) $f;
+                $identityFiles[] = IdentityPath::expand((string) $f);
             }
         } elseif (isset($row['identity_file']) && $row['identity_file'] !== null) {
             self::assertScalar('identity_file', $row['identity_file']);
-            $identityFiles[] = (string) $row['identity_file'];
+            $identityFiles[] = IdentityPath::expand((string) $row['identity_file']);
         } elseif (isset($row['identityFile']) && $row['identityFile'] !== null) {
             self::assertScalar('identityFile', $row['identityFile']);
-            $identityFiles[] = (string) $row['identityFile'];
+            $identityFiles[] = IdentityPath::expand((string) $row['identityFile']);
         }
         return new Endpoint(
             name:         (string) $row['name'],

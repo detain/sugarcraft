@@ -4,6 +4,9 @@
   host: prod.example.com
   port: 2222
   user: deploy
+  # A leading ~ on an identity path is expanded by the launcher ($HOME,
+  # passwd fallback). An absolute path is the portable spelling — it does
+  # not depend on who expands it.
   identity_file: ~/.ssh/prod-deploy
   description: Live customer-facing app servers
 

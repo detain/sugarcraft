@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\SshLauncher;
 
-use RuntimeException;
-
 /**
  * Parses an OpenSSH config file (~/.ssh/config) into a list of Endpoints.
  *
@@ -292,7 +290,7 @@ final class SshConfigParser
         $identityFiles = [];
         if (isset($options['identityfile']) && is_array($options['identityfile'])) {
             foreach ($options['identityfile'] as $f) {
-                $identityFiles[] = $this->expandPath((string) $f);
+                $identityFiles[] = IdentityPath::expand((string) $f);
             }
         }
 
@@ -304,71 +302,6 @@ final class SshConfigParser
             identityFiles: $identityFiles,
             proxyJump: isset($options['proxyjump']) ? (string) $options['proxyjump'] : null,
         );
-    }
-
-    private function expandPath(string $path): string
-    {
-        if (strncmp($path, '~', 1) !== 0) {
-            return $path;
-        }
-
-        // Parse ~user/path or ~/path using a simple string scan instead of regex
-        $len = strlen($path);
-        if ($len >= 2 && $path[1] === '/') {
-            // ~/path — current user's home
-            return $this->homeDirectory($path) . substr($path, 1);
-        }
-
-        // ~user/path — find the first slash
-        $slashPos = strpos($path, '/');
-        if ($slashPos === false) {
-            // ~user with no slash — entire path is the user name
-            $user = substr($path, 1);
-            $rest = '';
-        } else {
-            $user = substr($path, 1, $slashPos - 1);
-            $rest = substr($path, $slashPos);
-        }
-
-        if ($user === '') {
-            // Edge case: just ~ (the ~/... shape was handled above)
-            return $this->homeDirectory($path) . $rest;
-        }
-
-        // ~user/path — try to resolve via posix_getpwnam
-        if (function_exists('posix_getpwnam')) {
-            $pw = @posix_getpwnam($user);
-            if ($pw !== false && isset($pw['dir'])) {
-                return $pw['dir'] . $rest;
-            }
-        }
-
-        // Cannot resolve ~user — return path unchanged rather than
-        // producing garbage like <home>user/...
-        return $path;
-    }
-
-    /**
-     * Home directory for `~` expansion: $HOME, then the passwd entry of the
-     * effective user, then a loud refusal. The old code silently substituted
-     * the literal '/root', so an import run without $HOME would have hunted
-     * identity files under /root (2026-10-23).
-     */
-    private function homeDirectory(string $path): string
-    {
-        $home = getenv('HOME');
-        if (is_string($home) && $home !== '') {
-            return rtrim($home, '/');
-        }
-
-        if (function_exists('posix_geteuid') && function_exists('posix_getpwuid')) {
-            $pw = @posix_getpwuid(posix_geteuid());
-            if (is_array($pw) && isset($pw['dir']) && is_string($pw['dir']) && $pw['dir'] !== '') {
-                return rtrim($pw['dir'], '/');
-            }
-        }
-
-        throw new RuntimeException(Lang::t('config.home_unset', ['path' => $path]));
     }
 
     /**

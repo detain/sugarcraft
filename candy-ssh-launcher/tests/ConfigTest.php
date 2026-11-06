@@ -89,6 +89,131 @@ final class ConfigTest extends TestCase
         $this->assertSame(['/tmp/key2'], $endpoints[1]->identityFiles);
     }
 
+    // Step 22 (F-4): identity fields on the FLAT path expand a leading `~`
+    // exactly like the ssh_config import path has always done. OpenSSH 9.x
+    // happens to expand `~/...` in argv too, but against the PASSWD home and
+    // not $HOME — so a launcher that passed the literal through could silently
+    // pick a different key than the import path expands to, and non-OpenSSH
+    // clients (dropbear/busybox) never expand argv tildes at all.
+
+    public function testYamlIdentityFileTildeExpandsToHome(): void
+    {
+        $raw = <<<YAML
+        - name: a
+          host: a.test
+          identity_file: ~/.ssh/prod-deploy
+        YAML;
+        $endpoints = Config::parse($raw, 'wishlist.yml');
+        $this->assertSame([$this->home() . '/.ssh/prod-deploy'], $endpoints[0]->identityFiles);
+    }
+
+    public function testYamlIdentityFileCamelTildeExpandsToHome(): void
+    {
+        $raw = <<<YAML
+        - name: a
+          host: a.test
+          identityFile: ~/.ssh/camel
+        YAML;
+        $endpoints = Config::parse($raw, 'wishlist.yml');
+        $this->assertSame([$this->home() . '/.ssh/camel'], $endpoints[0]->identityFiles);
+    }
+
+    public function testJsonIdentityFilesListTildesExpandAndLiteralsSurvive(): void
+    {
+        // The plural list expands per item; every non-leading-tilde shape
+        // (absolute, relative, mid-string, path-segment) is byte-untouched.
+        $endpoints = Config::parse(
+            '[{"name":"a","host":"a.test","identityFiles":["~/k1","/abs/k2","./rel/k3","mid~dle","/x/~/y"]}]',
+            'wishlist.json',
+        );
+        $this->assertSame(
+            [$this->home() . '/k1', '/abs/k2', './rel/k3', 'mid~dle', '/x/~/y'],
+            $endpoints[0]->identityFiles,
+        );
+    }
+
+    public function testIdentityQuotedBareTildeExpandsToHome(): void
+    {
+        // Quoted "~" is a string scalar and lands on the home directory.
+        $raw = "- name: a\n  host: a.test\n  identity_file: \"~\"\n";
+        $endpoints = Config::parse($raw, 'wishlist.yml');
+        $this->assertSame([self::home()], $endpoints[0]->identityFiles);
+    }
+
+    public function testIdentityUnquotedBareTildeStaysNull(): void
+    {
+        // Unquoted bare "~" remains YAML null (null meaning, not a path):
+        // the field is simply absent and NO identity entry is minted.
+        $raw = "- name: a\n  host: a.test\n  identity_file: ~\n";
+        $endpoints = Config::parse($raw, 'wishlist.yml');
+        $this->assertSame([], $endpoints[0]->identityFiles);
+    }
+
+    public function testIdentityExpansionNeverTouchesNonTildePathsEvenWhenHomeMoves(): void
+    {
+        // Trust-boundary leg: expansion consults $HOME only for values that
+        // START with `~`; a relocated HOME must not rewrite anything else.
+        $prior = getenv('HOME');
+        putenv('HOME=/tmp/c4-poison-home');
+        try {
+            $endpoints = Config::parse(
+                '[{"name":"a","host":"a.test","identityFiles":["/abs/id","./rel/id"]}]',
+                'wishlist.json',
+            );
+        } finally {
+            if ($prior === false) {
+                putenv('HOME');
+            } else {
+                putenv('HOME=' . $prior);
+            }
+        }
+        $this->assertSame(['/abs/id', './rel/id'], $endpoints[0]->identityFiles);
+    }
+
+    public function testIdentityUserTildeResolvesViaPasswdAndUnresolvableStaysLiteral(): void
+    {
+        if (!function_exists('posix_getpwuid') || !function_exists('posix_getpwnam')) {
+            $this->markTestSkipped('posix extension required for ~user expansion');
+        }
+        $pw = posix_getpwuid(posix_geteuid());
+        $this->assertIsArray($pw);
+        $me = (string) $pw['name'];
+        $myHome = rtrim((string) $pw['dir'], '/');
+        $endpoints = Config::parse(
+            '[{"name":"a","host":"a.test","identityFiles":["~' . $me . '/shared-key","~nosuchuser42/k"]}]',
+            'wishlist.json',
+        );
+        $this->assertSame([$myHome . '/shared-key', '~nosuchuser42/k'], $endpoints[0]->identityFiles);
+    }
+
+    public function testOtherFieldsNeverExpandTilde(): void
+    {
+        // Scope leg: ONLY identity fields are expanded. proxyJump and options
+        // ride to ssh exactly as written, tildes included.
+        $endpoints = Config::parse(
+            '[{"name":"a","host":"a.test","proxyJump":"~/jump","options":["Mode=~x"]}]',
+            'wishlist.json',
+        );
+        $this->assertSame('~/jump', $endpoints[0]->proxyJump);
+        $this->assertSame(['Mode=~x'], $endpoints[0]->options);
+    }
+
+    /**
+     * Mirror of the expansion home ladder ($HOME, then passwd entry) for
+     * expected-value construction in the tests above.
+     */
+    private function home(): string
+    {
+        $home = getenv('HOME');
+        if (is_string($home) && $home !== '') {
+            return rtrim($home, '/');
+        }
+        $this->assertTrue(function_exists('posix_getpwuid') && function_exists('posix_geteuid'));
+        $pw = posix_getpwuid(posix_geteuid());
+        $this->assertIsArray($pw);
+        return rtrim((string) $pw['dir'], '/');
+    }
+
     public function testYamlNestedOptionsList(): void
     {
         // Nested string lists under a value-less key are the only
