@@ -490,6 +490,18 @@ resolve siblings from Packagist `dev-master` (path repositories are
 injected by CI at build time, never committed). At the stable release the
 pins become proper `^1.0` constraints — track this in the release plan.
 
+## Testing & CI
+
+```sh
+cd sugar-forms && composer install && vendor/bin/phpunit
+```
+
+CI runs this library's suite per push as one of the per-library matrix
+jobs in `.github/workflows/ci.yml` (which libraries are discovered
+dynamically via `scripts/affected-libs.php`). The sharded parallel runner
+(`scripts/parallel-tests.sh` with its durations manifest) is specific to
+the candy-code job and does not apply here — this suite runs whole.
+
 ## Snapshot tests
 
 Render output is covered by golden-file snapshot tests. Fixture files live
