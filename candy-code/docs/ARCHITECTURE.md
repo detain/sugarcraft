@@ -785,9 +785,9 @@ gone. While a group is outstanding the parent keeps writing heartbeat frames,
 so the turn's own idle ceiling does not kill a long delegation either.
 
 Delegations are the one member a group caps: at most
-`AgentPoolConfig::$maxConcurrent` (5 by default) `ExemptFromParallelDeadline`
-members are alive at once, and the rest wait queued and are forked in provider
-order as running ones exit (`Runtime::executeConcurrently()`). A queue costs a
+`AgentPoolConfig::$maxConcurrent` (no cap by default) `ExemptFromParallelDeadline`
+members are alive at once, and once a cap is set the rest wait queued and are
+forked in provider order as running ones exit (`Runtime::executeConcurrently()`). A queue costs a
 delegation nothing because the group deadline never kills it; seconds-scale
 siblings are never queued, so they keep the whole deadline for themselves.
 
