@@ -363,7 +363,7 @@ all one component tree — not two parallel UIs.
 | `Esc` `Esc` | Cancel an in-flight turn — press **twice** within 0.6 s (`doubleEscSeconds`); the same two presses while **idle** with an empty draft open the **message picker** instead — see the fine print below. |
 | `Esc` | Close the palette or the session picker (a filter typed into the picker is cleared first) |
 | `/new` | New session, through a **folder picker** that opens on this project — see the fine print below. |
-| `Ctrl+C` | Quit — unless the draft has a selection: then the first press copies it (OSC 52, clipped to 64 KiB with a notice) and the next press quits |
+| `Ctrl+C` | Quit — unless the draft has a selection: then the first press copies it (OSC 52, clipped to 65,536 characters with a notice) and the next press quits |
 | `Ctrl+P` | Command palette (fuzzy, grouped by category, biased by most-recently-used) |
 | `Ctrl+O` | Expand or collapse the tool output and thought at the row cursor — see the fine print below. |
 | `Ctrl+F` | Walk the transcript row cursor one row older, toggling nothing — the focused row now paints in the theme's active style, so the settled cursor is visible. See the fine print below. |
