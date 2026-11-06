@@ -76,7 +76,7 @@ echo $toast-&gt;view($bg);</code></pre>
             <div class="feature"><strong>Auto-dismiss</strong><span>Configurable duration. Passing <code>null</code> $expiresAt at the alert()/progressToast() doors means &quot;use the configured duration&quot; — persistence is reached by keeping the toast duration unset or through the explicit sentinel (<code>withoutExpiry()</code>/<code>cancelAlert()</code>).</span></div>
             <div class="feature"><strong>Symbol sets</strong><span>NerdFont, Unicode, or Ascii.</span></div>
             <div class="feature"><strong>Overflow control</strong><span>DropOldest, DropNewest, or Enqueue when maxConcurrent is exceeded.</span></div>
-            <div class="feature"><strong>Progress toasts</strong><span>Inline progress bar (0–100%) beneath the message body.</span></div>
+            <div class="feature"><strong>Progress toasts</strong><span>Inline progress bar beneath the message body — by default the bar speaks in glyph and colour; the numeric percentage (0–100%) prints only under <code>withAccessibleText()</code>.</span></div>
             <div class="feature"><strong>Action buttons</strong><span>[Label] buttons with closure callbacks; their frame cells are exported by <code>actionRects()</code>/<code>actionAt()</code> for host-side mouse and keyboard dispatch.</span></div>
             <div class="feature"><strong>History log</strong><span>Cumulative immutable record of dismissed and overflow-evicted alerts via <code>history()</code>; <code>clear()</code> never resets it.</span></div>
             <div class="feature"><strong>Styled alerts</strong><span>Per-alert background, foreground, and border colour overrides via Color.</span></div>
