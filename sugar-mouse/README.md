@@ -588,11 +588,10 @@ flooded by leaked `?1003` motion reporting.
 | `Manager` | `newGlobal()` | Build a fresh un-prefixed manager independent of every other instance — NOT the shared default (that is `Zones::defaultManager()`) |
 | `Manager` | `newPrefix(prefix)` | Create prefixed manager for isolation |
 | `Manager` | `mark(name, rendered)` | Wrap output with zone marker |
-| `Manager` | `scan(output)` | Record positions, strip markers |
+| `Manager` | `scan(output, ?width = null)` | Merge-record zones into the registry (re-recorded ids replace, absent ids persist; prefixed ids only), strip markers, clamp columns to `?width` |
 | `Manager` | `anyInBounds(mouseMsg)` | Return the innermost zone under the mouse |
 | `Manager` | `get(name)` | Get zone by name |
 | `Manager` | `setMotionTracking(bool)` | Return paired CSI 1003+1006 enable / LIFO disable sequence |
-| `Manager` | `scan(output, ?width)` | Merge-record zones (prefixed ids only), strip markers, clamp columns |
 | `Manager` | `allInBounds(mouseMsg)` | Every covering zone, smallest area first |
 | `Manager` | `zoneAt(col, row)` | Cell hit-test without a mouse message |
 | `Manager` | `anyInBoundsAndUpdate(model, msg)` | Dispatch `MsgZoneInBounds` into a Model |
