@@ -19,7 +19,7 @@ if (extension_loaded('gd') === false) {
     exit(1);
 }
 
-$path = sys_get_temp_dir() . '/candy-gifview-demo.gif';
+$path = (string) tempnam(sys_get_temp_dir(), 'sc_gifview_demo_');
 register_shutdown_function(static function () use ($path): void {
     @unlink($path);
 });
