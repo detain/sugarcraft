@@ -18,7 +18,7 @@
 composer require sugarcraft/sugar-core
 ```
 
-sugar-core — the Model–Update–View TUI runtime for PHP 8.3+: every app is a
+sugar-core — the MVC-style Model–Update–View TUI runtime for PHP 8.3+: every app is a
 `Model`, an `update()` that folds messages into new state, and a `view()`
 that renders it — driven by an event loop with subscriptions, commands and
 a full-screen diffing renderer.
