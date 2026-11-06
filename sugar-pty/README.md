@@ -737,8 +737,10 @@ So `PosixPump`, `ReactPump` and
   `MultiPump` stay POSIX-only and ConPTY masters are pumped by polling
   `read($len, $timeout)` — and `size()` answers the cached geometry with
   `xpix`/`ypix` always 0 (there is no pixel query to bind). The Windows CI
-  cells on PHP 8.3 therefore run the platform-neutral suites only; the
-  ConPTY live test skips there and executes on the 8.4 cell.
+  cells therefore run only `tests\Windows\` on every PHP matrix cell — the
+  rest of the suite is POSIX-pinned (libc FFI, `/dev/ptmx`, signals) and
+  cannot pass on a Windows cell; `tests\Windows` carries the ConPTY
+  primitives and adapter arms, and its live legs skip below PHP 8.4.
 - **ext-ffi is required but disabled by default.** `ext-ffi` is loaded eagerly
   because `FFI::cdef()` must resolve symbols at script startup. Many Linux
   distributions ship PHP with `ffi.enable=0` in `php.ini` (a security hardening
