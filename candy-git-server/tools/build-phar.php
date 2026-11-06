@@ -155,6 +155,13 @@ const INCLUDE_ROOTS = ['bin', 'src', 'lang', 'vendor'];
 const INCLUDE_FILES = ['LICENSE', 'README.md'];
 /** Never shipped, at any depth. */
 const EXCLUDE_SEGMENTS = ['.git', '.phpunit.cache', 'node_modules'];
+/**
+ * Never shipped by suffix, at any depth: a *.lock file that a dirty tree
+ * happens to carry (a stray src/Support/composer.lock from a local probe is
+ * the measured fingerprint) would freeze one build machine's resolved
+ * versions into the published archive, masquerading as package content.
+ */
+const EXCLUDE_SUFFIXES = ['.lock'];
 
 /**
  * Guard 4 (the poisoning guard): no symlink anywhere in a packaged tree,
@@ -187,6 +194,11 @@ $walk = static function (string $dir) use (&$walk, &$files, $package): void {
         }
         if (in_array($name, EXCLUDE_SEGMENTS, true)) {
             continue;
+        }
+        foreach (EXCLUDE_SUFFIXES as $suffix) {
+            if (str_ends_with($name, $suffix)) {
+                continue 2;
+            }
         }
         if (is_dir($path)) {
             $walk($path);

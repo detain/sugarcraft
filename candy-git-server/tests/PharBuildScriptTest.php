@@ -84,4 +84,30 @@ final class PharBuildScriptTest extends TestCase
         self::assertStringContainsString('Support\\Version', $bin);
         self::assertStringContainsString('displayVersion', $bin);
     }
+
+    public function testTheWalkerDropsLockFilesBeforeAnyFileIsAppended(): void
+    {
+        $build = $this->readAppFile('tools/build-phar.php');
+
+        // The roster is exactly the suffix that poisoned the published
+        // archive: a stray src/Support/composer.lock from a dirty tree.
+        self::assertMatchesRegularExpression(
+            '/const EXCLUDE_SUFFIXES = \[\'\.lock\'\];/',
+            $build,
+            'the .lock suffix roster must stay exactly this decision'
+        );
+
+        // The guard must sit INSIDE the scandir walker and strictly BEFORE
+        // the append — a guard moved after `$files[] = $path;` can never
+        // exclude anything, and the audit fingerprint is exactly a filter
+        // that reads as present while sitting in the wrong place.
+        $walkStart = strpos($build, '$walk = static function');
+        self::assertIsInt($walkStart, 'the scandir walker anchor moved');
+        $appendPos = strpos($build, '$files[] = $path;', $walkStart);
+        self::assertIsInt($appendPos, 'the walker append site moved');
+        $window = substr($build, $walkStart, $appendPos - $walkStart);
+        self::assertStringContainsString('foreach (EXCLUDE_SUFFIXES as $suffix)', $window);
+        self::assertStringContainsString('str_ends_with($name, $suffix)', $window);
+        self::assertStringContainsString('continue 2;', $window, 'a match must skip the scandir entry, not just the suffix loop');
+    }
 }
