@@ -44,7 +44,7 @@ use SugarCraft\ColorProfile\Palette;
 use SugarCraft\ColorProfile\ProfileWriter;
 
 // Detect the terminal's color profile (pass a stream to gate on its TTY-ness;
-// a null stream is env-only detection, mirroring upstream)
+// a null stream means env-only detection — no TTY gate)
 $palette = new Palette(STDOUT);
 $profile = $palette->profile();
 
@@ -59,6 +59,27 @@ echo "Converted: {$converted->toHex()}\n";
 $writer = ProfileWriter::wrap(STDOUT);
 $writer->write("\x1b[38;2;107;80;255mFancy text\x1b[0m\n");
 ```
+
+**Expected output.** Run with `STDOUT` piped (CI, `php demo.php | cat`), the two
+`echo` lines print exactly `Your terminal supports: No TTY` and
+`Converted: #000000` — the step-0 stream gate forces `NoTTY`, and `NoTTY`
+degrades the TrueColor test color to black. On a real terminal both lines depend
+on the detected profile: the label names whatever rung won, and `#6b50ff`
+collapses toward the nearest color the profile can actually render.
+
+**Terms used here.**
+
+- **SGR** — the `ESC[ …m` escape sequence that carries colors and decoration in
+  terminal output bytes.
+- **terminfo / `infocmp`** — the on-disk per-`TERM` capability database, and the
+  CLI that prints one entry (consulted by the optional phase-2 probe).
+- **`COLORTERM`, `NO_COLOR`, `FORCE_COLOR`** (with `CLICOLOR`,
+  `CLICOLOR_FORCE`) — the env vars users set to override what a terminal
+  advertises; the ladder below resolves them in a fixed order.
+- **CIELAB / ΔE** — a perceptually-uniform color space and its distance metric;
+  they define "nearest" for the color reduction above.
+- **TTY vs pipe** — `stream_isatty()` tells an interactive terminal from
+  redirected output; the same environment answers differently on each.
 
 ## Profiles
 
