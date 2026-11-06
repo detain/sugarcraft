@@ -36,6 +36,7 @@ A single-field form:
 ```php
 <?php
 
+use SugarCraft\Core\Program;
 use SugarCraft\Forms\Field\Input;
 use SugarCraft\Forms\Form;
 use SugarCraft\Forms\Validator\Required;
@@ -46,8 +47,16 @@ $form = Form::new(
         ->withValidator(new Required())
 );
 
-echo $form->view();
+(new Program($form))->run();
+
+echo $form->values()['name'], "\n";
 ```
+
+`echo $form->view()` on its own renders one static frame; the form is a
+SugarCraft Model, so `Program::run()` is what drives it interactively. For a
+complete reference — multi-group paging and conditional visibility — see
+`examples/multi-page-form.php:53` (`php examples/multi-page-form.php`); the
+`examples/` directory holds eleven runnable demos.
 
 ### Pre-filling fields
 
