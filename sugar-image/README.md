@@ -613,6 +613,7 @@ placement at all, so it reports a stale unrelated id.
 SugarCraft\Image
 ├── Animation              # Immutable frame sequence value object
 ├── AnimationDriver        # Model; drives Animation onto a Renderer via tick()
+├── ApngDecoder            # Pure-PHP APNG frame walk (GD collapses APNG to its base frame)
 ├── FrameTickMsg           # Internal Msg for frame-advance ticks
 ├── ImageLayer             # Per-frame image registry: marker blocks + placements
 ├── ImageSource            # Image bytes + metadata + decode budgets (Limits)
@@ -620,13 +621,16 @@ SugarCraft\Image
 ├── Lang                   # i18n facade
 ├── Mosaic                 # Facade: probe / auto / builder / render
 ├── MosaicBuilder          # Fluent Mosaic assembly
-├── Detect / TermDb / TermInfo  # Terminal capability detection + quirks tables
+├── Detect / TermDb / TermInfo / Capability  # Capability detection, quirks tables + probe result
 ├── DiskCache              # On-disk render cache (key includes protocol + mode detail)
 ├── AdaptiveImage          # In-memory LRU poster cache (within a session)
 ├── AsyncRenderer / PacedAsyncRenderer / SyncAsyncRenderer  # Async render paths
+├── PacedRenderSession     # Resumable slice pump over one incremental encode
 ├── PixelGrid              # 2-D cell grid (foreground, background, alpha, char)
 ├── PlacedImage            # placeTracked() result: marker block + assigned id
+├── PrecomputedImage       # A finished render: encoded ANSI bytes + geometry metadata
 ├── TmuxPassthrough / TmuxPassthroughDecorator  # tmux allow-passthrough envelope (root namespace)
+├── UnsupportedFormatException  # Recognised-but-refused container feature (vs corrupt input)
 ├── Renderer
 │   ├── AsciiRenderer      # Character ramp (Mono/Ansi16/Ansi256/TrueColor)
 │   ├── ChafaRenderer      # External command renderer
@@ -638,9 +642,15 @@ SugarCraft\Image
 │   └── SymbolMapRenderer  # chafa coverage-class symbol engine
 ├── Symbol                 # Glyph corpora: tables, tags, kana + wide defs
 ├── Codec                  # GD-free payload codecs (TIFF encoder, raw RGBA)
+├── CellGeometry / CellSize  # Pixel aspect ↔ cell arithmetic + cell pixel dimensions
+├── Deadline               # Monotonic millisecond budget tracker for I/O waits
 ├── Dither                 # Shared dithering arithmetic (Floyd-Steinberg, ordered…)
 ├── Levels                 # Luminance stretching (Rec.709 weights)
+├── Optimization           # chafa-style output-optimization bitmask (mosaic tiers)
+├── Quantizer              # Pairwise-nearest-neighbour palette quantiser (Sixel budget)
 ├── Render                 # Band splitting
+├── Scale                  # Scaling / cropping modes for a fixed cell box
 ├── Passthrough            # GNU screen envelope decorators (interface + packetizer)
+├── Concerns               # Shared traits (optimization carrier, render validation, raw pixels)
 └── Support                # OutputOptimizer, GdAvailability, PushToPull
 ```
