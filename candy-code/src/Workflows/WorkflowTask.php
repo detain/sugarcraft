@@ -27,8 +27,8 @@ final readonly class WorkflowTask
          * a PCRE pattern whose MATCH against the verifier's completed output
          * rejects the verdict — the stage fails as if the agent had. Null
          * (the default) keeps the status-only behavior byte-identical.
-         * Validity is enforced at {@see TaskBuilder::build()}; a hand-built
-         * malformed pattern still fails CLOSED at the scan.
+         * Validity is enforced at {@see TaskBuilder::reject()} set time; a
+         * hand-built malformed pattern still fails CLOSED at the scan.
          */
         public ?string $reject = null,
         /**
