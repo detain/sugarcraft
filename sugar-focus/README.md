@@ -180,14 +180,15 @@ and the trap is the disabled set. The recipe:
 
 ```php
 $saved = $ring->current();                       // what the dialog interrupts (null on an empty ring)
+$background = $ring->enabledIds();               // capture BEFORE the dialog: every id Tab can reach
 $ring = $ring->register('dialog-field')          // the dialog's focusables
     ->focus('dialog-field');
-foreach (['sidebar', 'grid', 'filter'] as $id) {
+foreach ($background as $id) {
     $ring = $ring->disable($id);                 // background unreachable
 }
 
 // On close — re-enable the background first, then drop the dialog:
-foreach (['sidebar', 'grid', 'filter'] as $id) {
+foreach ($background as $id) {
     $ring = $ring->enable($id);
 }
 $ring = $ring->unregister('dialog-field');
