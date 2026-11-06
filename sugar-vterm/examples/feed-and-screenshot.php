@@ -17,13 +17,13 @@ use SugarCraft\Vterm\Terminal\Terminal;
 
 $bytes = "\x1b]2;SugarVterm demo\x07"            // OSC 2: window title
        . "\x1b[2J\x1b[H"                       // ED 2J + cursor home
-       . "\x1b[1;38;5;213m  SugarVterm\x1b[0m\n"  // bold, 256-color magenta
-       . "\x1b[38;5;245m  --------\x1b[0m\n\n" // dim divider
+       . "\x1b[1;38;5;213m  SugarVterm\x1b[0m\r\n"  // bold, 256-color magenta
+       . "\x1b[38;5;245m  --------\x1b[0m\r\n\r\n" // dim divider
        . "\x1b[1mWelcome\x1b[0m, "             // bold "Welcome"
        . "\x1b]8;id=1;https://github.com/charmbracelet/x/tree/main/vt\x07"
        . "\x1b[4;38;5;39mclick here\x1b[0m"    // underlined blue hyperlink
        . "\x1b]8;;\x07"                        // close hyperlink
-       . " \xe2\x86\x92 source.\n\n"           // " → source.\n\n"
+       . " \xe2\x86\x92 source.\r\n\r\n"       // " → source.\r\n\r\n"
        . "\x1b[38;5;208m  PR1-PR9 shipped \xe2\x9c\x94\x1b[0m"; // orange "PR1-PR9 shipped ✔"
 
 $term = Terminal::new(cols: 40, rows: 8);
