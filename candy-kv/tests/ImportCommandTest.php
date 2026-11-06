@@ -16,6 +16,7 @@ use PHPUnit\Framework\TestCase;
 final class ImportCommandTest extends TestCase
 {
     private string $tmpDir;
+    private string $childConfigHome;
     private Store $store;
     private ImportCommand $cmd;
 
@@ -23,6 +24,8 @@ final class ImportCommandTest extends TestCase
     {
         $this->tmpDir = \sys_get_temp_dir() . '/candy-kv-import-cmd-' . \uniqid();
         \mkdir($this->tmpDir, 0o700, true);
+        $this->childConfigHome = $this->tmpDir . '/xdg';
+        \mkdir($this->childConfigHome, 0o700, true);
         $this->store = new Store($this->tmpDir, 'testdb');
         $this->cmd = new ImportCommand($this->store);
     }
@@ -214,5 +217,73 @@ final class ImportCommandTest extends TestCase
         $this->assertSame(0, $exit);
         $this->assertSame('secret', $this->store->get('token@pw'));
         $this->assertSame('alice', $this->store->get('user@meta'));
+    }
+
+    // ─── sanitize-on-egress (M5): diagnostics never carry raw control bytes ──
+
+    public function testImportFailureDiagnosticStripsEscapesFromFileChosenKeys(): void
+    {
+        // The refusal message embeds the ENTRY NAME chosen inside the import
+        // file (attacker bytes). Child process: stderr is the real sink and can
+        // only be observed across a process boundary (STDERR is a constant).
+        $path = $this->tmpDir . '/poison.json';
+        \file_put_contents($path, \json_encode(["\x1b[31mRED" => ['nested' => 1]]));
+
+        $res = $this->runChild(['import', 'json', $path]);
+
+        $this->assertSame(1, $res['exit'], $res['stderr']);
+        $this->assertStringContainsString('Import failed:', $res['stderr']);
+        $this->assertStringContainsString('array value', $res['stderr'], 'the diagnostic must stay informative');
+        $this->assertStringContainsString('[31mRED', $res['stderr'], 'printable residue survives the escape strip');
+        $this->assertStringNotContainsString("\x1b", $res['stderr'], 'raw ESC must never ride a stderr diagnostic');
+    }
+
+    public function testFileNotFoundPathStripsEscapes(): void
+    {
+        // The path is caller-chosen argv bytes; the miss line must not echo them raw.
+        $res = $this->runChild(['import', 'json', $this->tmpDir . "/\x1b[7mghost.json"]);
+
+        $this->assertSame(1, $res['exit'], $res['stderr']);
+        $this->assertStringContainsString('File not found:', $res['stderr']);
+        $this->assertStringNotContainsString("\x1b", $res['stderr'], 'raw ESC must never ride a stderr diagnostic');
+    }
+
+    public function testExportFailureDiagnosticStripsEscapesFromStoreKeys(): void
+    {
+        // A poisoned store key (ESC bytes + reserved YAML prefix) surfaces
+        // through the 'Export failed:' wrapper, which names the key verbatim.
+        $set = $this->runChild(['set', "skate_ttl_\x1b[31mX", 'v']);
+        $this->assertSame(0, $set['exit'], $set['stderr']);
+
+        $res = $this->runChild(['export', 'yml']);
+
+        $this->assertSame(1, $res['exit'], $res['stderr']);
+        $this->assertStringContainsString('Export failed:', $res['stderr']);
+        $this->assertStringContainsString('[31mX', $res['stderr'], 'printable residue survives the escape strip');
+        $this->assertStringNotContainsString("\x1b", $res['stderr'], 'raw ESC must never ride a stderr diagnostic');
+    }
+
+    /**
+     * Run `php bin/candy-kv <args...>` in a child process with the per-test
+     * XDG_CONFIG_HOME, so the binary's own store isolation is under our control.
+     *
+     * @param list<string> $args
+     * @return array{stdout: string, stderr: string, exit: int}
+     */
+    private function runChild(array $args): array
+    {
+        $cmd = \array_merge([\PHP_BINARY, \dirname(__DIR__) . '/bin/candy-kv'], $args);
+        $env = \getenv();
+        $env['XDG_CONFIG_HOME'] = $this->childConfigHome;
+
+        $proc = \proc_open($cmd, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, $env);
+        $this->assertIsResource($proc, 'failed to launch the candy-kv CLI');
+        \fclose($pipes[0]); // argv-fed commands must never wait on a terminal.
+        $stdout = (string) \stream_get_contents($pipes[1]);
+        $stderr = (string) \stream_get_contents($pipes[2]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+
+        return ['stdout' => $stdout, 'stderr' => $stderr, 'exit' => \proc_close($proc)];
     }
 }

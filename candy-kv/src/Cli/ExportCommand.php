@@ -36,7 +36,8 @@ final class ExportCommand
     {
         // Usage-class error first: an unknown format is caller intent, not a store failure.
         if (!\in_array($format, ['json', 'yaml', 'yml'], true)) {
-            \fwrite(STDERR, "Unknown export format: {$format}. Use 'json', 'yaml' or 'yml'.\n");
+            // Sanitize-on-egress: $format is argv-chosen and may carry terminal escapes.
+            \fwrite(STDERR, "Unknown export format: " . Store::sanitizeForTty($format) . ". Use 'json', 'yaml' or 'yml'.\n");
             return 2;
         }
         try {
@@ -44,7 +45,9 @@ final class ExportCommand
             \fwrite(STDOUT, $output);
             return 0;
         } catch (\Throwable $e) {
-            \fwrite(STDERR, "Export failed: {$e->getMessage()}\n");
+            // Sanitize-on-egress: the reserved-key refusal message names store
+            // keys verbatim (poisoned stores choose them) — sanitize at the sink.
+            \fwrite(STDERR, "Export failed: " . Store::sanitizeForTty($e->getMessage()) . "\n");
             return 1;
         }
     }

@@ -48,7 +48,8 @@ final class ImportCommand
 
         if ($importer === null) {
             // Usage-class error: the format the caller asked for is not a format at all.
-            \fwrite(STDERR, "Unknown import format: {$format}. Use 'json', 'yaml' or 'yml'.\n");
+            // Sanitize-on-egress: $format is argv-chosen and may carry terminal escapes.
+            \fwrite(STDERR, "Unknown import format: " . Store::sanitizeForTty($format) . ". Use 'json', 'yaml' or 'yml'.\n");
             return 2;
         }
 
@@ -66,7 +67,8 @@ final class ImportCommand
                 }
             } else {
                 if (!\file_exists($path)) {
-                    \fwrite(STDERR, "File not found: {$path}\n");
+                    // Sanitize-on-egress: the path is caller-chosen argv bytes.
+                    \fwrite(STDERR, "File not found: " . Store::sanitizeForTty($path) . "\n");
                     return 1;
                 }
                 if ($format === 'yaml' || $format === 'yml') {
@@ -79,7 +81,10 @@ final class ImportCommand
             \fwrite(STDOUT, Lang::t($count === 1 ? 'cli.imported_one' : 'cli.imported_n', ['count' => $count]) . "\n");
             return 0;
         } catch (\Throwable $e) {
-            \fwrite(STDERR, "Import failed: {$e->getMessage()}\n");
+            // Sanitize-on-egress: importer failure texts name file-chosen keys
+            // (JsonImporter 'Entry "%s" has a %s value', YamlDialect binary/base64
+            // refusals) — attacker-chosen bytes must not reach the TTY raw.
+            \fwrite(STDERR, "Import failed: " . Store::sanitizeForTty($e->getMessage()) . "\n");
             return 1;
         }
     }
