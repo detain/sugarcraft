@@ -117,7 +117,7 @@ $email2 = new Email(
 
 | Port | Mode | What happens |
 |------|------|--------------|
-| 465 | Implicit TLS (`withImplicitTls()`) | Socket is TLS-wrapped at connect; STARTTLS never sent. |
+| 465 | Implicit TLS (auto-detected on 465; `withImplicitTls()` to override) | Socket is TLS-wrapped at connect; STARTTLS never sent. |
 | 587 | STARTTLS (**default**) | Plaintext connect, then `STARTTLS`; **required** — if the server does not advertise it or the upgrade fails, the send throws instead of downgrading. |
 | 25 | STARTTLS opportune-but-required | Same default policy applies: a server that refuses STARTTLS fails the send while `requireTls` is on. |
 
