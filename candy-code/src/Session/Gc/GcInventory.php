@@ -37,9 +37,13 @@ final class GcInventory
      * predating an ALTER still accounts correctly; absent tables are listed
      * with present=false rather than failing the run.
      *
+     * Public because GcSessionSizes folds the SAME column accounting per
+     * session (B2 engine touch, additive only): `gc status` table census and
+     * `gc sessions` rows reconcile exactly when they share one roster.
+     *
      * @var array<string,list<string>>
      */
-    private const TABLE_ROSTERS = [
+    public const TABLE_ROSTERS = [
         'sessions' => ['id', 'provider', 'model', 'system_prompt', 'name', 'metadata', 'kind', 'parent_id', 'parent_call_id', 'agent', 'status', 'title_source', 'cwd', 'git_branch', 'last_preview'],
         'messages' => ['id', 'session_id', 'role', 'content', 'tool_calls', 'tool_results', 'model'],
         'tool_calls' => ['id', 'session_id', 'message_id', 'tool_name', 'tool_args', 'tool_result'],
@@ -125,7 +129,13 @@ final class GcInventory
         return str_replace(['%', '?', '#'], ['%25', '%3F', '%23'], $path);
     }
 
-    private function openReadOnly(): PDO
+    /**
+     * The ONE sanctioned read-only connect arm for the whole gc engine
+     * (B2 engine touch, visibility only): GcSessionSizes and GcOrphanCensus
+     * fold over this handle so the engine keeps a single connect site family
+     * and the SqliteConnect census sees no second arm.
+     */
+    public function openReadOnly(): PDO
     {
         return SqliteConnect::openDsn(
             'sqlite:file:' . self::encodeFileUriComponent($this->dbPath) . '?mode=ro',
@@ -188,7 +198,7 @@ final class GcInventory
         return $rows;
     }
 
-    private function tablePresent(PDO $connection, string $table): bool
+    public static function tablePresent(PDO $connection, string $table): bool
     {
         $statement = $connection->prepare('SELECT 1 FROM sqlite_master WHERE type = \'table\' AND name = ? LIMIT 1');
         $statement->execute([$table]);
@@ -199,7 +209,7 @@ final class GcInventory
     /**
      * @return list<string>
      */
-    private function columnsOf(PDO $connection, string $table): array
+    public static function columnsOf(PDO $connection, string $table): array
     {
         $columns = [];
 
@@ -286,7 +296,7 @@ final class GcInventory
                 continue;
             }
 
-            $walk = $this->walkDirectory($path, 0);
+            $walk = self::walkDirectory($path, 0);
             $entry = [
                 'present' => true,
                 'bytes' => $walk['bytes'],
@@ -295,7 +305,7 @@ final class GcInventory
             ];
 
             if ($directory === SessionLock::DIRECTORY) {
-                $locks = $this->countLocks($path);
+                $locks = self::countLocks($path);
                 $entry['lock_files'] = $locks['files'];
                 $entry['lock_live'] = $locks['live'];
                 $entry['lock_stale'] = $locks['files'] - $locks['live'];
@@ -312,9 +322,13 @@ final class GcInventory
      * skipped, not walked). Depth is capped defensively against a planted
      * loop through real subdirectories.
      *
+     * Public (B2 engine touch, visibility only): GcSessionSizes attributes
+     * shadow-repo and journal bytes with THIS walk law, so the storage
+     * census and the per-session fold see identical byte semantics.
+     *
      * @return array{bytes:int,files:int,links:int}
      */
-    private function walkDirectory(string $directory, int $depth): array
+    public static function walkDirectory(string $directory, int $depth): array
     {
         $bytes = 0;
         $files = 0;
@@ -342,7 +356,7 @@ final class GcInventory
                     continue;
                 }
 
-                $nested = $this->walkDirectory($path, $depth + 1);
+                $nested = self::walkDirectory($path, $depth + 1);
                 $bytes += $nested['bytes'];
                 $files += $nested['files'];
                 $links += $nested['links'];
@@ -364,16 +378,22 @@ final class GcInventory
      * non-blocking shared probe that SUCCEEDS proves no writer holds the
      * lock (stale residue), a refusal proves a live holder.
      *
-     * @return array{files:int,live:int}
+     * Public (B2 engine touch, visibility plus one additive key): GcOrphanCensus
+     * reports the stale half through the SAME probe, never a second flock
+     * idiom. The new stale_bytes total is B3's cleanup target surface; the
+     * existing files/live consumers (walkStorage) are untouched.
+     *
+     * @return array{files:int,live:int,stale_bytes:int}
      */
-    private function countLocks(string $sessionsDirectory): array
+    public static function countLocks(string $sessionsDirectory): array
     {
         $files = 0;
         $live = 0;
+        $staleBytes = 0;
         $entries = scandir($sessionsDirectory);
 
         if ($entries === false) {
-            return ['files' => 0, 'live' => 0];
+            return ['files' => 0, 'live' => 0, 'stale_bytes' => 0];
         }
 
         foreach ($entries as $entry) {
@@ -397,12 +417,14 @@ final class GcInventory
 
             if (!flock($handle, LOCK_EX | LOCK_NB)) {
                 $live++;
+            } else {
+                flock($handle, LOCK_UN);
+                $staleBytes += (int) (@filesize($path) ?: 0);
             }
 
-            flock($handle, LOCK_UN);
             fclose($handle);
         }
 
-        return ['files' => $files, 'live' => $live];
+        return ['files' => $files, 'live' => $live, 'stale_bytes' => $staleBytes];
     }
 }
