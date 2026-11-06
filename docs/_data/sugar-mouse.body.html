@@ -78,7 +78,7 @@ if ($click !== null) {
 <tr><td>MouseEvent</td><td>::release(x, y, button)</td><td>Factory for release event</td></tr>
 <tr><td>MouseEvent</td><td>::drag(x, y, button) / ::scroll(x, y, button)</td><td>Factories for drag and scroll events</td></tr>
 <tr><td>MouseAction</td><td>Press / Release / Drag / Scroll</td><td>Mouse action enum</td></tr>
-<tr><td>ZoneClickTracker</td><td>->track(MouseEvent)</td><td>Feed event, receive ClickResult or null</td></tr>
+<tr><td>ZoneClickTracker</td><td>->track(event, ?Zone $hitZone = null)</td><td>Feed event, receive ClickResult or null</td></tr>
 <tr><td>ZoneClickTracker</td><td>->setPressZone(Zone, button)</td><td>Legacy two-call form for a pending press; the preferred one-call form is <code>track(event, zone)</code></td></tr>
 <tr><td>ClickResult</td><td>$zone / $button</td><td>Completed click result</td></tr>
 <tr><td>Selection</td><td>::new(rowFrom, rowTo, colFrom, colTo) / ->begin(row, col) / ->dragTo(row, col) / ->range() / ->clear()</td><td>Text-selection state machine bounded to a selectable region</td></tr>
@@ -137,6 +137,7 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($click)) {
 <tr><td>Manager</td><td>anyInBoundsAndUpdate(model, msg)</td><td>Route the hit into a Model — the sole emitter of <code>MsgZoneInBounds</code>, dispatched into <code>update()</code> when a zone matches, the raw event forwarded otherwise</td></tr>
 <tr><td>Manager</td><td>all() / clear(?id) / close() / setEnabled(bool)</td><td>Every zone, reset one or all, disable</td></tr>
 <tr><td>Manager</td><td>get(name)</td><td>Get zone by name</td></tr>
+<tr><td>Manager</td><td>setMotionTracking(bool)</td><td>Return the 1003+1006 enable (or LIFO disable) escape bytes</td></tr>
 <tr><td>Zone</td><td>inBounds(mouseMsg)</td><td>Test if mouse is inside zone</td></tr>
 <tr><td>ZoneHoverTracker</td><td>new(manager)</td><td>Track hover state over a manager</td></tr>
 <tr><td>ZoneHoverTracker</td><td>update(mouseMsg)</td><td>Process mouse event, return enter/exit msg</td></tr>
@@ -155,7 +156,6 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($click)) {
 <tr><td>ClickCounter</td><td>clickCount()</td><td>Current streak count (0 = no streak)</td></tr>
 <tr><td>DoubleClickMsg</td><td>zone</td><td>Zone of the second press</td></tr>
 <tr><td>TripleClickMsg</td><td>zone</td><td>Zone of the third press</td></tr>
-<tr><td>Manager</td><td>setMotionTracking(bool)</td><td>Return the 1003+1006 enable (or LIFO disable) escape bytes</td></tr>
 </table>
 
     <h3 style="margin-top: 40px;">Accessibility</h3>
