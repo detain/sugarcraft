@@ -70,7 +70,7 @@ ships as `App\` — called out in the table below.
 | **SugarReadline** (`sugar-readline/`) | 🟢 ready | Interactive prompts — Text, Confirm, Selection, MultiSelect, Textarea. State-machine model, no external readline dependency. |
 | **SugarDatepicker** (`sugar-datepicker/`) | 🟢 ready | Interactive month-grid date picker — keyboard navigation, min/max date constraints, locale day names, ANSI rendering. |
 | **SugarToast** (`sugar-toast/`) | 🟢 ready | Floating notification overlays — Info / Success / Warning / Error types, configurable position and auto-dismiss. |
-| **SugarFlexbox** (`sugar-flexbox/`) | 🟢 ready | FlexBox layout engine + simple sort/filter table — ratio-based sizing, gap, align, per-column styling. |
+| **SugarFlexbox** (`sugar-flexbox/`) | 🟢 ready | FlexBox layout engine + delta-rendering Table (sort/filter/cursor) + sticky Viewport + Scrollbar — ratio-based sizing, gap, align, per-column styling. |
 | **SugarDiff** (`sugar-diff/`) | 🟢 ready | Unified-diff engine — LCS line diff, context hunks, GNU `diff -u` writer + line-number scanner. Extracted from candy-code (BuildsUnifiedDiff; candy-code's DiffGutter keeps an app-side copy). |
 | **Sugar MCP Client** (`sugar-mcp-client/`) | 🟢 ready | MCP client core — JSON-RPC 2.0 codec + envelopes, stdio transport (newline framing, bounded lifecycle via sugar-core BoundedShutdown), initialize/tools handshake, deny-before-allow tool narrowing. Extracted from candy-code MCP stack; protocol per Model Context Protocol spec. |
 
