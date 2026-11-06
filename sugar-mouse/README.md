@@ -405,9 +405,11 @@ Beyond `mark()` / `scan()` / `get()`:
 ### Package-level facade
 
 `SugarCraft\Mouse\Zones\Zones` follows the package-level surface of
-bubblezone (`DefaultManager` + `Mark` / `Scan` / `Clear` / `Get` /
-`Close` / `SetEnabled` / `Enabled` / `NewPrefix` / `AnyInBounds*`)
-as static methods over a single shared `Manager`:
+bubblezone, Go names camelCased into PHP statics over a single shared
+`Manager`: `defaultManager()` / `setDefaultManager()` / `mark()` /
+`scan()` / `get()` / `clear()` / `close()` / `setEnabled()` / `isEnabled()`
+(the Go surface's `Enabled` is `isEnabled()` here) / `newPrefix()` /
+`anyInBounds()` / `anyInBoundsAndUpdate()`:
 
 ```php
 use SugarCraft\Mouse\Zones\Zones;
