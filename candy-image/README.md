@@ -51,7 +51,7 @@ composer require "sugarcraft/candy-image:@dev"
 ```
 
 **Phar channel.** CI rebuilds and republishes a rolling prerelease on every
-push to master:
+push to master that touches it or its dependency closure:
 
 ```bash
 curl -LO https://github.com/detain/sugarcraft/releases/download/candy-image/dev/candy-image.phar
