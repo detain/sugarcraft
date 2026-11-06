@@ -209,6 +209,12 @@ final class DocSurfaceTruthTest extends TestCase
      * extensions the code really leans on went undeclared. Composer metadata
      * is a doc surface: installers read it, nothing compiles it, so it is
      * pinned here alongside the prose surfaces.
+     *
+     * `ext-ffi` moved from `require` to `suggest`: this package's own code
+     * never touches FFI, and the legacy HostSshdTransport runs without it.
+     * The install-time gate that matters belongs to sugar-pty, whose manifest
+     * hard-requires `ext-ffi`; this test pins only our own side, because a
+     * split-repo clone has no sibling manifest to read.
      */
     public function testTheManifestNamesTheExtensionsThisCodeActuallyNeeds(): void
     {
@@ -224,11 +230,13 @@ final class DocSurfaceTruthTest extends TestCase
         // sentence standing: the words are asserted as present-in-denial.
         $this->assertStringContainsString('it ships no client, no port forwarding and no SFTP server', $flatDescription);
 
-        $this->assertArrayHasKey('ext-ffi', $manifest['require'], 'sugar-pty allocates the PTY over FFI');
+        $this->assertArrayNotHasKey('ext-ffi', $manifest['require'], 'the legacy transport runs the chain with no FFI at all');
 
         $suggest = $manifest['suggest'] ?? [];
         $this->assertIsArray($suggest);
         $this->assertArrayNotHasKey('ext-ssh2', $suggest, 'no ssh2 middleware ships in this library');
+        $this->assertArrayHasKey('ext-ffi', $suggest, 'sugar-pty allocates the PTY over FFI');
+        $this->assertStringContainsString('sugar-pty', (string) $suggest['ext-ffi']);
         $this->assertArrayHasKey('ext-pcntl', $suggest);
         $this->assertStringContainsString('PtyException', (string) $suggest['ext-pcntl']);
 

@@ -29,7 +29,6 @@
     },
     "require": {
         "php": "^8.3",
-        "ext-ffi": "*",
         "react/event-loop": "^1.6",
         "react/promise-timer": "^1.9",
         "sugarcraft/sugar-core": "dev-master",
@@ -40,6 +39,7 @@
         "sugarcraft/sugar-testing": "dev-master"
     },
     "suggest": {
+        "ext-ffi": "sugar-pty binds libc through FFI to allocate the PTY; without it the default InProcessTransport cannot run, while the legacy HostSshdTransport needs nothing. sugar-pty's own manifest still hard-requires ext-ffi, so install-time enforcement is transitive.",
         "ext-pcntl": "Forks and reaps the InProcessTransport session child and forwards SIGWINCH resizes; runChild() raises a PtyException when it is missing, and the legacy HostSshdTransport needs nothing."
     },
     "autoload": {

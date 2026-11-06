@@ -35,6 +35,15 @@ composer require sugarcraft/sugar-ssh-server
 - The **default `InProcessTransport`** (PTY supervisor) additionally requires:
   - **`ext-ffi`** — sugar-pty binds libc through FFI to allocate the PTY;
     without it the transport cannot run (and Windows is not a target).
+    This library's own manifest lists `ext-ffi` under `suggest`, not
+    `require` — the code in this package never touches FFI, and the legacy
+    transport below runs without it. Install-time enforcement nonetheless
+    still applies: the sugar-pty dependency hard-requires `ext-ffi` in its
+    own manifest, so `composer require` fails transitively on a host without
+    it until that cross-lib manifest is relaxed (a pending upstream ruling).
+    To install the legacy combination on such a host, add
+    `--ignore-platform-reqs=ext-ffi` — the default transport will then
+    refuse to run, exactly as above.
   - **`ext-pcntl`** — forking and reaping the session child. `runChild()`
     raises a `PtyException` when pcntl is missing; SIGWINCH size forwarding
     alone degrades gracefully without it.
@@ -708,9 +717,11 @@ Both extend `\RuntimeException`.
 ## ext-ssh2
 
 Nothing in this library uses the PECL `ssh2` extension, and `composer.json`
-says so: it declares `ext-ffi` (which sugar-pty needs to allocate the PTY at
-all), suggests `ext-pcntl` (which the default transport needs to fork and
-reap the session child), and lists no `ext-ssh2` — an earlier revision
+says so: it suggests `ext-ffi` (which sugar-pty needs to allocate the PTY at
+all — sugar-pty's own manifest still hard-requires it, so install-time
+enforcement survives transitively) and `ext-pcntl` (which the default
+transport needs to fork and reap the session child), and lists no
+`ext-ssh2` — an earlier revision
 suggested it for a "Ssh2 client middleware (forwarding, sftp helpers)" that
 was never built. There is no outbound client here, no port forwarding, and no
 SFTP server: `SftpStub` is a wiring example, quarantined only by its own docblock, and the
