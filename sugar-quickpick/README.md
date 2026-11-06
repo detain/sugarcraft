@@ -430,7 +430,7 @@ loop decodes terminal keys and forwards them. A conventional mapping:
 
 `hide()` is not `accept()`: the overlay simply stops rendering; reading
 `selected()` **before** hiding is your accept path. The `Model` interface's
-`update(QuickPick $hermit, string $msg)` expects exactly this forwarding —
+`update(QuickPick $model, string $msg)` expects exactly this forwarding —
 `$msg` strings are host-defined, nothing in this library decodes them.
 
 ## SIGWINCH Resize
@@ -466,8 +466,8 @@ use SugarCraft\QuickPick\QuickPick;
 use SugarCraft\QuickPick\Model;
 
 class MyModel implements Model {
-    public function update(QuickPick $hermit, string $msg): Model { ... }
-    public function view(QuickPick $hermit): string { ... }
+    public function update(QuickPick $model, string $msg): Model { ... }
+    public function view(QuickPick $model): string { ... }
 }
 ```
 

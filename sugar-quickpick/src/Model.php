@@ -24,19 +24,19 @@ interface Model
     /**
      * Handle a message and return the updated model.
      *
-     * @param QuickPick $hermit  The current QuickPick state
+     * @param QuickPick $model  The current QuickPick state
      * @param string $msg     A host-defined event string (this library ships
      *                        no key decoder — names like "enter" below are
      *                        the host's vocabulary, not recognised tokens)
      * @return Model  A new model instance (may be $this for same-state)
      */
-    public function update(QuickPick $hermit, string $msg): Model;
+    public function update(QuickPick $model, string $msg): Model;
 
     /**
      * Render the view given the current QuickPick state.
      *
-     * @param QuickPick $hermit  The current QuickPick state
+     * @param QuickPick $model  The current QuickPick state
      * @return string  The rendered view string
      */
-    public function view(QuickPick $hermit): string;
+    public function view(QuickPick $model): string;
 }

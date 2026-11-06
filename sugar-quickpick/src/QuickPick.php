@@ -395,20 +395,20 @@ final class QuickPick
         // Capture $this in a local variable so the static closure can
         // dereference the live QuickPick instance when invoked asynchronously
         // (the closure outlives the attachSigwinch() call frame).
-        $hermit = $this;
+        $model = $this;
         return SignalForwarder::attachSigwinchToFd(
             // A DESCRIPTOR, not `(int) \STDIN` — see self::STDIN_DESCRIPTOR for
             // why the cast silently targeted STDOUT instead.
             self::STDIN_DESCRIPTOR,
-            static fn(): array => $hermit->ttySize(),
-            static function (int $cols, int $rows) use ($hermit): void {
+            static fn(): array => $model->ttySize(),
+            static function (int $cols, int $rows) use ($model): void {
                 // mm3: an auto-width frame sized against the OLD geometry is
                 // stale the moment the terminal changes shape. Invalidate the
                 // cache on the instance this handler was attached to; clones
                 // made later never bound a handler (documented caveat — the
                 // README warns attachSigwinch() binds the attach-time object).
-                $hermit->invalidateAutoWidth();
-                $cb = $hermit->onResize;
+                $model->invalidateAutoWidth();
+                $cb = $model->onResize;
                 if ($cb !== null) {
                     $cb($cols, $rows);
                 }
