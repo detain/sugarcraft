@@ -397,6 +397,12 @@ $alert = (new Alert(ToastType::Success, 'Deployed'))
 $toast = $toast->push($alert);
 ```
 
+One consequence to know before relying on theme remaps: the type palette and
+the 16-colour SGR codes reach the terminal as packed 24-bit RGB (the renderer
+decodes them through sugar-core's canonical table), not as `31`/`33`-style
+slot numbers — so a user's 16-colour theme remaps will restyle the rest of the
+frame but will **not** restyle toasts.
+
 ## History Log
 
 `Toast` maintains an immutable history of every DISMISSED and every
@@ -515,9 +521,16 @@ Toast content is app-supplied — and in a TUI the terminal is a sink. `view()`
 renders alert text through the sugar-cellbuffer grid and re-encodes it, so the
 output stream contains only the SGR sequences the renderer itself emits:
 
+One exception to "re-encodes it": with an empty or dismissed queue `view()`
+returns the `$background` string **unchanged** — no grid round-trip happens at
+all, so that frame carries exactly the bytes the host passed in, whatever they
+are.
+
 - **Control bytes can't escape**: raw ESC payloads, OSC hyperlinks (`\e]8;;…\e\\`)
   and BEL in a message are never forwarded — the output carries no OSC, no BEL,
-  and no escape sequence the library did not build from a parsed style. A
+  and no escape sequence the library did not build from a parsed style **from
+  message or label content** (a host OSC-8 run living in the background frame is
+  a different channel and IS re-emitted intact — see the hyperlink bullet below). A
   forged `\e[2J` inside a message survives only as styled cells.
 - **Inline SGR in a message is honoured as styling** (bold/colour etc. are
   re-encoded through the grid). Treat that as a feature boundary: if the text

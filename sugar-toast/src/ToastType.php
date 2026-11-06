@@ -57,6 +57,11 @@ enum ToastType: string
 
     /**
      * ANSI color code for this type's icon (SGR).
+     *
+     * The renderer decodes these slots through sugar-core's canonical table
+     * and emits packed 24-bit RGB, so a user's 16-colour theme remap will not
+     * restyle toasts — the codes name the family, they are not what reaches
+     * the wire.
      */
     public function color(): string
     {
