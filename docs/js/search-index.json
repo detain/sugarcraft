@@ -11,7 +11,7 @@
   {"name":"CandyGitServer","slug":"candy-git-server","category":"app","description":"Smart-HTTP clone, fetch, auth-gated push and LFS live; SSH ForceCommand dispatcher and git-daemon advertisement at class level.","url":"lib/candy-git-server.html"},
   {"name":"CandyImage","slug":"candy-image","category":"app","description":"File in, best-protocol image out: auto/sixel/kitty/iterm2/half/quarter/ascii/symbols formats, cell sizing, and --dump-detect.","url":"lib/candy-image.html"},
   {"name":"CandyKv","slug":"candy-kv","category":"app","description":"Persistent key/value store — multiple databases, binary data, glob filtering.","url":"lib/candy-kv.html"},
-  {"name":"CandyMail","slug":"candy-mail","category":"app","description":"Email sending — SMTP, API transports, attachments.","url":"lib/candy-mail.html"},
+  {"name":"CandyMail","slug":"candy-mail","category":"app","description":"Email sending — SMTP, API transports, attachments","url":"lib/candy-mail.html"},
   {"name":"CandyMdview","slug":"candy-mdview","category":"app","description":"Markdown CLI viewer + pager.","url":"lib/candy-mdview.html"},
   {"name":"CandyMinesweeper","slug":"candy-minesweeper","category":"app","description":"Minesweeper on the SugarCraft stack.","url":"lib/candy-minesweeper.html"},
   {"name":"CandyScriptui","slug":"candy-scriptui","category":"app","description":"Interactive terminal widgets you can call from shell scripts — prompts, tables, spinners, and more.","url":"lib/candy-scriptui.html"},
