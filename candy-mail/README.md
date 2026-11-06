@@ -209,7 +209,7 @@ a host application opts in process-wide:
 ```
 
 The CLI performs this at startup; library embedders decide. Missing keys in an active
-locale fall back to English, never raw placeholders.
+locale fall back to English; the en catalog is the last stop before the raw key.
 
 ## Architecture
 
