@@ -148,7 +148,16 @@ final class Cli
             // chafa's --polite selects its async-worker render model; this
             // viewer is inline and synchronous by construction, so the flag
             // is accepted for muscle-memory and changes nothing (documented).
+            // Its value slot takes the empty, on and off spellings only —
+            // str_starts_with alone would otherwise swallow any junk tail.
             if ($token === '--polite' || str_starts_with($token, '--polite=')) {
+                $value = $token === '--polite' ? '' : strtolower(substr($token, strlen('--polite=')));
+                if (!in_array($value, ['', 'on', 'off'], true)) {
+                    self::err($stderr, Lang::t('cli.bad_value', ['flag' => '--polite', 'value' => substr($token, strlen('--polite='))]));
+
+                    return self::EXIT_USAGE;
+                }
+
                 continue;
             }
 

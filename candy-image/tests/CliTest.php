@@ -290,13 +290,22 @@ final class CliTest extends TestCase
     {
         // chicle accepts --polite (on|off); SC renders inline synchronously,
         // so the flag must parse cleanly and change nothing.
-        foreach (['--polite', '--polite=on', '--polite=off'] as $spelling) {
+        foreach (['--polite', '--polite=on', '--polite=off', '--polite='] as $spelling) {
             [$exit, , $err] = self::drive([$spelling]);
 
             $this->assertSame(Cli::EXIT_USAGE, $exit, $spelling);
             $this->assertStringContainsString('usage:', $err, $spelling);
             $this->assertStringNotContainsString('unknown option', $err, $spelling);
         }
+    }
+
+    public function testPoliteWithJunkValueIsRefused(): void
+    {
+        // n1 — the accept-all no-op must not swallow a typo'd value silently.
+        [$exit, , $err] = self::drive(['--polite=jam']);
+
+        $this->assertSame(Cli::EXIT_USAGE, $exit);
+        $this->assertStringContainsString("invalid value 'jam' for --polite", $err);
     }
 
     public function testWidthRejectsNonPositiveAndFractionalValues(): void
