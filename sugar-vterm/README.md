@@ -160,6 +160,9 @@ $grid->put(0, 0, new Cell(char: 'H')); // in place, returns void
 $grid->put(0, 1, new Cell(char: 'i'));
 echo $grid->cell(0, 0)->char;         // 'H'
 echo implode(',', $grid->dirtyRegion()); // minRow, maxRow, minCol, maxCol
+// On a never-dirtied grid those four are the sentinels (minRow/minCol =
+// PHP_INT_MAX, maxRow/maxCol = -1 — Buffer.php), so test emptiness with
+// maxRow < minRow, not by arithmetic on the corners.
 $grid = $grid->clear();                // NEW empty grid, same size; dirty box resets
 $grid = $grid->resize(100, 40);        // NEW grid; content within bounds kept,
                                        // cuts discarded, edge wide-base erased,
