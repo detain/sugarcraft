@@ -125,7 +125,7 @@ A custom `setFilterFn()` predicate still applies on top of the ranker.
 | **Border & Style composition** | `withBorder()` and `withStyle()` compose `sugar-style` `Border` and `Style` for window decoration |
 | **HelpBar / StatusBar** | `withHelpBar()` and `withStatusBar()` attach keyboard-shortcut and status-line renders below the overlay |
 | **SIGWINCH resize** | `withOnResize()` + `attachSigwinch()` forwards terminal resize events via `SignalForwarder::attachSigwinchToFd` |
-| **Colorless by design** | The frame itself emits no color — pure Unicode runes (the default row decoration is the `●` cursor dot plus plain ordinals, and `setItemFormatter()` replaces it wholesale). SGR appears only where the host opts in (`setMatchStyle()`, the item formatter, `withStyle()`), so there is nothing for `NO_COLOR` to suppress |
+| **Colorless by design** | The frame itself emits no color — pure Unicode runes (the default row decoration is the `●` cursor dot plus plain ordinals, and `setItemFormatter()` replaces it wholesale). SGR appears only where the host opts in (`setMatchStyle()`, the item formatter, `withStyle()`) — and once opted in, those escapes go out unconditionally: honoring `NO_COLOR`/`CLICOLOR` is the host's job (skip the opt-ins on dumb terminals, or prefer the two-channel emphasis of runes that needs no color) |
 
 ## Architecture
 
