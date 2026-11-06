@@ -363,7 +363,11 @@ final class Reel
      * Attach a subtitle file (WebVTT or SRT) to the player.
      *
      * Returns a new Reel (immutable). The file is read and parsed at play()
-     * time; a missing or unreadable file is silently ignored (no subtitles).
+     * time; a missing, oversized, or unreadable file does NOT fail the play —
+     * it is announced-and-continued: readSubtitleFile() names the path on the
+     * error log (subtitle.unreadable, subtitle.too_large) and playback
+     * proceeds without captions, matching what the README's subtitle section
+     * has promised since the docs-reviews wave.
      */
     public function withSubtitles(string $path): self
     {
