@@ -502,6 +502,23 @@ mid-flight when the process died always **re-runs in full** — records are per
 whole stage, and there is no partial credit inside a stage (or inside a
 `parallel` sub-stage).
 
+Every record is stamped with the identity of the process that wrote it: its
+pid, plus that process's start time where the platform can read one. That is
+what lets a fresh session tell the three shapes the same file can stand for.
+A record left by a cooperative stop — `pause`, or a signal the engine caught —
+carries a clean marker and reads **paused**, exactly as always, whether or not
+its writer still lives. A record written by ordinary stage progress and never
+revised is crash-class: if its writer process is verifiably gone the run reads
+**orphaned** (progress you can resume that was never a pause you chose), and
+while that writer is verifiably still live elsewhere the run reads **running**
+from every process, so a second `resume` of one live run is refused rather
+than silently stealing it. A recycled pid cannot masquerade: a recorded start
+time that does not match the process now holding the pid settles it exactly,
+and where no start time is readable at all a stale heartbeat past
+`ORPHAN_HEARTBEAT_STALE_SECONDS` (two hours — twice the default stage timeout)
+decides for the dead. Records written before the stamps existed carry none and
+keep behaving as they always did.
+
 The record also carries a purely additive `stageInputHashes` map — per
 settled stage, a sha256 over its pre-interpolation prompt templates plus each
 task's model and schema identity. It is the substrate a future resume-side
@@ -541,7 +558,11 @@ name; both resolve to the same run.
   resumed run completes or fails, and a second `resume` is refused. To retry
   a resume that failed again, `pause` it again first.
 - **`status`** reports a live run as `running` (or `paused` once a pause is
-  requested), then the pause file's status, then a finished run's final status
+  requested), then the pause file's status reconciled against the writer that
+  stamped it — a cooperative or pre-stamp record reads `paused`, a crashed
+  run's progress record reads `orphaned` (and resumes exactly like a pause),
+  and a record whose stamped writer is still live in another process reads
+  `running`, where a `resume` is refused — then a finished run's final status
   (`completed` / `failed`) for runs this session performed.
   When a session `CommandContext` is supplied and the workflow's PAUSED ledger
   resolves from HOME, `status` additionally appends a per-stage ledger
