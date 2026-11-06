@@ -19,11 +19,18 @@ namespace SugarCraft\Kv;
  * implement exactly this dialect — including proper double-quote escaping
  * (backslashes, newlines, control characters) and quoted-key support — so
  * an export of `C:\temp` or a multi-line value reimports intact instead of
- * corrupting. Within the dialect's flat-scalar shape the two engines read
- * each other's output; the one asymmetry is that symfony may wrap very
- * long plain scalars across lines, which the fallback refuses loudly
- * rather than half-parses. A single process always uses one engine for
- * both directions, so its own round-trips are exact.
+ * corrupting. The two engines are NOT interchangeable parsers, though each
+ * reads its own output exactly: the fallback refuses an unquoted
+ * colon-containing key that symfony accepts (`e:f: hey` is the key `e:f`
+ * under symfony), it keeps `true`-style value tokens as literal text where
+ * symfony decodes them to a bool (the importer refuses bools, so such a
+ * document imports on the fallback and is refused under symfony; a decoded
+ * int stringifies on import and lands identically either way), and symfony
+ * may wrap very long plain scalars across lines, which the fallback
+ * refuses loudly rather than half-parses. A single process always uses one
+ * engine for both directions, so its own round-trips are exact.
+ * {@see \SugarCraft\Kv\Import\YamlImporter::importFromString()} is where
+ * the bool refusal lands.
  *
  * @internal This class is the export/import wire format, not a public API.
  */
