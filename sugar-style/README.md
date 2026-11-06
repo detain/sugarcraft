@@ -783,6 +783,26 @@ verbatim (e.g. `Color::hex` echoes the bad string into
 `invalid hex color: {hex}`) — treat caught throw text as untrusted if you
 render it.
 
+## Internationalisation
+
+User-facing runtime messages are translated through the core `T`
+lookup (`SugarCraft\Core\I18n\T`; exact match → base language → `en` →
+raw key). The shipped catalogue is **16 locales** under `lang/`
+(`ar` `cs` `de` `en` `es` `fr` `it` `ja` `ko` `nl` `pl` `pt` `pt-br`
+`ru` `tr` `zh-cn`), `en.php` being the source of truth, and it carries
+**12 keys**: the width/height/max-width/max-height/tab-width/label
+non-negative guards, `style.hyperlink_id_delimiter`,
+`style.markup_depth`, `style.border_toggles_count`,
+`style.expand_sides_count`, `table.width_nonneg` and
+`tree.offset_nonneg`. Call sites: `src/Style.php`, `src/Markup.php`,
+`src/Table/Table.php`, `src/Tree/Tree.php`, `src/Bar/HelpBar.php` and
+`src/Bar/StatusBar.php`. Locale selection is the core's: `T::setLocale()`
+is explicit, otherwise `T::detect()` consults `LC_ALL` → `LC_MESSAGES` →
+`LANG` (sugar-core `src/I18n/T.php`). One deliberate exception: the
+constraint layer under `src/Layout/` speaks hard-coded English — its
+error strings are not routed through `Lang` (see the disclaimer in the
+Layout section above).
+
 ## Accessibility
 
 Colour alone must never carry meaning (WCAG 1.4.1): pair colour-coded
