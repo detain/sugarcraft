@@ -113,13 +113,15 @@ phase (Phase 2) on top and `TerminalProbe` the terminfo and `TERM_PROGRAM`
 upgrade phases (Phases 2-3) — the chain's answer is the floor those phases can
 raise, never the ceiling. Measured: `{TERM_PROGRAM: WezTerm, TERM: xterm}`
 answers Ansi on `Palette` but TrueColor on `TerminalProbe` (Phase-3 upgrade).
-`README`, the `DetectionChain` docblock and the tests follow this one numbering:
+`README`, the `DetectionChain` docblock and the tests follow this one numbering
+(the chain levels `truecolor`/`ansi256`/`ansi`/`ascii`/`none` map to the enum
+cases `TrueColor`/`Ansi256`/`Ansi`/`Ascii`/`NoTTY` respectively):
 
 1. `CLICOLOR_FORCE=1` → TrueColor (overrides every env leg — step 0 can still outrank it)
-2. `FORCE_COLOR` (non-empty) → level: `true|yes|on|>=3` TrueColor, `2` Ansi256, `1` Ansi; any other spelling (`0`/`false`/`off`/…) → `Ascii` (disable color, keep decoration)
+2. `FORCE_COLOR` (non-empty) → level: `true|yes|on|>=3` TrueColor, `2` Ansi256, `1` Ansi; any other spelling (`0`/`false`/`off`/…) → `Ascii` (color reduced to the black/white pair, decoration kept)
 3. `NO_COLOR` (set and **non**-empty; `""` = unset per no-color.org) → the `NoTTY` rung — strips **all** ANSI including decoration (bold/underline gone); for a color-only strip pin `Palette::withProfile(ColorProfile::Ascii)`
-4. `CLICOLOR=0` → none
-5. `TERM=dumb` (case-insensitive) → none
+4. `CLICOLOR=0` → none (the `NoTTY` rung)
+5. `TERM=dumb` (case-insensitive) → none (the `NoTTY` rung)
 6. `COLORTERM=24bit|truecolor|yes` → TrueColor (`yes` is the legacy "this is a
    color terminal" marker, honored here as TrueColor — beyond its historical
    meaning; pin a profile explicitly if you want the conservative reading)
@@ -172,20 +174,22 @@ The ladder's env legs, one table row per variable, in ladder order:
 | Env var | Ladder step | Effect |
 |---------|-------------|--------|
 | `CLICOLOR_FORCE=1` | 1 | force TrueColor past every env suppression leg, `NO_COLOR` included (step 1; the step-0 stream TTY gate still outranks it on stream-taking surfaces) |
-| `FORCE_COLOR` | 2 | non-empty level override honored by **all** surfaces through the chain (step 2): `true/yes/on/>=3` TrueColor, `2` Ansi256, `1` Ansi; falsy spellings (`0/false/off/no`) land on the `Ascii` floor — decoration kept, color dropped. Outranks `NO_COLOR` by design |
+| `FORCE_COLOR` | 2 | non-empty level override honored by **all** surfaces through the chain (step 2): `true/yes/on/>=3` TrueColor, `2` Ansi256, `1` Ansi; falsy spellings (`0/false/off/no`) land on the `Ascii` floor — decoration kept, color reduced to the black/white pair. Outranks `NO_COLOR` by design |
 | `NO_COLOR` | 3 | set to a **non-empty** value (`""` = unset per no-color.org) → no color via the `NoTTY` rung / `NoColor` capability — `stripAnsi()` drops **all** ANSI including decoration (`\x1b[1m`/`\x1b[4m` gone). Contrast: falsy `FORCE_COLOR` lands the `Ascii` floor (step 2) which keeps decoration and reduces color to the black/white pair. Want NO_COLOR to keep bold/underline? Pin `Palette::withProfile(ColorProfile::Ascii)` |
 | `CLICOLOR=0` | 4 | suppress color |
 | `TERM=dumb` | 5 | case-insensitive; suppresses color — outranks `COLORTERM` (dumb is a promise of minimal capabilities) |
 | `COLORTERM=24bit\|truecolor\|yes` | 6 | TrueColor (exact value match, case-insensitive); `yes` is the legacy color-terminal marker, promoted here beyond its historical "some color" meaning |
 | `TERM_PROGRAM` | 7 | `iTerm.app` → TrueColor rung (step 7); phase 3 additionally maps WezTerm/vscode/Ghostty → TrueColor, iTerm.app → ITerm2, Hyper → Hyperlinks |
 | `WT_SESSION` | 8 | set, non-empty → Windows Terminal, TrueColor |
-| `GOOGLE_CLOUD_SHELL` | 9 | set, non-empty (any truthy spelling) → TrueColor |
+| `GOOGLE_CLOUD_SHELL` | 9 | set to any non-empty value (even `false`) → TrueColor |
 | `TMUX` / `STY` | 10 | set + base TERM already begins `screen*`/`tmux*` → Ansi256 (step 10). Under tmux/screen the inner TERM *is* the base — no re-anchoring to the outer terminal happens |
 | `TERM` | 11-12 | ladder levels: `*-256color`/`xterm-kitty`/`xterm-ghostty` → Ansi256; `xterm*`/`screen*`/`tmux*` prefix → Ansi (all case-insensitive) |
 | `REDUCE_MOTION` / `PREFERS_REDUCED_MOTION` | — | non-empty and not `0/false/no/off` → `Probe::reducedMotion()` true (motion preference, outside the color ladder) |
 
 `NoTTY` labels the zero-color rung; suppression vars land there even on a real
-TTY (`Probe::isNoColor()` and the `NoColor` capability name the same decision).
+TTY. The two names that surface it are not synonyms: `Probe::isNoColor()` names
+the `NO_COLOR` leg only, while the `NoColor` capability is broader — it covers
+all three suppression vars (`NO_COLOR`, `CLICOLOR=0`, `TERM=dumb`).
 `ProbeReport::colorDescription()` is report prose; the enum's `label()` and
 `description()` are the canonical vocabulary.
 
@@ -451,8 +455,10 @@ Beyond the env ladder above, the library exposes a richer capability surface:
   slot reclamation kills children whose loop was abandoned, so the public
   `AsyncProbe::MAX_CONCURRENT_PROBES = 4` cap can never wedge. **Every async
   settle answers from the detection chain — no blocking exec ever runs on the
-  loop thread.** The sync `Probe::colorProfile()` runs only when no event loop
-  is present at all. Env suppression, a missing infocmp binary, an unset or
+  loop thread.** `AsyncProbe` falls back to the sync `Probe::colorProfile()`
+  only when no event loop is present at all; the sync probe itself runs
+  whenever called, so invoking it from inside a live loop can block that loop
+  on the optional phase-2 `infocmp` exec. Env suppression, a missing infocmp binary, an unset or
   `dumb` TERM, the cap being reached, or a timeout/kill all settle to the
   chain's answer. Results are advisory only.
 
@@ -470,7 +476,7 @@ Beyond the env ladder above, the library exposes a richer capability surface:
 
 ## Deprecation: StandardColors mutable statics
 
-_Dated 2026-10-24 (owner ruling 2b)._
+Deprecated as of 2026-10-24.
 
 The **16** `public static Color` properties on `StandardColors` (`$black` …
 `$brightWhite`) are now **deprecated** as a *writable* surface. They are
