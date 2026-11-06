@@ -186,7 +186,7 @@ export CANDY_MAIL_SMTP_REQUIRE_TLS=1          # default ON; ON words 1/true/yes/
 export CANDY_MAIL_SMTP_IMPLICIT_TLS=0         # set 1 for port-465 style direct TLS (same word vocabulary)
 export CANDY_MAIL_SMTP_HELO=mail.example.com  # EHLO/HELO identity (letters, digits, dots, hyphens only)
 export CANDY_MAIL_SMTP_CA_FILE=/path/ca.pem   # custom CA bundle for TLS verification
-export CANDY_MAIL_SMTP_TIMEOUT=30             # per-response seconds budget, 1..3600 (default 30)
+export CANDY_MAIL_SMTP_TIMEOUT=30             # connect + per-response seconds budget, 1..3600 (default 30)
 export CANDY_MAIL_FROM=me@example.com         # Sender default — REQUIRED unless --from passed (never fabricated)
 export CANDY_MAIL_SIGNATURE="Sent with CandyMail"  # Appended to body
 # Pre-rename POP_* exports map onto the 11 known CANDY_MAIL_* names only;
