@@ -66,9 +66,9 @@ Bottom bar</code></pre>
 <tr><td>Node</td><td>noBorder(Node)</td><td>Static no-border wrapper — suppresses every frame and every divider through the whole subtree</td></tr>
 <tr><td>Node</td><td>totalWidth() / totalHeight()</td><td>Footprint the node claims: natural content, floored by min*, capped by max*, plus padding, frame and margin</td></tr>
 <tr><td>Node</td><td>withMinWidth(int)</td><td>Floor for the natural width. In the flex path it floors; in the legacy equal-split fallback a min* acts as a proportional weight, not a floor</td></tr>
-<tr><td>Node</td><td>withMaxWidth(int)</td><td>Cap on the node's total footprint (frame + padding + content) — what a flex basis claims. 0 means no cap</td></tr>
+<tr><td>Node</td><td>withMaxWidth(int)</td><td>Cap on the node's painted footprint (frame + padding + content) — what a flex basis claims. 0 means no cap; margin rides outside the cap, matching totalWidth()</td></tr>
 <tr><td>Node</td><td>withMinHeight(int)</td><td>Floor for the natural height. In the flex path it floors; in the legacy equal-split fallback a min* acts as a proportional weight, not a floor</td></tr>
-<tr><td>Node</td><td>withMaxHeight(int)</td><td>Cap on the node's total footprint (frame + padding + content) — what a flex basis claims. 0 means no cap</td></tr>
+<tr><td>Node</td><td>withMaxHeight(int)</td><td>Cap on the node's painted footprint (frame + padding + content) — what a flex basis claims. 0 means no cap; margin rides outside the cap, matching totalHeight()</td></tr>
 <tr><td>Node</td><td>withPadding(int)</td><td>Inner padding (cells)</td></tr>
 <tr><td>Node</td><td>withBorder(bool)</td><td>Show/hide box border</td></tr>
 <tr><td>Node</td><td>withSpacing(int)</td><td>Gap between children (cells)</td></tr>

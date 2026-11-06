@@ -488,7 +488,12 @@ final class SugarPanels
                 ? $w - $b - $offsets[$i]
                 : $offsets[$i + 1] - $offsets[$i] - $sp;
             if ($child->maxWidth > 0) {
-                $ow = \min($ow, $child->maxWidth);
+                // The cap rides the child's TOTAL claim (maxWidth + margin):
+                // renderNode() insets the child's margin from this region
+                // before the child's own cap applies, so capping at bare
+                // maxWidth charged the margin twice and squeezed margined
+                // children below what totalWidth() measures (PB-PANELS-34).
+                $ow = \min($ow, $child->maxWidth + $child->marginWidth());
             }
 
             $this->renderNode($child, $ox, $y + $b, $ow, $availableH, $cells, $noFrames);
@@ -566,14 +571,16 @@ final class SugarPanels
                 ? $h - $b - $offsets[$i]
                 : $offsets[$i + 1] - $offsets[$i] - $sp;
             if ($child->maxHeight > 0) {
-                $oh = \min($oh, $child->maxHeight);
+                // Margin allowance per PB-PANELS-34; see the horizontal site
+                // for why the cap rides the child's TOTAL claim.
+                $oh = \min($oh, $child->maxHeight + $child->marginHeight());
             }
             // A stacked child is capped on its COLUMNS too. Only the horizontal
             // layout used to honour maxWidth, so the same setter silently meant
             // 'row height' in a vertical stack and 'box width' anywhere else.
             $ow = $availableW;
             if ($child->maxWidth > 0) {
-                $ow = \min($ow, $child->maxWidth);
+                $ow = \min($ow, $child->maxWidth + $child->marginWidth());
             }
 
             $this->renderNode($child, $x + $b, $oy, $ow, $oh, $cells, $noFrames);

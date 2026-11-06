@@ -281,6 +281,25 @@ final class Node
     }
 
     /**
+     * The node's own horizontal margin (left + right).
+     *
+     * A max* cap covers the painted box only — frame, padding and content —
+     * while margin rides OUTSIDE the cap, so totalWidth() reaches
+     * maxWidth + marginWidth(). Callers capping a child's region must allow
+     * for it: charging the margin twice clips the child below what it claims.
+     */
+    public function marginWidth(): int
+    {
+        return $this->margin[3] + $this->margin[1]; // left + right
+    }
+
+    /** Vertical counterpart of marginWidth(): top + bottom. */
+    public function marginHeight(): int
+    {
+        return $this->margin[0] + $this->margin[2]; // top + bottom
+    }
+
+    /**
      * Horizontal footprint, computed the way the renderer will spend it.
      *
      * $noFrames reproduces the noBorder() wrapper's suppression: inside a
@@ -299,7 +318,7 @@ final class Node
         // the space a fixed sibling must reserve in flex layout — is its content
         // width PLUS its left+right margin. Omitting it makes margined children
         // under-claim, so the flex solver overlaps or clips them.
-        $marginW = $this->margin[3] + $this->margin[1]; // left + right
+        $marginW = $this->marginWidth();
         $frame   = $this->border === true && $noFrames === false;
 
         if ($this->kind === self::LEAF) {
@@ -352,7 +371,7 @@ final class Node
     {
         // See totalWidth(): the renderer insets by margin, so a node's real
         // vertical footprint includes its own top+bottom margin.
-        $marginH = $this->margin[0] + $this->margin[2]; // top + bottom
+        $marginH = $this->marginHeight();
         $frame   = $this->border === true && $noFrames === false;
 
         if ($this->kind === self::LEAF) {
