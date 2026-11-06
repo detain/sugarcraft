@@ -9,6 +9,8 @@
         "ansi",
         "vt100",
         "xterm",
+        "vt",
+        "charmbracelet",
         "sugarcraft"
     ],
     "homepage": "https://github.com/sugarcraft/sugar-vterm",
