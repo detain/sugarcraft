@@ -86,7 +86,7 @@ echo "cursor at {$cursor->row},{$cursor->col}\n";
 | Mode | `Mode\Mode` | DEC private mode flags (`DECSET`/`DECRST`) including DECAWM auto-wrap |
 | Hyperlink | `Hyperlink\Hyperlink` | OSC 8 URL + id tracker |
 | Scrollback | `Screen\Scrollback` | Ring buffer — stores rows that scroll off the top (default 1000) |
-| Msg | `Msg\FocusInMsg / FocusOutMsg` | Focus-in / focus-out event records (CSI I/O, mode 1004) |
+| Msg | `Msg\FocusInMsg / FocusOutMsg` | Focus-in / focus-out event records (CSI I and CSI O, mode 1004) |
 | Theme | `Theme` | 256-color palette + default fg/bg + factory methods for named themes |
 | Catalog | `Themes` | Bundled theme catalog: `all()` and `v1()` accessors |
 
@@ -281,7 +281,7 @@ implements the superset.
 | `s` | DECSC | `scosc()` | Save cursor + Sgr + origin mode (emulator); the renderer saves the cursor position only. |
 | `u` | DECRC | `scorc()` | Restore cursor + Sgr + origin mode (emulator); the renderer restores the position only. |
 | `<n> SP q` | DECSCUSR | (Handler) | Cursor shape 0–6 (block/underline/bar × blink). |
-| `<n> I/O` | Focus | (Handler) | Focus-in / focus-out report (under `?1004 h`). |
+| `<n> I` / `<n> O` | Focus | (Handler) | Focus-in (`I`) / focus-out (`O`) report (under `?1004 h`). |
 
 `(Handler)` rows live in the full `Handler/ScreenHandler` dispatcher used
 by `SugarCraft\Vterm\Terminal\Terminal`; the renderer's upstream
