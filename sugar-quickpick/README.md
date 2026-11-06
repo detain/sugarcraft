@@ -370,6 +370,9 @@ $bar = $bar->withShortcut('Ctrl+R', 'reload')
 $bar = $bar->show();
 $bar = $bar->hide();
 
+// Read back the entries (key → description)
+$shortcuts = $bar->shortcuts();
+
 // Render: "↑↓: navigate │ Enter: select │ Esc: close"
 echo $bar->render();
 ```
@@ -393,6 +396,10 @@ $bar = $bar->withMessage('Searching...')
 // Show or hide
 $bar = $bar->show();
 $bar = $bar->hide();
+
+// Read back the message and the named segments (name → value)
+$message  = $bar->message();
+$segments = $bar->segments();
 
 // Render: "[count: 7] Searching..."
 echo $bar->render();
