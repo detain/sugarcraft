@@ -144,9 +144,11 @@ The key table is fixed in the player model; keys are not rebindable.
   `Probe::reducedMotion()` from `sugar-colorprofile`) — a motion-averse
   user must opt in with `--paused` (or step with `←`/`→`) rather than
   relying on the environment signal. This is a known gap against the
-  fleet convention, disclosed here rather than silently ignored; the
-  engine exposes no autoplay-suppression seam for the app to honour the
-  flag today.
+  fleet convention, disclosed here rather than silently ignored; the app
+  does not read the env signal today, but the seam already exists
+  (`Player`'s `paused:` constructor argument — which `--paused` feeds — and
+  `Probe::reducedMotion()` from `sugar-colorprofile`), so auto-detection
+  would be a small opt-in change.
 
 ## Architecture
 
