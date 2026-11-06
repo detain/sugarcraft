@@ -841,6 +841,10 @@ final class TreeWideGuardRosterTest extends TestCase
         // G5 weld, in-step: tearDown()'s removeDirectory() sweeps the
         // sys_get_temp_dir() pause-record fixture dir setUp() made.
         'Workflows/WorkflowIncrementalPauseTest.php' => ['scandir($dir)'],
+        // P2 fix round, in-step: tearDown()'s removeDirectory() sweeps the
+        // sys_get_temp_dir() candy_code_wf_orphan_* tree setUp() made — the
+        // real-SIGKILL harness' pause records and child residue live there.
+        'Workflows/WorkflowOrphanedRunTest.php' => ['scandir($dir)'],
         'Workflows/WorkflowRegistryTest.php' => ['scandir($dir)'],
         // tearDown() removes the sys_get_temp_dir() HOME sandbox setUp() made.
         'Workflows/WorkflowRetriesTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
