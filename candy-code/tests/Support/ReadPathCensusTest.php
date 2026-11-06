@@ -176,6 +176,13 @@ final class ReadPathCensusTest extends TestCase
         'Agents/ForeignAgentPresetRegistry.php|file_get_contents' => [
             'CONTAINED — the foreign preset body, behind the same pair',
         ],
+        'Agents/CapabilityCardStore.php|scandir' => [
+            'NAMES_ONLY — discover() lists the session buckets under ~/.candy-code/capabilities; links and non-directories are skipped, nothing is read here',
+            'NAMES_ONLY — discover() lists one bucket\'s manifest names; only plain .json files that pass the link, containment and size gates are read below',
+        ],
+        'Agents/CapabilityCardStore.php|file_get_contents' => [
+            'OWNED_HOME — one manifest whose path is under the root this class derives from HomeDirectory::owned(); bytes are fail-closed shape-checked by CapabilityCard::fromJson and the name must match the file, and are DISPLAY-only downstream',
+        ],
         'Agents/Live/AgentRunCards.php|file_get_contents' => [
             'SELF_LOCATED — a run card under ~/.candy-code/mailboxes/<session>/<run>/, found by the glob over '
                 . 'the session directory this class names; every field is shape-checked as untrusted',
