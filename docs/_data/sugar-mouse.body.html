@@ -111,7 +111,7 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($mouseMsg)) {
       <div class="feature"><strong>One-call scan</strong><span><code>$z->scan($frame)</code> records every marker's 1-based cell bounding box and strips them in one call (parse + strip); the implementation walks the string more than once. It strips exactly the tags sugar-mouse's <code>Scan::parse()</code> decodes (ids that pass <code>Mark::isValidId()</code>); any other stray sentinel loses only its own 3 bytes and the text after it is kept, so the printed frame matches the measured one.</span></div>
       <div class="feature"><strong>Bounds query</strong><span><code>$z->get('btn:ok')?->inBounds($mouseMsg)</code> — clean predicate, no coordinate math.</span></div>
       <div class="feature"><strong>ANSI-aware</strong><span>Width calculation honours SGR + Unicode grapheme widths; emojis, CJK, combining marks all account correctly.</span></div>
-      <div class="feature"><strong>Manager isolation</strong><span>One package, two layers: <code>Manager::newGlobal()</code> app-wide, or <code>Manager::newPrefix()</code> per-component managers whose ids namespace every marker for nested mouse handling.</span></div>
+      <div class="feature"><strong>Manager isolation</strong><span>One package, two layers: <code>Manager::newGlobal()</code> builds a fresh un-prefixed manager independent of every other instance — NOT the shared default (that is <code>Zones::defaultManager()</code>); <code>Manager::newPrefix()</code> builds per-component managers whose ids namespace every marker for nested mouse handling.</span></div>
       <div class="feature"><strong>Plays with SugarCraft</strong><span>Drop into your Model — every <code>view()</code> call rescans, every MouseMsg routes.</span></div>
       <div class="feature"><strong>Hover tracking</strong><span><code>ZoneHoverTracker</code> emits <code>ZoneEnterMsg</code> / <code>ZoneExitMsg</code> on cursor boundary crossings.</span></div>
       <div class="feature"><strong>Drag tracking</strong><span><code>DragTracker</code> tracks press → move → release drags across zones; emits <code>ZoneDragStartMsg</code> / <code>ZoneDragMoveMsg</code> / <code>ZoneDragEndMsg</code>.</span></div>
@@ -122,7 +122,7 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($mouseMsg)) {
     <h3 style="margin-top: 32px;">Zones API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Manager</td><td>newGlobal()</td><td>Create global manager</td></tr>
+<tr><td>Manager</td><td>newGlobal()</td><td>Build a fresh un-prefixed manager independent of every other instance — NOT the shared default (that is <code>Zones::defaultManager()</code>)</td></tr>
 <tr><td>Manager</td><td>newPrefix(?prefix)</td><td>Create prefixed manager for isolation</td></tr>
 <tr><td>Manager</td><td>mark(id, content)</td><td>Wrap output with zone marker</td></tr>
 <tr><td>Manager</td><td>scan(rendered, ?width)</td><td>Record this namespace's positions, strip markers (delegates to <code>Scan::strip</code>); zones merge by id and persist until replaced or cleared</td></tr>
