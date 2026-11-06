@@ -107,6 +107,12 @@ class AudioPlayer
      * Silent no-op when:
      * - Neither ffplay nor mpv is installed (Probe::ffplay() returns null
      *   and `command -v mpv` also fails).
+     * - The audio source is option-shaped: a path starting with '-' would be
+     *   parsed as an ffplay/mpv command-line OPTION rather than a file, and
+     *   mpv's --script= flag is arbitrary Lua execution — this route only
+     *   ever speaks local paths and http(s) URLs, so such a source is never
+     *   legitimate. Refusing it silently keeps a hostile argument out of the
+     *   child's argv.
      * - The audio process exits immediately (isPlaying() will return false).
      */
     public function start(): void

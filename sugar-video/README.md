@@ -369,6 +369,8 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
 
 - **Audio plays at 1.0× regardless of playback speed.** Changing speed with `[`/`]` only affects video pacing. The audio companion (ffplay/mpv) always plays at normal speed. A/V will diverge noticeably when using speeds other than 1.0×.
 
+- **An option-shaped audio source is refused silently.** A video path that begins with `-` is never handed to ffplay/mpv: both parse leading-dash arguments as command-line options, and `mpv --script=` executes arbitrary Lua. The audio companion simply stays off for such a source (video playback is unaffected) — the route speaks only plain local paths and http(s) URLs, so a `-`-prefixed source is never legitimate anyway. Announcing the refusal is a possible future code leg, pending owner ruling.
+
 - **Seeking repositions audio but not frame-exactly.** A seek creates a new AudioPlayer at the correct offset, but the video frame timing and audio timing are only approximately synchronized (frame-skip resync keeps them close at 1.0×).
 
 - **GIF playback fills the terminal in HalfBlock mode** (each cell = 2 source rows). In text modes (ascii/ansi256/truecolor) the GIF renders at its native pixel dimensions without 2× vertical scaling.
