@@ -8,7 +8,9 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Mouse\Zones\Zone;
 
 /**
- * Emitted on every mouse-move event while a drag is in progress.
+ * Emitted when the cursor crosses into a different zone during a drag —
+ * motion inside the current zone emits nothing, and dragging off all zones
+ * clears the current zone silently (there is no zone to name).
  *
  * The origin zone never changes for the lifetime of a drag; the current
  * zone updates whenever the cursor crosses a zone boundary.
