@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Workflows;
 
 use SugarCraft\Core\Util\AtomicJsonFile;
+use SugarCraft\Code\Background\BackgroundSupervisor;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\PrivateDir;
+use SugarCraft\Code\Support\ProcessTree;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentManager;
@@ -51,6 +53,19 @@ use SugarCraft\Code\Tools\Tool;
  * run always re-runs — stage granularity is the contract, and the AUDIT
  * WF-2 rule holds: re-running a stage is recoverable, skipping one that
  * lied is not.
+ *
+ * P2 reconciliation: every record now carries the WRITER'S process identity
+ * (`pid`, and the kernel start instant `pidStartedAt` where procfs can
+ * answer). A record that a cooperative stop wrote is stamped clean and
+ * reads exactly as it always did; a crash-class record (the O1 refresh is
+ * the only writer that leaves one) is judged AT QUERY TIME, never polled —
+ * status() reports the run as `orphaned` when its writer is verifiably
+ * dead (pid-reuse defeated by the start instant) and `running` when the
+ * writer is verifiably live elsewhere, where resume() refuses rather than
+ * racing a second writer onto the same run. An orphaned record resumes
+ * through the very same replay path a cooperative pause takes: the killed
+ * stage's partial work is lost in both cases, and that was already the
+ * pause contract.
  *
  * Remaining limitation: resume granularity is per-whole-stage only. If
  * the interrupt lands while a 'parallel' stage is mid-flight (see
@@ -673,7 +688,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $cancelled = $snapshot(WorkflowStatus::Cancelled);
         if ($pauseWasRequested) {
             $pauseRequested = true;
-            $this->writePauseFile($interruptId, $cancelled, $loadPath);
+            $this->writePauseFile($interruptId, $cancelled, $loadPath, true);
         } elseif ($loadPath !== null) {
             // O1: a cancelled run with no pause standing leaves no file
             // today; the resilience record must not either.
@@ -810,7 +825,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($token !== null) {
             $this->liveRuns[$token]['pauseRequested'] = true;
             $frame = $this->liveRuns[$token];
-            $this->writePauseFile($frame['key'], ($frame['snapshot'])(WorkflowStatus::Paused), $frame['loadPath']);
+            $this->writePauseFile($frame['key'], ($frame['snapshot'])(WorkflowStatus::Paused), $frame['loadPath'], true);
 
             return;
         }
@@ -822,7 +837,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             );
         }
 
-        $this->writePauseFile($key, $this->resultsByName[$key], $this->loadPathsByKey[$key] ?? null);
+        $this->writePauseFile($key, $this->resultsByName[$key], $this->loadPathsByKey[$key] ?? null, true);
     }
 
     /**
@@ -859,8 +874,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * context's `<stage>.output` entries.
      *
      * @param string $workflowId The run ID or the workflow name.
-     * @return WorkflowResult The final result after the resumed workflow completes, fails, or is paused again.
-     * @throws WorkflowNotRunningException When no pause file exists for this workflow.
+     * @return WorkflowResult The final result after the resumed run completes, fails, or is paused again.
+     * @throws WorkflowNotRunningException When no pause file exists for this workflow, or when the
+     *                                      only file found is a crash record whose writer process
+     *                                      is still live elsewhere (refused so two processes never
+     *                                      drive one run; an ORPHANED record resumes normally).
      * @throws WorkflowNotFoundException   When the workflow definition can no longer be loaded.
      */
     public function resume(string $workflowId, ?CancellationToken $cancellation = null): WorkflowResult
@@ -880,6 +898,19 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if (!is_string($workflowPath) || $workflowPath === '') {
             throw new WorkflowNotRunningException(
                 "Pause file for '{$workflowId}' is corrupt: missing 'workflowPath' field"
+            );
+        }
+
+        // A crash-class record whose writer is still running is NOT a pause at
+        // all: another process owns this run and its record. Resuming here would
+        // start a second writer racing the first over the same file (and
+        // double-dispatching any agent stages), so refuse loudly instead — the
+        // orphaned case falls through to the ordinary replay path below.
+        if (self::recordNeedsLivenessJudgement($data) && !self::crashRecordIsOrphaned($data, $pauseFile)) {
+            throw new WorkflowNotRunningException(
+                "Workflow '{$workflowId}' is live in another process (pid "
+                . (int) ($data['pid'] ?? 0) . "), so its record '" . basename($pauseFile, '.json')
+                . "' cannot be resumed here"
             );
         }
 
@@ -1012,7 +1043,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *     {@see WorkflowStatus::Paused} once a pause has been requested. First,
      *     because a live run is the newest truth: a resumed run's pause file
      *     still reads `paused` while the resume is executing.
-     *  2. the pause file — its recorded status.
+     *  2. the pause file — its recorded status, with one reconciliation: an
+     *     O1 crash record (stamped by its writer's process, without the
+     *     cooperative marker) is judged at query time. A dead writer answers
+     *     {@see WorkflowStatus::Orphaned} — resumable progress, honestly
+     *     labeled, not a pause that was ever chosen; a writer still live
+     *     elsewhere answers {@see WorkflowStatus::Running}. Cooperative and
+     *     legacy (unsigned) records read exactly as they always have.
      *  3. a finished run this engine remembers — its final status, so a run
      *     that completed, failed, or finished a resume is no longer reported
      *     as whatever it last was on disk.
@@ -1056,12 +1093,20 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         try {
-            return WorkflowStatus::from($statusValue);
+            $recorded = WorkflowStatus::from($statusValue);
         } catch (\ValueError) {
             throw new WorkflowNotRunningException(
                 "Pause file for '{$workflowId}' is corrupt: invalid status value '{$statusValue}'"
             );
         }
+
+        if ($recorded === WorkflowStatus::Paused && self::recordNeedsLivenessJudgement($data)) {
+            return self::crashRecordIsOrphaned($data, $pauseFile)
+                ? WorkflowStatus::Orphaned
+                : WorkflowStatus::Running;
+        }
+
+        return $recorded;
     }
 
     /**
@@ -1313,8 +1358,23 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * `stagesCompleted` is its length, so a resume re-runs a stage that failed
      * instead of skipping it (AUDIT WF-2). The totals are the run's whole
      * spend, a failed attempt's included.
+     *
+     * $clean is the writer's declaration of HOW this record came to exist:
+     * true when a cooperative stop (explicit pause, the stage loop's own
+     * pause stop, a cancelled/failed run with pause standing, the signal
+     * handler) reached the write on purpose, false for the O1 per-stage
+     * refresh, which is written during ordinary progress and is therefore the
+     * only shape a SIGKILL can leave behind. Every write also signs the
+     * record with the writing process's identity (`pid`, plus `pidStartedAt`
+     * where procfs can answer), so a later reader can tell three things
+     * apart: a hand-written or cooperative record (no stamp or `pausedCleanly`
+     * — read exactly as before), a crashed run's still-progress record
+     * ({@see WorkflowStatus::Orphaned}), and a run whose writer is STILL live
+     * elsewhere ({@see WorkflowStatus::Running} — never resumed from a second
+     * process). Purely additive: a reader that ignores the keys sees the old
+     * file.
      */
-    private function writePauseFile(string $key, WorkflowResult $result, ?string $loadPath): void
+    private function writePauseFile(string $key, WorkflowResult $result, ?string $loadPath, bool $clean): void
     {
         $completed = self::completedStages($result);
 
@@ -1339,6 +1399,22 @@ final class WorkflowEngine implements WorkflowEngineInterface
             'startedAt' => $result->startedAt->format(\DateTimeInterface::ATOM),
             'pausedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
         ];
+
+        // Process identity + cooperative-stop marker (P2 orphan
+        // reconciliation). The stamp is what lets status()/resume() tell a
+        // crashed run's progress record from a paused one and from a record
+        // whose writer is still working in another process; the heartbeat
+        // age of this very file is the secondary bound. Absent on legacy
+        // records, which keep their pre-P2 reading exactly.
+        $writerPid = (int) \getmypid();
+        $data['pid'] = $writerPid;
+        $pidStartedAt = $writerPid > 0 ? BackgroundSupervisor::procStartTime($writerPid) : null;
+        if ($pidStartedAt !== null) {
+            $data['pidStartedAt'] = $pidStartedAt;
+        }
+        if ($clean) {
+            $data['pausedCleanly'] = true;
+        }
 
         // C13 substrate, purely additive: the identity hashes of every stage
         // this live run has settled. Read from the slot, so every writer —
@@ -1377,6 +1453,93 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if (is_file($pauseFile)) {
             @unlink($pauseFile);
         }
+    }
+
+    /**
+     * How stale the heartbeat (the pause file's own mtime, refreshed by every
+     * O1 write) may be before a crash-class record whose writer we cannot
+     * positively identify is judged orphaned rather than live.
+     *
+     * Sized at twice the default per-stage timeout (3600s — {@see
+     * \SugarCraft\Code\Workflows\Workflow::$timeout}), because a live run
+     * legitimately writes nothing between stage boundaries. This window
+     * governs ONLY the fallback where the writer's process start time could
+     * not be compared (no procfs start-time answer); when `pidStartedAt` was
+     * recorded and procfs answers, the comparison is exact and the window
+     * never applies. A stage configured with a custom timeout longer than
+     * this window can therefore only be trusted as live while pid + start
+     * time verify; on platforms where they cannot, a very long live stage may
+     * be misjudged orphaned — the misjudgement is safe in the resume-
+     * allowed direction only because the writer's next stage-boundary refresh
+     * simply re-stamps the record.
+     */
+    public const ORPHAN_HEARTBEAT_STALE_SECONDS = 7200;
+
+    /**
+     * Is this crash-class pause record (O1-shaped: pid stamped, no
+     * `pausedCleanly` marker) the residue of a dead process, or is its
+     * writer still at work?
+     *
+     * Liveness is checked AT QUERY TIME, on demand — never polled (E646).
+     * The semantics mirror the private {@see \SugarCraft\Code\Agents\TaskList}
+     * claim-release probe by reusing its two PUBLIC helpers rather than
+     * copying them: a zombie is dead, and a recorded start time that procfs
+     * can still read decides pid-reuse EXACTLY (a recycled pid starts later,
+     * so it can never masquerade as the original writer). Only when no
+     * start-time evidence exists anywhere does the heartbeat window decide,
+     * erring toward "alive" while fresh — a record judged a little longer,
+     * never one stolen from a writer still working.
+     *
+     * @param array<string,mixed> $data   Decoded pause record.
+     * @param string              $pauseFile Path to the record (its mtime is the heartbeat).
+     */
+    private static function crashRecordIsOrphaned(array $data, string $pauseFile): bool
+    {
+        $pid = isset($data['pid']) && is_int($data['pid']) ? $data['pid'] : 0;
+        $recordedStart = isset($data['pidStartedAt']) && is_int($data['pidStartedAt']) ? $data['pidStartedAt'] : null;
+
+        $stat = $pid > 0 ? ProcessTree::stat($pid) : null;
+        $observedStart = $pid > 0 ? BackgroundSupervisor::procStartTime($pid) : null;
+
+        if ($stat !== null && ($stat['state'] === 'Z' || $stat['state'] === 'X')) {
+            return true; // zombie / reaped-exit: will do no more work
+        }
+
+        if ($recordedStart !== null && $observedStart !== null) {
+            return $observedStart !== $recordedStart; // exact, pid-reuse-proof
+        }
+
+        if ($pid <= 0) {
+            return true; // unsigned crash record: no writer to be alive
+        }
+
+        $alive = \function_exists('posix_kill')
+            ? (@\posix_kill($pid, 0) || \posix_get_last_error() === 1) // EPERM: alive, another uid
+            : $stat !== null;
+
+        if (!$alive) {
+            return true;
+        }
+
+        $heartbeat = time() - (int) @filemtime($pauseFile);
+
+        return $heartbeat > self::ORPHAN_HEARTBEAT_STALE_SECONDS;
+    }
+
+    /**
+     * Does this decoded record claim a cooperative pause, or is it the raw
+     * O1 progress shape a crash can leave? Cooperative and legacy (unsigned)
+     * records keep their pre-P2 reading exactly; only stamped crash records
+     * consult {@see crashRecordIsOrphaned()} — and never inside a run this
+     * same process has live ({@see liveRunFor()} answered first upstream).
+     *
+     * @param array<string,mixed> $data
+     */
+    private static function recordNeedsLivenessJudgement(array $data): bool
+    {
+        return ($data['status'] ?? null) === WorkflowStatus::Paused->value
+            && isset($data['pid'])
+            && ($data['pausedCleanly'] ?? null) !== true;
     }
 
     /**
@@ -1646,7 +1809,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 if ($this->liveRuns[$liveToken]['pauseRequested']) {
                     $pauseRequested = true;
                     $paused = $snapshot(WorkflowStatus::Paused);
-                    $this->writePauseFile($interruptId, $paused, $loadPath);
+                    $this->writePauseFile($interruptId, $paused, $loadPath, true);
 
                     return $paused;
                 }
@@ -1743,7 +1906,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // all, so runFromPhp()/runWorkflow() stay byte-identical.
                 if ($loadPath !== null && !$stageResult->isFailure()) {
                     try {
-                        $this->writePauseFile($interruptId, $snapshot(WorkflowStatus::Paused), $loadPath);
+                        // Crash-class by construction: this write happens in
+                        // the middle of ordinary progress, so it is the only
+                        // shape a SIGKILL can leave. Not a cooperative stop.
+                        $this->writePauseFile($interruptId, $snapshot(WorkflowStatus::Paused), $loadPath, false);
                     } catch (\Throwable) {
                         // Ignored: the next refresh, or an explicit pause, retries.
                     }
@@ -1776,7 +1942,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     // re-runs the stage that failed.
                     if ($this->liveRuns[$liveToken]['pauseRequested']) {
                         $pauseRequested = true;
-                        $this->writePauseFile($interruptId, $failed, $loadPath);
+                        $this->writePauseFile($interruptId, $failed, $loadPath, true);
                     } elseif ($loadPath !== null) {
                         // O1: a failed run with no pause standing leaves no
                         // file today, and the resilience record must not
@@ -3802,7 +3968,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $this->rememberResult($interruptId, $partialResult, $loadPath);
 
             try {
-                $this->writePauseFile($interruptId, $partialResult, $loadPath);
+                $this->writePauseFile($interruptId, $partialResult, $loadPath, true);
             } catch (\Throwable) {
                 // Best-effort: still exit below even if pause() itself
                 // couldn't write (e.g. unwritable pause dir) — resuming
