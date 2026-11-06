@@ -32,7 +32,7 @@ final class ReadlineWireChordTest extends TestCase
      * A socket pair, not php://memory: the driver selects on the stream, and
      * stream_select() cannot poll memory streams.
      */
-    private function driveTextarea(string $bytes, ?TextareaPrompt $prompt = null): TextareaPrompt
+    private function driveTextarea(string $bytes, ?TextareaPrompt $prompt = null, $output = null): TextareaPrompt
     {
         $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         $this->assertIsArray($pair);
@@ -40,7 +40,7 @@ final class ReadlineWireChordTest extends TestCase
         fclose($pair[1]);
 
         $readline = new Readline(new StreamInputDriver($pair[0]));
-        $final = $readline->run($prompt ?? TextareaPrompt::new('> '));
+        $final = $readline->run($prompt ?? TextareaPrompt::new('> '), $output);
         fclose($pair[0]);
 
         $this->assertInstanceOf(TextareaPrompt::class, $final);
@@ -91,5 +91,28 @@ final class ReadlineWireChordTest extends TestCase
         $final = $this->driveTextarea("ab\x1b[106;5u\x0a");
         $this->assertTrue($final->isSubmitted());
         $this->assertSame("ab\n", $final->value());
+    }
+
+    // =========================================================================
+    // Negotiation gate — the push/pop is a TTY privilege
+    // =========================================================================
+
+    public function testNonTtyOutputReceivesNoNegotiationBytes(): void
+    {
+        // run() pushes `CSI >1u` and pops `CSI <u` for the life of the pump,
+        // but only when the OUTPUT is a real TTY — the same contract as
+        // bracketed paste (DEC 2004). Memory streams and pipes must stay
+        // byte-clean so scripted drives never capture protocol sequences.
+        $output = fopen('php://memory', 'w+');
+        $final = $this->driveTextarea("ab\x1b[13;2u\x0a", TextareaPrompt::new('> '), $output);
+        $this->assertTrue($final->isSubmitted());
+
+        rewind($output);
+        $captured = (string) stream_get_contents($output);
+        fclose($output);
+
+        $this->assertStringNotContainsString("\x1b[>1u", $captured);
+        $this->assertStringNotContainsString("\x1b[<u", $captured);
+        $this->assertStringNotContainsString("\x1b[?2004h", $captured);
     }
 }

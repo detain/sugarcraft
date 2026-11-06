@@ -12,8 +12,9 @@ namespace SugarCraft\Readline;
  * a programmatic call): Enter submits, Shift+Enter and Ctrl+J insert a new
  * line, Escape / Ctrl+C abort, Ctrl+U kills the text before the cursor on the
  * current line. Up / Down move between lines; Home / End jump within the
- * current line. The break chords exist only where the terminal reports
- * modified keys: on a legacy wire Shift+Enter and Ctrl+J send bare 0x0A/0x0D,
+ * current line. Readline's pump pushes the kitty keyboard protocol for the
+ * life of the prompt, so capable terminals report the chords; on wires that
+ * never report modified keys, Shift+Enter and Ctrl+J send bare 0x0A/0x0D,
  * which decode as a plain Enter and submit. Wire pins: ReadlineWireChordTest.
  */
 final class TextareaPrompt

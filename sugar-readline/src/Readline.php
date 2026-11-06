@@ -266,8 +266,12 @@ final class Readline
      *
      * While running, bracketed paste mode (DEC private mode 2004) is enabled
      * on the output terminal so pastes arrive as a single PasteEvent instead
-     * of a keystroke storm; it is restored on every exit path. Only emitted
-     * when the output is a real TTY, so tests and piped output are unaffected.
+     * of a keystroke storm; it is restored on every exit path. The kitty
+     * keyboard protocol (disambiguate flag) is likewise pushed for the
+     * duration, so terminals that honor it report Shift+Enter and Ctrl+J as
+     * distinct chords instead of bare Enter bytes; the pop runs on every exit
+     * path. Both emissions are gated to a real output TTY, so tests and piped
+     * output are unaffected.
      *
      * Poll contract: this is the interactive input pump — by design it waits
      * for input rather than returning on a schedule. Its idle cost and
@@ -314,9 +318,15 @@ final class Readline
     {
         $prompt = $this->fitPromptToWidth($prompt);
         $bracketedPaste = $this->enableBracketedPaste($output);
+        $kittyKeyboard = $this->enableKittyKeyboard($output);
         try {
             return $this->runLoop($prompt, $output);
         } finally {
+            // LIFO teardown: the kitty flag was the last layer pushed, so it
+            // pops first — same exit-path discipline as the paste restore.
+            if ($kittyKeyboard) {
+                fwrite($output, "\x1b[<u");
+            }
             if ($bracketedPaste) {
                 fwrite($output, "\x1b[?2004l");
             }
@@ -510,6 +520,29 @@ final class Readline
             return false;
         }
         fwrite($output, "\x1b[?2004h");
+        return true;
+    }
+
+    /**
+     * Emit `CSI >1u` — push the kitty keyboard protocol's disambiguate flag
+     * for the duration of the pump. Terminals that honor it report modified
+     * keys as distinct CSI-u frames, which is what lets the textarea's
+     * Shift+Enter/Ctrl+J breaks arrive as chords; non-supporting terminals
+     * ignore the sequence and the chords stay legacy Enter bytes (the shape
+     * ReadlineWireChordTest pins on both sides of that line).
+     *
+     * Guarded to real TTYs exactly like enableBracketedPaste(): tests write
+     * to memory streams and pipes, which must not receive stray control
+     * sequences. The pop (`CSI <u`) runs in run()'s finally, LIFO to the push.
+     *
+     * @return bool True when the flag was pushed (caller must pop on exit).
+     */
+    private function enableKittyKeyboard(mixed $output): bool
+    {
+        if (!\is_resource($output) || !stream_isatty($output)) {
+            return false;
+        }
+        fwrite($output, "\x1b[>1u");
         return true;
     }
 
