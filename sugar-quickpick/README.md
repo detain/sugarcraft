@@ -458,14 +458,8 @@ use SugarCraft\QuickPick\StatusBar;
 $bar = new StatusBar('3 of 12 items');
 
 // Fluent setters
-$bar = $bar->withMessage('Searching...')
-           ->withNoMessage()          // clear the message
-           ->withSegment('count', '7') // named segment
-           ->withoutSegment('count');
-
-// Show or hide
-$bar = $bar->show();
-$bar = $bar->hide();
+$bar = $bar->withMessage('Searching...')   // replaces the constructor message
+           ->withSegment('count', '7');    // named segment
 
 // Read back the message and the named segments (name → value)
 $message  = $bar->message();
@@ -473,6 +467,12 @@ $segments = $bar->segments();
 
 // Render: "[count: 7] Searching..."
 echo $bar->render();
+
+// The clearing and visibility ops undo one thing each; shown separately so
+// the echoed state above stays truthful:
+$bar->withoutSegment('count')->render(); // 'Searching...'
+$bar->withNoMessage()->render();         // '[count: 7]'
+$bar->hide()->render();                  // '' — a hidden bar renders empty
 ```
 
 ## Wiring keyboard input
