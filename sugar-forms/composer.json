@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-forms",
-    "description": "Foundation lib for form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) extracted from sugar-widgets, with the interactive huh-style form engine folded in.",
+    "description": "Canonical form engine (port of charmbracelet/huh) and foundation lib for form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form); sugar-widgets re-exports it via 22 class_alias shims.",
     "type": "library",
     "license": "MIT",
     "keywords": [
