@@ -264,9 +264,10 @@ final class Readline
      * (0x11, XON) resumes it. Restore the saved state on EVERY exit path —
      * capture `$saved=$(stty -g)` before the switch and run `stty "$saved"`
      * in a finally block. examples/interactive.php shows the guarded recipe;
-     * sugar-pty's FFI makeRaw() is turnkey for the whole switch, while
-     * sugar-core\Util\RawMode leaves signal handling ON (no -isig at this
-     * release), so ctrl_c arrives there as SIGINT, not as an abort key. Piped or
+     * sugar-pty's FFI makeRaw() is turnkey for the whole switch; sugar-core
+     * \Util\RawMode now switches flow control off (`-ixon`) too, so Ctrl+S
+     * arrives there, but leaves signal handling ON (no -isig at this
+     * release), so ctrl_c arrives as SIGINT, not as an abort key. Piped or
      * socket input (tests, scripted drives) needs no such setup — there is
      * no discipline to fight.
      *

@@ -17,6 +17,11 @@ namespace SugarCraft\Core\Util;
  * when the stream is not a terminal (piped input, CI, tests) — they
  * never shell out and never throw in that case.
  *
+ * The toggle covers canonical mode, echo, and output flow control — the
+ * input half of "raw". Signal generation stays ON: Ctrl+C continues to
+ * raise SIGINT here rather than arriving as a byte. Prompt libraries that
+ * abort on Ctrl+C as a key must clear ISIG themselves (see {@see enable()}).
+ *
  * Contrast with sugar-pty's `PosixTermios`: that is the FFI/termios
  * path which operates on an arbitrary PTY file descriptor and is far
  * heavier. Reach for RawMode when you only need the simple, portable
@@ -34,7 +39,19 @@ final class RawMode
 
     /**
      * Put the controlling terminal into raw mode: disable canonical
-     * input and echo, deliver each byte immediately (`min 1 time 0`).
+     * input and echo, switch output flow control off (`-ixon`), and
+     * deliver each byte immediately (`min 1 time 0`).
+     *
+     * Flow control is switched off so Ctrl+S (0x13, XOFF) arrives as an
+     * ordinary byte instead of freezing the terminal — prompt libraries
+     * bind it for forward history search.
+     *
+     * Signal generation is deliberately NOT disabled. Consumers of this
+     * helper arm SIGINT as their cancel channel by design (the in-repo
+     * picker runs a signal handler for exactly that reason); clearing
+     * ISIG here would silently turn those Ctrl+C presses into bytes.
+     * Prompts that need Ctrl+C as an abort key run their own
+     * `stty -icanon -echo -isig ...` recipe instead.
      *
      * No-op when $stream is not a TTY, so callers can invoke this
      * unconditionally in interactive code paths without breaking
@@ -47,7 +64,7 @@ final class RawMode
         if (!TtyDetect::isAtty($stream)) {
             return;
         }
-        shell_exec('stty -icanon -echo min 1 time 0 2>/dev/null');
+        shell_exec('stty -icanon -echo -ixon min 1 time 0 2>/dev/null');
     }
 
     /**

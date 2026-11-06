@@ -67,4 +67,25 @@ final class RawModeTest extends TestCase
         $this->assertIsResource($r);
         fclose($r);
     }
+    public function testEnableRecipeCarriesIxonAndHoldsIsigBack(): void
+    {
+        // The guard tests above can never observe the recipe string (CI has
+        // no controlling terminal), so pin the source window of enable().
+        // -ixon MUST be switched off: prompt libraries bind Ctrl+S (XOFF)
+        // for forward search, and a discipline that swallows it freezes
+        // output instead. -isig MUST stay enabled: consumers arm SIGINT as
+        // their cancel channel by design; clearing ISIG would turn their
+        // Ctrl+C into a byte. Abort-chord prompts run the full -isig
+        // recipe themselves.
+        $method = new \ReflectionMethod(RawMode::class, 'enable');
+        $lines = file($method->getFileName());
+        $this->assertIsArray($lines);
+        $body = implode('', array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1
+        ));
+        $this->assertStringContainsString('-icanon -echo -ixon', $body);
+        $this->assertStringNotContainsString('-isig', $body);
+    }
 }

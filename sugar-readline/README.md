@@ -286,10 +286,11 @@ store the string to replay it on another platform.
 
 `sugar-pty`'s FFI `Termios::makeRaw()` (`cfmakeraw`) clears signal generation
 and delivers the same transition. `sugar-core`'s
-`SugarCraft\Core\Util\RawMode` does not — at this release it leaves signal
-handling ON: Ctrl+C raises SIGINT there, and the abort chords documented
-below are the stty `-isig` recipe's contract; only that recipe — carried
-by `examples/interactive.php` with a shutdown-safe restore — delivers them.
+`SugarCraft\Core\Util\RawMode` delivers the same flow-control half — it
+runs `-ixon` — but deliberately leaves signal generation ON: Ctrl+C
+raises SIGINT there, and the abort chords documented below remain the
+stty `-isig` recipe's contract; only that recipe — carried by
+`examples/interactive.php` with a shutdown-safe restore — delivers them.
 Over a pipe or socket (no tty at all) no stty is needed — the bytes
 arrive as written, which is exactly how the test-suite drives chords.
 
