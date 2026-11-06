@@ -47,7 +47,7 @@ echo "  collaborators  : " . implode(', ', $repo->collaborators()) . "\n\n";
 $alice = User::new('alice');
 $bob   = User::new('bob');
 
-$ac = AccessControl::getInstance();
+$ac = AccessControl::instance();
 echo "=== Access matrix ===\n";
 echo sprintf("  %-8s read=%-3s write=%-3s admin=%s\n",
     'alice', $ac->canRead($alice, $repo) ? 'yes' : 'no', $ac->canWrite($alice, $repo) ? 'yes' : 'no', $ac->canAdmin($alice, $repo) ? 'yes' : 'no');

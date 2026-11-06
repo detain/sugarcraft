@@ -73,12 +73,12 @@ final class ChildProcessLifetimeCensusTest extends TestCase
         // AnonymousReadLeverTest). The lever is part of the parsed config
         // above (the daemon snapshots it at construction); the singleton
         // arm covers the direct-Server pins.
-        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(true);
+        \SugarCraft\GitServer\AccessControl::instance()->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void
     {
-        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(false);
+        \SugarCraft\GitServer\AccessControl::instance()->setAllowAnonymousRead(false);
         if ($this->savedPath !== null) {
             \putenv('PATH=' . $this->savedPath);
             $this->savedPath = null;

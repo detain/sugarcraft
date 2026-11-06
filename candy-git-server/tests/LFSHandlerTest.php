@@ -23,12 +23,12 @@ final class LFSHandlerTest extends TestCase
         // handleBatch consults canRead; these pins model the published
         // world where the operator opted into anonymous reads (the fail-closed
         // default is pinned in AnonymousReadLeverTest).
-        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(true);
+        \SugarCraft\GitServer\AccessControl::instance()->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void
     {
-        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(false);
+        \SugarCraft\GitServer\AccessControl::instance()->setAllowAnonymousRead(false);
         // Clean up temp directory
         $this->removeDirectory($this->tmpDir);
         parent::tearDown();

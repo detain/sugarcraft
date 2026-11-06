@@ -44,7 +44,7 @@ final class TrustModeHttpProbeTest extends TestCase
 
     protected function tearDown(): void
     {
-        AccessControl::getInstance()->setAllowAnonymousRead(false);
+        AccessControl::instance()->setAllowAnonymousRead(false);
         $this->removeDirectory($this->tmpDir);
         parent::tearDown();
     }
@@ -117,7 +117,7 @@ final class TrustModeHttpProbeTest extends TestCase
         // And the anonymous path through the SAME server with the global
         // singleton armed true still answers 401 — the per-request config
         // re-arm is what makes this listener's posture independent.
-        AccessControl::getInstance()->setAllowAnonymousRead(true);
+        AccessControl::instance()->setAllowAnonymousRead(true);
         $anon = $server->handleRequest(
             'GET',
             '/private.git/info/refs',

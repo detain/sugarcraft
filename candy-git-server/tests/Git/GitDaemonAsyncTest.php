@@ -41,7 +41,7 @@ final class GitDaemonAsyncTest extends TestCase
         // This whole fixture file models the published-repo world (repos
         // created withPublic); the C-13 default-off keystone lives in
         // AnonymousReadLeverTest.
-        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(true);
+        \SugarCraft\GitServer\AccessControl::instance()->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void

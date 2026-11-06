@@ -29,7 +29,7 @@ final class AccessControl
      */
     private bool $allowAnonymousRead = false;
 
-    public static function getInstance(): self
+    public static function instance(): self
     {
         return self::$instance ??= new self();
     }

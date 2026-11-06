@@ -257,7 +257,7 @@ final class StatsServer
         $method = $parts[0] ?? '';
         $path = \explode('?', $parts[1] ?? '/', 2)[0];
 
-        $stats = $this->stats ?? Stats::getInstance();
+        $stats = $this->stats ?? Stats::instance();
 
         if ($method !== 'GET') {
             $this->writeResponse($client, 405, 'Method Not Allowed', '{"error":"method not allowed"}');

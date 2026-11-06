@@ -151,7 +151,7 @@ final class BinServeRefusalTest extends TestCase
     {
         $source = (string) \file_get_contents($this->bin);
         $arm = 'if ($config->allowAnonymousRead) {'
-            . "\n        \\SugarCraft\\GitServer\\AccessControl::getInstance()->setAllowAnonymousRead(true);\n    }";
+            . "\n        \\SugarCraft\\GitServer\\AccessControl::instance()->setAllowAnonymousRead(true);\n    }";
 
         $this->assertStringContainsString(
             $arm,

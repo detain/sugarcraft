@@ -65,12 +65,12 @@ final class SmartHttpReadPathTest extends TestCase
 
         // Published world: the anonymous-read lever is raised (the
         // fail-closed default is pinned in ServerTest).
-        AccessControl::getInstance()->setAllowAnonymousRead(true);
+        AccessControl::instance()->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void
     {
-        AccessControl::getInstance()->setAllowAnonymousRead(false);
+        AccessControl::instance()->setAllowAnonymousRead(false);
         if (\is_dir($this->tmpDir)) {
             \exec('rm -rf ' . \escapeshellarg($this->tmpDir));
         }

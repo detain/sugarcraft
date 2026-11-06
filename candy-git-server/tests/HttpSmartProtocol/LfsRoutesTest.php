@@ -53,12 +53,12 @@ final class LfsRoutesTest extends TestCase
         // The published world: anonymous READ is opt-in via the config
         // lever, which these arms raise. Denial arms use private repos or
         // write operations, which the lever never unlocks.
-        AccessControl::getInstance()->setAllowAnonymousRead(true);
+        AccessControl::instance()->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void
     {
-        AccessControl::getInstance()->setAllowAnonymousRead(false);
+        AccessControl::instance()->setAllowAnonymousRead(false);
         $this->removeDirectory($this->tmpDir);
         parent::tearDown();
     }

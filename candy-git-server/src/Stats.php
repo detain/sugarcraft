@@ -9,7 +9,7 @@ namespace SugarCraft\GitServer;
  *
  * A tiny mutable collector — the one deliberately non-immutable service
  * next to {@see AccessControl}, and it follows the same
- * getInstance()/setInstance() pattern: transports record into the shared
+ * instance()/setInstance() pattern: transports record into the shared
  * instance by default, and hosts/tests inject their own via
  * `setInstance()` (or the per-object `setStats()` on GitDaemon and the
  * HTTP server).
@@ -35,7 +35,7 @@ final class Stats
         $this->startedAt = \microtime(true);
     }
 
-    public static function getInstance(): self
+    public static function instance(): self
     {
         return self::$instance ??= new self();
     }

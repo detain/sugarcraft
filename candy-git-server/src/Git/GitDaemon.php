@@ -128,7 +128,7 @@ final class GitDaemon
         // its own published repos (the anonymous-read lever simply not reaching
         // the transport that parsed it).
         if ($config->allowAnonymousRead) {
-            AccessControl::getInstance()->setAllowAnonymousRead(true);
+            AccessControl::instance()->setAllowAnonymousRead(true);
         }
     }
 
@@ -140,7 +140,7 @@ final class GitDaemon
 
     private function stats(): Stats
     {
-        return $this->stats ?? Stats::getInstance();
+        return $this->stats ?? Stats::instance();
     }
 
     // -------------------------------------------------------------------------
@@ -779,7 +779,7 @@ final class GitDaemon
                 return;
             }
 
-            $ac = AccessControl::getInstance();
+            $ac = AccessControl::instance();
             // The daemon's only identity is the config lever: with
             // git.allow_anonymous_read off, this anonymous transport
             // refuses EVERY request before serving a byte —

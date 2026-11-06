@@ -57,7 +57,7 @@ final class UploadPack
      */
     public function serve($in = null, $out = null): int
     {
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
 
         if (!$ac->canRead($this->user, $this->repo)) {
             $viewer = $this->user?->username ?? 'anonymous';

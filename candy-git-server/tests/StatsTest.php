@@ -106,9 +106,9 @@ final class StatsTest extends TestCase
         $mine = new Stats();
         Stats::setInstance($mine);
 
-        $this->assertSame($mine, Stats::getInstance());
+        $this->assertSame($mine, Stats::instance());
 
-        Stats::getInstance()->recordConnection();
+        Stats::instance()->recordConnection();
         $this->assertSame(1, $mine->connections());
     }
 }

@@ -41,12 +41,12 @@ final class AnonymousReadLeverTest extends TestCase
         $this->tmpDir = \sys_get_temp_dir() . '/cgs-lever-' . \uniqid('', true);
         \mkdir($this->tmpDir . '/repos', 0755, true);
         // tests/bootstrap.php resets the singleton per test; be explicit anyway.
-        AccessControl::getInstance()->setAllowAnonymousRead(false);
+        AccessControl::instance()->setAllowAnonymousRead(false);
     }
 
     protected function tearDown(): void
     {
-        AccessControl::getInstance()->setAllowAnonymousRead(false);
+        AccessControl::instance()->setAllowAnonymousRead(false);
         $this->removeDirectory($this->tmpDir);
         parent::tearDown();
     }
@@ -81,7 +81,7 @@ final class AnonymousReadLeverTest extends TestCase
 
     public function testCanReadHonoursTheLeverForPublishedRepos(): void
     {
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         $published = Repo::new('pub.git', $this->tmpDir . '/repos/pub.git');
 
         $ac->setAllowAnonymousRead(false);
@@ -101,7 +101,7 @@ final class AnonymousReadLeverTest extends TestCase
 
     public function testTheLeverNeverUnlocksAPrivateRepo(): void
     {
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         $private = Repo::new('priv.git', $this->tmpDir . '/repos/priv.git')->withVisibility(Visibility::Private);
 
         $ac->setAllowAnonymousRead(true);
@@ -149,7 +149,7 @@ final class AnonymousReadLeverTest extends TestCase
     public function testLeverOffAnAnonymousReadOfAPublishedRepoIsChallenged(): void
     {
         $server = $this->makeServer();
-        AccessControl::getInstance()->setAllowAnonymousRead(false);
+        AccessControl::instance()->setAllowAnonymousRead(false);
 
         $result = $server->handleRequest('GET', '/pub.git/info/refs', 'service=git-upload-pack', [], '');
 
@@ -161,7 +161,7 @@ final class AnonymousReadLeverTest extends TestCase
     public function testLeverOnAnAnonymousReadOfAPublishedRepoSucceeds(): void
     {
         $server = $this->makeServer();
-        AccessControl::getInstance()->setAllowAnonymousRead(true);
+        AccessControl::instance()->setAllowAnonymousRead(true);
 
         $result = $server->handleRequest('GET', '/pub.git/info/refs', 'service=git-upload-pack', [], '');
 
@@ -173,7 +173,7 @@ final class AnonymousReadLeverTest extends TestCase
     public function testAnAuthenticatedNonAdminReadsAPublishedRepoWithTheLeverOff(): void
     {
         $server = $this->makeServer();
-        AccessControl::getInstance()->setAllowAnonymousRead(false);
+        AccessControl::instance()->setAllowAnonymousRead(false);
 
         $result = $server->handleRequest(
             'GET',
@@ -189,7 +189,7 @@ final class AnonymousReadLeverTest extends TestCase
     public function testTheReceivePackAdvertisementNeverRespondsAnonymouslyEvenWithTheLeverOn(): void
     {
         $server = $this->makeServer();
-        AccessControl::getInstance()->setAllowAnonymousRead(true);
+        AccessControl::instance()->setAllowAnonymousRead(true);
 
         $result = $server->handleRequest('GET', '/pub.git/info/refs', 'service=git-receive-pack', [], '');
 

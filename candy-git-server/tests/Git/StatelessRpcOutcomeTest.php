@@ -35,7 +35,7 @@ final class StatelessRpcOutcomeTest extends TestCase
 
     protected function tearDown(): void
     {
-        AccessControl::getInstance()->setAllowAnonymousRead(false);
+        AccessControl::instance()->setAllowAnonymousRead(false);
         if ($this->savedPath !== null) {
             \putenv('PATH=' . $this->savedPath);
         }
@@ -121,7 +121,7 @@ final class StatelessRpcOutcomeTest extends TestCase
         );
         $config = Config::load($this->tmpDir . '/config.yaml');
 
-        AccessControl::getInstance()->setAllowAnonymousRead(true);
+        AccessControl::instance()->setAllowAnonymousRead(true);
         $server = new Server($config);
         $server->registerRepo(Repo::new('outcome.git', $this->tmpDir . '/repositories/outcome.git')->withPublic(true));
 

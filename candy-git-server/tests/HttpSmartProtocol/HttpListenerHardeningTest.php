@@ -54,7 +54,7 @@ final class HttpListenerHardeningTest extends TestCase
         }
         $this->sockets = [];
         $this->loop = null;
-        AccessControl::getInstance()->setAllowAnonymousRead(false);
+        AccessControl::instance()->setAllowAnonymousRead(false);
         $this->removeDirectory($this->tmpDir);
     }
 
@@ -415,7 +415,7 @@ final class HttpListenerHardeningTest extends TestCase
         );
 
         $server->registerRepo(Repo::new('dlrepo', $this->tmpDir . '/dlrepo.git')->withPublic(true));
-        AccessControl::getInstance()->setAllowAnonymousRead(true);
+        AccessControl::instance()->setAllowAnonymousRead(true);
 
         $response = $server->handleRequest('GET', '/dlrepo/info/lfs/objects/' . $oid, '', [], '');
         self::assertSame(413, $response['status'], 'a stored object past the cap must never be materialised');

@@ -18,7 +18,7 @@ $repo = Repo::new('my-project', $config-&gt;reposPath() . '/my-project.git')
     -&gt;init();
 
 // Ask the permission matrix
-$acl = AccessControl::getInstance();
+$acl = AccessControl::instance();
 $acl-&gt;canWrite(User::new('alice'), $repo);   // true  (collaborator)
 $acl-&gt;canWrite(User::new('bob'), $repo);     // false
 $acl-&gt;canRead(null, $repo);                  // false (anonymous reads are opt-in:
@@ -57,7 +57,7 @@ $daemon-&gt;registerRepo($repo);</code></pre>
 <tr><td>Repo</td><td>static new(name, path) / withDescription() / withPublic() / withPrivate() / withVisibility() / withAllowPush() / addCollaborator()</td><td>Immutable repository description</td></tr>
 <tr><td>Repo</td><td>init() / path() / branches()</td><td>Create the bare repository; inspect it</td></tr>
 <tr><td>User</td><td>static new(username) / withAdmin() / withPasswordHash() / withAuthorizedKeys() / addAuthorizedKey()</td><td>Immutable account: hashed password + SSH keys (accounts persist via UserStore)</td></tr>
-<tr><td>AccessControl</td><td>static getInstance() / canRead() / canWrite() / canAdmin()</td><td>Permission checks</td></tr>
+<tr><td>AccessControl</td><td>static instance() / canRead() / canWrite() / canAdmin()</td><td>Permission checks</td></tr>
 <tr><td>SSHServer</td><td>__construct(Config) / registerUser() / registerRepo() / handleConnection(stream, username, command, ?publicKey = null)</td><td>SSH command dispatcher</td></tr>
 <tr><td>GitDaemon</td><td>__construct(Config) / registerRepo() / registerRepos() / serve(pidFile = '') / serveAsync(?loop, pidFile = '') / shutdown()</td><td>git:// advertisement daemon (read-only)</td></tr>
 <tr><td>HttpSmartProtocol\Server</td><td>__construct(Config) / registerRepo() / registerUser() / handleRequest(…)</td><td>Smart-HTTP router: clone, fetch, auth-gated push, LFS</td></tr>

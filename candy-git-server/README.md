@@ -522,7 +522,7 @@ resolves to loopback (`127.0.0.1`), never the wildcard — setting an
 explicit non-loopback host is what makes the counters network-visible.
 
 Counters are recorded by the Git daemon class (both modes), the smart-HTTP
-class, and the LFS handler into the shared `Stats::getInstance()`
+class, and the LFS handler into the shared `Stats::instance()`
 (injectable per-object via `setStats()` for tests/hosts). The stats
 server itself runs only on a ReactPHP loop — there is deliberately no
 blocking mode, since a blocking stats listener would starve the servers

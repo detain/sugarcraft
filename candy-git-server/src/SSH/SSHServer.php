@@ -139,7 +139,7 @@ final class SSHServer
              ?? $this->findRepoByPath($path);
 
         if ($repo === null) {
-            $ac = AccessControl::getInstance();
+            $ac = AccessControl::instance();
             // Allow on-demand repo creation for authenticated users who can create repos
             if ($gitCmd === 'git-receive-pack' && $ac->canCreateRepos($user)) {
                 $repo = $this->createRepo($repoName, $user);
@@ -198,7 +198,7 @@ final class SSHServer
     {
         if ($user === null) {
             // Anonymous access — allowed only if server permits it
-            $ac = AccessControl::getInstance();
+            $ac = AccessControl::instance();
             return \extension_loaded('ssh2') && $ac->allowAnonymousRead();
         }
 
@@ -260,7 +260,7 @@ final class SSHServer
             throw new \RuntimeException(Lang::t('ssh.invalid_repo_name', ['name' => $name]));
         }
 
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         if (!$ac->canCreateRepos($user)) {
             $viewer = $user?->username;
             throw new \RuntimeException(Lang::t('ssh.user_cannot_create', ['viewer' => $viewer]));

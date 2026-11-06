@@ -53,7 +53,7 @@ final class SmartHttpCloneTest extends TestCase
         // real-git anonymous clone/fetch flow — the opt-in world of
         // git.allow_anonymous_read. The default-off keystone (401 +
         // WWW-Authenticate) lives in AnonymousReadLeverTest.
-        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(true);
+        \SugarCraft\GitServer\AccessControl::instance()->setAllowAnonymousRead(true);
 
         $this->tmpDir = \sys_get_temp_dir() . '/smart-clone-e2e-' . \uniqid();
         \mkdir($this->tmpDir, 0755, true);
@@ -82,7 +82,7 @@ final class SmartHttpCloneTest extends TestCase
 
     protected function tearDown(): void
     {
-        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(false);
+        \SugarCraft\GitServer\AccessControl::instance()->setAllowAnonymousRead(false);
         $this->listener->stop();
         if (\is_dir($this->tmpDir)) {
             \exec('rm -rf ' . \escapeshellarg($this->tmpDir));

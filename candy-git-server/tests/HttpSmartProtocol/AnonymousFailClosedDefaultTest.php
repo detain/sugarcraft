@@ -48,7 +48,7 @@ final class AnonymousFailClosedDefaultTest extends TestCase
     protected function tearDown(): void
     {
         // Never leave the singleton lever armed for sibling files.
-        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(false);
+        \SugarCraft\GitServer\AccessControl::instance()->setAllowAnonymousRead(false);
         $items = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator($this->tmpDir, \FilesystemIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::CHILD_FIRST

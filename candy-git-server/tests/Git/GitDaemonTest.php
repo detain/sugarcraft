@@ -32,12 +32,12 @@ final class GitDaemonTest extends TestCase
         // fail-closed lever restores in tests/bootstrap.php per test, so
         // the private-repo refusal pins below still run in the default
         // world (the lever never unlocks a private repo anyway).
-        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(true);
+        \SugarCraft\GitServer\AccessControl::instance()->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void
     {
-        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(false);
+        \SugarCraft\GitServer\AccessControl::instance()->setAllowAnonymousRead(false);
         $this->removeDirectory($this->tmpDir);
         parent::tearDown();
     }
@@ -303,7 +303,7 @@ final class GitDaemonTest extends TestCase
         $daemon = $this->createDaemon();
         $daemon->registerRepo($repo);
 
-        $ac = \SugarCraft\GitServer\AccessControl::getInstance();
+        $ac = \SugarCraft\GitServer\AccessControl::instance();
         // Published-repo anonymous read is the lever-ON world (setUp
         // arms it through the real Config::load parse path).
         $this->assertTrue($ac->allowAnonymousRead(), 'fixture world has the anonymous-read lever armed');
@@ -315,7 +315,7 @@ final class GitDaemonTest extends TestCase
         $repo = Repo::new('levered-repo', $this->tmpDir . '/repositories/levered-repo')
             ->withPublic(true);
 
-        $ac = \SugarCraft\GitServer\AccessControl::getInstance();
+        $ac = \SugarCraft\GitServer\AccessControl::instance();
         $ac->setAllowAnonymousRead(false);
         try {
             $this->assertFalse(
@@ -335,7 +335,7 @@ final class GitDaemonTest extends TestCase
         $daemon = $this->createDaemon();
         $daemon->registerRepo($repo);
 
-        $ac = \SugarCraft\GitServer\AccessControl::getInstance();
+        $ac = \SugarCraft\GitServer\AccessControl::instance();
         $this->assertFalse($ac->canRead(null, $repo));
     }
 

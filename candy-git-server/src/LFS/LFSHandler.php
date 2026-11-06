@@ -174,7 +174,7 @@ final class LFSHandler
             return ['download', ['error' => ['code' => 400, 'message' => 'Unsupported operation']]];
         }
 
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         $allowed = $operation === 'upload'
             ? $ac->canWrite($this->user, $this->repo)
             : $ac->canRead($this->user, $this->repo);
@@ -224,7 +224,7 @@ final class LFSHandler
      */
     public function handleBatch(array $request): array
     {
-        ($this->stats ?? Stats::getInstance())->recordLfsBatch();
+        ($this->stats ?? Stats::instance())->recordLfsBatch();
 
         [$operation, $error] = $this->gateBatch($request);
         if ($error !== null) {
@@ -274,7 +274,7 @@ final class LFSHandler
      */
     public function handleBatchAsync(array $request, ?LoopInterface $loop = null): PromiseInterface
     {
-        ($this->stats ?? Stats::getInstance())->recordLfsBatch();
+        ($this->stats ?? Stats::instance())->recordLfsBatch();
 
         [$operation, $error] = $this->gateBatch($request);
         if ($error !== null) {

@@ -100,7 +100,7 @@ final class Server
 
     private function stats(): Stats
     {
-        return $this->stats ?? Stats::getInstance();
+        return $this->stats ?? Stats::instance();
     }
 
     // -------------------------------------------------------------------------
@@ -302,7 +302,7 @@ final class Server
         // future runtime arm surface), but this method never LOWERS it —
         // reading via max() keeps the listener honest while leaving the
         // daemon and SSH transports in charge of their own snapshots.
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         if ($this->config->allowAnonymousRead) {
             $ac->setAllowAnonymousRead(true);
         }
@@ -343,7 +343,7 @@ final class Server
             return $this->errorResponse(404, 'Repository not found');
         }
 
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         $user = $this->getUserFromHeaders($headers);
         if (!$ac->canRead($user, $repo)) {
             return $this->authDenied($user);
@@ -400,7 +400,7 @@ final class Server
             return $this->errorResponse(404, 'Repository not found');
         }
 
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         $user = $this->getUserFromHeaders($headers);
         if (!$ac->canWrite($user, $repo)) {
             return $this->authDenied($user);
@@ -508,7 +508,7 @@ final class Server
             return $this->errorResponse(400, 'Invalid JSON body');
         }
 
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         if (($request['operation'] ?? 'download') === 'upload') {
             if (!$ac->canWrite($user, $repo)) {
                 return $this->authDenied($user);
@@ -548,7 +548,7 @@ final class Server
      */
     private function handleLfsDownload(Repo $repo, LFSHandler $handler, ?User $user, string $oid): array
     {
-        if (!AccessControl::getInstance()->canRead($user, $repo)) {
+        if (!AccessControl::instance()->canRead($user, $repo)) {
             return $this->authDenied($user);
         }
 
@@ -589,7 +589,7 @@ final class Server
      */
     private function handleLfsUpload(Repo $repo, LFSHandler $handler, ?User $user, string $oid, string $body): array
     {
-        if (!AccessControl::getInstance()->canWrite($user, $repo)) {
+        if (!AccessControl::instance()->canWrite($user, $repo)) {
             return $this->authDenied($user);
         }
 
@@ -632,7 +632,7 @@ final class Server
             return $this->errorResponse(405, 'Method not allowed');
         }
 
-        if (!AccessControl::getInstance()->canWrite($user, $repo)) {
+        if (!AccessControl::instance()->canWrite($user, $repo)) {
             return $this->authDenied($user);
         }
 
@@ -926,7 +926,7 @@ final class Server
      */
     private function lookupGlobalUser(string $username): ?User
     {
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
 
         return method_exists($ac, 'getUser') ? $ac->getUser($username) : null;
     }

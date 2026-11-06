@@ -169,7 +169,7 @@ final class GitServerTest extends TestCase
 
     public function testAccessControlCanReadPublicRepo(): void
     {
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         $user = User::new('alice');
         $repo = Repo::new('pub', '/tmp/pub')->withPublic(true);
 
@@ -189,7 +189,7 @@ final class GitServerTest extends TestCase
 
     public function testAccessControlCanReadPrivateRepo(): void
     {
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         $user = User::new('alice');
         $repo = Repo::new('priv', '/tmp/priv')->withPrivate(true);
 
@@ -199,7 +199,7 @@ final class GitServerTest extends TestCase
 
     public function testAccessControlAdminCanDoAnything(): void
     {
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         $admin = User::new('admin')->withAdmin(true);
         $repo = Repo::new('any', '/tmp/any')->withPrivate(true);
 
@@ -210,7 +210,7 @@ final class GitServerTest extends TestCase
 
     public function testAccessControlCollaboratorCanWritePrivateRepo(): void
     {
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         $user = User::new('alice');
         $repo = Repo::new('priv', '/tmp/priv')
             ->withPrivate(true)
@@ -231,7 +231,7 @@ final class GitServerTest extends TestCase
 
     public function testAccessControlCanReadDeniesAuthedUserOnNonPublicNonPrivate(): void
     {
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         $user = User::new('alice');
         $repo = Repo::new('semipub', '/tmp/semipub')->withPublic(false)->withPrivate(false);
 
@@ -240,7 +240,7 @@ final class GitServerTest extends TestCase
 
     public function testAccessControlCanWriteDeniesAllowPushOnNonPublic(): void
     {
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         $user = User::new('alice');
         $repo = Repo::new('pushpub', '/tmp/pushpub')->withPublic(false)->withAllowPush(true);
 
@@ -250,7 +250,7 @@ final class GitServerTest extends TestCase
 
     public function testAccessControlCanWriteAllowsPushOnPublic(): void
     {
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         $user = User::new('alice');
         $repo = Repo::new('allowpush', '/tmp/allowpush')->withPublic(true)->withAllowPush(true);
 
@@ -259,7 +259,7 @@ final class GitServerTest extends TestCase
 
     public function testAccessControlCanAdminNonAdminFalse(): void
     {
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         $user = User::new('alice');
         $repo = Repo::new('any', '/tmp/any');
 
@@ -312,7 +312,7 @@ final class GitServerTest extends TestCase
 
     public function testAccessControlCanCreateRepos(): void
     {
-        $ac = AccessControl::getInstance();
+        $ac = AccessControl::instance();
         $admin = User::new('admin')->withAdmin(true);
         $user = User::new('bob');
 

@@ -43,19 +43,19 @@ final class ServerTest extends TestCase
         // These arms model the published world: the anonymous-read lever is
         // raised (config opt-in). The lever-off default is pinned by
         // testAnonymousReadIsFailClosedByDefault below.
-        AccessControl::getInstance()->setAllowAnonymousRead(true);
+        AccessControl::instance()->setAllowAnonymousRead(true);
     }
 
     protected function tearDown(): void
     {
-        AccessControl::getInstance()->setAllowAnonymousRead(false);
+        AccessControl::instance()->setAllowAnonymousRead(false);
         $this->removeDirectory($this->tmpDir);
         parent::tearDown();
     }
 
     public function testAnonymousReadIsFailClosedByDefault(): void
     {
-        AccessControl::getInstance()->setAllowAnonymousRead(false);
+        AccessControl::instance()->setAllowAnonymousRead(false);
 
         $result = $this->server->handleRequest(
             'GET',
@@ -535,7 +535,7 @@ final class ServerTest extends TestCase
     public function testUnknownKnownWrongAndKeyOnlyBasicAuthAnswerIdentically(): void
     {
         // Lever-down: authentication decides the answer, not the lever.
-        AccessControl::getInstance()->setAllowAnonymousRead(false);
+        AccessControl::instance()->setAllowAnonymousRead(false);
         $this->server->registerUser(User::new('authtest')
             ->withPasswordHash(\password_hash('correct-password', \PASSWORD_DEFAULT)));
         $this->server->registerUser(User::new('keyonly'));

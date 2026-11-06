@@ -273,7 +273,7 @@ function cmdServeHttp(array $args): int
     // transport that parsed this config decides its own posture, and the
     // process-global AccessControl singleton is armed upward only.
     if ($config->allowAnonymousRead) {
-        \SugarCraft\GitServer\AccessControl::getInstance()->setAllowAnonymousRead(true);
+        \SugarCraft\GitServer\AccessControl::instance()->setAllowAnonymousRead(true);
     }
 
     try {
