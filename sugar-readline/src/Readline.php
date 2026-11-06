@@ -518,7 +518,9 @@ final class Readline
      * OUTPUT stream (the only one this class writes to); the terminal that
      * honors `?2004h` is the one the input arrives from, so a session with
      * piped STDIN behind a TTY stdout may still deliver pastes as plain
-     * keystrokes — they take the ordinary handleChar path.
+     * keystrokes — they take the ordinary handleChar path, where a CR or LF
+     * in the paste submits exactly as if typed (the literal-text guarantee
+     * of insertPastedText() belongs to the bracketed path alone).
      *
      * @return bool True when the mode was enabled (caller must disable on exit).
      */

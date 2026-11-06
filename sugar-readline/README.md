@@ -197,14 +197,17 @@ echo $result->value();
 `onMouse()`, `onFocus()` and `onPaste()` register the same way for mouse
 reporting, focus in/out, and bracketed paste. The bracketed-paste enable is
 gated on the **output** stream being a tty, so a program with piped stdin
-behind a tty stdout may still receive pastes as raw bytes. Whatever the
-delivery, pasted content is inserted as **literal text**: `TextPrompt` and
-`TextareaPrompt` expose `insertPastedText(string)`, which strips every
-control byte except TAB before inserting — the textarea additionally keeps
-LF and honours embedded newlines as line breaks — so a pasted payload can
-never forge a submit or replay editor commands. TAB survives on **both**
-surfaces, so a host relying on the strip to vet a secret or URL field must
-still reject tabs itself.
+behind a tty stdout may still receive pastes as raw bytes. On the genuine
+bracketed path — a `PasteEvent` framed by `ESC[200~` / `ESC[201~` — the
+content is inserted as **literal text**: `TextPrompt` and `TextareaPrompt`
+expose `insertPastedText(string)`, which strips every control byte except
+TAB before inserting — the textarea additionally keeps LF and honours
+embedded newlines as line breaks — so a bracketed paste payload can never
+forge a submit or replay editor commands. A raw-fallback delivery has no
+such framing: its bytes take the ordinary key path as they arrive, so a
+pasted CR or LF submits exactly as if it had been typed. TAB survives on
+**both** surfaces, so a host relying on the strip to vet a secret or URL
+field must still reject tabs itself.
 
 ### Untrusted content
 
