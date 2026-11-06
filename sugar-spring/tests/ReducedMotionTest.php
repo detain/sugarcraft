@@ -131,19 +131,30 @@ final class ReducedMotionTest extends TestCase
     {
         putenv('REDUCE_MOTION=1');
 
-        $chain = SpringChain::new([
+        $stages = [
             [new Spring(1.0 / 60.0, 6.0, 1.0), 0.0, 0.0, 100.0],
             [new Spring(1.0 / 60.0, 6.0, 1.0), 0.0, 0.0, 50.0],
-        ]);
+        ];
+        $chain = SpringChain::new($stages);
 
-        $ticks = 0;
+        // Snap ticks alternate with hand-off ticks: every stage costs one tick
+        // to snap and one more to hand off, so n stages complete on tick 2n
+        // and carry their final positions from tick 2n-1 onward. A future
+        // same-tick hand-off "optimisation" is a disclosed behaviour change,
+        // not a silent one.
+        $halfway = null;
+        $ticks   = 0;
         while (!$chain->isComplete() && $ticks < 20) {
             $chain = $chain->tick();
             $ticks++;
+            if ($ticks === 2 * count($stages) - 1) {
+                $halfway = $chain->currentPositions();
+            }
         }
 
         $this->assertTrue($chain->isComplete(), 'a reduced-motion chain must complete in a few ticks, not hundreds');
-        $this->assertLessThanOrEqual(4, $ticks);
+        $this->assertSame(2 * count($stages), $ticks, 'reduced-motion chain contract: n stages complete on tick 2n');
+        $this->assertSame([100.0, 50.0], $halfway, 'final positions are in place after 2n-1 ticks');
         $this->assertSame([100.0, 50.0], $chain->currentPositions());
     }
 

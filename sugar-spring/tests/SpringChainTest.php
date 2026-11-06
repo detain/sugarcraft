@@ -262,4 +262,45 @@ final class SpringChainTest extends TestCase
         // to be private, so the quote was unbackable.
         $this->assertSame(0.0005, SpringChain::SETTLING_THRESHOLD);
     }
+
+    // ── Step 32 (docs-fix-1104): reduced-motion tick contract ───────────────
+    //
+    // Under REDUCE_MOTION every stage snaps in one tick, but the hand-off
+    // still costs its own tick: final positions after 2n-1 ticks,
+    // isComplete() on tick 2n. Shape coverage for 1 and 3 stages alongside
+    // the 2-stage case ReducedMotionTest tightens. putenv is restored in the
+    // same method — this file has no env setUp/tearDown of its own.
+
+    public function testReducedMotionChainCompletesOnTickTwoNWithPositionsAtTwoNMinusOne(): void
+    {
+        putenv('REDUCE_MOTION=1');
+
+        try {
+            foreach ([[100.0], [100.0, 50.0, 75.0]] as $targets) {
+                $chain = SpringChain::new(array_map(
+                    static fn (float $target): array => [new Spring(1.0 / 60.0, 6.0, 1.0), 0.0, 0.0, $target],
+                    $targets,
+                ));
+
+                $ticks   = 0;
+                $halfway = null;
+                while (!$chain->isComplete() && $ticks < 20) {
+                    $chain = $chain->tick();
+                    $ticks++;
+                    if ($ticks === 2 * count($targets) - 1) {
+                        $halfway = $chain->currentPositions();
+                    }
+                }
+
+                $this->assertSame(
+                    2 * count($targets),
+                    $ticks,
+                    count($targets) . ' reduced-motion stages complete on tick 2n',
+                );
+                $this->assertSame($targets, $halfway, 'final positions land on tick 2n-1');
+            }
+        } finally {
+            putenv('REDUCE_MOTION');
+        }
+    }
 }

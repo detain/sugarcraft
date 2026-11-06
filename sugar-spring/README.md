@@ -400,8 +400,9 @@ the chain activates the next stage. The threshold is deliberately looser than
 a lone spring's `Spring::SETTLING_THRESHOLD` (`1e-4`) so stages hand off while
 still visually moving; a settled stage hands off up to `5e-4` short of its
 target by that design. `isComplete()` returns `true` when all stages have
-settled. Under reduced motion every stage snaps, so the chain completes within
-one tick per stage. Note `withStage()` restarts the new chain at stage 0:
+settled. Under reduced motion every stage still snaps, but each hand-off costs
+its own tick: with n unsettled stages the final positions are in place after
+2n−1 ticks and `isComplete()` turns true on tick 2n. Note `withStage()` restarts the new chain at stage 0:
 build the full stage list before the first `tick()`. The constructor accepts
 `[Spring, float, float, float]` stages and refuses malformed shapes and an
 out-of-range active index at the boundary.
@@ -557,7 +558,8 @@ back-flavoured control points — same honesty rule as `Easing`.
   returns a chain restarted at stage 0) / `tick(): self` (reassign or the run
   never advances) / `currentPositions(): list<float>` / `isComplete(): bool` /
   `activeStage(): int` / `const SETTLING_THRESHOLD = 5e-4`. Under reduced
-  motion every stage snaps (one tick per stage).
+  motion every stage snaps, but hand-offs still cost a tick (n stages carry
+  their final positions after 2n−1 ticks and complete on tick 2n).
 - **`SpringCollection`** — `__construct($springs, $positions, $velocities, $targets)` /
   `withSpring($id, Spring, $pos, $vel, $target)` / `without($id)` /
   `withTarget($id, $target)` (unknown ids refused, named in the error) /

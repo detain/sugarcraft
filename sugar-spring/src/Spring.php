@@ -139,9 +139,10 @@ final class Spring
      * PREFERS_REDUCED_MOTION) — or pinned per spring via the constructor's
      * $reducedMotionOverride — the spring snaps to its target instantly.
      * Anything composed of springs inherits that behaviour: {@see SpringChain}
-     * and {@see SpringCollection} advance through their stage/spring updates,
-     * so under reduced motion they settle in one tick per stage / one tick
-     * flat. {@see Projectile} and the easing curves are NOT spring-based and
+     * advances one stage per tick, so under reduced motion its final positions
+     * land after 2n−1 ticks and it completes on tick 2n (one snap tick plus
+     * one hand-off tick per stage), while a {@see SpringCollection} ticks all
+     * members at once and snaps them all in one tick flat. {@see Projectile} and the easing curves are NOT spring-based and
      * need application-level gating.
      *
      * @throws \InvalidArgumentException if any input is non-finite — a NAN

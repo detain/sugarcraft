@@ -13,7 +13,9 @@ namespace SugarCraft\Spring;
  *
  * Reduced motion (environment or per-spring override) is honored through the
  * stage springs themselves: under REDUCE_MOTION every stage snaps in one tick,
- * so a staged chain completes in one tick per stage.
+ * but the hand-off still costs its own tick — with n unsettled stages the
+ * final positions are in place after 2n−1 ticks and a complete chain arrives
+ * on tick 2n.
  *
  * ```php
  * $chain = SpringChain::new([

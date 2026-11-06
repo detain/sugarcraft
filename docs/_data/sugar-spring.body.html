@@ -57,7 +57,7 @@ for ($i = 0; $i &lt; 60; $i++) {
 <tr><td>Spring</td><td>settled(pos, vel, target, threshold?)</td><td>Completion predicate on position AND velocity</td></tr>
 <tr><td>Spring</td><td>fps($fps) / fromPreset($preset, $dt?, $override?)</td><td>deltaTime helper; five hand-tuned presets</td></tr>
 <tr><td>SpringConfig</td><td>new(tension, friction, mass) → spring()</td><td>react-spring-style triple; exposes public readonly ω/ζ</td></tr>
-<tr><td>SpringChain</td><td>tick(): self / isComplete() / currentPositions()</td><td>Stage hand-off on settle; one tick per stage under reduced motion</td></tr>
+<tr><td>SpringChain</td><td>tick(): self / isComplete() / currentPositions()</td><td>Stage hand-off on settle; under reduced motion final positions land after 2n−1 ticks, complete on 2n</td></tr>
 <tr><td>SpringCollection</td><td>tick(): self / settled() / velocity($id) / get($id)</td><td>Many named springs, one driver</td></tr>
 <tr><td>Easing</td><td>Linear, QuadraticIn … CubicOut … BackInOut → ease($t)</td><td>16 preset curves implementing EasingFunction</td></tr>
 <tr><td>CubicBezier</td><td>new(x1, y1, x2, y2) → evaluate($t)</td><td>CSS-style timing function (Newton + bounded subdivision)</td></tr>
