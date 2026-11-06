@@ -726,6 +726,10 @@ Ascii      → no colour; bold/italic/underline/… and OSC 8 links kept
 NoTty      → no escape sequence at all (clean text, layout kept)
 ```
 
+The tier rewrites apply to RGB colours; palette-slot colours
+(`Color::ansi(n)`) always emit their `30..37`/`90..97` form at every
+tier — measured at TrueColor, `Color::ansi(13)` still emits `ESC[95m`.
+
 `Ascii` (what `NO_COLOR` selects) forbids colour, not emphasis, so text
 attributes and hyperlinks survive. `NoTty` means the output is not a
 terminal: the whole render — including
