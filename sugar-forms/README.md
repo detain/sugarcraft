@@ -193,7 +193,7 @@ Form::groups(
 | `withTheme(Theme)` | Switch the colour palette. |
 | `withAccessible(bool)` | Render one `label: value` line for the focused field — for screen readers / dumb terminals. Echo-mode fields project their display characters via `displayValue()`; the stored secret is never read aloud. |
 | `withShowHelp(bool)` | Toggles the multi-group `Step X of Y` indicator (view() consults it only alongside more-than-one group and the group's own help flag). It renders no footer: `keyBinds()` / `help()` compose host-facing binding rows that view() never draws. |
-| `withShowErrors(bool)` | **Stored, not consumed** (SF-10, M19): fields render their `! error` line whenever an error is stored (`Field/Input.php:668` and siblings, unconditional at render) — no render path reads this flag, so today it suppresses nothing. Implementing consumption in field render vs deprecating the flag is an open owner decision; the row states the shipped truth. |
+| `withShowErrors(bool)` | **Stored, not consumed**: fields render their `! error` line whenever an error is stored (`Field/Input.php:668` and siblings, unconditional at render) — no render path reads this flag, so today it suppresses nothing. Implementing consumption in field render vs deprecating the flag is an open owner decision; the row states the shipped truth. |
 | `withWidth(int)`, `withHeight(int)` | Pin the rendered geometry. |
 | `withTimeout(int $ms)` | Stores a wall-clock budget (ms) for the host runtime to consult; the `Form` model itself starts no timer. |
 | `withKeyMap(KeyMap)` (or the `Form` constructor's `$keyMap` prop) | Override the bindings for `Next` / `Prev` / `Submit` / `Quit` (and per-field nav) on a single form. |
@@ -390,12 +390,11 @@ sugar-forms is built on five shared packages:
   CursorRight, CursorUp, CursorDown, DeleteChar, YankLine, …). Vim mode is an
   opt-in on the inner text widgets themselves — each runs on it when you arm
   `TextInput::withVimMode(true)` (single-line) or the TextArea equivalent
-  (TUI-3B:
-  `j`/`k` rows, `v` visual selection) — and sugar-readline's vi mode delegates
+  (`j`/`k` rows, `v` visual selection) — and sugar-readline's vi mode delegates
   to this same handler; sugar-widgets re-exports the fields unchanged and
   carries no vim layer of its own. New bindings benefit both hosts at once.
   In `VisualLine` mode, however, `j`/`k` step between ENTRIES (the pinned
-  horizontal CursorLeft/CursorRight vocabulary of the E736 3.2 owner ruling),
+  horizontal CursorLeft/CursorRight vocabulary),
   not rows, and `V` currently aliases `v` into character-wise selection.
   Text objects (`ci"`, `da{`, `yiw`, …) resolve through
   `VimKeyHandler::handleTextObject()`: `VimOperator` (c/d/y) +
@@ -487,8 +486,7 @@ manifest carries `minimum-stability: dev`. That is intentional while the
 monorepo pre-dates 1.0: every library moves together and published installs
 resolve siblings from Packagist `dev-master` (path repositories are
 injected by CI at build time, never committed). At the stable release the
-pins become proper `^1.0` constraints — track this in the release plan
-(E736 plan 7.4).
+pins become proper `^1.0` constraints — track this in the release plan.
 
 ## Snapshot tests
 
