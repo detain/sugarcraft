@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-readline",
-    "description": "PHP port of erikgeiser/promptkit \u2014 interactive line-editing prompt library. Supports text input with validation/completion/hidden-password mode, selection prompts with filtering/pagination/cursor navigation, confirmation prompts, and textarea multi-line input.",
+    "description": "Interactive line-editing prompts for terminal UIs \u2014 text input with validation/completion/hidden-password mode, selection prompts with filtering/pagination/cursor navigation, multi-select prompts, confirmation prompts and multi-line textarea input. Design antecedent: erikgeiser/promptkit; developed as a native PHP project.",
     "type": "library",
     "license": "MIT",
     "keywords": [
