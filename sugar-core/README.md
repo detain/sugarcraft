@@ -347,7 +347,7 @@ into the stack, and keeps infrastructure messages
 (`ScreenStackPushedMsg` / `ScreenStackPoppedMsg`) on the root model.
 
 ```php
-use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program, ScreenStack, ScreenStackCapable, SubscriptionCapable};
+use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program, Screen, ScreenStack, ScreenStackCapable, Subscriptions, SubscriptionCapable};
 use SugarCraft\Core\Cmd\{PushScreenCmd, PopScreenCmd};
 use SugarCraft\Core\Msg\{KeyMsg, ScreenStackPushedMsg, ScreenStackPoppedMsg};
 
