@@ -147,7 +147,11 @@ final class WorkflowStatusDetailTest extends TestCase
         mkdir($home . '/.candy-code/workflows/.running', 0700, true);
         $this->statusDirs[] = $home;
         $previous = getenv('HOME');
+        $previousServer = $_SERVER['HOME'] ?? null;
         putenv('HOME=' . $home);
+        // Both HOME spellings move together (OneSidedHomeSandboxTest law): a
+        // reader that consults $_SERVER must see the sandbox too.
+        $_SERVER['HOME'] = $home;
         try {
             $ledger = $this->ledgerDoc();
             $ledger['workflowId'] = 'run-7';
@@ -168,6 +172,11 @@ final class WorkflowStatusDetailTest extends TestCase
                 putenv('HOME');
             } else {
                 putenv('HOME=' . $previous);
+            }
+            if ($previousServer === null) {
+                unset($_SERVER['HOME']);
+            } else {
+                $_SERVER['HOME'] = $previousServer;
             }
         }
     }

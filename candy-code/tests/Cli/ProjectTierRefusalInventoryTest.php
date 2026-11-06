@@ -250,6 +250,14 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // user's own home (or CANDY_CODE_SERVER_DIR) to report the running
         // server; it never touches a project tier and refuses nothing.
         'Host/Commands/StatusHostCommand.php|.candy-code/server' => self::USER,
+        // WFA (C14): `registryFor()` mirrors the engine's two-tier registry, and
+        // the flagged literal is its PROJECT tier — `<root>/.candy-code/workflows`
+        // with `$configRoot` from the checkout, so the repository chooses it on
+        // exactly the basis `Cli/Bootstrap.php`'s row above does. The ledger read
+        // that shipped with the lane resolves through the USER-tier accessor
+        // (`workflowsPath()`), never this path: the literal configures the mirror
+        // only, touches no project tier file, and refuses nothing — no drain.
+        'Host/Commands/WorkflowCommand.php|.candy-code/workflows' => self::REPOSITORY,
         // MOVED OUT OF THE PACKAGE-RELATIVE BLOCK BELOW, and the move is the
         // finding rather than a tidy-up. This literal was package-relative
         // because {@see \SugarCraft\Code\Agents\WorktreeManager} constructed
@@ -600,8 +608,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is NINETY-FIVE occurrences — one per entry
-     * in {@see DOT_PATHS} — of SIXTY-FOUR distinct paths. THIRTY-FIVE of those
+     * APPEARS IN. On this tree that is NINETY-SIX occurrences — one per entry
+     * in {@see DOT_PATHS} — of SIXTY-FOUR distinct paths. THIRTY-SIX of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are TWENTY-NINE distinct paths — which is the figure
@@ -818,7 +826,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             83 => 'EIGHTY-THREE', 84 => 'EIGHTY-FOUR', 85 => 'EIGHTY-FIVE',
             86 => 'EIGHTY-SIX', 87 => 'EIGHTY-SEVEN', 88 => 'EIGHTY-EIGHT',
             89 => 'EIGHTY-NINE', 90 => 'NINETY', 91 => 'NINETY-ONE', 92 => 'NINETY-TWO',
-            93 => 'NINETY-THREE', 94 => 'NINETY-FOUR', 95 => 'NINETY-FIVE'];
+            93 => 'NINETY-THREE', 94 => 'NINETY-FOUR', 95 => 'NINETY-FIVE',
+            96 => 'NINETY-SIX'];
         $pathWords = [21 => 'TWENTY-ONE', 22 => 'TWENTY-TWO', 23 => 'TWENTY-THREE',
             24 => 'TWENTY-FOUR', 25 => 'TWENTY-FIVE', 26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE', 30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
@@ -838,7 +847,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             26 => 'TWENTY-SIX', 27 => 'TWENTY-SEVEN',
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE',
             30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
-            33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE'];
+            33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE',
+            36 => 'THIRTY-SIX'];
 
         $occurrences = \count(self::DOT_PATHS);
         $repositoryOccurrences = 0;
