@@ -284,6 +284,27 @@ propagate normally.
 ![multi-select](.vhs/multi-select.gif) ![text](.vhs/text.gif) ![themes](.vhs/themes.gif)
 ![multi-page form](.vhs/prompt-form.gif)
 
+## Security & trust boundary
+
+Form content is frequently model- or network-produced (agent UIs), so every
+display surface runs hostile bytes through `RenderSafe::clean()`: C0/DEL
+bytes are stripped (TAB and LF survive) and every ESC-introduced sequence is
+disarmed **except true SGR** (`\x1b[[0-9;]*m`), so theme colour renders while
+screen clears, cursor moves and OSC payloads (e.g. OSC-8 hyperlinks) become
+inert text. The sweep is idempotent and UTF-8 safe (C1 bytes are kept — they
+overlap multi-byte sequences).
+
+Cleaned at render: dynamic labels/descriptions, per-field error lines,
+Confirm button labels, RadioPills and MultiSelect options, ItemList rows
+behind Select, FilePicker cwd/entries/selection, errorHelp rows, the text
+echo (Normal and Mask arms of `TextInput::displayedValue()`), the TextArea
+render, the accessible view line, and the error summary.
+
+The boundary is the **display**, never the buffer: `value()` returns pasted
+bytes verbatim, and dev-authored strings (placeholder text) render raw —
+they are trusted input by construction. Mirrors upstream bubbletea's
+Viewport sanitisation for externally-sourced content.
+
 ## Shared foundations
 
 sugar-forms is built on five shared packages:

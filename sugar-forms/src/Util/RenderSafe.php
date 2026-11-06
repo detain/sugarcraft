@@ -27,9 +27,11 @@ namespace SugarCraft\Forms\Util;
  * UTF-8 continuation byte range and stripping them from valid UTF-8 text
  * would corrupt multi-byte characters.
  *
- * Prevents malicious filenames / option strings / validation-error messages
- * from injecting terminal control sequences (screen clears, cursor moves)
- * into the rendered output.
+ * Prevents untrusted content — FilePicker entries and paths, option
+ * strings, labels and descriptions, validation-error messages, echoed
+ * field values, and the accessible form view — from injecting terminal
+ * control sequences (screen clears, cursor moves, OSC payloads) into the
+ * rendered output.
  *
  * Mirrors the sanitisation applied in upstream bubbletea's Viewport for
  * externally-sourced content.
