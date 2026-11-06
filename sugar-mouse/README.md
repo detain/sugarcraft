@@ -67,7 +67,7 @@ if ($click !== null) {
 | `Mark` | Wrap content with private-use sentinel tags (`Mark::new()`, `Mark::zone()`, `Mark::disabled()`; `Mark::isValidId()` is the id predicate both encoder and decoder share; `Mark::untrusted()` sweeps foreign framing bytes off untrusted labels; `Mark::escapeForMessage()` renders hostile ids safely in errors) |
 | `Scan` | Stateless, reentrant decoder behind `Scanner` — `parse($rendered, ?$width)` returns `id => Zone`; `Scan::strip($rendered)` is the public byte-wise marker remover |
 | `Scanner` | Parse sentinels; `get(id)` and `hit(col, row)` lookups |
-| `Zone` | Readonly bounding box (start/end col/row) with `width()` / `height()` and `contains()` |
+| `Zone` | Readonly bounding box (start/end col/row) with `width()` / `height()` and `inBounds(MouseEvent)` |
 | `ZoneClickTracker` | Press+Release dedup per button |
 | `MouseEvent` | Immutable event (x, y, button, action enum) |
 | `MouseAction` | `Press` / `Release` / `Drag` / `Scroll` enum (the X10 button consts `BUTTON_LEFT/MIDDLE/RIGHT` hang off it — a legacy of the primitive's numeric-button vocabulary) |
