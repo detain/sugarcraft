@@ -41,7 +41,10 @@ final class JsonImporter
 {
     /**
      * @param array{ttl?: array<string, int>} $options Import options.
-     *                   ttl: Map of key → seconds until expiry.
+     *                   ttl: Map of key → seconds until expiry. Keys match
+     *                   the FULL document-key spelling (the '@db' suffix
+     *                   included when present); a document-level "_ttl"
+     *                   entry for the same key wins over this map.
      */
     public function __construct(
         private readonly Store $store,
@@ -90,11 +93,24 @@ final class JsonImporter
 
         // Extract TTL map if present (values must be whole seconds).
         $ttlMap = [];
-        if (isset($data['_ttl']) && \is_array($data['_ttl'])) {
+        if (isset($data['_ttl'])) {
+            if (!\is_array($data['_ttl'])) {
+                throw new \RuntimeException(
+                    \sprintf('_ttl must be a map of key → seconds, got %s.', \get_debug_type($data['_ttl']))
+                );
+            }
             foreach ($data['_ttl'] as $ttlKey => $seconds) {
                 if (!\is_int($seconds) && !\is_numeric($seconds)) {
                     throw new \RuntimeException(
                         \sprintf('_ttl entry "%s" must be an integer number of seconds, got %s.', (string) $ttlKey, \get_debug_type($seconds))
+                    );
+                }
+                // is_numeric admits floats and float-shaped strings; the
+                // store counts whole seconds, and (int) would silently
+                // truncate 1.5 to 1 while the text promises "integer".
+                if ((float) $seconds !== (float) (int) $seconds) {
+                    throw new \RuntimeException(
+                        \sprintf('_ttl entry "%s" must be an integer number of seconds, got %s.', (string) $ttlKey, (string) $seconds)
                     );
                 }
                 $ttlMap[(string) $ttlKey] = (int) $seconds;
@@ -105,16 +121,28 @@ final class JsonImporter
         // Binary entries ride base64 values plus the "_binary" flag list;
         // without it a reimport would store the base64 text as the value.
         $binaryKeys = [];
-        if (isset($data['_binary']) && \is_array($data['_binary'])) {
+        if (isset($data['_binary'])) {
+            if (!\is_array($data['_binary'])) {
+                throw new \RuntimeException(
+                    \sprintf('_binary must be a list of key names, got %s.', \get_debug_type($data['_binary']))
+                );
+            }
             foreach ($data['_binary'] as $bKey) {
-                if (\is_string($bKey)) {
-                    $binaryKeys[$bKey] = true;
+                if (!\is_string($bKey)) {
+                    // A skipped non-string member would silently demote one
+                    // intended binary entry to literal base64 text.
+                    throw new \RuntimeException(
+                        \sprintf('_binary must list key names as strings, got %s.', \get_debug_type($bKey))
+                    );
                 }
+                $binaryKeys[$bKey] = true;
             }
             unset($data['_binary']);
         }
 
-        // Merge constructor options with file-level TTL
+        // Merge constructor options with file-level TTL. Document keys match
+        // on their full spelling (the '@db' suffix included when present),
+        // and the file-level "_ttl" map wins over the constructor map.
         $ttlMap = \array_merge($this->options['ttl'] ?? [], $ttlMap);
 
         // Normalise every row BEFORE any write (fail-fast: a document with

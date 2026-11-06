@@ -40,7 +40,13 @@ use SugarCraft\Kv\YamlDialect;
  */
 final class YamlImporter
 {
-    /** @var array{ttl?: array<string, int>} Import options. */
+    /**
+     * @var array{ttl?: array<string, int>} Import options.
+     *                ttl: Map of key → seconds until expiry. Keys match the
+     *                FULL document-key spelling (the '@db' suffix included
+     *                when present); document-level "_ttl" / "skate_ttl_"
+     *                entries win over this map.
+     */
     private array $options;
 
     public function __construct(
@@ -99,34 +105,69 @@ final class YamlImporter
                         \sprintf('TTL for entry "%s" must be an integer number of seconds, got %s.', $actualKey, \get_debug_type($value))
                     );
                 }
+                // is_numeric admits float-shaped text; the store counts whole
+                // seconds and (int) would truncate 1.5 silently.
+                if ((float) $value !== (float) (int) $value) {
+                    throw new \RuntimeException(
+                        \sprintf('TTL for entry "%s" must be an integer number of seconds, got %s.', $actualKey, (string) $value)
+                    );
+                }
                 $ttlMap[$actualKey] = (int) $value;
                 unset($data[$key]);
             } elseif (\str_starts_with($key, YamlDialect::BINARY_PREFIX)) {
                 $actualKey = \substr($key, \strlen(YamlDialect::BINARY_PREFIX));
-                $binaryMap[$actualKey] = (bool) ((int) $value);
+                // Export writes 0 or 1. Anything else must NOT fail open:
+                // (bool)(int)'text' is false, which silently demotes a
+                // base64 payload to literal text.
+                if (!((\is_int($value) && ($value === 0 || $value === 1)) || (\is_string($value) && ($value === '0' || $value === '1')))) {
+                    throw new \RuntimeException(
+                        \sprintf('Binary flag for entry "%s" must be 0 or 1, got %s.', $actualKey, \get_debug_type($value))
+                    );
+                }
+                $binaryMap[$actualKey] = $value === 1 || $value === '1';
                 unset($data[$key]);
-            } elseif ($key === YamlDialect::JSON_TTL_KEY && \is_array($value)) {
+            } elseif ($key === YamlDialect::JSON_TTL_KEY) {
                 // Legacy symfony-route export: nested `_ttl: {key: secs}`.
+                // A scalar here is a mangled envelope, not a data key.
+                if (!\is_array($value)) {
+                    throw new \RuntimeException(
+                        \sprintf('_ttl must be a map of key → seconds, got %s.', \get_debug_type($value))
+                    );
+                }
                 foreach ($value as $k => $secs) {
                     if (!\is_int($secs) && !\is_numeric($secs)) {
                         throw new \RuntimeException(
                             \sprintf('_ttl entry "%s" must be an integer number of seconds, got %s.', (string) $k, \get_debug_type($secs))
                         );
                     }
+                    if ((float) $secs !== (float) (int) $secs) {
+                        throw new \RuntimeException(
+                            \sprintf('_ttl entry "%s" must be an integer number of seconds, got %s.', (string) $k, (string) $secs)
+                        );
+                    }
                     $ttlMap[(string) $k] = (int) $secs;
                 }
                 unset($data[$key]);
-            } elseif ($key === YamlDialect::JSON_BINARY_KEY && \is_array($value)) {
+            } elseif ($key === YamlDialect::JSON_BINARY_KEY) {
+                if (!\is_array($value)) {
+                    throw new \RuntimeException(
+                        \sprintf('_binary must be a list of key names, got %s.', \get_debug_type($value))
+                    );
+                }
                 foreach ($value as $k) {
-                    if (\is_string($k)) {
-                        $binaryMap[$k] = true;
+                    if (!\is_string($k)) {
+                        throw new \RuntimeException(
+                            \sprintf('_binary must list key names as strings, got %s.', \get_debug_type($k))
+                        );
                     }
+                    $binaryMap[$k] = true;
                 }
                 unset($data[$key]);
             }
         }
 
-        // Merge with constructor options
+        // Merge with constructor options: file-level entries win, and keys
+        // match the full document spelling (e.g. 'k@mydb'), not the bare key.
         $ttlMap = \array_merge($this->options['ttl'] ?? [], $ttlMap);
 
         // Normalise every row BEFORE any write (fail-fast: a document with

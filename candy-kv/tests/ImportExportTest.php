@@ -182,6 +182,53 @@ final class ImportExportTest extends TestCase
         $importer->importFromString('{"_ttl":{"k":0},"k":"v"}', false);
     }
 
+    public function testJsonImporterRefusesFractionalTtl(): void
+    {
+        // is_numeric used to admit 1.5 and (int) truncated it to one second
+        // — the document's stated lifetime shaved silently.
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('_ttl entry "k" must be an integer number of seconds, got 1.5.');
+        $importer->importFromString('{"_ttl":{"k":1.5},"k":"v"}', false);
+    }
+
+    public function testJsonImporterRefusesFractionalStringTtl(): void
+    {
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('_ttl entry "k" must be an integer number of seconds, got 60.5.');
+        $importer->importFromString('{"_ttl":{"k":"60.5"},"k":"v"}', false);
+    }
+
+    public function testJsonImporterRefusesScalarTtlEnvelope(): void
+    {
+        // A scalar "_ttl" used to fall through the envelope branch and
+        // import as a stray literal data key that export can never write
+        // back (reserved-name refusal makes it a dead key).
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('_ttl must be a map of key → seconds, got int.');
+        $importer->importFromString('{"_ttl":60,"k":"v"}', false);
+    }
+
+    public function testJsonImporterRefusesScalarBinaryEnvelope(): void
+    {
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('_binary must be a list of key names, got string.');
+        $importer->importFromString('{"_binary":"k","k":"QUJD"}', false);
+    }
+
+    public function testJsonImporterRefusesNonStringBinaryMember(): void
+    {
+        // A skipped non-string member silently demoted one intended binary
+        // entry to literal base64 text.
+        $importer = new JsonImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('_binary must list key names as strings, got int.');
+        $importer->importFromString('{"_binary":["k",5],"k":"QUJD"}', false);
+    }
+
     public function testAtomicRosterSeesNumericValuesOnSecondDatabase(): void
     {
         // The old roster skipped non-string values while the write loop
@@ -275,6 +322,60 @@ final class ImportExportTest extends TestCase
 
         $entry = $this->store->entry('timed-key');
         $this->assertNotNull($entry->expiresAt);
+    }
+
+    public function testYamlImporterRefusesFractionalTtlLine(): void
+    {
+        $importer = new YamlImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('TTL for entry "k" must be an integer number of seconds, got 60.5.');
+        $importer->importFromString("k: v\nskate_ttl_k: 60.5\n", false);
+    }
+
+    public function testYamlImporterRefusesScalarLegacyTtlEnvelope(): void
+    {
+        // A scalar `_ttl:` fell through the legacy-envelope branch and
+        // imported as a stray literal data key the exporter can never
+        // round-trip.
+        $importer = new YamlImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('_ttl must be a map of key → seconds, got int.');
+        $importer->importFromString("_ttl: 60\nk: v\n", false);
+    }
+
+    public function testYamlImporterRefusesScalarLegacyBinaryEnvelope(): void
+    {
+        $importer = new YamlImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('_binary must be a list of key names, got string.');
+        $importer->importFromString("_binary: k\nk: QUJD\n", false);
+    }
+
+    public function testYamlImporterRefusesTextBinaryFlag(): void
+    {
+        // (bool)(int)'text' evaluated to 0: the flag dropped silently and
+        // the base64 payload imported as literal text — the exact corruption
+        // the fail-fast headline promises to refuse.
+        $importer = new YamlImporter($this->store);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Binary flag for entry "k" must be 0 or 1');
+        $importer->importFromString("k: QUJD\nskate_binary_k: text\n", false);
+    }
+
+    public function testYamlImporterHonoursZeroOneBinaryFlags(): void
+    {
+        // Positive control: the shape export writes (1) still imports, and
+        // an explicit 0 means plain text rather than a refusal.
+        $importer = new YamlImporter($this->store);
+        $count = $importer->importFromString(
+            "bin: QUJD\nskate_binary_bin: 1\ntxt: hello\nskate_binary_txt: 0\n",
+            false,
+        );
+        $this->assertSame(2, $count);
+        $this->assertTrue($this->store->entry('bin')->binary);
+        $this->assertSame('ABC', $this->store->entry('bin')->rawValue());
+        $this->assertFalse($this->store->entry('txt')->binary);
+        $this->assertSame('hello', $this->store->get('txt'));
     }
 
     public function testYamlImporterAtomicMultiDatabaseThrows(): void
@@ -481,6 +582,19 @@ final class ImportExportTest extends TestCase
 
         $this->assertNotNull($fileEntry->expiresAt);
         $this->assertNotNull($optEntry->expiresAt);
+    }
+
+    public function testJsonImporterConstructorTtlMatchesFullDocumentKeySpelling(): void
+    {
+        // The ttl option is keyed by the FULL document-key spelling (the
+        // '@db' suffix included) — that is the string the row loop resolves.
+        $importer = new JsonImporter($this->store, ['ttl' => ['k@other' => 1800]]);
+        $importer->importFromString('{"k@other":"v"}', false);
+        $this->assertNotNull($this->store->entry('k@other')->expiresAt);
+
+        $bare = new JsonImporter($this->store, ['ttl' => ['k@x' => 1800]]);
+        $bare->importFromString('{"k":"v"}', false);
+        $this->assertNull($this->store->entry('k')->expiresAt, 'a suffix-keyed map must not leak onto the bare key');
     }
 
     // ─── JsonImporter single-database atomic path ─────────────────────────────
