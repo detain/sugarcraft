@@ -505,12 +505,12 @@ Built-in `Msg` classes under `SugarCraft\Core\Msg\` (all implement the
 | Keyboard | `KeyMsg`, `KeyPressMsg`, `KeyReleaseMsg`, `KeyRepeatMsg` |
 | Mouse | `MouseMsg`, `MouseClickMsg`, `MouseReleaseMsg`, `MouseMotionMsg`, `MouseWheelMsg` |
 | Paste | `PasteMsg`, `PasteStartMsg`, `PasteEndMsg` |
-| Lifecycle | `QuitMsg`, `SuspendMsg`, `ResumeMsg`, `InterruptMsg`, `Empty`-family via `RawMsg` |
+| Lifecycle | `QuitMsg`, `SuspendMsg`, `ResumeMsg`, `InterruptMsg` |
 | Terminal | `WindowSizeMsg` (`$cols`/`$rows`), `CursorPositionMsg`, `BackgroundColorMsg`, `ForegroundColorMsg`, `CursorColorMsg`, `ColorProfileMsg`, `TerminalVersionMsg`, `ModeReportMsg`, `CapabilityMsg`, `KeyboardEnhancementsMsg`, `ClipboardMsg` |
 | Focus | `FocusGainedMsg`, `FocusLostMsg` |
 | Screen stack | `ScreenStackPushedMsg`, `ScreenStackPoppedMsg` |
 | Composition | `AddComponentMsg`, `RemoveComponentMsg`, `ComponentAddressedMsg` (interface) |
-| Async / infra | `ExceptionMsg`, `ExecMsg`, `EnvMsg`, `PrintMsg`, `RawMsg`, `BatchMsg`, `SequenceMsg`, `SubscriptionsMsg`, `SuggestionsReadyMsg`, `TickRequest` (`@internal` request shape — no BC promise, do not construct in user code), `ExecRequest` (the `Cmd::exec` request the Program intercepts), `WorkerResultMsg` |
+| Async / infra | `ExceptionMsg`, `ExecMsg`, `EnvMsg`, `PrintMsg`, `RawMsg` (stdout side-channel: the Program intercepts it and writes the bytes verbatim without disturbing the renderer's diff state), `BatchMsg`, `SequenceMsg`, `SubscriptionsMsg`, `SuggestionsReadyMsg`, `TickRequest` (`@internal` request shape — no BC promise, do not construct in user code), `ExecRequest` (the `Cmd::exec` request the Program intercepts), `WorkerResultMsg` |
 
 ## Alt-screen vs inline mode
 
