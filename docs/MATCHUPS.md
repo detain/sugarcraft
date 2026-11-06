@@ -93,7 +93,7 @@ ships as `App\` — called out in the table below.
 | **CandyTetris** (`candy-tetris/`) | 🟢 ready | Tetris clone — SRS / 7-bag / NES base + Guideline bonuses. |
 | **CandyFiles** (`candy-files/`) | 🟢 ready | Dual-pane file manager. |
 | **CandyGit** (`candy-git/`) | 🟢 ready | Terminal Git client — a TUI for diff/hunk staging, branching, log, stash, worktrees and rebase; shells out to `git`. |
-| **CandySql** (`candy-sql/`) | 🟢 ready | SQLite/MySQL/PostgreSQL client TUI — schema introspection, query editor, EXPLAIN plans, server status, alerting, query history, and the admin suite: Workbench-style status dashboard, Variables editor (SET GLOBAL/PERSIST), connections/processlist with KILL, Performance Schema easy-setup, catalog-driven Reports. |
+| **CandySql** (`candy-sql/`) | 🟢 ready | SQLite/MySQL/PostgreSQL client TUI — schema introspection, query editor, EXPLAIN plans, server status, alerting, status history + in-session query log, and the admin suite: Workbench-style status dashboard, Variables editor (SET GLOBAL/PERSIST), connections/processlist with KILL, Performance Schema easy-setup, catalog-driven Reports. |
 | **CandyCodetime** (`candy-codetime/`) | 🟢 ready | Privacy-first coding-time tracker — JSONL day-files by default, optional SQLite backend (`--backend`). |
 | **CandyMinesweeper** (`candy-minesweeper/`) | 🟢 ready | Minesweeper — first-click safety / flood-fill. |
 | **CandyGifView** (`candy-gifview/`) | 🟢 ready | Terminal GIF viewer CLI (ext-gd via sugar-animation) — sugar-animation's viewer; antecedent: gifterm. |
