@@ -319,7 +319,10 @@ solarizedDark/Light) sets them explicitly; consumers must NOT assume
 - **`Palette`** — the ANSI 16-slot palette as lowercase static factories
   (`Palette::red()`, `Palette::brightWhite()`, … plus a `gray()` alias and
   `Palette::all(): list<Color>`) returning `Color` instances — there are no
-  `Palette::Red`-style constants. `Palette::hasDarkBackground(?Color $background)`
+  `Palette::Red`-style *constants*, though a capitalized *call* such as
+  `Palette::Red()` still resolves: it is a method call, and only the
+  lowercase names are declared (same case-insensitivity note as under
+  **Layout helpers**). `Palette::hasDarkBackground(?Color $background)`
   answers `true`/`false` for a *given* background colour and returns `null`
   when you pass `null` (meaning “unknown — don't switch schemes”); it does
   not probe the terminal by itself.
