@@ -33,23 +33,24 @@ Rules that make a fleet reproducible:
 ## The stdout envelope (`--output-format json`)
 
 A json run writes exactly one JSON document to stdout, on every exit path.
-Success shape (assembled at src/Cli/NonInteractive.php:2352):
+Success shape (assembled at src/Cli/NonInteractive.php:2371):
 
 | Key | Presence | Meaning |
 | --- | --- | --- |
 | `schema` | always | Envelope version; `1`. |
 | `result` | always (success) | The final assistant text. |
-| `refusals` | when present | Denials recorded during the run; omitted when there were none. |
+| `refusals` | always (success doc) | Denials recorded during the run; `[]` when there were none. |
 | `session_id` | when present | 16-hex id of the session that served the turn. |
 | `usage` | when present | Token/cost record for the turn; fields declared at src/Usage.php:140-218 (`totalTokens`, `costUsd`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheCreationTokens`, `reasoningTokens`, `delegatedTokens`, `unpricedModel`, `webSearchRequests`). |
 | `steps_truncated` / `length_stopped` / `loop_guard_stopped_by` | only when true | The stop-reason trio: a step budget cut, an output-length stop, or a loop-guard intervention. |
 | `json_schema_applied` | only when `false` | Appears only when a schema was requested and the answer rode a tool result instead — the schema was not enforced on that turn. |
 
-Error shape (src/Cli/NonInteractive.php:1580): `{"schema":1,"result":null,
-"error":{"type":...,"message":...}}` with an optional `provider` key, and the
-same `refusals`-when-present rule (src/Cli/NonInteractive.php:1593). A machine
-error document is only emitted under json/stream-json output — plain-text mode
-dies with prose on stderr instead (guard at src/Cli/NonInteractive.php:1584).
+Error shape (src/Cli/NonInteractive.php:1587): `{"schema":1,"result":null,
+"error":{"type":...,"message":...}}` with an optional `provider` key; here
+`refusals` stays conditional — present only when denials were recorded
+(src/Cli/NonInteractive.php:1608). A machine error document is only emitted
+under json/stream-json output — plain-text mode dies with prose on stderr
+instead (guard at src/Cli/NonInteractive.php:1598).
 Provider failures surface as `error.type` `backend` with a raw English message
 (connection refused, HTTP status) — not locale-tied, safe to pattern-match.
 
@@ -89,6 +90,11 @@ needs (src/Cli/NonInteractive.php:107, src/Cli/NonInteractive.php:146,
 src/Cli/NonInteractive.php:186). `2` means your command line was wrong — fail
 loud and fix the launcher; `1` means the run itself failed, and the envelope
 tells you why.
+
+Stdout cells above describe plain mode. Under `--output-format json` a machine
+error document accompanies the 1 and 2 exits alongside the stderr prose —
+`error.type` `usage` for the exit-2 cases above (including unrecognized
+options), `not-found` for an unknown `session show` target.
 
 ## Follow-up turns and lineage
 
@@ -168,9 +174,9 @@ A `SIGTERM` (or `SIGINT`) delivered to a headless workflow run exits 143 with
 an **empty stdout and no pause file** — `.running/` is never created, so
 `/workflow resume` has nothing to resume. The root cause is on the
 `WorkflowTool` path, which calls the engine's non-interactive entry (declared
-at src/Workflows/WorkflowEngine.php:717) with the interruptibility argument
-pinned off (src/Workflows/WorkflowEngine.php:723): signal handlers are only
-installed when the run is interruptible (src/Workflows/WorkflowEngine.php:1504),
+at src/Workflows/WorkflowEngine.php:750) with the interruptibility argument
+pinned off (src/Workflows/WorkflowEngine.php:756): signal handlers are only
+installed when the run is interruptible (src/Workflows/WorkflowEngine.php:1568),
 so the process dies on the raw signal. The interactive `/workflow run` path
 takes the interruptible default and does write pause records. Do not expect
 resume-from-kill on headless runs; budget time instead of assuming you can
