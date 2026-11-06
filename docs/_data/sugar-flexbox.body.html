@@ -54,6 +54,7 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
 <tr><td>FlexItem</td><td>new(content)</td><td>Create flex item</td></tr>
 <tr><td>FlexItem</td><td>withRatio(n)</td><td>Share of leftover main-axis space (0 = never grows, keeps its floor)</td></tr>
 <tr><td>FlexItem</td><td>withBasis(cells)</td><td>Fixed main-axis reservation before ratios share the rest</td></tr>
+<tr><td>FlexItem</td><td>withWidth(cells)</td><td>Legacy alias of withBasis() — in column mode the reserved axis is the HEIGHT; prefer withBasis</td></tr>
 <tr><td>Table</td><td>new()</td><td>Create empty table</td></tr>
 <tr><td>Table</td><td>addColumn(col)</td><td>Add table column</td></tr>
 <tr><td>Table</td><td>addRow(cells)</td><td>Add table row</td></tr>
@@ -66,12 +67,15 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
 <tr><td>Table</td><td>currentCell(col)</td><td>Single cell under the cursor (null when off the view)</td></tr>
 <tr><td>Table</td><td>render()</td><td>Full frame (pure); use TableRenderer for deltas</td></tr>
 <tr><td>TableRenderer</td><td>render(table)</td><td>First/resize frame full, then change-only delta</td></tr>
-<tr><td>Column</td><td>make(title, width)</td><td>Create a column (width in cells)</td></tr>
+<tr><td>Column</td><td>new(title, width)</td><td>Create a column (width in cells; `make()` remains as its BC alias)</td></tr>
 <tr><td>Column</td><td>withAlign(align)</td><td>Left / right / center cell placement</td></tr>
 <tr><td>Viewport</td><td>withContent(str, w=80, h=24)</td><td>Create viewport from string content</td></tr>
 <tr><td>Viewport</td><td>withStickyHeader/Footer(rows)</td><td>Pin lines at top/bottom across scrolling</td></tr>
 <tr><td>Viewport</td><td>withScrollbar(bool)</td><td>Toggle scrollbar display</td></tr>
 <tr><td>Viewport</td><td>lineUp/Down(n)</td><td>Scroll by n lines</td></tr>
+<tr><td>Viewport</td><td>pageUp/Down(), halfPageUp/Down()</td><td>Scroll by a page or half the viewport height</td></tr>
+<tr><td>Viewport</td><td>withMouseWheelEnabled(bool)</td><td>Accept mouse-wheel scroll messages</td></tr>
+<tr><td>Viewport</td><td>withMouseWheelDelta(n)</td><td>Lines the wheel turns per notch</td></tr>
 <tr><td>Viewport</td><td>gotoTop/Bottom()</td><td>Jump to start/end</td></tr>
 <tr><td>Scrollbar</td><td>vertical()</td><td>Vertical scrollbar</td></tr>
 <tr><td>Scrollbar</td><td>horizontal()</td><td>Horizontal scrollbar</td></tr>

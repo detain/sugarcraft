@@ -134,9 +134,9 @@ result must be assigned (or chained) — calling a method for effect discards it
 use SugarCraft\Flexbox\Table\{Table, Column};
 
 $table = (new Table())
-    ->addColumn(Column::make('Name', 20))
-    ->addColumn(Column::make('Age', 5)->withAlign('right'))
-    ->addColumn(Column::make('City', 15))
+    ->addColumn(Column::new('Name', 20))
+    ->addColumn(Column::new('Age', 5)->withAlign('right'))
+    ->addColumn(Column::new('City', 15))
     ->addRow(['Alice', '30', 'NYC'])
     ->addRow(['Bob', '25', 'LA'])
     ->addRow(['Carol', '35', 'Chicago']);
