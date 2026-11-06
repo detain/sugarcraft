@@ -469,11 +469,16 @@ and who fills each slot changes what you may trust in it.
 
 Two consequences deserve the front of your mind:
 
-- **Pairing without delivery is a lockout.** `Auth`'s `userKeys` map (and
-  a non-empty `keyFingerprints` list) rejects a session that presents no
-  fingerprint. With `ExposeAuthInfo` off, no fingerprint arrives, so
-  every login is refused. Turn the delivery on -- or keep the key lists
-  empty and authenticate by name only -- and prove the shape with a
+- **Pairing without delivery is a lockout — for real fingerprint lists.**
+  `Auth`'s `userKeys` map (and a non-empty `keyFingerprints` list) rejects a
+  session that presents no fingerprint. With `ExposeAuthInfo` off, no
+  fingerprint arrives, so every login against such an entry is refused.
+  The two ways out are not equivalent: emptying the key lists disarms
+  pairing altogether (name-only authentication, with the cross-product
+  footgun above), while an `[Auth::ANY_KEY]` entry says honestly "any key
+  for this name" — there is no key evidence to check, so it passes with or
+  without one, for that name only. Turn the delivery on, or pair with
+  `ANY_KEY` where no fingerprint can arrive, and prove the shape with a
   `ssh -v` round trip before you enable it on a live account.
 - **Peer-asserted slots are input, not fact.** Anything that arrived via
   `AcceptEnv` is a string the client chose. The middleware in this
