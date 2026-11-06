@@ -109,8 +109,22 @@ directory-level plant, run `push` from a working directory whose own
 $CANDY_CODETIME_DIR/
   2026-10-23.jsonl      one appendable line per heartbeat
   candy-codetime.db     created by --backend=sqlite, and by `milestone` (which always uses sqlite)
+  candy-codetime.db-wal WAL sidecar: recent commits live here until checkpointed
+  candy-codetime.db-shm WAL index header (shared memory)
 <dir>-backups/          created by `backup`
 ```
+
+The SQLite backend tunes the database on every open: `journal_mode=WAL` so
+dashboard reads never block behind a committing appender (the reverse either —
+the stated model is editor plugin + CLI + cron appending to one file), a
+5-second busy timeout so concurrent writers wait each other's locks out
+instead of failing with "database is locked", `synchronous=NORMAL` as WAL's
+companion (a power cut can cost the last transaction of heartbeat telemetry —
+one sample, never the file), and a 64 MB page cache (`cache_size=-64000`)
+that keeps the `idx_heartbeats_time` range scans in memory. The `-wal`/`-shm`
+sidecars are swept to `0600` with the database itself (Privacy below) and
+carry recent commits until checkpointed — one more reason the copy-only
+`backup` archive cannot cover sqlite; use `sqlite3 <db> ".backup <dest>"`.
 
 Each line of a day file is one JSON object:
 `{"time": <unix seconds>, "project": <string>, "language": <string>, "file":
@@ -133,7 +147,8 @@ backend, open the database with `sqlite3` and fix the row in `heartbeats`.
 ### Privacy
 
 The data directory and every file in it are owner-private: directories are
-`0700`, day files and the database are `0600`. Directories are created under a
+`0700`, day files, the database, and its `-wal`/`-shm` sidecars are `0600`.
+Directories are created under a
 narrowed umask, so they never exist world-readable; regular files are
 created-then-tightened — mode `0600` is settled before any payload is written,
 and until then the file is empty and shielded by the `0700` directory. A
