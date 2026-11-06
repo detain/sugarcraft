@@ -36,16 +36,20 @@ use SugarCraft\Async\CancellationToken;
  * TLS: unlike the react/mysql connector (which takes only a plaintext
  * mysql:// URI), PgAsync carries a real TLS story — the libpq `sslmode`
  * that {@see \SugarCraft\Sql\Db\ConnectionConfig} bakes into every pgsql
- * DSN is threaded through to PgAsync's own `tls` parameter here. In the
- * required modes (require/verify-ca/verify-full) PgAsync refuses the
- * connection outright when the server declines SSLRequest rather than
- * silently downgrading to plaintext. One upstream parity caveat:
- * pgasync's verify-ca sets verify_peer=false/allow_self_signed=true, so
- * it means "encrypted, CA-chain NOT verified" — weaker than libpq's
- * verify-ca; only verify-full gets certificate verification. Note also
- * that pgsql `require` matches libpq semantics (encrypt, no cert check)
- * — unlike the MySQL table in {@see \SugarCraft\Sql\Db\MysqlDatabase},
- * where require escalates to system-store verification.
+ * DSN is threaded through to PgAsync's own `tls` parameter here. One
+ * doctrine across drivers (review M4): `pgsqlSslModeSuffix()` folds every
+ * verification-demanding spelling (require/required/verify-ca/verify-full/
+ * verify-identity) onto `verify-full` and throws on typos, so only
+ * disable/allow/prefer/verify-full can reach this class. In `verify-full`
+ * PgAsync refuses the connection outright when the server declines
+ * SSLRequest rather than silently downgrading to plaintext — and since
+ * verify-full is the ONLY mode in which pgasync actually enables peer and
+ * chain verification, every demanding setting gets the strongest check.
+ * The weaker shapes that made this a parity hazard upstream — libpq's
+ * encrypt-only `require` and pgasync's `verify-ca` (verify_peer=false,
+ * allow_self_signed=true) — are unreachable from this app by
+ * construction; the accept-list below still names them because PgAsync's
+ * own vocabulary (and any caller hand-building `tls`) may carry them.
  *
  * @see https://github.com/voryx/PgAsync
  */
@@ -121,9 +125,10 @@ final class ReactPostgresConnection implements AsyncConnection
      * PgAsync requires both 'user' and 'database'; host/port have built-in
      * defaults but we pass them explicitly from the DSN when present.
      * The DSN's libpq `sslmode` (added by ConnectionConfig::buildDsn for
-     * pgsql, so its spelling is already normalised) rides as the `tls`
-     * parameter — see the class docblock for the required-mode and
-     * verify-ca parity semantics.
+     * pgsql, so its spelling is already normalised — verification-
+     * demanding settings arrive folded onto verify-full) rides as the
+     * `tls` parameter — see the class docblock for the fold doctrine and
+     * the accept-list rationale.
      *
      * @return array<string,mixed>
      */
