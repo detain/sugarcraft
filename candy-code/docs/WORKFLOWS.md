@@ -466,6 +466,10 @@ want a preset's prompt in a stage, paste it into the stage's `prompt:`.
 `parseYamlStage()` recognises only three stage shapes: one task, a `tasks:`
 list, and `parallel: true`. There is no YAML spelling for either. They are reachable from
 a user-tier `.php` workflow and from an embedder, not from a `.yaml` file.
+For the same reason `reject()` ([below](#reject-fails-a-stage-on-the-verifier-verdict))
+has no YAML spelling either: an unknown key in a `.yaml` task is silently
+ignored, so a stray `reject:` line there buys nothing — a `.php` workflow is
+the only place a verdict-gated verification stage can live.
 
 ---
 
@@ -497,9 +501,9 @@ return (new WorkflowBuilder())
 ```
 
 `TaskBuilder` carries `agent()`, `prompt()`, `tools()`, `timeout()`,
-`retries()`, `isolation()` and `name()`. `timeout` and `isolation` have **no
-YAML spelling**, so a YAML-declared task never carries them; `retries` is the
-`retries:` key above. `WorkflowEngine` substitutes defaults for whatever a task
+`retries()`, `isolation()`, `name()` and `reject()`. `timeout`, `isolation` and
+`reject` have **no YAML spelling**, so a YAML-declared task never carries them;
+`retries` is the `retries:` key above. `WorkflowEngine` substitutes defaults for whatever a task
 leaves unset when it builds the `SubAgent`:
 `$task->timeout ?? config.timeout` seconds, `$task->retries ?? 0`,
 `$task->isolation ?? Isolation::None`. A task without its own `timeout()` is
@@ -508,6 +512,65 @@ seconds); see [`timeout` is a per-stage wall-clock budget](#timeout-is-a-per-sta
 
 `retries()` reaches `SubAgent::$maxRetries`, and the pool re-runs the agent as
 [`retries` re-runs a failed agent](#retries-re-runs-a-failed-agent) describes.
+
+### `reject()` fails a stage on the verifier verdict
+
+A verification stage normally fails only when the verifier's agent *mechanically*
+fails (`Failed`) or runs out of time (`TimedOut`). But a verifier that finishes
+happily and writes "REJECT — the fix breaks the guard pins" is a **verdict**,
+not a crash, and status alone cannot see it. `reject()` closes that gap: attach
+a PCRE pattern to the verifier and the engine scans the verifier's final output
+after it completes — **a match rejects the run**. Read the name as "this text
+means rejection": the pattern names the words your verifier uses when it says
+*no*, not the words you hope to see. (An option called `expect` would invert
+that reading; `reject` states what a match does.)
+
+```php
+->withVerification(
+    'review',
+    Tasks::agent('coder')->prompt('Fix the finding.')->tools(['Edit', 'Read']),
+    Tasks::agent('reviewer')
+        ->prompt('Review the fix. Answer APPROVE or REJECT with reasons.')
+        ->reject('/\bREJECT\b|\bNEEDS-FIX\b/i')
+        ->retries(2),
+)
+```
+
+Semantics, precisely:
+
+- **Verifier slot only.** `reject()` belongs on the `TaskBuilder` you pass as
+  the *verifier*. Placing it on a verification stage's task slot, or on any
+  task of a `stage()` / `parallel()` / `pipeline()` stage, is refused by a
+  pre-flight check: the run ends `Failed` with a message naming the stage, and
+  **zero agents are dispatched** — a misplaced verdict rule never burns spend.
+- **The scan runs only on a completed verifier.** `Failed`, `TimedOut` and
+  `Stopped` verifier results keep their existing paths untouched; a
+  mechanically failed verifier is never pattern-scanned, and its error reaches
+  you verbatim.
+- **Match ⇒ verdict failure.** The stage fails with a reason that cites the
+  pattern and the matched line (control bytes stripped, long lines clipped), so
+  resume output reads like a mechanical failure: `verdict rejected: verifier
+  output matched /REJECT/ on: "…"`.
+- **`retries` is one shared budget.** Verdict re-runs and the pool's mechanical
+  re-runs draw from the same `retries(N)` allowance — `N` is attempts beyond
+  the first, whichever way they failed. Each re-run is a fresh verifier agent
+  against the same task result. When the budget is spent and the last verdict
+  still matches, the stage fails like any exhausted retry (the reason gains
+  `[failed on all N attempts]`), the run stops, and `/workflow resume` re-runs
+  the stage with the successful prefix kept.
+- **Invalid patterns fail closed.** `reject()` throws at the builder boundary
+  if the PCRE will not compile. A task constructed directly (bypassing the
+  builder) with a broken pattern cannot pass *or* silently skip its gate: the
+  scan reports `verdict scan failed closed` and the stage fails.
+- **Absent ⇒ untouched.** With no `reject()` the verification stage is
+  byte-for-byte the old engine path: one verifier dispatch, combined
+  `task + "\n" + verifier` output.
+
+This is what makes a review→fix→re-review loop an engine feature rather than an
+operator habit: the fixer task runs, the verifier judges, a rejecting verdict
+consumes a retry (or stops the run for `/workflow resume` after you act on the
+reason), and stage tokens and cost already fold every attempt into the run
+totals.
 
 `Workflow` itself is immutable; `withStatus()` returns a new instance.
 
