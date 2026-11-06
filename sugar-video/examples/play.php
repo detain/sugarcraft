@@ -69,8 +69,9 @@ Controls:
   m            cycle through rendering modes
   q / Esc      quit
 
-Environment variables (this example always seeds an explicit size; the
-library auto-detects only when a Reel opens without withSize()):
+Environment variables (this example always seeds an explicit size, which
+holds until the terminal's first size message overrides it — a live resize
+always wins; the library auto-detects only when a Reel opens without withSize()):
   SUGAR_VIDEO_COLS  terminal width in cells (default: 80, clamped to 10-200)
   SUGAR_VIDEO_ROWS  terminal height in rows (default: 24, clamped to 5-80)
 

@@ -70,7 +70,7 @@
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell">php examples/play.php video.mp4           # play a video
 php examples/play.php                    # synthetic test pattern (no file needed)
-SUGAR_VIDEO_COLS=120 SUGAR_VIDEO_ROWS=40 php examples/play.php   # explicit size</code></pre>
+SUGAR_VIDEO_COLS=120 SUGAR_VIDEO_ROWS=40 php examples/play.php   # seed the size; the terminal's own size message overrides it (live resize always wins)</code></pre>
     <pre class="code"><code class="language-php">// Programmatic (mode auto-detects terminal capability):
 use SugarCraft\Video\Player;
 $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm decode through ffmpeg

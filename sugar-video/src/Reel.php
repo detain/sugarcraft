@@ -73,6 +73,12 @@ final class Reel
      *               only once {@see withCellPx()} supplied BOTH dimensions, so the
      *               private update helper can tell "explicitly set" from "not passed"
      *               (a null prop alone is ambiguous). Invariant: true ⇒ both ints non-null.
+     * @param bool         $audioEnabled  When false, the built player runs with the
+     *               audio companion suppressed (see {@see withAudio()})
+     * @param bool         $sizeSet  Sentinel paired with the terminal size: true only
+     *               once {@see withSize()} supplied an explicit geometry, so play() can
+     *               seed the program's first frame with it; an unseeded Reel asks the
+     *               terminal instead, and the terminal's own size message always wins.
      */
     private function __construct(
         private readonly string $path,
@@ -89,6 +95,7 @@ final class Reel
         private readonly ?int $cellPxH = null,
         private readonly bool $cellPxSet = false,
         private readonly bool $audioEnabled = true,
+        private readonly bool $sizeSet = false,
     ) {
     }
 
@@ -343,7 +350,7 @@ final class Reel
      */
     public function withSize(int $cols, int $rows): self
     {
-        return $this->with(cols: $cols, rows: $rows);
+        return $this->with(cols: $cols, rows: $rows, sizeSet: true);
     }
 
     /**
@@ -650,9 +657,19 @@ final class Reel
         // M24: the opt-out is applied to the built player.
         $player = $this->audioEnabled ? $player : $player->withAudio(false);
 
+        // A size the host set explicitly (withSize()) seeds the very first
+        // frame; a Reel that never sized instead asks the terminal. Either
+        // way the terminal's own size message overrides from here on — a
+        // live resize always wins. Non-positive geometry cannot seed: the
+        // terminal query is the safer fallback there.
+        $windowSeed = $this->sizeSet && $this->cols > 0 && $this->rows > 0
+            ? ['cols' => $this->cols, 'rows' => $this->rows]
+            : null;
+
         $options = new ProgramOptions(
             useAltScreen: true,
             hideCursor: true,
+            windowSize: $windowSeed,
         );
 
         (new Program($player, $options))->run();
@@ -679,6 +696,7 @@ final class Reel
      * @param int|null   $cellPxW Caller-measured cell pixel width, leave null to keep current
      * @param int|null   $cellPxH Caller-measured cell pixel height, leave null to keep current
      * @param bool|null  $cellPxSet Sentinel for the pair, leave null to keep current
+     * @param bool|null  $sizeSet  Sentinel for the explicit size, leave null to keep current
      *
      * The cellPx trio is coupled: pass all three together (as withCellPx() does) —
      * dimensions without cellPxSet stay inert, matching cellPx()'s set ⇒ non-null invariant.
@@ -701,6 +719,7 @@ final class Reel
         // ride the value itself — this flag marks "the caller handed fps".
         bool $fpsSet = false,
         ?bool $audioEnabled = null,
+        ?bool $sizeSet = null,
     ): self {
         // AutoMode sentinel → null (play() will resolve to auto-detected mode).
         $resolvedMode = $mode instanceof AutoMode ? null : ($mode ?? $this->mode);
@@ -720,6 +739,7 @@ final class Reel
             $cellPxH ?? $this->cellPxH,
             $cellPxSet ?? $this->cellPxSet,
             $audioEnabled ?? $this->audioEnabled,
+            $sizeSet ?? $this->sizeSet,
         );
     }
 

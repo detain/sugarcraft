@@ -73,7 +73,8 @@ php examples/play.php video.mp4 ascii
 # Force auto mode (probe terminal, pick best available)
 php examples/play.php video.mp4 auto
 
-# Set terminal dimensions
+# Seed the first frame's size — the terminal's own size message overrides
+# it, so a live resize always wins
 SUGAR_VIDEO_COLS=120 SUGAR_VIDEO_ROWS=40 php examples/play.php synthetic
 ```
 

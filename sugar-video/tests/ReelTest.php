@@ -504,4 +504,28 @@ final class ReelTest extends TestCase
             self::assertStringContainsString('ftp://***@example.invalid/clip.mp4', $e->getMessage());
         }
     }
+
+    /**
+     * @testdox an explicit withSize() seeds the program window; an unsized Reel never does
+     */
+    public function testTheExplicitSizeSeedsTheProgramWindow(): void
+    {
+        $read = static fn (Reel $r): bool => (new \ReflectionProperty(Reel::class, 'sizeSet'))->getValue($r);
+
+        $this->assertFalse($read(Reel::open('/tmp/clip.mp4')), 'a Reel that never sized must not seed');
+
+        $sized = Reel::open('/tmp/clip.mp4')->withSize(120, 40);
+        $this->assertTrue($read($sized), 'withSize() arms the seed');
+        $this->assertTrue(
+            $read($sized->withLoop(true)->withFps(30.0)->withRamp('dense')),
+            'a later setter must not drop the seed',
+        );
+
+        $src = (string) file_get_contents(\dirname(__DIR__) . '/src/Reel.php');
+        $this->assertStringContainsString('sizeSet: true', $src, 'withSize() passes the sentinel through the update helper');
+        $this->assertStringContainsString("['cols' => \$this->cols, 'rows' => \$this->rows]", $src,
+            'play() builds the seed from the explicit geometry');
+        $this->assertSame(1, substr_count($src, 'windowSize: $windowSeed'),
+            'the single Program construction in play() carries the seed');
+    }
 }
