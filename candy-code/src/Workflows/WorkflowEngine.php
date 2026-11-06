@@ -40,6 +40,17 @@ use SugarCraft\Code\Tools\Tool;
  * actually completed so far, then exits — so a real interrupt captures
  * genuine partial progress instead of losing the whole run silently.
  *
+ * O1 resilience records: for a registry-backed run (run()/resume()) the
+ * same pause record is ALSO refreshed after every stage that completes —
+ * same serializer, same wire shape, same path. A SIGKILL or a dead machine
+ * can then never lose a finished stage: resume() replays from the first
+ * stage the record does not count. Clean terminals (completed, failed,
+ * cancelled with no pause standing) withdraw it, so an undisturbed run
+ * leaves exactly the trace it always left. The in-flight stage of a killed
+ * run always re-runs — stage granularity is the contract, and the AUDIT
+ * WF-2 rule holds: re-running a stage is recoverable, skipping one that
+ * lied is not.
+ *
  * Remaining limitation: resume granularity is per-whole-stage only. If
  * the interrupt lands while a 'parallel' stage is mid-flight (see
  * executeParallelStage()), that stage's individual in-progress agent
@@ -645,6 +656,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($pauseWasRequested) {
             $pauseRequested = true;
             $this->writePauseFile($interruptId, $cancelled, $loadPath);
+        } elseif ($loadPath !== null) {
+            // O1: a cancelled run with no pause standing leaves no file
+            // today; the resilience record must not either.
+            $this->withdrawPauseRecord($interruptId);
         }
 
         return $cancelled;
@@ -1316,6 +1331,21 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
+     * Withdraw the O1 per-stage resilience record at a clean terminal state
+     * (completed / failed / cancelled with no pause standing). A vanished
+     * file is success: an explicit resume() may have consumed it in the
+     * meantime, and the run's remembered result then carries the truth.
+     */
+    private function withdrawPauseRecord(string $key): void
+    {
+        $pauseFile = $this->getPauseFilePath($key);
+
+        if (is_file($pauseFile)) {
+            @unlink($pauseFile);
+        }
+    }
+
+    /**
      * The {@see $liveRuns} key of the live run an identifier names — its pause
      * key (the name) or its run ID — innermost first, or null when none is
      * live.
@@ -1625,6 +1655,20 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $totalTokens += $this->sumTokens($stageResult);
                 $totalCost += $this->sumCost($stageResult);
 
+                // O1: refresh the resilience record with this stage counted.
+                // Best-effort deliberately — a resilience write that fails
+                // must not break the run it protects; the explicit pause
+                // paths still throw through their callers, and only registry-
+                // backed runs (a loadPath to resume from) keep a record at
+                // all, so runFromPhp()/runWorkflow() stay byte-identical.
+                if ($loadPath !== null && !$stageResult->isFailure()) {
+                    try {
+                        $this->writePauseFile($interruptId, $snapshot(WorkflowStatus::Paused), $loadPath);
+                    } catch (\Throwable) {
+                        // Ignored: the next refresh, or an explicit pause, retries.
+                    }
+                }
+
                 // Cancelled WHILE this stage ran: its agents were killed
                 // (underCancellation()), so the stage's result — a failure, or
                 // a "success" missing the agents that died — is not its work,
@@ -1653,6 +1697,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     if ($this->liveRuns[$liveToken]['pauseRequested']) {
                         $pauseRequested = true;
                         $this->writePauseFile($interruptId, $failed, $loadPath);
+                    } elseif ($loadPath !== null) {
+                        // O1: a failed run with no pause standing leaves no
+                        // file today, and the resilience record must not
+                        // either — status() reads a file BEFORE the
+                        // remembered result, so a leftover would report the
+                        // Failed run as Paused with nothing new to resume.
+                        $this->withdrawPauseRecord($interruptId);
                     }
 
                     return $failed;
@@ -1662,13 +1713,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // A pause requested during the LAST stage has nothing left to stop:
             // the run completed. The file pause() wrote at request time is
             // withdrawn, or status would report a paused run with nothing to
-            // resume and stages missing from it.
+            // resume and stages missing from it. A clean completion likewise
+            // withdraws the O1 resilience record (3); an interrupted one keeps
+            // it for resume().
             if ($this->liveRuns[$liveToken]['pauseRequested']) {
                 $pauseRequested = true;
-                $pauseFile = $this->getPauseFilePath($interruptId);
-                if (is_file($pauseFile)) {
-                    @unlink($pauseFile);
-                }
+                $this->withdrawPauseRecord($interruptId);
+            } elseif ($loadPath !== null) {
+                $this->withdrawPauseRecord($interruptId);
             }
 
             return $snapshot(WorkflowStatus::Completed);

@@ -405,6 +405,17 @@ Pause files live under `<workflowsPath>/.running/*.json` — anchored to the
 registry's directory rather than to `~`, so a registry pointed somewhere trusted
 does not pause into a directory nobody vetted.
 
+A registry-backed run (`/workflow run`, and any `resume()`) refreshes that same
+record after **every stage that completes** — not only at pause boundaries. A
+`SIGKILL`, a machine that dies, or a dropped container can then lose at most the
+in-flight stage: `resume()` replays from the first stage the record does not
+count, and skips the prefix it does. The record is withdrawn whenever the run
+ends without a standing pause (completed, failed, or cancelled), so an
+undisturbed run still leaves no file behind. Honest limit: a stage that was
+mid-flight when the process died always **re-runs in full** — records are per
+whole stage, and there is no partial credit inside a stage (or inside a
+`parallel` sub-stage).
+
 ### Pause, resume, status
 
 `<id>` is the run ID `/workflow run` prints (`three-1a2b3c4d`) or the workflow
