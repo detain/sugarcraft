@@ -26,6 +26,12 @@ to a no-op. `ext-posix` is optional too — `Child::kill()` signals
 through `Libc::kill()`, which uses `posix_kill()` when it is loaded and
 libc `kill(2)` over FFI otherwise.
 
+Heads-up for the first run: distro-packaged PHP often ships
+`ffi.enable=0` in `php.ini`, and sugar-pty then throws `PtyException:
+Failed to load libc` the moment it binds — the
+[ext-ffi bullet under Known limitations](#ext-ffi-is-required--and-distro-php-often-ships-it-switched-off)
+carries the fix and a one-line check for what your PHP actually answered.
+
 ## Quickstart
 
 Contract-first — resolve the backend through the factory so tests can
@@ -616,8 +622,8 @@ environment variable to select which PTY backend to use:
 | Value | Behaviour |
 |---|---|
 | _(unset)_ / `auto` | Platform-appropriate default — `posix-ffi` on the POSIX families, `conpty` on Windows |
-| `posix-ffi` | `PosixPtySystem` — FFI into libc `posix_openpt` etc. (Linux / macOS) |
-| `conpty` | `Windows\ConPtySystem` — FFI into the kernel32 pseudo-console APIs (Windows 10 1809+ / PHP 8.4+). On a non-Windows host it throws `UnsupportedPlatformException` naming the probe's reason; the FFI load itself is deferred to `open()`. |
+| `posix-ffi` | `PosixPtySystem` — FFI into libc `posix_openpt` etc. (Linux / macOS). FFI-backed: distro PHP with `ffi.enable=0` fails at first bind — see [Install](#install). |
+| `conpty` | `Windows\ConPtySystem` — FFI into the kernel32 pseudo-console APIs (Windows 10 1809+ / PHP 8.4+). On a non-Windows host it throws `UnsupportedPlatformException` naming the probe's reason; the FFI load itself is deferred to `open()`. FFI-backed: same `ffi.enable` dependency. |
 | `sidecar` | Not implemented in this release — throws `UnsupportedPlatformException` |
 | `pecl` | Not implemented in this release — throws `UnsupportedPlatformException` |
 
