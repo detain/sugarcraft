@@ -7,13 +7,14 @@ namespace SugarCraft\GitServer\Tests;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Fresh-process pins for the `repo list` / `repo info` CLI slice: visibility
- * persists only via the on-disk marker (never public-by-presence), bare repos
- * are listed exactly as the serve scan accepts them, and a jail-unsafe name
- * is refused before it ever touches the filesystem. Children run with a PATH
- * that includes the system git (Repo::init() shells out) and a cwd inside the
- * fixture sandbox, so a misparsed path argument can never plant junk in the
- * repository tree.
+ * Fresh-process pins for the bin CLI slices (repo list/info/create and
+ * init's publish shape): visibility persists only via the on-disk marker
+ * (never public-by-presence), bare repos are listed exactly as the serve
+ * scan accepts them, a jail-unsafe name is refused before it ever touches
+ * the filesystem, and init lands its config 0600 regardless of process
+ * umask. Children run with a PATH that includes the system git
+ * (Repo::init() shells out) and a cwd inside the fixture sandbox, so a
+ * misparsed path argument can never plant junk in the repository tree.
  */
 final class BinRepoCommandsTest extends TestCase
 {
@@ -186,6 +187,31 @@ final class BinRepoCommandsTest extends TestCase
         $this->assertStringNotContainsString('published via its marker', $created['out']);
     }
 
+
+    /**
+     * init seeds the data directory with a config that will later carry
+     * the token signing secret, so the file must never be born
+     * world-readable under the default umask, and the anonymous-read
+     * lever must be present and off in the skeleton (a skeleton without
+     * the key would still be fail-closed via the loader default, but the
+     * operator loses the discoverability that motivated writing it).
+     */
+    public function testInitWritesConfigPrivateWithTheLeverDocumentedInSkeleton(): void
+    {
+        $dir = $this->tmpDir . '/data';
+        $r = $this->runBin(['init', $dir]);
+        $this->assertSame(0, $r['rc'], $r['out'] . $r['err']);
+
+        $config = $dir . '/config.yaml';
+        $this->assertFileExists($config);
+        $this->assertSame(
+            0600,
+            \fileperms($config) & 0777,
+            'init published config.yaml under the process umask instead of 0600'
+        );
+        $this->assertStringContainsString('allow_anonymous_read: false', (string) \file_get_contents($config));
+        $this->assertSame([], \glob($dir . '/config.yaml.*.tmp'), 'temp residue escaped the publish rename');
+    }
 
     public function testServeHttpRefusesNonNumericPort(): void
     {

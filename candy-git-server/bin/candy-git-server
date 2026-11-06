@@ -386,7 +386,31 @@ lfs:
   enabled: true
 YAML;
 
-    \file_put_contents("{$dataPath}/config.yaml", $configYaml);
+    // The config can carry http.auth_secret (the token-mode signing key),
+    // so it gets the same treatment the user store promises: created
+    // 0600 on the temp inode before the payload lands — a bare
+    // file_put_contents would inherit the process umask, and deployers
+    // routinely run the init step with a 0022 or looser umask where the
+    // secret would sit world-readable from first byte.
+    $tmp = "{$dataPath}/config.yaml." . \bin2hex(\random_bytes(6)) . '.tmp';
+    $handle = @\fopen($tmp, 'xb');
+    if ($handle === false) {
+        return error("init: cannot open temp config at {$tmp}\n");
+    }
+    $written = false;
+    try {
+        \chmod($tmp, 0600);
+        if (\fwrite($handle, $configYaml) !== false) {
+            \fflush($handle);
+            $written = true;
+        }
+    } finally {
+        \fclose($handle);
+    }
+    if (!$written || !@\rename($tmp, "{$dataPath}/config.yaml")) {
+        @\unlink($tmp);
+        return error("init: cannot publish config at {$dataPath}/config.yaml\n");
+    }
 
     echo Lang::t('cli.done') . "\n";
     echo Lang::t('cli.next_steps') . "\n";
