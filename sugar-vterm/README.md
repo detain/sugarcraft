@@ -274,7 +274,7 @@ implements the superset.
 | `d` | VPA | (Handler) | Cursor to row N. |
 | `f` | HVP | `hvp($row, $col)` | Same as CUP — move cursor to (row, col). |
 | `g` | TBC | `tbc($mode=0)` | Tab clear: 0=column, 3=all (renderer: no-op — tab stops unmodelled). |
-| `h` | SM/DECSET | `decset($mode, $prefix)` | Set mode. `?` prefix → private. `?7 h` enables DECAWM, `?12 h` BCE, `?25 h` cursor visible, `?47/?1047/?1049 h` alt screen, `?1004 h` focus events, `?2026 h` sync-update, `?6 h` DECOM. |
+| `h` | SM/DECSET | `decset($mode, $prefix)` | Set mode. `?` prefix → private. `?7 h` enables DECAWM, `?12 h` BCE, `?25 h` cursor visible, `?47/?1047/?1049 h` alt screen, `?1004 h` focus events, `?2026 h` synchronized output, `?6 h` DECOM. |
 | `l` | RM/DECRST | `decrst($mode, $prefix)` | Reset mode (mirror of `h`). |
 | `m` | SGR | `sgr($params)` | Set graphic rendition. Subparam colons (`4:1`..`4:5`) parsed. |
 | `r` | DECSTBM | `decstbm($top, $bottom)` | Set scroll region rows (1-indexed). |
@@ -652,15 +652,15 @@ use SugarCraft\Vterm\Terminal\Terminal;
 $vt = Terminal::new(cols: 80, rows: 24);
 
 $mode = $vt->mode();
-var_dump($mode->syncUpdate);  // bool — false until DEC 2026 is set
+var_dump($mode->syncUpdate);  // bool — false until synchronized output is set
 
-$vt->feed("\x1b[?2026h");       // enter sync-update mode
+$vt->feed("\x1b[?2026h");       // enter synchronized output mode
 $vt->feed("\x1b[31mA\x1b[0m");  // queued, not yet visible
 $vt->feed("\x1b[?2026l");       // flush → both cells appear together
 var_dump($vt->screen()->cell(0, 0)->grapheme);  // 'A'
 ```
 
-Mutations are queued on the handler's internal sync buffer and replayed
+Mutations are queued on the handler's internal synchronized-output queue and replayed
 atomically when the window closes. BCE erase (CSI ?12 h)
 and combining-char attachments are both eligible for queued writes.
 The queue is bounded: past 16384 pending mutations a partial flush lands
@@ -759,7 +759,7 @@ unbounded channel is capped and nothing leaves the grid unsanitised:
 - **Clipboard / focus events** — OSC 52 and DEC 1004 are *self-armed* by the
   remote program (no capability negotiation), so both logs are 1024-entry
   drop-oldest rings. `clipboardEvents()` and `focusEvents()` drain-on-read.
-- **DEC 2026 sync queue** — at most 16384 pending cell writes; past that the
+- **Synchronized output (DEC 2026) queue** — at most 16384 pending cell writes; past that the
   queue partially replays to the grid. Atomicity is surrendered only under
   adversarial pressure, never silently dropped.
 - **Scrollback** — bounded ring (default 1000 rows); `withScrollbackSize()`
