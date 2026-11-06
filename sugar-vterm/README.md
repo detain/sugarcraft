@@ -98,11 +98,11 @@ output anywhere.
 | Handler | `Handler\ScreenHandler` | Dispatches parser actions to Buffer / Cursor / Sgr / Mode |
 | Screen | `Screen\Screen` | Immutable snapshot — read current grid after feeding bytes |
 | Buffer | `Buffer\Buffer` | Cell grid — `rows × cols` of styled grapheme cells |
-| Cursor | `Cursor\Cursor` | Position + visibility + origin mode tracking |
+| Cursor | `Cursor\Cursor` | Position + visibility + shape (the emulator-path class also carries the saved row/column pair) |
 | SGR | `Sgr\Sgr` | Current graphics rendition: foreground / background / attributes |
 | Rendition | `Rendition` | Double-height / double-width line rendition (`ESC # 3`–`ESC # 6`), stamped on cells |
 | Charset | `Charset\Charsets` | SCS character-set tables — G0–G3 designations, SO/SI locking shifts, SS2/SS3 single shifts |
-| Mode | `Mode\Mode` | DEC private mode flags (`DECSET`/`DECRST`) including DECAWM auto-wrap; `altScreenVariant` separates the four-way `47`/`1047`/`1048`/`1049` alt-screen semantics |
+| Mode | `Mode\Mode` | DEC private mode flags (`DECSET`/`DECRST`) including DECAWM auto-wrap and DECOM origin mode (`$originMode` — origin is mode state, not cursor state; the emulator keeps a separate saved-origin slot per DECSC); `altScreenVariant` separates the four-way `47`/`1047`/`1048`/`1049` alt-screen semantics |
 | Hyperlink | `Hyperlink\Hyperlink` | OSC 8 URL + id tracker |
 | Scrollback | `Screen\Scrollback` | Ring buffer — stores rows that scroll off the top (default 1000) |
 | Msg | `Msg\FocusInMsg / FocusOutMsg` | Focus-in / focus-out event records (CSI I and CSI O, mode 1004) |
