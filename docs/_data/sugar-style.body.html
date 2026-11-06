@@ -77,7 +77,7 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
 <tr><td>Style</td><td>patch($other)</td><td>Incremental merge — only props set in $other are applied; a null colour/width/border in $other is skipped, not a clear</td></tr>
 <tr><td>Style</td><td>colorProfile(ColorProfile $p)</td><td>Force the colour tier render() downsamples to (TrueColor / Ansi256 / Ansi / Ascii / NoTty)</td></tr>
 <tr><td>BorderGradientBlend</td><td>fromColors(Color ...$colors)</td><td>1-5 colors → 4 interpolated border-side colors</td></tr>
-<tr><td>Style</td><td>padding(top, right, bottom, left)</td><td>Add padding</td></tr>
+<tr><td>Style</td><td>padding(...$sides)</td><td>Add padding (1–4 values — CSS-style shorthand)</td></tr>
 <tr><td>Style</td><td>render(content)</td><td>Render styled content</td></tr>
 <tr><td>Border</td><td>normal(), rounded(), thick(), double(), block(), ascii(), hidden(), markdownBorder()</td><td>All eight border style presets</td></tr>
 <tr><td>Border</td><td>withEmbeddedTitle(text, ?anchor, ?open, ?close)</td><td>btop-style title cut into the edge (<code>╭─┐cpu┌──╮</code>); left/right inset one rune, center uses btop's clock formula, overflow shrinks with <code>…</code></td></tr>
