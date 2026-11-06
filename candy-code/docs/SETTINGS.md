@@ -338,7 +338,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `theme` | `Bootstrap::chat()` | yes |
 | `statusLine` | `Bootstrap::chat()`, `Chat::applySettings()` → `StatusLineCommand::fromSettings()` | **no** |
 | `layout` | `Bootstrap::app()` → `App::$dock` via `DockLayout::fromArray()` | **no** |
-| `notify` | `Chat` (turn end, permission prompt) → `TerminalNotifier::fromConfig()` | yes |
+| `notify` | `Chat` (turn end, permission prompt) → `TerminalNotifier::fromConfig()` — which upgrades `off` to `bell` while the `screenReader` switch is ON (the upgrade is consulted per call, so it tracks the live switch; the CONFIGURED mode itself is read from the launch-time merged config, which is why this key carries the restart badge) | yes |
 | `watchFiles` | `Chat::subscriptions()` → `AiCommentWatcher::enabled()` | **no** |
 | `queueMode` | `Chat::submit()`, `SubmitOptions::effectiveDelivery()` → `QueueMode::onEnter()` | yes |
 | `terminalBackground` | `Theme::adaptive()`, the shell chrome → `TerminalBackground::isDark()`, `color()` → `setting()` | yes |
@@ -360,7 +360,7 @@ and `"permissionRules": []` is a well-formed empty list that still outranks
 | `maxCheckpoints` | `EnhancedSessionStore::saveCheckpoint()` → `maxCheckpoints()` | **no** |
 | `keybindings` | `Bootstrap::chat()` → `KeyBindingRegistry::useOverrides()` → `aliasPress()` (via `effective()`) at `App::handleKey()`; `command:` ids split to `commandFor()` at the top of `App::handleKey()` — re-applied mid-session by `/keys reload` → `Bootstrap::reloadKeybindings()` | **no** |
 | `vimMode` | `Chat::update()` key dispatch (arm re-sync + operator resolution) → `ComposerVim` over the sugar-forms `TextArea` Vim layer | **no** |
-| `screenReader` | ON, the frame sheds what a reader cannot narrate: box frames, rules and the diff gutter draw as blank paper, pane titles and the dock lose their identity pictures, list cursors read as a plain `>`, selected menu rows carry a text `>` and an `n/of` position instead of reverse video alone, and the agent spinner pins to its first frame. OFF, every byte is exactly what the plain renderer paints. | **no** |
+| `screenReader` | ON, the frame sheds what a reader cannot narrate: box frames, rules and the diff gutter draw as blank paper, pane titles and the dock lose their identity pictures, list cursors read as a plain `>`, selected menu rows carry a text `>` and an `n/of` position instead of reverse video alone, and the agent spinner pins to its first frame. It additionally takes the notification stage: `TerminalNotifier::fromConfig()` upgrades an `off` `notify` to `bell` — turn ends and waiting approvals always sound, never the visual `osc9` popup — and each permission prompt batches a `ScreenReaderMode::cue()` BEL beside the wait; both checks run live, so this half needs no restart however `notify` is set. Note the two cues stack while the upgrade is in effect: an ask with `notify: off` (promoted to `bell`) sounds twice, a behaviour change reserved to its own ruling. OFF, every byte is exactly what the plain renderer paints. | **no** |
 | `transcriptJsonl` | `Bootstrap::sessionStore()` → `EnhancedSessionStore::withJsonlMirror()` (the store mirror) and the `JsonlTranscriptWriter::enabled()` flag read by `ScriptHook::stdinPayload()` (`transcript_path`) | **no** |
 | `lintCommands` | `Bootstrap::hooks()` → `LintRunner::withCommands()` | **no** |
 | `formatCommands` | `Bootstrap::hooks()` → `FormatRunner::withCommands()` | **no** |

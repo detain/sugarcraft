@@ -1237,7 +1237,10 @@ side: under `SPLIT_MIN_TOTAL_COLS` (80) the split is not rendered and the
 view is whichever single band has focus. Nothing about the keyboard contract
 changes with width, which is what makes a narrow or screen-reader terminal a
 layout question rather than a lost feature: `screenReader` mode sheds icons
-and spells the row cursor as text (see `ScreenReaderMode`), and the collapse
+and spells the row cursor as text (see `ScreenReaderMode`), it sounds the
+events a reader cannot see — the `notify: off` upgrade to `bell` and the
+permission-prompt BEL cue (`TerminalNotifier::fromConfig()`,
+`ScreenReaderMode::cue()`) — and the collapse
 rules above mean the same keys select the same panes at 60 columns as at 160.
 
 Keyboard focus order and meaning:

@@ -101,7 +101,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.notify.label'))
                 ->withHelp(Lang::t('settings.notify.help'))
                 ->withReaderSymbol(TerminalNotifier::class . '::fromConfig')
-                ->withReadBy('`Chat` (turn end, permission prompt) → `TerminalNotifier::fromConfig()`'),
+                ->withReadBy('`Chat` (turn end, permission prompt) → `TerminalNotifier::fromConfig()` — which upgrades `off` to `bell` while the `screenReader` switch is ON (the upgrade is consulted per call, so it tracks the live switch; the CONFIGURED mode itself is read from the launch-time merged config, which is why this key carries the restart badge)'),
             // Roadmap 5.14i. USER-only: it makes comments in the repository's
             // files prompts the agent acts on, so a checkout may never turn it on.
             SettingDefinition::new(AiCommentWatcher::SETTINGS_KEY, SettingType::Bool, false)
@@ -365,7 +365,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.screenReader.label'))
                 ->withHelp(Lang::t('settings.screenReader.help'))
                 ->withReaderSymbol(ScreenReaderMode::class . '::enabled')
-                ->withReadBy('ON, the frame sheds what a reader cannot narrate: box frames, rules and the diff gutter draw as blank paper, pane titles and the dock lose their identity pictures, list cursors read as a plain `>`, selected menu rows carry a text `>` and an `n/of` position instead of reverse video alone, and the agent spinner pins to its first frame. OFF, every byte is exactly what the plain renderer paints.'),
+                ->withReadBy('ON, the frame sheds what a reader cannot narrate: box frames, rules and the diff gutter draw as blank paper, pane titles and the dock lose their identity pictures, list cursors read as a plain `>`, selected menu rows carry a text `>` and an `n/of` position instead of reverse video alone, and the agent spinner pins to its first frame. It additionally takes the notification stage: `TerminalNotifier::fromConfig()` upgrades an `off` `notify` to `bell` — turn ends and waiting approvals always sound, never the visual `osc9` popup — and each permission prompt batches a `ScreenReaderMode::cue()` BEL beside the wait; both checks run live, so this half needs no restart however `notify` is set. Note the two cues stack while the upgrade is in effect: an ask with `notify: off` (promoted to `bell`) sounds twice, a behaviour change reserved to its own ruling. OFF, every byte is exactly what the plain renderer paints.'),
             // C-SES-8.g (plan_comparison.md §3): the JSONL mirror switch. USER
             // tier on purpose — no withProjectSettable(): `transcript_path`
             // rides into hook STDIN and hooks are project-definable, so a

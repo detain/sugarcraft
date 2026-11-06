@@ -594,6 +594,9 @@ to cancel:
 
 With `"notify": "bell"` (or `"osc9"` for a desktop notification) the terminal
 is told when a turn ends and when a permission question is waiting.
+Under the `screenReader` setting an `off` `notify` upgrades to `bell` — the
+silent moments are exactly what a reader cannot see — and each permission
+prompt carries a BEL cue beside the wait (see [`docs/SETTINGS.md`](docs/SETTINGS.md#every-key)).
 `/goal <condition>` and `/grind <condition>` keep the agent working, turn after
 turn, until the title model judges the condition met from the evidence in the
 transcript (at most 10 and 50 follow-up rounds); see
@@ -1538,7 +1541,7 @@ checked-out code, and a project that moves your panes behind your back is
 answering to the wrong owner; `keybindings`, for the same habit reason one
 layer deeper — the chords are what the operator's fingers learned, and a
 checkout re-pointing them rewrites what the operator's keystrokes do at the
-prompt, inside their own editor; `vimMode`, the same habit reason again — it is the switch to that keymap, and a checkout flipping it changes what the operator's ordinary typing does at the composer; `screenReader`, the same habit reason on the output side — it is the switch that sheds the decoration a screen reader cannot narrate, and a checkout flipping it changes what the operator's own reader says of every frame; `maxToolSteps`, because it multiplies how many
+prompt, inside their own editor; `vimMode`, the same habit reason again — it is the switch to that keymap, and a checkout flipping it changes what the operator's ordinary typing does at the composer; `screenReader`, the same habit reason on the output side — it is the switch that sheds the decoration a screen reader cannot narrate, and a checkout flipping it changes what the operator's own reader says of every frame, and — because an ON reader upgrades a silent `notify: off` to the audible `bell` — whether the operator's terminal rings at all; `maxToolSteps`, because it multiplies how many
 billed provider round-trips one turn may fan out — the `maxOutputTokens` money
 axis counted in calls instead of tokens, and a ceiling a checkout can raise is
 still a bill a clone can run up on the operator's credential; `maxCostUsd`,
@@ -1854,6 +1857,8 @@ settings — see the *Interface* rows of [`docs/SETTINGS.md`](docs/SETTINGS.md#e
 approval waits) sits in the same category but is not live: it is read while
 the session is built, so a change applies at the next restart — the settings
 view badges it `restart`.
+The one live exception is the reader upgrade: while `screenReader` is ON, an
+`off` `notify` sounds as `bell` from the next event on, restart or no restart.
 `watchFiles` (saved [`AI!` comments](#prompts-from-your-editor-ai-comments)
 become prompts) is user tier only and read at launch.
 
