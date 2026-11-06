@@ -258,8 +258,10 @@ a track to a `Reel` and it flows through to the player untouched:
 ```php
 use SugarCraft\Video\Reel;
 
-// The .vtt is read and parsed when play()/toPlayer() builds the Player; an
-// unreadable path simply means "no subtitles" rather than a fatal.
+// The .vtt is read and parsed when play()/toPlayer() builds the Player; a
+// missing or unreadable track is announced via error_log (subtitle.unreadable
+// / subtitle.too_large) and playback continues without captions — "no
+// subtitles" rather than a fatal, but never a silent drop.
 Reel::open('clip.mp4')
     ->withSubtitles('clip.vtt')
     ->play();
