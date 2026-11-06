@@ -7,6 +7,71 @@ found to contradict each other and the actual code during the remediation
 audit described below, so treat *this* file plus `git log` as the source of
 truth going forward.
 
+## Changed — documentation archaeology migration, 2026-11-05
+
+**The live docs now state contracts; their repair histories moved here**
+(PB-CODE-27). The README passages below had each carried a fixed defect's
+before-state inline; the history is recorded once, in this changelog, and the
+docs keep only the contract the repair established.
+
+- **`disabledTools` rationale.** A paragraph claimed expressing an attack
+  through `disabledTools` "means naming every tool it removes — a value you
+  can see". False: the filter matches names with bare `fnmatch()`, honouring
+  negated character classes, so a project entry can delete every tool in one
+  line (the README keeps the worked demo).
+- **`--config` value absorption.** `--config -p "hi"` once ate the `-p` as the
+  file name; the flag is now refused when followed by another option.
+- **`--output-format` strictness.** The value used to be accepted verbatim and
+  equality-matched per consumer, so `--output-format xml` printed plain text
+  and exited `0` — a `| jq` caller got an empty pipe with a success status.
+  Strict match with exit `2` on anything else, both paths.
+- **Text-format control-byte strip.** The default answer used to pass the
+  model's own text straight through, so a transcript carrying SGR or OSC
+  sequences could restyle, scroll, or rename the caller's terminal; JSON was
+  safe only because `json_encode` happened to escape those bytes.
+- **"Exactly two exceptions" to the JSON error contract.** The section once
+  exempted the missing-autoloader case on the theory that the class owning
+  the document shape could not be loaded; `json_encode()` is a core function
+  and the shape never was unreachable, so there are no exceptions.
+- **Streaming repaints.** The read loop used to run to completion inside one
+  ReactPHP `futureTick`, blocking the event loop for the whole completion so
+  the TUI repainted once (measured both ways against six tokens 300ms apart —
+  0 vs 36 loop ticks, table kept in the README). `CANDY_CODE_BACKEND_CMD`
+  had the same defect in a worse form: its promise executor ran the blocking
+  call immediately, so the freeze started before the promise was returned.
+  Both are driven from timers now.
+- **Console permission default.** `-p` used to start in `bypass-permissions`
+  because an ASK on the engine path could not reach the screen; the engine
+  path gained a frame channel, and `default` is now the launch mode on both
+  paths (reversing that permissive console default).
+- **Argument-pattern path normalization.** `Read(./.env)` originally matched
+  only the exact spelling; it now normalizes away `./` and covers `.env`,
+  `.//.env` and `./foo/../.env` — none of which the first cut caught.
+- **rm-rf breaker newline chains.** `echo hi⏎rm -rf /` was once **allowed**
+  under `bypass-permissions` while `echo hi && rm -rf /` was denied; newline
+  chains are inside the breaker's scope now.
+- **Hook-file validation.** A typo'd `hook:` used to install zero guards and
+  say nothing; `mather:` used to fall back to the `.*` default and run the
+  hook on every call; `enabled: false` was accepted and ignored, and so was
+  `timeout:` back when the format had no such key. All of it now stops the
+  launch, and `timeout` is honoured.
+- **Skill path globs.** A leading `**` used not to claim files at the tree
+  root; it now does, which is why the three shipped `**/*.php`-scoped skills
+  fire on root-level files where they used to stay silent.
+- **Skills-dir and workflows-dir symlink confinement.** Committing
+  `.claude/skills` (or `.candy-code/workflows`) **itself** as a link used to
+  relocate the boundary rather than trip it — every entry under the target
+  was read/listed/loaded. The *directory* is now confined too. A rejected
+  workflow file used to be reported with the YAML parser's message, which
+  quotes the line it choked on; error text never carries file content now.
+- **Skill tier precedence.** Native project skills once outranked user-tier
+  skills of the same name; the tier order is now built-in < project < user
+  whatever the format.
+- **Unattended ASK refusals.** ASKs used to fail closed everywhere because
+  nothing anywhere attached an approver; every path now answers (interactive)
+  or refuses with the fix named (`HeadlessPermissionPrompt` on `-p`, the
+  modal on the TUI, deliberate refusal for background sessions).
+
 ## Added — media surface and help screen, 2026-10-30 → 2026-11-03
 
 The media generation recorded under the rename era kept growing, and the
