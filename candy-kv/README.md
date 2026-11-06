@@ -340,7 +340,7 @@ takes an explicit database name.
 | `__construct(?string $dataDir = null, string $defaultDb = 'default')` | Optional data dir (else `resolveDataDir()`); touches nothing on disk — databases open on first use |
 | `resolveDataDir(): string` (static) | `XDG_CONFIG_HOME/skate` → `$HOME/.config/skate` → passwd home; refuses relative env values; throws when no home exists |
 | `const DEFAULT_SUBDIR` | `.config/skate` — the directory segment under the home (historical name, see Data directory) |
-| `set(string $key, string $value, bool $binary = false, ?int $ttlSeconds = null): Entry` | Store a value; `$binary` base64-wraps it; TTL in whole seconds (the CLI auto-detects what this parameter forces) |
+| `set(string $key, string $value, bool $binary = false, ?int $ttlSeconds = null): Entry` | Store a value; `$binary` base64-wraps it; TTL in whole seconds (the CLI auto-detects what this parameter forces). A `ttlSeconds <= 0` stores a **forever** entry — expiry arms only above zero — the deliberate opposite of `setWithTtl` below, where the same bound stores nothing |
 | `setWithTtl(string $key, mixed $value, int $ttlSeconds): void` | Convenience setter — stringable values (scalars plus `__toString` objects); arrays, resources and non-stringable objects throw; `ttlSeconds <= 0` is a documented NO-OP (stores nothing) |
 | `get(string $key, string $fallback = ''): string` | Exact-key read; pure — no terminal writes, expired or missing keys return the fallback |
 | `entry(string $key): ?Entry` | Full entry (metadata included, live rows only) |
