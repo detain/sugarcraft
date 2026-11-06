@@ -188,10 +188,12 @@ reporting, focus in/out, and bracketed paste. The bracketed-paste enable is
 gated on the **output** stream being a tty, so a program with piped stdin
 behind a tty stdout may still receive pastes as raw bytes. Whatever the
 delivery, pasted content is inserted as **literal text**: `TextPrompt` and
-`TextareaPrompt` expose `insertPastedText(string)`, which strips control
-bytes (the textarea honours embedded newlines as line breaks) before
-inserting, so a pasted payload can never forge a submit or replay editor
-commands.
+`TextareaPrompt` expose `insertPastedText(string)`, which strips every
+control byte except TAB before inserting — the textarea additionally keeps
+LF and honours embedded newlines as line breaks — so a pasted payload can
+never forge a submit or replay editor commands. TAB survives on **both**
+surfaces, so a host relying on the strip to vet a secret or URL field must
+still reject tabs itself.
 
 ### Long lines and repaint
 
