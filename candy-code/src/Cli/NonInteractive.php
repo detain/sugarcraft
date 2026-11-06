@@ -328,7 +328,11 @@ final class NonInteractive
                 );
             }
 
-            [$streamInputRows, $ignoredLines, $firstIgnoredType] = self::parseStreamJsonInput($streamRaw);
+            try {
+                [$streamInputRows, $ignoredLines, $firstIgnoredType] = self::parseStreamJsonInput($streamRaw);
+            } catch (\InvalidArgumentException $e) {
+                return self::failUsage($e->getMessage(), $outputFormat);
+            }
             if ($ignoredLines > 0) {
                 // LOUD-ONCE per the packet: machine traffic loses turns in
                 // silence otherwise. One line names the count and the first
@@ -2244,21 +2248,32 @@ final class NonInteractive
      *
      * The line grammar is the READING direction of the NDJSON event stream
      * {@see StreamJsonEmitter} writes out: one JSON object per line, and only
-     * `{"type":"user"}` events carry input. Accepted text shapes: `content`
-     * as a string (the emitter's own spelling — it wins when a line carries
-     * both), then a nested `message` that is itself a string or carries a
-     * string `content` (the transcript-row spelling a driver round-tripping
-     * stored history produces). Anything without usable text, plus every
-     * non-user event and every malformed line, counts as IGNORED and is
-     * reported once by the caller with a count and the first offending
-     * shape — the packet's loud-once law for machine traffic, where a
-     * silently dropped line would be a lost turn.
+     * `{"type":"user"}` events carry input.
+     *
+     * Accepted text shapes: `content` as a string (the emitter's own
+     * spelling — it wins when a line carries both), then a nested `message`
+     * that is itself a string or carries a string `content` (the
+     * transcript-row spelling a driver round-tripping stored history
+     * produces). Anything without usable text, plus every non-user event,
+     * counts as IGNORED and is reported once by the caller with a count and
+     * the first offending shape — the packet's loud-once law for machine
+     * traffic, where a silently dropped line would be a lost turn.
+     *
+     * A line that is not JSON AT ALL is different in kind: it is a broken
+     * protocol frame, not an unusable event, and it raises
+     * {@see \InvalidArgumentException} naming the line number — the usage
+     * error (exit 2) every other machine-facing spelling mistake gets,
+     * judged before a single billed token is spent. The truncated tail of a
+     * document over {@see MAX_STDIN_BYTES} lands in exactly this class
+     * rather than posing as input.
      *
      * Pure — no streams, no output, no state — and public static like
      * {@see readStdinIfPiped()} and {@see historyFrom()} so the decoder is
      * pinned in-process while the run plumbing is pinned by child witnesses.
      *
      * @return array{0: list<string>, 1: int, 2: ?string}
+     *
+     * @throws \InvalidArgumentException when a line is not valid JSON
      */
     public static function parseStreamJsonInput(string $raw): array
     {
@@ -2266,14 +2281,29 @@ final class NonInteractive
         $ignored = 0;
         $firstIgnoredType = null;
 
-        foreach (\preg_split('/\R/u', $raw) ?: [] as $line) {
+        foreach (\preg_split('/\R/u', $raw) ?: [] as $index => $line) {
             $line = \trim($line);
             if ($line === '') {
                 continue;
             }
 
             $decoded = \json_decode($line, true);
-            if (\is_array($decoded) && ($decoded['type'] ?? null) === 'user') {
+            if (!\is_array($decoded)) {
+                // Broken protocol frame, not an unusable event: raise with
+                // the physical line number the driver can point at.
+                if (\json_last_error() !== \JSON_ERROR_NONE) {
+                    throw new \InvalidArgumentException(
+                        'candy-code: --input-format stream-json: line ' . ($index + 1) . ' is not valid JSON',
+                    );
+                }
+                if ($firstIgnoredType === null) {
+                    $firstIgnoredType = 'an event that is not a JSON object';
+                }
+                ++$ignored;
+                continue;
+            }
+
+            if (($decoded['type'] ?? null) === 'user') {
                 $content = self::streamJsonUserText($decoded);
                 if ($content !== null) {
                     $turns[] = $content;
@@ -2282,13 +2312,11 @@ final class NonInteractive
                 if ($firstIgnoredType === null) {
                     $firstIgnoredType = 'a user event without text content';
                 }
-            } elseif (\is_array($decoded)) {
+            } else {
                 $type = $decoded['type'] ?? null;
                 if ($firstIgnoredType === null) {
                     $firstIgnoredType = \is_string($type) ? 'type ' . $type : 'an event without a type';
                 }
-            } elseif ($firstIgnoredType === null) {
-                $firstIgnoredType = 'malformed JSON';
             }
             ++$ignored;
         }
