@@ -110,9 +110,10 @@ final class Store
      * Set a value that automatically expires after $ttlSeconds.
      *
      * @param string $key         Entry key (supports @dbname suffix).
-     * @param mixed  $value       Scalar value (stringified); arrays,
+     * @param mixed  $value       Scalar value (stringified); null, arrays,
      *                            non-stringable objects and resources are
-     *                            refused rather than silently mangled.
+     *                            refused rather than silently mangled (null
+     *                            once slipped through and stored as "").
      * @param int    $ttlSeconds  Seconds until the entry expires. A value
      *                            <= 0 is a documented NO-OP: nothing is
      *                            written (it does NOT store the key forever).
@@ -123,7 +124,7 @@ final class Store
         if ($ttlSeconds <= 0) {
             return;
         }
-        if (\is_array($value) || \is_resource($value) || (\is_object($value) && !\method_exists($value, '__toString'))) {
+        if ($value === null || \is_array($value) || \is_resource($value) || (\is_object($value) && !\method_exists($value, '__toString'))) {
             throw new \InvalidArgumentException(
                 \sprintf('setWithTtl expects a scalar value, got %s for key "%s".', \get_debug_type($value), $key)
             );

@@ -715,6 +715,20 @@ final class StoreTest extends TestCase
         $this->store->setWithTtl('arr', ['a'], 60);
     }
 
+    public function testSetWithTtlRefusesNullWithoutStoring(): void
+    {
+        // BEHAVIOR CHANGE (Step 45): null once passed the guard and stored an
+        // empty string while the throw text said "expects a scalar". It is
+        // now refused like every other non-scalar, and nothing is written.
+        try {
+            $this->store->setWithTtl('nil', null, 60);
+            $this->fail('null must be refused, not stringified to "".');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('got null', $e->getMessage());
+        }
+        $this->assertNull($this->store->entry('nil'));
+    }
+
     public function testSetWithTtlRefusesNonStringableObject(): void
     {
         $this->expectException(\InvalidArgumentException::class);
