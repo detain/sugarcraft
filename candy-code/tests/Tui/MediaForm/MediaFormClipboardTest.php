@@ -83,7 +83,7 @@ final class MediaFormClipboardTest extends TestCase
         $form = MediaForm::open()->withClipboardImage(str_repeat("\x00", 64));
 
         $this->assertStringStartsWith('! ', (string) $this->clipStatusOf($form));
-        $this->assertStringContainsString('GD failed to load image', (string) $this->clipStatusOf($form));
+        $this->assertStringContainsString('Unsupported image format:', (string) $this->clipStatusOf($form));
 
         $image = $this->clipImageSection($form);
         $this->assertSame([], $image->sources());

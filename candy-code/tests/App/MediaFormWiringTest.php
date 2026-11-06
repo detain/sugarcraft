@@ -366,7 +366,7 @@ final class MediaFormWiringTest extends TestCase
         $status = $this->awStatusOf($pasted->mediaForm);
         self::assertIsString($status);
         self::assertStringStartsWith('! ', $status);
-        self::assertStringContainsString('GD failed to load image', $status);
+        self::assertStringContainsString('Unsupported image format:', $status);
         self::assertDirectoryDoesNotExist($this->awHomeDir . '/home/.candy-code/media');
     }
 

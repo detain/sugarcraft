@@ -108,11 +108,12 @@ final class ImageIngressTest extends TestCase
 
     public function testFromBytesRefusesGarbageUnderTheCap(): void
     {
-        // fromString's GD door is an InvalidArgumentException (ImageSource:235),
-        // unlike fromFile's RuntimeException (:184) — the two entry shapes
-        // fail through different classes and both polarities are pinned.
+        // Headerless bytes are refused by the format gate before GD allocates
+        // (UnsupportedFormatException extends InvalidArgumentException); fromFile
+        // still fails through its RuntimeException — the two entry shapes and
+        // both polarities are pinned.
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('GD failed to load image');
+        $this->expectExceptionMessage('Unsupported image format:');
 
         ImageIngress::fromBytes(str_repeat("\x00", 32), 'clipboard.png');
     }

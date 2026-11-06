@@ -86,7 +86,7 @@ final class MaskIngestTest extends TestCase
     public function testNotAnImageAtAllIsRefused(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('GD failed to load image');
+        $this->expectExceptionMessage('Unsupported image format:');
 
         MaskIngest::fromBytes('this is not a png at all', 'notes.txt');
     }
