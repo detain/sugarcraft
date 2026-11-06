@@ -87,7 +87,7 @@ the asset for verification.
 | `--format`       | ✅ subset    | every `Mosaic::fromModeString()` arm except `chafa` (refused by design — the whole point is a viewer that never shells out). |
 | `--size`         | ✅          | cells; `--width`/`--height` as explicit-leg aliases. |
 | `--dump-detect`  | ✅          | chafa's debugging gold, re-expressed over `Detect` + `TermDb` + the palette probe. |
-| `--passthrough`  | ✅ `auto`/`none` | `tmux` (force) and `screen` (the `Passthrough\ScreenPassthrough` decorator) refuse with a pointer — no seam on this base yet. |
+| `--passthrough`  | ✅ `auto`/`none` | The GNU Screen envelope **has** landed — sugar-image's `Passthrough\ScreenPassthrough` is applied automatically by detection. What refuses (exit 1, with a pointer mirroring `lang/en.php`) is *forcing* it: `tmux` and `screen` are not accepted values here; use `auto` or `none`. |
 | `--polite`       | ✅ no-op    | sugar-image has no async worker model; every render is already "polite". |
 | `--symbols`      | ✅ tag classes | chafa's `--symbols=` class grammar over the ported narrow corpus (1,251 effective glyphs — 1,260 entries with nine AMBIGUOUS-tagged misc-narrow glyphs BAD-vetoed even by `all`, as in the C build: ASCII, Latin, block table, legacy, misc, braille, sextant, octant) plus the opt-in wide kana tier (181 double-width glyphs, `wide`; rendered by the double-width wide-glyph engine). `[chars]` literal sets and codepoint ranges are not implemented. |
 | `--canvas` / `--work` | ✅ | the canvas-mode and work-factor dials, threaded onto whichever backend speaks them. |
