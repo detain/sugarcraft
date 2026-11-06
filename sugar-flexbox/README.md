@@ -80,8 +80,9 @@ Every dimension is in **cells**, and allocation follows one deterministic model 
 `justify-content`, `flex-wrap`, or reverse-direction counterparts exist):
 
 1. **Basis first.** Each item's `withBasis(cells)` reserves a fixed main-axis slice
-   (row: width, column: height), clamped to the container; a zero ratio with a positive
-   basis is a fixed-size item that never grows. `withWidth()` is a legacy alias of
+   (row: width, column: height), clamped to the container: ANY positive basis is a
+   fixed-size item that never grows — even one that also carries a ratio takes exactly
+   its basis and is excluded from the flex pool. `withWidth()` is a legacy alias of
    `withBasis()` — in column mode the reserved axis is the HEIGHT, so prefer `withBasis`.
 2. **Gaps next.** `n` items cost `(n - 1) x gap` cells before any ratio math; the gap is
    reined in at render time if the budget cannot pay for it.
