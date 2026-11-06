@@ -11,7 +11,7 @@ $term-&gt;feed("\x1b[1;31mHello\x1b[0m world");
 
 $screen = $term-&gt;screen();
 $screen-&gt;cell(0, 0)-&gt;grapheme;       // 'H'
-$screen-&gt;cell(0, 0)-&gt;sgr-&gt;bold;      // true
+$screen-&gt;cell(0, 0)-&gt;sgr()-&gt;bold;     // true (sgr() never null; the $sgr property is ?Sgr — null on the renderer path)
 $screen-&gt;cell(0, 0)-&gt;foreground();   // a Color (kind 1 = Indexed16, value 1 — 16-color red)
 
 $term-&gt;feed("\x1b]2;Demo\x07");
@@ -61,7 +61,7 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
 <tr><td>Terminal</td><td>withScrollbackSize(n)</td><td>New terminal with scrollback buffer size N</td></tr>
 <tr><td>Screen</td><td>cell(row, col)</td><td>Get cell at position (out-of-bounds in either coordinate returns the empty cell)</td></tr>
 <tr><td>Screen</td><td>scrollback()</td><td>Get scrollback buffer (ring buffer of scrolled-off rows)</td></tr>
-<tr><td>Cell</td><td>grapheme, sgr, combining, foreground(), background()</td><td>Cell content, style, and combining marks</td></tr>
+<tr><td>Cell</td><td>grapheme, sgr(), combining, foreground(), background()</td><td>Cell content, style, and combining marks (sgr() always returns an Sgr; the raw $sgr property is ?Sgr)</td></tr>
 <tr><td>Cell</td><td>withCombining(string)</td><td>New cell with additional combining marks appended</td></tr>
 <tr><td>Mode</td><td>autoWrap, syncUpdate, withAutoWrap(bool)</td><td>DECAWM auto-wrap and synchronized-output (DEC 2026) state</td></tr>
 <tr><td>Sgr</td><td>underlineStyle, withUnderlineStyle(UnderlineStyle)</td><td>SGR underline style (None/Single/Double/Curly/Dotted/Dashed)</td></tr>
