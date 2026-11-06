@@ -447,14 +447,14 @@ echo $sgr->underlineStyle->value; // 2 (Double)
 
 `UnderlineStyle` values map to CSI sequences as follows:
 
-| Enum value | CSI sequence | Description         |
-|------------|--------------|---------------------|
-| `None`     | `CSI 4:0 m`  | No underline        |
-| `Single`   | `CSI 4:1 m`  | Single underline   |
-| `Double`  | `CSI 4:2 m`  | Double underline   |
-| `Curly`   | `CSI 4:3 m`  | Curly underline    |
-| `Dotted`  | `CSI 4:4 m`  | Dotted underline   |
-| `Dashed`  | `CSI 4:5 m`  | Dashed underline   |
+| Enum value | CSI sequence | Description      |
+|------------|--------------|------------------|
+| `None`     | `CSI 4:0 m`  | No underline     |
+| `Single`   | `CSI 4:1 m`  | Single underline |
+| `Double`   | `CSI 4:2 m`  | Double underline |
+| `Curly`    | `CSI 4:3 m`  | Curly underline  |
+| `Dotted`   | `CSI 4:4 m`  | Dotted underline |
+| `Dashed`   | `CSI 4:5 m`  | Dashed underline |
 
 `CSI 24 m` clears underline (any style). Plain `CSI 4 m` (no subparam)
 is equivalent to `4:1` (single).
@@ -559,14 +559,14 @@ $bar = $mode->withCursorShape(CursorShape::SteadyBar->toInt());
 
 `CursorShape` values map to VT sequences:
 
-| Enum value      | Value | CSI sequence   | Description            |
-|-----------------|-------|----------------|------------------------|
-| `BlinkingBlock`  | 0/1   | `CSI 0 SP q`   | Blinking block         |
-| `SteadyBlock`    | 2     | `CSI 2 SP q`   | Steady block           |
-| `BlinkingUnderline` | 3 | `CSI 3 SP q`   | Blinking underline    |
-| `SteadyUnderline`  | 4  | `CSI 4 SP q`   | Steady underline       |
-| `BlinkingBar`    | 5     | `CSI 5 SP q`   | Blinking vertical bar  |
-| `SteadyBar`       | 6     | `CSI 6 SP q`   | Steady vertical bar    |
+| Enum value          | Value | CSI sequence | Description           |
+|---------------------|-------|--------------|-----------------------|
+| `BlinkingBlock`     | 0/1   | `CSI 0 SP q` | Blinking block        |
+| `SteadyBlock`       | 2     | `CSI 2 SP q` | Steady block          |
+| `BlinkingUnderline` | 3     | `CSI 3 SP q` | Blinking underline    |
+| `SteadyUnderline`   | 4     | `CSI 4 SP q` | Steady underline      |
+| `BlinkingBar`       | 5     | `CSI 5 SP q` | Blinking vertical bar |
+| `SteadyBar`         | 6     | `CSI 6 SP q` | Steady vertical bar   |
 
 `CursorShape::fromInt()` normalises both `0` and `1` to `BlinkingBlock`
 to match the VT spec.
