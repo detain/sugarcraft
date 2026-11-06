@@ -247,6 +247,13 @@ final class HttpListener
 
             return;
         }
+        if ($needs === self::BODY_MALFORMED_FRAMING) {
+            unset($buffer);
+            $this->writeStatus($client, 400, 'Bad Request');
+            $this->closeClient($client);
+
+            return;
+        }
         if ($needs > 0) {
             unset($buffer);
             return; // body incomplete — keep buffering
@@ -261,8 +268,16 @@ final class HttpListener
     private const BODY_TOO_LARGE = -1;
 
     /**
+     * Sentinel returned by expectedBodyBytes() when duplicate
+     * Content-Length headers DISAGREE — the request cannot be framed at
+     * all, so no body-state answer applies.
+     */
+    private const BODY_MALFORMED_FRAMING = -2;
+
+    /**
      * Remaining body bytes for the given head + body seen so far:
-     * 0 = complete, >0 = still needed, BODY_TOO_LARGE = over the cap.
+     * 0 = complete, >0 = still needed, BODY_TOO_LARGE = over the cap,
+     * BODY_MALFORMED_FRAMING = conflicting Content-Length duplicates.
      *
      * The chunked path advances a PERSISTED scan cursor instead of
      * re-decoding the whole buffer per read — re-scanning turned a
@@ -288,12 +303,21 @@ final class HttpListener
             return $scan['done'] ? 0 : 1;
         }
 
-        $length = 0;
+        $length = null;
         foreach (\explode("\r\n", $head) as $line) {
-            if (\preg_match('/^content-length:\s*(\d+)$/i', $line, $m) === 1) {
-                $length = (int) $m[1];
+            if (\preg_match('/^content-length:\s*(\d+)$/i', $line, $m) !== 1) {
+                continue;
             }
+            $value = (int) $m[1];
+            if ($length !== null && $length !== $value) {
+                // Request-smuggling bait: two claims about where the body
+                // ends. Last-wins would silently adopt whichever framing a
+                // downstream proxy may not have seen; refuse the request.
+                return self::BODY_MALFORMED_FRAMING;
+            }
+            $length = $value;
         }
+        $length ??= 0;
         if ($length > $cap) {
             return self::BODY_TOO_LARGE;
         }
@@ -381,6 +405,12 @@ final class HttpListener
         }
     }
 
+    /**
+     * True when the named header carries $value as one of its comma-list
+     * tokens. Substring matching would let 'Transfer-Encoding: xchunkedz'
+     * (or any header merely CONTAINING the word) arm the chunked framing
+     * path, so the comparison is per-token and exact.
+     */
     private function hasHeader(string $head, string $lowerName, string $value): bool
     {
         foreach (\explode("\r\n", $head) as $line) {
@@ -388,9 +418,13 @@ final class HttpListener
             if ($colon === false) {
                 continue;
             }
-            if (\strtolower(\trim(\substr($line, 0, $colon))) === $lowerName
-                && \str_contains(\strtolower(\substr($line, $colon + 1)), $value)) {
-                return true;
+            if (\strtolower(\trim(\substr($line, 0, $colon))) !== $lowerName) {
+                continue;
+            }
+            foreach (\explode(',', \substr($line, $colon + 1)) as $token) {
+                if (\strtolower(\trim($token)) === $value) {
+                    return true;
+                }
             }
         }
 
@@ -502,6 +536,16 @@ final class HttpListener
         $name = @\stream_socket_get_name($client, true);
         if ($name === false || $name === '') {
             return null;
+        }
+        if ($name[0] === '[') {
+            // IPv6: stream_socket_get_name() formats peers as '[addr]:port'.
+            // Hand out the BARE address — a bracketed literal never matches
+            // inet_pton()-derived CIDR bounds downstream, and every other
+            // consumer (access log, allowlist prose) wants the plain form.
+            $close = \strpos($name, ']');
+            if ($close !== false) {
+                return \substr($name, 1, $close - 1);
+            }
         }
         $colon = \strrpos($name, ':');
 

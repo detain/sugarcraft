@@ -20,8 +20,11 @@ use SugarCraft\GitServer\Repo;
  * bounded, the request-body cap has ONE source (http.max_pack_bytes
  * governs the listener exactly as it governs the router), the incremental
  * chunk scanner agrees with the whole-buffer decoder on every framing
- * edge, and an oversize LFS object is refused before its bytes are
- * materialised in memory.
+ * edge, an oversize LFS object is refused before its bytes are
+ * materialised in memory, duplicate Content-Length claims that DISAGREE
+ * and Transfer-Encoding values that merely CONTAIN the chunked token are
+ * refused or ignored at the socket, and IPv6 peers are handed downstream
+ * bare (never '[::1]').
  *
  * @covers \SugarCraft\GitServer\HttpSmartProtocol\HttpListener
  */
@@ -245,6 +248,117 @@ final class HttpListenerHardeningTest extends TestCase
         } finally {
             $listener->stop();
         }
+    }
+
+    public function testConflictingContentLengthClaimsAreRefusedAtTheSocket(): void
+    {
+        $loop = new StreamSelectLoop();
+        $this->loop = $loop;
+        $listener = new HttpListener(
+            $this->makeServer(null),
+            '127.0.0.1',
+            0,
+            $loop,
+            idleTimeoutSeconds: 60.0,
+            absoluteDeadlineSeconds: 60.0
+        );
+        $listener->start();
+        try {
+            $client = $this->connect($listener);
+            \fwrite($client, "POST /ghost.git/git-upload-pack HTTP/1.1\r\nHost: t\r\nContent-Length: 5\r\nContent-Length: 6\r\n\r\nhello!");
+            $response = $this->readResponse($loop, $client, 1.5);
+
+            self::assertStringStartsWith('HTTP/1.1 400', $response, 'two disagreeing body-length claims cannot be framed');
+            self::assertStringNotContainsString('Repository not found', $response, 'the request never reaches the router');
+        } finally {
+            $listener->stop();
+        }
+    }
+
+    public function testAgreeingContentLengthDuplicatesStillFrameTheRequest(): void
+    {
+        $loop = new StreamSelectLoop();
+        $this->loop = $loop;
+        $listener = new HttpListener(
+            $this->makeServer(null),
+            '127.0.0.1',
+            0,
+            $loop,
+            idleTimeoutSeconds: 60.0,
+            absoluteDeadlineSeconds: 60.0
+        );
+        $listener->start();
+        try {
+            $client = $this->connect($listener);
+            \fwrite($client, "POST /ghost.git/git-upload-pack HTTP/1.1\r\nHost: t\r\nContent-Length: 5\r\nContent-Length: 5\r\n\r\nhello");
+            $response = $this->readResponse($loop, $client, 1.5);
+
+            self::assertStringStartsWith('HTTP/1.1 404', $response, 'identical duplicates are benign: the request frames and dispatches');
+            self::assertStringContainsString('Repository not found', $response);
+        } finally {
+            $listener->stop();
+        }
+    }
+
+    public function testChunkedFramingNeedsTheExactTransferEncodingToken(): void
+    {
+        $loop = new StreamSelectLoop();
+        $this->loop = $loop;
+        $listener = new HttpListener(
+            $this->makeServer(null),
+            '127.0.0.1',
+            0,
+            $loop,
+            idleTimeoutSeconds: 60.0,
+            absoluteDeadlineSeconds: 60.0
+        );
+        $listener->start();
+        try {
+            // A substring-matched 'chunkedx' would arm the chunk scanner and
+            // this plain Content-Length body would sit unfilled until the
+            // deadlines reaped it; exact-token matching frames it normally.
+            $client = $this->connect($listener);
+            \fwrite($client, "POST /ghost.git/git-upload-pack HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunkedx\r\nContent-Length: 5\r\n\r\nhello");
+            $response = $this->readResponse($loop, $client, 1.5);
+
+            self::assertStringStartsWith('HTTP/1.1 404', $response, 'a header VALUE merely containing the token does not enable chunked framing');
+            self::assertStringContainsString('Repository not found', $response);
+        } finally {
+            $listener->stop();
+        }
+    }
+
+    public function testPeerAddressHandsOutIpv6PeersWithoutBrackets(): void
+    {
+        $peer = \Closure::bind(static fn ($sock): ?string => HttpListener::peerAddress($sock), null, HttpListener::class);
+
+        $v6Server = @\stream_socket_server('tcp://[::1]:0', $errno, $errstr);
+        if ($v6Server === false) {
+            self::markTestSkipped('no IPv6 loopback on this host: ' . $errstr);
+        }
+        $this->sockets[] = $v6Server;
+        $bound = (string) \stream_socket_get_name($v6Server, false);
+        $v6Client = @\stream_socket_client('tcp://' . $bound, $errno, $errstr, 2.0);
+        self::assertIsResource($v6Client, 'v6 client connect: ' . $errstr);
+        $this->sockets[] = $v6Client;
+        $v6Peer = @\stream_socket_accept($v6Server, 2.0);
+        self::assertIsResource($v6Peer, 'no v6 connection arrived at the server');
+        $this->sockets[] = $v6Peer;
+        // A bracketed '[::1]' never survives inet_pton() downstream, so
+        // the accessor must publish the bare literal.
+        self::assertSame('::1', $peer($v6Peer), 'the v6 peer is handed out bare, port stripped');
+
+        $v4Server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        self::assertIsResource($v4Server, 'v4 server: ' . $errstr);
+        $this->sockets[] = $v4Server;
+        $bound = (string) \stream_socket_get_name($v4Server, false);
+        $v4Client = @\stream_socket_client('tcp://' . $bound, $errno, $errstr, 2.0);
+        self::assertIsResource($v4Client, 'v4 client connect: ' . $errstr);
+        $this->sockets[] = $v4Client;
+        $v4Peer = @\stream_socket_accept($v4Server, 2.0);
+        self::assertIsResource($v4Peer, 'no v4 connection arrived at the server');
+        $this->sockets[] = $v4Peer;
+        self::assertSame('127.0.0.1', $peer($v4Peer), 'the v4 shape keeps its port-stripping behavior');
     }
 
     public function testIncrementalScannerAgreesWithTheWholeBufferDecoder(): void
