@@ -64,7 +64,7 @@ exit(Server::new()
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Server</td><td>new()</td><td>Create a new SSH server</td></tr>
+<tr><td>Server</td><td>new()</td><td>Start an empty middleware pipeline — this library opens no listener: the pipeline runs inside the process sshd (or your supervisor) spawns under <code>ForceCommand</code></td></tr>
 <tr><td>Server</td><td>use(Middleware)</td><td>Add middleware to the pipeline</td></tr>
 <tr><td>Server</td><td>withTransport(Transport)</td><td>Override the active transport (default: InProcessTransport)</td></tr>
 <tr><td>Server</td><td>withKeepalive(int)</td><td>Add keepalive middleware with the given interval</td></tr>
@@ -100,7 +100,7 @@ exit(Server::new()
 <tr><td>HostSshdTransport</td><td>new()</td><td>Legacy transport — inline middleware, Program on STDIN/STDOUT</td></tr>
 <tr><td>ChannelHandler</td><td>handlePtyReq / handleWindowChange / handleShell / handleExec / handleSignal / handleEnv / handleBreak</td><td>Interface for custom channel-level message handling (InProcessTransport only). Only <code>WindowChangeMsg</code> is produced by the library today &mdash; from a <code>SIGWINCH</code>; the other six are dispatched by your own code, not by the wire.</td></tr>
 <tr><td>ChannelMsg</td><td>abstract base</td><td>Base for all SSH channel messages (RFC 4254)</td></tr>
-<tr><td>DefaultChannelHandler</td><td>new(?ChildSpawner, ?Session, array $acceptEnv, ?string $shell, array $allowedExec, ?callable $execGate, $stderr)</td><td>Default impl — tracks PTY dims, env vars, drives ChildSpawner on shell/exec. Exec is <strong>default-closed</strong>: the peer names the program, so nothing spawns unless <code>$allowedExec</code> holds that exact path <em>and</em> the optional <code>$execGate</code> returns exactly <code>true</code>. <code>decodeCommandString()</code> is the public quoting tokenizer (no shell, no expansion, no globbing) and is also the right entry point for <code>SSH_ORIGINAL_COMMAND</code>.</td></tr>
+<tr><td>DefaultChannelHandler</td><td>new(?ChildSpawner, ?Session, array $acceptEnv, ?string $shell, array $allowedExec, mixed $execGate, $stderr)</td><td>Default impl — tracks PTY dims, env vars, drives ChildSpawner on shell/exec. Exec is <strong>default-closed</strong>: the peer names the program, so nothing spawns unless <code>$allowedExec</code> holds that exact path <em>and</em> the optional <code>$execGate</code> returns exactly <code>true</code>. The gate is typed <code>mixed</code> on purpose: it is meant to be <code>callable|null</code>, and a value that is neither raises internally and is treated as a refusal (catch-Throwable fail-closed), never a fatal or an approval. <code>decodeCommandString()</code> is the public quoting tokenizer (no shell, no expansion, no globbing) and is also the right entry point for <code>SSH_ORIGINAL_COMMAND</code>.</td></tr>
 <tr><td>PtyReqMsg</td><td>wantPty, term, cols, rows, widthPx, heightPx</td><td>PTY allocation request</td></tr>
 <tr><td>WindowChangeMsg</td><td>cols, rows, widthPx, heightPx</td><td>Terminal resize (SIGWINCH equivalent)</td></tr>
 <tr><td>ShellMsg</td><td>wantShell, subsystem</td><td>Login-shell request</td></tr>
