@@ -114,7 +114,7 @@ final class ToolDocGenerator
             [self::SETTINGS, '/never reaches the merge — all ([\w-]+) tools survive/', $built],
             [self::ARCHITECTURE, '/holds \*\*([\w-]+)\*\* concrete `Tool` classes/', $wired],
             [self::ARCHITECTURE, '/Tools\\\\\*\s+(\d+) built-ins \+ MCP bridges/', $wired],
-            [self::ARCHITECTURE, '/`Bootstrap::tools\(\)` ships ([\w-]+) of them —/', $launched],
+            [self::ARCHITECTURE, '/`Bootstrap::tools\(\)` can carry ([\w-]+) of them —/', $launched],
             [self::ARCHITECTURE, '/\*\*([\w-]+) is the count of \*wired\* tools/', $wired],
             [self::ARCHITECTURE, '/saying "([\w-]+) working tools"/', $wired],
             [self::ARCHITECTURE, '/"([\w-]+) tools" means wired built-ins/', $wired],
