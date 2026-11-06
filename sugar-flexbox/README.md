@@ -86,7 +86,7 @@ Every dimension is in **cells**, and allocation follows one deterministic model 
    its basis and is excluded from the flex pool. `withWidth()` is a legacy alias of
    `withBasis()` — in column mode the reserved axis is the HEIGHT, so prefer `withBasis`.
 2. **Gaps next.** `n` items cost `(n - 1) x gap` cells before any ratio math; the gap is
-   reined in at render time if the budget cannot pay for it.
+   clamped at render time if the budget cannot pay for it.
 3. **Ratios split the rest.** Remaining cells are shared by grow ratios with an exact-sum
    guarantee: each flex item's base share is the rounded-down quotient, and the rounding
    remainder is handed out in item order (80 cells across ratios 1:1:1 yields 27/27/26,
