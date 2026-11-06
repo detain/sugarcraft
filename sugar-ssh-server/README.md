@@ -404,7 +404,7 @@ table below.
 | `Auth` | `new Auth()` has no user list and no fingerprint list, so **every session passes**. | Pass `users`, `keyFingerprints`, or the pairing map `userKeys` (see below). |
 | `KeyboardInteractive` | No `$validate` callable means **any answer authenticates**; the exchange is a form, not a check. | Pass a validator. There is no built-in PAM/password backend in this library. |
 | `RateLimit` | `failClosed` is `false`, so an unreadable or locked state file **lets the connection through** with a notice. | Construct with `failClosed: true` to deny when state cannot be read. |
-| `Server` | `serve()` runs exactly the middleware you `use()` -- **no auth is inserted for you** -- and a stack that runs out of middleware without spawning answers `0`. | `->use(new Auth(...))->use(new RateLimit(...))`, then `exit($server->serve())`: a gate that refuses now answers `Server::EXIT_DENIED` (`129`), a child reports its own code, and `0` means there was nothing to run. |
+| `Server` | `serve()` runs exactly the middleware you `use()` -- **no auth is inserted for you** -- and a stack that runs out of middleware without spawning answers `0`. | `->use(new Auth(...))->use(new RateLimit(...))`, then `exit($server->serve())`: a gate that refuses now answers `Server::EXIT_DENIED` (`129`), a child reports its own code, and `0` means there was nothing to run (full precedence in [The exit contract](#the-exit-contract-refuse-complete-and-129)). |
 
 The docblocks on those four classes say the same thing in longer words, and
 `docs/admin/sugar-ssh-server.md` describes the deployment posture. If you
@@ -660,6 +660,50 @@ bastion's record, or the same user's next login. Treat the two version fields
 the same way — an empty one is the normal case, and a filled one means *your*
 wrapper exported it (see [What sshd actually hands your
 middleware](#what-sshd-actually-hands-your-middleware)).
+
+### The exit contract: refuse, complete, and 129
+
+`Server::EXIT_DENIED` is not a docblock rumor — it is the other half of a
+two-method contract every bundled gate keeps, and it is worth writing the
+same way yourself. The stack can end without anything running in two
+different ways, and they are different answers to the process exit; it is
+middleware's job to keep them distinguishable. A gate refuses by *marking
+the session and not calling `$next`*:
+
+```php
+public function handle(Context $ctx, Session $session, callable $next): void
+{
+    if (!$this->admits($session)) {
+        $session->markRefused();  // the exit code carries the refusal
+        return;                   // not calling $next IS the refusal
+    }
+    $next($ctx, $session);
+}
+```
+
+`Auth`, `PasswordAuth`, `KeyboardInteractive`, `CertificateAuth`,
+`RateLimit` and the transport-side `DispatchesMiddlewareStack` all do
+exactly this — mark once at the deny site, then write the human-facing
+notice wherever it can actually be seen. `markRefused()` is a one-way
+latch: a session that has been refused stays refused.
+
+Both transports read the outcome through one resolver,
+`Server::resolveStatus(Session): int`, so refusal and completion cannot
+drift apart by transport:
+
+| Session state | Resolved status | Meaning |
+|---------------|-----------------|---------|
+| `exitStatus()` non-null | that number | a child actually ran — its code is the most specific truth available, and it wins |
+| `refused()`, no recorded child status | `Server::EXIT_DENIED` (129) | a gate stopped this session; nothing ran |
+| neither | `0` | the walk finished with nothing to spawn — that is success |
+
+`exitStatus()` stays null until a spawner calls `recordExitStatus()`;
+that pair belongs to transports, not to gates. Resizes travel another
+door entirely: `withSize(int $cols, int $rows): self` returns a new
+Session carrying fresh dimensions, which `DefaultChannelHandler` swaps
+into the walk on each frame. A ForceCommand script hands the resolved
+number to `exit()` — see the `exit(...)` paragraph under [Write the entry
+script](#3-write-the-entry-script).
 
 ## Context propagation
 
