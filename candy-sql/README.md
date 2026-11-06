@@ -143,7 +143,7 @@ these tables.
 | `Db\ConnectionConfig`| Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn. Pass never echoed. |
 | `Db\ConnectionFactory`| Static factory — four entries: `fromDsn()` parses a DSN into a `ConnectionConfig` without connecting; `fromConfig()` and `fromArgv()` connect and return a `DatabaseInterface`; `fromPath()` opens a bare SQLite file path.    |
 | `Db\Flavor`          | Enum: `MySQL`, `MariaDB`, `Percona`, `Postgres`, `Sqlite`. Used to identify database flavor. `Flavor::detectFromDriver(string $driverName, string $version = '', string $versionComment = '')` detects flavor from a PDO driver name plus an optional version string and version comment — the comment carries the MariaDB/Percona discriminator that a bare `5.5.5-`-prefixed version string hides. |
-| `Db\Version`         | Parser for server version strings. Handles MariaDB `5.5.5-` prefix. `isAtLeast(Version)` compares versions. |
+| `Db\Version`         | Parser for server version strings. Handles MariaDB `5.5.5-` prefix. `isAtLeast(int $major, int $minor = 0, int $release = 0): bool` compares versions. |
 | `Database`        | ⚠️ Deprecated thin alias to `SqliteDatabase`. Use `DatabaseInterface` for driver-agnostic code.   |
 | `Db\MysqlDatabase`   | `DatabaseInterface` implementation via PDO `mysql`. Implements `serverVersion()`, `driverName()`, `ping()`, `databases()`. |
 | `Db\PostgresDatabase`| `DatabaseInterface` implementation via PDO `pgsql`. Implements `serverVersion()`, `driverName()`, `ping()`, `databases()`. |
