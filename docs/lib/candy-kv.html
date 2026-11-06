@@ -66,7 +66,7 @@ $store-&gt;set('user:2', 'Bob');
 echo $store-&gt;get('user:1');                 // 'Alice'
 echo $store-&gt;get('missing', 'n/a');         // fallback: 'n/a'
 
-// A key@db suffix routes to a named database ("\\@" spells a literal at-sign)
+// A key@db suffix routes to a named database ("\@" spells a literal at-sign)
 $store-&gt;set('token@passwords', 'ghp_xxxx');
 $store-&gt;setWithTtl('session', 'abc', 60);   // expires after 60 s
 
