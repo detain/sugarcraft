@@ -141,6 +141,7 @@ the output):
 ```text
 $ candy-kv set greeting 'Hello, World!'        # silent on success
 $ candy-kv set color blue
+$ candy-kv set note@notes 'buy milk'           # the @ suffix routes to the notes database
 $ candy-kv get greeting
 Hello, World!                                  # exact bytes, no trailing newline
 $ candy-kv list
