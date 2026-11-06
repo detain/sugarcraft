@@ -56,7 +56,7 @@ echo "The escape bytes differ per rung — this is the degradation, live:\n";
 foreach ([ColorProfile::TrueColor, ColorProfile::Ansi256, ColorProfile::Ansi, ColorProfile::Ascii, ColorProfile::NoTTY] as $profile) {
     $converted = $original->convert($profile);
     $fg = $encode($converted, $profile);
-    echo $fg . "[{$profile->label()}] This is #6b50ff converted to {$profile->label()} \x1b[0m\n";
+    echo $fg . "[{$profile->label()}] This is #6b50ff converted to {$profile->label()} " . ($fg !== '' ? "\x1b[0m" : '') . "\n";
 }
 
 echo "\n--- ANSI256 216-cube sample ---\n";
