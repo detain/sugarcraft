@@ -10,7 +10,10 @@ use SugarCraft\Core\MouseButton;
 
 /**
  * A single mouse event (press, release, motion, or wheel). Coordinates are
- * 1-based as reported by the terminal.
+ * 1-based, exactly as reported by the terminal: the only mouse decoder is
+ * the SGR (CSI ?1006) one, and it passes the wire values through unchanged
+ * (`ESC[<0;10;20M` arrives as x=10, y=20), so there is no off-by-one
+ * translation layer between the terminal and these fields.
  *
  * Bubble Tea v2 splits mouse messages into four concrete types. The
  * subclasses {@see MouseClickMsg} / {@see MouseReleaseMsg} /

@@ -140,7 +140,11 @@ including bare-cursor moves) to `ProgramOptions`. Pick:
   process-wide.
 
 `MouseMsg` carries a `MouseAction` enum (`Press` / `Release` /
-`Motion`) and 1-based `$x` / `$y` coordinates. The wheel is not an
+`Motion`) and 1-based `$x` / `$y` coordinates — SGR (CSI ?1006) mouse
+reporting is 1-based on the wire and the decoder passes those numbers
+through unchanged (`ESC[<0;10;20M` decodes to `x=10, y=20`), so the
+stored convention *is* the wire convention; legacy X10 byte-mode
+reports are not decoded as mouse events at all. The wheel is not an
 action: wheel events arrive as `Press` with `MouseButton::WheelUp` /
 `MouseButton::WheelDown`. The four `MouseClickMsg` / `MouseReleaseMsg` /
 `MouseMotionMsg` / `MouseWheelMsg` subclasses let you match by class
