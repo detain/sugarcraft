@@ -71,7 +71,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Reel</td><td>::open(path)</td><td>Open a video file</td></tr>
 <tr><td>Reel</td><td>::openUrl(url, headers, allowedHosts)</td><td>Open a remote stream behind the SSRF guard</td></tr>
-<tr><td>Reel</td><td>::new()</td><td>Create unbound player (synthetic test pattern)</td></tr>
+<tr><td>Reel</td><td>::new()</td><td>Create an unbound reel — play() falls back to the synthetic test pattern, but toPlayer() refuses to embed one</td></tr>
 <tr><td>Reel</td><td>withMode(Mode)</td><td>Set rendering mode</td></tr>
 <tr><td>Reel</td><td>withSize(cols, rows)</td><td>Set terminal cell dimensions</td></tr>
 <tr><td>Reel</td><td>withFps(?float)</td><td>FPS override (null = auto-detect)</td></tr>
@@ -88,7 +88,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
 <tr><td>Player</td><td>::openForTest(decoder, fps, totalFrames, cellsW, cellsH, &#x2026;)</td><td>Deprecated alias of ::fromDecoder() for HalfBlock test wiring</td></tr>
 <tr><td>WebVtt</td><td>::parse(text)</td><td>Parse a WebVTT (lenient SRT) track into cues; bounded at MAX_CUES</td></tr>
 <tr><td>WebVtt</td><td>cueAt(seconds)</td><td>Binary-search the active caption for a timeline position</td></tr>
-<tr><td>Synthetic</td><td>::generate(path, w = 120, h = 60, frames = 16, delayCs = 8)</td><td>Write a looping rainbow-gradient test animation as one valid GIF89a stream (one header and global palette, NETSCAPE2.0 loop, a GCE on every frame and a local palette on each frame after the first, one trailer), so decoders read every frame; a 1&#215;1 GIF stands in when ext-gd is absent.</td></tr>
+<tr><td>Synthetic</td><td>::generate(path = DEFAULT_PATH, w = 120, h = 60, frames = 16, delayCs = 8)</td><td>Write a looping rainbow-gradient test animation as one valid GIF89a stream (one header and global palette, NETSCAPE2.0 loop, a GCE on every frame and a local palette on each frame after the first, one trailer), so decoders read every frame; a 1&#215;1 GIF stands in when ext-gd is absent. The path defaults to the public <code>DEFAULT_PATH</code> constant, and the returned path — not the argument — is the source of truth: a refused target (e.g. a planted symlink) yields a private stand-in path.</td></tr>
 <tr><td>LumaRamp</td><td>::char(luma, ramp)</td><td>Map 0-255 luminance to character</td></tr>
 <tr><td>LumaRamp</td><td>::compute(r, g, b)</td><td>Compute BT.601 luma from RGB</td></tr>
 </table>
@@ -106,5 +106,6 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
                 <span class="demo-caption">Synthetic rainbow-gradient GIF used by the playback demos.</span>
             </div>
         </div>
+        <p class="lede" style="margin-top: 24px;">The recorded demos animate at full terminal speed and loop automatically. Flashing content can affect photosensitive viewers (WCAG 2.3.1 / 2.3.3); the player ships no static-fallback toggle today, so treat these GIFs as motion warnings.</p>
     </div>
 </section>
