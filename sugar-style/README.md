@@ -787,10 +787,12 @@ render it.
 
 Colour alone must never carry meaning (WCAG 1.4.1): pair colour-coded
 state with text, an icon+label, or structure. For constrained displays
-this library offers honest degradation paths — `Theme::ansi()` and
-`ColorProfile::Ascii` (`NO_COLOR`) drop the palette but keep text
-attributes, and OSC 8 hyperlinks survive both, so emphasis- and
-link-based affordances still read. `ColorProfile::NoTty` strips every
+this library offers honest degradation paths — `ColorProfile::Ascii`
+(`NO_COLOR`) drops the palette but keeps text attributes emitting, and
+OSC 8 hyperlinks survive it, so emphasis- and link-based affordances
+still read. (`Theme::ansi()` is not one of these paths: it only changes
+which palette slots colours resolve to — it neither drops nor keeps
+attributes and never touches links.) `ColorProfile::NoTty` strips every
 escape yet preserves padding, borders and alignment, so a piped capture
 keeps the document's visual structure. Border *styles* (rounded vs
 double vs thick) are decorative: never encode a state distinction in the
