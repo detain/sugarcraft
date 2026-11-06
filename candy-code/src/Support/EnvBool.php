@@ -17,7 +17,7 @@ namespace SugarCraft\Code\Support;
  *  - {@see isTrue()} is the NARROW house law — only `1`, `true`, `yes`
  *    (case-insensitive) turn a flag on. This is the vocabulary
  *    `BootstrapMcpDisableEnvTest` pins for `SUGARCRUSH_MCP_DISABLE` /
- *    `CANDY_CODE_DISABLE_MCP`; every other value keeps the default.
+ *    `CANDY_CODE_MCP_DISABLE`; every other value keeps the default.
  *  - {@see isSet()} is the PRESENCE law documented in docs/ENVIRONMENT.md for
  *    the `CANDY_CODE_DISABLE_*` family: "any value other than empty or 0"
  *    disables. Adopting the narrow law at those sites would silently flip
