@@ -55,13 +55,14 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-forms"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-forms" alt="SugarForms code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Form engine built on SugarCraft — multi-page Group wizards, seven themes, per-field validators, conditional skip predicates. The form is itself a Model — drop it into a Program. Also the foundation for the raw form / input primitives that <code>sugar-widgets</code> re-exports, folded together with the interactive form library (port of charmbracelet/huh) into a single standalone dependency.</p>
+    <p class="lede" style="margin-top: 28px;">Form engine built on SugarCraft — multi-page Group wizards, seven themes, per-field validators, conditional hide predicates. The form is itself a Model — drop it into a Program. Also the foundation for the raw form / input primitives that <code>sugar-widgets</code> re-exports, folded together with the interactive form library into a single standalone dependency.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-forms</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Forms\Form;
+use SugarCraft\Core\Program;
 use SugarCraft\Forms\Field\{Input, Confirm, Select, Note};
 use SugarCraft\Forms\Validator\{Required, Email, MinLength};
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
@@ -85,7 +86,9 @@ $form = Form::new(
         -&gt;withOptions('PHP', 'Go', 'Rust', 'Python')
         -&gt;withFuzzySuggestions(['PHP', 'Go', 'Rust', 'Python', 'JavaScript', 'TypeScript']),
 );
-// $form is a SugarCraft Model — drop it into a Program.
+// $form is a SugarCraft Model — drive it with a Program:
+(new Program($form))->run();
+echo $form->values()['name'], "\n";
 
 // Async suggestions:
 $form = Form::new(
@@ -104,19 +107,22 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
       <div class="feature"><strong>Input primitives</strong><span>TextInput, TextArea, ItemList, Viewport, FilePicker, Cursor, Scrollbar, Spinner.</span></div>
       <div class="feature"><strong>Form engine</strong><span>Field interface + Field\{Input, Text, Confirm, Select, MultiSelect, Note, FilePicker, Date, Slider, Color, NumberField, RadioPills\}, Form, Group, KeyMap, Theme.</span></div>
       <div class="feature"><strong>Hidden fields &amp; groups</strong><span><code>Form</code> honours <code>Field::isHidden()</code> in values, errors, validation, navigation, submit and view; focus never rests on a hidden field and fully hidden groups are skipped. A <code>Group::withHideFunc()</code> predicate sees the same view <code>values()</code> returns — the visible fields of every visible earlier group.</span></div>
-      <div class="feature"><strong>Bounded editing</strong><span>TextInput / TextArea clip a paste or insert to the remaining <code>charLimit</code> budget (newlines count), and TextArea pans to keep the cursor row visible.</span></div>
+      <div class="feature"><strong>Bounded editing</strong><span>TextInput / TextArea clip a paste or insert to the remaining <code>charLimit</code> budget; TextArea counts newlines against it, while TextInput strips them at insert — a single-line field cannot represent them. TextArea pans to keep the cursor row visible.</span></div>
       <div class="feature"><strong>Validation</strong><span>Attach validators with <code>->withValidator(Validator | \Closure)</code> — a closure returns null to pass or an error string to block submit; Input chains multiple attachments in order. The predicate form <code>->withValidation(callable $predicate, string $errorMessage)</code> (Input and Text) takes a boolean instead: true passes. These contracts are not interchangeable — a hypothetical <code>withValidate</code> that returned null/error string renamed to <code>withValidation</code> would INVERT the return semantics (null/string vs bool). Five built-in validators: <code>Required</code>, <code>Email</code>, <code>MinLength</code>, <code>MaxLength</code>, <code>Pattern</code>. Cross-field validation via <code>Form::validateAll(): array&lt;string,string&gt;</code> after submit. Enable error summary with <code>Form::withErrorSummary(true)</code> to show all errors at once.</span></div>
       <div class="feature"><strong>Fuzzy suggestions</strong><span><code>->withFuzzySuggestions([...])</code> on Input and Select — Smith-Waterman scoring ranks candidates by match quality (extracted to sugar-fuzzy). Use sugar-fuzzy’s <code>SmithWatermanMatcher</code> directly for programmatic scoring: <code>$matcher->score($query, $candidate)</code>.</span></div>
-      <div class="feature"><strong>Async suggestions</strong><span><code>->withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)</code> on Input and Select — fetches suggestions asynchronously with a configurable debounce delay. The <code>SuggestionsReadyMsg</code> message is dispatched via the event loop when results are available.</span></div>
+      <div class="feature"><strong>Async suggestions</strong><span><code>->withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)</code> on Input and Select — fetches suggestions asynchronously with a configurable debounce delay. The <code>SugarCraft\Core\Msg\SuggestionsReadyMsg</code> message is dispatched via the event loop when results are available.</span></div>
       <div class="feature"><strong>MultiSelect vim keys</strong><span><code>j</code> / <code>k</code> navigate, <code>Space</code> toggles selection — mirrors vim-style keybindings.</span></div>
       <div class="feature"><strong>Select enum mode</strong><span><code>Select::withEnum(\BackedEnum::class)</code> coerces the selected value to the given enum type automatically.</span></div>
       <div class="feature"><strong>Multi-page Groups</strong><span><code>Group::new(Field ...$fields)</code> stacks fields into one page; a multi-page wizard is built with <code>Form::groups(Group ...$groups)</code>. Conditional <code>->withHideFunc(?\Closure)</code> HIDES the whole group — it drops out of the focus walk and its values are excluded — there is no skip function.</span></div>
-      <div class="feature"><strong>Seven themes</strong><span>ansi (default), plain, charm, dracula, catppuccin, base16, base. Custom error summary slot via <code>Theme::$errorSummary</code>.</span></div>
+      <div class="feature"><strong>Seven themes</strong><span>ansi (default), plain, charm, dracula, catppuccin, base16, base. Custom error summary slot via the <code>Theme-&gt;errorSummary</code> readonly property.</span></div>
       <div class="feature"><strong>Tab nav</strong><span>Tab / Shift+Tab between fields, Enter on the last submits, Esc / Ctrl+C aborts.</span></div>
       <div class="feature"><strong>Read at the run boundary</strong><span><code>$form->values()</code> or typed accessors <code>string()</code> / <code>int()</code> / <code>bool()</code> / <code>array()</code> / <code>get(string $key, mixed $default = null)</code> once the Program ends — no submit-hook callback API exists.</span></div>
       <div class="feature"><strong>Form-level KeyMap</strong><span><code>Form::withKeyMap(?KeyMap)</code> rebinds Next / Prev / Submit / Abort per form.</span></div>
       <div class="feature"><strong>ActionSpinner</strong><span>Fork-isolated spinner action (<code>ActionSpinner</code>) with a bounded runtime ceiling — the long-running spin primitive folded in from the retired prompt façade.</span></div>
     </div>
+
+    <p style="margin-top: 24px;"><strong>Accessible mode.</strong> <code>Form::withAccessible()</code> flips the form to plain-text rendering — useful when you detect <code>NO_COLOR=1</code> or <code>TERM=dumb</code>. The accessible line is scoped to the focused field only: no group titles, no <code>Step X of Y</code> pagination, no error-summary block.</p>
+    <p style="margin-top: 16px;"><strong>Security &amp; trust boundary.</strong> Form content is frequently model- or network-produced, so every display surface runs hostile bytes through <code>RenderSafe::clean()</code>: C0/DEL bytes are stripped (TAB and LF survive) and every ESC-introduced sequence is disarmed except true SGR, so theme colour renders while screen clears, cursor moves and OSC payloads become inert text; the sweep is idempotent and UTF-8 safe. The boundary is the display, never the buffer — <code>value()</code> returns pasted bytes verbatim, and dev-authored placeholders render raw.</p>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
     <ul>
@@ -141,7 +147,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Form</td><td>new(Field ...$fields)</td><td>Create a single-group form with fields</td></tr>
 <tr><td>Form</td><td>groups(Group ...$groups)</td><td>Create a multi-page form</td></tr>
-<tr><td>Form</td><td>values() / string() / int() / bool() / array()</td><td>Submitted values of visible fields; hidden fields and hidden groups are excluded (legacy <code>getString()</code> &amp; friends are deprecated forwarders, removed in 2.0.0)</td></tr>
+<tr><td>Form</td><td>values() / string() / int() / bool() / array()</td><td>Submitted values of visible, non-skippable fields — hidden fields, hidden groups and Note fields are excluded (legacy <code>getString()</code> &amp; friends remain as deprecated forwarders, to be removed in 2.0.0)</td></tr>
 <tr><td>Form</td><td>get(key, default = null)</td><td>Value of one field, or the fallback when the key is absent</td></tr>
 <tr><td>Form</td><td>validateAll()</td><td>Run all field validators, return [fieldKey => errorMessage]</td></tr>
 <tr><td>Form</td><td>withErrorSummary(bool)</td><td>Show all errors at once on submit failure</td></tr>
@@ -156,9 +162,9 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 <tr><td>Field\Select</td><td>withAsyncSuggestions(callable, int = 150)</td><td>Async suggestions with debounce</td></tr>
 <tr><td>Field\Select</td><td>withEnum(BackedEnum::class)</td><td>Coerce selected value to enum type</td></tr>
 <tr><td>Field\MultiSelect</td><td>new(name)</td><td>Create multi-select field (j/k nav, Space toggle)</td></tr>
-<tr><td>Field\Note</td><td>new(content)</td><td>Create note field</td></tr>
-<tr><td>Validator\Required</td><td>validate(mixed)</td><td>Check value is not empty</td></tr>
-<tr><td>Validator\Email</td><td>validate(mixed)</td><td>Check valid email format</td></tr>
+<tr><td>Field\Note</td><td>new(key)</td><td>Create note field — text set via withTitle/withDescription; notes never appear in values()</td></tr>
+<tr><td>Validator\Required</td><td>validate(string): true|string</td><td>true to pass, or the error string when the value is empty</td></tr>
+<tr><td>Validator\Email</td><td>validate(string): true|string</td><td>true to pass, or the error string when the value is not a valid email</td></tr>
 <tr><td>Spinner\Spinner</td><td>new(?Style)</td><td>Create a spinner with style</td></tr>
 <tr><td>ActionSpinner</td><td>new() / run()</td><td>Fork-isolated spinner action with a bounded runtime ceiling</td></tr>
 <tr><td>Fuzzy\FuzzyMatcher <em>(deprecated shim)</em></td><td>score(query, candidate)</td><td>Smith-Waterman alignment score (int) — delegates to sugar-fuzzy</td></tr>
