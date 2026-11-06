@@ -46,6 +46,23 @@ final class PtyRunToolTest extends TestCase
         self::assertSame(['send', 'wait', 'expect', 'timeout'], array_keys($schema['properties']['steps']['items']['properties']));
     }
 
+    /**
+     * The Bash-scale ceiling is the advertised, validated ceiling in literal
+     * terms: the schema text says 21600 and the constructor refuses past it.
+     * The const-equality arms above would ride along with a regression; these
+     * would not.
+     */
+    public function testTheCeilingIsAdvertisedAsBashScale(): void
+    {
+        $schema = (new PtyRun())->inputSchema();
+
+        self::assertStringContainsString('Default 30, maximum 21600', $schema['properties']['timeout']['description']);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('maximum timeout must be between 1 and 21600 seconds');
+        new PtyRun(defaultTimeoutSeconds: 30, maxTimeoutSeconds: 21601);
+    }
+
     public function testDecodeTurnsNamedKeysIntoRealTerminalBytes(): void
     {
         self::assertSame("\x1b[B", PtyRun::decode('<Down>'));
