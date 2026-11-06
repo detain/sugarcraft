@@ -387,10 +387,13 @@ sugar-forms is built on five shared packages:
   one live request.
 - **Vim keybindings** — `VimKeyHandler` provides a shared vim mode handler
   (`VimState`: Insert/Normal/Visual/VisualLine; `VimAction`: CursorLeft,
-  CursorRight, CursorUp, CursorDown, DeleteChar, YankLine, …). Both text
-  widgets run on it — TextInput single-line, TextArea multi-line (TUI-3B:
-  `j`/`k` rows, `v` visual selection) — and sugar-widgets and
-  sugar-readline delegate to it — new bindings benefit all consumers at once.
+  CursorRight, CursorUp, CursorDown, DeleteChar, YankLine, …). Vim mode is an
+  opt-in on the inner text widgets themselves — each runs on it when you arm
+  `TextInput::withVimMode(true)` (single-line) or the TextArea equivalent
+  (TUI-3B:
+  `j`/`k` rows, `v` visual selection) — and sugar-readline's vi mode delegates
+  to this same handler; sugar-widgets re-exports the fields unchanged and
+  carries no vim layer of its own. New bindings benefit both hosts at once.
   In `VisualLine` mode, however, `j`/`k` step between ENTRIES (the pinned
   horizontal CursorLeft/CursorRight vocabulary of the E736 3.2 owner ruling),
   not rows, and `V` currently aliases `v` into character-wise selection.
