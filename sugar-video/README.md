@@ -23,7 +23,8 @@ composer require sugarcraft/sugar-video
 ```php
 use SugarCraft\Video\Reel;
 
-// Play a video with auto-detected terminal capability.
+// Play a video with auto-detected terminal capability — it opens paused;
+// Space starts the motion.
 Reel::open('clip.mp4')->play();
 ```
 
@@ -334,6 +335,8 @@ into your own view.
 
 ## Keyboard controls
 
+Playback starts paused — `Space` is the first key you will press.
+
 | Key | Action |
 |-----|--------|
 | `Space` | Pause / resume |
@@ -372,6 +375,20 @@ into your own view.
 - Motion is never imposed: playback starts paused and waits for `Space`.
   A reduced-motion host is honored by that law, stated in full under
   [Reduced motion and paused start](#reduced-motion-and-paused-start).
+
+### Reduced motion and paused start
+
+Opening a source starts no motion. `Player::open()` pulls a single poster
+frame and returns the model **paused** — the first screen is a still with
+real content, and nothing decodes or repaints on its own. `Reel::play()`
+runs that same model, so even the one-line quickstart waits for `Space`
+before a single frame moves.
+
+A `REDUCE_MOTION` host is honored by that law rather than by a switch: the
+player reads no environment variable to decide whether to move, because it
+never moves unsolicited in the first place. Once you press `Space`, the
+speed is yours (`[` and `]`, floor 0.25×) and `Space` stops the motion
+again at any point.
 
 ## Architecture
 
