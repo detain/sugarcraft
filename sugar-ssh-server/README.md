@@ -140,9 +140,14 @@ depend on it:
 ssh -o BatchMode=yes wishuser@host; echo "status=$?"
 ```
 
-That runs your entry script, not your shell -- which is the point. A status of
-`0` or `129` means `ForceCommand` reached the account (see [Exit
-status](../docs/admin/sugar-ssh-server.md#exit-status)); a login that drops you
+That runs your entry script, not your shell -- which is the point. At this
+point in the quickstart the entry script does not exist yet (sections 2 and 3
+provision it below), so a correct `Match` block lands on PHP's
+"Could not open input file" and reports `255` here; `0` and `129` are what the
+same probe answers once `server.php` exists. Any of those three means
+`ForceCommand` reached the account (see [Exit
+status](../docs/admin/sugar-ssh-server.md#exit-status), where a PHP failure is
+likewise `255`, not `129`); a login that drops you
 into an interactive shell means the `Match` block never applied, and every
 assumption below it about rate limits and pairing is currently unenforced. Do
 not write the probe as `ssh wishuser@host echo ok`: the argument is discarded
@@ -562,7 +567,8 @@ $s->cols;          // 120
 $s->rows;          // 40
 $s->tty;          // '/dev/pts/3'   (null when non-interactive)
 $s->command;      // SSH_ORIGINAL_COMMAND if set -- what the peer asked to run,
-                  // which ForceCommand ignores unless you decode it (see Status)
+                  // which ForceCommand ignores unless you decode it
+                  // (see the Exec policy section below)
 $s->serverHost;   // '198.51.100.2' -- empty on the 3-field SSH_CLIENT fallback,
                   // which carries a server port and no server address
 $s->serverPort;   // 22
@@ -787,7 +793,8 @@ interpreter is the configured `$shell`, then the server-side `SHELL`, then
 
 The deny-list that makes that sentence true is `DANGEROUS_VARS`, and it is
 applied even to names an operator put in `$acceptEnv`: the loader hooks
-(`LD_PRELOAD`, `LD_LIBRARY_PATH`, `LD_AUDIT`, and macOS's `DYLD_*`), the
+(`LD_PRELOAD`, `LD_LIBRARY_PATH`, `LD_AUDIT`, and the two macOS spellings
+`DYLD_INSERT_LIBRARIES` and `DYLD_LIBRARY_PATH`), the
 locale-conversion path (`GCONV_PATH`), the files shells source before running
 anything (`BASH_ENV`, `ENV`) and the code bash runs at each prompt
 (`PROMPT_COMMAND`), plus `IFS`, `PATH`, `SHELL`, `HOSTALIASES` and
