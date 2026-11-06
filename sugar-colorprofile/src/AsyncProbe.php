@@ -101,6 +101,16 @@ final class AsyncProbe
             return \React\Promise\resolve($chain->toColorProfile());
         }
 
+        // Promotion gate (parity with the sync terminfo leg in Probe):
+        // the infocmp child can only ever ADD TrueColor, so the terminfo
+        // leg runs solely on the Ansi/Ansi256 rungs. On the Ascii floor
+        // (FORCE_COLOR=0 and friends) the chain answer is final — spawning
+        // the child there let a TERM cap-claim upgrade past a forced floor.
+        $profile = $chain->toColorProfile();
+        if ($profile !== ColorProfile::Ansi && $profile !== ColorProfile::Ansi256) {
+            return \React\Promise\resolve($profile);
+        }
+
         $loop = self::getLoop();
         if ($loop === null) {
             // No event loop exists to run a child on — the synchronous probe

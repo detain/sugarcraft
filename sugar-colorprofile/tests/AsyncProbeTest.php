@@ -7,6 +7,7 @@ namespace SugarCraft\ColorProfile\Tests;
 use SugarCraft\ColorProfile\AsyncProbe;
 use SugarCraft\ColorProfile\ColorProfile;
 use SugarCraft\ColorProfile\Probe;
+use SugarCraft\ColorProfile\Probe\InfocmpBinary;
 use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 
@@ -262,6 +263,45 @@ final class AsyncProbeTest extends TestCase
         $this->assertStringContainsString('terminate(defined(\'SIGKILL\') ? \\SIGKILL : 9)', $src);
         $this->assertStringContainsString('cancelTimer($timeoutTimer)', $src);
         $this->assertStringContainsString('reclaimStaleSlots()', $src);
+    }
+
+    public function testAsciiFloorSettlesFromTheChainWithoutSpawning(): void
+    {
+        // The terminfo leg may only ADD TrueColor on the Ansi/Ansi256 rungs
+        // (parity with the sync Probe). On a forced Ascii floor the chain
+        // answer is final: before the gate this resolved TrueColor straight
+        // from the child's Tc-declaring stdout.
+        Probe::_reset();
+        $slots = new \ReflectionProperty(AsyncProbe::class, 'inFlight');
+        $slots->setValue(null, []);
+
+        $printer = \tempnam(\sys_get_temp_dir(), 'tc');
+        $this->assertIsString($printer);
+        \file_put_contents($printer, "#!/bin/sh\nprintf '\\tTc,\\n'\n");
+        \chmod($printer, 0755);
+        (new \ReflectionProperty(InfocmpBinary::class, 'path'))->setValue(null, $printer);
+
+        $_ENV['TERM'] = 'xterm-256color';
+        putenv('TERM=xterm-256color');
+        $_ENV['FORCE_COLOR'] = '0';
+        putenv('FORCE_COLOR=0');
+
+        try {
+            $resolved = null;
+            AsyncProbe::colorProfile()->then(function (ColorProfile $p) use (&$resolved): void {
+                $resolved = $p;
+            });
+
+            $this->assertSame(ColorProfile::Ascii, $resolved, 'the forced floor must settle from the chain, not the child');
+            $this->assertCount(0, $slots->getValue(), 'the floor path must neither spawn nor book a slot');
+        } finally {
+            unset($_ENV['TERM'], $_ENV['FORCE_COLOR']);
+            putenv('TERM');
+            putenv('FORCE_COLOR');
+            Probe::_reset();
+            $slots->setValue(null, []);
+            @\unlink($printer);
+        }
     }
 
     /**
