@@ -245,7 +245,7 @@ use SugarCraft\SshServer\Session;
 exit(Server::new()
     ->use(Logger::toFile('/var/log/wish.jsonl'))
     ->use(new RateLimit('/var/lib/wish/buckets.json', burst: 5, ratePerSec: 0.5))
-    ->use(new Auth(users: ['alice', 'bob']))
+    ->use(new Auth(users: ['wishuser']))
     ->use(new Spawn(fn (Session $s) => [
         'cmd' => ['/bin/bash', '-l'],
         'env' => [
@@ -273,10 +273,21 @@ exit(Server::new()
     ->withTransport(new HostSshdTransport())
     ->use(Logger::toFile('/var/log/wish.jsonl'))
     ->use(new RateLimit('/var/lib/wish/buckets.json', burst: 5, ratePerSec: 0.5))
-    ->use(new Auth(users: ['alice', 'bob']))
+    ->use(new Auth(users: ['wishuser']))
     ->use(new BubbleTea(fn ($session) => new MyApp($session)))
     ->serve());
 ```
+
+The `wishuser` in both `Auth` allowlists is what the Step 1 `Match` block
+makes true, not an oversight: `ForceCommand` runs the entry script *as the
+target account*, so `$s->user` — read from `USER`/`LOGNAME` in
+`Session::fromEnvironment()` — is `wishuser` on every connection, and an
+allowlist of human names here refuses 100% of logins with exit
+`Server::EXIT_DENIED`. Authenticating real humans is the SSH layer's job
+before the script starts; per-user separation inside the middleware needs a
+per-user `Match` block or a `command="..."` line in each person's own
+`authorized_keys`, and each such identity then runs its own entry script
+that sees its own name.
 
 Both examples `exit(...)` on `serve()` deliberately: that return value is
 the session's answer -- the child's own exit code, `Server::EXIT_DENIED`

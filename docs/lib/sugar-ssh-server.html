@@ -75,7 +75,7 @@ use SugarCraft\SshServer\Session;
 
 exit(Server::new()
     -&gt;use(Logger::toFile('/var/log/wish.jsonl'))
-    -&gt;use(new Auth(users: ['alice', 'bob']))
+    -&gt;use(new Auth(users: ['wishuser']))
     -&gt;use(new Spawn(fn (Session $s) =&gt; [
         'cmd' =&gt; ['/bin/bash', '-l'],
         'env' =&gt; [
@@ -92,9 +92,11 @@ use SugarCraft\SshServer\Middleware\BubbleTea;
 exit(Server::new()
     -&gt;withTransport(new HostSshdTransport())
     -&gt;use(Logger::toFile('/var/log/wish.jsonl'))
-    -&gt;use(new Auth(users: ['alice', 'bob']))
+    -&gt;use(new Auth(users: ['wishuser']))
     -&gt;use(new BubbleTea(fn($session) =&gt; new MyApp($session)))
     -&gt;serve());</code></pre>
+
+    <p>The <code>wishuser</code> in both <code>Auth</code> allowlists is what the sshd <code>Match</code> block makes true: under <code>ForceCommand</code> the entry script runs <em>as the target account</em>, so <code>$s-&gt;user</code> is that account on every connection, and an allowlist of human names refuses 100% of logins with exit <code>Server::EXIT_DENIED</code>. Per-user separation needs per-user <code>Match</code> blocks or <code>authorized_keys</code> <code>command=</code> entries, each running its own entry script.</p>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
