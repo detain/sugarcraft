@@ -157,6 +157,10 @@ drive the VHS demo tapes and is not shipped as a runnable template.
 public static function new(array $items = [], ?\Closure $itemFormatter = null): self
 ```
 
+The raw constructor additionally accepts a third optional `?\Closure $filterFn`
+predicate — a way to seed a custom filter without a fluent call. `new()` does
+not expose it; `setFilterFn()` (configuration below) is the fluent path.
+
 ## API — QuickPick configuration (fluent setters)
 
 Every `set*()`/`with*()` below returns a **clone**; the receiver is never

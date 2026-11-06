@@ -128,6 +128,14 @@ final class QuickPick
      */
     private ?\Closure $onResize = null;
 
+    /**
+     * The third parameter is the only constructor-level way to seed a custom
+     * filter predicate; the fluent path is setFilterFn() and new() exposes neither.
+     *
+     * @param array<array-key, string|Item> $items
+     * @param \Closure(string $item, bool $isSelected, int $number = 0): string|null $itemFormatter
+     * @param \Closure(Item $item): bool|null $filterFn
+     */
     public function __construct(
         array $items = [],
         ?\Closure $itemFormatter = null,
