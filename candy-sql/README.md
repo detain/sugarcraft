@@ -24,11 +24,21 @@ composer require sugarcraft/candy-sql
 
 ## CLI usage
 
+First run, no database at hand: `php examples/play.php` seeds an in-memory
+SQLite instance (`users`/`posts`) and opens the dashboard over it. Invoked with
+no arguments the launcher prints a one-line `USAGE:` reminder and exits 2;
+`bin/candy-sql --help` prints the full flag table (exit 0) and `--version`
+prints the build stamp (exit 0).
+
 ```bash
 # (the `bin/candy-sql` form below assumes a monorepo checkout — installed as a
 #  composer dependency the launcher is at `vendor/bin/candy-sql`, same flags)
 # SQLite via bare path (inferred as Flavor::Sqlite)
 bin/candy-sql app.sqlite
+
+# Password via environment instead of argv — the preferred shape whenever a
+# password is needed (keeps the secret out of /proc/<pid>/cmdline)
+CANDY_SQL_PASS=secret bin/candy-sql --driver=mysql --user=root --db=mydb
 
 # Any DSN — MySQL, PostgreSQL, SQLite (flags use --key=value form)
 bin/candy-sql --dsn=mysql://user:pass@localhost:3306/dbname
@@ -37,9 +47,6 @@ bin/candy-sql --dsn=sqlite:///absolute/path/to/db.sqlite
 
 # Individual flags (no DSN)
 bin/candy-sql --driver=mysql --host=localhost --port=3306 --user=root --db=mydb
-
-# Password via environment instead of argv (keeps it out of /proc/<pid>/cmdline)
-CANDY_SQL_PASS=secret bin/candy-sql --driver=mysql --user=root --db=mydb
 
 # Status-snapshot history: on by default at $HOME/.candy-sql/history.db
 bin/candy-sql app.sqlite --no-history
@@ -167,11 +174,11 @@ these tables.
 | `Admin\ServerStatus\ServerInfoCard`    | Info card with host, socket, port, version, uptime (computed to running-since). |
 | `Admin\ServerStatusSnapshotAdapter` | Adapter wrapping `ServerContextInterface` to satisfy `StatusSnapshotProviderInterface`, enabling `Sampler` to compute per-second rate deltas across poll cycles. Stores snapshots internally so two-sample rate logic can operate on the same context without the context needing to implement the interface directly. |
 | `Admin\Sampler` | Rate computer service: takes two status snapshots and elapsed time, computes per-second deltas (Bytes_received, Bytes_sent, etc.) with negative-delta clamping. Restart detection is consumed from `provider->wasReset()` via `StatusSnapshotProviderInterface` — delegating to `ServerContext::detectReset()` as the single owner. Advance via `sample()` on each gauge refresh cycle. |
-| `Admin\Variables\VariablesPage`     | Dual-tab (Status/System) variable browser with category tree, search filtering, keyboard nav (j/k/w/s/e/q), and inline edit via VariableEditor. The `[e]` key opens a two-phase dialog: type the new value (DLG_INPUT), press [Enter] to review the SET statement (DLG_CONFIRM), then [Enter] again to execute or [Esc] to cancel. Self-write is guarded: setting a variable to its current value is a no-op. Static (non-dynamic) variables show error 1238 with a clear message rather than silently refusing. The `[tab]` Status/System toggle is unreachable while the app runs: `App::update()` consumes `Tab` for global pane cycling before admin delegation, so the page's handler (VariablesPage.php:207-213) is kept only for standalone use — same fate as the ConnectionsPage detail-tab handlers below. Follows the VariablesPage convention of the original design. |
+| `Admin\Variables\VariablesPage`     | Dual-tab (Status/System) variable browser with category tree, search filtering, keyboard nav (j/k/w/s/e/q), and inline edit via VariableEditor. The `[e]` key opens a two-phase dialog: type the new value (DLG_INPUT), press [Enter] to review the SET statement (DLG_CONFIRM), then [Enter] again to execute or [Esc] to cancel. Self-write is guarded: setting a variable to its current value is a no-op. Static (non-dynamic) variables show error 1238 with a clear message rather than silently refusing. The `[tab]` Status/System toggle is unreachable while the app runs: `App::update()` consumes `Tab` for global pane cycling before admin delegation, so the page's handler (VariablesPage.php:207-213) is kept only for standalone use — same fate as the ConnectionsPage detail-tab handlers below. Mirrors charmbracelet/lazysql's VariablesPage (src/Admin/Variables/VariablesPage.php:42). |
 | `Admin\Variables\VariableEditor`    | Inline editor for MySQL variables via `SET GLOBAL` / `SET PERSIST` / `SET PERSIST_ONLY` / `RESET PERSIST` (8.0+). Uses prepared statements; backtick-escapes variable names (from catalog, not user input), uses `?` placeholder for values. Error handling: 1142 (no privilege), 1227 (access denied), 1238 (variable is not dynamic — requires restart or use PERSIST_ONLY), 3680 (persisted_variables restriction). Press [p] in the edit dialog to cycle through GLOBAL → PERSIST → PERSIST_ONLY modes. Mirrors `mysql-workbench wb_admin_variable_editor`. |
 | `Admin\Variables\VariableMetadata` | Immutable descriptor: name, description, editable flag, **dynamic flag**, group memberships. Single MySQL system variable. `editable` = can be set at all (SET GLOBAL / SET PERSIST); `dynamic` = can be changed at runtime without restart (static vars like `innodb_log_file_size` accept SET GLOBAL but error 1238). Constructed from `data/variable_metadata.json` (1563 entries). |
 | `Admin\Variables\Catalog` | Loads `data/variable_metadata.json` (1563 variables, 67 groups). Provides `get()`, `all()`, `byGroup()`, `groups()`, `isEditable()`, `isDynamic()`. `isDynamic()` returns false for static variables (e.g. `innodb_log_file_size`) — used by VariablesPage to gate inline editing. Missing metadata is non-fatal — the page renders without categories or `[rw]` indicators. |
-| `Admin\Connections\ConnectionsPage`  | Processlist browser with selection navigation (j/k/↑/↓), hide-sleeping filter (f), and async refresh (r) via `Cmd::send`. The detail-tab cycling handlers (Tab / 1 / 2 / 3) are unreachable today: Tab cycles panes globally and digits 1–8 select admin panes first. Follows the connections-page convention of the original design. |
+| `Admin\Connections\ConnectionsPage`  | Processlist browser with selection navigation (j/k/↑/↓), hide-sleeping filter (f), and async refresh (r) via `Cmd::send`. The detail-tab cycling handlers (Tab / 1 / 2 / 3) are unreachable today: Tab cycles panes globally and digits 1–8 select admin panes first. Mirrors charmbracelet/lazysql's connections page (src/Admin/Connections/ConnectionsPage.php:28). |
 | `Admin\Connections\ConnectionFilters` | Immutable filter config: hide-sleeping, hide-background, skip-full-info, refresh-rate. All fields are readonly with paired `$Set` sentinels. |
 | `Admin\Connections\ConnectionCounters` | Connection metrics from `SHOW GLOBAL STATUS`: threads-connected/running/cached, connections, aborted-connects, connection-errors. Computes `connectionUsageRatio()` lazily (0.0–1.0). |
 | `Admin\Connections\ConnectionDetailTabs` | Three detail tabs (Details/Attributes/MDL) per processlist thread. Details from `performance_schema.threads`; Attributes from `session_connect_attrs`; MDL from `performance_schema.metadata_locks` with graceful fallback to `information_schema.metadata_lock_info`. Gracefully returns `null` on permission errors (1142/1146/1227). |
@@ -735,6 +742,10 @@ outright (no forwarder is possible on an interface, and the repo-wide consumer
 census found no implementations outside the lib — the three providers above are
 its only implementors). `tests/AccessorDeprecationTest.php` pins every row, the
 src census, and the table's agreement with it.
+
+## Internationalization
+
+`src/Lang.php` is a thin facade over the shared sugar-core translation registry with the `sql` namespace baked in, and `lang/` ships 16 locales — but the translated surface is currently one message: the `database.no_file` SQLite refusal (`src/Database.php:34`, `src/Db/SqliteDatabase.php:32`); everything else the UI prints is untranslated English.
 
 ## Known limitations
 
