@@ -226,7 +226,7 @@ handler layer that the parser drives.
 | `AnsiParser\Parser\Action` | sugar-ansi-parser | Enum of dispatch actions: `Print`, `Execute`, `CsiDispatch`, `EscDispatch`, `OscDispatch`, `DcsDispatch`, `Hook`, `Put`, `Unhook`. |
 | `AnsiParser\Parser\Transitions` | sugar-ansi-parser | Static transition table — `(state, byte) → (action, next_state)`. |
 | `AnsiParser\Parser\Handler` | sugar-ansi-parser | The contract the parser drives. |
-| `AnsiParser\Parser\CsiHandler` | sugar-ansi-parser | CSI dispatch contract — `printable`, `cuu`/`cud`/`cuf`/`cub`, `cup`, `sgr`, `ed`/`el`, `decset`/`decrst`, `decstbm`, `tbc`, `cht`/`cbt`, `gridRows`. |
+| `AnsiParser\Parser\CsiHandler` | sugar-ansi-parser | CSI dispatch contract — `printable`, `cuu`/`cud`/`cuf`/`cub`, `cup`/`hvp`, `sgr`, `ed`/`el`, `decset`/`decrst`, `decstbm`, `tbc`, `cht`/`cbt`, `cr`/`lf`, `su`/`sd`, `il`/`dl`, `ich`/`dch`, `rep`, `scosc`/`scorc`, `gridRows`/`gridCols` — 29 members, matching `sugar-ansi-parser/src/Parser/CsiHandler.php`. |
 | `AnsiParser\Parser\OscHandler` | sugar-ansi-parser | OSC dispatch contract — `title`, `hyperlink`. |
 | `AnsiParser\Parser\HandlerAdapter` | sugar-ansi-parser | Glue that wires `CsiHandler` + `OscHandler` into a single `Handler` for the parser. |
 | `Parser\CsiHandlerImpl` | sugar-vterm | Default CSI handler used by the root `Terminal` renderer path. |
