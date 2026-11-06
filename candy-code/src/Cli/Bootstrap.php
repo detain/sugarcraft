@@ -125,6 +125,7 @@ final class Bootstrap
 {
     use DetectsCapabilities;
     use ManagedConfigTier;
+    use CarriesSessionLaunchPreset;
 
     /**
      * The per-invocation override and the persisted key for the launch's
@@ -4395,23 +4396,6 @@ public static function useSessionLaunch(bool $continue, bool $resume = false, ?s
         LaunchContext::useIncognito($incognito);
     }
 
-    /**
-     * Delegates to {@see LaunchContext::useSessionLaunchPresetId()} — D1
-     * (RS-DRIVER a): `--session-id` registers on the same launch-context
-     * seam as the mode/target pair, so the one funnel every session-opening
-     * surface reads is also the one that sees the preset.
-     */
-    public static function useSessionLaunchPresetId(?string $sessionId): void
-    {
-        LaunchContext::useSessionLaunchPresetId($sessionId);
-    }
-
-    /** The id `--session-id` pre-allocated for this launch, if any. */
-    public static function sessionLaunchPresetId(): ?string
-    {
-        return LaunchContext::sessionLaunchPresetId();
-    }
-
     /** Whether this launch keeps nothing — {@see LaunchContext::incognito()}. */
     public static function incognito(): bool
     {
@@ -4491,23 +4475,12 @@ public static function pinPromptHistoryPath(?string $path): void
      */
     public static function sessionLaunchError(): ?string
     {
-        // D1 (RS-DRIVER a): a pre-allocated id that already names a stored
-        // row is a usage error, not a silent share-the-address — the driver
-        // asked for THIS lineage address and something else owns it. Judged
-        // on the new-session leg only: the parser refused --session-id
-        // beside --continue/--resume/--incognito, and an attach launch
-        // answers from the server's own id (forLaunch() returns above the
-        // local store entirely), so elsewhere the preset could only be inert.
-        $preset = LaunchContext::sessionLaunchPresetId();
-        if ($preset !== null && LaunchContext::sessionLaunchMode() === 'new' && !LaunchContext::incognito()) {
-            try {
-                $clash = self::sessionStore(false)->session($preset);
-            } catch (\Throwable $e) {
-                return 'candy-code: --session-id: cannot open the session store: ' . $e->getMessage();
-            }
-            if ($clash !== null) {
-                return 'candy-code: --session-id ' . $preset . ': a session with that id is already stored; to reopen that session use --resume=' . $preset;
-            }
+        // D1 (RS-DRIVER a): the preset-vs-store collision pre-flight lives
+        // in {@see CarriesSessionLaunchPreset::sessionPresetCollisionError()}
+        // (M6 ratchet extraction; the refusal bytes rode there unchanged).
+        $collision = self::sessionPresetCollisionError();
+        if ($collision !== null) {
+            return $collision;
         }
 
         if (LaunchContext::sessionLaunchMode() !== 'resume' || LaunchContext::sessionLaunchTarget() === null) {

@@ -279,14 +279,16 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * the headless-default banner that now names `-p`'s new asking default; and C-SEC-7.b two more still: useRestricted()'s and useSafeMode()'s
  * one-launch notices each, and C-SEC-7.e one more: the once-per-session
  * implicit-autoReview launch notice that rides the seam when the default engages, and C-TOOL-6.e one more: the per-file skip announcements for user script tools, and C-SEC-3.b two more: trustedOriginNames()'s not-a-list and not-a-name-entry warnings), each producing a
- * distinct `candy-code: ` line, against a channel-4 credit of ten for that
+ * distinct `candy-code: ` line, against a channel-4 credit of eight for that
  * file (ISS-026's envelope-carrying resume notice joined the six as a raw
  * fwrite line, and its rv6 `--resume` pick twin joined the seven; D1
- * RS-DRIVER.a's two --session-id collision legs in sessionLaunchError(),
- * store-unreadable and already-stored, joined the nine and ten — they are
- * RETURNED for failUsage to print, but each still produces one distinct
- * `candy-code: ` line, the same shape as the resume-not-found row beside
- * them). Off by
+ * RS-DRIVER.a's two --session-id collision legs joined the nine and ten
+ * where they were minted, inside sessionLaunchError() — the wf-driverfix M6
+ * ratchet extraction relocated them, still RETURNED for failUsage to print,
+ * to CarriesSessionLaunchPreset.php, whose own row carries that +2; each
+ * still produces one distinct
+ * `candy-code: ` line, the same shape as the resume-not-found row that
+ * stayed beside them here). Off by
  * roughly five times, in the blind direction.
  *
  * IT WAS NOT A THEORY. Round 45's review added one
@@ -596,7 +598,13 @@ final class StderrEmitterCensusTest extends TestCase
         // `candy-code: ` envelope, like the retention detail line.
         // +1 in ISS-026 residual (rv6): the --resume pick twin carries its own
         // envelope too.
-        'src/Cli/Bootstrap.php' => 10, // +2 D1 RS-DRIVER.a: sessionLaunchError()'s --session-id collision legs (already-stored, store-unreadable) carry their own `candy-code: ` envelope — the strings are RETURNED for failUsage to print (stderr-alone: usage error, no session exists yet to name it in a transcript), the same decision as the resume-not-found row they sit beside
+        'src/Cli/Bootstrap.php' => 8, // the +2 D1 RS-DRIVER.a collision legs moved to CarriesSessionLaunchPreset.php with the M6 ratchet extraction — decision unchanged (stderr-alone), the credit follows the bytes
+        // +2 D1 RS-DRIVER.a (re-keyed 2026-11-06 by the wf-driverfix M6 extraction from
+        // Bootstrap::sessionLaunchError()): the --session-id collision legs (already-stored,
+        // store-unreadable) carry their own `candy-code: ` envelope. The strings are RETURNED
+        // for failUsage to print — the same stderr-alone decision as the resume-not-found
+        // legs they sit beside; nothing about the decision moved, only the file.
+        'src/Cli/CarriesSessionLaunchPreset.php' => 2,
         'src/Cli/HeadlessPermissionPrompt.php' => 4,
         // 8A: the three migration notices (env fold, running-server refusal,
         // per-directory move), all stderr-alone — see INDIRECT_SITES' row for
