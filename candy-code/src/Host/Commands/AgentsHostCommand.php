@@ -80,9 +80,12 @@ final class AgentsHostCommand implements HostCommand
         // file operations, and a build without a sub-agent runtime can still
         // promote presets. `tree` (A3) joins them: it reads the run cards on
         // disk, not the roster, so it answers whether or not a manager was
-        // ever configured. Any other word (none, `list`, a preset name) falls
-        // through to the roster arm unchanged.
-        if ($sub === 'new' || $sub === 'proposed' || $sub === 'accept' || $sub === 'tree') {
+        // ever configured. `capabilities` (RS-AGENT-C4) is the same posture:
+        // it reads and writes only the home-store manifests, and answers with
+        // an empty roster when no manager was configured. Any other word
+        // (none, `list`, a preset name) falls through to the roster arm
+        // unchanged.
+        if ($sub === 'new' || $sub === 'proposed' || $sub === 'accept' || $sub === 'tree' || $sub === 'capabilities') {
             try {
                 return match ($sub) {
                     'new' => CommandResult::reply($text, Lang::t('host.agents.new.dispatched'))
@@ -96,6 +99,7 @@ final class AgentsHostCommand implements HostCommand
                     'tree' => \count($words) <= 1
                         ? CommandResult::reply($text, AgentStatusCommands::tree($context->currentSessionId()))
                         : CommandResult::failure($text, Lang::t('host.agents.usage'), 2),
+                    'capabilities' => self::capabilitiesResult($context, $text, $words),
                     default => self::accept($context, $text, \array_slice($words, 1)),
                 };
             } catch (\Throwable $e) {
@@ -121,6 +125,44 @@ final class AgentsHostCommand implements HostCommand
         return $exitCode === 0
             ? CommandResult::reply($text, $output)
             : CommandResult::failure($text, $output, $exitCode);
+    }
+
+    /**
+     * `/agents capabilities [name] [--json]` (RS-AGENT-C4 v1) — publish this
+     * session's roster as capability manifests and list what is discoverable
+     * across sessions in the home store. The manager gate is NOT required:
+     * discovery works from disk alone, and an empty roster simply publishes
+     * nothing, so the verb answers on every build. `--json` is the machine
+     * row drivers consume; the argument parser is strict — one optional
+     * exact-name filter and at most one `--json`, anything else is usage.
+     *
+     * @param list<string> $words the full word list, verb at index 0
+     */
+    private static function capabilitiesResult(CommandContext $context, string $text, array $words): CommandResult
+    {
+        $nameFilter = null;
+        $asJson = false;
+        foreach (array_slice($words, 1) as $word) {
+            if ($word === '--json') {
+                if ($asJson) {
+                    return CommandResult::failure($text, Lang::t('host.agents.usage'), 2);
+                }
+                $asJson = true;
+                continue;
+            }
+            if (str_starts_with($word, '--') || $nameFilter !== null) {
+                return CommandResult::failure($text, Lang::t('host.agents.usage'), 2);
+            }
+            $nameFilter = $word;
+        }
+
+        return CommandResult::reply($text, AgentStatusCommands::capabilities(
+            $context->currentSessionId(),
+            $context->agentManager?->all() ?? [],
+            $nameFilter,
+            $asJson,
+            !$context->readOnly,
+        ));
     }
 
     /**

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Host\Commands;
 
+use SugarCraft\Code\Agents\Agent;
+use SugarCraft\Code\Agents\CapabilityCard;
+use SugarCraft\Code\Agents\CapabilityCardStore;
 use SugarCraft\Code\Agents\Live\AgentInbox;
 use SugarCraft\Code\Agents\Live\AgentRunCards;
 use SugarCraft\Code\Agents\Live\AgentRunStatus;
@@ -82,6 +85,94 @@ final class AgentStatusCommands
                 $line .= ' · PARENT CYCLE (forged or corrupt lineage)';
             }
 
+            $lines[] = $line;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * The discoverable capability manifests (RS-AGENT-C4 v1): publish this
+     * session's roster into the home store, then list what is discoverable —
+     * including other sessions' buckets. V1 discovery is LOCAL and
+     * CROSS-SESSION only, never network; every card row below is data, not
+     * permission, and nothing on this path acts on it.
+     *
+     * Publishing is skipped when the caller disallows it (read-only
+     * surfaces) or holds no session id; discovery never needs either, so a
+     * null scope still answers with everything on record. A stale row is a
+     * manifest in THIS session's bucket that the live roster no longer
+     * names — surfaced and labelled, because a vanished capability is
+     * itself the news.
+     *
+     * @param list<Agent> $roster the caller's live agents, published as cards
+     */
+    public static function capabilities(
+        ?string $scope,
+        array $roster,
+        ?string $nameFilter,
+        bool $asJson,
+        bool $allowPublish,
+        ?string $root = null,
+    ): string {
+        $liveNames = [];
+        foreach ($roster as $agent) {
+            $liveNames[] = $agent->name;
+        }
+
+        if ($allowPublish && $scope !== null && $scope !== '' && $roster !== []) {
+            $now = time();
+            $cards = [];
+            foreach ($roster as $agent) {
+                $cards[] = CapabilityCard::fromAgent($agent, $now);
+            }
+            CapabilityCardStore::publish($scope, $cards, $root);
+        }
+
+        $rows = CapabilityCardStore::discover($scope, $liveNames, $root);
+        if ($nameFilter !== null) {
+            $rows = array_values(array_filter(
+                $rows,
+                static fn (array $row): bool => $row['name'] === $nameFilter,
+            ));
+        }
+
+        if ($asJson) {
+            $manifests = [];
+            foreach ($rows as $row) {
+                $manifests[] = [
+                    'session' => $row['session'],
+                    'current' => $row['current'],
+                    'stale' => $row['stale'],
+                    'card' => $row['card']->toArray(),
+                ];
+            }
+            $json = json_encode(
+                ['version' => CapabilityCard::SCHEMA_VERSION, 'scope' => $scope, 'agents' => $manifests],
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE,
+            );
+            if ($json === false) {
+                return 'Could not encode the capability roster; refusing to print a partial manifest.';
+            }
+
+            return $json;
+        }
+
+        if ($rows === []) {
+            return 'No capability manifests are on record yet. `agents capabilities` publishes this '
+                . "session's roster and lists everything discoverable.";
+        }
+
+        $lines = ['Discoverable agent capabilities (a manifest is data, not permission):'];
+        foreach ($rows as $row) {
+            $line = '- ' . PermissionsCommand::reportField($row['name'])
+                . ' · ' . PermissionsCommand::reportField($row['card']->summary());
+            if (!$row['current']) {
+                $line .= ' · from session ' . PermissionsCommand::reportField($row['session']);
+            }
+            if ($row['stale']) {
+                $line .= " · STALE (this session's current roster no longer names it)";
+            }
             $lines[] = $line;
         }
 
