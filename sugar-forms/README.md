@@ -197,7 +197,7 @@ Form::groups(
 | `withWidth(int)`, `withHeight(int)` | Pin the rendered geometry. |
 | `withTimeout(int $ms)` | Stores a wall-clock budget (ms) for the host runtime to consult; the `Form` model itself starts no timer. |
 | `withKeyMap(KeyMap)` (or the `Form` constructor's `$keyMap` prop) | Override the bindings for `Next` / `Prev` / `Submit` / `Quit` (and per-field nav) on a single form. |
-| `validateAll(): array<string,string>` | Run all field validators and return `[fieldKey => errorMessage]` for fields that failed. Use after `Form::run()` to collect cross-field validation failures that cannot be expressed per-field. |
+| `validateAll(): array<string,string>` | Run all field validators and return `[fieldKey => errorMessage]` for fields that failed. Use at the Program-run boundary (once the `Program` ends) to collect cross-field validation failures that cannot be expressed per-field. |
 
 ### Reading values after submit
 
