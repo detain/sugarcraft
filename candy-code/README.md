@@ -159,9 +159,10 @@ against the sidecar, then installs `candy-code` (mode 0755) into
 curl -fsSL https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/tools/install.sh | sh -s --
 ```
 
-The trailing `--` closes the outer shell's options and opens the installer's: script flags go after it (the script itself is a plain file at that URL — reading it before piping it is a reasonable habit). It takes flags only — no environment variables — plus
-`--base-url URL` to read `releases.json` from a mirror of the release list
-instead of the GitHub API. Homebrew: a formula is rendered per release by
+The trailing `--` closes the outer shell's options and opens the installer's: script flags go after it (the script itself is a plain file at that URL — reading it before piping it is a reasonable habit). It takes flags only — no
+environment variables — plus `--version X.Y.Z` (an exact stable tag; refused on
+the dev channel) and `--base-url URL` to read `releases.json` from a mirror of
+the release list instead of the GitHub API. Homebrew: a formula is rendered per release by
 `candy-code/tools/gen-homebrew-formula.php` and ships as that release's
 `candy-code.rb` asset — there is no tap, so install the formula file itself,
 downloaded from the release page or named by its download URL:
