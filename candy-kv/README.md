@@ -31,7 +31,7 @@ pane build one on top of `Store::list()`.
 - **SQLite-backed** — one file per database under `$XDG_CONFIG_HOME/skate/` (or `~/.config/skate/`; see Data directory)
 - **Iterable streams** — `list()` yields results without loading everything into memory
 - **TTL / expiry** — integer epoch seconds, so an entry means the same instant on every machine and timezone; `prune` removes expired residue
-- **Levenshtein suggestions** — a key miss prints the closest live key (within half the query's character length) to stderr
+- **Levenshtein suggestions** — a key miss prints the closest live key (within half the query's codepoint count) to stderr
 - **Import/Export** — JSON and YAML (`yml` accepted), fail-fast: a bad document or an unround-trippable value refuses before writing anything
 - **Atomic transactions** — `transaction()` wraps a callback in BEGIN IMMEDIATE/COMMIT/ROLLBACK
 - **Bounded lock waits** — every SQLite connection opens with a 5-second busy timeout (`Database.php:67`), so two candy-kv processes racing on one database queue on each other's write locks instead of failing instantly with SQLITE_BUSY
