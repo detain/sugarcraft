@@ -103,6 +103,18 @@ documentation and isolation**, not pretending config is data:
   fingerprints are forgeable metadata — see the admin guide,
   [docs/admin/sugar-ssh-server.md](./admin/sugar-ssh-server.md).
 
+- **SSH endpoint files** (`candy-ssh-launcher`): the YAML/JSON endpoint
+  config is trusted input — exactly like `~/.ssh/config` itself.
+  `options:` entries reach ssh verbatim, and OpenSSH options such as
+  `ProxyCommand` / `LocalCommand` execute arbitrary commands at connect
+  time; keep configs `0600`/`0644`-owned and do not accept endpoint files
+  from strangers. Untrusted bytes are fenced on the display path: endpoint
+  fields pass through `Sanitize::untrustedForDisplay` (with a CR/LF/TAB
+  fold) before printing, the filter echo strips control sequences, and no
+  leading-dash value can smuggle an ssh option. The parser refuses
+  malformed input loudly (quote-aware comment stripping, block-map
+  conflicts, empty hosts/options) rather than guessing.
+
 A change that lets an *untrusted repo, server, or config drop* reach
 these execution paths without the user's visible consent is a
 vulnerability.
