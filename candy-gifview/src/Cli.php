@@ -216,6 +216,9 @@ final class Cli
             // Any other dash-prefixed token (-fps=10, -x) is not a short form
             // this front end speaks: refuse it as an unknown option rather
             // than silently feeding it to the positional ladder as a path.
+            // The display normalizes to --name form: the cli.bad_flag template
+            // hardcodes the double dash, so `-fps=10` echoes as
+            // `unknown option --fps` (pinned by CliTest's single-dash refusal).
             if (\str_starts_with($token, '-') && $token !== '-') {
                 $body = substr($token, 1);
                 $name = rtrim(($eq = strpos($body, '=')) === false ? $body : substr($body, 0, $eq), '-');
