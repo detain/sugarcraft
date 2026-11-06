@@ -251,6 +251,9 @@ takes its bounding boxes from the instance `parse()` method of a constructed
 the markers so the returned frame is display-ready.
 
 ```php
+use SugarCraft\Core\MouseButton;
+use SugarCraft\Core\MouseAction;   // the WIRE enum (Press / Release / Motion)
+use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Mouse\Zones\Manager;
 
 $z = Manager::newGlobal();
@@ -264,11 +267,19 @@ $frame     = $btnOk . '   ' . $btnCancel;
 $displayable = $z->scan($frame);
 echo $displayable;
 
-// Later, when a MouseMsg arrives:
-if ($z->get('btn:ok')?->inBounds($mouseMsg)) {
+// Later, when a MouseMsg arrives (1-based col, row — the same grid `get()`
+// measures; here col 5 lands inside the six-cell "  OK  " button):
+$click = new MouseMsg(5, 1, MouseButton::Left, MouseAction::Press);
+if ($z->get('btn:ok')?->inBounds($click)) {
     // ...
 }
 ```
+
+Mind the two `MouseAction` enums: `SugarCraft\Core\MouseAction` is the
+wire-level event kind carried by `MouseMsg` (above), while
+`SugarCraft\Mouse\MouseAction` is this library's primitive marker-action
+enum (with the X10 button constants). Same class name, different namespaces
+— if a file needs both, alias one.
 
 Never mark text you did not author without sweeping it first: a label that
 already contains `U+E000 <id> U+E001` is structurally a tag, so
