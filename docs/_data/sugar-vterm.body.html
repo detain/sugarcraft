@@ -6,7 +6,7 @@
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Vterm\Terminal\Terminal;
 
-$term = Terminal::create(cols: 80, rows: 24);
+$term = Terminal::new(cols: 80, rows: 24);
 $term-&gt;feed("\x1b[1;31mHello\x1b[0m world");
 
 $screen = $term-&gt;screen();
@@ -52,7 +52,7 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Terminal</td><td>create(cols, rows)</td><td>Create a virtual terminal</td></tr>
+<tr><td>Terminal</td><td>new(cols, rows, scrollbackSize)</td><td>Create a virtual terminal (the <code>Terminal::create()</code> factory is deprecated: it accepts no <code>scrollbackSize</code>)</td></tr>
 <tr><td>Terminal</td><td>feed(bytes)</td><td>Feed ANSI bytes to terminal</td></tr>
 <tr><td>Terminal</td><td>screen()</td><td>Get current cell grid</td></tr>
 <tr><td>Terminal</td><td>cursor()</td><td>Get cursor position</td></tr>

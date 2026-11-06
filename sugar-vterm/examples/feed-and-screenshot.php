@@ -26,7 +26,7 @@ $bytes = "\x1b]2;SugarVterm demo\x07"            // OSC 2: window title
        . " \xe2\x86\x92 source.\n\n"           // " → source.\n\n"
        . "\x1b[38;5;208m  PR1-PR9 shipped \xe2\x9c\x94\x1b[0m"; // orange "PR1-PR9 shipped ✔"
 
-$term = Terminal::create(cols: 40, rows: 8);
+$term = Terminal::new(cols: 40, rows: 8);
 $term->feed($bytes);
 
 echo "Window title: " . ($term->windowTitle() ?? '(none)') . "\n";
