@@ -171,18 +171,27 @@ function run(Store $store, string $cmd, array $argv, string $bin): void
         $opts = ArgParser::list($argv, 2);
         // The delimiter is CONTROLLED by the operator (awk -F contract), so
         // it prints byte-untouched; only the STORED key/value columns get
-        // the escape-smuggling scrub. Binary entries never dump bytes.
+        // the escape-smuggling scrub. The <binary N bytes> placeholder is
+        // driven by the entry's binary FLAG, so 'values' must iterate Entry
+        // mode as well: the mode-'values' string yield carries no flag, and
+        // a UTF-8-decodable binary payload used to print in full there while
+        // plain 'list' placeholdered it — one documented promise
+        // ("Binary values print as <binary N bytes>") broken for one of the
+        // two modes it covers. 'keys' keeps the cheap string yield; values
+        // are never decoded for it, so a corrupt-base64 binary row cannot
+        // throw on a key listing.
         $delim = $opts['delimiter'];
-        foreach ($store->list($opts['pattern'], null, $opts['reverse'], $opts['mode'], $opts['delimiter']) as $item) {
+        $mode = $opts['mode'];
+        foreach ($store->list($opts['pattern'], null, $opts['reverse'], $mode === 'keys' ? 'keys' : 'all', $opts['delimiter']) as $item) {
             if ($item instanceof Entry) {
                 $key = Store::sanitizeForTty($item->key);
                 $bytes = $item->rawValue();
                 $val = $item->binary
                     ? '<binary ' . strlen($bytes) . ' bytes>'
                     : Store::sanitizeForTty($bytes);
-                echo "{$key}{$delim}{$val}\n";
+                echo $mode === 'values' ? "{$val}\n" : "{$key}{$delim}{$val}\n";
             } else {
-                // keys-only or values-only mode: sanitize the yielded string
+                // keys-only mode: sanitize the yielded key string
                 echo Store::sanitizeForTty((string) $item) . "\n";
             }
         }

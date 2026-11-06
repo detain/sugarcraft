@@ -125,6 +125,24 @@ final class CliContractTest extends TestCase
         $this->assertStringContainsString("nul-k\t<binary 3 bytes>", $list['stdout']);
     }
 
+    public function testListValuesHonoursTheBinaryPlaceholderLikeDefaultMode(): void
+    {
+        // --binary forces the flag on a UTF-8-decodable payload, the shape
+        // the sanitizeForTty placeholder gate cannot see. 'list -v' used to
+        // dump it in full while plain 'list' placeholdered the same entry.
+        $set = $this->runKv(['set', 'utfbin-k', '--binary', 'café']);
+        $this->assertSame(0, $set['exit'], $set['stderr']);
+        $bytes = \strlen('café');
+
+        $list = $this->runKv(['list']);
+        $this->assertStringContainsString("utfbin-k\t<binary {$bytes} bytes>", $list['stdout']);
+
+        $values = $this->runKv(['list', '-v']);
+        $this->assertSame(0, $values['exit']);
+        $this->assertStringContainsString("<binary {$bytes} bytes>", $values['stdout']);
+        $this->assertStringNotContainsString('café', $values['stdout'], '-v must placeholder binary entries, not dump them');
+    }
+
     public function testListPrintsDelimiterRawAndTabIsDefault(): void
     {
         // The delimiter is an awk field separator for scripts: it must not be
