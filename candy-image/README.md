@@ -151,5 +151,9 @@ The player paints its own status footer with the same set, abbreviated:
 
 ## Localized
 
-CLI messages ship through the sugar-core i18n lookup from `lang/en.php`
-(namespace `image`); additional locales follow the repo's add-locale flow.
+The user-facing CLI strings — usage, flag/value/format refusals, notices —
+ship through the sugar-core i18n lookup from `lang/en.php` (namespace
+`image`); additional locales follow the repo's add-locale flow. Machine-
+facing output deliberately stays English: the `--dump-detect` report labels
+and the `--version` line are fixed-format diagnostics meant to be pasted
+verbatim into bug reports, not translatable prose.
