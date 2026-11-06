@@ -588,7 +588,7 @@ flooded by leaked `?1003` motion reporting.
 | `Manager` | `newGlobal()` | Build a fresh un-prefixed manager independent of every other instance — NOT the shared default (that is `Zones::defaultManager()`) |
 | `Manager` | `newPrefix(prefix)` | Create prefixed manager for isolation |
 | `Manager` | `mark(name, rendered)` | Wrap output with zone marker |
-| `Manager` | `scan(output, ?width = null)` | Merge-record zones into the registry (re-recorded ids replace, absent ids persist; prefixed ids only), strip markers, clamp columns to `?width` |
+| `Manager` | `scan(output, ?width = null)` | Merge-record zones into the registry (re-recorded ids replace, absent ids persist; a `newPrefix()` manager skips ids outside its prefix, a `newGlobal()` manager records every id), strip markers, clamp columns to `?width` |
 | `Manager` | `anyInBounds(mouseMsg)` | Return the innermost zone under the mouse |
 | `Manager` | `get(name)` | Get zone by name |
 | `Manager` | `setMotionTracking(bool)` | Return paired CSI 1003+1006 enable / LIFO disable sequence |
