@@ -162,21 +162,77 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
     }
 
     /**
-     * A TURN THAT REFUSES NOTHING EMITS THE DOCUMENT IT ALWAYS DID.
+     * A TURN THAT REFUSES NOTHING EMITS THE STABLE KEY SET.
      *
-     * `refusals` is the one optional key in the contract, and this is the half
-     * of that decision a test can hold: the zero-refusal document must not
-     * merely be equivalent, it must have the same keys — because
+     * `refusals` is a STABLE key of the success document (owner ruling
+     * 2026-11-06, lane wf-s5): the zero-refusal run must carry it as the
+     * empty array, so a driver branches on data and never on presence. The
+     * optionality that used to live here held only for THIS document —
      * {@see \SugarCraft\Code\Tests\Integration\BinCandyCodeAutoloadGuardTest}
      * compares `array_keys()` against a document `bin/candy-code` hand-rolls
-     * before `vendor/autoload.php` exists, in a process where no tool could
-     * ever have run.
+     * before `vendor/autoload.php` exists, but that comparison covers the
+     * ERROR document only, and the error document keeps its conditionality.
      */
-    public function testATurnThatRefusesNothingEmitsExactlyTheKeysItAlwaysDid(): void
+    public function testATurnThatRefusesNothingEmitsTheStableKeySet(): void
     {
         $backend = $this->backendEmitting([]);
 
-        self::assertSame(['schema', 'result'], array_keys($this->documentFrom($backend, NonInteractive::EXIT_OK)));
+        $document = $this->documentFrom($backend, NonInteractive::EXIT_OK);
+
+        self::assertSame(['schema', 'result', 'refusals'], array_keys($document));
+        self::assertSame([], $document['refusals'], 'the zero polarity is an empty array, not a missing key');
+    }
+
+    /**
+     * THE STABLE SHAPE, IN BYTES.
+     *
+     * The key-set pin above proves presence; this pins the wire itself, so a
+     * consumer may match on the exact compact document and a mutation that
+     * drops or reorders the key cannot hide behind a tolerant decode.
+     */
+    public function testACleanJsonDocumentCarriesTheEmptyRefusalsArrayInBytes(): void
+    {
+        self::assertSame(
+            '{"schema":1,"result":"the answer","refusals":[]}',
+            NonInteractive::format(Message::assistant('the answer'), NonInteractive::FORMAT_JSON),
+        );
+    }
+
+    /**
+     * A SCHEMA ANSWER AND REFUSAL ROWS LIVE IN SEPARATE KEYS.
+     *
+     * `--json-schema` constrains the provider's reply, and the ledger is the
+     * envelope's own fact: the schema'd `result` must parse back to exactly
+     * the model's object with no refusal rows folded into it, while
+     * `refusals` sits beside it as the third key — outside whatever contract
+     * the caller asked the model to honor.
+     */
+    public function testSchemaAnswerAndRefusalRowsStayInSeparateKeys(): void
+    {
+        $rows = [['tool' => 'Edit', 'kind' => DenialKind::Refused->token(), 'reason' => 'Permission denied: by policy']];
+
+        $document = json_decode(
+            NonInteractive::format(
+                Message::assistant('{"verdict":"pass"}'),
+                NonInteractive::FORMAT_JSON,
+                $rows,
+                'session-under-test',
+                null,
+                [],
+                true,
+            ),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+
+        self::assertSame(
+            ['schema', 'result', 'refusals', 'session_id', 'json_schema_applied'],
+            array_keys($document),
+        );
+        self::assertSame(['verdict'], array_keys(json_decode($document['result'], true, 512, JSON_THROW_ON_ERROR)),
+            'refusal rows must never be folded into the schema-constrained result');
+        self::assertSame($rows, $document['refusals']);
     }
 
     /**
@@ -636,7 +692,7 @@ final class NonInteractiveRefusalDocumentTest extends TestCase
             'bash',
         )->withTools([$this->recordingEditTool()]);
         $second = $this->documentFrom($quiet, NonInteractive::EXIT_OK);
-        self::assertArrayNotHasKey('refusals', $second, 'a turn that refused nothing carries rows anyway');
+        self::assertSame([], $second['refusals'], 'a turn that refused nothing carries rows anyway');
     }
 
     /**

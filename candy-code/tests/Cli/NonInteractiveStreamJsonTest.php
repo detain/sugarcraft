@@ -138,7 +138,7 @@ final class NonInteractiveStreamJsonTest extends TestCase
             $terminal = $rows[\count($rows) - 1];
             $this->assertArrayNotHasKey('type', $terminal, 'the last line is the document, not an envelope');
             $this->assertSame(
-                ['schema' => NonInteractive::SCHEMA, 'result' => 'Hello world'],
+                ['schema' => NonInteractive::SCHEMA, 'result' => 'Hello world', 'refusals' => []],
                 $terminal,
                 'the terminal line is exactly the json-format success document',
             );

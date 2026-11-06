@@ -31,7 +31,7 @@ final class JsonSchemaEnvelopeTest extends TestCase
         $json = NonInteractive::format(Message::assistant('the answer'), NonInteractive::FORMAT_JSON);
         $document = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
 
-        $this->assertSame(['schema', 'result'], array_keys($document));
+        $this->assertSame(['schema', 'result', 'refusals'], array_keys($document));
         $this->assertSame(NonInteractive::SCHEMA, $document['schema']);
         $this->assertSame('the answer', $document['result']);
     }

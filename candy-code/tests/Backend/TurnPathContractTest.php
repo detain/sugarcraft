@@ -364,7 +364,7 @@ final class TurnPathContractTest extends TestCase
 
         [$code, $doc] = $this->driveHeadlessJson($headlessEngine);
         $this->assertSame(NonInteractive::EXIT_OK, $code, 'a stopped-but-answered -p run is not a failure: the answer is complete, the STOP is the caveat');
-        $this->assertFalse(isset($doc['refusals']), 'a step cap is not a refusal — the refusals row stays for its own facts');
+        $this->assertSame([], $doc['refusals'], 'a step cap is not a refusal — the refusals row stays for its own facts');
         $this->assertSame(true, $doc['steps_truncated'] ?? null, 'LOUD contract (post D1-fix): the -p json document carries the folded stop fact');
         foreach (['length_stopped', 'loop_guard_stopped_by'] as $untouched) {
             $this->assertFalse(isset($doc[$untouched]), "only the flag the script earned lands: {$untouched} stays absent-until-set");

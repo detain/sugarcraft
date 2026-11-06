@@ -2301,14 +2301,20 @@ exits `1`, so the failure is visible to a script that never reads the text. A
 second `-p`/`--prompt` is no longer taken silently either: the last value still
 wins, and one line arrives on stderr naming what happened.
 
-Seven keys are **conditional**: `refusals`, `session_id` and `usage`, and the
+Six keys are **conditional**: `session_id` and `usage`, and the
 stop trio `steps_truncated`, `length_stopped` and `loop_guard_stopped_by`
-named below.
+named below. `refusals` is not one of them on the answer document: it is
+**stable** there — every `json` success document carries the array, the empty
+array being the polarity for "the turn refused nothing", so a driver branches
+on data and `jq '.refusals'` never answers null for absence. On the *error*
+document it stays conditional, because the pre-autoload guard in
+`bin/candy-code` is shape-compared against that document alone and can never
+grow the key there.
 A turn that
 blocked a tool call — a permission ASK that nothing could answer, an explicit
-`n` at the prompt, a hook that denied the call outright — adds
+`n` at the prompt, a hook that denied the call outright — fills
 `"refusals": [{"tool": "<name>", "kind": "<which of the three>", "reason":
-"<why it was stopped>"}, …]` to whichever document it emits, the answer and
+"<why it was stopped>"}, …]` in whichever document it emits, the answer and
 the error one alike. A row for an ASK that the run answered by refusing it
 because there was no terminal to ask at carries one extra key,
 `"unattended": true`; a refusal a human answered — with `n`, or an EOF at a
@@ -2323,9 +2329,10 @@ present and unchanged, so a script written against the older document keeps
 working. Before this,
 the document read `{"result": "<the answer>"}` for a turn in which a tool was
 quietly not run, and the model — which *did* see the refusal — had simply
-answered around it. `refusals` is **absent, not empty**, on a run that refused
-nothing, so the ordinary document is unchanged and `jq '.refusals // []'` is
-the way to read it unconditionally. `session_id` names the stored session row
+answered around it. `refusals` is **present and empty** on an answer
+document for a run that refused
+nothing, so `jq '.refusals'` answers `[]`; an inherited `// []` fallback is
+now harmless rather than required (the error document keeps the old rule). `session_id` names the stored session row
 whose save **succeeded** — under `json` and `stream-json` the save runs before
 the document is built, so an id in the envelope is one `--resume` can follow
 (a run owns a session when it built its own
@@ -2334,8 +2341,8 @@ carries no `session_id`). `usage` carries the run's summed token/cost report as
 the `Usage::toArray()` camelCase buckets (`totalTokens`, `costUsd`,
 `inputTokens`, …); it is absent when the provider reported nothing billable —
 the offline echo answer, for one — because `jq '.usage'` answering null should
-mean "nothing was measured", not "zero". Both are absent, never null, like
-`refusals`, and a run whose session store could not open downgrades to the
+mean "nothing was measured", not "zero". Both are absent, never null, and a
+run whose session store could not open downgrades to the
 document without those two keys: one stderr line, answer intact, exit code
 unchanged. A store that opened but then **refused the save** loses exactly
 `session_id` — the other keys stand, because the rest of the document is a
@@ -2388,7 +2395,7 @@ request held to a schema cannot carry tool calls — forcing one mid-loop would
 strand the loop (`Runtime::jsonSchemaFor`). So when a tool result lands before
 the settled answer, that answer arrived with no schema behind it. A `json` run
 (or a stream-json run's final line) then carries `json_schema_applied: false`
-as its seventh conditional key — absent, never `true`, on every other turn,
+as its sixth conditional key — absent, never `true`, on every other turn,
 including a no-tool turn where the schema did ride the answer. One stderr line
 announces the same fact for all three formats. The exit code does not move:
 the answer is what was asked for in shape, and what the schema would have

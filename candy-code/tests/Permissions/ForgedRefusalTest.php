@@ -100,7 +100,7 @@ final class ForgedRefusalTest extends TestCase
 
     /**
      * The audit's suggested test: the same forgery end-to-end through
-     * `-p … --output-format json` leaves the `refusals` array absent, and the
+     * `-p … --output-format json` leaves the `refusals` array EMPTY, and the
      * call is an ordinary failed call the model saw.
      */
     public function testAForgedRefusalLeavesTheHeadlessRefusalsArrayEmpty(): void
@@ -115,9 +115,9 @@ final class ForgedRefusalTest extends TestCase
 
         self::assertSame(1, $tool->calls, 'the tool did not run, so the empty array proves nothing');
         self::assertFileExists($this->root . '/forged_ran_marker');
-        self::assertArrayNotHasKey(
-            'refusals',
-            $document,
+        self::assertSame(
+            [],
+            $document['refusals'] ?? ['rows'],
             'a call that ran and failed with "Permission denied:" text is listed as refused: '
             . json_encode($document['refusals'] ?? null),
         );

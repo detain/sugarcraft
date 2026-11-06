@@ -1458,12 +1458,15 @@ final class NonInteractive
      * A consumer that kept the exit code and wants to know WHICH kind of 2 it
      * got is exactly who `type` is for.
      *
-     * ## `refusals`, and why it is the one OPTIONAL key (E173)
+     * ## `refusals`, and why it is OPTIONAL ON THIS DOCUMENT (E173)
      *
-     * Every other key in these documents is unconditional. `refusals` is
-     * emitted only when the run actually blocked a tool call, and that
+     * Every other key in THIS document is unconditional. `refusals` is
+     * emitted here only when the run actually blocked a tool call, and that
      * asymmetry is a decision with two measurements behind it rather than a
-     * shortcut.
+     * shortcut. The SUCCESS document no longer shares the asymmetry: since
+     * the ruling recorded further down this section, `format()` carries the
+     * key on every run. This method's conditionality stands on the FIRST
+     * measurement, and that measurement reaches this method alone.
      *
      * FIRST — AND THIS REASON REACHES THIS METHOD'S DOCUMENT ONLY, which the
      * paragraph did not say when it landed and which is the whole of what
@@ -1486,13 +1489,25 @@ final class NonInteractive
      * never `format()`'s. MEASURED on PHP 8.3.6 at round 47 by making the key
      * unconditional in each place separately, full-suite scope both times —
      * unconditional here reds that test, and unconditional in `format()` reds
-     * exactly one test, {@see \SugarCraft\Code\Tests\Cli\NonInteractiveRefusalDocumentTest::testATurnThatRefusesNothingEmitsExactlyTheKeysItAlwaysDid()},
-     * with the autoload guard staying green. The success document's shape is
-     * held by that one test and by nothing external. It is held for the SAME
+     * exactly one test, {@see \SugarCraft\Code\Tests\Cli\NonInteractiveRefusalDocumentTest::testATurnThatRefusesNothingEmitsTheStableKeySet()}
+     * (the same test, under the name it has held since the reversal below),
+     * with the autoload guard staying green. The success document's shape was
+     * held by that one test and by nothing external. It was held for the SAME
      * reason — a consumer of `{"result": …}` should not have to learn a new
-     * key to keep working — but that is this package's own promise, not a
+     * key to keep working — but that was this package's own promise, not a
      * constraint imposed from outside it, and conflating the two is how a
      * justification stops being checkable.
+     *
+     * THE SELF-IMPOSED HALF WAS REVERSED ON 2026-11-06 (owner ruling, lane
+     * wf-s5, phlix-eval S5): a machine consumer branches on data, not on
+     * presence, so the STABLE shape won — `format()` now writes the key on
+     * every success document, `[]` when the turn refused nothing. The test
+     * named above pins the new promise: the zero-refusal success document
+     * carries exactly `schema`, `result`, `refusals`, the last an empty
+     * array. What the ruling did NOT touch is THIS method's conditionality:
+     * the external FIRST measurement reaches the error document and it
+     * alone, so a run that threw without refusing still emits the
+     * byte-identical guard-legacy shape.
      *
      * SECOND, IT RIDES ON THE ERROR DOCUMENT AS WELL AS THE ANSWER, because a
      * turn can refuse a tool call and then throw. Attaching it only to
@@ -2259,12 +2274,16 @@ final class NonInteractive
      *
      * `text` (default): the assistant's raw content, matching the plain
      * stdout contract of every tool surveyed in section 2.
-     * `json`: `{"schema": 1, "result": "<content>"}`, plus SEVEN conditional
-     * keys. `refusals` appears when the turn blocked at least one tool call
-     * — see {@see self::emitErrorDocument()} for why refusals is
-     * conditional, and {@see self::refusalFrom()} for what counts as one and
-     * for the optional per-row `unattended` qualifier an auto-refusal carries
-     * (E375). `session_id` names the row this run persisted its answer to —
+     * `json`: `{"schema": 1, "result": "<content>", "refusals": [...]}`, plus
+     * SIX conditional keys. `refusals` is the third key and a STABLE one
+     * (owner ruling 2026-11-06, lane wf-s5): every success document carries
+     * it, the empty array being the zero polarity, so `jq '.refusals'`
+     * answers `[]` or rows and never null-for-absent. See
+     * {@see self::emitErrorDocument()} for why the ERROR document keeps the
+     * key conditional, and {@see self::refusalFrom()} for what counts as one
+     * and for the optional per-row `unattended` qualifier an auto-refusal
+     * carries (E375). `session_id` names the row this run persisted its
+     * answer to —
      * under `json` and `stream-json` the save runs BEFORE this document is
      * built (C-AGT-7.b), so the id names a row whose save SUCCEEDED; a store
      * that refuses the write costs the key, never the answer —
@@ -2281,7 +2300,7 @@ final class NonInteractive
      * neither — the keys report what happened, not what did not), and
      * `loop_guard_stopped_by` names the repeated tool exactly when the
      * repeat-call guard ended the turn. They are the machine half of the same
-     * facts the `text` trailer spells for a human. The seventh key,
+     * facts the `text` trailer spells for a human. The sixth key,
      * `json_schema_applied: false` (C-AGT-7.b), appears exactly when a
      * `--json-schema` launch settled its answer AFTER a tool result: the
      * engine constrains only the turn's FIRST request
@@ -2350,9 +2369,12 @@ final class NonInteractive
     {
         if ($outputFormat === self::FORMAT_JSON) {
             $document = ['schema' => self::SCHEMA, 'result' => $message->content];
-            if ($refusals !== []) {
-                $document['refusals'] = $refusals;
-            }
+            // A STABLE key of the success document (owner ruling 2026-11-06,
+            // lane wf-s5): drivers branch on data, never on presence, and the
+            // empty array is the zero polarity. The ERROR document keeps the
+            // key conditional — the first measurement in
+            // {@see self::emitErrorDocument()} reaches that method alone.
+            $document['refusals'] = $refusals;
             if ($sessionId !== null) {
                 $document['session_id'] = $sessionId;
             }

@@ -204,7 +204,7 @@ final class NonInteractiveSpendCapTest extends TestCase
 
         self::assertSame(NonInteractive::EXIT_OK, $code);
         $decoded = json_decode(trim($stdout), true, 512, JSON_THROW_ON_ERROR);
-        self::assertArrayNotHasKey('refusals', $decoded);
+        self::assertSame([], $decoded['refusals'], 'a clean run carries the stable key at its empty polarity');
         self::assertSame('the answer', $decoded['result']);
     }
 

@@ -192,7 +192,7 @@ final class NonInteractiveTurnHookTest extends TestCase
         self::assertSame([Role::User], array_map(static fn (Message $m): Role => $m->role, $seen->history));
         $decoded = json_decode(trim($stdout), true, 512, JSON_THROW_ON_ERROR);
         self::assertSame('the answer', $decoded['result']);
-        self::assertArrayNotHasKey('refusals', $decoded);
+        self::assertSame([], $decoded['refusals'], 'an empty hook chain still carries the stable key at its empty polarity');
         self::assertArrayNotHasKey('error', $decoded);
     }
 

@@ -54,10 +54,12 @@ code should hold no token that can write to the pull request that supplied it. T
 | `refusals`, `refusal-count` | The `refusals` array (compact JSON) and its length — every tool call that was blocked mid-run. |
 | `exit-code` | `0` ok, `1` ran-and-failed, `2` usage/config error, `127` binary missing. |
 
-The envelope itself is `{"schema":1,"result":...}` on success plus optional
-`"refusals":[{"tool":...,"kind":...,"reason":...}]`, and `{"schema":1,"result":null,
-"error":{"type":...,"message":...}}` on failure — the same contract as `candy-code -p
---output-format json` locally. A document without `"schema"` is schema 0.
+The envelope itself is `{"schema":1,"result":...,"refusals":[...]}` on success
+— the `refusals` array is stable there, `[]` when the turn blocked nothing —
+and `{"schema":1,"result":null,
+"error":{"type":...,"message":...}}` on failure, where `"refusals"` appears
+only when the run blocked calls before throwing — the same contract as
+`candy-code -p --output-format json` locally. A document without `"schema"` is schema 0.
 
 A turn the engine stopped early says so: under `--output-format
 json` the document gains `steps_truncated: true`, `length_stopped: true`, or
