@@ -332,7 +332,7 @@ host blocks forever.
 
 ### Demos
 
-![confirm](.vhs/confirm.gif) ![input](.vhs/input.gif) ![select](.vhs/select.gif)
+![form](.vhs/form.gif) ![confirm](.vhs/confirm.gif) ![input](.vhs/input.gif) ![select](.vhs/select.gif)
 ![multi-select](.vhs/multi-select.gif) ![text](.vhs/text.gif) ![themes](.vhs/themes.gif)
 ![multi-page form](.vhs/prompt-form.gif)
 
