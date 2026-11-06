@@ -2424,7 +2424,7 @@ guard in `bin/candy-code` emits the standard document itself.
 > owning the document shape could not be loaded. `json_encode()` is a core
 > function; the shape never was unreachable. So today, on a checkout with no
 > `vendor/autoload.php`, `candy-code --output-format json -p hi` prints
-> `{"result":null,"error":{"type":"installation","message":"candy-code: cannot
+> `{"schema":1,"result":null,"error":{"type":"installation","message":"candy-code: cannot
 > find composer autoload.php"}}` and a newline on stdout, the same message on
 > stderr, and exits `2`. Because that copy is hand-rolled, a drift guard pins
 > it against `NonInteractive::emitErrorDocument()` key-for-key **and** the two

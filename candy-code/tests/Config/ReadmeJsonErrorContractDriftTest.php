@@ -14,7 +14,7 @@ use SugarCraft\Code\Cli\NonInteractive;
  * had left.
  *
  * WHAT HAPPENED. E84 gave `bin/candy-code`'s missing-autoload guard a JSON
- * document — `{"result":null,"error":{"type":"installation","message":"…"}}`
+ * document — `{"schema":1,"result":null,"error":{"type":"installation","message":"…"}}`
  * at exit 2 — where it had previously printed nothing on stdout. README.md
  * belonged to a different lane that round, so it went on saying the opposite in
  * (1) its "there are exactly two exceptions" paragraph, (2) its exit-code
