@@ -280,7 +280,10 @@ $prompt = TextPrompt::new('> ')->withMode(new ViMode());    // modal vi bindings
 ```
 
 Every key fed to `TextPrompt::handleKey()` is delegated to the attached
-`Mode\ModeInterface` implementation. Typed characters are routed through the
+`Mode\ModeInterface` implementation — with two carve-outs: while an
+incremental search is active the search consumes keys before the mode is
+consulted, and a plain character the mode does not claim is inserted without
+going through its `handleKey()`. Typed characters are routed through the
 mode too while the mode is *claiming* them (`consumesCharacters()` — an armed
 Emacs meta prefix, or Vi outside insert mode), so `^W` never lands in the
 buffer while the prefix waits. The mode translates the key into prompt
