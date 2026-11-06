@@ -209,7 +209,7 @@ reference projects supplied the ideas, not the code.
 | CandyAnsiInspect (candy-ansi-inspect/) | [sequin](https://github.com/charmbracelet/sequin) |
 | CandyGit (candy-git/) | [lazygit](https://github.com/jesseduffield/lazygit) |
 | SugarFlexbox (sugar-flexbox/) | [stickers](https://github.com/76creates/stickers) |
-| SugarTable (sugar-table/) | [bubble-table](https://github.com/Evertras/bubble-table) (no mouse integration, no frozen rows — divergent) |
+| SugarTable (sugar-table/) | [bubble-table](https://github.com/Evertras/bubble-table) (no mouse integration; upstream's frozen-rows concept not ported — this lib freezes columns) |
 | CandyCodetime (candy-codetime/) | [TakaTime](https://github.com/Rtarun3606k/TakaTime) |
 | SugarToast (sugar-toast/) | [bubbleup](https://github.com/DaltonSW/bubbleup) |
 | SugarOverlay (sugar-overlay/) | [bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) |
