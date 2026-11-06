@@ -58,6 +58,15 @@ explicit `Alert::$persistent` sentinel, not a magic `null` expiry),
 `allowEscToClose` true, `maxConcurrent` `null` (unbounded), overflow
 `DropOldest`, history limit 100, symbol set `Unicode`.
 
+Note the one thing the quickstart does not show: an expiry never fires on its
+own. sugar-toast keeps no timers — a timed alert leaves the screen at the next
+rendered frame after its instant (rendering draws only live alerts; the queue
+itself is pruned on writes and by the public `pruneExpired()` door), so a live
+program needs a repaint tick. The [Loop Integration](#loop-integration)
+section wires exactly that, and the bundled demos (`examples/basic.php`,
+`examples/types.php`, `examples/accessibility.php`) show the whole surface
+running.
+
 ## Alert Types
 
 ```php
@@ -332,6 +341,17 @@ input.
 ```php
 use SugarCraft\Toast\{Action, Alert, Position, Toast, ToastType};
 
+// Host-side context the dispatch call needs: the frame the toast is painted
+// over (`view()`'s background), its dimensions, the click in frame coords
+// (subtract your pane offset), and the callbacks the buttons run.
+$background = str_repeat("background content\n", 20);
+$cols = 80;
+$rows = 24;
+$clickCol = 12;
+$clickRow = 3;
+$reconnect = fn () => null;  // your reconnect
+$giveUp = fn () => null;     // your bail-out path
+
 $toast = Toast::new(60)
     ->withPosition(Position::TopLeft)
     ->alert(ToastType::Error, 'Connection lost', actions: [
@@ -348,6 +368,7 @@ if ($action !== null) {
 
 // Keyboard: enumerate the same rects — e.g. Alt+<n> fires the n-th button,
 // or draw a focus ring at {row, col, width} and activate on Enter.
+$hotkeys = [];
 foreach ($toast->actionRects($background, $cols, $rows) as $n => $rect) {
     $hotkeys['alt+' . ($n + 1)] = $rect['action'];
 }
