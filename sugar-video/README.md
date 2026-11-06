@@ -82,7 +82,7 @@ SUGAR_VIDEO_COLS=120 SUGAR_VIDEO_ROWS=40 php examples/play.php synthetic
 | `sixel` | Sixel graphics protocol (DEC) | Sixel-capable |
 | `kitty` | Kitty graphics protocol (APC `\x1b_G`) | Kitty-compatible |
 | `iterm2` | iTerm2 inline image (OSC 1337) | iTerm2 / WezTerm |
-| `auto` | Probe terminal, pick best available (default) | — |
+| `auto` | Selector, not a ninth mode: probes the terminal at open and picks the best mode it can render. There is no `Mode::Auto` case — `Mode::from('auto')` throws a `ValueError` | — |
 
 Auto mode probes the terminal using `Mosaic::diagnose()` (for sixel/kitty/
 iTerm2) and falls back to `Probe::colorProfile()` for ANSI modes.
@@ -186,7 +186,7 @@ $player->stop(); // idempotent — stops audio companion + closes decoder/ffmpeg
 
 #### Tell the player how big one cell is
 
-In the graphics modes (`kitty`, `sixel`, `iTerm2`) the terminal's cell pixel size
+In the graphics modes (`sixel`, `kitty`, `iTerm2`) the terminal's cell pixel size
 is a **decode** input: the frame is rasterised at `cols × cellPxW` by
 `rows × cellPxH` so the image fills the pixel box instead of being resampled up
 from one pixel per cell. Only the host knows that number, so `Reel` accepts it
@@ -271,7 +271,8 @@ into your own view.
 | `[` | Decrease playback speed (−0.25×, min 0.25×) |
 | `]` | Increase playback speed (+0.25×, max 4.0×) |
 | `0`–`9` | Seek to 0–90% of video duration |
-| `m` | Cycle to next rendering mode |
+| `m` | Cycle to next rendering mode — the cycle walks only the modes this terminal can actually receive (graphics rungs gated by `RendererFactory::supports()`; text rungs always cycle) |
+| `audio` | No key toggles audio: on/off is chosen at open time via `Reel::withAudio()`, and `AudioPlayer::pause()` / `resume()` (or `mute()` / `unmute()`) are the only levers, never bound to a key |
 | `q` / `Esc` | Quit |
 | `resize` | Terminal resize (SIGWINCH) re-scales video automatically |
 | `loop` | Loop is set at open time via `Reel::new()->withLoop(true)->play()` (no keyboard shortcut) |
@@ -332,7 +333,7 @@ three terminal-video projects, credited here:
 The rendering stack is reused from the SugarCraft ecosystem rather than
 reinvented: [sugar-image](../sugar-image) (image → cell renderers),
 [sugar-animation](../sugar-animation) (downsampling / dithering), [sugar-colorprofile](../sugar-colorprofile)
-(color mapping), and [sugar-core](../sugar-core) (Model–Update–View runtime + frame pacing).
+(color mapping), [sugar-core](../sugar-core) (Model–Update–View runtime + frame pacing), and [sugar-cellbuffer](../sugar-cellbuffer) (the delta-repaint cell grid the renderer replays frames onto).
 
 ## Known limitations
 
@@ -388,11 +389,11 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
 
 The entry points worth knowing: `Reel` (open/openUrl/play/toPlayer + `withMode/withFps/withLoop/withRamp/withSubtitles/withAudio/withAllowedHosts`), `Player` (open/fromDecoder + pause/play/stop/isStopped/withSeek/withAudio/frameAt), `AudioPlayer` (start/stop/mute/unmute/isMuted), `Synthetic::generate`, `WebVtt::parse`, `VideoSource::probe`, `HttpHeaders::parse`, `Probe`, `DecoderFactory::new`, and `RendererFactory` (`auto`/`autoMode`/`supports`/`supportedModes`/`diagnose`).
 
-Ceilings that shape what plays: source capture is capped at 64 MiB per file (`GifDecoder::MAX_SOURCE_BYTES`, `AnimatedWebpDecoder::MAX_SOURCE_BYTES`); animated WebP at `MAX_FRAMES` 4096 frames, `MAX_CANVAS_PIXELS` 2048² per canvas and `MAX_TOTAL_PIXELS` 32 Mi-px across the file; GIF residency at `MAX_TOTAL_FRAME_PIXELS` 8 000 000 decoded pixels per playthrough; subtitles at 4 MiB (`Reel::MAX_SUBTITLE_BYTES`) and 10 000 cues (`WebVtt::MAX_CUES`, announced when truncated); the terminal geometry clamps to 10-200 columns and 5-80 rows (`Player::MIN/MAX_COLS`, `MIN/MAX_ROWS`). ffprobe output drains under an 8 MiB ceiling and a 10 s deadline; each ffmpeg frame read is bounded by a per-fill timeout.
+Ceilings that shape what plays: source capture is capped at 64 MiB per file (`GifDecoder::MAX_SOURCE_BYTES`, `AnimatedWebpDecoder::MAX_SOURCE_BYTES`); animated WebP at `MAX_FRAMES` 4096 frames, `MAX_CANVAS_PIXELS` 2048² per canvas and `MAX_TOTAL_PIXELS` 33,554,432 pixels summed across the file; GIF residency at `MAX_TOTAL_FRAME_PIXELS` 8 000 000 decoded pixels per playthrough; subtitles at 4 MiB (`Reel::MAX_SUBTITLE_BYTES`) and 10 000 cues (`WebVtt::MAX_CUES`, announced when truncated); the terminal geometry clamps to 10-200 columns and 5-80 rows (`Player::MIN/MAX_COLS`, `MIN/MAX_ROWS`). ffprobe output drains under an 8 MiB ceiling and a 10 s deadline; each ffmpeg frame read is bounded by a per-fill timeout.
 
 ## Color and terminal honesty
 
-The graphics ladder in `RendererFactory::auto()` descends Sixel → Kitty → iTerm2 → TrueColor (block-glyph rung when the profile is symbol-safe) → half-block → ANSI-256 → plain ASCII, gated per rung by `supports()`; unsupported explicit modes raise a typed refusal naming the best mode for this seat, and graphics modes refuse loudly when the PHP lacks ext-gd. `NO_COLOR` is honored transitively: sugar-colorprofile's probe (CLICOLOR_FORCE/FORCE_COLOR/NO_COLOR chain) reports reduced capability and the ladder steps down accordingly.
+The graphics ladder in `RendererFactory::auto()` descends Sixel → Kitty → iTerm2 → TrueColor (block-glyph rung when the profile is symbol-safe) → half-block → ANSI 256-color → plain ASCII, gated per rung by `supports()`; unsupported explicit modes raise a typed refusal naming the best mode for this seat, and graphics modes refuse loudly when the PHP lacks ext-gd. `NO_COLOR` is honored transitively: sugar-colorprofile's probe (CLICOLOR_FORCE/FORCE_COLOR/NO_COLOR chain) reports reduced capability and the ladder steps down accordingly.
 
 ## Localization
 
