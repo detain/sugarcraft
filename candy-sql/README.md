@@ -120,7 +120,7 @@ The admin pages' own `Tab`/`Shift+Tab` tab-cycling handlers (Variables, Connecti
 
 > **Key routing** — `App::update()` consumes, in order: `Ctrl+C` (unconditional quit); on the Admin pane, every key goes to the page while it is modal (`PageBase::isModal()`: the variable-editor dialog, the GTID dialog, a pending kill confirmation, or a staged PerfSchema commit) and `Esc` goes to the page whenever it is present; `q`/`Esc` quit **only from the Tables and Rows browser panes** (in the Query pane `Esc` no longer discards a drafted query); `Tab` cycles the focus pane. In the Query pane, `Ctrl+R`/`Ctrl+E` run the query (both also accept `Ctrl+Enter`) and every other key edits the buffer — except destructive statements (`DROP`/`TRUNCATE`/`DELETE`/`ALTER`/`RENAME`/`GRANT`/`REVOKE`), whose first press only arms a warning; a second consecutive run whose trimmed statement equals the staged SQL confirms, and any other query run or an edit whose trimmed text differs from the staged SQL disarms (a whitespace-only edit trims to the same statement and leaves the arm standing). On the Admin pane, `App::handleAdminKey()` then intercepts the page picker (`1`–`{n}`, `p`, `r`, `q`→return to Tables); `r` additionally forwards to the active page after dropping the shared `AdminQueryCache`. Pages listed in `RowNavigable` (Variables, Connections, Reports, PerfSchema, Debug) keep their own `j`/`k`/`↑`/`↓` row cursors; on non-row-navigable pages (ServerStatus, Dashboard) those same keys walk the sidebar. All remaining keys are delegated to the active page's `update()` method.
 
-> **MySQL / PostgreSQL only** — the Admin pane needs server introspection data. On SQLite, `App::createContext()` falls back to `EmptyServerContext`, whose variable/status/processlist accessors all return empty sets (`connection()` throws and the async fetch path swallows it in a `Throwable` guard); admin pages render empty rather than crashing — run the admin panes against MySQL or PostgreSQL to see live content.
+> **MySQL / PostgreSQL only** — the Admin pane needs server introspection data. On SQLite, `App::adminPage()` finds no context to serve and falls back to `EmptyServerContext`: the variable, status and plugins accessors return empty sets, `statusVariablesTs()` reports `0.0`, `wasReset()` reports `false`, `refresh()` is a no-op, and `connection()` throws `RuntimeException` (each leg pinned by `EmptyServerContextTest`). No context exposes a processlist accessor — those grids go through `Admin\Connections\ProcesslistProvider` — so run the admin panes against MySQL or PostgreSQL to see live content.
 
 ### Admin Page Digit Map
 
@@ -355,15 +355,18 @@ Available providers:
 `AdminProviderInterface` is the flavor-agnostic port for admin panel data. It exposes eight methods —
 `flavor()`, `fetchStatusVariables()`, `fetchServerVariables()`, `fetchProcesslist()`, `maxConnections()`,
 `statusVariablesTs()`, `wasReset()`, `refresh()` — returning structured data the admin UI renders for either flavor.
-Providers are not built through a static factory: the app's `ServerContext` (MySQL) and `PostgresServerContext`
-(PostgreSQL) construct and drive them.
+Providers are adapters built over a `ServerContextInterface`: `MysqlAdminProvider::new($context)` wraps the
+MySQL context, while the app constructs `PostgresAdminProvider` from the connection and drives it through
+`PostgresServerContext`.
 
 ```php
+use SugarCraft\Sql\Admin\Providers\MysqlAdminProvider;
 use SugarCraft\Sql\Admin\ServerContext;
 
-$context = new ServerContext($db);   // picks the MySQL admin provider internally
-$status  = $context->statusVariables();
-$rows    = $context->processlist();
+$context  = new ServerContext($db);             // MySQL introspection handle
+$status   = $context->statusVariables();        // SHOW GLOBAL STATUS
+$provider = MysqlAdminProvider::new($context);  // the AdminProviderInterface port
+$rows     = $provider->fetchProcesslist();      // performance_schema.threads, SHOW FULL PROCESSLIST fallback
 ```
 
 Available providers:
