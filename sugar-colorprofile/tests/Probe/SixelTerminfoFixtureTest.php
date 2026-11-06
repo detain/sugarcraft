@@ -20,7 +20,7 @@ use SugarCraft\ColorProfile\Probe\TerminalProbe;
  *
  * Regression target: the probe used to match `/\bsixel\b/` against the whole
  * dump. Real `infocmp -1` emits capability names such as `Sixel#1` (numeric),
- * `Sixel=true` (string), `SixelScreenMode` and the `Ss1`/`Ss2` user caps — all
+ * `Sixel=true` (string) and `SixelScreenMode` — all
  * of which that case-sensitive, bare-word pattern could never see — while a
  * lowercase "sixel" sitting inside an unrelated `des=` value or a `#` comment
  * matched spuriously. Sixel was systematically UNDER-detected on real entries
@@ -125,8 +125,6 @@ final class SixelTerminfoFixtureTest extends TestCase
             'capitalised boolean Sixel' => ['	Sixel,'],
             'abbreviated boolean sixl' => ['	sixl,'],
             'SixelScreenMode string' => ['	SixelScreenMode=1,'],
-            'Ss1 user capability' => ['	Ss1,'],
-            'Ss2 user capability' => ['	Ss2,'],
             'colon numeric :Sixel#1' => [':	Sixel#1,'],
         ];
     }
@@ -159,8 +157,12 @@ final class SixelTerminfoFixtureTest extends TestCase
             'sixel only in comment' => ["#\tsixel mentioned here as a comment\n\tSixel_Disabled=false,"],
             // A capability NAME that merely starts with sixel but is not one we accept.
             'sixelish is not sixel' => ["\tsixelish=true,"],
-            // Ss0/Ss9 user caps are not sixel-advertising (only Ss1/Ss2 are).
+            // Status-line user caps are not sixel-advertising: Ss1/Ss2 alias
+            // the X3.64 status-line init strings and were dropped from
+            // TerminfoParser::SIXEL_NAMES for exactly that reason.
             'Ss0 not a sixel cap' => ["\tSs0,"],
+            'Ss1 status-line init is not a sixel cap' => ["\tSs1,"],
+            'Ss2 status-line init is not a sixel cap' => ["\tSs2,"],
         ];
     }
 

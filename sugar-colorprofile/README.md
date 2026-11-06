@@ -170,7 +170,10 @@ the bytes are about to land.
 **Phase 2 (infocmp) — probe surfaces only:** `Probe`/`AsyncProbe` consult
 `infocmp -1` only when the ladder answers `Ansi` or `Ansi256`; `Tc`/`RGB`
 capability *names* (name-position match via `Probe\TerminfoParser`, never a
-whole-output regex) upgrade the answer to TrueColor. Before any surface execs
+whole-output regex) upgrade the answer to TrueColor. The Sixel leg accepts
+exactly the folded names `sixel`/`sixl`/`sixelscreenmode`; the legacy `Ss1`/`Ss2`
+user caps are deliberately NOT markers — they initialize X3.64 status lines, not
+sixel graphics. Before any surface execs
 the binary, `TERM` must pass one shared name-shape predicate
 (`Probe\InfocmpBinary::isSafeTermName()`): alnum first byte, then only the
 characters real terminfo names use — so a value beginning with `-` never

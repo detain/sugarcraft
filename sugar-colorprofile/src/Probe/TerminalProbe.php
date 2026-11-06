@@ -268,8 +268,10 @@ class TerminalProbe
      * ncurses and downstream vendors spell the Sixel capability differently
      * across releases: the boolean `sixel`/`Sixel` (and the abbreviated `sixl`),
      * the numeric-as-boolean `Sixel#1`, the string `Sixel=true`, and the
-     * `SixelScreenMode` / `Ss1` / `Ss2` user-defined caps shipped by sixel
-     * terminals (foot, mlterm, xterm).
+     * `SixelScreenMode` numeric form shipped by sixel terminals (foot, mlterm,
+     * xterm). The legacy `Ss1`/`Ss2` user caps are NOT sixel markers — they
+     * initialize X3.64 status lines — so they sit outside the accepted set
+     * ({@see TerminfoParser::SIXEL_NAMES}).
      * Names are matched after lowercasing and stripping underscores, so
      * `SixelScreenMode` and `sixel_screen_mode` collapse to one token
      * ({@see TerminfoParser::hasCapName()}).

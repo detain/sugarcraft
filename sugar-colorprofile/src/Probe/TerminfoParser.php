@@ -21,8 +21,18 @@ namespace SugarCraft\ColorProfile\Probe;
  */
 final class TerminfoParser
 {
-    /** Capability names whose presence means Sixel graphics support. */
-    public const SIXEL_NAMES = ['sixel', 'sixl', 'sixelscreenmode', 'ss1', 'ss2'];
+    /**
+     * Capability names whose presence means Sixel graphics support.
+     *
+     * The termcap `ss1`/`ss2` entries are deliberately NOT in this set: in
+     * X3.64/ncurses terms they initialize the legacy STATUS LINE (scrolled /
+     * advanced), a decoration any terminal may ship sixel or not — a dump
+     * carrying only `Ss1` says nothing at all about sixel graphics. The
+     * accepted spellings are the folded boolean `sixel` (covers `Sixel`,
+     * `Sixel#1`, `Sixel=true`), the abbreviated `sixl`, and the numeric
+     * `SixelScreenMode` the xterm family uses.
+     */
+    public const SIXEL_NAMES = ['sixel', 'sixl', 'sixelscreenmode'];
 
     /** Capability names whose presence means 24-bit direct color support. */
     public const TRUECOLOR_NAMES = ['tc', 'rgb'];
