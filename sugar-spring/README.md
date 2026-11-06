@@ -217,7 +217,7 @@ constructs a spring from a named preset at 60 fps (override the frame time as
 needed; `reducedMotionOverride` pins the snap-to-target behaviour — see
 [Reduced motion](#reduced-motion)).
 Five presets are available, tuned by hand against the react-spring-era folk
-tables (they are not literal UIKit values — `UIViewPropertyLiteral` documents
+tables (they are not literal UIKit values — `UIViewPropertyAnimator` documents
 duration/damping, not tension triples):
 
 | Preset | Tension | Friction | Mass | ζ | Overshoot | Settle at 60 fps |
