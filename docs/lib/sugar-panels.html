@@ -109,18 +109,25 @@ Bottom bar</code></pre>
 <tr><td>SugarPanels</td><td>horizontal(Node ...)</td><td>Horizontal (row) layout</td></tr>
 <tr><td>SugarPanels</td><td>vertical(Node ...)</td><td>Vertical (column) layout</td></tr>
 <tr><td>SugarPanels</td><td>noBorder(Node)</td><td>Suppresses every frame and every divider through the whole subtree — adjacent panels render touching</td></tr>
-<tr><td>SugarPanels</td><td>render(Node, int $width, int $height)</td><td>Render to ANSI string</td></tr>
+<tr><td>SugarPanels</td><td>render(Node, int $width, int $height)</td><td>Paint one frame to an ANSI string; throws InvalidArgumentException on a viewport outside the documented ranges</td></tr>
+<tr><td>SugarPanels</td><td>resetPreviousFrame()</td><td>Drop the frame cache — the next render() repaints full, without erasing</td></tr>
+<tr><td>SugarPanels</td><td>MAX_VIEWPORT_DIMENSION</td><td>4096 cells — largest viewport side accepted</td></tr>
+<tr><td>SugarPanels</td><td>MAX_VIEWPORT_CELLS</td><td>1 000 000 cells — largest viewport area accepted</td></tr>
 <tr><td>Node</td><td>leaf(string)</td><td>Static leaf constructor</td></tr>
 <tr><td>Node</td><td>horizontal(Node ...)</td><td>Static horizontal constructor</td></tr>
 <tr><td>Node</td><td>vertical(Node ...)</td><td>Static vertical constructor</td></tr>
 <tr><td>Node</td><td>noBorder(Node)</td><td>Static no-border wrapper — suppresses every frame and every divider through the whole subtree</td></tr>
-<tr><td>Node</td><td>withMinWidth(int)</td><td>Minimum width hint</td></tr>
-<tr><td>Node</td><td>withMaxWidth(int)</td><td>Maximum width hint</td></tr>
-<tr><td>Node</td><td>withMinHeight(int)</td><td>Minimum height hint</td></tr>
-<tr><td>Node</td><td>withMaxHeight(int)</td><td>Maximum height hint</td></tr>
+<tr><td>Node</td><td>totalWidth() / totalHeight()</td><td>Footprint the node claims: natural content, floored by min*, capped by max*, plus padding, frame and margin</td></tr>
+<tr><td>Node</td><td>withMinWidth(int)</td><td>Floor for the natural width. In the flex path it floors; in the legacy equal-split fallback a min* acts as a proportional weight, not a floor</td></tr>
+<tr><td>Node</td><td>withMaxWidth(int)</td><td>Cap on the node's total footprint (frame + padding + content) — what a flex basis claims. 0 means no cap</td></tr>
+<tr><td>Node</td><td>withMinHeight(int)</td><td>Floor for the natural height. In the flex path it floors; in the legacy equal-split fallback a min* acts as a proportional weight, not a floor</td></tr>
+<tr><td>Node</td><td>withMaxHeight(int)</td><td>Cap on the node's total footprint (frame + padding + content) — what a flex basis claims. 0 means no cap</td></tr>
 <tr><td>Node</td><td>withPadding(int)</td><td>Inner padding (cells)</td></tr>
 <tr><td>Node</td><td>withBorder(bool)</td><td>Show/hide box border</td></tr>
 <tr><td>Node</td><td>withSpacing(int)</td><td>Gap between children (cells)</td></tr>
+<tr><td>Node</td><td>withContent(string)</td><td>Replace leaf content (new node)</td></tr>
+<tr><td>Node</td><td>withFlex(int)</td><td>Fill leftover space by weight (0 = fixed, natural size)</td></tr>
+<tr><td>Node</td><td>withGrow()</td><td>Shorthand for withFlex(1)</td></tr>
 <tr><td>Node</td><td>withBorderStyle(?Border)</td><td>Border char set from sugar-style</td></tr>
 <tr><td>Node</td><td>withStyle(?Style)</td><td>Style (colour, attributes) from sugar-style</td></tr>
 <tr><td>Node</td><td>withTitle(string)</td><td>Box title text</td></tr>
