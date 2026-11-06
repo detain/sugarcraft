@@ -42,7 +42,7 @@ works — inline-protocol rendering is a different route, offered by
 | `--speed=N`           | N × the GIF's nominal rate (decoded delays averaged), landing on the same single uniform period as `--fps`. |
 | `--speed=Nfps`        | An absolute rate of N frames/second.                              |
 | `--speed=max`         | Burn frames as fast as the scheduler's floors allow.              |
-| `--duration=SECONDS`  | Stop after SECONDS of playback (a schedule deadline in the model — no wall-clock kill). Needs at least two frames: a single-frame file combined with `--duration` is refused. |
+| `--duration=SECONDS`  | Stop after SECONDS of playback time — paused time never accrues (a schedule deadline in the model — no wall-clock kill). Needs at least two frames: a single-frame file combined with `--duration` is refused. |
 | `--watch`             | Reload automatically when the source file changes, via a 10 ms event-loop poll. Bare flag — it takes no value. |
 | `--paused`            | Start paused on the first frame (step with the arrow keys, `Space` resumes). Bare flag — it takes no value. |
 | `--help` / `-h`       | Print the usage line (localized) and exit 0.                      |
