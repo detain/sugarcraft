@@ -374,6 +374,8 @@ $bar = $bar->hide();
 echo $bar->render();
 ```
 
+Shortcut labels are free-form strings rendered verbatim, so prefer word-form entries like 'Up/Down' (the 'Enter' row above already is one) over glyphs like '↑↓' for screen-reader listeners — the example removes the glyph entry with `withoutShortcut()` for exactly this reason.
+
 ## API — StatusBar
 
 ```php
