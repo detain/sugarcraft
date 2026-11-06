@@ -260,9 +260,9 @@ final class SyntheticTest extends TestCase
      * caused two "Undefined array key 1" warnings because $argv[1] was
      * accessed without guarding against unset keys. argv parsing runs before
      * any TTY decision, so the no-warnings half of the contract survives the
-     * Step 34 hoist unchanged.
+     * guard hoist unchanged.
      *
-     * Step 34 (M5) flipped the second half: the stream_isatty(STDOUT) guard
+     * The hoist flipped the second half: the stream_isatty(STDOUT) guard
      * now protects EVERY invocation, not just explicit-mode ones, so a bare
      * run whose stdout is captured answers with the refusal instead of the
      * synthetic banner. (The old comment's claim that bash hands php a
