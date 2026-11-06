@@ -2032,6 +2032,7 @@ candy-code --root /path/to/project              # set the project root explicitl
 candy-code src                                  # an existing directory as the only argument is the root too
 candy-code --config ~/policies/crush.json       # read settings/permissions from this file
 candy-code --model gpt-5 -p "audit this"        # pick the model (not the provider)
+candy-code --agent reviewer                     # open the TUI narrowed to the reviewer agent preset
 candy-code --permission-mode plan -p "audit this" # pick the permission mode for this run
 candy-code --max-cost 2.50 -p "audit this"        # cap this launch's spend (USD)
 candy-code --max-turns 8 -p "audit this"          # cap this launch's tool-loop steps
@@ -2055,6 +2056,15 @@ provider — that still comes from `$CANDY_CODE_PROVIDER` or the persisted
 `provider` setting, and the two are independent axes. The Ctrl+P palette entry
 labelled "Switch model" switches the PROVIDER, which is why the distinction is
 worth stating twice.
+
+`--agent <name>` (also `--agent=<name>`) launches the interactive session already
+narrowed to an agent PRESET — the same narrow-only switch `/agent use <name>`
+travels, applied once at launch. The roster is `~/.candy-code/agents/` plus the
+project's `.candy-code/agents/`; an unknown name costs a transcript refusal row
+and the session keeps the default agent. Like `--model`, an empty value is a
+STRICT usage refusal, and `--agent` is refused beside `-p` and beside subcommand
+verbs (exit 2): a one-shot run and a verb's own flow build no Chat to narrow,
+so v1 is interactive-only — use `/agent use <name>` once the TUI is open.
 
 `--permission-mode <mode>` (also `--permission-mode=<mode>`) runs this launch
 under one of `default`, `accept-edits`, `plan`, `auto`, `dont-ask`,

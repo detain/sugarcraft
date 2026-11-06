@@ -1840,6 +1840,24 @@ final class Bootstrap
 
         $chat = $chat->withLaunchNotices(self::launchNotices());
 
+        // C3 (RS-AGENT): `--agent <name>` applies the ONE primary-agent
+        // switch Chat already travels (switchPrimaryAgent) at launch, so the
+        // flag and `/agent use <name>` and Alt+A speak identically — same
+        // roster, same narrow-only apply, same refusal rows for an unknown
+        // name. Applied after withLaunchNotices so the switch's
+        // confirmation/refusal row lands BELOW the launch warnings on the
+        // first frame, and before the lock so the lock stays the bottom row.
+        // The switch is session-scoped by construction (Chat's mutate choke
+        // clears it on a session change), so a refused launch just keeps the
+        // default agent — there is nothing to unwind. Tab chats never take
+        // this: the flag is the launch window's, and buildChat's tab path
+        // returns before this tail (it reaches the switch mid-session like
+        // any other conversation).
+        $agentPreset = LaunchContext::agentPresetOverride();
+        if ($agentPreset !== null) {
+            $chat = $chat->withLaunchPrimaryAgent($agentPreset);
+        }
+
         // The single-writer lock on the session just opened (audit SES-3(b)).
         // Taken LAST so that, when another TUI already has the session, the
         // read-only notice and its `/branch` offer are the bottom row of the
@@ -4706,6 +4724,16 @@ public static function usePermissionMode(?string $mode): void
 public static function useMaxCost(?string $maxCost): void
     {
         LaunchContext::useMaxCost($maxCost);
+    }
+
+    /**
+     * Register `--agent <name>` for this process — delegates to {@see
+     * LaunchContext::useAgentPreset()}, the launch-context shelf where the
+     * store lives beside the model and permission registers (C3, RS-AGENT).
+     */
+    public static function useAgentPreset(?string $name): void
+    {
+        LaunchContext::useAgentPreset($name);
     }
 
     /**

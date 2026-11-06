@@ -14138,6 +14138,22 @@ final class Chat implements Model
     }
 
     /**
+     * Apply `--agent <name>` at launch — C3 (RS-AGENT). This is NOT a second
+     * switch: it travels {@see switchPrimaryAgent()} with $echo on, so the
+     * flag, `/agent use <name>` and Alt+A share one code path, one roster,
+     * one refusal vocabulary (unknown name answers with the same
+     * `host.agents.use_unknown` transcript row). A launch has no turn in
+     * flight, so the mid-turn door can only pass; a refused name leaves the
+     * plain default agent in place and costs nothing but the row.
+     */
+    public function withLaunchPrimaryAgent(string $name): self
+    {
+        [$next,] = $this->switchPrimaryAgent($name, echo: true);
+
+        return $next;
+    }
+
+    /**
      * The one switch every primary-agent change travels — `/agent use`'s
      * effect arm in {@see applyCommandResult()} and the Alt+A chord — so the
      * mid-turn refusal, like `Alt+M`'s mode door, reads from a single place

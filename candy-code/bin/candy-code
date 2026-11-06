@@ -471,6 +471,11 @@ Bootstrap::useMaxCost($args->maxCost);
 // NonInteractive::run(); the TUI path reads it at backend/chat construction)
 // and both the -p path and the TUI read the same one static.
 Bootstrap::useMaxTurns($args->maxTurns);
+// C3 (RS-AGENT): --agent registers before dispatch like its launch-override
+// siblings. The parser already refused it beside -p and beside a subcommand
+// verb, so the only launch that reaches here carrying a name builds a Chat —
+// Bootstrap::chat() applies it through Chat's one primary-agent switch.
+Bootstrap::useAgentPreset($args->agent);
 Bootstrap::useSessionLaunch($args->continueSession, $args->resumeRequested, $args->resumeSession);
 // C-SES-7.c: `--incognito` joins the launch-mode family registered before
 // dispatch — the flag was already refused beside --continue/--resume in the

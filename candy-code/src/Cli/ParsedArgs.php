@@ -395,6 +395,14 @@ final readonly class ParsedArgs
          *  \SugarCraft\Code\Cli\NonInteractive::run()}, and the unset
          *  default keeps the legacy stdin path byte-identical. */
         public string $inputFormat = self::DEFAULT_INPUT_FORMAT,
+        /** C3 (RS-AGENT): the agent preset name `--agent` named, or null.
+         *  Stored RAW, like {@see $model} — the judgement belongs to the one
+         *  primary-agent switch {@see \SugarCraft\Code\Chat} travels at
+         *  launch, which resolves the name against THIS launch's roster and
+         *  answers an unknown name with a transcript refusal row exactly as
+         *  `/agent use <name>` does mid-session. The flag applies that
+         *  switch; it mints no second one. */
+        public ?string $agent = null,
     ) {
     }
 
@@ -488,7 +496,8 @@ final readonly class ParsedArgs
         bool $safeMode = false,
         ?string $sessionId = null,
         string $inputFormat = ParsedArgs::DEFAULT_INPUT_FORMAT,
+        ?string $agent = null,
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId, $inputFormat);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId, $inputFormat, $agent);
     }
 }

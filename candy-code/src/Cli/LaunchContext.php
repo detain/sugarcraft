@@ -83,6 +83,17 @@ final class LaunchContext
     private static ?string $modelOverride = null;
 
     /**
+     * The agent preset `--agent` named, or null for the plain launch
+     * default (C3, RS-AGENT). Stored RAW, like {@see $modelOverride}: a
+     * name that matches no roster entry is judged at launch by the ONE
+     * primary-agent switch {@see \SugarCraft\Code\Chat} travels
+     * (`switchPrimaryAgent`), which answers an unknown preset with a
+     * transcript refusal row exactly as `/agent use <name>` does
+     * mid-session — the flag applies that switch, it mints no second one.
+     */
+    private static ?string $agentPresetOverride = null;
+
+    /**
      * Where `bin/candy-code`'s `TuiErrorLog::install()` sent `error_log()` for
      * this TUI run, or null when it left the operator's own destination in
      * place — see {@see useTuiErrorLog()}.
@@ -393,6 +404,20 @@ final class LaunchContext
         self::$maxTurnsOverride = ($maxTurns === null || $maxTurns === '') ? null : $maxTurns;
     }
 
+    /**
+     * Register `--agent <name>` for this process. See {@see useModel()} for
+     * why this is a static rather than a threaded parameter, and for the
+     * clear-what-you-set contract this honours: null (and the empty string)
+     * clear the preset as surely as they set one, so an in-process relaunch
+     * cannot inherit an earlier launch's verdict. The name is NOT judged
+     * here — {@see \SugarCraft\Code\Cli\Bootstrap::chat()} applies it
+     * through the Chat's own switch at launch, where the roster is real.
+     */
+    public static function useAgentPreset(?string $name): void
+    {
+        self::$agentPresetOverride = ($name === null || $name === '') ? null : $name;
+    }
+
 
     // -- readers ---------------------------------------------------------
 
@@ -406,6 +431,12 @@ final class LaunchContext
     public static function modelOverride(): ?string
     {
         return self::$modelOverride;
+    }
+
+    /** The agent preset `--agent` named; null means the plain launch default. */
+    public static function agentPresetOverride(): ?string
+    {
+        return self::$agentPresetOverride;
     }
 
     /** Where the TUI's `error_log` redirect landed; null means untouched. */

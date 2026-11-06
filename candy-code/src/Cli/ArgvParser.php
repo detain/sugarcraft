@@ -173,6 +173,13 @@ final class ArgvParser
         // collision is pre-flowed by Bootstrap::sessionLaunchError(), because
         // parse() keeps its no-filesystem law.
         $sessionId = null;
+        // C3 (RS-AGENT): --agent — the agent preset whose switch the launch
+        // applies. Like --model the RAW name is stored and no roster read
+        // happens here (parse() keeps its no-filesystem law); the one
+        // primary-agent switch Chat::switchPrimaryAgent() judges the name at
+        // launch, answering an unknown preset with a transcript refusal row
+        // exactly as `/agent use <name>` does mid-session.
+        $agent = null;
 
         $i = 1; // skip $argv[0] (script name)
         while ($i < \count($argv)) {
@@ -533,6 +540,57 @@ final class ArgvParser
                     continue;
                 }
                 $model = $next;
+                $i += 2;
+                continue;
+            }
+
+            // --agent=<value>  (no space)
+            //
+            // The empty value is a usage error, not a name — the same shape
+            // --model above keeps, because `--agent=` asks for a preset and
+            // silently starting plain would be the parsed-but-dropped lie.
+            if (\str_starts_with($arg, '--agent=')) {
+                $value = \substr($arg, 8); // length of "--agent="
+                if ($value === '') {
+                    if ($usageError === null) {
+                        $usageError = 'candy-code: ' . Lang::t('cli.argv.agent.empty');
+                        $usageHint = Lang::t('cli.argv.hint.agent_value');
+                    }
+                    ++$i;
+                    continue;
+                }
+                $agent = $value;
+                ++$i;
+                continue;
+            }
+
+            // --agent <value>
+            //
+            // STRICT, exactly like --model: a preset name is never
+            // flag-shaped, so `--agent -p "hi"` is a typo in which the bare
+            // form ate the next OPTION, and the =-form stays available for a
+            // name that legitimately begins with "-".
+            if ($arg === '--agent') {
+                $next = $argv[$i + 1] ?? null;
+                if ($next === null || self::looksLikeFlag($next)) {
+                    if ($usageError === null) {
+                        $usageError = $next === null
+                            ? 'candy-code: ' . Lang::t('cli.argv.agent.missing')
+                            : 'candy-code: ' . Lang::t('cli.argv.agent.flag', ['option' => $next]);
+                        $usageHint = Lang::t('cli.argv.hint.agent_value');
+                    }
+                    ++$i; // leave a flag-shaped $next for the loop to judge
+                    continue;
+                }
+                if ($next === '') {
+                    if ($usageError === null) {
+                        $usageError = 'candy-code: ' . Lang::t('cli.argv.agent.empty');
+                        $usageHint = Lang::t('cli.argv.hint.agent_value');
+                    }
+                    $i += 2; // the empty token is consumed; it is not a prompt
+                    continue;
+                }
+                $agent = $next;
                 $i += 2;
                 continue;
             }
@@ -1222,6 +1280,26 @@ final class ArgvParser
             $usageHint = Lang::t('cli.argv.hint.append_system_prompt_needs_prompt');
         }
 
+        // C3 (RS-AGENT): --agent swaps the primary agent of the INTERACTIVE
+        // session — it applies the one switch Chat::switchPrimaryAgent()
+        // travels, whose rows the operator reads in the transcript. That
+        // switch lives in a Chat, and a one-shot run never builds one (bin
+        // dispatches straight into NonInteractive::run()), so beside -p the
+        // name was parsed, carried, and silently dropped — the AUT-4-P1 lie
+        // family the jsonSchema door above was minted to forbid. Refused at
+        // the parser so both spellings of the clash fail identically on
+        // stdout and in the JSON error document.
+        if ($usageError === null && $agent !== null && $promptRequested) {
+            $usageError = 'candy-code: ' . Lang::t('cli.argv.agent.with_prompt');
+            $usageHint = Lang::t('cli.argv.hint.agent_needs_tui');
+        }
+        // The same lie beside a subcommand verb: the verb runs its own flow,
+        // never a Chat, so the switch could only be ignored.
+        if ($usageError === null && $agent !== null && $subcommand !== null) {
+            $usageError = 'candy-code: ' . Lang::t('cli.argv.agent.with_subcommand');
+            $usageHint = Lang::t('cli.argv.hint.agent_subcommand');
+        }
+
         // C-AGT-6.c, broadened at weld: --worktree is a MAIN-session flag —
         // it swaps the launch's root for a worktree before the TUI or a
         // one-shot opens there. bin exits at a subcommand verb's OWN
@@ -1246,7 +1324,7 @@ final class ArgvParser
             $root = \array_shift($positional);
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId, $inputFormat);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId, $inputFormat, $agent);
     }
 
     /**
