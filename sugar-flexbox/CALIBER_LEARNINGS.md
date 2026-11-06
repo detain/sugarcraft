@@ -53,16 +53,13 @@ $measured = \array_map(fn(FlexItem $item): array => [
 
 This allocates a new array with closures on every render call, creating GC pressure for frequently-updated layouts. Could be cached if items haven't changed, but adds complexity for marginal gain. Document as known pattern — no immediate fix required.
 
-### TableRenderer $strippedPosToStyle array (memory usage)
+### TableRenderer per-frame Cell minting (memory usage)
 
-`TableRenderer::renderLine()` (lines 119-150) builds a `$strippedPosToStyle` associative array per line to track ANSI SGR styles through the diff algorithm:
+`TableRenderer::bufferFromOutput()` rebuilds the full grid every frame. For each row it calls `splitStyledLine()`, which returns the line as parallel arrays of grapheme clusters and their `Style`s (styles are attributed per cluster, never per UTF-8 byte), then mints one `Cell` per cluster — a wide cluster also consumes a continuation cell — and pads the row out to width with blank cells before `Buffer::fromGrid()` assembles the frame.
 
-```php
-$strippedPosToStyle = [];
-// ... populated per character in the line
-```
+A 100×50 frame therefore mints roughly 5,000 short-lived `Cell` objects per frame. That is inherent to the cell-buffer diff model: the frame is rebuilt once, the `DiffEncoder` walk then emits only the cells that changed, and the steady-state cost stays proportional to what actually moved on screen.
 
-Creates approximately 5,000 entries for a 100×50 character buffer. This is necessary for correct ANSI style tracking but represents a known memory usage pattern for large renders. Could be replaced with a more memory-efficient structure if profiling shows it to be a bottleneck.
+> Historical note: this section documented a `$strippedPosToStyle` associative array built per line by `renderLine()`. Both were removed in the `splitStyledLine`/`bufferFromOutput` shape described above; the stale entry pointed future edits at code that no longer exists.
 
 ### Viewport scroll defaults
 
