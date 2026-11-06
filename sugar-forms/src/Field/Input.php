@@ -203,7 +203,9 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
     /**
      * Mask the rendered value with a fixed echo character. Mirrors huh's
      * `Password()` modifier — handy for token / passphrase prompts.
-     * Pass empty string to clear masking.
+     * Pass an empty echo char to fall back to the default `*` (the value stays
+     * masked); clearing masking itself is `withPassword(false)` or
+     * `withPasswordMask(null)` on this field.
      */
     public function withPassword(bool $on = true, string $echoChar = '*'): self
     {
