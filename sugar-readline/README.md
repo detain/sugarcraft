@@ -371,7 +371,10 @@ each push, merging anything another process appended in between.
 Entries are stored one per line with backslash escapes (`\\`, `\n`, `\r`)
 applied at the write choke and undone on load — a value that somehow
 contains a raw newline survives a save/reload round-trip as **one** entry
-instead of splitting into two. A history path that is a **symlink** is
+instead of splitting into two. A history file written before the escaping
+format existed can therefore have a literal `\n` two-character sequence
+decoded into a real newline on the first load — a documented consequence of
+adopting the escape format. A history path that is a **symlink** is
 refused loudly at construction and again under the write lock: without the
 check, an attacker-planted link turns every append (and the `0600` chmod)
 against, say, `~/.bashrc`.
