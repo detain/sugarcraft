@@ -39,7 +39,7 @@ works — inline-protocol rendering is a different route, offered by
 | Option                | Meaning                                                          |
 |-----------------------|------------------------------------------------------------------|
 | `--fps=N`             | Play at a uniform N frames/second instead of the GIF's delays.    |
-| `--speed=N`           | N × the GIF's nominal rate.                                       |
+| `--speed=N`           | N × the GIF's nominal rate (decoded delays averaged), landing on the same single uniform period as `--fps`. |
 | `--speed=Nfps`        | An absolute rate of N frames/second.                              |
 | `--speed=max`         | Burn frames as fast as the scheduler's floors allow.              |
 | `--duration=SECONDS`  | Stop after SECONDS of playback (a schedule deadline in the model — no wall-clock kill). Needs at least two frames: a single-frame file combined with `--duration` is refused. |
