@@ -160,7 +160,9 @@ The key table is fixed in the player model; keys are not rebindable.
 The whole animation engine — `Decoder`, `Frame`, `Renderer`, `Player`, and
 the separate `.ansi` art surface (`AnsiArt` / `ArtLibrary` / `ArtLoop`,
 which this viewer does not expose) — lives in
-[`sugarcraft/sugar-animation`](https://github.com/detain/sugarcraft/tree/master/sugar-animation). This package is only the viewer app:
+[`sugarcraft/sugar-animation`](https://github.com/detain/sugarcraft/tree/master/sugar-animation). This package is only the viewer app,
+plus [`sugarcraft/sugar-pty`](https://github.com/detain/sugarcraft/tree/master/sugar-pty) for the terminal-size ioctl query that
+sizes the viewport:
 
 | File              | Role                                                                 |
 |-------------------|----------------------------------------------------------------------|
