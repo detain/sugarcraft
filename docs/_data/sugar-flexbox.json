@@ -3,7 +3,7 @@
     "description": "SugarFlexbox: flexbox-like terminal-cell layout (FlexBox), a sortable/filterable styled Table with a delta-rendering TableRenderer, plus Viewport and Scrollbar windows.",
     "ogTitle": "SugarFlexbox \u2014 SugarCraft",
     "ogDescription": "Flex-style cell layout, sortable/filterable tables with delta rendering, sticky viewports and scrollbars for terminal UIs.",
-    "emoji": "",
+    "emoji": "📐",
     "displayName": "SugarFlexbox",
     "tagline": "FlexBox layout + delta Table + sticky Viewport + Scrollbar",
     "phpVersion": "8.3+",
