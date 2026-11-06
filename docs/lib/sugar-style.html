@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarStyle — SugarCraft</title>
-<meta name="description" content="SugarStyle: Declarative styling and layout for terminal output — colors, borders, tables, trees, and themes.">
+<meta name="description" content="SugarStyle: Declarative styling and layout for terminal output — colours, borders, tables, trees, and themes.">
 <meta property="og:title" content="SugarStyle — SugarCraft">
-<meta property="og:description" content="Declarative styling and layout for terminal output — colors, borders, tables, trees, and themes.">
+<meta property="og:description" content="Declarative styling and layout for terminal output — colours, borders, tables, trees, and themes.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-style.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-style.html">
 <meta property="og:type" content="website">
@@ -55,7 +55,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-style"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-style" alt="SugarStyle code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Style, Border, Table, List, Tree, Layout::join, Place, multi-layer Canvas, and Theme — the canonical colour palette for all SugarCraft libs. Pure rendering — no I/O — so you can render frames inside a unit test.</p>
+    <p class="lede" style="margin-top: 28px;">Style, Border, Table\Table, Listing\ItemList, Tree\Tree, Layout::joinHorizontal/joinVertical, Layout::place, multi-layer Canvas, and Theme — the canonical colour palette for all SugarCraft libs. The rendering core is pure — no I/O (an optional <code>Output</code> facade wraps print/printf/fprint) — so you can render frames inside a unit test.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-style</code></pre>
@@ -88,9 +88,9 @@ echo Layout::joinVertical(Position::LEFT, $banner, $table);</code></pre>
       <div class="feature"><strong>List + Tree</strong><span>Bulleted lists and ASCII trees with custom enumerators.</span></div>
       <div class="feature"><strong>Layout</strong><span><code>joinHorizontal</code>, <code>joinVertical</code>, <code>place</code>, plus the ratatui-style constraint solver (<code>Layout\Layout::vertical([...])-&gt;split()</code>) and <code>RegionBridge</code> for handing rectangles between sugar-constraints and sugar-cellbuffer.</span></div>
       <div class="feature"><strong>Canvas</strong><span>Multi-layer compositor. Z-ordered overlays merged by a cell-aware row splice (no alpha blending — upper cells replace lower ones), ideal for modals + tooltips.</span></div>
-      <div class="feature"><strong>Theme</strong><span>SSOT colour palette. 10 named factories (dark/light/dracula/tokyoNight/oneDark/githubDark/solarized*/ansi/adaptive). 13 colour slots (foreground/background/primary/secondary/accent/muted/error/warning/success/info/border/separator/cursor). All <code>with*()</code> setters return a new Theme. <code>adaptive()</code> reads <code>$COLORFGBG</code>: the last field's palette slot decides light vs dark by luminance (7/15 light, 0/8 dark); unset or unparseable falls back to dark.</span></div>
+      <div class="feature"><strong>Theme</strong><span>Single source of truth (SSOT) colour palette. 10 named factories (dark/light/dracula/tokyoNight/oneDark/githubDark/solarized*/ansi/adaptive). 13 colour slots (foreground/background/primary/secondary/accent/muted/error/warning/success/info/border/separator/cursor). All <code>with*()</code> setters return a new Theme. <code>adaptive()</code> reads <code>$COLORFGBG</code>: any numeric slot (0-255) in the last field decides light vs dark by luminance (e.g. 7/15 light, 0/8 dark); unset, non-numeric or out-of-range falls back to dark.</span></div>
       <div class="feature"><strong>Embedded titles + seams</strong><span>btop-style box titles: <code>Border::withEmbeddedTitle()</code> brackets text in junctions (<code>╭─┐cpu┌────┐12:00┌───────╮</code>) on any of six anchors; <code>Border::seam()</code> picks the <code>┬ ┴ ├ ┤ ┼</code> rune where an internal divider meets the frame, preserving the border family.</span></div>
-      <div class="feature"><strong>Colour degradation</strong><span>A Style carries a <code>ColorProfile</code> and <code>render()</code> downsamples to it, as charmbracelet/colorprofile's Writer does: TrueColor → 38;2, Ansi256 → 38;5, Ansi → 30..37/90..97, <code>Ascii</code> (what <code>NO_COLOR</code> selects) drops colour but keeps bold/italic/underline and OSC 8 links, and <code>NoTty</code> strips every escape — including ones carried in by pre-styled content, a <code>transform()</code> or a border title — while padding, borders and alignment stay.</span></div>
+      <div class="feature"><strong>Colour degradation</strong><span>A Style carries a <code>ColorProfile</code> and <code>render()</code> downsamples to it, as charmbracelet/colorprofile's Writer does: TrueColor → 38;2, Ansi256 → 38;5, Ansi → 30..37/90..97, <code>Ascii</code> (what <code>NO_COLOR</code> selects) drops colour but keeps bold/italic/underline and OSC 8 links, and <code>NoTty</code> strips every escape — including ones carried in by pre-styled content, a <code>transform()</code> or a border title — while padding, borders and alignment stay. Tier rewrites apply to RGB colours; palette-slot colours (<code>Color::ansi(n)</code>) always emit their 30..37/90..97 form at every tier.</span></div>
       <div class="feature"><strong>Underline truth</strong><span>Sub-style shapes ride the numeric SGR <code>4:N</code> form emitted only alongside <code>underline()</code> — terminals that ignore <code>4:N</code> typically draw no underline at all (no plain SGR 4 companion is sent). SGR <code>58</code> has no 4-bit spelling, so at the <code>Ansi</code> tier the underline colour is applied through the foreground attribute instead — it recolours the glyphs rather than tinting the rule.</span></div>
     </div>
 
@@ -134,7 +134,7 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
 <tr><td>Style</td><td>patch($other)</td><td>Incremental merge — only props set in $other are applied; a null colour/width/border in $other is skipped, not a clear</td></tr>
 <tr><td>Style</td><td>colorProfile(ColorProfile $p)</td><td>Force the colour tier render() downsamples to (TrueColor / Ansi256 / Ansi / Ascii / NoTty)</td></tr>
 <tr><td>BorderGradientBlend</td><td>fromColors(Color ...$colors)</td><td>1-5 colors → 4 interpolated border-side colors</td></tr>
-<tr><td>Style</td><td>padding(top, right, bottom, left)</td><td>Add padding</td></tr>
+<tr><td>Style</td><td>padding(...$sides)</td><td>Add padding (1, 2, or 4 values — CSS-style shorthand)</td></tr>
 <tr><td>Style</td><td>render(content)</td><td>Render styled content</td></tr>
 <tr><td>Border</td><td>normal(), rounded(), thick(), double(), block(), ascii(), hidden(), markdownBorder()</td><td>All eight border style presets</td></tr>
 <tr><td>Border</td><td>withEmbeddedTitle(text, ?anchor, ?open, ?close)</td><td>btop-style title cut into the edge (<code>╭─┐cpu┌──╮</code>); left/right inset one rune, center uses btop's clock formula, overflow shrinks with <code>…</code></td></tr>
@@ -154,40 +154,45 @@ echo Border::normal()-&gt;seam(left: true, right: true, up: false, down: true); 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <p class="lede">VHS-recorded GIF demos of the library's headline examples. Regenerated automatically on every push that touches the source. One example ships without a GIF: <code>examples/styled-text.php</code>.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/style.gif" alt="Style" onerror="this.parentElement.style.display='none'">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/style.gif" alt="Foreground, background, bold, italic, underline, strikethrough, and adaptive colour on headline text" onerror="this.parentElement.style.display='none'">
                 <h3>Style</h3>
                 <span class="demo-caption">Foreground / background, bold, italic — chained Style builders.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/border.gif" alt="Border" onerror="this.parentElement.style.display='none'">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/border.gif" alt="The same text block rendered under every built-in border style" onerror="this.parentElement.style.display='none'">
                 <h3>Border</h3>
                 <span class="demo-caption">All eight built-in border styles.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/table.gif" alt="Table" onerror="this.parentElement.style.display='none'">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/table.gif" alt="A rounded-border table with custom alignment and alternate-row shading" onerror="this.parentElement.style.display='none'">
                 <h3>Table</h3>
                 <span class="demo-caption">Per-cell styleFunc with header highlighting.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/list.gif" alt="List" onerror="this.parentElement.style.display='none'">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/list.gif" alt="Three list flavours with default, custom, and nested enumerators" onerror="this.parentElement.style.display='none'">
                 <h3>List</h3>
                 <span class="demo-caption">Bulleted list with custom enumerator.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/tree.gif" alt="Tree" onerror="this.parentElement.style.display='none'">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/tree.gif" alt="A project structure rendered under three enumerator styles" onerror="this.parentElement.style.display='none'">
                 <h3>Tree</h3>
                 <span class="demo-caption">Indented tree with branch glyphs.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/dashboard.gif" alt="Dashboard" onerror="this.parentElement.style.display='none'">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/dashboard.gif" alt="A dashboard assembled from horizontal and vertical joins with placed panes" onerror="this.parentElement.style.display='none'">
                 <h3>Dashboard</h3>
                 <span class="demo-caption">Multi-panel layout joined horizontally + vertically.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/canvas.gif" alt="Canvas" onerror="this.parentElement.style.display='none'">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/constraint-dashboard.gif" alt="Three panes resized live by Length, Min, Max, and Percentage constraints" onerror="this.parentElement.style.display='none'">
+                <h3>Constraints</h3>
+                <span class="demo-caption">Constraint-based layout driving a 3-pane dashboard.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/canvas.gif" alt="A styled popover layer composited over a base layer" onerror="this.parentElement.style.display='none'">
                 <h3>Canvas</h3>
                 <span class="demo-caption">Multi-layer compositor with z-ordered overlays.</span>
             </div>
