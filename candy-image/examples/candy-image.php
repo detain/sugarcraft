@@ -34,8 +34,31 @@ for ($i = 0; $i < 8; ++$i) {
     imagefilledrectangle($im, $i * 12, 40, $i * 12 + 9, 47, imagecolorallocate($im, $i * 30, 255 - $i * 30, 128));
 }
 
-$path = tempnam(sys_get_temp_dir(), 'candy_image_demo_') . '.png';
-imagepng($im, $path);
+// tempnam() creates the base file and the old code appended '.png' to its
+// name — so every run orphaned an empty base while only the '.png' path was
+// ever unlinked. One component, no double file: a unique name, created
+// exclusively ('x' mode, O_EXCL) so a planted path is refused, cleaned up on
+// every exit including a Cli::main throwable.
+$path = sys_get_temp_dir() . '/candy-image-demo-' . bin2hex(random_bytes(8)) . '.png';
+register_shutdown_function(static function () use ($path): void {
+    if (is_file($path)) {
+        @unlink($path);
+    }
+});
+
+$handle = fopen($path, 'x');
+if ($handle === false) {
+    imagedestroy($im);
+    fwrite(STDERR, "candy-image demo could not create its temp PNG exclusively\n");
+    exit(1);
+}
+fclose($handle);
+
+if (!imagepng($im, $path)) {
+    imagedestroy($im);
+    fwrite(STDERR, "candy-image demo could not encode the temp PNG\n");
+    exit(1);
+}
 imagedestroy($im);
 
 $exit = Cli::main(
@@ -43,7 +66,5 @@ $exit = Cli::main(
     STDOUT,
     STDERR,
 );
-
-unlink($path);
 
 exit($exit);
