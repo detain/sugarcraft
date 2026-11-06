@@ -175,7 +175,7 @@ these tables.
 | `Admin\ServerStatus\SidebarGauge` | Single metric gauge with threshold coloring (green/yellow/red). Uses horizontal Gauge for all metric types. |
 | `Admin\ServerStatus\SidebarGaugeSet` | Collection of 5 gauges: Connections, Traffic, Key Efficiency, QPS, InnoDB. Polls ServerContext and optional `Sampler` for per-second rate calculations. Traffic gauge uses Sampler delta (Bytes_received/Bytes_sent) for baseline-corrected per-second ratio; key-efficiency uses `Key_reads / (Key_reads + Key_read_requests)`. Sampler advances on each `withRefresh()` call via `ServerStatusSnapshotAdapter` bridging `ServerContextInterface` to `StatusSnapshotProviderInterface`. |
 | `Admin\Reports\Catalog` | Loads `data/sys_reports.json` (report widget definitions). Provides `get()`, `all()`, `byCategory()`, `categories()`. Categories are sorted by a curated `CATEGORY_ORDER` constant (problems first, matching MySQL Workbench Appendix B) rather than alphabetically. Unknown categories fall through to alphabetical ordering after the curated set. Uses `ColumnType::tryFrom()` to gracefully handle unknown column type strings rather than throwing a fatal. |
-| `Admin\Reports\ReportsPage` | Performance Reports admin page: left category/report tree + right sortable/exportable grid. `validate()` only loads `Catalog` (file I/O) — no DB queries on the render path. Navigation methods `withSelectPrevCategory()` / `withSelectNextCategory()` / `withSelectPrevReport()` / `withSelectNextReport()` cycle through the catalog with wrap-around. `selectedColumnIndex` tracks the focused column for unit display targeting (future work). Footer shows keybindings `[j/k] nav rows  [h/l] category  [[]/[]] report  [,/.] column  [c] unit  [r] refresh  [x] export  [q] back`. |
+| `Admin\Reports\ReportsPage` | Performance Reports admin page: left category/report tree + right sortable/exportable grid. `validate()` acquires the `$this->context->connection()` handle and loads `Catalog` (file I/O) — no DB queries on the render path (ReportsPage.php:134-140). Navigation methods `withSelectPrevCategory()` / `withSelectNextCategory()` / `withSelectPrevReport()` / `withSelectNextReport()` cycle through the catalog with wrap-around. `selectedColumnIndex` tracks the focused column for unit display targeting (future work). Footer shows keybindings `[j/k] nav rows  [h/l] category  [[]/[]] report  [,/.] column  [c] unit  [r] refresh  [x] export  [q] back`. |
 | `Admin\Reports\ReportRunner` | Executes `SELECT * FROM sys.<view>` for report views. Uses prepared statements with backtick-quoted view names. `run()` applies time/byte unit formatting; `runRaw()` returns unformatted values. |
 | `Admin\Reports\AvailabilityChecker` | Checks which sys schema views are available via `SHOW FULL TABLES FROM sys WHERE Table_type='VIEW'`. Caches results in-memory. `discoverViews()` catches `\Throwable` (not just `\PDOException`) because React/cached connections can surface non-PDO errors. |
 | `Core\Msg\ReloadReportMsg` | Message dispatched by `App` after `AdminDataLoadedMsg` to trigger async report loading. `ReportsPage::update()` handles this by calling `loadCurrentReport()` which queues the query via `AsyncCachedConnection` for the next admin tick. |
@@ -411,10 +411,10 @@ GTID dialog: press `[c]` to cycle through `OFF → OFF_PERMISSIVE → OFF_SECURE
 
 ## Performance Reports
 
-The Performance Reports pages (`[5]` Query Stats / `[7]` Table Stats in admin) displays data from MySQL's `sys` schema views — grouped by category (problems, schema, IO, memory, etc.). Report queries are fully asynchronous: `validate()` calls only `Catalog::load()` (file I/O), then `App` dispatches `ReloadReportMsg` after the admin data tick, queuing the report query via `AdminQueryCache` for the next event-loop tick. This means the page never blocks on a slow `SELECT * FROM sys.x$*` query, matching the non-blocking behaviour of processlist and replica pages.
+The Performance Reports pages (`[5]` Query Stats / `[7]` Table Stats in admin) displays data from MySQL's `sys` schema views — grouped by category (problems, schema, IO, memory, etc.). Report queries are fully asynchronous: `validate()` acquires the connection handle and calls `Catalog::load()` (file I/O) but issues no query, then `App` dispatches `ReloadReportMsg` after the admin data tick, queuing the report query via `AdminQueryCache` for the next event-loop tick. This means the page never blocks on a slow `SELECT * FROM sys.x$*` query, matching the non-blocking behaviour of processlist and replica pages.
 
 **Async flow:**
-1. `ReportsPage::validate()` — loads `Catalog` from `data/sys_reports.json` (file I/O, always sync, never blocks)
+1. `ReportsPage::validate()` — acquires the `$context->connection()` handle (handle only, no query issued) and loads `Catalog` from `data/sys_reports.json` (file I/O, always sync, never blocks)
 2. After admin status/variables data lands, `App` sends `ReloadReportMsg` to `ReportsPage`
 3. `ReportsPage::update(ReloadReportMsg)` calls `loadCurrentReport()` — queries are issued through `AdminQueryCache` via `AsyncCachedConnection`, returning `null` immediately
 4. `view()` sees `currentResult === null` and renders a loading spinner
@@ -485,7 +485,7 @@ The detector is wired from `App::adminPage()` into the `PerfSchemaPage` construc
 | `Space` or `Enter` | Toggle/select item (Instruments/Consumers/Actors/Objects tabs) |
 | `Tab` | Switch tabs |
 | `Shift+Tab` | Previous tab |
-| `c` | Commit pending changes (when dirty) |
+| `c` | Stage commit of pending changes (when dirty) — `y` fires the prepared statements, any other key cancels |
 | `r` | Revert pending changes (when dirty) |
 | `1/2/3` | Easy Setup actions (enable full / disable / reset to defaults) |
 | `q` | Quit (exits the application) |
