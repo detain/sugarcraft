@@ -287,7 +287,8 @@ implements the superset.
 by `SugarCraft\Vterm\Terminal\Terminal`; the renderer's upstream
 `HandlerAdapter` does not route those final bytes, so the renderer path
 silently discards them. Rows with an explicit `Method` are implemented by
-`Parser/CsiHandlerImpl` — the emulator implements a superset of those.
+`Parser/CsiHandlerImpl` — the emulator implements a superset of those, save
+the three asymmetries named below (one of them, `b` REP, is renderer-only).
 Three asymmetries are deliberate and pinned out of
 `tests/EngineDifferentialTest.php`'s corpus: tab handling (`I`/`Z`/`g` —
 the emulator walks a tab-stop table, the renderer single-steps and
