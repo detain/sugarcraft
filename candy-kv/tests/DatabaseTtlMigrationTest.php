@@ -189,6 +189,54 @@ final class DatabaseTtlMigrationTest extends TestCase
         new Database($path, 'garbage');
     }
 
+    /**
+     * N27 ordering law: the permission sweep must PRECEDE the migration.
+     *
+     * A legacy 0644 file is tightened on open — but the one-time expiry
+     * rewrite inside init() is itself a write, so a sweep that runs only
+     * AFTER init() leaves the exposure window open through the very call
+     * that rewrites the schema. A transient window cannot be sampled
+     * functionally, so the order is pinned structurally on the
+     * constructor's own body (house pattern: structural source-slice
+     * ordering pins, cf. MediaStore's fopen<chmod<rename pin).
+     */
+    public function testPermissionsAreTightenedBeforeTheMigrationWrites(): void
+    {
+        $method = new \ReflectionMethod(Database::class, '__construct');
+        $lines = \file((string) $method->getFileName());
+        $this->assertIsArray($lines, 'Database.php must be readable for the ordering pin');
+        $body = \implode('', \array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1
+        ));
+
+        $sweep = \strpos($body, '$this->secureFilePermissions(');
+        $init = \strpos($body, '$this->init(');
+        $this->assertNotFalse($sweep, 'the constructor must sweep permissions');
+        $this->assertNotFalse($init, 'the constructor must run init()');
+        $this->assertLessThan(
+            (int) $init,
+            (int) $sweep,
+            'a legacy 0644 database must be tightened BEFORE init() writes the expiry migration'
+        );
+
+        // Belt: the post-open end state stays 0600 regardless of the mode
+        // the legacy file arrived with.
+        $path = $this->createLegacyDb('perm', [
+            ['key' => 'alive', 'expires' => (new \DateTimeImmutable('+1 hour'))->format(\DATE_ATOM)],
+        ]);
+        \chmod($path, 0o644);
+        $db = new Database($path, 'perm');
+        \clearstatcache(true, $path);
+        $this->assertSame(
+            0,
+            \fileperms($path) & 0o077,
+            'a world-readable legacy database must not stay group/world accessible after open'
+        );
+        $db->close();
+    }
+
     public function testFreshDatabaseWritesEpochAndRoundTripsThroughReopen(): void
     {
         $path = $this->tmpDir . '/fresh.db';

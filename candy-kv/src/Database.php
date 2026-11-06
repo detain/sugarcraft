@@ -66,7 +66,15 @@ final class Database
         $this->db->enableExceptions(true);
         $this->db->busyTimeout(5000);
         $this->name = $name;
+        // N27: tighten BEFORE the first write. init() migrates legacy schemas
+        // — migrateExpiryColumn UPDATEs every row that carries an expiry —
+        // so a legacy 0644 database would otherwise stay world-readable
+        // through the very act that was supposed to fix it.
+        \clearstatcache(true, $path);
+        $this->secureFilePermissions($path);
         $this->init();
+        // The journal_mode = WAL switch mints -wal/-shm sidecars at the
+        // process umask; a second sweep so those land 0600 as well.
         \clearstatcache(true, $path);
         $this->secureFilePermissions($path);
     }
