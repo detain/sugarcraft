@@ -384,7 +384,7 @@ locale — call sites look strings up by fully-qualified key.
 ```php
 use SugarCraft\Core\I18n\T;
 
-T::setLocale(T::detect());                 // 'en' / 'fr' / 'de' from $LANG
+T::setLocale(T::detect());                 // 'en' / 'fr' / 'de' — LC_ALL → LC_MESSAGES → LANG
 echo T::t('core.color.invalid_hex', ['hex' => '#zz']);
 // => "invalid hex color: #zz"
 ```
