@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/sugar-core",
-    "description": "PHP port of charmbracelet/bubbletea \u2014 Elm-architecture TUI runtime.",
+    "description": "MVC-style Model–Update–View TUI runtime for PHP 8.3+ (formerly sugarcraft/candy-core).",
     "type": "library",
     "license": "MIT",
     "keywords": [
