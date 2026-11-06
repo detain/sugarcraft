@@ -799,7 +799,11 @@ double vs thick) are decorative: never encode a state distinction in the
 border family alone — combine it with a title or colour slot. Adaptive
 colours (`AdaptiveColor` / `Theme::adaptive()`) track dark-vs-light
 terminals so foreground/background contrast doesn't silently invert on
-scheme change.
+scheme change — but `Theme::adaptive()`'s tracking is a heuristic: it
+reads `$COLORFGBG` only, and an unset, non-numeric or out-of-range last
+field selects the dark scheme silently. Whichever scheme wins, verify
+pairs against the WCAG AA floors — 4.5:1 for text, 3:1 for non-text
+items such as borders and icons.
 
 ## Performance — build once, render many
 
