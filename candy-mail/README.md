@@ -243,7 +243,7 @@ loopback fake-server tests for the SMTP conversation; no external network is eve
 
 ## Accessor deprecation (2026-10-24)
 
-Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*"), ruling 3b)*, `Attachment::getContent()` was renamed to its bare twin `content()` — the method slot was unclaimed (no `withContent` setter exists; the public readonly `$content` property names the raw backing field, not a callable, and PHP keeps property and method namespaces distinct). The legacy spelling stays a byte-identical one-line BC forwarder marked `@deprecated` with `REMOVED-IN: 2.0.0`; it will be removed in candy-mail v2.0.0.
+Per the house bare-accessor convention (`AGENTS.md`: *"Bare accessors (no* `get`*)*), `Attachment::getContent()` was renamed to its bare twin `content()` — the method slot was unclaimed (no `withContent` setter exists; the public readonly `$content` property names the raw backing field, not a callable, and PHP keeps property and method namespaces distinct). The legacy spelling stays a byte-identical one-line BC forwarder marked `@deprecated` with `REMOVED-IN: 2.0.0`; it will be removed in candy-mail v2.0.0.
 
 | Namespace | Class | Deprecated | Use instead |
 |-----------|-------|------------|-------------|
