@@ -11,7 +11,7 @@
 <!-- BADGES:END -->
 
 
-![demo](.vhs/view.gif)
+![VHS recording: candy-gifview playing a synthetic GIF — solid 24-bit blocks, then the ASCII density ramp](.vhs/view.gif)
 
 Terminal GIF viewer for PHP 8.3+ — the command-line front end built on
 [`sugarcraft/sugar-animation`](https://github.com/detain/sugarcraft/tree/master/sugar-animation). Point it at a `.gif` on
