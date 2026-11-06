@@ -119,7 +119,9 @@ candy-kv --version
   value to one control-free line for terminal printing.
 - `--dry-run` reports how many entries `delete` would touch and writes nothing.
 - `--` ends option processing: `set backup -- --ttl=60` stores the literal
-  value `--ttl=60`. Unknown options and surplus positionals are refused
+  value `--ttl=60`. Only the first `--` ends option processing — a second one
+  is ordinary positional data, so `set k -- --` stores the value `--`.
+  Unknown options and surplus positionals are refused
   (exit 2) rather than silently ignored — a typo'd `--ttl300` never becomes a
   forever secret.
 - `-d` accepts the delimiter attached (`-d,`) or spaced (`-d ,`); the printed
