@@ -1,11 +1,11 @@
 {
     "title": "SugarReadline — SugarCraft",
-    "description": "SugarReadline: Interactive prompts — text, confirm, select, multi-select, textarea.",
+    "description": "Interactive line-editing prompts for terminal UIs — text, selection, confirmation, multi-selection and textarea.",
     "ogTitle": "SugarReadline — SugarCraft",
-    "ogDescription": "Interactive prompts — text, confirm, select, multi-select, textarea.",
+    "ogDescription": "Interactive line-editing prompts for terminal UIs — text, selection, confirmation, multi-selection and textarea.",
     "emoji": "",
     "displayName": "SugarReadline",
-    "tagline": "Interactive prompts — text, confirm, select, multi-select, textarea",
+    "tagline": "Interactive line-editing prompts for terminal UIs — text, selection, confirmation, multi-selection and textarea",
     "phpVersion": "8.3+",
     "detailMeta": "          <span class=\"tag-chip accent\">inspired by <a href=\"https://github.com/erikgeiser/promptkit\" style=\"color: inherit;\">erikgeiser/promptkit</a></span>\n          <span class=\"tag-chip\">prompt</span><span class=\"tag-chip\">input</span><span class=\"tag-chip\">readline</span><span class=\"tag-chip\">interactive</span>"
 }
