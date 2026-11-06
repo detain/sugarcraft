@@ -149,6 +149,29 @@ because the latter is sugar-image's own — per the naming rule in
 The player paints its own status footer with the same set, abbreviated:
 `space pause ←/→ step d preset q quit`.
 
+## Accessibility
+
+Every format this viewer can pick produces *pixels-or-glyphs*, not semantics:
+nothing here describes image content, and no output leg is a screen-reader
+surface. What the flag surface can do is choose **how the picture reaches
+you**:
+
+- The graphics protocols (`--format=sixel` / `kitty` / `iterm2`) hand the
+  terminal an encoded payload — they are literally invisible to screen
+  readers and to copy/select, and they say nothing on a braille cell.
+- The text tiers are characters in the buffer: `--format=ascii` (a luminance
+  ramp), `--format=symbols` (the symbol-engine corpus), the block tiers
+  `half`/`quarter`, and the colored-character tiers `ansi16`/`ansi256`/
+  `truecolor`. They remain selectable and reachable by anything that reads
+  terminal text, which the protocol payloads are not.
+- `--canvas=fgbg` confines a text-tier render to the terminal's own
+  foreground/background pair, so the picture follows the user's contrast
+  theme instead of embedding colors chosen from the image.
+- `--work=1` is the cheapest candidate-search setting (the shortest path to
+  a frame) when the exhaustive ladder is not wanted.
+- `--dump-detect` is the diagnostic leg: when a render looks blank or wrong,
+  it prints what the stack actually detected instead of guessing.
+
 ## Localized
 
 The user-facing CLI strings — usage, flag/value/format refusals, notices —
