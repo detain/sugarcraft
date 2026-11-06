@@ -406,7 +406,7 @@ share the case-sensitive, character-wise semantics of exact ones.
   chmods its target before writing.
 - `get` on a typo prints the closest key to stderr. On shared machines,
   remember key names can themselves be sensitive — stderr is still a log.
-  Suggestions fire only within half the query's length; a far-from-anything
+  Suggestions fire only within half the query's codepoint count; a far-from-anything
   miss says just `key not found: <the sanitized query>` (shipped string
   `key not found: {key}`, `cli.key_not_found` in `lang/en.php`).
 - **Command lines are not secret storage.** Anything passed as an argument
@@ -443,9 +443,10 @@ from `LC_ALL` → `LC_MESSAGES` → `LANG` at start-up (16 shipped locales, see
 `lang/`). The missing-argument usage line is part of that translated surface —
 `usage()` emits `Lang::t('cli.usage_*')` before exit 2, so `LANG=fr candy-kv
 get` answers `Usage : candy-kv get <clé>`. Three surfaces stay English by
-design and are quoted verbatim by the test suite: `candy-kv --help` (a fixed
-heredoc — its option grammar mirrors the flag spellings), `src/Cli/ArgParser.php`'s
-own parse errors (unknown option, surplus positional), and the import/export
+design: `candy-kv --help` (a fixed
+heredoc — its flag needles are pinned by `CliContractTest`), `src/Cli/ArgParser.php`'s
+own parse errors (unknown option, surplus positional — the one surface quoted
+verbatim by the test suite), and the import/export
 runtime diagnostics — importer refusals and failure lines such as
 `File not found: <path>` throw plain English from outside the catalogs, a
 design the `src/Cli/ImportCommand.php` docblock states outright. The rest of

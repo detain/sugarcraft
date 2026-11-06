@@ -331,7 +331,7 @@ function help(string $bin): void
                                       bytes or invalid UTF-8 are stored
                                       base64-encoded with the binary flag.
       --sanitize                      `get`: collapse the value to one
-                                      control-free line. Without it, get
+                                      C0-control-free line. Without it, get
                                       prints the exact stored bytes.
       -d DELIM | -dDELIM              `list` column delimiter (default: tab).
                                       Printed untouched — safe for awk -F.

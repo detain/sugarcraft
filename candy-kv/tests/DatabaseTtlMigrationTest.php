@@ -190,7 +190,7 @@ final class DatabaseTtlMigrationTest extends TestCase
     }
 
     /**
-     * N27 ordering law: the permission sweep must PRECEDE the migration.
+     * Ordering law: the permission sweep must PRECEDE the migration.
      *
      * A legacy 0644 file is tightened on open — but the one-time expiry
      * rewrite inside init() is itself a write, so a sweep that runs only
