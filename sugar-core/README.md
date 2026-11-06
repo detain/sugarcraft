@@ -185,7 +185,7 @@ text yourself; there is no automatic downgrade.
 - **`Composite`** — `Model` that manages a list of child `Component`s. Tracks `pendingCmds` and drains them during reconcile, calling child `onMount()`/`onUnmount()` Cmds synchronously. Children are reconciled by *presence*: a child that stays in the list keeps its state; adding or removing triggers lifecycle events. Reordering alone does not re-run lifecycle.
 - **`Panes` / `Pane` / `Rect`** — split-region bookkeeping for apps that manage multiple viewports. Geometry is advisory: the runtime does **not** clip a pane's `view()` output to its `Rect` — models must size their own frames (see [Viewport fit](#viewport-fit)).
 - **`WorkerPool`** — bounded-concurrency pool (default 4 workers) for offloading CPU-bound tasks to subprocesses. Tasks are named global functions or serialized `Serializable`/closure-free callables; a `Closure` cannot cross the process boundary, so dispatching one returns an already-rejected promise. Worker children run `php` without your application autoloader: only PHP built-ins and whatever the worker's own script loads are resolvable inside the child.
-- **`WorkerCmd`** — `Cmd` factory: `WorkerCmd::run($pool, $callable)` dispatches a task to the pool and yields a `WorkerResultMsg` when complete.
+- **`WorkerCmd`** — `Cmd` factory: `WorkerCmd::run($pool, $task)` (`callable|string $task` — a named global function or a serializable closure-free callable, matching the real parameter) dispatches a task to the pool and yields a `WorkerResultMsg` when complete.
 - **`WorkerResultMsg`** — result `Msg` carrying `$result`, `$error`, and `$workerId` from a pool worker.
 
 ## Subscriptions
@@ -458,7 +458,7 @@ maps common orchestration needs to the PHP combinators:
 | Drop bytes onto the wire | `Cmd::raw($bytes)` |
 | Suspend on Ctrl+Z, resume on SIGCONT | `Cmd::suspend()` (returns to a `ResumeMsg`) |
 | Run an external program (`$EDITOR`) | `Cmd::exec($command, captureOutput: false, onComplete: fn (int $exitCode) => $msg)` |
-| Offload to a worker subprocess | `WorkerCmd::run($pool, $callable)` → `WorkerResultMsg` |
+| Offload to a worker subprocess | `WorkerCmd::run($pool, $task)` (`callable|string $task`) → `WorkerResultMsg` |
 | Replace the subscription set for this cycle | `new SubscribeCmd($subscriptions)` |
 
 `init()` returns a Cmd (or null) to fire once at startup — for the active
