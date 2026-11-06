@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-code",
-    "description": "Chat-shell TUI for AI coding assistants \u2014 port of charmbracelet/crush. Pluggable Backend interface (ship your own Anthropic / OpenAI / Ollama / shell-out adapter). Markdown rendering of replies via SugarMarkdown, scrollback viewport via SugarWidgets, input area via SugarForms TextArea.",
+    "description": "Chat-shell TUI for AI coding assistants \u2014 port of charmbracelet/crush. Pluggable Backend interface (ship your own provider or shell-out adapter \u2014 see docs/ADDING_A_PROVIDER.md). Markdown rendering of replies via SugarMarkdown, scrollback viewport via SugarWidgets, input area via SugarForms TextArea.",
     "type": "project",
     "license": "MIT",
     "keywords": [
