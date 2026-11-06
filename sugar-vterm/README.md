@@ -296,7 +296,7 @@ implements the superset.
 | `d` | VPA | (Handler) | Cursor to row N. |
 | `f` | HVP | `hvp($row, $col)` | Same as CUP — move cursor to (row, col). |
 | `g` | TBC | `tbc($mode=0)` | Tab clear: 0=column, 3=all (renderer: no-op — tab stops unmodelled). |
-| `h` | DECSET (private, `?`-prefixed only) | `decset($mode, $prefix)` | Set mode; bare SM without the `?` prefix is inert on both engines (the emulator gate and `CsiHandlerImpl::decset` refuse it). `?7 h` enables DECAWM, `?12 h` BCE, `?25 h` cursor visible, `?47/?1047/?1049 h` alt screen, `?1004 h` focus events, `?2026 h` synchronized output, `?6 h` DECOM. |
+| `h` | DECSET (private, `?`-prefixed only) | `decset($mode, $prefix)` | Set mode; bare SM without the `?` prefix is inert on both engines (the emulator gate and `CsiHandlerImpl::decset` refuse it). `?7 h` enables DECAWM, `?12 h` BCE, `?25 h` cursor visible, `?47/?1047/?1049 h` alt screen, `?1004 h` focus events, `?2026 h` synchronized output, `?6 h` DECOM, `?1000/?1001/?1002/?1003 h` mouse tracking, `?1005/?1006/?1015 h` mouse encoding, `?1048 h` cursor save/restore, `?2004 h` bracketed paste — full roster below. |
 | `l` | DECRST (private, `?`-prefixed only) | `decrst($mode, $prefix)` | Reset mode (mirror of `h`; bare RM without the prefix is inert). |
 | `m` | SGR | `sgr($params)` | Set graphic rendition. Subparam colons (`4:1`..`4:5`) parsed. |
 | `r` | DECSTBM | `decstbm($top, $bottom)` | Set scroll region rows (1-indexed). |
@@ -318,6 +318,40 @@ the emulator walks a tab-stop table, the renderer single-steps and
 background-color erase (`X` ECH and mode-3 scrollback clearing are
 emulator-only). The renderer honours the same DECAWM/DECTCEM private
 modes, origin-mode clamps, and SGR set as the emulator.
+
+### DECSET/DECRST mode roster (emulator `ModeHandler`)
+
+The full emulator's `Handler\ModeHandler` tracks these private modes (all
+`?`-prefixed; bare SM/RM stays inert on both engines). Mouse and paste state
+lands on `Mode` fields the library exposes for consumers to read — decoded,
+never encoded:
+
+| Mode | Effect on `set` (`h`)                                                    |
+|------|--------------------------------------------------------------------------|
+| 6    | `Mode::$originMode` — DECOM, cursor rows relative to the scroll region.  |
+| 7    | `Mode::$autoWrap` — DECAWM wrap at the right margin.                     |
+| 25   | DECTCEM cursor visibility (`setCursorVisible`).                          |
+| 47   | Alt-buffer swap without save (`enterAltScreenNoSave`).                   |
+| 1000 | `Mode::$mouseAny` — button press/release tracking flag.                  |
+| 1001 | `Mode::$mouseHighlights` — highlight tracking flag.                      |
+| 1002 | `Mode::$mouseCellMotion` — cell-motion tracking flag.                    |
+| 1003 | `Mode::$mouseExtended` — any-event tracking flag.                        |
+| 1004 | `Mode::$reportFocusEvents` — arms the `CSI I`/`O` focus intercept.       |
+| 1005 | `Mode::$mouseEncoding = MouseEncoding::Utf8`; reset returns `Default`.   |
+| 1006 | `Mode::$mouseEncoding = MouseEncoding::Sgr`; reset returns `Default`.    |
+| 1015 | `Mode::$mouseEncoding = MouseEncoding::Urxvt`; reset returns `Default`.  |
+| 1047 | Alt-buffer swap without save, same arm as 47.                            |
+| 1048 | Cursor save/restore only (`enterAltScreenCursorOnly`) — no buffer swap.  |
+| 1049 | Full alt screen (`enterAltScreen`): save cursor, switch, clear.          |
+| 2004 | `Mode::$bracketedPaste` — flags that paste arrives bracketed.            |
+| 2026 | `Mode::$syncUpdate` — synchronized output queue (16384-cell budget).     |
+
+Modes 1005/1006/1015 share the one `MouseEncoding` slot: it is the decoder's
+note of which reporting dialect a real terminal would use — the last setter
+wins, any reset flips back to `Default`, and none of them change which
+tracking modes (1000–1003) are armed. The library emits nothing for any mouse,
+focus or paste mode; consumers read the `Mode` fields and build report bytes
+themselves.
 
 The `printable` and `execute` paths also route through the same
 adapter — printable bytes call `CsiHandlerImpl::printable()` (writes
@@ -854,7 +888,9 @@ unbounded channel is capped and nothing leaves the grid unsanitised:
 - **BEL** — counted via `bells()` on the emulator path only; the renderer
   discards BEL upstream in the adapter before any sink exists.
 - **One-way doors** — mouse, focus and bracketed-paste sequences are DECODED
-  only. `Mode\MouseEncoding` describes the decoder slot; the library ships
+  only; the DECSET/DECRST roster above names every mode bit the emulator
+  tracks and none of them produce outbound bytes. `Mode\MouseEncoding`
+  describes the decoder slot; the library ships
   no encoders, so programs emitting those sequences build their own bytes.
 - **No I/O** — `src/` never writes streams, spawns processes, or touches the
   filesystem; `feedStream()` merely accepts one.
