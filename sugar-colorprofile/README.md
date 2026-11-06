@@ -120,7 +120,9 @@ answers Ansi on `Palette` but TrueColor on `TerminalProbe` (Phase-3 upgrade).
 3. `NO_COLOR` (set and **non**-empty; `""` = unset per no-color.org) → the `NoTTY` rung — strips **all** ANSI including decoration (bold/underline gone); for a color-only strip pin `Palette::withProfile(ColorProfile::Ascii)`
 4. `CLICOLOR=0` → none
 5. `TERM=dumb` (case-insensitive) → none
-6. `COLORTERM=24bit|truecolor|yes` → TrueColor
+6. `COLORTERM=24bit|truecolor|yes` → TrueColor (`yes` is the legacy "this is a
+   color terminal" marker, honored here as TrueColor — beyond its historical
+   meaning; pin a profile explicitly if you want the conservative reading)
 7. `TERM_PROGRAM=iTerm.app` → TrueColor (inline image + 24-bit history)
 8. `WT_SESSION` (set, non-empty) → TrueColor (Windows Terminal)
 9. `GOOGLE_CLOUD_SHELL` (set, non-empty) → TrueColor
@@ -151,11 +153,17 @@ with a non-TTY stream. Surfaces that never gate: `Probe`, `AsyncProbe` and
 `Probe\TerminalProbe` — they report what the environment *can* do, not where
 the bytes are about to land.
 
-**Phase 2 (infocmp) — `Probe`/`AsyncProbe`/`TerminalProbe` surfaces only:** when
-the ladder answers `Ansi` or `Ansi256`, `infocmp -1` is consulted and `Tc`/`RGB`
+**Phase 2 (infocmp) — probe surfaces only:** `Probe`/`AsyncProbe` consult
+`infocmp -1` only when the ladder answers `Ansi` or `Ansi256`; `Tc`/`RGB`
 capability *names* (name-position match via `Probe\TerminfoParser`, never a
-whole-output regex) upgrade the answer to TrueColor. A bare `Palette::detect()`
-runs the ladder without this phase.
+whole-output regex) upgrade the answer to TrueColor. `TerminalProbe` runs its
+terminfo phase more broadly: unless the env phase delivered a suppression
+decision (the `NoColor` capability — `NO_COLOR`, `CLICOLOR=0`, `TERM=dumb`) or
+the falsy-`FORCE_COLOR` `Ascii` floor, it queries the database even when the
+env rung already answered TrueColor — its report covers capabilities beyond
+color depth. That suppression check is a decision, not one input among many,
+which is why it also gates the escape-query phase. A bare `Palette::detect()`
+never runs terminfo; it is the ladder plus the step-0 stream gate.
 
 ### Env-var precedence
 
@@ -168,7 +176,7 @@ The ladder's env legs, one table row per variable, in ladder order:
 | `NO_COLOR` | 3 | set to a **non-empty** value (`""` = unset per no-color.org) → no color via the `NoTTY` rung / `NoColor` capability — `stripAnsi()` drops **all** ANSI including decoration (`\x1b[1m`/`\x1b[4m` gone). Contrast: falsy `FORCE_COLOR` lands the `Ascii` floor (step 2) which keeps decoration and reduces color to the black/white pair. Want NO_COLOR to keep bold/underline? Pin `Palette::withProfile(ColorProfile::Ascii)` |
 | `CLICOLOR=0` | 4 | suppress color |
 | `TERM=dumb` | 5 | case-insensitive; suppresses color — outranks `COLORTERM` (dumb is a promise of minimal capabilities) |
-| `COLORTERM=24bit\|truecolor\|yes` | 6 | TrueColor (exact value match, case-insensitive) |
+| `COLORTERM=24bit\|truecolor\|yes` | 6 | TrueColor (exact value match, case-insensitive); `yes` is the legacy color-terminal marker, promoted here beyond its historical "some color" meaning |
 | `TERM_PROGRAM` | 7 | `iTerm.app` → TrueColor rung (step 7); phase 3 additionally maps WezTerm/vscode/Ghostty → TrueColor, iTerm.app → ITerm2, Hyper → Hyperlinks |
 | `WT_SESSION` | 8 | set, non-empty → Windows Terminal, TrueColor |
 | `GOOGLE_CLOUD_SHELL` | 9 | set, non-empty (any truthy spelling) → TrueColor |
@@ -406,7 +414,7 @@ SugarCraft\ColorProfile\
 ├── ColorDistance   — distance strategy enum (Euclidean/Cie76/Cie94/Cie2000)
 ├── NearestColor    — nearest-palette matcher (key-guarded memoized Lab, error-compensation carrier)
 ├── PaletteIndex    — PCA-bucketed exact accelerator for repeated lookups
-├── StandardColors  — ANSI/ANSI256 standard palette (public MUTABLE statics — read-only by convention)
+├── StandardColors  — the 16 ANSI colors (mutable statics deprecated in favour of all()/fromIndex()/catalog(); see the deprecation window below)
 ├── ProfileWriter   — stream wrapper for automatic color degradation
 └── Lang            — i18n strings
 ```
