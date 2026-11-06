@@ -15,6 +15,7 @@ use SugarCraft\Code\Providers\EmbeddingsRequest;
 use SugarCraft\Code\Providers\EmbeddingsResponse;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Runtime;
+use SugarCraft\Code\Tools\BuiltIn\Bash;
 use SugarCraft\Code\Tools\ParallelSafe;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolCall;
@@ -281,6 +282,41 @@ final class EngineBackendParallelConfigTest extends TestCase
         Bootstrap::writeUserConfig(['parallelToolDeadlineSeconds' => 119]);
 
         $this->assertSame(119, $this->deadline());
+    }
+
+    /**
+     * The tool-timeouts weld's follow-up: the schema range now admits an
+     * hour-scale group deadline — Bash::MAX_TIMEOUT_SECONDS, the per-call
+     * ceiling of the longest legitimate batch member — and the resolver
+     * honours one exactly as written when the turn's idle ceiling is raised
+     * to carry it. The group deadline has to fit inside the idle window, or
+     * the whole turn would be reaped from above with every sibling's result
+     * lost, so pairing is not a formality.
+     */
+    public function testAnHourScaleDeadlineIsHonouredPairedWithTheIdleCeiling(): void
+    {
+        $this->assertSame(
+            Bash::MAX_TIMEOUT_SECONDS,
+            $this->deadlineFrom([
+                'parallelToolDeadlineSeconds' => Bash::MAX_TIMEOUT_SECONDS,
+                'turnIdleTimeoutSeconds' => Bash::MAX_TIMEOUT_SECONDS + 100,
+            ]),
+        );
+    }
+
+    /**
+     * ...and UNPAIRED the hour-scale value still falls back to the documented
+     * default rather than being honoured past the idle window or refused at
+     * save. This is the silent-drop physics the definition's comment
+     * documents; pinned here so a future resolver that honours (or rejects)
+     * an unpaired hour-scale deadline has to flip this row on purpose.
+     */
+    public function testAnUnpairedHourScaleDeadlineFallsBackToTheDefault(): void
+    {
+        $this->assertSame(
+            Runtime::PARALLEL_TOOL_DEADLINE_SECONDS,
+            $this->deadlineFrom(['parallelToolDeadlineSeconds' => Bash::MAX_TIMEOUT_SECONDS]),
+        );
     }
 
     // =========================================================================

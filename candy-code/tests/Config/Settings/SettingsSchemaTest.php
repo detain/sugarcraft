@@ -26,6 +26,7 @@ use SugarCraft\Code\Config\Settings\Validator\RangeValidator;
 use SugarCraft\Code\Config\Settings\Validator\ThresholdOrderValidator;
 use SugarCraft\Code\Config\Settings\Validator\UrlValidator;
 use SugarCraft\Code\Theme;
+use SugarCraft\Code\Tools\BuiltIn\Bash;
 
 /**
  * The settings schema's invariants (Appendix N §4.2): every definition is
@@ -82,6 +83,25 @@ final class SettingsSchemaTest extends TestCase
     public function testParallelToolDeadlineSecondsIsTuning(): void
     {
         self::assertSame(RiskClass::Tuning, SettingsSchema::byKey('parallelToolDeadlineSeconds')?->riskClass);
+    }
+
+    /**
+     * The tool-timeouts weld's follow-up: the door admits up to
+     * {@see Bash::MAX_TIMEOUT_SECONDS} — the per-call ceiling of the longest
+     * legitimate batch member, the same range shape commit 8f982d722 gave the
+     * bash/parallel timeout keys — so an hour-scale deadline an operator
+     * writes reaches the resolver instead of being refused at save. The
+     * resolver honours it paired with a raised `turnIdleTimeoutSeconds` and
+     * falls back unpaired; either way the default tier is untouched.
+     */
+    public function testParallelToolDeadlineSecondsIsBoundedByTheToolCeiling(): void
+    {
+        $definition = SettingsSchema::byKey('parallelToolDeadlineSeconds');
+
+        self::assertNotNull($definition);
+        self::assertNull($definition->validate(Bash::MAX_TIMEOUT_SECONDS), 'the hour-scale ceiling itself must be saveable');
+        self::assertSame('must be at most ' . Bash::MAX_TIMEOUT_SECONDS, $definition->validate(Bash::MAX_TIMEOUT_SECONDS + 1));
+        self::assertSame('must be at most ' . Bash::MAX_TIMEOUT_SECONDS, $definition->validate(999_999_999));
     }
 
     public function testEveryReaderSymbolResolvesToARealMethod(): void
