@@ -943,13 +943,17 @@ exactly two files in `tests/fixtures/` — `terminal-cleared.golden` and
 output by `tests/GoldenRenderTest.php` via
 `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`; no other
 fixture files are read. To re-record a fixture after an intentional output
-change, delete it and re-run the test — `assertGoldenAnsi()` writes the
-file when it is missing (there is no env-var override):
+change, delete it and re-run the test once with `UPDATE_GOLDENS=1` (or its
+more explicit spelling, `SUGAR_TESTING_UPDATE_GOLDENS=1`):
 
 ```sh
 rm tests/fixtures/<name>.golden
-vendor/bin/phpunit --filter <TestName>
+UPDATE_GOLDENS=1 vendor/bin/phpunit --filter <TestName>
 ```
+
+The flag arms creation only — an existing golden is never rewritten, and a
+missing golden without the flag is a hard failure, so a CI run can never
+silently re-baseline itself.
 
 Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (PSR-12 + `declare_strict_types` + `strict_param` + short array syntax). Append `--dry-run --diff` to preview without writing.
 
