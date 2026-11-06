@@ -77,7 +77,7 @@ final readonly class ParsedArgs
      *
      * @var list<string>
      */
-    public const SUBCOMMANDS = ['acp', 'attach', 'bundles', 'completion', 'doctor', 'import', 'login', 'lsp', 'mcp', 'models', 'self-update', 'serve', 'session', 'usage'];
+    public const SUBCOMMANDS = ['acp', 'attach', 'bundles', 'completion', 'doctor', 'gc', 'import', 'login', 'lsp', 'mcp', 'models', 'self-update', 'serve', 'session', 'usage'];
 
     /**
      * The flags each subcommand verb owns, keyed by verb: `true` when the flag
@@ -99,6 +99,16 @@ final readonly class ParsedArgs
         // the one this user's `serve` state directory records.
         'attach' => [
             '--url' => true,
+        ],
+        // `gc` (gc-cli-1106 B1): storage inspection and reclaim. `-f` is the
+        // alias of `--force`; which ACTION each flag belongs to is
+        // {@see Subcommands::GC_ACTION_FLAGS}, not the parser's concern.
+        'gc' => [
+            '--check' => false,
+            '-f' => false,
+            '--force' => false,
+            '--format' => true,
+            '--incremental' => false,
         ],
         // `import` (C-TUI-5.b): `--project` adds the project's own
         // `.claude/settings.json` to the read; `--yes` skips the interactive

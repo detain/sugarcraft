@@ -19,6 +19,9 @@ use SugarCraft\Code\MCP\Serve\McpServeHost;
 use SugarCraft\Code\MCP\Serve\McpServeRoster;
 use SugarCraft\Code\Providers\ProviderFactory;
 use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Session\Gc\GcInventory;
+use SugarCraft\Code\Session\Gc\GcStoreFiles;
+use SugarCraft\Code\Session\Gc\GcVacuum;
 use SugarCraft\Code\Bundles\Bundle;
 use SugarCraft\Code\Bundles\BundleRecommender;
 use SugarCraft\Code\Bundles\BundleSource;
@@ -32,6 +35,7 @@ use SugarCraft\Code\Session\Import\ImportFormat;
 use SugarCraft\Code\Session\Import\ImportRefusedException;
 use SugarCraft\Code\Session\Import\SessionImportLedger;
 use SugarCraft\Code\Session\Import\SessionImporter;
+use SugarCraft\Code\Session\SessionLock;
 use SugarCraft\Code\Session\SessionQuery;
 use SugarCraft\Code\Session\SessionResolver;
 use SugarCraft\Code\Session\SessionRow;
@@ -124,6 +128,7 @@ final class Subcommands
     {
         return match ($args->subcommand) {
             'doctor'     => self::doctor($args),
+            'gc'         => self::gc($args),
             'models'     => self::models($args),
             'self-update' => SelfUpdate::run($args),
             'login'      => self::login($args),
@@ -998,6 +1003,446 @@ final class Subcommands
             return NonInteractive::EXIT_FAILURE;
         }
     }
+
+    /**
+     * `gc` — storage inspection and reclaim over the session ledger
+     * (gc-cli-1106 B1).
+     *
+     * The action door mirrors {@see self::session()}: no action is a usage
+     * error, an unknown action is a usage error, and a flag the action does
+     * not speak is refused rather than silently ignored. `sessions`,
+     * `analyze` and `purge` are later rungs of the same verb — TODAY they
+     * fall through this unknown-action door, which is the honest answer for
+     * an action the store tools do not implement yet.
+     *
+     * Nothing here prunes: every read runs over a read-only connection, and
+     * the only writes the verb performs are the VACUUM rewrites its own
+     * `--force` door admits ("diagnostics NEVER prune" — the same law
+     * {@see \SugarCraft\Code\Support\DoctorChecks} records for the probe).
+     */
+    private static function gc(ParsedArgs $args): int
+    {
+        $verb = $args->subcommandArgs[0] ?? null;
+        if ($verb === null) {
+            return NonInteractive::failUsage('candy-code: ' . Lang::t('cli.gc.no_action'), $args->outputFormat, self::gcUsage());
+        }
+        if (!isset(self::GC_ACTION_FLAGS[$verb])) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.gc.unknown_action', ['action' => $verb]),
+                $args->outputFormat,
+                self::gcUsage(),
+            );
+        }
+
+        foreach (\array_keys($args->subcommandFlags) as $flag) {
+            if (!\in_array($flag, self::GC_ACTION_FLAGS[$verb], true)) {
+                return NonInteractive::failUsage(
+                    'candy-code: ' . Lang::t('cli.gc.flag_does_not_apply', ['action' => $verb, 'flag' => $flag]),
+                    $args->outputFormat,
+                    Lang::t('cli.gc.accepts', ['action' => $verb, 'flags' => \implode(', ', self::GC_ACTION_FLAGS[$verb])]),
+                );
+            }
+        }
+
+        return match ($verb) {
+            'status' => self::gcStatus($args),
+            default => self::gcVacuum($args),
+        };
+    }
+
+    /**
+     * One line per verb, for every `gc` usage error.
+     */
+    private static function gcUsage(): string
+    {
+        return Lang::t('cli.gc.usage');
+    }
+
+    /**
+     * `gc status`: a full read-only census of the session store — file and
+     * free-page bytes, per-table bytes, session counts and ages, the storage
+     * families beside the database, and the retention regime as configured.
+     *
+     * The JSON layout is {@see GcInventory::collect()}'s own snake_case
+     * shape, passed through untouched under the schema-1 envelope; the text
+     * render adds bars so the biggest table is visible at a glance.
+     */
+    private static function gcStatus(ParsedArgs $args): int
+    {
+        $spelled = isset($args->subcommandFlags['--format'])
+            ? (string) $args->subcommandFlags['--format']
+            : NonInteractive::FORMAT_TEXT;
+        if ($spelled !== NonInteractive::FORMAT_TEXT && $spelled !== NonInteractive::FORMAT_JSON) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.gc.bad_format', ['format' => $spelled]),
+                $args->outputFormat,
+                self::gcUsage(),
+            );
+        }
+        $asJson = $spelled === NonInteractive::FORMAT_JSON || $args->outputFormat === NonInteractive::FORMAT_JSON;
+
+        try {
+            $inventory = (new GcInventory(self::gcStorePath()))->collect(Bootstrap::sessionRetentionDays());
+        } catch (\PDOException $e) {
+            return self::gcStoreUnavailable($args, $asJson, 'status', $e->getMessage());
+        }
+
+        if ($asJson) {
+            self::emitDocument(['verb' => 'gc', 'action' => 'status', 'result' => $inventory]);
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        echo 'candy-code gc status', \PHP_EOL;
+        echo '  ', $inventory['db_path'], \PHP_EOL;
+        echo Lang::t('cli.gc.files_line', [
+            'db' => self::gcFormatBytes((int) $inventory['files']['db']),
+            'wal' => self::gcFormatBytes((int) $inventory['files']['wal']),
+            'shm' => self::gcFormatBytes((int) $inventory['files']['shm']),
+            'total' => self::gcFormatBytes((int) $inventory['files']['total']),
+        ]), \PHP_EOL;
+        $pragma = $inventory['pragma'];
+        echo \sprintf(
+            'journal %s · auto_vacuum %s · reclaimable %s',
+            (string) $pragma['journal_mode'],
+            (string) $pragma['auto_vacuum_label'],
+            self::gcFormatBytes((int) $inventory['reclaimable_bytes']),
+        ), \PHP_EOL;
+
+        echo Lang::t('cli.gc.tables_header'), \PHP_EOL;
+        $largest = 0;
+        foreach ($inventory['tables'] as $table) {
+            $largest = \max($largest, (int) $table['bytes']);
+        }
+        foreach ($inventory['tables'] as $table) {
+            $name = (string) $table['name'];
+            if (!$table['present']) {
+                echo \sprintf('  %-24s  %s', $name, Lang::t('cli.gc.row_absent')), \PHP_EOL;
+
+                continue;
+            }
+
+            echo \sprintf(
+                '  %-24s  %6d rows  %10s  %s',
+                $name,
+                (int) $table['rows'],
+                self::gcFormatBytes((int) $table['bytes']),
+                self::gcBar((int) $table['bytes'], $largest, (int) $inventory['bar_cells']),
+            ), \PHP_EOL;
+        }
+
+        echo Lang::t('cli.gc.sessions_header'), \PHP_EOL;
+        $counts = $inventory['sessions'];
+        echo Lang::t('cli.gc.counts', [
+            'total' => (string) $counts['total'],
+            'live' => (string) $counts['live'],
+            'archived' => (string) $counts['archived'],
+            'subagents' => (string) $counts['subagents'],
+            'pinned' => (string) $counts['pinned'],
+            'named' => (string) $counts['named'],
+        ]), \PHP_EOL;
+        if ($counts['oldest_created_at'] !== null) {
+            echo Lang::t('cli.gc.when', [
+                'oldest' => \date('Y-m-d H:i', (int) $counts['oldest_created_at']),
+                'newest' => \date('Y-m-d H:i', (int) $counts['newest_created_at']),
+            ]), \PHP_EOL;
+        }
+        $buckets = $counts['age_buckets'];
+        echo Lang::t('cli.gc.age_line', [
+            'le7' => (string) $buckets['le7'],
+            'd8_30' => (string) $buckets['d8_30'],
+            'd31_90' => (string) $buckets['d31_90'],
+            'gt90' => (string) $buckets['gt90'],
+            'unknown' => (string) $buckets['unknown'],
+        ]), \PHP_EOL;
+        echo (int) $inventory['retention_days'] > 0
+            ? Lang::t('cli.gc.retention_days', ['days' => (string) $inventory['retention_days']])
+            : Lang::t('cli.gc.retention_off'), \PHP_EOL;
+
+        echo Lang::t('cli.gc.storage_header'), \PHP_EOL;
+        foreach ($inventory['storage'] as $family => $entry) {
+            $line = \sprintf(
+                '  %-14s  %10s  %d files',
+                (string) $family,
+                self::gcFormatBytes((int) $entry['bytes']),
+                (int) $entry['files'],
+            );
+            if (isset($entry['lock_files'])) {
+                $line .= \sprintf('  (locks %d live / %d stale)', (int) $entry['lock_live'], (int) $entry['lock_stale']);
+            }
+            if ((int) $entry['links_skipped'] > 0) {
+                $line .= \sprintf('  (%d links skipped)', (int) $entry['links_skipped']);
+            }
+            echo $line, \PHP_EOL;
+        }
+
+        if ($inventory['flags']['events_exceed_transcripts']) {
+            $bytesByName = [];
+            foreach ($inventory['tables'] as $table) {
+                $bytesByName[(string) $table['name']] = (int) $table['bytes'];
+            }
+            echo Lang::t('cli.gc.events_flag', [
+                'events' => self::gcFormatBytes($bytesByName['session_events'] ?? 0),
+                'transcripts' => self::gcFormatBytes($bytesByName['session_transcripts'] ?? 0),
+            ]), \PHP_EOL;
+        }
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * `gc vacuum`: reclaim free pages.
+     *
+     * The no-force shape is the report the user needs to decide: how many
+     * bytes are free, what `auto_vacuum` is set to, and an ESTIMATE (labeled
+     * as one) of the file size after a rewrite — computed as db bytes minus
+     * the free pages, the dbstat-free heuristic. Without `--force` nothing is
+     * rewritten, whatever flags came along, and the exit is 0: the report is
+     * the answer that was asked for.
+     *
+     * With `--force` the rewrite goes through {@see GcVacuum}: a plain
+     * `VACUUM`, or the one-time `auto_vacuum = INCREMENTAL` flip (which only
+     * takes effect through a full rewrite — the disclosure line below states
+     * exactly that), or — when the regime is already incremental — the cheap
+     * `PRAGMA incremental_vacuum` drain. A rewrite wants about the file's own
+     * size in transient space; the advisory is printed before the rewrite
+     * and the attempt is never refused on the estimate alone. A store held
+     * by a running session answers with the lock advice line whose holder
+     * count is the flock ground truth — never a process-name guess.
+     */
+    private static function gcVacuum(ParsedArgs $args): int
+    {
+        $asJson = $args->outputFormat === NonInteractive::FORMAT_JSON;
+        $check = isset($args->subcommandFlags['--check']);
+        $incremental = isset($args->subcommandFlags['--incremental']);
+        $force = isset($args->subcommandFlags['--force']) || isset($args->subcommandFlags['-f']);
+        $dbPath = self::gcStorePath();
+
+        if (!$force) {
+            try {
+                $inventory = (new GcInventory($dbPath))->collect(Bootstrap::sessionRetentionDays());
+            } catch (\PDOException $e) {
+                return self::gcStoreUnavailable($args, $asJson, 'vacuum', $e->getMessage());
+            }
+
+            $reclaimable = (int) $inventory['reclaimable_bytes'];
+            $estimate = \max(0, (int) $inventory['files']['db'] - $reclaimable);
+            $redFlag = (bool) $inventory['flags']['events_exceed_transcripts'];
+
+            if ($asJson) {
+                self::emitDocument(['verb' => 'gc', 'action' => 'vacuum', 'result' => [
+                    'performed' => false,
+                    'check' => $check,
+                    'requested_mode' => $incremental ? 'incremental' : 'full',
+                    'files' => $inventory['files'],
+                    'reclaimable_bytes' => $reclaimable,
+                    'auto_vacuum' => (int) $inventory['pragma']['auto_vacuum'],
+                    'auto_vacuum_label' => (string) $inventory['pragma']['auto_vacuum_label'],
+                    'freelist_count' => (int) $inventory['pragma']['freelist_count'],
+                    'estimated_db_bytes_after' => $estimate,
+                    'red_flag_events' => $redFlag,
+                ]]);
+
+                return NonInteractive::EXIT_OK;
+            }
+
+            echo 'candy-code gc vacuum', $incremental ? ' [--incremental]' : '', \PHP_EOL;
+            echo Lang::t('cli.gc.vacuum.reclaimable', [
+                'reclaimable' => self::gcFormatBytes($reclaimable),
+                'auto_vacuum' => (string) $inventory['pragma']['auto_vacuum_label'],
+                'estimate' => self::gcFormatBytes($estimate),
+            ]), \PHP_EOL;
+            if ($redFlag) {
+                $bytesByName = [];
+                foreach ($inventory['tables'] as $table) {
+                    $bytesByName[(string) $table['name']] = (int) $table['bytes'];
+                }
+                echo Lang::t('cli.gc.events_flag', [
+                    'events' => self::gcFormatBytes($bytesByName['session_events'] ?? 0),
+                    'transcripts' => self::gcFormatBytes($bytesByName['session_transcripts'] ?? 0),
+                ]), \PHP_EOL;
+            }
+            echo Lang::t('cli.gc.vacuum.no_rewrite'), \PHP_EOL;
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        $before = GcStoreFiles::sizes($dbPath);
+        if (!$before['present']) {
+            return self::gcStoreUnavailable($args, $asJson, 'vacuum', 'no such file: ' . $dbPath);
+        }
+
+        if (!$asJson) {
+            \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.gc.vacuum.headroom', [
+                'needed' => self::gcFormatBytes((int) $before['total']),
+                'free' => self::gcFormatBytes(GcStoreFiles::freeSpace($dbPath)),
+            ]) . "\n");
+        }
+
+        try {
+            $report = (new GcVacuum($dbPath))->run($incremental);
+        } catch (\PDOException $e) {
+            $message = $e->getMessage();
+            if (\stripos($message, 'database is locked') !== false || \stripos($message, 'busy') !== false) {
+                $holders = self::gcLiveLockCount();
+                $notice = Lang::t('cli.gc.vacuum.locked', ['holders' => (string) $holders]);
+                \fwrite(\STDERR, 'candy-code: ' . $notice . "\n");
+                if ($asJson) {
+                    self::emitDocument(['verb' => 'gc', 'action' => 'vacuum', 'result' => [
+                        'performed' => false,
+                        'reason' => $notice,
+                    ]]);
+                }
+
+                return NonInteractive::EXIT_FAILURE;
+            }
+
+            return self::gcStoreUnavailable($args, $asJson, 'vacuum', $message);
+        }
+
+        if ($asJson) {
+            self::emitDocument(['verb' => 'gc', 'action' => 'vacuum', 'result' => $report]);
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        echo Lang::t('cli.gc.vacuum.done', [
+            'mode' => (string) $report['mode'],
+            'before' => self::gcFormatBytes((int) $report['before']['total']),
+            'after' => self::gcFormatBytes((int) $report['after']['total']),
+            'pages' => (string) $report['pages_released'],
+        ]), \PHP_EOL;
+        if ($report['flipped']) {
+            echo Lang::t('cli.gc.vacuum.flipped', [
+                'from' => (string) $report['auto_vacuum_before'],
+                'to' => (string) $report['auto_vacuum_after'],
+            ]), \PHP_EOL;
+        }
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * The store path every `gc` action reads, WITHOUT constructing a store:
+     * {@see \SugarCraft\Code\Session\EnhancedSessionStore}'s constructor
+     * CREATES the database and its schema, and a diagnostic that mints a
+     * store just to report on it would be lying about the fresh install it
+     * just performed. `Bootstrap::trustedConfigDirPath()` is the same path
+     * the store's own launcher builds.
+     */
+    private static function gcStorePath(): string
+    {
+        return Bootstrap::trustedConfigDirPath() . '/session.db';
+    }
+
+    /**
+     * The `gc` mirror of {@see self::sessionStoreForVerbs()}: a store that
+     * will not open — missing, corrupt, or unreadable — states the reason it
+     * gave and exits 1 (EXIT_FAILURE: the verb attempted something and the
+     * ledger could not answer), never 255.
+     */
+    private static function gcStoreUnavailable(ParsedArgs $args, bool $asJson, string $action, string $error): int
+    {
+        $notice = Lang::t('cli.gc.store_unavailable', ['error' => $error]);
+
+        \fwrite(\STDERR, 'candy-code: ' . $notice . "\n");
+        if ($asJson) {
+            self::emitDocument([
+                'verb' => 'gc',
+                'action' => $action,
+                'result' => ['opened' => false, 'reason' => $notice],
+            ]);
+        }
+
+        return NonInteractive::EXIT_FAILURE;
+    }
+
+    /**
+     * How many per-session lock files under the config dir carry a LIVE
+     * flock, the ground truth behind the locked-store advice line. A lock
+     * this process can take is a dead window's residue (stale); one it
+     * cannot is held right now. The pid INSIDE the file is never trusted
+     * for liveness (ISS-079's law), and no process-name probe is used.
+     */
+    private static function gcLiveLockCount(): int
+    {
+        $directory = \dirname(self::gcStorePath()) . '/' . SessionLock::DIRECTORY;
+        if (!\is_dir($directory)) {
+            return 0;
+        }
+
+        $live = 0;
+        foreach ((array) \scandir($directory) as $entry) {
+            if (!\is_string($entry) || !\str_ends_with($entry, '.lock')) {
+                continue;
+            }
+
+            $handle = @\fopen($directory . '/' . $entry, 'r');
+            if ($handle === false) {
+                ++$live;
+
+                continue;
+            }
+
+            if (@\flock($handle, \LOCK_EX | \LOCK_NB)) {
+                @\flock($handle, \LOCK_UN);
+                @\fclose($handle);
+
+                continue;
+            }
+
+            @\fclose($handle);
+            ++$live;
+        }
+
+        return $live;
+    }
+
+    /**
+     * Bytes as a human reads them — the same binary walk
+     * {@see \SugarCraft\Code\Support\DoctorChecks} uses for its store row
+     * (its helper is private to that class; the shapes are kept identical).
+     */
+    private static function gcFormatBytes(int $bytes): string
+    {
+        $units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+        $value = (float) $bytes;
+        $index = 0;
+        while (\abs($value) >= 1024.0 && $index < \count($units) - 1) {
+            $value /= 1024.0;
+            ++$index;
+        }
+
+        return $index === 0
+            ? $bytes . ' B'
+            : \number_format($value, 1) . ' ' . $units[$index];
+    }
+
+    /**
+     * A 30-cell fill bar scaled to the largest row, like ocgc's table
+     * display: █ for the filled cells, ░ for the rest.
+     */
+    private static function gcBar(int $bytes, int $largest, int $cells): string
+    {
+        $filled = $largest > 0 ? (int) \round($cells * $bytes / $largest) : 0;
+
+        return \str_repeat('█', $filled) . \str_repeat('░', $cells - $filled);
+    }
+
+    /**
+     * Each `gc` action and the {@see ParsedArgs::SUBCOMMAND_FLAGS} it
+     * accepts — the verb-level door {@see self::gc()} checks before any
+     * work, exactly like {@see self::SESSION_ACTION_FLAGS} does for
+     * `session`. Both `--force` spellings sit in `vacuum`'s list because
+     * `-f` is its alias, and the vacuum rewrite is the only write this verb
+     * performs.
+     *
+     * @var array<string, list<string>>
+     */
+    private const GC_ACTION_FLAGS = [
+        'status' => ['--format'],
+        'vacuum' => ['--check', '--incremental', '--force', '-f'],
+    ];
 
     /**
      * Each `session` action and the {@see ParsedArgs::SUBCOMMAND_FLAGS} it
