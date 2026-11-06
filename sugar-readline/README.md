@@ -86,7 +86,8 @@ in normal mode). `ConfirmationPrompt::withHint(string)` paints a hint row
 ### Selection Prompt
 
 Type to filter the list as you go; Backspace edits the filter, Ctrl+U clears
-it, Space selects (SelectionPrompt submits the match directly):
+it, and Space acts on the row under the cursor — a second Enter in
+SelectionPrompt (it submits the match), a mark toggle in MultiSelectPrompt:
 
 ```php
 use SugarCraft\Readline\Readline;
@@ -253,7 +254,7 @@ sequence a terminal can send.
 - `Key::Up` / `Key::Down` — navigate selection list / history / textarea line; also Ctrl+P / Ctrl+N
 - `Key::Home` / `Key::End` — jump within the current line / list; also Ctrl+A / Ctrl+E
 - `Key::Enter` — submit text or select current choice (in the textarea, Shift+Enter and Ctrl+J break a line instead)
-- `Key::Space` — selects in SelectionPrompt; toggles the mark in multi-select; toggles Yes/No in ConfirmationPrompt; inserts a literal space in text inputs
+- `Key::Space` — a second Enter in SelectionPrompt (submits the row under the cursor); toggles the mark in MultiSelectPrompt; toggles Yes/No in ConfirmationPrompt; inserts a literal space in text inputs
 - `Key::Tab` — auto-complete or toggle confirmation value; pressing Tab again cycles the matches (first Tab extends to their longest common prefix)
 - `Key::Backspace` / `Key::Delete` — delete characters; Ctrl+D deletes under the cursor and, on an empty buffer, aborts (like GNU `delete-char-or-eof`)
 - `Key::CtrlU` / `Key::CtrlK` — delete to start / end of line; Ctrl+W deletes the previous word
