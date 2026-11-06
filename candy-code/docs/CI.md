@@ -338,7 +338,9 @@ side of the bridge.
 
 A stable candy-code release is published by `.github/workflows/release-phar.yml`: pushing a
 tag spelled `candy-code/v*` — or dispatching the workflow manually with that tag as input —
-builds the phar and publishes it, with its checksum and signature assets, as a GitHub Release.
+builds the phar and its slim `candy-code-gz.phar` transfer twin and publishes them, with
+their checksum and signature assets (plus the `candy-code.phar.packages.json` build
+manifest), as a GitHub Release.
 Nothing else mints a stable artifact.
 
 Since reviews-1103 G6-P the workflow is **gated in CI, not in the tagger's good intentions**
@@ -356,8 +358,10 @@ The procedure for a human is now just the honest half:
    green suite at it, so a tag cut from an unmerged branch simply refuses to publish.
 2. Tag that commit and push: `git tag candy-code/vX.Y.Z <sha> && git push origin
    candy-code/vX.Y.Z`. The gate opens the publication path only over a tested SHA.
-3. Verify the finished release page: the phar assets with their `.sha256` sidecars and
-   signatures, plus the provenance pair `.phar.commit` (full tested SHA) and
+3. Verify the finished release page: both phars (`candy-code.phar` and the slim
+   `candy-code-gz.phar`) with their `.sha256` sidecars and signatures, the
+   `candy-code.phar.packages.json` build manifest, plus the provenance pair
+   `.phar.commit` (full tested SHA) and
    `.phar.pins.json` (sibling pin map), and — once merged to master — a `self-update` run
    against the new tag.
 

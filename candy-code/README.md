@@ -146,7 +146,16 @@ from then on; a CI dev build stamped `dev-<shortsha>` rides the rolling
 matches the stamp — `--channel=stable|dev` overrides the default). That dev
 archive is rebuilt and re-stamped on every push to `master` that touches it,
 so the phar on that channel carries the newest master commit that did — the
-`dev-<shortsha>` it prints is the commit it was packed from.
+`dev-<shortsha>` it prints is the commit it was packed from. A release carries
+two phars — the plain `candy-code.phar` and the slim transfer twin
+`candy-code-gz.phar`, the same build in compressed bytes (an opt-in: it trades
+the ~117 MiB download for a runtime `ext-zlib` requirement, and `self-update`
+keeps selecting the plain asset by default) — each with its `.sha256` sidecar
+and, when the release is signed, its `.minisig` (with a `.minisig.sha256`) and
+`.sha256.sig`; alongside them ride the `candy-code.phar.packages.json` build
+manifest, the `.phar.commit` (full tested SHA) and `.phar.pins.json` (sibling
+pin map) provenance pair, the rendered `candy-code.rb` formula, and a copy of
+`tools/install.sh` itself.
 
 Or let the bundled `tools/install.sh` run those legs in one command: it
 resolves the newest `candy-code/v*` release (or `candy-code/dev` with
