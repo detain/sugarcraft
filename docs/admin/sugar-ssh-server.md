@@ -176,7 +176,7 @@ Server::new()
     ->withTransport(new InProcessTransport())        // or HostSshdTransport
     ->withKeepalive(30)                                // idle NUL into the child's stdin, not an SSH keepalive
     ->use(new Logger('/var/log/sshd-hub.jsonl'))
-    ->use(new Auth(['alice', 'bob']))
+    ->use(new Auth(users: ['wishuser']))
     ->use(new RateLimit('/var/lib/sshd-hub/buckets.json', burst: 5, ratePerSec: 0.5))
     ->use(new Spawn(fn (Session $s) => ['cmd' => ['/bin/bash', '-l']]))
     ->serve();
@@ -184,6 +184,10 @@ Server::new()
 
 (`Spawn` takes a factory returning a config array — `['cmd' =>
 list<string>, 'env' => array<string,string>]` — not a bare argv list.)
+
+Under sshd `ForceCommand` the script runs as the target account, so `$s->user`
+names that account on every connection; per-user separation needs per-user
+`Match` blocks or `authorized_keys` command entries.
 
 ### Authentication methods
 
