@@ -450,7 +450,7 @@ Style::setDefaultProfile($had); // always, e.g. in tearDown
 | `$a->blend1d($b, $steps)` | list of N stops from $a to $b |
 | `$tl->blend2d($tr, $bl, $br, $rows, $cols)` | 2D gradient grid |
 | `$c->lighten($amount)` / `darken($amount)` | luminance ±amount |
-| `$c->alpha($amount, $bg)` | premultiply alpha onto a backdrop |
+| `$c->alpha($amount, $bg)` | composite (alpha-over) onto a backdrop; null backdrop = black; amount clamps to [0,1] |
 | `$c->complementary()` | hue + 180° |
 
 Named ANSI slots live on `Style\Palette`: the lowercase factories
