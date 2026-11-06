@@ -815,7 +815,9 @@ The sibling-lib pattern it was built for: `AtomicJsonFile::path($file)
 
 Operator notes:
 
-- **Stale `.lock` sidecar.** The lock lives in `<file>.lock`. If a process
+- **Stale `.lock` sidecar.** The lock lives in a hidden dot-sidecar beside
+  the file — `<dirname>/.<basename>.lock` (`state.json` →
+  `.state.json.lock`). If a process
   is `SIGKILL`ed while holding it, the sidecar can outlive its flock lease;
   on a multi-uid host the residue may even belong to another user, and
   every later write fails until an operator removes the stale `.lock`
