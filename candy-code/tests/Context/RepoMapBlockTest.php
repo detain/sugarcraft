@@ -702,7 +702,8 @@ final class RepoMapBlockTest extends TestCase
         ]);
 
         // Reaching the private walker directly is the only way to observe the
-        // bound: MAX_SOURCE_FILES is 40,000, and building a fixture that large
+        // bound: MAX_SOURCE_FILES is 50,000 (raised from 40,000 with the
+        // corpus ceiling in a54d2bb16), and building a fixture that large
         // would trade a precise assertion for a slow, approximate one. The
         // by-reference counter is what makes the budget global rather than
         // per-root, so it is asserted at the exact boundary.
@@ -918,7 +919,10 @@ final class RepoMapBlockTest extends TestCase
         $this->assertSame(120, RepoMapBlock::MAX_ENTRY_BYTES);
         $this->assertSame(256, RepoMapBlock::MAX_PACKAGES);
         $this->assertSame(8192, RepoMapBlock::MAX_SECTION_BYTES);
-        $this->assertSame(40000, RepoMapBlock::MAX_SOURCE_FILES);
+        // 40,000 -> 50,000 with the corpus ceiling in a54d2bb16, when src/
+        // crossed the guard's files*10*3 slack; the literal follows the
+        // constant's RAISED provenance line.
+        $this->assertSame(50000, RepoMapBlock::MAX_SOURCE_FILES);
     }
 
     /**

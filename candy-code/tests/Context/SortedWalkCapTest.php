@@ -227,7 +227,10 @@ final class SortedWalkCapTest extends TestCase
 
     public function testTheWalkBudgetIsTheLiteralItsDocBlockArgues(): void
     {
-        self::assertSame(200000, RepoMapBlock::MAX_WALK_ENTRIES);
+        // 200,000 -> 250,000 with the corpus ceiling in a54d2bb16 — the walk
+        // cap moves five times over with MAX_SOURCE_FILES, as the five-times
+        // leg below re-derives.
+        self::assertSame(250000, RepoMapBlock::MAX_WALK_ENTRIES);
         self::assertSame(4096, self::ruleLoaderConstant('MAX_WALK_ENTRIES'));
         self::assertSame(
             5 * RepoMapBlock::MAX_SOURCE_FILES,
