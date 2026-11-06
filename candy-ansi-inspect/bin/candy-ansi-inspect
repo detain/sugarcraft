@@ -31,6 +31,14 @@ $input = '';
 // usage; a source that happens to be empty is a legitimate report of nothing.
 $sawSource = false;
 if (!empty($argv[1])) {
+    // m2-fresh ruling (a): `--help` / `-h` is a request for usage, not a path.
+    // Same Lang::t('cli.usage') string the empty-source misuse arm prints; the
+    // stream differs by intent — asked-for usage rides stdout with exit 0,
+    // misusage stays a stderr refusal with exit 1.
+    if ($argv[1] === '--help' || $argv[1] === '-h') {
+        fwrite(STDOUT, Lang::t('cli.usage') . "\n");
+        exit(0);
+    }
     // Reject stream wrappers (php://, data://, http://, …) — a file-path argument
     // must not be coerced into fetching a URL or evaluating a wrapper. is_file()
     // is false for every wrapper scheme and for non-existent paths, and the

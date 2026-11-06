@@ -139,6 +139,22 @@ final class CliTest extends TestCase
         $this->assertStringNotContainsString($german, $english);
     }
 
+    public function testHelpFlagPrintsUsageOnStdoutAndExitsZero(): void
+    {
+        // m2-fresh ruling (a): `--help`/`-h` is a request for usage, not a
+        // path — before the arm it was swallowed by the file gate and refused
+        // 'not a readable file: --help' with exit 1. Now the usage lands on
+        // stdout, exit 0, stderr silent (a scripted caller may capture it).
+        // The expected text is read from lang/en.php, not hardcoded.
+        $usage = (string) (require dirname(__DIR__) . '/lang/en.php')['cli.usage'];
+        foreach (['--help', '-h'] as $flag) {
+            [$code, $stdout, $stderr] = self::runCli($flag);
+            $this->assertSame(0, $code, $flag . ': ' . $stderr);
+            $this->assertStringContainsString($usage, $stdout, $flag . ' stdout');
+            $this->assertSame('', $stderr, $flag . ' must leave stderr empty');
+        }
+    }
+
     /**
      * Run the CLI with piped stdin (never a TTY) and optional file argument.
      *

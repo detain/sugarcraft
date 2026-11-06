@@ -60,8 +60,10 @@ same report comes out.
 An empty source is a valid report of nothing: an empty file, or a command that
 printed nothing, yields an empty report and exit status **0**, so
 `cmd | candy-ansi-inspect` stays chainable when `cmd` has no output. Usage is printed on
-stderr with exit status **1** only when no source was named at all (no file
-argument and no piped stdin), and a path argument that is not a local file —
+stderr with exit status **1** when no source was named at all (no file
+argument and no piped stdin); asked explicitly — `--help` or `-h` — the same
+usage prints on **stdout** with exit status **0** before the path gate ever
+sees the flag. A path argument that is not a local file —
 including a stream wrapper such as `php://` or `data://` — is refused with the
 same exit status rather than being read or fetched. An existing file that
 cannot be read is refused the same way (the gate is "is this a readable regular
