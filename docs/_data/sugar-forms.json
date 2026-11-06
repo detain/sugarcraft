@@ -1,6 +1,6 @@
 {
     "title": "SugarCraft — SugarForms",
-    "description": "SugarForms: canonical form engine (port of charmbracelet/huh) and foundation lib for form and input primitives — TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form; sugar-widgets re-exports it via class_alias shims.",
+    "description": "SugarForms: canonical form engine (port of charmbracelet/huh) and foundation lib for form and input primitives — TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form; sugar-widgets re-exports it via class_alias shims. Field types: Field\\{Input, Text, Confirm, Select, MultiSelect, Note, FilePicker, Date, Slider, Color, NumberField, RadioPills\\}.",
     "ogTitle": "SugarCraft — SugarForms",
     "ogDescription": "Form engine (port of charmbracelet/huh) plus the raw component implementations that sugar-widgets re-exports — Groups, themes, validators, fuzzy / async suggestions.",
     "emoji": "🍬",
