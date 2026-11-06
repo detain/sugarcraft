@@ -242,7 +242,7 @@ handler layer that the parser drives.
 
 | Component | Owner | Role |
 |-----------|-------|------|
-| `AnsiParser\Parser\State` | sugar-ansi-parser | Enum of parser states: `Ground`, `Escape`, `CsiEntry`, `CsiParam`, `CsiIntermediate`, `CsiIgnore`, `DcsEntry`, `OscString`, etc. |
+| `AnsiParser\Parser\State` | sugar-ansi-parser | Enum of the 15 parser states: `Ground`, `Escape`, `EscapeIntermediate`, `CsiEntry`, `CsiParam`, `CsiIntermediate`, `DcsEntry`, `DcsParam`, `DcsIntermediate`, `DcsString`, `OscString`, `SosString`, `PmString`, `ApcString`, `Utf8`. No `CsiIgnore` state exists — ignored CSI bytes are handled inside the transition table. |
 | `AnsiParser\Parser\Action` | sugar-ansi-parser | Enum of dispatch actions: `Print`, `Execute`, `CsiDispatch`, `EscDispatch`, `OscDispatch`, `DcsDispatch`, `Hook`, `Put`, `Unhook`. |
 | `AnsiParser\Parser\Transitions` | sugar-ansi-parser | Static transition table — `(state, byte) → (action, next_state)`. |
 | `AnsiParser\Parser\Handler` | sugar-ansi-parser | The contract the parser drives. |
