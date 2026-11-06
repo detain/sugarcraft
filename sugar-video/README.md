@@ -341,6 +341,8 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
 [sugar-animation](../sugar-animation) (downsampling / dithering), [sugar-colorprofile](../sugar-colorprofile)
 (color mapping), [sugar-core](../sugar-core) (Model–Update–View runtime + frame pacing), and [sugar-cellbuffer](../sugar-cellbuffer) (the delta-repaint cell grid the renderer replays frames onto).
 
+**Sixel encoding is pure PHP (no external accelerator).** `sixel` mode encodes through sugar-image's `SixelRenderer`; the former preference for an external `chafa` binary on PATH was retired once `candy-image` shipped as the chafa frontend, leaving sugar-image as the single sixel encoder in the ecosystem. Frames are decoded at the pixel grid each mode asks for (graphics modes at cells·cellPx, text modes at the mode cell grid), so the pure-PHP encoder needs no upscaling, and the DCS stream it emits is protocol-conformant output of exactly the shape a sixel-capable terminal expects.
+
 ## Known limitations
 
 - **Audio plays at 1.0× regardless of playback speed.** Changing speed with `[`/`]` only affects video pacing. The audio companion (ffplay/mpv) always plays at normal speed. A/V will diverge noticeably when using speeds other than 1.0×.
@@ -349,7 +351,7 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
 
 - **GIF playback fills the terminal in HalfBlock mode** (each cell = 2 source rows). In text modes (ascii/ansi256/truecolor) the GIF renders at its native pixel dimensions without 2× vertical scaling.
 
-- **Sixel encoding is pure PHP (no external accelerator).** `sixel` mode encodes through sugar-image's `SixelRenderer`; the former preference for an external `chafa` binary on PATH was retired once `candy-image` shipped as the chafa frontend, leaving sugar-image as the single sixel encoder in the ecosystem. Frames are decoded at the pixel grid each mode asks for (graphics modes at cells·cellPx, text modes at the mode cell grid), so the pure-PHP encoder needs no upscaling and the DCS output is protocol-identical; the trade-off is PHP time per large sixel frame, and no child process is ever spawned from the video render path.
+- **Sixel frames cost PHP time.** The pure-PHP encoder spends more CPU time per large sixel frame than a native accelerator would; no child process is ever spawned from the video render path.
 
 - **Seek is fast, slightly less frame-exact (keyframe snap).** `seekToSeconds()`
   uses ffmpeg *input* seeking (`-ss` placed before `-i`), which decodes from the
