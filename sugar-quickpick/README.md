@@ -502,12 +502,17 @@ $h = QuickPick::new($items)
 // attachSigwinch() returns bool — whether the handler installed — not the
 // QuickPick, so call it on its own line rather than continuing the chain.
 if ($h->attachSigwinch() === false) {
-    // No ext-pcntl, no SIGWINCH, no callback registered, or the size query
-    // cannot fire (non-tty STDIN — the handler installs but silently stops
-    // reporting on such descriptors): fall back to
-    // polling the size yourself, or simply carry on without resize events.
+    // A genuine install failure: no ext-pcntl, no SIGWINCH support, the OS
+    // refused pcntl_signal(), or no withOnResize() callback was registered.
+    // Poll the size yourself, or simply carry on without resize events.
 }
 ```
+
+Installing and reporting are separate facts. A `true` return only says the
+handler is wired up: SIGWINCH is raised by the terminal driver, so on a
+non-tty STDIN (pipe, redirect) the callback may simply never fire even
+though the attach succeeded. If you want a size-polling fallback, gate it
+on `stream_isatty(STDIN)` — not on the return value.
 
 Attach binds the object you called it on. The handler closes over the
 attach-time QuickPick instance and invalidates that instance's width cache —
