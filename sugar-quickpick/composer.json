@@ -31,6 +31,9 @@
         "sugarcraft/sugar-style": "dev-master",
         "sugarcraft/sugar-pty": "dev-master"
     },
+    "suggest": {
+        "ext-pcntl": "Required for QuickPick::attachSigwinch() to re-render the overlay on SIGWINCH terminal resizes."
+    },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
     },
