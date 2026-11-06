@@ -42,6 +42,9 @@
         "phpstan/phpstan": "^2.1",
         "phpstan/phpstan-phpunit": "^2.0"
     },
+    "suggest": {
+        "ext-ffi": "Required on Windows for raw TTY support (the sugar-pty termios backend)."
+    },
     "scripts": {
         "analyse": "vendor/bin/phpstan analyse src --no-progress"
     },
