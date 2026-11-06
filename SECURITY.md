@@ -74,6 +74,7 @@ handful of network-facing surfaces. Practical attack surfaces:
   should be passed through verbatim; we don't sanitise the URL but we
   do escape it inside the OSC envelope.
 - **Terminal-escape injection from untrusted data** — every
+- **Terminal image path** (`candy-image` + `SugarCraft\Image`) — image bytes are untrusted input end to end: decode rides the magic-byte allow-list and structural refusals (animated WebP rejected pre-decode, AVIF/JXL/TIFF refused on container), and every leg that echoes detected state or render payloads — `--dump-detect` output and the mosaic text tiers — must honour the fleet `Sanitize` contract in docs/TRUST-BOUNDARY.md above; block and character tiers emit plain Unicode glyphs while sixel/kitty/iTerm2 payloads are encoded graphics — a trust-boundary violation on either leg is a report, not a style choice.
   presentation sink that can render attacker-influenced strings
   (pane titles, rail titles, poster/attachment bytes, tool output,
   stderr echoes) must pass through `SugarCraft\Core\Util\Sanitize`.

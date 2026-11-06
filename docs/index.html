@@ -323,7 +323,7 @@
                     <h3>SugarCli</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-cli">GitHub →</span>
                 </div>
-                <p class="summary">CLI presentation helpers — StatusLine, Banner, Section, Stage, HelpText. Library-only, no Symfony Console requirement.</p>
+                <p class="summary">Terminal UI building blocks — StatusLine, Banner, Section, Stage, HelpText, Frame, Logo, and themes.</p>
             </a>
 
             <a class="lib-card" href="lib/sugar-ssh-server.html">
@@ -545,7 +545,7 @@
                     <h3>SugarInput</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-input">GitHub →</span>
                 </div>
-                <p class="summary">Terminal escape sequence decoder — legacy keys, Kitty keyboard, SGR 1006 mouse, focus, bracketed paste. The missing input layer for PHP TUI.</p>
+                <p class="summary">Terminal escape sequence decoder — legacy keys, Kitty keyboard, SGR/urxvt/X10 mouse, focus, bracketed paste. The missing input layer for PHP TUI.</p>
             </a>
 
             <a class="lib-card" href="lib/sugar-fuzzy.html">
@@ -590,7 +590,7 @@
                     <h3>SugarDatepicker</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-datepicker">GitHub →</span>
                 </div>
-                <p class="summary">Interactive month-grid date picker. Keyboard navigation, min/max date constraints, locale day names, ANSI rendering.</p>
+                <p class="summary">DatePicker, Calendar and TimePicker widgets with min/max date constraints, locale-ready day names (English ships today), ANSI rendering; weeks start Monday (firstDayOfWeek is not configurable).</p>
             </a>
 
             <a class="lib-card" href="lib/sugar-readline.html">
@@ -802,7 +802,7 @@
                     <h3>CandyCodeWeb</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-code-web">GitHub →</span>
                 </div>
-                <p class="summary">Browser UI for CandyCode's server mode — a Vite + Vue 3 bundle committed as <code>dist/</code> and located by a one-class PHP shim, so <code>candy-code serve</code> needs no Node. Scaffold today.</p>
+                <p class="summary">Browser UI for CandyCode's server mode — a Vite + Vue 3 bundle committed as <code>dist/</code> and located by a one-class PHP shim, so <code>candy-code serve</code> needs no Node.</p>
             </a>
 
             <a class="lib-card" href="lib/candy-vcr.html">
@@ -811,7 +811,7 @@
                     <h3>CandyVcr</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-vcr">GitHub →</span>
                 </div>
-                <p class="summary">Record + replay sugar-core sessions — JSONL/YAML cassettes, Recorder hook, Player + Byte/Screen assertions, CLI.</p>
+                <p class="summary">Record + replay sugar-core sessions — JSONL/YAML cassettes, Program::setRecorder(), Player + Byte/Screen assertions, .tape→GIF renderer (themes, GD/imagick, ffmpeg/php), CLI.</p>
             </a>
 
             <a class="lib-card" href="lib/candy-git.html">
@@ -876,7 +876,7 @@
                     <h3>CandyImage</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-image">GitHub →</span>
                 </div>
-                <p class="summary">Terminal image viewer CLI — the chafa-independent front end over sugar-image: protocol auto-detection, sixel/kitty/iterm2/half/quarter/ascii formats, cell sizing, and a --dump-detect that answers "why is my image blank?".</p>
+                <p class="summary">Terminal image viewer CLI — the chafa-independent front end over sugar-image: protocol auto-detection down a shell-out-free ladder to block and text tiers with colored-character modes, cell sizing, --canvas/--work/--scale dials, GIF animation, and a --dump-detect that answers "why is my image blank?".</p>
             </a>
 
             <a class="lib-card" href="lib/candy-top.html">

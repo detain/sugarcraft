@@ -393,6 +393,14 @@ jobs:
             echo "::notice::$app --version does not surface the phar metadata stamp (archive metadata still carries $stamp)"
           fi
           HOME="$fake_home" php "dist/$app.phar" --help >/dev/null
+          if [ "$app" = "candy-tetris" ]; then
+            # no raw app i18n key may leak into the rendered help (step-18 leg)
+            help_out="$(HOME="$fake_home" php "dist/$app.phar" --help)"
+            if printf '%s' "$help_out" | grep -q 'tetris\.'; then
+              echo "::error::$app --help renders a raw tetris.* i18n key"
+              exit 1
+            fi
+          fi
         env:
           STEP_STAMP: dev-${{ steps.build.outputs.short }}
 

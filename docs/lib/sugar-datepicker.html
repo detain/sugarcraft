@@ -51,7 +51,7 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-datepicker"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-datepicker" alt="SugarDatepicker code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Month-grid date picker with keyboard navigation, min/max date constraints, locale-aware day names, and a fully-rendered ANSI view.</p>
+    <p class="lede" style="margin-top: 28px;">Month-grid date picker with keyboard navigation, min/max date constraints, locale-ready day names (English ships today), and a fully-rendered ANSI view.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-datepicker:@dev</code></pre>
@@ -79,7 +79,7 @@ $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Month grid</strong><span>A 6×7 month view with localized day and month names, today and the cursor highlighted, and optional ISO week numbers.</span></div>
+      <div class="feature"><strong>Month grid</strong><span>A 6×7 month view with localized day and month names (English ships today), weeks starting Monday (firstDayOfWeek is not configurable), today and the cursor highlighted, and optional ISO week numbers.</span></div>
       <div class="feature"><strong>Keyboard nav</strong><span><code>handleKey()</code> takes the <code>KEY_*</code> constants: arrows move the cursor, Home/End jump to the first/last valid day of the viewed month, Enter selects (single mode) or sets the range start/end, Esc clears.</span></div>
       <div class="feature"><strong>Range selection</strong><span><code>withRangeMode(true)</code>: the first Enter sets the start, the second the end (swapped if needed), a third starts over; Esc clears.</span></div>
       <div class="feature"><strong>Date bounds</strong><span><code>withMinDate()</code>/<code>withMaxDate()</code> clamp navigation to the allowed months and refuse out-of-range selection; <code>withoutMinDate()</code>/<code>withoutMaxDate()</code> lift a bound.</span></div>
