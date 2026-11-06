@@ -64,7 +64,7 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
 
     public const DEFAULT_TIMEOUT_SECONDS = 30;
 
-    public const MAX_TIMEOUT_SECONDS = 300;
+    public const MAX_TIMEOUT_SECONDS = 21600;
 
     public const DEFAULT_MAX_OUTPUT_BYTES = 65536;
 
@@ -160,10 +160,11 @@ final readonly class PtyRun implements Tool, AcceptsWorktreeJail, AcceptsHeartbe
         private ?\Closure $toolProgressEmitter = null,
     ) {
         // The wall ceiling is what the turn waits on. Same purpose as Bash's —
-        // so no single call can hold the loop forever — but deliberately
-        // tighter than Bash's (30s default / 300s max against Bash's
-        // 120s / 600s): an interactive driver is meant to nudge a program
-        // step-by-step, not to babysit a long job.
+        // so no single call can hold the loop forever — and it shares Bash's
+        // ceiling (hour-scale drives are legitimate); what stays deliberately
+        // tighter than Bash is the DEFAULT (30 s against Bash's 120 s): an
+        // interactive driver is meant to nudge a program step-by-step, and a
+        // session that needs longer says so through `timeout`.
         if ($this->defaultTimeoutSeconds < 1 || $this->defaultTimeoutSeconds > self::MAX_TIMEOUT_SECONDS) {
             throw new \InvalidArgumentException(sprintf('default timeout must be between 1 and %d seconds', self::MAX_TIMEOUT_SECONDS));
         }

@@ -350,7 +350,7 @@ never ask (they write only the harness's mailboxes and run records):
 | Tool | Does |
 |---|---|
 | `SendMessage {to, text, mode}` | To a **running** sub-agent: a `steer` (the default) or `note` it reads at its next step boundary; a `followup` kept for the next run that resumes it. To a **finished** one: continues it — the message becomes the prompt of a `Task` call with its resume id, under the same approval a `Task` call would need |
-| `Subagents {action}` | `list` what the agent launched (status, background id, resume id), `wait` up to `timeout_seconds` (default 30, at most 300) for one to finish or send a message, or `cancel` one at its next tool or step, resumable |
+| `Subagents {action}` | `list` what the agent launched (status, background id, resume id), `wait` up to `timeout_seconds` (default 30, at most 3600) for one to finish or send a message, or `cancel` one at its next tool or step, resumable |
 | `InterruptAgent {to, text}` | Makes a running sub-agent skip the rest of its current step and read the text first |
 
 A sub-agent that has `SendMessage` (one with no `tools:` list inherits it)

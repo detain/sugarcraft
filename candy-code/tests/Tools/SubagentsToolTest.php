@@ -157,6 +157,34 @@ final class SubagentsToolTest extends TestCase
         self::assertStringContainsString("<subagent-message from=\"busy_1\">\nneed the API key name\n</subagent-message>", $woken->content());
     }
 
+    /**
+     * The hour ceiling is the clamp the loop enforces, not prose: a request of
+     * 3601 s waits exactly 3600 s, and the description and the parameter schema
+     * advertise the same number the clamp uses.
+     */
+    public function testARequestJustOverTheCeilingWaitsExactlyTheCeiling(): void
+    {
+        $this->card('busy_1');
+        $engine = $this->engine(new ScriptedProvider([]), []);
+        $now = 0.0;
+        $clock = static function () use (&$now): float {
+            return $now;
+        };
+        $idle = SubagentsTool::new()->withEngine($engine)->withWaitClock(static function (float $s) use (&$now): void {
+            $now += $s;
+        }, $clock);
+
+        $result = $idle->execute(['action' => 'wait', 'timeout_seconds' => 3601]);
+
+        self::assertStringStartsWith('Waited 3600 s; 1 sub-agent is still running.', $result->content());
+        self::assertSame(3600.0, $now, 'the ask was clamped to the ceiling, never granted past it');
+        self::assertStringContainsString('at most 3600', SubagentsTool::new()->description());
+        self::assertStringContainsString(
+            '0 to 3600 seconds (default 30)',
+            SubagentsTool::new()->inputSchema()['properties']['timeout_seconds']['description'],
+        );
+    }
+
     public function testCancelStopsARunningSubAgentResumably(): void
     {
         $provider = new ScriptedProvider([

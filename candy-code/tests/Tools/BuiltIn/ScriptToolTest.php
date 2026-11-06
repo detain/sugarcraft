@@ -218,8 +218,10 @@ final class ScriptToolTest extends TestCase
             'zero floors at one second, not an immediate timeout' => [0, 1.0],
             'negative floors too' => [-5, 1.0],
             'string number parses and rides' => ['42.5', 42.5],
-            'over the ceiling caps' => [601, 600.0],
-            'the ceiling itself stands' => [600.0, 600.0],
+            'above the old ceiling stands' => [601, 601.0],
+            'over the ceiling caps' => [7201, 7200.0],
+            'the ceiling itself stands' => [7200.0, 7200.0],
+            'absurd asks cap, never overflow' => [999999999, 7200.0],
         ];
     }
 

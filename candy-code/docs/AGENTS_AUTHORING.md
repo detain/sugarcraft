@@ -460,7 +460,7 @@ the run records they write are harness state, never the project):
 - **`Subagents`** `{action: list|wait|cancel}` lists what the agent launched
   (id, agent, status — `running`, `lost` for a run whose process is gone
   without a report, or how it ended — background `agent_id`, resume id),
-  `wait`s up to `timeout_seconds` (default 30, at most 300; `0` is a
+  `wait`s up to `timeout_seconds` (default 30, at most 3600; `0` is a
   snapshot) for a named or any running sub-agent to finish or send a
   message, and `cancel`s by sending the run a `control` `cancel` line: it
   stops at its next tool or step, resumable.

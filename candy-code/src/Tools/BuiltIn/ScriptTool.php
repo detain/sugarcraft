@@ -73,7 +73,7 @@ final readonly class ScriptTool implements Tool, BuildsFromCatalog, AcceptsHeart
     public const DEFAULT_TIMEOUT_SECONDS = 60.0;
 
     /** Hard ceiling on a sent `timeout` — a per-PROCESS run bound, never a request timeout (E646). */
-    public const MAX_TIMEOUT_SECONDS = 600.0;
+    public const MAX_TIMEOUT_SECONDS = 7200.0;
 
     /** Rows of the call ledger kept in the result text; older rows collapse into a count note. */
     public const MAX_LEDGER_ROWS = 64;
