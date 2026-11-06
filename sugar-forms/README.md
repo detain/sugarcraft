@@ -372,8 +372,11 @@ sugar-forms is built on five shared packages:
 - **[sugar-async](https://github.com/sugarcraft/sugar-async)** — `AsyncOps` +
   `CancellationSource` for async suggestion fetchers (the lib's failure
   vocabulary is `OperationCancelledException` and `TimeoutException`). `withAsyncSuggestions` stores a
-  `CancellationSource` on the model and cancels the previous timer before
-  scheduling the next, so rapid keystrokes only fire one network request.
+  `CancellationSource` on the model and cancels the previous in-flight fetch
+  before starting the next; the debounce timer itself is never cancelled — each
+  armed timer fires at most once into a cancellation check, so neither timer nor
+  fetch outlives its keystroke's replacement and rapid keystrokes collapse to
+  one live request.
 - **Vim keybindings** — `VimKeyHandler` provides a shared vim mode handler
   (`VimState`: Insert/Normal/Visual/VisualLine; `VimAction`: CursorLeft,
   CursorRight, CursorUp, CursorDown, DeleteChar, YankLine, …). Both text
