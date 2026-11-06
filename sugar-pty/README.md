@@ -735,13 +735,13 @@ private arrow-key or Ctrl-key buffering.
   `fd` as false, `Child::kill()` collapses every signal into one
   `TerminateJobObject` (exit surfaces as `128 + signal` by convention),
   `MasterPty::stream()` and `fd()` throw; and an **empty** `$env` array
-inverts the replace semantics — ConPTY builds an environment block only
-for a non-empty map, so `spawn($cmd, [])` passes a NULL
-`lpEnvironment` and the child inherits the FULL parent environment
-(on POSIX an empty array means an empty environment). Pass a
-non-empty explicit map when you mean a restricted environment on
-Windows.
-So `PosixPump`, `ReactPump` and
+  inverts the replace semantics — ConPTY builds an environment block only
+  for a non-empty map, so `spawn($cmd, [])` passes a NULL
+  `lpEnvironment` and the child inherits the FULL parent environment
+  (on POSIX an empty array means an empty environment). Pass a
+  non-empty explicit map when you mean a restricted environment on
+  Windows.
+  So `PosixPump`, `ReactPump` and
   `MultiPump` stay POSIX-only and ConPTY masters are pumped by polling
   `read($len, $timeout)` — and `size()` answers the cached geometry with
   `xpix`/`ypix` always 0 (there is no pixel query to bind). The Windows CI
