@@ -263,8 +263,10 @@ final class Readline
      * forward history search open, and the terminal freezes until Ctrl+Q
      * (0x11, XON) resumes it. Restore the saved state on EVERY exit path —
      * capture `$saved=$(stty -g)` before the switch and run `stty "$saved"`
-     * in a finally block. examples/interactive.php shows the guarded recipe, and
-     * sugar-core\Util\RawMode / sugar-pty offer turnkey versions. Piped or
+     * in a finally block. examples/interactive.php shows the guarded recipe;
+     * sugar-pty's FFI makeRaw() is turnkey for the whole switch, while
+     * sugar-core\Util\RawMode leaves signal handling ON (no -isig at this
+     * release), so ctrl_c arrives there as SIGINT, not as an abort key. Piped or
      * socket input (tests, scripted drives) needs no such setup — there is
      * no discipline to fight.
      *

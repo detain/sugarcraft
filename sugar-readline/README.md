@@ -284,10 +284,13 @@ dense single tokens (`-icanon`) while BSD/macOS `stty` uses space-separated
 words — so capture and restore on the same machine in the same run; never
 store the string to replay it on another platform.
 
-`sugar-core`'s `SugarCraft\Core\Util\RawMode` and the `sugar-pty` library
-provide the same transition as turnkey helpers if you already depend on them.
-`examples/interactive.php` carries the full recipe with shutdown-safe
-restore. Over a pipe or socket (no tty at all) no stty is needed — the bytes
+`sugar-pty`'s FFI `Termios::makeRaw()` (`cfmakeraw`) clears signal generation
+and delivers the same transition. `sugar-core`'s
+`SugarCraft\Core\Util\RawMode` does not — at this release it leaves signal
+handling ON: Ctrl+C raises SIGINT there, and the abort chords documented
+below are the stty `-isig` recipe's contract; only that recipe — carried
+by `examples/interactive.php` with a shutdown-safe restore — delivers them.
+Over a pipe or socket (no tty at all) no stty is needed — the bytes
 arrive as written, which is exactly how the test-suite drives chords.
 
 ## Input Driver
@@ -331,7 +334,7 @@ sequence a terminal can send.
 - Ctrl+Z / Ctrl+Y — undo / redo the last edit run (a run of consecutive typing collapses into one undo step)
 - Ctrl+L — `Readline` clears the screen and repaints the prompt
 - `Key::PageUp` / `Key::PageDown` — jump the selection list by one page
-- `Key::Escape` / `Key::CtrlC` — abort. Inside an attached `EmacsMode`, Escape is the meta prefix instead (a second Escape cancels it); use Ctrl+C to abort there. While an incremental history search is active, Ctrl+C is reclaimed by the search: it cancels back to the pre-search line rather than aborting.
+- `Key::Escape` / `Key::CtrlC` — abort. On a real tty the Ctrl+C chord requires the `-isig` recipe above — with signal generation still on, 0x03 raises SIGINT before the prompt sees it. Inside an attached `EmacsMode`, Escape is the meta prefix instead (a second Escape cancels it); use Ctrl+C to abort there. While an incremental history search is active, Ctrl+C is reclaimed by the search: it cancels back to the pre-search line rather than aborting.
 
 Not every `Ctrl+X` shown has a matching `Key::` constant — there is no
 `Key::CtrlD`, `CtrlL`, `CtrlZ` or `CtrlY`, for example. Those bindings are
@@ -508,7 +511,7 @@ what you type as a query never appears in clear text.
 Each prompt is a state machine with three states: pending, submitted, aborted.
 
 - `submit()` finalises the prompt; for `MultiSelectPrompt` it only succeeds when `canSubmit()` is true.
-- `abort()` (or feeding `Key::Escape` / `Key::CtrlC` on the default bindings; inside an attached `EmacsMode`, Ctrl+C) discards the prompt; `value()` / `selectedValues()` then return empty. During an active incremental history search these keys cancel the search back to the original line instead — abort resumes ownership on the next keypress.
+- `abort()` (or feeding `Key::Escape` / `Key::CtrlC` on the default bindings; inside an attached `EmacsMode`, Ctrl+C) discards the prompt; `value()` / `selectedValues()` then return empty. The Ctrl+C chord on a live tty requires the `-isig` raw-mode recipe above — with signals on it is a SIGINT death, not an abort. During an active incremental history search these keys cancel the search back to the original line instead — abort resumes ownership on the next keypress.
 - `isSubmitted()` / `isAborted()` report status. `currentValue()` (Confirmation) always reflects the current choice, submitted or not. `selectedValue()` (Selection) tracks the cursor while one exists, but returns `null` after an abort and whenever the filter matches no choice — with no cursor to point at, there is no value to report, submitted state or not.
 - True end-of-input: when `Readline` owns the stdin pump and the stream reaches EOF after the decoder drains, `run()` returns the prompt in its current state — neither submitted nor aborted. The pump is per-`Readline`-instance, **not** per-`run()`: calling `run()` again feeds the next prompt from wherever the stream stands, so `printf 'a\nb\n' | php app.php` drives two successive prompts with `a` and `b`; once EOF is seen it stays seen. Injected drivers report EOF and "nothing yet" identically, so they cannot trigger this exit; end those loops by submitting, aborting, or `stop()`.
 - `stop()` requests the loop exit; it lands within one idle poll interval (capped at 20 ms) **when the driver's read is non-blocking** (`min 1 time 0`, or an injected driver that returns `null` promptly). A driver blocking in `read()` is not interrupted — the stop takes effect on the first pass after it wakes.
