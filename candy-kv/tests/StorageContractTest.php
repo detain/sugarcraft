@@ -10,7 +10,8 @@ use SugarCraft\Kv\Store;
 
 /**
  * Pins the storage-layer contract established alongside the strict CLI
- * contract: globs are byte-exact like exact reads, deletes only see live
+ * contract: globs match case-sensitively and character-wise like exact
+ * reads, deletes only see live
  * rows, reads never create files, "\@" spells a literal at-sign in keys,
  * exported files land at 0600, and suggestions measure codepoints.
  */
@@ -59,7 +60,7 @@ final class StorageContractTest extends TestCase
         return $out;
     }
 
-    public function testGlobMatchingIsByteCaseSensitiveLikeExactReads(): void
+    public function testGlobMatchingIsCaseSensitiveLikeExactReads(): void
     {
         $store = $this->store();
         $store->set('Abc-1', 'v');
@@ -69,6 +70,23 @@ final class StorageContractTest extends TestCase
 
         $this->assertSame(0, $store->delete('abc-1'));
         $this->assertSame(1, $store->delete('Abc-1'));
+    }
+
+    /**
+     * M4: the pattern half of the contract is SQLite LIKE over the stored
+     * text — width is counted in characters, not bytes. 'k?y' fills its
+     * single '_' with the multi-byte 'ä' (three UTF-8 bytes, one codepoint).
+     * The case half stays byte-faithful via case_sensitive_like = ON.
+     */
+    public function testGlobWildcardSpansOneCharacterNotOneByte(): void
+    {
+        $store = $this->store();
+        $store->set('kay', 'v');
+        $store->set("käy", 'v');
+        $store->set('kaay', 'v');
+
+        $this->assertSame(['kay', "käy"], $this->keysMatching($store, 'k?y'));
+        $this->assertSame([], $this->keysMatching($store, 'K?Y'));
     }
 
     public function testLiteralEscapesInGlobs(): void

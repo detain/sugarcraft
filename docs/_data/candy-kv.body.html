@@ -17,7 +17,7 @@ echo $store-&gt;get('missing', 'n/a');         // fallback: 'n/a'
 $store-&gt;set('token@passwords', 'ghp_xxxx');
 $store-&gt;setWithTtl('session', 'abc', 60);   // expires after 60 s
 
-foreach ($store-&gt;list('user:*') as $entry) {  // byte-exact glob patterns; yields Entry
+foreach ($store-&gt;list('user:*') as $entry) {  // case-sensitive character-wise glob patterns; yields Entry
     echo "{$entry-&gt;key} =&gt; {$entry-&gt;rawValue()}\n";
 }
 $store-&gt;listDatabases();                    // ['default', 'passwords']

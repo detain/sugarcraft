@@ -128,7 +128,7 @@ final class Database
         }
         $this->migrateExpiryColumn();
         $this->db->exec('PRAGMA journal_mode = WAL');
-        // Pattern operations must share the byte-exact case semantics of the
+        // Pattern operations must share the case-sensitive semantics of the
         // exact ones: default LIKE folds case, so list/delete 'Abc-*' would
         // sweep keys that get('Abc-1') reads and delete('Abc-1') misses.
         $this->db->exec('PRAGMA case_sensitive_like = ON');
@@ -484,7 +484,9 @@ final class Database
     /**
      * Convert a glob pattern (* and ?) to a SQL LIKE string.
      *
-     * Spelling: `*` = any run, `?` = exactly one byte, `\*`/`\?` request a
+     * Spelling: `*` = any run, `?` = exactly one character (LIKE operates
+     * over the stored text, so a multi-byte codepoint fills a single `_`),
+     * `\*`/`\?` request a
      * literal asterisk/question-mark. A backslash before anything else is
      * itself a literal (doubled so the LIKE ESCAPE introducer cannot
      * quietly capture the next character).

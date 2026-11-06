@@ -336,7 +336,7 @@ function help(string $bin): void
     Patterns:
       *  matches any characters;  ?  matches one character.
       Patterns apply to list and delete; get is exact-key.
-      Matching is byte-wise and case-sensitive; a literal * or ? can be
+      Matching is case-sensitive and character-wise; a literal * or ? can be
       introduced with a backslash.
 
     Database suffix:

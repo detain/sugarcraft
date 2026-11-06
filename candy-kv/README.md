@@ -26,7 +26,7 @@ pane build one on top of `Store::list()`.
 
 - **Multi-database** — separate stores with the `key@dbname` suffix; the SQLite file for a name is created the first time something is written to it (reads of a missing database just see emptiness)
 - **Binary-safe** — values containing NUL bytes or invalid UTF-8 are stored base64-encoded with the binary flag (auto-detected; `--binary`/`--text` override); binary entries export as base64 envelopes and reimport byte-exact
-- **Glob patterns** — `list` and `delete` accept `*` and `?`; matching is byte-wise and case-sensitive, `\*`/`\?` stand for literals; `get` takes an exact key only — and that gate is a raw-byte check, so a key whose *name* contains `*` or `?` is unreachable through `get` even when spelled `\*`/`\?` (the backslash does not hide the byte). Reach such keys with `list`/`delete` escape literals, `saveTo()`, or `export`.
+- **Glob patterns** — `list` and `delete` accept `*` and `?`; matching is case-sensitive and character-wise (the pattern compiles to SQLite LIKE over the stored text, so `?` spans one character, not one byte), `\*`/`\?` stand for literals; `get` takes an exact key only — and that gate is a raw-byte check, so a key whose *name* contains `*` or `?` is unreachable through `get` even when spelled `\*`/`\?` (the backslash does not hide the byte). Reach such keys with `list`/`delete` escape literals, `saveTo()`, or `export`.
 - **Ordered, filterable listing** — forward or reverse, keys only, values only, or full entries
 - **SQLite-backed** — one file per database under `$XDG_CONFIG_HOME/skate/` (or `~/.config/skate/`; see Data directory)
 - **Iterable streams** — `list()` yields results without loading everything into memory
@@ -386,7 +386,7 @@ corrupt base64 raises rather than printing its own encoding as content).
 close` — `count(?pattern)` counts live entries, `raw()` skips the expiry
 filter (the documented bypass: a live-only read never shows residue, `raw`
 and `pruneExpired` are how you see and clear it), and pattern operations
-share the byte-exact, case-sensitive semantics of exact ones.
+share the case-sensitive, character-wise semantics of exact ones.
 
 ## Privacy & file modes
 
