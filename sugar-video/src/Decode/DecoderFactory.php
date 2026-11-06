@@ -18,11 +18,14 @@ use SugarCraft\Video\Source\Probe;
  *     ffmpeg, not by the in-process GIF reader)
  *   - Else if source ends with .gif (case-insensitive) → GifDecoder
  *   - Else if source is a LOCAL animated WebP → AnimatedWebpDecoder
- *     (ffmpeg cannot read WebP animation at all — it skips ANMF — so the old
- *     ffmpeg route showed one silent base frame; the sniff is a header-only
- *     container walk, and a still .webp never enters this branch, keeping its
- *     ffmpeg/fallback route byte-unchanged. When this PHP's GD has no WebP,
- *     the decoder raises the loud typed refusal instead of degrading.)
+ *     (a design choice, not an ffmpeg capability gap: current ffmpeg builds
+ *     decode animated WebP fine, but the old route showed one silent base
+ *     frame on the builds this path was validated against, and the in-process
+ *     walk needs no external toolchain, spawns no child, and decodes
+ *     deterministically. The sniff is a header-only container walk, and a
+ *     still .webp never enters this branch, keeping its ffmpeg/fallback route
+ *     byte-unchanged. When this PHP's GD has no WebP, the decoder raises the
+ *     loud typed refusal instead of degrading.)
  *   - Else if ffmpeg is available → FfmpegDecoder
  *   - Else if the bytes are real GIF magic → GifDecoder (an extensionless
  *     or mislabelled gif is still decodable without ffmpeg)

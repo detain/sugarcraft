@@ -48,11 +48,13 @@ Requires:
   *local* files; a remote `.gif` URL routes through `ffmpeg` because the pure-PHP
   decoder has no network transport)
 - `ext-gd` built with WebP for animated `.webp` playback (pure-PHP container
-  walk + per-frame GD decode — no ffmpeg needed, and no ffmpeg on a stock host
-  can decode animated WebP, so this is the route, not a fallback). The same
-  local-only caveat applies to remote `.webp`: animated sniffing never touches
-  the network, so those sources go through `ffmpeg` too, and on an ffmpeg-less
-  host both remote routes fail loudly with the `decoder.ffmpeg_missing` message.
+  walk + per-frame GD decode — no ffmpeg needed). This is a design choice, not
+  a capability gap: current ffmpeg builds decode animated WebP fine, but the
+  in-process route needs no external toolchain, spawns no child, and decodes
+  deterministically. The same local-only caveat applies to remote `.webp`:
+  animated sniffing never touches the network, so those sources go through
+  `ffmpeg` too, and on an ffmpeg-less host both remote routes fail loudly with
+  the `decoder.ffmpeg_missing` message.
 - A terminal with at least 256-color support for ANSI modes
 
 ## Usage
