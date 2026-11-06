@@ -489,6 +489,84 @@ final class ServerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // Basic-auth timing alignment (user-enumeration oracle)
+    // -------------------------------------------------------------------------
+
+    public function testBasicAuthRefusalsAllPayABcryptVerify(): void
+    {
+        // Structural pin: the unknown-user and key-only refusals each verify
+        // against the decoy digest before answering, so no refusal path can
+        // skip bcrypt. The old shape — a bare `if ($user === null) return
+        // null;` ahead of any verify — is the mutation this catches; the
+        // uniform-401 behaviour alone cannot see it.
+        $source = (string) \file_get_contents(__DIR__ . '/../../src/HttpSmartProtocol/Server.php');
+        $start = \strpos($source, 'private function getUserFromHeaders');
+        $end = \strpos($source, '// Custom CandyGitServer user header');
+        self::assertNotFalse($start);
+        self::assertNotFalse($end);
+        $auth = \substr($source, (int) $start, (int) $end - (int) $start);
+
+        self::assertStringNotContainsString('if ($user === null) return null;', $auth);
+        self::assertSame(
+            2,
+            \substr_count($auth, 'self::BASIC_AUTH_DECOY_HASH'),
+            'unknown-user and key-only refusals must each burn the decoy',
+        );
+        self::assertStringContainsString('if (!\password_verify($password, $hash)) {', $auth);
+    }
+
+    public function testDecoyDigestIsCostMatchedAndNeverMatches(): void
+    {
+        $const = (new \ReflectionClass(Server::class))->getReflectionConstant('BASIC_AUTH_DECOY_HASH');
+        self::assertNotFalse($const);
+        $decoy = (string) $const->getValue();
+
+        $info = \password_get_info($decoy);
+        self::assertSame('bcrypt', $info['algoName']);
+        // The bin mints credentials with PASSWORD_DEFAULT; the decoy must
+        // burn the same work or the alignment is only approximate.
+        $mintCost = \password_get_info(\password_hash('alignment-probe', \PASSWORD_DEFAULT))['options']['cost'] ?? null;
+        self::assertSame($mintCost, $info['options']['cost'] ?? null);
+        foreach (['', 'a', 'password', 'secret123', '$2y$10$00'] as $probe) {
+            self::assertFalse(\password_verify($probe, $decoy));
+        }
+    }
+
+    public function testUnknownKnownWrongAndKeyOnlyBasicAuthAnswerIdentically(): void
+    {
+        // Lever-down: authentication decides the answer, not the lever.
+        AccessControl::getInstance()->setAllowAnonymousRead(false);
+        $this->server->registerUser(User::new('authtest')
+            ->withPasswordHash(\password_hash('correct-password', \PASSWORD_DEFAULT)));
+        $this->server->registerUser(User::new('keyonly'));
+
+        $answers = [];
+        foreach (['ghost:whatever', 'authtest:wrong-password', 'keyonly:whatever'] as $credential) {
+            $answers[$credential] = $this->basicAuthInfoRefs($credential);
+        }
+        self::assertSame($answers['ghost:whatever'], $answers['authtest:wrong-password']);
+        self::assertSame($answers['ghost:whatever'], $answers['keyonly:whatever']);
+        self::assertSame(401, $answers['ghost:whatever']['status']);
+
+        // The real credential still wins — the decoy equalizes refusals, it
+        // does not disable authentication.
+        $ok = $this->basicAuthInfoRefs('authtest:correct-password');
+        self::assertSame(200, $ok['status']);
+    }
+
+    /** @return array{status: int, headers: array<string, string>, body: string} */
+    private function basicAuthInfoRefs(string $credential): array
+    {
+        return $this->server->handleRequest(
+            'GET',
+            '/testrepo.git/info/refs',
+            'service=git-upload-pack',
+            ['Authorization' => 'Basic ' . \base64_encode($credential)],
+            '',
+        );
+    }
+
+    // -------------------------------------------------------------------------
     // Case sensitivity tests
     // -------------------------------------------------------------------------
 

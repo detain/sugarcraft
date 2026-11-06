@@ -42,6 +42,15 @@ use SugarCraft\GitServer\LFS\LFSHandler;
  */
 final class Server
 {
+    /**
+     * A bcrypt cost-10 digest whose preimage is unknown and unrecorded:
+     * password_verify() against it always returns false, but it costs the
+     * same work as a real verify. The Basic-auth refusal paths for unknown
+     * users, wrong passwords and key-only accounts all run through it so
+     * their timing cannot be compared to enumerate accounts.
+     */
+    private const BASIC_AUTH_DECOY_HASH = '$2y$10$md6xRkDmvJOBksYf.2WY5edYmiO2shcOAfkv8PCc7whIWYG9KxVwO';
+
     private Config $config;
 
     /** @var array<string, Repo> repo name => Repo */
@@ -279,7 +288,10 @@ final class Server
         // 403-versus-advertisement difference to map push policy across
         // repos. Repo EXISTENCE is not hidden here: the router answers 404
         // for an unregistered repo earlier in this method — a disclosed
-        // existence oracle (timing alignment is open work). A known
+        // existence oracle for repo NAMES. USER existence is not a timing
+        // channel: every Basic-auth refusal (unknown name, wrong password,
+        // key-only account) pays the same bcrypt decoy inside
+        // getUserFromHeaders() before answering. A known
         // identity that lacks the
         // right gets 403. Read advertisement rides canRead, push
         // advertisement rides canWrite and always requires an identity.
@@ -827,7 +839,10 @@ final class Server
     /**
      * Extract user from HTTP headers.
      *
-     * Looks for Basic auth or session headers.
+     * Looks for Basic auth or session headers. Every Basic-auth refusal
+     * path performs one bcrypt verify — against the real digest, or against
+     * the decoy when no digest can match — so reply latency never reveals
+     * whether a username exists.
      */
     private function getUserFromHeaders(array $headers): ?User
     {
@@ -846,14 +861,30 @@ final class Server
                         $username = \substr($credentials, 0, $colon);
                         $password = \substr($credentials, $colon + 1);
                         $user = $this->users[$username] ?? null;
-                        if ($user === null) return null;
+                        if ($user === null) {
+                            // The old shape returned HERE, before any
+                            // password_verify() — and a bcrypt-less reply is
+                            // measurably faster, so response latency alone
+                            // answered "does this username exist?". Burn the
+                            // same cost-10 work against a decoy digest whose
+                            // preimage nobody knows, then refuse: unknown
+                            // names, wrong passwords and key-only accounts
+                            // all pay bcrypt and all return null.
+                            \password_verify($password, self::BASIC_AUTH_DECOY_HASH);
+                            return null;
+                        }
                         // Passwords authenticate against a stored hash only.
                         // An account with no password hash (key-only account)
                         // cannot Basic-authenticate; there is no cleartext
                         // fallback — the old comparison read the plaintext
-                        // field straight off the model.
+                        // field straight off the model. The decoy burn keeps
+                        // that refusal timing-indistinguishable too.
                         $hash = $user->passwordHash;
-                        if ($hash === null || $hash === '' || !\password_verify($password, $hash)) {
+                        if ($hash === null || $hash === '') {
+                            \password_verify($password, self::BASIC_AUTH_DECOY_HASH);
+                            return null;
+                        }
+                        if (!\password_verify($password, $hash)) {
                             return null;
                         }
                         // A deactivated account authenticates to nothing:
