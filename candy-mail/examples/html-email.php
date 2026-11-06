@@ -28,7 +28,7 @@ $email = new Email(
     subject:  'Multi-recipient HTML email',
     body:     'This is the plain-text fallback.',
     htmlBody: <<<'HTML'
-<html>
+<html lang="en">
 <body style="font-family: sans-serif;">
   <h2>Hello!</h2>
   <p>This email has <strong>HTML</strong> formatting.</p>

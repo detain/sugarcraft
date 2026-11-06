@@ -22,6 +22,10 @@ store, or manage an inbox.
 - **Dual transport** — send via the Resend HTTP API or raw SMTP
 - **Email value object** — from, to, cc, bcc, subject, body, HTML body, reply-to, attachments,
   signature (the signature joins the plain-text body only — an HTML-only mail silently drops it)
+- **HTML accessibility** — the authored HTML is embedded verbatim (nothing post-processes it),
+  so set `<html lang="…">`, give images alt text, and keep a meaningful plain-text body: it is
+  the reader-equivalent leg of the `multipart/alternative` for anyone your HTML does not reach.
+  No `Content-Language` header is emitted — the language lives in the document, not the envelope.
 - **File attachments** — attach from disk paths (`withAttachment()`), or pass raw in-memory
   bytes with `Attachment::fromContent()` via the constructor's `attachments:` parameter
 - **Inline attachments (CID)** — `withInlineAttachment()` embeds images addressed as
