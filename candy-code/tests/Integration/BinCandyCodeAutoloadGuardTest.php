@@ -32,9 +32,9 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is FIFTY-THREE:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is FIFTY-SEVEN:
  *
- *  - {@see \SugarCraft\Code\Cli\NonInteractive}, sixteen —
+ *  - {@see \SugarCraft\Code\Cli\NonInteractive}, twenty — (BM-1 RS-DRIVER 2026-11-07: four of them are the `--batch` continuation loop's per-row mirrors of the single-run failure arms)
  *    `run()` four times (a thrown backend error, an answer that would not encode
  *    as JSON, and the two AUT-2 session-degrade lines), `failUsage()`, `failUnusableProvider()`,
  *    and — added by AUT-4 — `failJsonSchemaUnsupported()`, the refusal line for a

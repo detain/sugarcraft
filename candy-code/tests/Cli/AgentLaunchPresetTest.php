@@ -174,7 +174,7 @@ final class AgentLaunchPresetTest extends TestCase
 
     public function testTheLaunchSeamTravelsTheOneSwitch(): void
     {
-        $chat = $this->chat(agents: [$this->agent('worker', tools: ['keep'])], registry: [$this->probeTool('keep')]);
+        $chat = $this->chat(agents: [$this->agent('worker', tools: ['keep'])], registry: [$this->launchProbeTool('keep')]);
 
         $narrowed = $chat->withLaunchPrimaryAgent('worker');
 
@@ -264,7 +264,7 @@ final class AgentLaunchPresetTest extends TestCase
         );
     }
 
-    private function probeTool(string $name): Tool
+    private function launchProbeTool(string $name): Tool
     {
         return new class ($name) implements Tool {
             public function __construct(private string $toolName)

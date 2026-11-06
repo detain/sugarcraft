@@ -2033,6 +2033,7 @@ candy-code src                                  # an existing directory as the o
 candy-code --config ~/policies/crush.json       # read settings/permissions from this file
 candy-code --model gpt-5 -p "audit this"        # pick the model (not the provider)
 candy-code --agent reviewer                     # open the TUI narrowed to the reviewer agent preset
+cat events.ndjson | candy-code --batch --input-format stream-json # each event is its own turn, one process
 candy-code --permission-mode plan -p "audit this" # pick the permission mode for this run
 candy-code --max-cost 2.50 -p "audit this"        # cap this launch's spend (USD)
 candy-code --max-turns 8 -p "audit this"          # cap this launch's tool-loop steps
@@ -2065,6 +2066,19 @@ and the session keeps the default agent. Like `--model`, an empty value is a
 STRICT usage refusal, and `--agent` is refused beside `-p` and beside subcommand
 verbs (exit 2): a one-shot run and a verb's own flow build no Chat to narrow,
 so v1 is interactive-only — use `/agent use <name>` once the TUI is open.
+
+`--batch` changes what `--input-format stream-json` means: instead of seeding one
+run's history, each user event on the feed executes as its OWN turn, sequentially,
+in this one process and session — the prompts run in feed order, and an argv `-p`
+prompt, when given, runs last. Each turn emits its own result document in order
+(the terminal line is the final row's), a row that fails gets its error envelope
+while the queue proceeds to the next row, and only a FIRST-turn failure stops the
+batch — there the backend itself is answering badly and billing more rows is
+cruel. `--batch` without `--input-format stream-json` is a usage refusal: the
+switch names an execution mode for a feed that would not exist. `--batch` beside
+`--agent` is refused too: the session the preset would narrow ends before the last
+row's answer. This is deliberately NOT parallelism — N-process fan-out stays the
+isolation tool, and one process keeps the session's own ordering.
 
 `--permission-mode <mode>` (also `--permission-mode=<mode>`) runs this launch
 under one of `default`, `accept-edits`, `plan`, `auto`, `dont-ask`,

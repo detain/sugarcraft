@@ -563,7 +563,9 @@ if ($args->worktreeRequested) {
 // parsed": a bare `candy-code -p` / `--prompt` / `run` has a null prompt, and
 // keying off the value sent it into the TUI. NonInteractive::run() already
 // owns the "no prompt given" message, so route there rather than repeat it.
-if ($args->promptRequested) {
+// BM-1: --batch is its own one-shot request — the stream-json feed carries
+// the work, so the run dispatches without any -p prompt value at all.
+if ($args->promptRequested || $args->batch) {
     exit(NonInteractive::run($args, null, $args->outputFormat));
 }
 

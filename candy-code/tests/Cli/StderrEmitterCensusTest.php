@@ -57,7 +57,7 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — fifty-three sites (gc-cli-1106 2026-11-06: +4 in
+ *  1. `fwrite(STDERR, …)` — fifty-seven sites (BM-1 RS-DRIVER 2026-11-07: +4 in the `NonInteractive::run()` --batch continuation loop — per-row mirrors of the single-run failure arms, stderr alone; gc-cli-1106 2026-11-06: +4 in
  *     `Subcommands` — the gc verb family writers: the vacuum headroom notice, the
  *     live-seat lock-refusal pair and the corrupt-store funnel, each a one-shot
  *     notice printed by a detached CLI verb and Stderr alone by the same
@@ -430,7 +430,7 @@ final class StderrEmitterCensusTest extends TestCase
         // like every other answer-shaping note: stdout carries the answer (or
         // the document) on all three formats, and the fact this reports rides
         // the document itself as json_schema_applied: false.
-        'src/Cli/NonInteractive.php' => 16, // +1 C-AGT-7.b 2026-10-28 json_schema_unapplied (was +1 D1-fix 2026-10-21 noticeUnpricedModel, +1 AUT-4 failJsonSchemaUnsupported at 13) | +1 D2 RS-DRIVER.b 2026-11-06 ignored-stream-lines notice (stderr alone: the run continues past unusable shapes, the driver sees the count once — nothing to name in a transcript)
+        'src/Cli/NonInteractive.php' => 20, // +1 C-AGT-7.b 2026-10-28 json_schema_unapplied (was +1 D1-fix 2026-10-21 noticeUnpricedModel, +1 AUT-4 failJsonSchemaUnsupported at 13) | +1 D2 RS-DRIVER.b 2026-11-06 ignored-stream-lines notice (stderr alone: the run continues past unusable shapes, the driver sees the count once — nothing to name in a transcript) | +4 BM-1 RS-DRIVER 2026-11-07 --batch continuation loop mirrors (backend failure label, schema notice, session save failure, encoding failure) — per-row copies of the single-run arms, stderr alone
         // O-3a: `serve`'s one funnel (Serve::stderr()) for its startup lines,
         // request log and stop notice. Stderr alone: no session exists to
         // carry a transcript notice, and the terminal running the server is
@@ -603,7 +603,7 @@ final class StderrEmitterCensusTest extends TestCase
         // C-AGT-7.b took it to thirty-six: the --json-schema-without-a-prompt
         // hint carries its own `candy-code: ` envelope, the same pre-launch
         // exit-2 usage decision as the family above it.
-        'src/Cli/ArgvParser.php' => 61, // +1 C-SES-7.c --incognito combination refusal (stderr-only: the usage error exits 2 before any session exists, so there is no transcript to name it in) | +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021); +1 C-AGT-7.b requires_prompt hint; +1 C-AGT-6.c serve-refusal message; +4 C-CTX-4.g --append-system-prompt refusal family | +9 D1 RS-DRIVER.a --session-id refusal family (empty/missing/flag value arms, shape, continue-resume clash, incognito clash, requires-prompt, subcommand clash) — all the same pre-launch exit-2 usage decision, stderr alone | +4 D2 RS-DRIVER.b --input-format refusal family (value arms share one message, membership, subcommand clash, requires-prompt) — same pre-launch exit-2 usage decision, stderr alone | +6 C3 RS-AGENT --agent refusal family (empty value both forms, missing value, flag-shaped value, one-shot clash, subcommand clash) — same pre-launch exit-2 usage decision, stderr alone
+        'src/Cli/ArgvParser.php' => 62, // +1 C-SES-7.c --incognito combination refusal (stderr-only: the usage error exits 2 before any session exists, so there is no transcript to name it in) | +3 AUT-4 --json-schema refusal family; +1 INFO-4 duplicate-prompt notice (1021); +1 C-AGT-7.b requires_prompt hint; +1 C-AGT-6.c serve-refusal message; +4 C-CTX-4.g --append-system-prompt refusal family | +9 D1 RS-DRIVER.a --session-id refusal family (empty/missing/flag value arms, shape, continue-resume clash, incognito clash, requires-prompt, subcommand clash) — all the same pre-launch exit-2 usage decision, stderr alone | +4 D2 RS-DRIVER.b --input-format refusal family (value arms share one message, membership, subcommand clash, requires-prompt) — same pre-launch exit-2 usage decision, subcommand clash) — same pre-launch exit-2 usage decision, stderr alone | +1 BM-1 --batch needs-stream-json clash door — same pre-launch exit-2 usage decision, stderr alone
         // +1 in ISS-026: SESSION_RESUME_CROSS_PROJECT_FORMAT carries its own
         // `candy-code: ` envelope, like the retention detail line.
         // +1 in ISS-026 residual (rv6): the --resume pick twin carries its own
@@ -641,7 +641,7 @@ final class StderrEmitterCensusTest extends TestCase
         // envelope — a stderr-alone notice that never reaches a document
         // (channel 1's note; the document reports the same fact through the
         // json_schema_applied key).
-        'src/Cli/NonInteractive.php' => 15, // +2 AUT-4 refusal prefixes (gate line + decode failUsage); +1 C-AGT-7.b json_schema_unapplied; +1 C-CTX-4.g non-engine honesty gate | +3 D2 RS-DRIVER.b 2026-11-06 --input-format run doors (no-stdin failUsage, the ignored-lines stderr notice, the malformed-line throw message routed through failUsage) — same stderr-only usage decision as every sibling: the refusal exits 2 before any session work begins
+        'src/Cli/NonInteractive.php' => 18, // +2 AUT-4 refusal prefixes (gate line + decode failUsage); +1 C-AGT-7.b json_schema_unapplied; +1 C-CTX-4.g non-engine honesty gate | +3 D2 RS-DRIVER.b 2026-11-06 --input-format run doors (no-stdin failUsage, the ignored-lines stderr notice, the malformed-line throw message routed through failUsage) — same stderr-only usage decision as every sibling: the refusal exits 2 before any session work begins | +3 BM-1 --batch loop mirrors carrying the candy-code: prefix (schema notice, session save failure, encoding failure)
         // E701: mcpAuth's five failUsage shapes (no action, unknown action,
         // JSON refusal, bad --timeout, missing server) took eleven to sixteen.
         // E710: mcpImport adds the funnel prefix literal plus its five door
@@ -1182,7 +1182,7 @@ final class StderrEmitterCensusTest extends TestCase
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39, 'forty' => 40,
         'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44, 'forty-five' => 45,
         'forty-six' => 46, 'forty-seven' => 47, 'forty-eight' => 48, 'forty-nine' => 49,
-        'fifty' => 50, 'fifty-one' => 51, 'fifty-two' => 52, 'fifty-three' => 53,
+        'fifty' => 50, 'fifty-one' => 51, 'fifty-two' => 52, 'fifty-three' => 53, 'fifty-four' => 54, 'fifty-five' => 55, 'fifty-six' => 56, 'fifty-seven' => 57,
     ];
 
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void

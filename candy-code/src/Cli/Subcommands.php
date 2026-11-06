@@ -6644,6 +6644,7 @@ final class Subcommands
         '--config' => ['short' => null, 'value' => 'file', 'desc' => 'cli.completion.option.config'],
         '--model' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.model'],
         '--agent' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.agent'],
+        '--batch' => ['short' => null, 'value' => null, 'desc' => 'cli.completion.option.batch'],
         '--permission-mode' => ['short' => null, 'value' => 'mode', 'desc' => 'cli.completion.option.mode'],
         '--max-cost' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.max_cost'],
         '--max-turns' => ['short' => null, 'value' => 'text', 'desc' => 'cli.completion.option.max_turns'],

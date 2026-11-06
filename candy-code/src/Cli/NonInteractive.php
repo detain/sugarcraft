@@ -254,7 +254,7 @@ final class NonInteractive
      */
     public static function run(ParsedArgs $args, ?Backend $backend = null, string $outputFormat = self::FORMAT_TEXT): int
     {
-        if ($args->prompt === null || \trim($args->prompt) === '') {
+        if (($args->prompt === null || \trim($args->prompt) === '') && !$args->batch) {
             return self::failUsage(
                 Lang::t('cli.noninteractive.no_prompt'),
                 $outputFormat,
@@ -339,6 +339,26 @@ final class NonInteractive
                 // offending shape; every other ignored line rides the count.
                 \fwrite(\STDERR, 'candy-code: --input-format stream-json ignored ' . $ignoredLines . ' stdin line(s) that were not usable {"type":"user"} input events'
                     . ($firstIgnoredType !== null ? ' (first: ' . $firstIgnoredType . ')' : '') . ".\n");
+            }
+        }
+
+        // BM-1: under --batch the event feed is not a history seed — each
+        // user row becomes its own sequential turn. The argv prompt, when
+        // given, runs as the FINAL row, so the launch keeps the familiar
+        // "and now answer this" shape. An empty feed is asked-for work that
+        // does not exist: refused before a session is opened, the same
+        // no-partial-sides law the no-prompt door above enforces.
+        $batchRows = [];
+        if ($args->batch) {
+            $batchRows = $streamInputRows;
+            if ($args->prompt !== null && \trim($args->prompt) !== '') {
+                $batchRows[] = $args->prompt;
+            }
+            if ($batchRows === []) {
+                return self::failUsage(
+                    Lang::t('cli.noninteractive.batch.no_rows'),
+                    $outputFormat,
+                );
             }
         }
 
@@ -535,7 +555,9 @@ final class NonInteractive
         // `@agent:` is answered from the launch's roster below.
         $gate = $backend instanceof \SugarCraft\Code\Backend\EngineBackend ? $backend->permissionGate() : null;
         $history = self::historyFrom(
-            $args->prompt,
+            // BM-1: the first event row IS the prompt when batching; the
+            // argv prompt (if any) waits at the back of the queue.
+            $args->batch && $batchRows !== [] ? $batchRows[0] : $args->prompt,
             // D2: in stream mode the feed was already drained and judged
             // above, and its turns ride $streamInputRows — passing the raw
             // document through the context channel too would double-embed
@@ -591,7 +613,9 @@ final class NonInteractive
         // context. The rows are plain Message::user: the @/$ mention scan
         // stays on the typed prompt ONLY (C-WEB-2.c — machine-fed text is
         // not a privileged attachment request).
-        if ($streamInputRows !== []) {
+        // BM-1: under --batch the rows run as turns, not a seed — splicing
+        // them into history would bill row 2 twice (as seed AND as turn).
+        if ($streamInputRows !== [] && !$args->batch) {
             $feed = \array_map(static fn (string $row): Message => Message::user($row), $streamInputRows);
             $history = [...\array_slice($history, 0, -1), ...$feed, ...\array_slice($history, -1)];
         }
@@ -736,6 +760,11 @@ final class NonInteractive
             $emitter?->onEvent($event);
         };
 
+        // BM-1: one failure flag for the whole queue — a row that breaks
+        // records here and the run proceeds; the exit status at the tail
+        // honours it exactly like an error-marked answer does.
+        $batchFailed = false;
+
         try {
             $message = $backend->complete($history, $emitter === null ? null : $onToken, $onEvent, $emitter === null ? null : $onReasoning);
         } catch (\Throwable $e) {
@@ -785,7 +814,10 @@ final class NonInteractive
         // else, so a slower or failing save cannot withhold anything a `text`
         // consumer reads. The closure returns the id iff the whole save —
         // mint, turn, transcript, ledger — came through.
-        $persistSession = static function () use ($ownsSession, $opened, $sessionStore, $args, $history, $message, $sessionUsages, $backend): ?string {
+        // BM-1: under --batch the session's first recorded turn is the
+        // first ROW, not the argv prompt (which waits as the final row).
+        $leadTurnText = $args->batch && $batchRows !== [] ? $batchRows[0] : (string) $args->prompt;
+        $persistSession = static function () use ($ownsSession, $opened, $sessionStore, $args, $history, $message, $sessionUsages, $backend, $leadTurnText): ?string {
             if (!$ownsSession || $opened === null || $sessionStore === null) {
                 return null;
             }
@@ -794,7 +826,7 @@ final class NonInteractive
                 if ($mint !== null) {
                     $mint();
                 }
-                $sessionStore->recordTurn($opened['id'], (string) $args->prompt);
+                $sessionStore->recordTurn($opened['id'], $leadTurnText);
                 \SugarCraft\Code\Host\TranscriptStore::new($sessionStore)->save($opened['id'], [...$history, $message]);
 
                 // C-SES-1.a: the run's provider-reported usage joins the durable
@@ -894,6 +926,97 @@ final class NonInteractive
             $persistSession();
         }
 
+        // BM-1: the rest of the batch runs here, in order, in this one
+        // session — each row a full turn on the backend that answered row 1,
+        // each answer persisted and emitted as its own result doc. A row
+        // that throws records its error envelope and the queue moves on;
+        // the crash-blast the probe warned about is bounded to the row that
+        // broke. A row-1 FAILURE skipped this whole block: there the backend
+        // itself answers badly and billing more calls at it is not the
+        // bargain. No timers anywhere (E646) — each row runs as long as its
+        // own provider leg needs.
+        if ($args->batch && \count($batchRows) > 1 && !$message->error) {
+            $history = [...$history, $message];
+            $usageOffset = \count($sessionUsages);
+            foreach (\array_slice($batchRows, 1) as $row) {
+                self::$askWasUnattended = false;
+                $refusals = [];
+                $sawToolResult = false;
+                $trial = [...$history, Message::user($row)];
+                try {
+                    $answer = $backend->complete($trial, $emitter === null ? null : $onToken, $onEvent, $emitter === null ? null : $onReasoning);
+                } catch (\Throwable $e) {
+                    // 1021 F-7 law holds per row: emitter owns the label,
+                    // the document carries the raw sentence.
+                    $raw = self::unlabel($e->getMessage());
+                    \fwrite(\STDERR, self::ERROR_LABEL . $raw . "\n");
+                    self::emitErrorDocument($outputFormat, 'backend', $raw, null, $refusals);
+
+                    $batchFailed = true;
+                    continue;
+                }
+
+                $history = [...$trial, $answer];
+                $message = $answer;
+                $rowUsage = \SugarCraft\Code\Usage::sum(\array_slice($sessionUsages, $usageOffset));
+                $usageOffset = \count($sessionUsages);
+
+                // The schema leg is re-derived per row off the same observer
+                // slots (by reference in $onEvent), so each document tells
+                // the truth about its own turn.
+                $rowSchemaUnapplied = $jsonSchema !== null && $sawToolResult;
+                if ($rowSchemaUnapplied) {
+                    \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.json_schema_unapplied') . "\n");
+                }
+
+                if ($ownsSession && $opened !== null && $sessionStore !== null) {
+                    try {
+                        $sessionStore->recordTurn($opened['id'], $row);
+                        \SugarCraft\Code\Host\TranscriptStore::new($sessionStore)->save($opened['id'], $history);
+                        \SugarCraft\Code\Host\SpendLedger::new()->account(
+                            new \SugarCraft\Code\Util\TokenTracker(),
+                            $rowUsage,
+                            static function (\SugarCraft\Code\Usage $usage, ?string $model = null) use ($sessionStore, $opened): void {
+                                $sessionStore->appendUsageRecord($opened['id'], $usage, $model);
+                            },
+                            $backend instanceof \SugarCraft\Code\Backend\EngineBackend ? $backend->model() : null,
+                        );
+                    } catch (\Throwable $e) {
+                        \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.session_save_failed', ['error' => $e->getMessage()]) . "\n");
+                    }
+                }
+
+                try {
+                    $renderedRow = self::format(
+                        $answer,
+                        $emitter !== null ? self::FORMAT_JSON : $outputFormat,
+                        $refusals,
+                        $opened['id'] ?? null,
+                        $rowUsage?->toArray(),
+                        self::stopFlags($answer),
+                        $rowSchemaUnapplied,
+                    );
+                } catch (\JsonException $e) {
+                    \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.answer_not_json', ['error' => $e->getMessage()]) . "\n");
+                    self::emitErrorDocument($outputFormat, 'encoding', $e->getMessage(), null, $refusals);
+
+                    $batchFailed = true;
+                    continue;
+                }
+
+                if ($answer->attachmentNotice !== null) {
+                    self::noticeAttachment($answer->attachmentNotice);
+                }
+                self::noticeUnpricedModel($answer);
+
+                if ($emitter !== null) {
+                    $emitter->emitLine($renderedRow);
+                } else {
+                    echo $renderedRow . "\n";
+                }
+            }
+        }
+
         // Step 3.D-2: the run is over and its answer is out — the one point
         // a successful `-p` session ends, so SessionEnd fires here, once,
         // after stdout carries the whole document.
@@ -921,7 +1044,10 @@ final class NonInteractive
         // pipeline. The answer is still printed, the session still persisted,
         // SessionEnd still fires; only the status code changes, to the one
         // whose contract already promises "ran and failed".
-        return $message->error ? self::EXIT_FAILURE : self::EXIT_OK;
+        // BM-1: a row that failed anywhere in the queue gives the whole run
+        // the "ran and failed" status — same contract the tail has always
+        // kept for the single answer.
+        return $message->error || $batchFailed ? self::EXIT_FAILURE : self::EXIT_OK;
     }
 
     /**

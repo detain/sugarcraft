@@ -180,6 +180,9 @@ final class ArgvParser
         // launch, answering an unknown preset with a transcript refusal row
         // exactly as `/agent use <name>` does mid-session.
         $agent = null;
+        // BM-1 (RS-DRIVER): bare --batch switch; the stream branch of
+        // NonInteractive::run() executes each event as its own turn.
+        $batch = false;
 
         $i = 1; // skip $argv[0] (script name)
         while ($i < \count($argv)) {
@@ -953,6 +956,16 @@ final class ArgvParser
                 continue;
             }
 
+            // --batch (BM-1, RS-DRIVER): run each stream-json user event as
+            // its own sequential turn in this one process. A bare switch —
+            // no value, no short form — and it rides no meaning without the
+            // event feed, so the door below demands stream-json.
+            if ($arg === '--batch') {
+                $batch = true;
+                ++$i;
+                continue;
+            }
+
             // --restricted / --safe-mode (C-SEC-7.b): launch-narrowing
             // switches, read once at dispatch by Bootstrap's two choke points
             // (the tool-set drop; the trust/bundle/foreign refusals). Bare
@@ -1242,7 +1255,8 @@ final class ArgvParser
             $usageError = 'candy-code: --input-format stream-json reads stdin as input events for one main run; subcommand verbs run their own flow and could only ignore it';
             $usageHint = 'Run the subcommand without --input-format, or start `candy-code --input-format stream-json -p …` for a main run fed by events.';
         }
-        if ($usageError === null && $inputFormat === 'stream-json' && !$promptRequested) {
+        // BM-1: --batch is itself a prompt request — the feed IS the work.
+        if ($usageError === null && $inputFormat === 'stream-json' && !$promptRequested && !$batch) {
             $usageError = 'candy-code: --input-format stream-json feeds a one-shot run, but this launch has no prompt to run';
             $usageHint = 'Use --input-format stream-json with -p "<prompt>" or `candy-code run "<prompt>"`, and pipe NDJSON events on stdin.';
         }
@@ -1289,7 +1303,7 @@ final class ArgvParser
         // family the jsonSchema door above was minted to forbid. Refused at
         // the parser so both spellings of the clash fail identically on
         // stdout and in the JSON error document.
-        if ($usageError === null && $agent !== null && $promptRequested) {
+        if ($usageError === null && $agent !== null && ($promptRequested || $batch)) {
             $usageError = 'candy-code: ' . Lang::t('cli.argv.agent.with_prompt');
             $usageHint = Lang::t('cli.argv.hint.agent_needs_tui');
         }
@@ -1298,6 +1312,13 @@ final class ArgvParser
         if ($usageError === null && $agent !== null && $subcommand !== null) {
             $usageError = 'candy-code: ' . Lang::t('cli.argv.agent.with_subcommand');
             $usageHint = Lang::t('cli.argv.hint.agent_subcommand');
+        }
+        // BM-1: --batch names an execution MODE for the event feed; without
+        // --input-format stream-json there is no feed, and the switch would
+        // silently do nothing — the same carried-ignored family.
+        if ($usageError === null && $batch && $inputFormat !== 'stream-json') {
+            $usageError = 'candy-code: ' . Lang::t('cli.argv.batch.needs_stream_json');
+            $usageHint = Lang::t('cli.argv.hint.batch_needs_stream_json');
         }
 
         // C-AGT-6.c, broadened at weld: --worktree is a MAIN-session flag —
@@ -1324,7 +1345,7 @@ final class ArgvParser
             $root = \array_shift($positional);
         }
 
-        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId, $inputFormat, $agent);
+        return ParsedArgs::from($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, \array_values($positional), $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId, $inputFormat, $agent, $batch);
     }
 
     /**

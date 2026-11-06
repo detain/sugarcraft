@@ -604,6 +604,11 @@ final class TreeWideGuardRosterTest extends TestCase
         'Chat/StartupSummaryGatherTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
         'ClaudeCodeMcpClientStdinWedgeTest.php' => ['glob($this->tempDir.\'/*\')'],
         'Cli/AgentManagerWiringTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],
+        // BM-1: removeBatchScratch() empties only the test's own scratch tree (iterator walk, no name-wider token).
+        'Cli/BatchModeTest.php' => ['RecursiveDirectoryIterator($path,\FilesystemIterator::SKIP_DOTS)'],
+        // removeBatchScratch() empties only the sys_get_temp_dir() scratch tree
+        // openBatchStage() mkdir'd (iterator walk of the test's own sandbox).
+        'Cli/BatchModeTest.php' => ['RecursiveDirectoryIterator($path,\FilesystemIterator::SKIP_DOTS)'],
         // tearDown() removes the sys_get_temp_dir() tree setUp() made;
         // entriesOf() lists the config / dotfiles dirs symlinkedConfig() made in it.
         'Cli/BootstrapConfigPathOverrideTest.php' => ['RecursiveDirectoryIterator($this->tempDir,\FilesystemIterator::SKIP_DOTS)', 'scandir($dir)'],

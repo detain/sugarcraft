@@ -403,6 +403,16 @@ final readonly class ParsedArgs
          *  `/agent use <name>` does mid-session. The flag applies that
          *  switch; it mints no second one. */
         public ?string $agent = null,
+        /** BM-1 (RS-DRIVER, owner ruled BUILD — smallest shape): each
+         *  `--input-format stream-json` user event executes as its OWN
+         *  sequential turn in this one process and session, instead of the
+         *  default history-seed role. The argv prompt, when given, runs as
+         *  the FINAL row. A row that fails records its error envelope and
+         *  the run proceeds to the next row; only a first-turn failure
+         *  stops the batch (the backend itself is answering badly). Turns
+         *  are strictly sequential — this mints no parallelism, which the
+         *  probe says the N-process fan-out already covers. */
+        public bool $batch = false,
     ) {
     }
 
@@ -497,7 +507,8 @@ final readonly class ParsedArgs
         ?string $sessionId = null,
         string $inputFormat = ParsedArgs::DEFAULT_INPUT_FORMAT,
         ?string $agent = null,
+        bool $batch = false,
     ): self {
-        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId, $inputFormat, $agent);
+        return new self($help, $prompt, $root, $outputFormat, $unknownFlags, $promptRequested, $version, $usageError, $usageHint, $configPath, $subcommand, $subcommandArgs, $model, $permissionMode, $continueSession, $resumeSession, $resumeRequested, $positionals, null, $subcommandFlags, $maxCost, $maxTurns, $jsonSchema, $worktreeRequested, $worktreeName, $appendSystemPrompt, $incognito, $restricted, $safeMode, $sessionId, $inputFormat, $agent, $batch);
     }
 }
