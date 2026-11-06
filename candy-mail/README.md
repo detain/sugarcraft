@@ -119,7 +119,7 @@ $email2 = new Email(
 |------|------|--------------|
 | 465 | Implicit TLS (auto-detected on 465; `withImplicitTls()` to override) | Socket is TLS-wrapped at connect; STARTTLS never sent. |
 | 587 | STARTTLS (**default**) | Plaintext connect, then `STARTTLS`; **required** — if the server does not advertise it or the upgrade fails, the send throws instead of downgrading. |
-| 25 | STARTTLS opportune-but-required | Same default policy applies: a server that refuses STARTTLS fails the send while `requireTls` is on. |
+| 25 | STARTTLS upgraded opportunistically, enforced by default | Same default policy applies: a server that refuses STARTTLS fails the send while `requireTls` is on. |
 
 - **Fail-closed credentials.** `AUTH LOGIN` never runs on an unencrypted channel —
   regardless of `requireTls`. There is no `allowInsecureAuth` escape hatch by design.
