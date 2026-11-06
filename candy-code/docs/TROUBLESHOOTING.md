@@ -200,8 +200,10 @@ Four answers, matching `Bootstrap::mcpConfigDecision()`:
 If an `error_log` line (in the TUI's log file, or on stderr for `-p` and the
 subcommands — see [Where diagnostics go](#where-diagnostics-go)) says the config
 **could not be fully started**, at least
-one entry could not be built (an unknown `type`, such as `sse`, or a malformed
-entry). It does not matter where that entry sits in the file: every entry is
+one entry could not be built (an unknown `type` — anything outside
+`stdio` / `http` / `sse`, the spelling trap being upstream's
+`streamable-http` label typed verbatim where this client calls it `http` —
+or a malformed entry). It does not matter where that entry sits in the file: every entry is
 attempted, and the line names each one that could not be built. Every other
 server is up. Fix or remove the named entries; moving them changes nothing.
 
