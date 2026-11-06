@@ -461,4 +461,25 @@ final class CliTest extends TestCase
         $this->assertStringNotContainsString("\x1b", $err, 'the echoed value must not carry raw escapes');
         $this->assertStringNotContainsString("\x07", $err);
     }
+
+    public function testCellDimensionsAreCappedAtTheDocumentedCeiling(): void
+    {
+        // m18 — arbitrary digits used to sail past the parser into the
+        // unclamped renderers, where the memory fatal exited 255 and broke
+        // the documented exit-code contract.
+        [$exit] = self::drive(['--width=' . Cli::MAX_CELL_DIM, '/nonexistent/candy-image-absent.png']);
+        $this->assertSame(Cli::EXIT_INPUT, $exit, 'the ceiling itself stays a valid box leg');
+
+        [$exit, , $err] = self::drive(['--width=' . (Cli::MAX_CELL_DIM + 1), '/nonexistent/candy-image-absent.png']);
+        $this->assertSame(Cli::EXIT_USAGE, $exit);
+        $this->assertStringContainsString('invalid value', $err);
+
+        [$exit, , $err] = self::drive(['--width=99999999999999999999', 'x.png']);
+        $this->assertSame(Cli::EXIT_USAGE, $exit, 'saturating digit runs must refuse as usage, not fatal at 255');
+        $this->assertStringContainsString('invalid value', $err);
+
+        [$exit, , $err] = self::drive(['--size=200000x12', 'x.png']);
+        $this->assertSame(Cli::EXIT_USAGE, $exit);
+        $this->assertStringContainsString('invalid value', $err);
+    }
 }

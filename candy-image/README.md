@@ -87,7 +87,7 @@ the asset for verification.
 | `--canvas=MODE`         | Colour canvas for the text tiers: `truecolor` (default) `ansi256` `ansi16` `fgbg`. A no-op on backends without the dial. |
 | `--work=N`              | Candidate-search effort: chafa's integer `1`–`9`, config float `(N−1)/8` — `1` is the cheapest render, `9` runs the exhaustive path. |
 | `--size=WxH`            | Render box in terminal cells (chafa's `WxH` syntax — here a **cells** box). |
-| `--width=N` / `--height=N` | Individual box legs; cannot be mixed with `--size`. Defaults: viewport columns × aspect-derived rows, with one status row held back when STDOUT is a live tty. When STDOUT is **not** a tty (piped output, CI, examples — e.g. `candy-image x.png > out.txt`) the viewport fallback is a fixed **60×24** cells; size the box explicitly if you need anything else. |
+| `--width=N` / `--height=N` | Individual box legs; cannot be mixed with `--size`. Defaults: viewport columns × aspect-derived rows, with one status row held back when STDOUT is a live tty. When STDOUT is **not** a tty (piped output, CI, examples — e.g. `candy-image x.png > out.txt`) the viewport fallback is a fixed **60×24** cells; size the box explicitly if you need anything else. Each box leg is capped at **100,000** cells; larger values are refused (exit 1). |
 | `--scale=S`             | Fit policy: `fit` `shrink` `fill` `stretch` `none` `crop` (maps onto `SugarCraft\Image\Scale`). |
 | `--animate`             | Animated-GIF pass-through into sugar-animation's `Player` (alternate screen). Pause, frame-stepping and the solid/density preset toggle ride this viewer's wired `Player` (Keys below); frame-rate, speed and watch-mode flags (`--fps`/`--speed`/`--duration`/`--watch`) live in `candy-gifview`. Combining it with the render dials `--format`/`--scale`/`--symbols`/`--canvas`/`--work` is refused (exit 1) — the animation path speaks none of them and would silently drop them; `--width`/`--height`/`--size` are honored. |
 | `--passthrough=V`       | tmux `allow-passthrough` transaction: `auto` (default) or `none`. |
@@ -120,7 +120,7 @@ tiers — see Options above.
 | Code | Meaning |
 |------|---------|
 | 0    | success (including `--help` / `--version` / `--dump-detect`) |
-| 1    | usage error — unknown flag, bad value, refused format (`chafa`/`ansi`), **no** file argument (usage is printed), a second file argument; separately, the bin exits 1 printing `cannot find composer autoload.php` when no autoloader resolves |
+| 1    | usage error — unknown flag, bad value (including a size leg past the 100,000-cell ceiling), refused format (`chafa`/`ansi`), **no** file argument (usage is printed), a second file argument; separately, the bin exits 1 printing `cannot find composer autoload.php` when no autoloader resolves |
 | 2    | input/decode error — the file path is unreadable or not decodable (a **missing** file lands here, not on the usage path), undecodable image, empty animation, render failure |
 
 ## Architecture

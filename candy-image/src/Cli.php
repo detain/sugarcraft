@@ -70,6 +70,15 @@ final class Cli
     public const FALLBACK_CELLS_H = 24;
 
     /**
+     * Ceiling for a single --width/--height/--size leg. Arbitrary digits
+     * otherwise reach the sugar-image renderers unclamped — the memory
+     * fatal they raise there exits 255, breaching the documented
+     * 0/1/2 exit contract — so the façade refuses oversized boxes at
+     * parse time (the argv validation job lives here, not in the lib).
+     */
+    public const MAX_CELL_DIM = 100_000;
+
+    /**
      * --format vocabulary: every {@see Mosaic::fromModeString()} arm on this
      * base EXCEPT 'chafa', which is refused separately with its own message.
      * Text-grid tiers are spelled with chicle's short names as aliases.
@@ -504,7 +513,8 @@ final class Cli
 
     /**
      * Parse a positive cell count for --width/--height; anything else
-     * (non-numeric, zero, negative, fractional) refuses with null.
+     * (non-numeric, zero, negative, fractional, beyond MAX_CELL_DIM)
+     * refuses with null.
      */
     private static function parseCells(string $raw): ?int
     {
@@ -513,7 +523,7 @@ final class Cli
         }
         $value = (int) $raw;
 
-        return $value >= 1 ? $value : null;
+        return $value >= 1 && $value <= self::MAX_CELL_DIM ? $value : null;
     }
 
     /**
@@ -529,7 +539,7 @@ final class Cli
         }
         $w = (int) $m[1];
         $h = (int) $m[2];
-        if ($w < 1 || $h < 1) {
+        if ($w < 1 || $h < 1 || $w > self::MAX_CELL_DIM || $h > self::MAX_CELL_DIM) {
             return null;
         }
 
