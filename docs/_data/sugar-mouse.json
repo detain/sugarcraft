@@ -2,7 +2,7 @@
     "title": "SugarMouse — SugarCraft",
     "description": "SugarMouse: Mouse support for terminal UIs — tag rendered output with private-use zone markers (zero-width to the scanner), then hit-test where clicks land.",
     "ogTitle": "SugarMouse — SugarCraft",
-    "ogDescription": "Mouse support for terminal UIs — tag rendered output with private-use zone markers, then hit-test where clicks land.",
+    "ogDescription": "Mouse support for terminal UIs — tag rendered output with private-use zone markers (zero-width to the scanner; hosts may render PUA glyphs), then hit-test where clicks land.",
     "emoji": "🎯",
     "displayName": "SugarMouse",
     "tagline": "Mark/Scan/Get mouse hit-testing primitives plus the bubblezone-style Zones manager layer, in one package",
