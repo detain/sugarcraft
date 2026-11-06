@@ -122,6 +122,7 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
 <tr><td>TableRenderer</td><td>render(table)</td><td>First/resize frame full, then change-only delta</td></tr>
 <tr><td>Column</td><td>new(title, width)</td><td>Create a column (width in cells; `make()` remains as its BC alias)</td></tr>
 <tr><td>Column</td><td>withAlign(align)</td><td>Left / right / center cell placement</td></tr>
+<tr><td>Column</td><td>withStyle(style)</td><td>SGR parameter string applied to every cell of the column (validated at the door; the cursor style paints over it)</td></tr>
 <tr><td>Viewport</td><td>withContent(str, w=80, h=24)</td><td>Create viewport from string content</td></tr>
 <tr><td>Viewport</td><td>withStickyHeader/Footer(rows)</td><td>Pin lines at top/bottom across scrolling</td></tr>
 <tr><td>Viewport</td><td>withScrollbar(bool)</td><td>Toggle scrollbar display</td></tr>
