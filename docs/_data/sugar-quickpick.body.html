@@ -70,7 +70,7 @@ $allItems = $history->all();</code></pre>
 <tr><td>QuickPick</td><td>show() / hide()</td><td>Show the overlay (resetting cursor and filter) or hide it</td></tr>
 <tr><td>QuickPick</td><td>type(string) / backspace() / clear()</td><td>Modify filter text</td></tr>
 <tr><td>QuickPick</td><td>cursorUp/Down/Top/Bottom()</td><td>Navigate item cursor</td></tr>
-<tr><td>QuickPick</td><td>selected()</td><td>Get currently selected Item</td></tr>
+<tr><td>QuickPick</td><td>selected()</td><td>Get the Item under the cursor (never null while the filtered list is non-empty — the cursor always rests on an item, so a non-null answer is cursor position, not confirmed intent; null only when no items match)</td></tr>
 <tr><td>QuickPick</td><td>items() / itemCount() / allCount()</td><td>Query filtered/all item state</td></tr>
 <tr><td>QuickPick</td><td>withBorder(?Border)</td><td>Apply sugar-style Border to overlay window</td></tr>
 <tr><td>QuickPick</td><td>withStyle(?Style)</td><td>Apply sugar-style Style to overlay window</td></tr>
