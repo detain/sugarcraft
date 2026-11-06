@@ -123,8 +123,11 @@ session changes nothing — each write still asks. Strictness runs
 `dont-ask` (`PermissionMode::strictness()`). The preset's gate rides the
 sub-agent's reserved `subagent-grant` hook, so it is applied on a turn with hooks
 switched off and cannot be disabled. A foreign preset (`.claude/agents`,
-`.opencode/agents`) never carries a mode at all: its `permissionMode:` collapses
-to `default` on import (see
+`.opencode/agents`) keeps the `permissionMode:` it was written with — the field
+is parsed and stays visible on the imported preset — but `Agent::fromPreset()`
+gates that one field on the preset's source, so a foreign preset's sub-agent
+runs under `default` while a native (`.candy-code/agents`) preset rides through
+with its own mode (see
 [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#which-fields-reach-the-roster)).
 
 ---
