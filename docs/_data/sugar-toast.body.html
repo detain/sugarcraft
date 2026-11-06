@@ -1,4 +1,4 @@
-<p class="lede" style="margin-top: 28px;">Non-blocking floating notifications at 9 screen positions. Error, Warning, Info, Success types. Auto-dismiss, an Escape-dismiss preference flag for hosts, and stacked multi-toast support.</p>
+<p class="lede" style="margin-top: 28px;">Non-blocking floating notifications at 9 screen positions. Error, Warning, Info, Success types. Auto-dismiss, an Escape-dismiss preference flag for hosts, and stacked multi-toast support. Severity never rides colour alone: each type carries a distinct symbol, <code>withAccessibleText()</code> adds the plain-text word, and the <code>REDUCE_MOTION</code>/<code>NO_COLOR</code> environment gates drop blink and colour bytes while those text channels keep rendering.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-toast</code></pre>
@@ -18,12 +18,14 @@ echo $toast-&gt;view($bg);</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Four types</strong><span>Error, Warning, Info, Success — each with a distinct symbol and color.</span></div>
+      <div class="feature"><strong>Four types</strong><span>Error, Warning, Info, Success — severity carried by icon + colour; add <code>withAccessibleText()</code> for a plain-text severity word (box shape and border glyphs are the same across types, so colour is never the sole carrier).</span></div>
             <div class="feature"><strong>Positions</strong><span>9 positions: TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight, MiddleLeft, MiddleCenter, MiddleRight.</span></div>
             <div class="feature"><strong>Auto-dismiss</strong><span>Configurable duration. Passing <code>null</code> $expiresAt at the alert()/progressToast() doors means &quot;use the configured duration&quot; — persistence is reached by keeping the toast duration unset or through the explicit sentinel (<code>withoutExpiry()</code>/<code>cancelAlert()</code>).</span></div>
             <div class="feature"><strong>Symbol sets</strong><span>NerdFont, Unicode, or Ascii.</span></div>
             <div class="feature"><strong>Overflow control</strong><span>DropOldest, DropNewest, or Enqueue when maxConcurrent is exceeded.</span></div>
             <div class="feature"><strong>Progress toasts</strong><span>Inline progress bar beneath the message body — by default the bar speaks in glyph and colour; the numeric percentage (0–100%) prints only under <code>withAccessibleText()</code>.</span></div>
+            <div class="feature"><strong>Accessible text mode</strong><span><code>withAccessibleText()</code> names the severity in words and prints progress percentages — a text channel beside the frame's colour/glyph language (WCAG 1.4.1). Default off keeps every frame byte-identical.</span></div>
+            <div class="feature"><strong>Accessibility environment variables</strong><span><code>REDUCE_MOTION</code>/<code>PREFERS_REDUCED_MOTION</code> drop blink; <code>NO_COLOR</code>/<code>CLICOLOR=0</code> drop all colour bytes (renderer palette, custom alert colours, inline message SGR); <code>CLICOLOR_FORCE</code> overrides. The gates are deliberately not spec-literal: a literal <code>NO_COLOR=0</code> counts as unset (suppression off) and <code>CLICOLOR</code> must read exactly <code>0</code> to drop colour; the divergence law lives in the colour-decision docblock. Environment-only checks — sugar-toast composites for its host and never probes a TTY itself.</span></div>
             <div class="feature"><strong>Action buttons</strong><span>[Label] buttons with closure callbacks; their frame cells are exported by <code>actionRects()</code>/<code>actionAt()</code> for host-side mouse and keyboard dispatch.</span></div>
             <div class="feature"><strong>History log</strong><span>Cumulative immutable record of dismissed and overflow-evicted alerts via <code>history()</code>; <code>clear()</code> never resets it.</span></div>
             <div class="feature"><strong>Styled alerts</strong><span>Per-alert background, foreground, and border colour overrides via Color.</span></div>
