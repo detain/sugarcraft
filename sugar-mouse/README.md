@@ -79,7 +79,7 @@ if ($click !== null) {
 | `SelectionRange` | Normalized, inclusive stream range a selection covers; `extract()` copies its text out of a frame |
 | `Sentinel` | The two framing codepoints (`U+E000` open / `U+E001` close), anchored to sugar-core |
 | `ClickResult` | The agreed press+release pair `ZoneClickTracker::track()` returns on a confirmed click |
-| `Lang` | Refusal-message lookup for this package's catalogue (`lang/`, `sugar-mouse:`-prefixed keys) |
+| `Lang` | Refusal-message lookup for this package's catalogue (`lang/`, five bare keys under Lang namespace `mouse`; the `sugar-mouse:` label rides inside each message) |
 | `Zones\MsgZoneInBounds` | Zone-bound Msg emitted by `Manager::anyInBoundsAndUpdate()` into a Model's `update()` — the only Zones-layer message that lives outside the `Msg\` namespace |
 
 `Selection` / `SelectionRange` were ported from candy-code's
@@ -608,8 +608,9 @@ flooded by leaked `?1003` motion reporting.
 - Organic shapes (ASCII art) report a rectangular bounding box —
   the marker pair only carries 4 corners' worth of information.
 - Exception and refusal messages resolve through `SugarCraft\Mouse\Lang`
-  against `lang/en.php` (five keys, `sugar-mouse:`-prefixed); the
-  package ships `en` only.
+  against `lang/en.php` — five keys with bare names under the Lang
+  namespace `mouse`, and the `sugar-mouse:` label rides inside each
+  message value, not in the keys; the package ships `en` only.
 - `scan()` is synchronous (no background worker), so
   `close()` is purely a state reset / disable rather than a thread
   join.
