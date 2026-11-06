@@ -30,7 +30,7 @@ The library carries the house i18n plumbing (`src/Lang.php` plus locale files un
 ### Table
 - **Sortable columns** — sortBy()/sortByNext() toggle ascending/descending (mouse wiring belongs to the app); the sort arrow is prepended before the header is truncated, so a sorted column narrower than arrow plus text shows the arrow alone
 - **Filterable** — keeps rows where any cell contains a case-insensitive substring; matching runs on the stored raw strings, not the render-time sanitized text
-- **Configurable columns** — title, width, alignment, formatter (`Column::new()`, `withAlign()`, `withStyle()`, `withFormatter()`)
+- **Configurable columns** — title, width, alignment, formatter (`Column::new()`, `withAlign()`, `withStyle()`, `withFormatter()`); the render pipeline runs formatter → sanitize → truncate/pad, so a formatter's output is sanitized like any other cell value and cannot smuggle color to the screen — styling belongs to `withStyle()`
 - **Cell styling** — per-column ANSI style support
 - **Cursor tracking** — get current row/cell on selection. Note the cursor
   style is empty by default, so `setCursor()` alone marks nothing on screen —
