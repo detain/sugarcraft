@@ -32,11 +32,11 @@ use SugarCraft\Pty\SizeIoctl;
  * candy-gifview's harness shape.
  *
  * Chafa flag-compat vocabulary (chicle's chafa.c option table) and what this base honors:
- * --format/--size/--scale/--probe-shape/--dump-detect are wired; --polite is
+ * --format/--size/--scale/--dump-detect are wired; --polite is
  * an accepted no-op (this viewer always renders inline and synchronously);
  * --symbols=CLASS[+CLASS...], --canvas=MODE and --work=N thread the
- * sugar-image exposes (the symbol-corpus selector grammar,
- * Canvas mode, work factor) — a no-op on backends that do not
+ * dials the sugar-image exposes (the symbol-corpus selector grammar,
+ * canvas mode, work factor) — a no-op on backends that do not
  * speak the dial. --passthrough=screen refuses with a pointer: the
  * Screen envelope is detection-chosen, never forced. --probe=off has no
  * seam in Detect yet, so the spelling is refused like any unknown flag.
@@ -49,7 +49,7 @@ final class Cli
 
     /**
      * The version this run reports: the phar archive's build stamp when
-     * executing inside one (DST-1 — InstalledVersions lies under the frozen
+     * executing inside one (InstalledVersions lies under the frozen
      * vendor/), else the compiled-in {@see VERSION} constant. The archive is
      * identified by \Phar::running(false), which is exactly the real path the
      * \Phar constructor wants here (the class file only ever runs required
@@ -396,8 +396,10 @@ final class Cli
     /**
      * Animation pass-through: decode via sugar-animation and hand the
      * frames to its Player inside a Program — the sugar-animation seam
-     * sugar-video's Player-side playback uses; full playback controls
-     * (fps/speed/duration, preset toggle) live in candy-gifview.
+     * sugar-video's Player-side playback uses. Pause, frame-stepping and
+     * the solid/density preset toggle ride the Player wired here (see the
+     * README Keys table); frame-rate, speed and watch-mode controls
+     * (--fps/--speed/--duration/--watch) live in candy-gifview.
      *
      * @param resource $stdout
      * @param resource $stderr

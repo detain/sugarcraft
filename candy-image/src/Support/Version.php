@@ -7,7 +7,7 @@ namespace SugarCraft\CandyImage\Support;
 /**
  * Reads the version stamped into a running phar archive's metadata.
  *
- * Mirrors candy-top's Support\Version (the DST-1 program): under a self-
+ * Mirrors candy-top's Support\Version: under a self-
  * contained .phar the frozen vendor/ makes Composer's InstalledVersions report
  * the build root's dev guess, so a build stamp nothing consumes would make
  * `--version` lie. The stamp is read back here and wins over the caller's
