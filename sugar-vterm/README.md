@@ -279,7 +279,7 @@ handler layer that the parser drives.
 | Component | Owner | Role |
 |-----------|-------|------|
 | `AnsiParser\Parser\State` | sugar-ansi-parser | Enum of the 15 parser states: `Ground`, `Escape`, `EscapeIntermediate`, `CsiEntry`, `CsiParam`, `CsiIntermediate`, `DcsEntry`, `DcsParam`, `DcsIntermediate`, `DcsString`, `OscString`, `SosString`, `PmString`, `ApcString`, `Utf8`. No `CsiIgnore` state exists — ignored CSI bytes are handled inside the transition table. |
-| `AnsiParser\Parser\Action` | sugar-ansi-parser | Enum of dispatch actions: `Print`, `Execute`, `CsiDispatch`, `EscDispatch`, `OscDispatch`, `DcsDispatch`, `Hook`, `Put`, `Unhook`. |
+| `AnsiParser\Parser\Action` | sugar-ansi-parser | Enum of the parser's per-event actions: `None`, `Clear`, `Collect`, `Prefix`, `Dispatch`, `Execute`, `Start`, `Put`, `Param`, `Print`. |
 | `AnsiParser\Parser\Transitions` | sugar-ansi-parser | Static transition table — `(state, byte) → (action, next_state)`. |
 | `AnsiParser\Parser\Handler` | sugar-ansi-parser | The contract the parser drives. |
 | `AnsiParser\Parser\CsiHandler` | sugar-ansi-parser | CSI dispatch contract — `printable`, `cuu`/`cud`/`cuf`/`cub`, `cup`/`hvp`, `sgr`, `ed`/`el`, `decset`/`decrst`, `decstbm`, `tbc`, `cht`/`cbt`, `cr`/`lf`, `su`/`sd`, `il`/`dl`, `ich`/`dch`, `rep`, `scosc`/`scorc`, `gridRows`/`gridCols` — 29 members, matching `sugar-ansi-parser/src/Parser/CsiHandler.php`. |
