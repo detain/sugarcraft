@@ -139,7 +139,11 @@ signal is on. The signal is **environment-only**: `REDUCE_MOTION` or
 `PREFERS_REDUCED_MOTION`, looked up through
 `SugarCraft\ColorProfile\Probe::reducedMotion()`. The lookup treats `0`,
 `false`, `no` and `off` (case-insensitively) as *off*; any other non-empty
-value — `1` among them — as *on*. There is no terminal query or
+value — `1` among them — as *on*. Both variables are consulted — `REDUCE_MOTION`
+first, then `PREFERS_REDUCED_MOTION` — and either reading *on* snaps, so an
+*off* value in one never suppresses an *on* value in the other, and the
+per-spring `reducedMotionOverride` (below) is the only opt-back-in path when
+the environment is set. There is no terminal query or
 accessibility-daemon channel, and the value is consulted per call: flipping
 the env var mid-session changes behaviour on the next frame. When the host
 sets one of the variables this supports the [WCAG 2.3.3 (Animation from
