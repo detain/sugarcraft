@@ -320,8 +320,9 @@ socket, which is what keeps the TUI's event loop free. Details that matter:
   bytes but a corrupt header must not make the parent buffer an arbitrary length.
 - Child reaping is a bounded 100 ms `WNOHANG` poll, with escaped PIDs tracked and
   swept at the top of the next turn. A blanket `pcntl_waitpid(-1, …)` would be
-  actively harmful: `Chat::executeToolsParallel()` and
-  `BackgroundSessionRunner` both wait on their *own* PIDs in the same process.
+  actively harmful: `Chat::waitForToolChildrenAsync()` and
+  `Runtime::parallelJobHasExited()`, and `BackgroundSessionRunner`, all wait on
+  their *own* PIDs in the same process.
 
 The socket carries frames **both ways**. The child streams the turn up; on a
 turn started with `EngineBackend::completeInteractive()` (the
