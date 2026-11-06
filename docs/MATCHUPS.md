@@ -159,7 +159,7 @@ reference projects supplied the ideas, not the code.
 | CandyFiles (candy-files/) | [superfile](https://github.com/yorukot/superfile) |
 | CandyGifView (candy-gifview/) | [gifterm](https://github.com/namzug16/gifterm) |
 | CandyImage (candy-image/) | [chafa](https://github.com/hpjansson/chafa) (CLI surface idea, not a port) |
-| SugarFocus (sugar-focus/) | none — first-party (plays the role of [bubbles](https://github.com/charmbracelet/bubbles) focus handling; analogy only) |
+| SugarFocus (sugar-focus/) | none — first-party (plays the role of [bubbles](https://github.com/charmbracelet/bubbles) focus handling; sugar-dashboard `FocusManager` analog; analogy only) |
 | CandyCodeshot (candy-codeshot/) | [freeze](https://github.com/charmbracelet/freeze) |
 | SugarFuzzy (sugar-fuzzy/) | [fuzzy](https://github.com/sahilm/fuzzy) (+ internal algorithms) |
 | SugarQuickpick (sugar-quickpick/) | [theHermit](https://github.com/Genekkion/theHermit) |
