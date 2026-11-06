@@ -8,8 +8,11 @@ use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Video\Lang;
 
 /**
- * A parsed WebVTT subtitle track — a time-sorted list of {@see Cue}s with an
- * O(log n) `cueAt()` lookup for the caption showing at a given playback time.
+ * A parsed WebVTT subtitle track — a time-sorted list of {@see Cue}s with a
+ * `cueAt()` lookup for the caption showing at a given playback time: a binary
+ * search for the rightmost start at or before the position, then a walk back
+ * over earlier cues until one contains it — O(log n) plus worst-case O(k)
+ * over the cues walked back, bounded by MAX_CUES for a parsed track.
  *
  * Parsing is lenient: it skips the `WEBVTT` header and any `NOTE`/`STYLE`/
  * `REGION` blocks, ignores per-cue identifiers and cue settings, strips inline
@@ -106,7 +109,10 @@ final class WebVtt
 
     /**
      * The caption text showing at $seconds, or null when nothing is.
-     * Uses binary search over the sorted cue list (O(log n)).
+     * Binary-searches the sorted cue list for the rightmost cue starting at
+     * or before $seconds (O(log n)), then walks back over earlier cues until
+     * one actually contains the position or the list runs out — worst case
+     * O(k) cues walked back, bounded by MAX_CUES for a parsed track.
      * When multiple overlapping cues contain $seconds, the one with the
      * latest start time is returned (first matching cue from the end).
      */

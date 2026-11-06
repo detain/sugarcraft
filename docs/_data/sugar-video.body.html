@@ -115,7 +115,7 @@ $player = Player::open('clip.mp4', cellsW: 80, cellsH: 24);   // mp4/avi/webm de
 <tr><td>Player</td><td>::seekToSeconds(sec)</td><td>Seek to a timeline position in seconds</td></tr>
 <tr><td>Player</td><td>::position() / ::duration()</td><td>Current playhead and total duration in seconds</td></tr>
 <tr><td>WebVtt</td><td>::parse(text)</td><td>Parse a WebVTT (lenient SRT) track into cues; bounded at MAX_CUES</td></tr>
-<tr><td>WebVtt</td><td>cueAt(seconds)</td><td>Binary-search the active caption for a timeline position</td></tr>
+<tr><td>WebVtt</td><td>cueAt(seconds)</td><td>Find the active caption for a timeline position: binary search for the rightmost start, then a back-walk bounded by MAX_CUES to the containing cue</td></tr>
 <tr><td>Synthetic</td><td>::generate(path = DEFAULT_PATH, w = 120, h = 60, frames = 16, delayCs = 8)</td><td>Write a looping rainbow-gradient test animation as one valid GIF89a stream (one header and global palette, NETSCAPE2.0 loop, a GCE on every frame and a local palette on each frame after the first, one trailer), so decoders read every frame; a 1&#215;1 GIF stands in when ext-gd is absent. The path defaults to the public <code>DEFAULT_PATH</code> constant, and the returned path — not the argument — is the source of truth: a refused target (e.g. a planted symlink) yields a private stand-in path.</td></tr>
 <tr><td>AudioPlayer</td><td>::start() / ::stop()</td><td>Spawn and reap the audio child (ffplay/mpv) for the reel&#8217;s source</td></tr>
 <tr><td>AudioPlayer</td><td>::pause() / ::resume()</td><td>Signal the audio child to pause and resume</td></tr>

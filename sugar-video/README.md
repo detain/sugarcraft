@@ -279,8 +279,11 @@ bound.
 **Where they paint.** In every rendering mode the active cue for the current
 video time is appended as one caption line directly below the frame,
 left-aligned, truncated or space-padded to the player's cell width (the
-one-line-per-row invariant). Cue lookup is a binary search on the timeline
-(`WebVtt::cueAt()`), so adding a track does not slow the per-frame path. There
+one-line-per-row invariant). Cue lookup (`WebVtt::cueAt()`) binary-searches
+the timeline for the rightmost cue starting at or before the position, then
+walks back until a cue actually contains it — O(log n) plus worst-case O(k)
+over the cues walked back, bounded by the parser's `MAX_CUES` cap — so an
+attached track adds a bounded per-frame lookup, not a free one. There
 is no keyboard shortcut: the toggle is attaching (or not attaching) the track
 at open time.
 
