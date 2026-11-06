@@ -183,6 +183,11 @@ decoded GIFs and animated WebP ride pure PHP/GD in-process and cost no child.
 $player = Reel::openUrl($url, $headers)->toPlayer(); // paused; decoder child already spawned
 
 // Mount $player in your own Program, or fold it into a larger Model.
+// play()/pause() are immutable — they return a NEW Player, so re-bind it:
+// calling $player->play(); as a statement leaves the mounted model paused
+// while the shared audio companion has already resumed in place.
+$player = $player->play(); // un-pause: re-anchors the play clock on the new model
+
 // When the host leaves the player screen, release the child processes:
 $player->stop(); // idempotent — stops audio companion + closes decoder/ffmpeg
 ```
@@ -204,8 +209,10 @@ $player->stop(); // idempotent — stops audio companion + closes decoder/ffmpeg
   embedding the player may route different keys but must still call `stop()` on
   teardown so no `ffmpeg`/audio child is orphaned.
 - **Tick:** the player self-schedules with `Cmd::tick()` while playing; do not
-  poll it from a separate timer. `toPlayer()` returns it **paused** — call
-  `$player->play()` (or send `Space`) to start.
+  poll it from a separate timer. `toPlayer()` returns it **paused** — start it
+  with `$player = $player->play()` (re-bind: `play()` returns a new Player; the
+  statement form would leave the mounted model paused while the shared audio
+  companion resumes) or send `Space` through `update()`.
 - **Source binding:** `toPlayer()` requires a bound source (a path or URL). An
   unbound `Reel::new()` throws `InvalidArgumentException` rather than
   silently substituting the synthetic pattern that `play()` uses.
