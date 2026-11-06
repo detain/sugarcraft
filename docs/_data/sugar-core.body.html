@@ -33,7 +33,7 @@ final class Counter implements Model {
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Model interface</strong><span>Three pure methods: <code>init()</code>, <code>update(Msg)</code>, <code>view()</code>.</span></div>
+      <div class="feature"><strong>Model interface</strong><span>Four methods: <code>init()</code>, <code>update(Msg)</code>, <code>view()</code>, <code>subscriptions()</code> — the <code>SubscriptionCapable</code> trait supplies a default for the last one.</span></div>
       <div class="feature"><strong>Cmd helpers</strong><span><code>Cmd::quit()</code>, <code>Cmd::batch()</code>, <code>Cmd::send()</code> — async work scheduled, never inlined.</span></div>
       <div class="feature"><strong>InputReader</strong><span>Stateful escape-sequence parser. Bracketed paste, mouse, function keys, OSC, DEC private modes. Paste is bounded: an end marker split across reads still closes the envelope, a paste larger than <code>MAX_PASTE_BYTES</code> (1 MiB) surfaces in chunks, and an envelope whose end marker never arrives is closed after <code>PASTE_IDLE_TIMEOUT</code> (1 s) of silence so the keyboard comes back. Pasted content is sanitized by default.</span></div>
       <div class="feature"><strong>"Cursed" renderer</strong><span>Bubble Tea v2's term for the cell-diff default — here, cell-diff rendering with ≥15% bandwidth savings on a 50-tick test.</span></div>
