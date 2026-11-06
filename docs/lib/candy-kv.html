@@ -74,7 +74,7 @@ foreach ($store-&gt;list('user:*') as $entry) {  // byte-exact glob patterns; yi
     echo "{$entry-&gt;key} =&gt; {$entry-&gt;rawValue()}\n";
 }
 $store-&gt;listDatabases();                    // ['default', 'passwords']
-$store-&gt;pruneExpired();                     // reclaim rows past their TTL</code></pre>
+$store-&gt;pruneExpired();                     // reclaims expired rows in the default database</code></pre>
 
     <h3 style="margin-top: 32px;">CLI</h3>
     <pre class="code"><code class="language-shell">candy-kv set color blue              # values with NUL/invalid UTF-8 auto-arm binary mode
