@@ -996,9 +996,14 @@ echo $action->label;          // 'delete foo'
 ## Atomic durable JSON files (`Util\AtomicJsonFile`)
 
 The sibling-lib pattern it was built for: `AtomicJsonFile::path($file)
-->write($data)` serialises to a `0600` temp inode, `fsync`s, then
-`rename()`s, so a reader never sees a half-written file, and takes a
-`Semaphore`-guarded lock so concurrent processes serialise.
+->write($data)` serialises to a temp inode, `fsync`s, then `rename()`s,
+so a reader never sees a half-written file, and takes a
+`Semaphore`-guarded lock so concurrent processes serialise. The temp
+inode's mode is umask-derived — not a fixed `0600`: measured on this
+box, 0644 at umask 022, 0664 at 002, 0666 at 000, and 0600 only under
+a protective 077. Token/history stores must opt in with
+`withPermissions(0600)`, which chmods the temp inode before the first
+payload byte so the published file is private from birth.
 
 Operator notes:
 
