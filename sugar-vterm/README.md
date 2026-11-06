@@ -135,7 +135,13 @@ output anywhere.
 
 sugar-vterm ships **two** Terminal entry-points for distinct use cases —
 both share the short class name `Terminal`, so import one per file or alias
-the other (`use SugarCraft\Vterm\Terminal\Terminal as FullTerminal;`):
+the other (`use SugarCraft\Vterm\Terminal\Terminal as FullTerminal;`).
+The collision that actually bites is `Cursor`: root `SugarCraft\Vterm\Cursor`
+(the renderer value object — the one `Snapshot::$cursor` holds, a DISTINCT
+class) versus `SugarCraft\Vterm\Cursor\Cursor` (the emulator state class
+carrying the saved row/column pair and `save()`/`restore()`). `Cell` versus
+`Cell\Cell`, by contrast, is NOT a two-class collision — the namespaced name
+is a `class_alias` shim resolving to the canonical root `Cell`.
 
 | Class | Use case | Methods |
 |-------|----------|---------|
@@ -162,15 +168,23 @@ per-frame snapshots.
 
 ### Renderer value objects (vcr path)
 
-The `SugarCraft\Vterm` root namespace provides simplified value objects for the
-candy-vcr VHS renderer path — independent of the full VT parser stack:
+The `SugarCraft\Vterm` root namespace provides the value objects behind the
+candy-vcr VHS renderer path. They are NOT a parallel simplified class set:
+the grid and the cell are the one `Buffer\Buffer` and the one `Cell` SHARED
+by both engines — `Cell\Cell` is a `class_alias` shim over the canonical root
+`Cell` (the two names resolve to the same class after autoload; pinned by
+`tests/CellAliasTest.php`), and the emulator-facing payload fields simply
+carry their defaults on the renderer path. What IS renderer-path state: the
+root `Terminal` facade, `Snapshot`, the root `Cursor` value object, and
+`Theme`:
 
 ```php
 use SugarCraft\Vterm\Buffer\Buffer;
 use SugarCraft\Vterm\Cell;
 use SugarCraft\Vterm\Cursor;
 
-// Cell — char + fg (0-255) + bg (0-255) + attrs bitfield
+// Cell — the ONE cell class for both engines: char/grapheme + palette fg (0-255) + bg (0-255)
+// + attrs bitfield; the emulator payload fields (sgr/truecolour/hyperlink/rendition) default here
 $cell = new Cell(char: 'X', fg: 196, bg: 21, attrs: Cell::ATTR_BOLD);
 $cell = $cell->withFg(34);            // green foreground
 $cell = $cell->withBg(226);           // yellow background
@@ -896,7 +910,7 @@ Each subdirectory of `src/` owns a small piece of VT state:
 | `Buffer\Buffer` | Cell grid storage (`rows × cols` array of `Cell`). | `cell($row, $col)` (either coordinate out of bounds → `Cell::empty()`), `put($row, $col, $cell)` (out-of-grid writes silently ignored), `insertRows($count, $from, ?$top, ?$bottom)`, `deleteRows($count, $from, ?$top, ?$bottom)`, `dirtyRegion()`, `each(): Generator`, `copy(): array`, `clear(): self` (blank the grid in place), `equals(self $other): bool` (grid-for-grid comparison), `resize($cols, $rows): self` (refuses dims < 1, repairs wide pairs at the cut, marks the whole viewport dirty). |
 | `Screen\Screen` | Immutable snapshot of Buffer + Scrollback; cell-level diff API. | `fromBuffer($buf, ?$scrollback)`, `lines()` (Generator: full-width rows, combining marks re-appended), `linesWithHistory()` (Generator: scrolled-off rows oldest-first, then visible), `cell($row, $col)` (out-of-bounds in EITHER coordinate returns `Cell::empty()`), `scrollback()` (`?Scrollback` — null when built via `fromBuffer($buf)` without a ring; the full `Terminal\Terminal::screen()` path always wires one), `diff($other)`. |
 | `Screen\Scrollback` | Ring buffer (default 1000 rows) for rows scrolled off the top. | `push($row)` (record a scrolled-off line, evicting the oldest at capacity), `count()`, `maxSize()`, `at($n)`, `all()`, `clear()` (drop every saved row — what `ED 3` calls). |
-| `Cell\Cell` | Cell-grid cell — grapheme + Sgr + Hyperlink + combining marks. Used by the full Terminal facade. | `empty()`, `continuation($prev)`, `withCombining($s)`, `sgr()`, `foreground()`, `background()`, `equals()`. |
+| `Cell\Cell` | `class_alias` shim over the canonical root `SugarCraft\Vterm\Cell` — the ONE cell class for both engines (char + grapheme aliases, palette `fg`/`bg`, `attrs` bitfield, optional `Sgr`/truecolour/hyperlink/`Rendition`/combining payload). | Static `empty()`, `continuation($prev)`; `withFg($i)`, `withBg($i)`, `withAttrs($flags)`, `withFgTruecolor(?int)`, `withBgTruecolor(?int)`, `withRendition(Rendition)`, `withCombining($s)`; `sgr()`, `foreground()`/`background()` (`?Color`), `fgRgb()`/`bgRgb()` (`?array`), `colorSgr()`, `equals($other)`. |
 | `Cursor\Cursor` | Position + visibility + shape + saved-state. | `withRow($r)`, `withCol($c)`, `withVisible($v)`, `withShape($s)`, `save()`, `restore()`, `equals()`. |
 | `Sgr\Sgr` | Pen state (fg, bg, attrs bitfield, underline style). | `empty()`, `withBold/Italic/Underline/Strikethrough/Blink/Reverse/Dim/Hidden($v)`, `withUnderlineStyle($style)`, `withForeground(?$color)`, `withBackground(?$color)`, `equals()`. |
 | `Sgr\UnderlineStyle` | Enum: `None`/`Single`/`Double`/`Curly`/`Dotted`/`Dashed`. | Backed int enum (`None`=0 … `Dashed`=5); `->value` is the CSI code (no `fromInt()`). |
