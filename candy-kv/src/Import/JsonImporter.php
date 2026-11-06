@@ -151,7 +151,11 @@ final class JsonImporter
             return $count;
         };
 
-        if ($atomic) {
+        if ($atomic && $rows !== []) {
+            // Zero-entry documents skip the transaction entirely: opening a
+            // database to BEGIN/COMMIT nothing would create the SQLite file,
+            // breaking the documented law that no file exists "until the
+            // first write" (README, Data directory).
             // Collect the databases the validated keys route to so the whole
             // import runs inside that database's transaction. The roster MUST
             // see every row (and use the same escape-aware '@' law Store::set

@@ -241,6 +241,28 @@ final class CliContractTest extends TestCase
         $this->assertStringContainsString('Imported 2 entries.', $many['stdout']);
     }
 
+    public function testEmptyAtomicImportCreatesNoDatabaseFile(): void
+    {
+        // Data-directory law (README): neither the directory nor a database
+        // file exists "until the first write". An atomic import of an empty
+        // document used to open default.db just to BEGIN/COMMIT nothing,
+        // while --no-atomic created nothing; both shapes must now be true
+        // no-ops that still report success.
+        $cases = [
+            [['import', 'json', '-'], '{}'],
+            [['import', 'json', '-', '--no-atomic'], '{}'],
+            [['import', 'yaml', '-'], ''],
+        ];
+        foreach ($cases as [$args, $payload]) {
+            $label = \implode(' ', $args);
+            $run = $this->runKvFeeding($args, $payload);
+            $this->assertSame(0, $run['exit'], $label);
+            $this->assertStringContainsString('Imported 0 entries.', $run['stdout'], $label);
+            $this->assertFileDoesNotExist($this->configHome . '/skate/default.db', $label . ' minted a database file');
+        }
+        $this->assertDirectoryDoesNotExist($this->configHome . '/skate', 'the data directory itself may not appear');
+    }
+
     public function testUnknownImportAndExportFormatsExitTwo(): void
     {
         $import = $this->runKv(['import', 'xml', 'whatever.xml']);
