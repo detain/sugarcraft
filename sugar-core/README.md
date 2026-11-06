@@ -1,6 +1,6 @@
 <img src=".assets/icon.png" alt="sugar-core" width="160" align="right">
 
-# SugarCraft
+# SugarCraft Core
 
 > Formerly published as `sugarcraft/candy-core` (renamed 2026-10). <!-- @rename-keep -->
 
@@ -373,8 +373,8 @@ a resume is deliberately not a Cmd: SIGCONT dispatches a `ResumeMsg` from the ru
 
 ## Companion libraries
 
-SugarCraft is the foundation — the rest of the SugarCraft stack
-builds on it. From the same monorepo:
+**SugarCraft Core** (the `sugarcraft/sugar-core` package) is the foundation library —
+the rest of the SugarCraft stack builds on it. From the same monorepo:
 
 - **SugarStyle** — declarative styling + layout.
 - **SugarWidgets** — prebuilt terminal components.
