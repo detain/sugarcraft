@@ -76,8 +76,9 @@ $prompt = Readline::fromStdin()->run(
 The remaining prompt surface (all fluent, all returning new instances):
 `withValidator(callable)` gates `submit()` on a rule, `withCharLimit(int)`
 caps the buffer, `withHidden()` masks input (secrets) and disables history
-pushes and completion echoes, `withAutoSuggest()` proposes the most recent
-matching history entry as a dim row under the prompt, and `withUndoManager()`
+pushes and completion echoes, `withAutoSuggest(bool)` proposes the most
+recent matching history entry as a dim row under the prompt, and
+`withUndoManager(manager)`
 attaches an `UndoManager` — an immutable bounded (512-state) snapshot stack
 fed automatically as you type and edit, driven by Ctrl+Z/Ctrl+Y (or vi `u`
 in normal mode). `ConfirmationPrompt::withHint(string)` paints a hint row
