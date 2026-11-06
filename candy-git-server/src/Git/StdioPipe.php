@@ -42,6 +42,18 @@ final class StdioPipe
     /** How much of the child's stderr is kept for the failure line. */
     public const STDERR_TAIL_BYTES = 8192;
 
+    /**
+     * Ceiling on the client→child stdin backlog held in memory while the
+     * child's pipe refuses more bytes. A healthy child drains its stdin
+     * continuously, so the pile never grows past roughly one pipe buffer;
+     * a sustained multi-megabyte backlog means the child stopped consuming
+     * (wedged or hostile). Left uncapped, the pile grows until the hard
+     * wall-clock stop — a memory-exhaustion vector on the authenticated
+     * push path, where a client can stream gigabytes regardless of what
+     * the repository ever was. This is a MEMORY bound, not a timeout.
+     */
+    public const PENDING_TO_CHILD_MAX_BYTES = 16 * 1024 * 1024;
+
     private const TICK_MICROSECONDS = 100_000;
 
     private const REAP_POLL_MICROSECONDS = 10_000;
@@ -70,7 +82,8 @@ final class StdioPipe
      * @param float|null       $hardSeconds absolute ceiling override (tests)
      *
      * @return int the child's exit code, or a synthetic failure code
-     *             (1 = client/stream unusable, 127 = spawn failed)
+     *             (1 = client/stream unusable — including a stdin backlog past
+     *             {@see self::PENDING_TO_CHILD_MAX_BYTES} — , 127 = spawn failed)
      */
     public static function run(
         $in,
@@ -116,6 +129,11 @@ final class StdioPipe
         // Declared before the try so the finally block is meaningful even
         // when the pump body throws on its first statements.
         $childErrDone = false;
+        // Set when the client→child backlog crosses PENDING_TO_CHILD_MAX_BYTES.
+        // Kept separate from $exitCode because the finally block unconditionally
+        // recomputes $exitCode from the reaped child — a synthetic breach code
+        // written inside the loop would be clobbered there.
+        $backlogBreached = false;
         try {
             foreach ($pipes as $pipe) {
                 if (\is_resource($pipe)) {
@@ -124,6 +142,11 @@ final class StdioPipe
             }
 
             $toChild = $seed;
+            if (\strlen($toChild) > self::PENDING_TO_CHILD_MAX_BYTES) {
+                // The seed itself is already past the cap: refuse before a
+                // byte is pushed at the child.
+                $backlogBreached = true;
+            }
             $pendingOut = '';
             $writtenOut = 0;
             $childInOpen = true;
@@ -135,7 +158,7 @@ final class StdioPipe
             $lastActivityNs = $startNs;
             $wedgedNs = null;
 
-            while (true) {
+            while (!$backlogBreached) {
                 $read = [];
                 if (!$clientInDone) {
                     $read[] = $inStream;
@@ -193,6 +216,16 @@ final class StdioPipe
                         $clientInDone = true;
                     } elseif ($chunk !== '') {
                         $toChild .= $chunk;
+
+                        if (\strlen($toChild) > self::PENDING_TO_CHILD_MAX_BYTES) {
+                            // n11: the pile is past the cap — the child stopped
+                            // consuming. Fail the stream instead of growing
+                            // without bound until the wall-clock stop.
+                            $backlogBreached = true;
+
+                            break;
+                        }
+
                         $lastActivityNs = $nowNs;
                     }
                 }
@@ -329,6 +362,14 @@ final class StdioPipe
             // gone. Precedence note: bare `$closeRc >= 0 ? $closeRc : x
             // ?? y` mis-groups in PHP 8 — parenthesise explicitly.
             $exitCode = $closeRc >= 0 ? $closeRc : ($reapedCode >= 0 ? $reapedCode : $closeRc);
+        }
+
+        if ($backlogBreached) {
+            // n11: the backlog cap fired; the finally ladder already reaped
+            // the child. Contract code 1 = client/stream unusable.
+            \fwrite(\STDERR, 'candy-git-server: ' . self::label($argv) . ' stdin backlog exceeded ' . self::PENDING_TO_CHILD_MAX_BYTES . " bytes; stream failed\n");
+
+            return 1;
         }
 
         if ($exitCode !== 0) {
