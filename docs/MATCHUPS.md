@@ -72,7 +72,7 @@ ships as `App\` — called out in the table below.
 | **SugarToast** (`sugar-toast/`) | 🟢 ready | Floating notification overlays — Info / Success / Warning / Error types, configurable position and auto-dismiss. |
 | **SugarFlexbox** (`sugar-flexbox/`) | 🟢 ready | FlexBox layout engine + delta-rendering Table (sort/filter/cursor) + sticky Viewport + Scrollbar — ratio-based sizing, gap, align, per-column styling. |
 | **SugarDiff** (`sugar-diff/`) | 🟢 ready | Unified-diff engine — LCS line diff, context hunks, GNU `diff -u` writer + line-number scanner. Extracted from candy-code (BuildsUnifiedDiff; candy-code's DiffGutter keeps an app-side copy). |
-| **Sugar MCP Client** (`sugar-mcp-client/`) | 🟢 ready | MCP client core — JSON-RPC 2.0 codec + envelopes, stdio transport (newline framing, bounded lifecycle via sugar-core BoundedShutdown), initialize/tools handshake, deny-before-allow tool narrowing. Extracted from candy-code MCP stack; protocol per Model Context Protocol spec. |
+| **Sugar MCP Client** (`sugar-mcp-client/`) | 🟢 ready | MCP client core — JSON-RPC 2.0 codec + envelopes, stdio transport (newline framing, bounded lifecycle via sugar-core BoundedShutdown), initialize/tools handshake, deny-before-allow SERVER narrowing (tool rosters follow servers). Extracted from candy-code MCP stack; protocol per Model Context Protocol spec. |
 
 ## Apps
 
