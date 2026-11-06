@@ -259,8 +259,9 @@ $db = ConnectionFactory::fromPath('app.sqlite');   // -> SqliteDatabase
 
 > **Performance posture (user databases)** — every SQLite connection candy-sql opens on a database it does not own arms
 > exactly two per-connection pragmas at the one chokepoint every handle passes through (`SqliteDatabase::__construct`):
-> `busy_timeout=5000` (browsing a file locked elsewhere waits five seconds instead of erroring instantly) and
-> `cache_size=-64000` (a 64 MiB page cache living only in this connection's memory). It deliberately sends **no**
+> `busy_timeout=5000` (pdo_sqlite's own build default would otherwise wait out a full 60 seconds on a file locked
+> elsewhere; five seconds is the house cap, the same figure the history store's `\SQLite3::busyTimeout` uses) and
+> `cache_size=-64000` (a 64,000 KiB / 62.5 MiB page cache living only in this connection's memory). It deliberately sends **no**
 > `journal_mode`, `synchronous`, or `foreign_keys`: WAL is persistent in the file header and opening someone's database
 > must not rewrite it; `synchronous` would silently change the durability of the user's own writes; and turning
 > `foreign_keys` ON starts rejecting statements the user already runs (SQLite and the sqlite3 CLI both default it OFF).

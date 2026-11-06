@@ -9,6 +9,18 @@ use PHPUnit\Framework\TestCase;
 
 final class SqliteDatabaseTest extends TestCase
 {
+    /** @var list<string> temp databases, unlinked in tearDown even on failure paths */
+    private array $tempFiles = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->tempFiles as $path) {
+            @unlink($path);
+        }
+        $this->tempFiles = [];
+        parent::tearDown();
+    }
+
     private function makeInMemory(): SqliteDatabase
     {
         $pdo = new \PDO('sqlite::memory:');
@@ -133,12 +145,12 @@ final class SqliteDatabaseTest extends TestCase
     public function testDatabasesReturnsBasenameForFileDb(): void
     {
         $tmpPath = '/tmp/test_db_' . uniqid() . '.db';
+        $this->tempFiles[] = $tmpPath;
         $pdo = new \PDO('sqlite:' . $tmpPath);
         $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         $db = new SqliteDatabase($pdo, $tmpPath);
         $databases = $db->databases();
         $this->assertSame(basename($tmpPath), $databases[0]);
-        unlink($tmpPath);
     }
 
     // ── close() ──────────────────────────────────────────────────────────────
@@ -188,6 +200,7 @@ final class SqliteDatabaseTest extends TestCase
     public function testOpenArmsThePerConnectionClientPragmas(): void
     {
         $tmpPath = '/tmp/candy_sql_pragma_' . uniqid() . '.db';
+        $this->tempFiles[] = $tmpPath;
         (new \PDO('sqlite:' . $tmpPath))->exec('CREATE TABLE t (x INTEGER)');
         $db = SqliteDatabase::open($tmpPath);
         try {
@@ -212,12 +225,12 @@ final class SqliteDatabaseTest extends TestCase
         $bare = new \PDO('sqlite:' . $tmpPath);
         $reopened = $bare->query('PRAGMA journal_mode')->fetchAll(\PDO::FETCH_ASSOC);
         $this->assertSame('delete', $reopened[0]['journal_mode']);
-        @\unlink($tmpPath);
     }
 
     public function testDeprecatedAliasArmsTheSamePostureThroughItsDelegate(): void
     {
         $tmpPath = '/tmp/candy_sql_pragma_alias_' . uniqid() . '.db';
+        $this->tempFiles[] = $tmpPath;
         (new \PDO('sqlite:' . $tmpPath))->exec('CREATE TABLE t (x INTEGER)');
         $db = \SugarCraft\Sql\Database::open($tmpPath);
         try {
@@ -225,7 +238,6 @@ final class SqliteDatabaseTest extends TestCase
             $this->assertSame(5000, $busy[0]['timeout'], 'the alias forwards to the same armed delegate — no second copy of the posture');
         } finally {
             $db->close();
-            @\unlink($tmpPath);
         }
     }
 }

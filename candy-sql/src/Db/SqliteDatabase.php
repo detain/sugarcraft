@@ -44,11 +44,14 @@ final class SqliteDatabase implements DatabaseInterface
     /**
      * Per-connection posture for a database this client does NOT own.
      *
-     * busy_timeout=5000: browsing a file another process holds in a
-     * transaction currently errors instantly; five seconds of patience lets a
-     * transient lock pass instead (the same figure the history store uses).
-     * cache_size=-64000: negative means KiB — a 64 MiB page cache for the
-     * browse-heavy reader, living only in this connection's memory.
+     * busy_timeout=5000: pdo_sqlite arms its own build default of 60000 ms
+     * on every handle, so an un-armed browse of a file another process holds
+     * in a transaction waits out the full minute before failing; five seconds
+     * is the house cap — the same figure the history store passes to
+     * \SQLite3::busyTimeout — trading a long stale wait for a prompt retry.
+     * cache_size=-64000: negative means KiB — a 64,000 KiB (62.5 MiB) page
+     * cache for the browse-heavy reader, living only in this connection's
+     * memory.
      *
      * Deliberately NOT sent here: journal_mode (WAL is persistent — it is
      * written into the FILE header, and opening someone's database must not
