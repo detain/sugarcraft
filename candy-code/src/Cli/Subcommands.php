@@ -2043,7 +2043,7 @@ final class Subcommands
                 );
             }
             $scales = ['k' => 1024, 'kb' => 1024, 'm' => 1048576, 'mb' => 1048576, 'g' => 1073741824, 'gb' => 1073741824];
-            $largerBytes = (int) ((float) $match[1] * $scales[\strtolower($match[3])]);
+            $largerBytes = (int) ((float) $match[1] * $scales[\strtolower($match[2])]);
         }
         $keepLatest = null;
         if (in_array('--keep-latest', $filters, true)) {
