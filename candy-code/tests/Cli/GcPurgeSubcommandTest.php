@@ -176,10 +176,21 @@ final class GcPurgeSubcommandTest extends TestCase
 
     public function testNamedSessionsAreExemptWithoutIncludeNamed(): void
     {
-        self::gcPurgeSeedStore($this->dbPath);
+        [$store, $pdo] = self::gcPurgeSeedStore($this->dbPath);
+        // A PINNED row with NO name: only the 'pinned <> 0' leg of
+        // gcPurgeExemptIds can spare it ('named' carries both legs, so it
+        // alone never discriminates the pinned one). Seeded in-method so
+        // the shared-store pins ('four seeded' counts, include-named
+        // sweeps) stay untouched.
+        $store->createSession('kept', 'openai', 'gpt-4o');
+        $store->setPinned('kept', true);
+        $epoch = \time() - 3_500_000;
+        $pdo->exec('UPDATE sessions SET created_at = ' . $epoch . ", updated_at = " . $epoch . " WHERE id = 'kept'");
+        $pdo->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+
         $doc = self::gcPurgeJsonDoor(['purge', '--older-than=30d', '--dry-run']);
-        self::assertSame(['old'], $doc['plan']['target_sessions']);
-        self::assertSame(['named'], $doc['plan']['exemptions']);
+        self::assertSame(['old'], $doc['plan']['target_sessions'], 'the pinned-unnamed kept row must not fall into the acted set');
+        self::assertSame(['named', 'kept'], $doc['plan']['exemptions'], 'pinned and named rows both ride the exemption list, in plan order');
         self::assertStringContainsString('--include-named', self::gcPurgeText(['purge', '--older-than=30d', '--dry-run']), 'the exemption line must disclose its override');
     }
 
