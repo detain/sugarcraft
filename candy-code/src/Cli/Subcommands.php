@@ -1935,8 +1935,8 @@ final class Subcommands
      *
      * Execution phase: a read-write connection via the sanctioned
      * SqliteConnect arm, then the same plan derivation on it. Cleans run
-     * FIRST in the fixed order (journals, events, usage, locks, shares,
-     * imports, shadows, expired tombstones), then strips, then whole-
+     * FIRST in the fixed order (journals, events, usage, imports, expired
+     * tombstones, locks, shares, shadows), then strips, then whole-
      * session deletes routed EXCLUSIVELY through EnhancedSessionStore::
      * deleteSession() — the house path whose tombstone insert, share
      * revoke, workspace-ref drop, blob de-intern and FTS-forget laws
@@ -2722,8 +2722,10 @@ final class Subcommands
     }
 
     /**
-     * Candidate list for the ambiguity door, mirroring the session verb's
-     * first-ten render exactly (ids and sanitized labels).
+     * Candidate list for the ambiguity door: the matched ids comma-
+     * joined for display. The session verb's first-ten render pairs each
+     * id with a sanitized label ('id (label)'); this list deliberately
+     * carries the ids only — no labels ride it.
      *
      * @param list<string> $ids
      */
