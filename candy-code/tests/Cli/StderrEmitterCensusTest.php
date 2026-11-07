@@ -57,7 +57,12 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — forty-nine sites (RS-DRIVER.b 2026-11-06: +1 in
+ *  1. `fwrite(STDERR, …)` — fifty-three sites (gc-cli-1106 2026-11-06: +4 in
+ *     `Subcommands` — the gc verb family writers: the vacuum headroom notice, the
+ *     live-seat lock-refusal pair and the corrupt-store funnel, each a one-shot
+ *     notice printed by a detached CLI verb and Stderr alone by the same
+ *     detached-process decision as every sibling subcommand writer; RS-DRIVER.b
+ *     2026-11-06: +1 in
  *     `NonInteractive::run()` — the stream-json ignored-lines notice,
  *     stderr-alone because the run continues past the shapes it counts;
  *     CC-QA-2 2026-11-05: +1 in
@@ -447,7 +452,12 @@ final class StderrEmitterCensusTest extends TestCase
         // CC-QA-1 2026-11-04: +1 — sessionStoreForVerbs()' funnel notice for
         // a session.db that will not open at all; the six session verbs share
         // the one door, so the file gains one site, not six.
-        'src/Cli/Subcommands.php' => 9,
+        'src/Cli/Subcommands.php' => 13, // gc-cli-1106 closeout 2026-11-06: +4 raw writers in the
+            // gc verb family — the vacuum headroom notice, the two live-seat
+            // lock-refusal doors (held-seat refusal and the orphan-sweep
+            // announcement), and the corrupt-store funnel — each a one-shot
+            // notice printed by a detached CLI verb and Stderr alone by the same
+            // detached-process decision as every sibling subcommand writer;
         // `/new` into another directory: SessionRelaunch::tell(), the one
         // line saying why candy-code could not restart there (no
         // pcntl_exec, an unenterable directory, a failed exec) and the
@@ -694,7 +704,7 @@ final class StderrEmitterCensusTest extends TestCase
         // prefix into the message {@see NonInteractive::failUsage()} carries;
         // the verb's own prose never touches stderr — preview, refusals and
         // the settle lines are all stdout echoes on the login arm's model.
-        'src/Cli/Subcommands.php' => 55, // CC-QA-1: the funnel notice literal
+        'src/Cli/Subcommands.php' => 76, // CC-QA-1: the funnel notice literal | +21 gc-cli-1106 (2026-11-06): the gc verb family's prefixed literals across its usage refusals (the action-arg match arm's + 640KiB/128MiB/512MiB vacuum headroom + two live-seat lock-refusal + purge/vacuum decline and lock-refusal doors + the corrupt-store funnel + per-action corrupt/usage lines), the status/sessions/analyze/purge/vacuum settle-line literals, and the orphan-sweep/seat-lock/usage/preflight refusal literals the status leg now names — all one-shot CLI-verb output on the stderr channel, the same detached-process decision as every sibling subcommand writer
         // C-EXT-6.b: the three prefixed reason strings of a refused hook-log
         // write (directory not private, symlinked leaf, throwing append). All
         // three ride RuntimeNoticeSink::warn() behind a once-per-process latch
@@ -1172,7 +1182,7 @@ final class StderrEmitterCensusTest extends TestCase
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39, 'forty' => 40,
         'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44, 'forty-five' => 45,
         'forty-six' => 46, 'forty-seven' => 47, 'forty-eight' => 48, 'forty-nine' => 49,
-        'fifty' => 50, 'fifty-one' => 51,
+        'fifty' => 50, 'fifty-one' => 51, 'fifty-two' => 52, 'fifty-three' => 53,
     ];
 
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void
