@@ -447,16 +447,36 @@ final class ReadPathCensusTest extends TestCase
         'Commands/CommandLoader.php|new RecursiveDirectoryIterator' => [
             'CONTAINED — the commands directory is anchored to its tree and each `*.md` confined to it',
         ],
+        'Cli/Subcommands.php|fopen' => [
+            // gc-cli-1106 closeout 2026-11-06: gcLockIsHeld() opens a `.lock`
+            // under the app's own config dir only to test its flock() liveness —
+            // the same seat-probe shape as the DelegationSlots sweep; nothing is
+            // read through the handle.
+            'SELF_LOCATED — the lock liveness probe of gcLockIsHeld(), opened `r` '
+                . 'and flock()-tested on a `.lock` inside this application\'s own '
+                . 'config directory, no byte read',
+        ],
         'Cli/Subcommands.php|scandir' => [
             'USER_TYPED — copyBundleTree() lists the install source the person at the terminal '
                 . 'named on `bundles install`; the destination is this command\'s own container',
             'SELF_LOCATED — removeTree() sweeps only the scratch paths this verb minted inside '
                 . 'its own root',
+            // gc-cli-1106 closeout 2026-11-06: gcPurgeRemoveDirectory() walks a
+            // store directory already jailed inside the application's own root.
+            'SELF_LOCATED — gcPurgeRemoveDirectory() lists only the names directly '
+                . 'under a purged store directory this application already confined '
+                . 'to its own root',
             // C-EXT-4.b: bundlesBundleRootNames() lists the command's OWN bundle
             // root (under HomeDirectory::owned()) names-only, to pick which
             // installed bundles `bundles update` walks and `recommend` excludes.
             'SELF_LOCATED — bundlesBundleRootNames() reads only the names directly under '
                 . 'the operator-owned `~/.candy-code/bundles` root this command minted',
+            // gc-cli-1106 closeout 2026-11-06: gcLiveLockCount() lists names under
+            // the lock directory inside this application's own config root, names
+            // only, to count live flocks for the `gc status` advice line.
+            'SELF_LOCATED — gcLiveLockCount() lists the names directly under the '
+                . 'session-lock directory inside this application\'s own config '
+                . 'directory, names only',
         ],
         'Commands/BangShell.php|file_get_contents' => [
             'SELF_LOCATED — the `!cmd` result payload (roadmap 5.14g): the name ToolIpcFiles::reserve() '
@@ -1046,6 +1066,37 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — server.lock in the verified state dir, opened `c` under umask 077 '
                 . 'only to hold flock(); lstat refuses anything but a regular file and no byte '
                 . 'of it is read',
+        ],
+        'Session/Gc/GcInventory.php|fopen' => [
+            // gc-cli-1106 closeout 2026-11-06: lockSweep() opens each `.lock`
+            // in this application's own session-lock directory only to test
+            // its flock() liveness; nothing is read through the handle.
+            'SELF_LOCATED — the lock liveness probe of GcInventory::lockSweep(), '
+                . 'opened `r` and flock()-tested on a `.lock` inside this '
+                . 'application\'s own session-lock directory, no byte read',
+        ],
+        'Session/Gc/GcInventory.php|scandir' => [
+            // gc-cli-1106 closeout 2026-11-06: both walks list this
+            // application's own storage, names only.
+            'SELF_LOCATED — GcInventory::walkDirectory() lists the names directly '
+                . 'under this application\'s own session store directory, names '
+                . 'only, entries then gated by their own sink verdicts',
+            'SELF_LOCATED — GcInventory::lockSweep() lists the names directly '
+                . 'under the session-lock directory inside this application\'s '
+                . 'own config directory, names only, acting via unlink only',
+        ],
+        'Session/Gc/GcSessionSizes.php|scandir' => [
+            // gc-cli-1106 closeout 2026-11-06: the size scans walk this
+            // application's own store roots, names only.
+            'SELF_LOCATED — GcSessionSizes::scanJournalPaths() lists the names '
+                . 'directly under a directory inside this application\'s own '
+                . 'session store root, names only',
+            'SELF_LOCATED — GcSessionSizes::scanJournalPaths() lists the names '
+                . 'directly under one session directory of this application\'s '
+                . 'own store, names only',
+            'SELF_LOCATED — GcSessionSizes::scanShadowDirectories() lists the '
+                . 'names directly under a directory inside this application\'s '
+                . 'own data home, names only',
         ],
         'Session/Import/RemoteSessionPush.php|file_get_contents' => [
             'SELF_LOCATED — resolveToken() (C-SES-7.g) reads the owner-token file the '
