@@ -2238,6 +2238,8 @@ final class Subcommands
         if (in_array('--clean-shadows', $cleans, true)) {
             foreach ($accuser->abandonedShadowDirectories($now) as $shadow) {
                 $sweep = self::gcPurgeRemoveDirectory((string) $shadow['path']);
+                // Report face: an accused-but-empty dir is rmdir'd above yet
+                // tallies 0 here; the census face counts every accused dir.
                 $cleaned['shadow_dirs'] += $sweep[0] > 0 ? 1 : 0;
                 $releasedFileBytes += $sweep[1];
             }
