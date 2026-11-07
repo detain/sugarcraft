@@ -12,6 +12,8 @@ use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\ExecutorInterface;
 use SugarCraft\Code\Agents\Isolation;
 use SugarCraft\Code\Agents\SubAgent;
+use SugarCraft\Code\Permissions\PermissionGate;
+use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Providers\CompleteRequest;
 
 /**
@@ -94,6 +96,12 @@ final class AgentWorkerPoolInlineBudgetTest extends TestCase
     public function testTheBoundedCopyCarriesEveryOtherConstructorArgument(): void
     {
         $executor = $this->timeoutHonouringExecutor(workSeconds: 0);
+        // EVERY constructor parameter gets a value distinct from its default,
+        // deliberately: a field left at its default cannot tell "carried"
+        // from "dropped" (null compared equal to null), and exactly that
+        // vacuity hid the loss of outputSchema and $model in the bounded
+        // copy until the wf-g2g3 fields shipped. Keep this fixture
+        // non-default on every parameter as SubAgent gains more.
         $agent = new SubAgent(
             id: 'carried',
             agent: $this->budgetAgent('x', timeout: 1)->agent,
@@ -102,8 +110,14 @@ final class AgentWorkerPoolInlineBudgetTest extends TestCase
             timeout: 300,
             maxRetries: 4,
             isolation: Isolation::Worktree,
+            permissionGate: new PermissionGate(PermissionMode::AcceptEdits),
             teamId: 'team',
             teammateId: 'mate',
+            // G3 shape: a decoded-trusted JSON-schema document.
+            outputSchema: ['type' => 'object', 'properties' => ['verdict' => ['type' => 'string']]],
+            // S2 ask: distinct from the preset's model 'm' so a copy that
+            // fell back to the preset instead of carrying the ask also reddens.
+            model: 'stage-model',
         );
 
         iterator_to_array((new AgentWorkerPool(executor: $executor))->withTimeBudget(30.0)->executeAll([$agent], $this->budgetRequest()), false);
