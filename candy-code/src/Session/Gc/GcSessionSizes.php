@@ -62,7 +62,10 @@ final class GcSessionSizes
     /** Storage family holding shadow repos, per ShadowRepo base dir. */
     public const SHADOW_DIRECTORY_NAME = 'checkpoints';
 
-    /** @param list<string> Tables folded per owner; FTS + tombstones ride their own legs. */
+    /**
+     * @param PDO    $connection Session store handle (EnhancedSessionStore db)
+     * @param string $configDir  Home config dir; FTS + tombstones ride their own legs
+     */
     public function __construct(
         private readonly PDO $connection,
         private readonly string $configDir,
