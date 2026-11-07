@@ -359,6 +359,7 @@ CandyCode — 终端 AI 编程助手。
                          失败则退出码为 1。
                          区别于模型可调用的 "doctor" 工具，后者
                          向模型报告终端的图像协议。
+  gc                     检查并回收会话存储空间
   import claude          预览导入 Claude Code 设置：读取 Claude 的用户
                          设置文件，以及启动根目录下的 .claude 设置文件，
                          当指定 --project 时，将其权限

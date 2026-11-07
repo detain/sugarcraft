@@ -397,6 +397,8 @@ session; acp runs turns for an editor, until the editor disconnects):
                          FAILS.
                          Distinct from the model-callable "doctor" tool, which
                          reports the terminal's image protocol to the model.
+  gc                     Inspect and reclaim session storage; run it without an
+                         action to list the actions.
   import claude          Preview importing Claude Code settings: reads Claude's user
                          settings file, plus the .claude settings file under the launch
                          root when --project is spelled, translates its permissions

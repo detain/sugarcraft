@@ -359,6 +359,7 @@ CandyCode — 終端機 AI 程式碼助理。
                          失敗則以 1 退出。
                          有別於模型可呼叫的 "doctor" 工具，該工具
                          向模型回報終端機的影像協定。
+  gc                     檢查並回收會話儲存空間
   import claude          預覽匯入 Claude Code 設定：讀取 Claude 的使用者
                          設定檔，以及啟動根目錄下的 .claude 設定檔，
                          當指定 --project 時，將其權限的

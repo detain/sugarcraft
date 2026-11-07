@@ -359,6 +359,7 @@ parados — e attach, que é a exceção a ambos: executa a TUI na sessão de um
                          verificação FALHAR.
                          Distinto da ferramenta "doctor" chamável pelo modelo, que
                          reporta o protocolo de imagens do terminal ao modelo.
+  gc                     Inspecionar e recuperar o armazenamento de sessões
   import claude          Pré-visualiza a importação das configurações do Claude Code: lê o arquivo
                          de configurações do usuário do Claude, além do arquivo de configurações .claude
                          sob a raiz de execução quando --project é informado, traduz suas listas

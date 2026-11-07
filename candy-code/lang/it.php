@@ -359,6 +359,7 @@ esecuzione; acp esegue turni per un editor, finché l'editor non si disconnette)
                          FALLISCE.
                          Distinto dal tool "doctor" invocabile dal modello, che
                          segnala al modello il protocollo immagini del terminale.
+  gc                     Ispeziona e recupera l’archivio delle sessioni
   import claude          Anteprima dell'importazione delle impostazioni di Claude Code: legge l'utente di Claude
                          file di impostazioni, oltre al file di impostazioni .claude nella directory di avvio
                          root quando --project è specificato, traduce i suoi permessi

@@ -359,6 +359,7 @@ de um servidor em execução; acp executa turnos para um editor, até este se de
                          com 1 se alguma verificação FALHAR.
                          Distinto da ferramenta "doctor" invocável pelo modelo, que
                          reporta ao modelo o protocolo de imagens do terminal.
+  gc                     Inspecionar e recuperar o armazenamento de sessões
   import claude          Pré-visualizar importação das definições do Claude Code: lê o ficheiro de
                          definições do utilizador, mais o ficheiro de definições .claude sob a raiz de
                          arranque quando --project é indicado, traduz as suas listas de permissões

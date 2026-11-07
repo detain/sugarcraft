@@ -359,6 +359,7 @@ CandyCode — ターミナル向けAIコーディングアシスタント。
                          失敗した場合終了コード1。
                          モデルから呼び出せる"doctor"ツールとは別物。
                          後者はターミナルの画像プロトコルをモデルに報告します。
+  gc                     セッションストレージを検査して回収する
   import claude          Claude Code設定のインポートをプレビュー: Claudeのユーザー
                          設定ファイル、および--project指定時の起動ルート下の.claude
                          設定ファイルを読み取り、permissionsのallow/deny/askリストを
