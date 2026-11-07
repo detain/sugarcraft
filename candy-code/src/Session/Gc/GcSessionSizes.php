@@ -195,6 +195,31 @@ final class GcSessionSizes
      */
     public static function scanJournals(string $configDir): array
     {
+        $sizes = [];
+
+        foreach (self::scanJournalPaths($configDir) as $stem => $paths) {
+            $bytes = 0;
+
+            foreach ($paths as $path) {
+                $bytes += (int) filesize($path);
+            }
+
+            $sizes[$stem] = $bytes;
+        }
+
+        return $sizes;
+    }
+
+    /**
+     * The same walk as {@see scanJournals}, but keyed id => the file paths
+     * behind it: `gc purge` needs to unlink (B3), not just bill. Duplicate
+     * ids across slugs keep every path; the id law is identical, so the two
+     * public faces can never disagree about what is a journal.
+     *
+     * @return array<string,list<string>>
+     */
+    public static function scanJournalPaths(string $configDir): array
+    {
         $root = $configDir . '/' . JsonlTranscriptWriter::DIR_NAME;
         $found = [];
 
@@ -242,7 +267,7 @@ final class GcSessionSizes
                     continue;
                 }
 
-                $found[$stem] = ($found[$stem] ?? 0) + (int) filesize($path);
+                $found[$stem][] = $path;
             }
         }
 

@@ -387,13 +387,45 @@ final class GcInventory
      */
     public static function countLocks(string $sessionsDirectory): array
     {
+        $sweep = self::lockSweep($sessionsDirectory);
+
+        return [
+            'files' => $sweep['files'],
+            'live' => $sweep['live'],
+            'stale_bytes' => $sweep['stale_bytes'],
+        ];
+    }
+
+    /**
+     * The stale half as paths, for `gc purge --clean-locks` (B3): every
+     * entry {@see countLocks} proved unheld. Callers that delete must
+     * re-probe per file immediately before unlinking — an inode that was
+     * free at sweep time can gain a holder at any moment, and a lock that
+     * gains one is somebody's running session.
+     *
+     * @return list<string>
+     */
+    public static function staleLockPaths(string $sessionsDirectory): array
+    {
+        return self::lockSweep($sessionsDirectory)['stale_paths'];
+    }
+
+    /**
+     * The one flock sweep behind both public faces: count, bytes, and the
+     * unheld paths in a single walk.
+     *
+     * @return array{files:int,live:int,stale_bytes:int,stale_paths:list<string>}
+     */
+    private static function lockSweep(string $sessionsDirectory): array
+    {
         $files = 0;
         $live = 0;
         $staleBytes = 0;
+        $stalePaths = [];
         $entries = scandir($sessionsDirectory);
 
         if ($entries === false) {
-            return ['files' => 0, 'live' => 0, 'stale_bytes' => 0];
+            return ['files' => 0, 'live' => 0, 'stale_bytes' => 0, 'stale_paths' => []];
         }
 
         foreach ($entries as $entry) {
@@ -420,11 +452,12 @@ final class GcInventory
             } else {
                 flock($handle, LOCK_UN);
                 $staleBytes += (int) (@filesize($path) ?: 0);
+                $stalePaths[] = $path;
             }
 
             fclose($handle);
         }
 
-        return ['files' => $files, 'live' => $live, 'stale_bytes' => $staleBytes];
+        return ['files' => $files, 'live' => $live, 'stale_bytes' => $staleBytes, 'stale_paths' => $stalePaths];
     }
 }

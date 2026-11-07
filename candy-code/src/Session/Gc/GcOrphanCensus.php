@@ -29,6 +29,13 @@ use SugarCraft\Code\Workspace\ShadowGarbageCollector;
  * The shadow-dir age gate borrows ShadowGarbageCollector's own interval
  * vocabulary: a dir nobody claims YET may be mid-checkpoint, so only dirs
  * older than one collection interval count as abandoned.
+ *
+ * B3 rider (gc purge): every accusation also has a TARGET face —
+ * {@see orphanJournalPaths()}, {@see orphanRowTarget()},
+ * {@see abandonedShadowDirectories()}, {@see listStaleLockPaths()},
+ * {@see expiredTombstoneTarget()} — so purge deletes exactly what the
+ * census counts, never a re-derived second rule set. The target faces are
+ * still read-only; the DELETE statements live in the caller.
  */
 final class GcOrphanCensus
 {
@@ -71,26 +78,47 @@ final class GcOrphanCensus
      */
     public function orphanJournals(int $now): array
     {
-        $journals = GcSessionSizes::scanJournals($this->configDir);
+        $accused = $this->orphanJournalPaths($now);
+        $count = count($accused);
+        $bytes = 0;
+
+        foreach ($accused as $paths) {
+            foreach ($paths as $path) {
+                $bytes += (int) filesize($path);
+            }
+        }
+
+        return ['count' => $count, 'bytes' => $bytes];
+    }
+
+    /**
+     * The SAME accusation as {@see orphanJournals()}, as targets: accused
+     * session id => its journal paths. `gc purge --clean-orphan-journals`
+     * unlinks through this list, so the census and the cleanup can never
+     * disagree about which file is an orphan (gc-cli-1106 B3).
+     *
+     * @return array<string,list<string>>
+     */
+    public function orphanJournalPaths(int $now): array
+    {
+        $journals = GcSessionSizes::scanJournalPaths($this->configDir);
 
         if ($journals === [] || !GcInventory::tablePresent($this->connection, 'sessions')) {
-            return ['count' => 0, 'bytes' => 0];
+            return [];
         }
 
         $claimed = $this->claimedIds($now);
-        $count = 0;
-        $bytes = 0;
+        $accused = [];
 
-        foreach ($journals as $id => $size) {
+        foreach ($journals as $id => $paths) {
             if (isset($claimed[$id])) {
                 continue;
             }
 
-            $count++;
-            $bytes += $size;
+            $accused[$id] = $paths;
         }
 
-        return ['count' => $count, 'bytes' => $bytes];
+        return $accused;
     }
 
     /**
@@ -102,8 +130,50 @@ final class GcOrphanCensus
      */
     private function orphanRows(string $table, int $now): array
     {
-        if (!GcInventory::tablePresent($this->connection, $table)) {
+        $target = $this->orphanRowTarget($table, $now);
+
+        if ($target === null) {
             return ['count' => 0, 'bytes' => 0];
+        }
+
+        $columns = array_values(array_intersect(
+            GcInventory::columnsOf($this->connection, $table),
+            GcInventory::TABLE_ROSTERS[$table],
+        ));
+        $terms = array_map(
+            static fn (string $column): string => 'COALESCE(SUM(LENGTH("' . $column . '")), 0)',
+            $columns,
+        );
+
+        $statement = $this->connection->prepare(
+            'SELECT COUNT(*), ' . implode(' + ', $terms)
+            . ' FROM "' . $table . '" WHERE ' . $target[0],
+        );
+        $statement->execute($target[1]);
+        $row = $statement->fetch(PDO::FETCH_NUM);
+
+        if ($row === false) {
+            return ['count' => 0, 'bytes' => 0];
+        }
+
+        return ['count' => (int) $row[0], 'bytes' => (int) $row[1]];
+    }
+
+    /**
+     * The accusation predicate for one orphan row family, with the params
+     * that complete it: `gc purge --clean-orphan-events`, `--clean-orphan-usage`
+     * and `--clean-imports` DELETE through the SAME fragment the census
+     * counts with, so cleanup can never reap a row the diagnostic did not
+     * accuse (gc-cli-1106 B3 single-source law). Returns null when the
+     * family is not accusable at all (missing table, missing session_id,
+     * or no sessions table to disprove against).
+     *
+     * @return null|array{0:string,1:list<int|string>}
+     */
+    public function orphanRowTarget(string $table, int $now): ?array
+    {
+        if (!GcInventory::tablePresent($this->connection, $table)) {
+            return null;
         }
 
         $columns = array_values(array_intersect(
@@ -112,17 +182,12 @@ final class GcOrphanCensus
         ));
 
         if ($columns === [] || !in_array('session_id', $columns, true)) {
-            return ['count' => 0, 'bytes' => 0];
+            return null;
         }
 
         if (!GcInventory::tablePresent($this->connection, 'sessions')) {
-            return ['count' => 0, 'bytes' => 0];
+            return null;
         }
-
-        $terms = array_map(
-            static fn (string $column): string => 'COALESCE(SUM(LENGTH("' . $column . '")), 0)',
-            $columns,
-        );
 
         $parameters = [$now - self::TOMBSTONE_TTL_SECONDS];
         $grace = '';
@@ -135,21 +200,12 @@ final class GcOrphanCensus
             $grace = ' AND "session_id" NOT IN (SELECT "id" FROM "' . $tombstoneGrave . '" WHERE "deleted_at" >= ?)';
         }
 
-        $statement = $this->connection->prepare(
-            'SELECT COUNT(*), ' . implode(' + ', $terms)
-            . ' FROM "' . $table . '"'
-            . ' WHERE ("session_id" IS NULL'
+        return [
+            '("session_id" IS NULL'
             . ' OR ("session_id" NOT IN (SELECT "id" FROM "sessions")'
             . $grace . '))',
-        );
-        $statement->execute($grace === '' ? [] : $parameters);
-        $row = $statement->fetch(PDO::FETCH_NUM);
-
-        if ($row === false) {
-            return ['count' => 0, 'bytes' => 0];
-        }
-
-        return ['count' => (int) $row[0], 'bytes' => (int) $row[1]];
+            $grace === '' ? [] : $parameters,
+        ];
     }
 
     /**
@@ -172,6 +228,25 @@ final class GcOrphanCensus
             'count' => $locks['files'] - $locks['live'],
             'bytes' => $locks['stale_bytes'],
         ];
+    }
+
+    /**
+     * The stale half as paths, from the SAME sweep {@see staleLocks()}
+     * counts through: `gc purge --clean-locks` deletes exactly these,
+     * re-probing each inode immediately before its unlink (a lock that
+     * gains a holder mid-run is somebody's live session and must survive).
+     *
+     * @return list<string>
+     */
+    public function listStaleLockPaths(): array
+    {
+        $directory = $this->configDir . '/' . SessionLock::DIRECTORY;
+
+        if (!is_dir($directory) || is_link($directory)) {
+            return [];
+        }
+
+        return GcInventory::staleLockPaths($directory);
     }
 
     /**
@@ -235,16 +310,37 @@ final class GcOrphanCensus
      */
     private function abandonedShadows(int $now): array
     {
+        $accused = $this->abandonedShadowDirectories($now);
+        $count = count($accused);
+        $bytes = 0;
+
+        foreach ($accused as $dir) {
+            $bytes += $dir['bytes'];
+        }
+
+        return ['count' => $count, 'bytes' => $bytes];
+    }
+
+    /**
+     * The accusation above as targets: hash => {bytes, mtime, path}. `gc
+     * purge --clean-shadows` deletes exactly these directories — same
+     * claim-law (a dir any live cwd hashes to is owned; a young unknown
+     * may be mid-checkpoint), one walk, no second copy (gc-cli-1106 B3).
+     *
+     * @return array<string,array{bytes:int,mtime:int,path:string}>
+     */
+    public function abandonedShadowDirectories(int $now): array
+    {
         $directories = GcSessionSizes::scanShadowDirectories($this->configDir);
 
         if ($directories === [] || !GcInventory::tablePresent($this->connection, 'sessions')) {
-            return ['count' => 0, 'bytes' => 0];
+            return [];
         }
 
         $columns = GcInventory::columnsOf($this->connection, 'sessions');
 
         if (!in_array('cwd', $columns, true)) {
-            return ['count' => 0, 'bytes' => 0];
+            return [];
         }
 
         $statement = $this->connection->prepare('SELECT DISTINCT "cwd" FROM "sessions" WHERE "cwd" IS NOT NULL AND "cwd" <> \'\'');
@@ -255,8 +351,7 @@ final class GcOrphanCensus
             $claimed[GcSessionSizes::hashForCwd((string) $cwd)] = true;
         }
 
-        $count = 0;
-        $bytes = 0;
+        $accused = [];
 
         foreach ($directories as $hash => $dir) {
             if (isset($claimed[$hash])) {
@@ -267,11 +362,12 @@ final class GcOrphanCensus
                 continue;
             }
 
-            $count++;
-            $bytes += $dir['bytes'];
+            $accused[$hash] = $dir + [
+                'path' => $this->configDir . '/' . GcSessionSizes::SHADOW_DIRECTORY_NAME . '/' . $hash,
+            ];
         }
 
-        return ['count' => $count, 'bytes' => $bytes];
+        return $accused;
     }
 
     /**
@@ -282,22 +378,16 @@ final class GcOrphanCensus
      */
     private function expiredTombstones(int $now): array
     {
-        $table = 'session_tombstones';
+        $target = $this->expiredTombstoneTarget($now);
 
-        if (!GcInventory::tablePresent($this->connection, $table)) {
-            return ['count' => 0, 'bytes' => 0];
-        }
-
-        $live = GcInventory::columnsOf($this->connection, $table);
-
-        if (!in_array('id', $live, true) || !in_array('deleted_at', $live, true)) {
+        if ($target === null) {
             return ['count' => 0, 'bytes' => 0];
         }
 
         $statement = $this->connection->prepare(
-            'SELECT COUNT(*), COALESCE(SUM(LENGTH("id")), 0) FROM "' . $table . '" WHERE "deleted_at" < ?',
+            'SELECT COUNT(*), COALESCE(SUM(LENGTH("id")), 0) FROM "session_tombstones" WHERE ' . $target[0],
         );
-        $statement->execute([$now - self::TOMBSTONE_TTL_SECONDS]);
+        $statement->execute($target[1]);
         $row = $statement->fetch(PDO::FETCH_NUM);
 
         if ($row === false) {
@@ -305,6 +395,31 @@ final class GcOrphanCensus
         }
 
         return ['count' => (int) $row[0], 'bytes' => (int) $row[1]];
+    }
+
+    /**
+     * The expired-grave predicate with its params, shared by the count
+     * above and `gc purge --clean-expired-tombstones` below — SessionStore
+     * only reaps these opportunistically on its next write, so the census
+     * names the reap and purge performs it through the same fragment.
+     *
+     * @return null|array{0:string,1:list<int|string>}
+     */
+    public function expiredTombstoneTarget(int $now): ?array
+    {
+        $table = 'session_tombstones';
+
+        if (!GcInventory::tablePresent($this->connection, $table)) {
+            return null;
+        }
+
+        $live = GcInventory::columnsOf($this->connection, $table);
+
+        if (!in_array('id', $live, true) || !in_array('deleted_at', $live, true)) {
+            return null;
+        }
+
+        return ['"deleted_at" < ?', [$now - self::TOMBSTONE_TTL_SECONDS]];
     }
 
     /**

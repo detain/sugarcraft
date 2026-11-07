@@ -381,9 +381,25 @@ final class ShareStore
     }
 
     /** Delete rows no lookup could ever return again (expired or revoked). */
-    private function sweepInertRows(): void
+    private function sweepInertRows(): int
     {
         $statement = $this->pdo->prepare('DELETE FROM shares WHERE expires_at <= :now OR revoked_at IS NOT NULL');
         $statement->execute([':now' => time()]);
+
+        return $statement->rowCount();
+    }
+
+    /**
+     * `gc purge --clean-shares` entry point (gc-cli-1106 B3): the publish
+     * sweep, callable on purpose. The DELETE law is the private
+     * {@see sweepInertRows()} verbatim — this mints no second rule, it only
+     * lifts the existing one to a named door and reports how many inert
+     * rows left the table.
+     */
+    public function purgeInertRows(): int
+    {
+        $this->ensureSchema();
+
+        return $this->sweepInertRows();
     }
 }

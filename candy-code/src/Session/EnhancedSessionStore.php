@@ -3432,6 +3432,47 @@ final class EnhancedSessionStore
     }
 
     /**
+     * Strip EVERY checkpoint row of one session — `gc purge
+     * --strip-checkpoints` (gc-cli-1106 B3). This is the
+     * {@see discardRedoStackRows()} idiom widened from the redo stack
+     * (`undone > 0`) to the whole session, carrying its laws unchanged:
+     * workspace refs are queued before the rows vanish, and
+     * {@see collectCheckpointBlobs()} runs after, so message blobs only
+     * these checkpoints named stop being billed — purge never
+     * reimplements blob accounting. Returns the deleted row count.
+     */
+    public function stripSessionCheckpoints(string $sessionId): int
+    {
+        $deleted = 0;
+
+        try {
+            $this->writeTransaction(function () use ($sessionId, &$deleted): void {
+                $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM checkpoints WHERE session_id = ?');
+                $stmt->execute([$sessionId]);
+                $deleted = (int) $stmt->fetchColumn();
+                // Cursor discipline per insertCheckpoint(): a held read
+                // cursor across the DELETE below stalls the WAL checkpoint.
+                $stmt->closeCursor();
+
+                if ($deleted === 0) {
+                    return;
+                }
+
+                $this->queueWorkspaceRefDrops('session_id = ?', [$sessionId]);
+                $this->pdo->prepare('DELETE FROM checkpoints WHERE session_id = ?')->execute([$sessionId]);
+                $this->collectCheckpointBlobs($sessionId);
+            });
+        } catch (\Throwable $e) {
+            $this->discardWorkspaceRefOps();
+            throw $e;
+        }
+
+        $this->flushWorkspaceRefOps();
+
+        return $deleted;
+    }
+
+    /**
      * Drop `checkpoint_blobs` rows no surviving checkpoint of this session
      * references any more.
      */
