@@ -995,6 +995,11 @@ final class AgentWorkerPool
             permissionGate: $agent->permissionGate,
             teamId: $agent->teamId,
             teammateId: $agent->teammateId,
+            // The G3 schema and the S2 model ask are part of WHAT the run is,
+            // not how long it gets: dropping them made a budget-bounded stage
+            // silently run unconstrained and off its asked model.
+            outputSchema: $agent->outputSchema,
+            model: $agent->model,
         );
     }
 
