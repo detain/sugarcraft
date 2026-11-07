@@ -447,6 +447,14 @@ final class ReadPathCensusTest extends TestCase
         'Commands/CommandLoader.php|new RecursiveDirectoryIterator' => [
             'CONTAINED — the commands directory is anchored to its tree and each `*.md` confined to it',
         ],
+        'Cli/Subcommands.php|fopen' => [
+            // gc-cli-1106 closeout 2026-11-06: gcLiveLockCount() opens each
+            // `.lock` beside the operator's own session store only to test
+            // its flock() with LOCK_NB — same seat-probe shape as the
+            // DelegationSlots sweep above; nothing is read through it.
+            'SELF_LOCATED — the lock liveness probe of the `gc status` advice line, opened `r` '
+                . 'and flock()-tested inside this application\'s own config directory',
+        ],
         'Cli/Subcommands.php|scandir' => [
             'USER_TYPED — copyBundleTree() lists the install source the person at the terminal '
                 . 'named on `bundles install`; the destination is this command\'s own container',
@@ -457,6 +465,12 @@ final class ReadPathCensusTest extends TestCase
             // installed bundles `bundles update` walks and `recommend` excludes.
             'SELF_LOCATED — bundlesBundleRootNames() reads only the names directly under '
                 . 'the operator-owned `~/.candy-code/bundles` root this command minted',
+            // gc-cli-1106 closeout 2026-11-06: gcLiveLockCount() lists the
+            // lock-directory names inside the app's own config dir, names
+            // only, to count live flocks for the `gc status` advice line.
+            'SELF_LOCATED — gcLiveLockCount() lists the names directly under the '
+                . 'session-lock directory inside this application\'s own config '
+                . 'directory, names only',
         ],
         'Commands/BangShell.php|file_get_contents' => [
             'SELF_LOCATED — the `!cmd` result payload (roadmap 5.14g): the name ToolIpcFiles::reserve() '
@@ -1046,6 +1060,22 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — server.lock in the verified state dir, opened `c` under umask 077 '
                 . 'only to hold flock(); lstat refuses anything but a regular file and no byte '
                 . 'of it is read',
+        ],
+        'Session/Gc/GcInventory.php|fopen' => [
+            // gc-cli-1106 closeout 2026-11-06: countLocks() opens each `.lock`
+            // under the app's own session store only to test its flock()
+            // liveness — the same seat-probe shape as the DelegationSlots
+            // sweep; nothing is read through the handle.
+            'SELF_LOCATED — the lock liveness probe inside the read-only gc inventory, '
+                . 'opened `r` and flock()-tested on a `.lock` under this application\'s '
+                . 'own config directory, no byte read',
+        ],
+        'Session/Gc/GcInventory.php|scandir' => [
+            'SELF_LOCATED — walkDirectory() lists names under the fixed STORAGE_'
+                . 'DIRECTORIES of this application\'s own config directory to total '
+                . 'bytes and file counts, depth-capped and link-refusing',
+            'SELF_LOCATED — countLocks() lists the names directly under the session-'
+                . 'lock directory inside the same owned config root, names only',
         ],
         'Session/Import/RemoteSessionPush.php|file_get_contents' => [
             'SELF_LOCATED — resolveToken() (C-SES-7.g) reads the owner-token file the '
