@@ -496,6 +496,33 @@ final class GcSubcommandTest extends TestCase
         self::assertStringContainsString('orphan census (report-only', $out);
     }
 
+    public function testAnalyzeExpiredTombstoneCensusAccusesOnlyExpiredGraves(): void
+    {
+        // B2-MINOR-1: the expired_tombstones family had a quiet-store zero
+        // leg but never a POSITIVE one. The grave is placed by explicit
+        // arithmetic around the 30-day grace the census mirrors from
+        // SessionStore.php:86 ({@see \SugarCraft\Code\Session\Gc\GcOrphanCensus::TOMBSTONE_TTL_SECONDS}),
+        // and $now is passed-positioned into the INSERT, never re-derived at
+        // read time — no wall-clock flake window.
+        $this->gcSeedStore();
+        $now = \time();
+        $connection = SqliteConnect::open($this->dbPath);
+        $connection->prepare('INSERT INTO session_tombstones (id, deleted_at) VALUES (?, ?)')
+            ->execute(['grave-old', $now - \SugarCraft\Code\Session\Gc\GcOrphanCensus::TOMBSTONE_TTL_SECONDS - 10]);
+        $connection->prepare('INSERT INTO session_tombstones (id, deleted_at) VALUES (?, ?)')
+            ->execute(['grave-fresh', $now - 60]);
+        $connection->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+        unset($connection);
+
+        [$rc, $doc] = $this->gcJsonDoor(['analyze']);
+        self::assertSame(NonInteractive::EXIT_OK, $rc);
+        $orphans = $doc['result']['orphans'];
+        self::assertSame(1, $orphans['expired_tombstones']['count'], 'the grave past its grace is accused, the fresh one is not');
+
+        [$rc, $out] = $this->gcDispatch(['analyze']);
+        self::assertStringContainsString('candy-code gc analyze', $out);
+    }
+
     public function testAnalyzeOrphanCensusQuietOnCleanStore(): void
     {
         $this->gcSeedStore();
