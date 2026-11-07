@@ -4059,7 +4059,7 @@ final class DocFigureProseDriftTest extends TestCase
      * touched through ArgvParser, per the lane-be autoload law), the server
      * halves the page enumerates, `serve` named as not an MCP server (O-3a
      * replaced the old no-`serve` negative), and `run` as the extra word
-     * argv treats specially — the page's fifteenth (with the line-number
+     * argv treats specially — the page's roster overrun (with the line-number
      * anchor the page carried until this tranche deleted).
      */
     public function testMcpCommandsSurfaceCountsHelpRowsAndTheRunArm(): void
@@ -4150,7 +4150,7 @@ final class DocFigureProseDriftTest extends TestCase
             'the Usage block stopped labelling run as an alias for -p',
         );
         self::assertStringContainsString('it is an alias for `-p`', $mcp, 'the alias half of the page sentence drifted from the help block');
-        self::assertCount($wordNumbers['sixteen'], array_merge($commands, ['run']), 'the fourteen-plus-run-is-a-fifteenth arithmetic broke against the live roster');
+        self::assertCount($wordNumbers['sixteen'], array_merge($commands, ['run']), 'the roster-overrun arithmetic broke against the live roster');
 
         // E695 in-step: the auth section's new attachment truth, bound to the
         // code that makes it true — the page may only claim what the request

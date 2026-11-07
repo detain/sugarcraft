@@ -1417,7 +1417,7 @@ rewrites the running file: a phar-only swap verified against the release sidecar
 running `serve`, whose turns run there; `acp` runs turns for an editor that
 started it, speaking the Agent Client Protocol on stdio.
 
-Fourteen is the subcommand count, not the count of bare words argv treats specially:
+Fifteen is the subcommand count, not the count of bare words argv treats specially:
 `run` is a sixteenth (the `$arg === 'run'` arm in `Cli\ArgvParser`,
 `candy-code run "<prompt>"` in the help's Usage block), but it is an alias for
 `-p` and therefore a turn of conversation rather than a question about the
