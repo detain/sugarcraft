@@ -313,6 +313,8 @@ detenerse — y attach, que es la excepción a ambos: ejecuta la TUI en una sesi
                          comprobación FALLA.
                          Distinto de la herramienta "doctor" invocable por el modelo, que
                          informa al modelo del protocolo de imágenes de la terminal.
+  gc                     Inspeccionar y recuperar el almacenamiento de sesiones;
+                         ejecutarlo sin una acción lista las acciones.
   import claude          Vista previa de la importación de ajustes de Claude Code: lee el archivo de usuario de
                          Claude, además del archivo de ajustes .claude bajo la raíz de
                          lanzamiento cuando se indica --project, traduce sus listas de

@@ -313,6 +313,8 @@ d'exécution ; acp exécute des tours pour un éditeur, jusqu'à la déconnexion
                          ÉCHEOUE.
                          Distinct de l'outil "doctor" appelable par le modèle, qui
                          signale le protocole d'images du terminal au modèle.
+  gc                     Inspecter et récupérer le stockage des sessions ;
+                         l'exécuter sans action liste les actions.
   import claude          Prévisualise l'import des paramètres Claude Code : lit le fichier
                          de paramètres utilisateur de Claude, plus le fichier .claude sous la
                          racine de lancement quand --project est précisé, traduit ses listes

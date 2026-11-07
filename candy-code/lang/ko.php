@@ -313,6 +313,8 @@ CandyCode — 터미널용 AI 코딩 어시스턴트.
                          종료 코드 1.
                          모델 호출 가능한 "doctor" 도구와 별개이며,
                          후자는 터미널의 이미지 프로토콜을 모델에 보고.
+  gc                     세션 저장소 검사 및 회수. 작업 없이 실행 시
+                         작업 목록 표시.
   import claude          Claude Code 설정 가져오기 미리보기: Claude의 사용자
                          설정 파일과, --project 지정 시 실행 루트 아래의 .claude
                          설정 파일을 읽은 뒤, permissions의 allow/deny/ask

@@ -313,6 +313,8 @@ Sitzung aus; acp führt Runden für einen Editor aus, bis der Editor sich trennt
                          FEHLTSCHLÄGT.
                          Unterscheidet sich vom modellaufrufbaren "doctor"-Tool, das
                          das Bildprotokoll des Terminals an das Modell meldet.
+  gc                     Sitzungen und geteilte Daten prüfen und
+                         freigeben; ohne Aktion listet es die Aktionen.
   import claude          Vorschau des Claude Code-Settings-Imports: liest Claudes Benutzer-
                          Einstellungsdatei, plus die .claude Einstellungsdatei unter dem Start-
                          verzeichnis bei Angabe von --project, übersetzt deren Berechtigungs-
