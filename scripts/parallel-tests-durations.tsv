@@ -915,6 +915,7 @@ candy-code/tests/Agents/Board/BoardTest.php	0.084	20
 candy-code/tests/Memory/ForeignMemoryImporterTest.php	0.084	40
 candy-code/tests/Tools/BuiltIn/GenerateImageSglangTest.php	0.084	6
 candy-code/tests/Skills/BuiltInSkillsTest.php	0.084	137
+candy-code/tests/Chat/AgentMentionRoutingTest.php	0.084	9
 candy-code/tests/Tui/ComponentTest.php	0.083	21
 candy-code/tests/ChatScrollTest.php	0.082	18
 candy-code/tests/Context/InstructionFileLoaderTest.php	0.081	63
@@ -1523,6 +1524,7 @@ candy-code/tests/Tui/SessionTabTest.php	0.006	19
 candy-code/tests/Tools/McpToolProgressTest.php	0.006	15
 candy-code/tests/Hooks/HookEventTest.php	0.006	35
 candy-code/tests/Commands/McpReconnectTest.php	0.006	9
+candy-code/tests/Agents/AgentMentionsTest.php	0.006	17
 candy-code/tests/Share/JsonlTranscriptWriterTest.php	0.005	9
 candy-code/tests/Host/TranscriptProjectorParityTest.php	0.005	6
 candy-code/tests/Chat/MediaProgressFoldTest.php	0.005	6
