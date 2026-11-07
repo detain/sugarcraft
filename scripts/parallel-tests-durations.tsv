@@ -84,6 +84,7 @@ candy-code/tests/Observability/AsyncOtlpTransportTest.php	7.022	8
 candy-code/tests/Agents/EngineExecutorTest.php	7.019	17
 candy-code/tests/Host/TranscriptStoreTest.php	6.901	12
 candy-code/tests/Cli/BootstrapToolAndPermissionSettingsTest.php	6.867	57
+candy-code/tests/Cli/GcSubcommandTest.php	6.800	41
 candy-code/tests/SwallowingCatchCensusTest.php	6.671	2
 candy-code/tests/Agents/WorktreeManagerTest.php	6.599	44
 candy-code/tests/Config/StatusLineCommandTest.php	6.512	50
@@ -161,6 +162,7 @@ candy-code/tests/Agents/TaskListTest.php	3.539	46
 candy-code/tests/Server/TlsListenerTest.php	3.530	4
 candy-code/tests/Sessions/BackgroundSupervisorReapTest.php	3.490	10
 candy-code/tests/Chat/CustomCommandShellAsyncTest.php	3.479	10
+candy-code/tests/Cli/GcPurgeSubcommandTest.php	3.464	30
 candy-code/tests/Backend/RemoteBackendTest.php	3.453	13
 candy-code/tests/Tools/TaskNestingDepthCapTest.php	3.447	6
 candy-code/tests/Session/LatestResumableSessionCwdTest.php	3.427	6
