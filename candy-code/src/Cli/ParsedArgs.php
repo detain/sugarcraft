@@ -100,20 +100,46 @@ final readonly class ParsedArgs
         'attach' => [
             '--url' => true,
         ],
-        // `gc` (gc-cli-1106 B1+B2): storage inspection, per-session fold and
-        // reclaim. `-f` is the alias of `--force`; which ACTION each flag
-        // belongs to is {@see Subcommands::GC_ACTION_FLAGS}, not the parser's
-        // concern. B2 adds the `sessions` fold flags.
+        // `gc` (gc-cli-1106 B1+B2+B3): storage inspection, per-session fold
+        // and reclaim. `-f` is the alias of `--force` and `-n` of `--dry-run`;
+        // which ACTION each flag belongs to is
+        // {@see Subcommands::GC_ACTION_FLAGS}, not the parser's concern. B2
+        // adds the `sessions` fold flags; B3 adds the `purge` family — its
+        // filters, its five `--strip-*` row-preservers and its eight
+        // `--clean-*` census-follower flags. `--session` is REPEATABLE for
+        // `gc` (self::REPEATABLE_SUBCOMMAND_FLAGS): repeats COMMA-JOIN into
+        // one string, and `gc purge` splits them back apart.
         'gc' => [
             '--archived' => false,
             '--check' => false,
             '--children' => false,
+            '--clean-expired-tombstones' => false,
+            '--clean-imports' => false,
+            '--clean-locks' => false,
+            '--clean-orphan-events' => false,
+            '--clean-orphan-journals' => false,
+            '--clean-orphan-usage' => false,
+            '--clean-shadows' => false,
+            '--clean-shares' => false,
+            '-n' => false,
+            '--dry-run' => false,
             '-f' => false,
             '--force' => false,
             '--format' => true,
+            '--include-named' => false,
             '--incremental' => false,
+            '--keep-latest' => true,
+            '--larger-than' => true,
             '--limit' => true,
+            '--older-than' => true,
+            '--session' => true,
             '--sort' => true,
+            '--strip-checkpoints' => false,
+            '--strip-events' => false,
+            '--strip-fts' => false,
+            '--strip-journal' => false,
+            '--strip-usage' => false,
+            '--subagents' => false,
             '--top' => true,
         ],
         // `import` (C-TUI-5.b): `--project` adds the project's own
@@ -211,12 +237,15 @@ final readonly class ParsedArgs
     /**
      * The value flags of {@see self::SUBCOMMAND_FLAGS} whose repeats are
      * joined with commas (`--allowed-host a --allowed-host b` is `a,b`)
-     * rather than the last one winning: each names a list.
+     * rather than the last one winning: each names a list. `gc --session`
+     * joins the same way and `gc purge` splits the string back apart, so
+     * one flag spelling carries either a single id or a whole list.
      *
      * @var array<string, list<string>>
      */
     public const REPEATABLE_SUBCOMMAND_FLAGS = [
         'serve' => ['--allowed-host', '--allowed-ips', '--allowed-origin'],
+        'gc' => ['--session'],
     ];
 
     /**

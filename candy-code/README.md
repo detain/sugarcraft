@@ -2499,6 +2499,12 @@ candy-code gc sessions [--sort size|age|name] [--limit N] [--archived] [--childr
                                        #   archived hidden unless --archived, --children restricts to subagents
 candy-code gc analyze [--top N]        # top sessions by real bytes, a labeled growth rate,
                                        #   per-table/storage bars, root-vs-subagent, orphan census
+candy-code gc purge [<selectors>]      # destructive family: filters select sessions and
+                                       #   --force deletes them (tombstones ride; named and
+                                       #   pinned rows are exempt unless --include-named),
+                                       #   --strip-* hollows matched rows instead, and
+                                       #   --clean-* sweeps store-wide orphans (census-owned);
+                                       #   --dry-run prints the plan without writing anything
 candy-code gc vacuum [--check]         # report free pages; rewrites only with --force
                                        #   --incremental --force flips auto_vacuum once, then drains
 candy-code import claude               # preview the Claude Code settings translation; --project adds the project file, --yes writes the user tier

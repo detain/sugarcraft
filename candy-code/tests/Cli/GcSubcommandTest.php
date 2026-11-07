@@ -9,6 +9,7 @@ use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Cli\ParsedArgs;
 use SugarCraft\Code\Cli\Subcommands;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionKind;
 use SugarCraft\Code\Support\SqliteConnect;
@@ -21,10 +22,10 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * In-process, the way {@see SessionSubcommandsTest} drives its verb:
  * ArgvParser -> Subcommands::dispatch with `HOME` pointed at a private
  * directory, so {@see Subcommands}' `gc` path reads the fixture database
- * this file seeds. `sessions` and `analyze` landed with B2 (the fold and
- * its analysis surface); `purge` is the one later rung of the same verb:
- * TODAY it must answer the unknown-action door at exit 2, and the case
- * below pins exactly that (it flips when the rung lands).
+ * this file seeds. `sessions` and `analyze` landed with B2; `purge` landed
+ * with B3, and its doors are pinned individually below (unknown-action and
+ * the purge doors share exit 2, so exact messages discriminate them). The
+ * full `purge` execution matrix lives in {@see GcPurgeSubcommandTest}.
  *
  * stdout is ob-captured; stderr is not capturable in-process, so every
  * failure arm is asserted through the `--output-format json` document.
@@ -177,17 +178,41 @@ final class GcSubcommandTest extends TestCase
         self::assertIsArray($doc);
     }
 
-    public function testLaterRungActionsAreUsageErrorsToday(): void
+    public function testBogusActionAndThePurgeDoorsAreIndividuallyPinned(): void
     {
-        // B3 rung: only `purge` remains unimplemented TODAY — the honest
-        // answer is the unknown-action door. (`sessions` landed with B2 and
-        // `analyze` lands with C3 of this same program; their pins live in
-        // the sections below.)
-        foreach (['purge'] as $action) {
-            [$rc, $doc] = $this->gcJsonDoor([$action]);
-            self::assertSame(NonInteractive::EXIT_CONFIG, $rc, $action);
-            self::assertIsArray($doc, $action);
-        }
+        // B3 landed the purge rung. The exit code coincides at 2 with the
+        // old unknown-action answer, so each door is pinned by its EXACT
+        // message: a bogus action names itself through the unknown-action
+        // door; bare `gc purge` under JSON answers json-needs-mode (machine
+        // runs must pre-decide with --dry-run or --force); with a mode
+        // present but no selector it answers the zero-op door.
+        [$rc, $doc] = $this->gcJsonDoor(['frobnicate']);
+        self::assertSame(NonInteractive::EXIT_CONFIG, $rc);
+        self::assertSame('usage', $doc['error']['type']);
+        self::assertSame(Lang::t('cli.gc.unknown_action', ['action' => 'frobnicate']), $doc['error']['message']);
+
+        [$rc, $doc] = $this->gcJsonDoor(['purge']);
+        self::assertSame(NonInteractive::EXIT_CONFIG, $rc);
+        self::assertSame('usage', $doc['error']['type']);
+        self::assertSame(Lang::t('cli.gc.purge.json_needs_mode'), $doc['error']['message']);
+
+        [$rc, $doc] = $this->gcJsonDoor(['purge', '--dry-run']);
+        self::assertSame(NonInteractive::EXIT_CONFIG, $rc);
+        self::assertSame('usage', $doc['error']['type']);
+        self::assertSame(Lang::t('cli.gc.purge.zero_op'), $doc['error']['message']);
+    }
+
+    public function testPurgeDryRunPlansAgainstSeededStore(): void
+    {
+        $this->gcSeedStore();
+
+        [$rc, $doc] = $this->gcJsonDoor(['purge', '--older-than', '1h', '--dry-run']);
+
+        self::assertSame(NonInteractive::EXIT_OK, $rc);
+        self::assertTrue($doc['result']['dry_run']);
+        self::assertFalse($doc['result']['executed']);
+        self::assertIsArray($doc['result']['plan']['target_sessions']);
+        self::assertArrayHasKey('--older-than', ParsedArgs::SUBCOMMAND_FLAGS['gc'], 'the parser admits the purge filters');
     }
 
     public function testFlagOnTheWrongActionIsAUsageError(): void

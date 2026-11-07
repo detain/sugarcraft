@@ -107,7 +107,7 @@ final class GcInventory
             'db_path' => $this->dbPath,
             'files' => $files,
             'pragma' => $pragma,
-            'reclaimable_bytes' => $pragma['page_size'] * $pragma['freelist_count'],
+            'reclaimable_bytes' => self::reclaimableBytes($connection),
             'tables' => $tables,
             'sessions' => $this->readSessionCounts($connection),
             'storage' => $this->walkStorage(),
@@ -117,6 +117,21 @@ final class GcInventory
             ],
             'bar_cells' => self::BAR_CELLS,
         ];
+    }
+
+    /**
+     * Free pages times page size — the space `vacuum` could hand back on
+     * this connection, measured NOW. Single source for the
+     * `reclaimable_bytes` figure: {@see self::collect()} reports it for a
+     * read-only snapshot, and `gc purge`'s post-delete vacuum hint
+     * re-measures it after its deletes have grown the freelist.
+     */
+    public static function reclaimableBytes(PDO $connection): int
+    {
+        $pageSize = (int) $connection->query('PRAGMA page_size')->fetchColumn();
+        $freelist = (int) $connection->query('PRAGMA freelist_count')->fetchColumn();
+
+        return $pageSize * $freelist;
     }
 
     /**

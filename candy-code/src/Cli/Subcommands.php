@@ -38,10 +38,13 @@ use SugarCraft\Code\Session\Import\ImportRefusedException;
 use SugarCraft\Code\Session\Import\SessionImportLedger;
 use SugarCraft\Code\Session\Import\SessionImporter;
 use SugarCraft\Code\Session\SessionLock;
+use SugarCraft\Code\Session\SessionSearchIndex;
 use SugarCraft\Code\Session\SessionQuery;
 use SugarCraft\Code\Session\SessionResolver;
 use SugarCraft\Code\Session\SessionRow;
 use SugarCraft\Code\Session\TitleSource;
+use SugarCraft\Code\Share\ShareStore;
+use SugarCraft\Code\Support\SqliteConnect;
 use SugarCraft\Code\Util\Exporter;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Core\Util\Sanitize;
@@ -1051,6 +1054,7 @@ final class Subcommands
             'status' => self::gcStatus($args),
             'sessions' => self::gcSessions($args),
             'analyze' => self::gcAnalyze($args),
+            'purge' => self::gcPurge($args),
             default => self::gcVacuum($args),
         };
     }
@@ -1883,6 +1887,1064 @@ final class Subcommands
     }
 
     /**
+    /**
+     * `gc purge` — the destructive rung of the ladder (gc-cli-1106 B3).
+     *
+     * Three verbs hide behind one action, and they are deliberately NOT
+     * all-or-nothing together. FILTERS (--older-than, --session,
+     * --subagents, --larger-than, --keep-latest, --archived) select a set
+     * of whole sessions; STRIPS (--strip-events/_usage/_checkpoints/
+     * _journal/_fts) hollow matched rows out but KEEP the session row;
+     * CLEANS (--clean-orphan-journals/_events/_usage, --clean-locks,
+     * --clean-shares, --clean-imports, --clean-shadows,
+     * --clean-expired-tombstones) are store-wide and independent of any
+     * filter — they always target exactly what GcOrphanCensus accuses,
+     * never a re-derived rule (the census is the single source of truth
+     * for orphanhood; purge only ever deletes rows/paths the SAME listers
+     * on this connection just accused).
+     *
+     * Delete mode is precise: whole-session deletes fire when at least
+     * one filter is set AND no strip flag is set (a strip present means
+     * the caller wants the row hollowed, not removed — the row survives
+     * every strip, pinned by tests). Named+pinned sessions are exempt
+     * from deletes by default (ruling 3a) — the exemption predicate is
+     * the INVERSE of the retention law in SessionStore::pruneSessions
+     * (victim = unnamed-or-auto-titled AND unpinned; so exempt = pinned,
+     * or a real name with a non-'auto' title source), and --include-named
+     * overrides it. Strips DO act on exempt sessions; the exemption is
+     * delete-only.
+     *
+     * Safety model, in order: (1) plan phase opens ONLY the read-only
+     * connection and derives the full plan; --dry-run prints it and
+     * leaves — a dry run never opens a read-write connection at all.
+     * (2) machine callers must be explicit: JSON mode (--format json or
+     * the global --output-format json) REQUIRES --dry-run or --force,
+     * because an interactive confirm prompt has no meaning on a wire
+     * consumer (exit 2 otherwise). (3) without --force the run CONFIRMS
+     * at the tty, mirroring the settings-import prompt idiom — except
+     * that decline AND non-tty refusal both return EXIT_OK per the spec
+     * law 'success and decline exit 0' (the import path's EXIT_FAILURE
+     * for a missing tty is a refusal-to-run; here it is a decline,
+     * recorded deviation). (4) --force skips the confirm and crosses the
+     * live-flock gate: without it, sessions whose lock is held right now
+     * are REFUSED from both deletes and strips and named in the output
+     * (same hazard family as deleting under a live writer — stripping a
+     * mid-turn session's events would blind that turn; adjudicated
+     * stricter than the spec's delete-only refusal); with --force they
+     * are included behind a loud disclosure line.
+     *
+     * Execution phase: a read-write connection via the sanctioned
+     * SqliteConnect arm, then the same plan derivation on it. Cleans run
+     * FIRST in the fixed order (journals, events, usage, locks, shares,
+     * imports, shadows, expired tombstones), then strips, then whole-
+     * session deletes routed EXCLUSIVELY through EnhancedSessionStore::
+     * deleteSession() — the house path whose tombstone insert, share
+     * revoke, workspace-ref drop, blob de-intern and FTS-forget laws
+     * ride it (purge NEVER mints a raw DELETE FROM sessions; the store's
+     * own journal files survive that path, so purge unlinks the matched
+     * journals itself afterwards). Each DB family is one logical
+     * transaction; file unlinks happen AFTER their DB commit, are best-
+     * effort, and swallow missing files. The store is opened with
+     * prune: false — purge must never trigger the retention sweep the
+     * session verbs run (spec law (h)). Whole-session deletes also reap
+     * EXPIRED tombstones as a side effect (deleteSessionTrees self-reaps
+     * them); the explicit --clean-expired-tombstones flag keeps that
+     * reaping available to cleans-only runs and uses the census rule.
+     *
+     * Zero-op (`gc purge` with no filters, no strips, no cleans) is a
+     * usage error: the spec text contradicts itself (its action section
+     * sketches exit 1, its cross-cutting law routes every usage error
+     * through failUsage exit 2); the orchestrator adjudicated EXIT 2 —
+     * consistent with every other door on this verb. Vacuum is NOT part
+     * of purge: after deletes the run only PRINTS the reclaim hint.
+     *
+     * @return int EXIT_OK plan printed/executed (or declined),
+     *               EXIT_CONFIG usage errors and the JSON-mode door,
+     *               EXIT_FAILURE missing/corrupt store and unresolved
+     *               --session targets
+     */
+    private static function gcPurge(ParsedArgs $args): int
+    {
+        $spelledFormat = isset($args->subcommandFlags['--format'])
+            ? (string) $args->subcommandFlags['--format']
+            : NonInteractive::FORMAT_TEXT;
+        if ($spelledFormat !== NonInteractive::FORMAT_TEXT && $spelledFormat !== NonInteractive::FORMAT_JSON) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.gc.bad_format', ['format' => $spelledFormat]),
+                $args->outputFormat,
+                self::gcUsage()
+            );
+        }
+        $asJson = $spelledFormat === NonInteractive::FORMAT_JSON
+            || $args->outputFormat === NonInteractive::FORMAT_JSON;
+        $dryRun = isset($args->subcommandFlags['--dry-run']) || isset($args->subcommandFlags['-n']);
+        $force = isset($args->subcommandFlags['--force']) || isset($args->subcommandFlags['-f']);
+
+        // Machine-driven JSON has nobody to answer the confirm prompt, so
+        // it must arrive pre-decided: plan (--dry-run) or act (--force).
+        if ($asJson && !$dryRun && !$force) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.gc.purge.json_needs_mode'),
+                $args->outputFormat,
+                self::gcUsage()
+            );
+        }
+
+        $filters = [];
+        foreach (['--older-than', '--session', '--subagents', '--larger-than', '--keep-latest', '--archived'] as $flag) {
+            if (isset($args->subcommandFlags[$flag])) {
+                $filters[] = $flag;
+            }
+        }
+        $strips = [];
+        foreach (['--strip-events', '--strip-usage', '--strip-checkpoints', '--strip-journal', '--strip-fts'] as $flag) {
+            if (isset($args->subcommandFlags[$flag])) {
+                $strips[] = $flag;
+            }
+        }
+        $cleans = [];
+        foreach (['--clean-orphan-journals', '--clean-orphan-events', '--clean-orphan-usage', '--clean-locks', '--clean-shares', '--clean-imports', '--clean-shadows', '--clean-expired-tombstones'] as $flag) {
+            if (isset($args->subcommandFlags[$flag])) {
+                $cleans[] = $flag;
+            }
+        }
+
+        // The zero-op door (see docblock: adjudicated exit 2).
+        if ($filters === [] && $strips === [] && $cleans === []) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.gc.purge.zero_op'),
+                $args->outputFormat,
+                self::gcUsage()
+            );
+        }
+
+        // Flag validation doors BEFORE any store touch — bad forms cost 2.
+        $olderSeconds = null;
+        if (in_array('--older-than', $filters, true)) {
+            $value = (string) $args->subcommandFlags['--older-than'];
+            if (\preg_match('/^(\d+)(m|h|d|w|mo)$/', $value, $match) !== 1) {
+                return NonInteractive::failUsage(
+                    'candy-code: ' . Lang::t('cli.gc.purge.bad_older_than', ['value' => $value]),
+                    $args->outputFormat,
+                    self::gcUsage()
+                );
+            }
+            $units = ['m' => 60, 'h' => 3600, 'd' => 86400, 'w' => 604800, 'mo' => 2592000];
+            $olderSeconds = (int) $match[1] * $units[$match[2]];
+        }
+        $largerBytes = null;
+        if (in_array('--larger-than', $filters, true)) {
+            $value = (string) $args->subcommandFlags['--larger-than'];
+            if (\preg_match('/^(\d+(?:\.\d+)?)(k|m|g|kb|mb|gb)$/i', $value, $match) !== 1) {
+                return NonInteractive::failUsage(
+                    'candy-code: ' . Lang::t('cli.gc.purge.bad_larger_than', ['value' => $value]),
+                    $args->outputFormat,
+                    self::gcUsage()
+                );
+            }
+            $scales = ['k' => 1024, 'kb' => 1024, 'm' => 1048576, 'mb' => 1048576, 'g' => 1073741824, 'gb' => 1073741824];
+            $largerBytes = (int) ((float) $match[1] * $scales[\strtolower($match[3])]);
+        }
+        $keepLatest = null;
+        if (in_array('--keep-latest', $filters, true)) {
+            $value = (string) $args->subcommandFlags['--keep-latest'];
+            if (\preg_match('/^(0|[1-9]\d{0,8})$/', $value) !== 1) {
+                return NonInteractive::failUsage(
+                    'candy-code: ' . Lang::t('cli.gc.purge.bad_keep_latest', ['value' => $value]),
+                    $args->outputFormat,
+                    self::gcUsage()
+                );
+            }
+            $keepLatest = (int) $value;
+        }
+        // Repeated --session flags arrive comma-JOINED into one string by
+        // the parser (ParsedArgs::REPEATABLE_SUBCOMMAND_FLAGS): split,
+        // trim, drop empties. `--session=abc,def` and two flags behave
+        // identically.
+        $tokens = [];
+        if (in_array('--session', $filters, true)) {
+            foreach (\explode(',', (string) $args->subcommandFlags['--session']) as $token) {
+                $token = \trim($token);
+                if ($token !== '') {
+                    $tokens[] = $token;
+                }
+            }
+        }
+        $deleteMode = $filters !== [] && $strips === [];
+        $selectors = [
+            'older' => $olderSeconds,
+            'larger' => $largerBytes,
+            'keep' => $keepLatest,
+            'tokens' => $tokens,
+            'subagents' => in_array('--subagents', $filters, true),
+            'archived' => in_array('--archived', $filters, true),
+            'includeNamed' => isset($args->subcommandFlags['--include-named']),
+            'deleteMode' => $deleteMode,
+            'strips' => $strips,
+            'cleans' => $cleans,
+        ];
+
+        $storePath = self::gcStorePath();
+        $configDir = \dirname($storePath);
+        $now = \time();
+
+        // ---- PLAN phase: read-only connection, always. --dry-run ends here.
+        try {
+            $inventory = new GcInventory($storePath);
+            $census = $inventory->collect(Bootstrap::sessionRetentionDays());
+            $plan = self::gcPurgePlan($inventory->openReadOnly(), $configDir, $now, $selectors, $args, $asJson);
+        } catch (\PDOException $error) {
+            return self::gcStoreUnavailable($args, $asJson, 'purge', $error->getMessage());
+        }
+        if (\is_int($plan)) {
+            return $plan; // resolution door already reported (exit 1/2).
+        }
+
+        $totals = self::gcPurgeCensusTotals($plan['census'], $cleans);
+        if ($dryRun) {
+            self::gcPurgeReport($asJson, $plan, $cleans, $totals, true, false, (int) $census['reclaimable_bytes'], $now);
+            return NonInteractive::EXIT_OK;
+        }
+
+        // ---- CONFIRM gate (mirror of the settings-import idiom, with the
+        // recorded deviation: decline AND non-tty both exit 0 — on this
+        // verb "I won't answer" IS a decline, and declines exit 0 by law).
+        if (!$force) {
+            self::gcPurgeReport($asJson, $plan, $cleans, $totals, false, false, (int) $census['reclaimable_bytes'], $now);
+            if (!\is_resource(\STDIN) || !\stream_isatty(\STDIN)) {
+                echo Lang::t('cli.gc.purge.confirm_required') . "\n";
+                return NonInteractive::EXIT_OK;
+            }
+            echo Lang::t('cli.gc.purge.confirm_ask') . "\n";
+            $answer = \strtolower(\trim((string) \fgets(\STDIN)));
+            if ($answer !== 'y' && $answer !== 'yes') {
+                echo Lang::t('cli.gc.purge.confirm_declined') . "\n";
+                return NonInteractive::EXIT_OK;
+            }
+        }
+
+        // ---- EXECUTE phase. The store route runs with prune: false — a
+        // purge must never sweep retention on the side (spec law (h)) —
+        // and owns its own connection; targeted family work runs on a
+        // separate sanctioned-arm connection. The plan is re-derived on
+        // read-write truth after the confirm, so nothing planned under a
+        // race executes blind.
+        try {
+            $store = Bootstrap::sessionStore(prune: false);
+            $rw = SqliteConnect::open($storePath);
+            $plan = self::gcPurgePlan($rw, $configDir, $now, $selectors, $args, $asJson);
+        } catch (\PDOException $error) {
+            return self::gcStoreUnavailable($args, $asJson, 'purge', $error->getMessage());
+        }
+        if (\is_int($plan)) {
+            return $plan;
+        }
+
+        $censusBefore = $plan['census'];
+        // Under --force the plan-phase locked list records the locks this
+        // run deliberately crosses; the execute re-truth overwrites
+        // plan['locked'] afterwards, so capture the crossed set now.
+        $crossed = $force ? $plan['locked'] : [];
+        $lockedExecute = $plan['locked'];
+        if ($force) {
+            $lockedExecute = [];
+        } else {
+            // The store's own flock probe is the execution truth per id;
+            // the plan-phase per-file probe already agreed with it
+            // seconds ago, and non-force excludes either way.
+            foreach ($plan['acted'] as $id) {
+                if ($store->liveLockHolder($id) !== null && !\in_array($id, $lockedExecute, true)) {
+                    $lockedExecute[] = $id;
+                }
+            }
+        }
+        $deleteIds = \array_values(\array_diff($plan['deleteIds'], $lockedExecute));
+        $stripIds = \array_values(\array_diff($plan['stripIds'], $lockedExecute));
+
+        $before = GcStoreFiles::sizes($storePath);
+        $deleted = ['sessions' => 0, 'journal_files' => 0];
+        $stripped = ['events_rows' => 0, 'usage_rows' => 0, 'checkpoint_rows' => 0, 'journal_files' => 0, 'search_rows' => 0];
+        $cleaned = ['journal_files' => 0, 'events_rows' => 0, 'usage_rows' => 0, 'lock_files' => 0, 'share_rows' => 0, 'import_rows' => 0, 'shadow_dirs' => 0, 'tombstone_rows' => 0];
+        $releasedFileBytes = 0;
+
+        // Cleans run FIRST, in the fixed order, against fresh accusations
+        // on the read-write connection (GcOrphanCensus is the sole
+        // accuser — purge deletes exactly what its listers return).
+        $accuser = new GcOrphanCensus($rw, $configDir);
+        if (in_array('--clean-orphan-journals', $cleans, true)) {
+            foreach ($accuser->orphanJournalPaths($now) as $paths) {
+                foreach ($paths as $path) {
+                    $size = \is_file($path) && !\is_link($path) ? (int) \filesize($path) : 0;
+                    if (@\unlink($path)) {
+                        ++$cleaned['journal_files'];
+                        $releasedFileBytes += $size;
+                    }
+                }
+            }
+        }
+        foreach ([['--clean-orphan-events', 'session_events', 'events_rows'], ['--clean-orphan-usage', 'usage_records', 'usage_rows'], ['--clean-imports', 'session_imports', 'import_rows']] as [$flag, $table, $tally]) {
+            if (!in_array($flag, $cleans, true)) {
+                continue;
+            }
+            $target = $accuser->orphanRowTarget($table, $now);
+            if ($target === null) {
+                continue; // table absent or family not accusable
+            }
+            $rw->beginTransaction();
+            try {
+                $statement = $rw->prepare('DELETE FROM "' . $table . '" WHERE ' . $target[0]);
+                $statement->execute($target[1]);
+                $cleaned[$tally] += $statement->rowCount();
+                $rw->commit();
+            } catch (\PDOException $error) {
+                $rw->rollBack();
+
+                return self::gcStoreUnavailable($args, $asJson, 'purge', $error->getMessage());
+            }
+        }
+        if (in_array('--clean-expired-tombstones', $cleans, true)) {
+            $target = $accuser->expiredTombstoneTarget($now);
+            if ($target !== null) {
+                $rw->beginTransaction();
+                try {
+                    $statement = $rw->prepare('DELETE FROM "session_tombstones" WHERE ' . $target[0]);
+                    $statement->execute($target[1]);
+                    $cleaned['tombstone_rows'] += $statement->rowCount();
+                    $rw->commit();
+                } catch (\PDOException $error) {
+                    $rw->rollBack();
+
+                    return self::gcStoreUnavailable($args, $asJson, 'purge', $error->getMessage());
+                }
+            }
+        }
+        if (in_array('--clean-locks', $cleans, true)) {
+            // Re-probe each file immediately before unlinking it: a holder
+            // can appear between listing and acting (GcInventory law).
+            foreach ($accuser->listStaleLockPaths() as $path) {
+                if (self::gcLockIsHeld($path)) {
+                    continue;
+                }
+                $size = \is_file($path) && !\is_link($path) ? (int) \filesize($path) : 0;
+                if (@\unlink($path)) {
+                    ++$cleaned['lock_files'];
+                    $releasedFileBytes += $size;
+                }
+            }
+        }
+        if (in_array('--clean-shares', $cleans, true)) {
+            $cleaned['share_rows'] += ShareStore::atPath($storePath)->purgeInertRows();
+        }
+        if (in_array('--clean-shadows', $cleans, true)) {
+            foreach ($accuser->abandonedShadowDirectories($now) as $shadow) {
+                $sweep = self::gcPurgeRemoveDirectory((string) $shadow['path']);
+                $cleaned['shadow_dirs'] += $sweep[0] > 0 ? 1 : 0;
+                $releasedFileBytes += $sweep[1];
+            }
+        }
+
+        // Strips next: targeted deletes on the matched set, one logical
+        // transaction per family (house chunk shape of 400 placeholders).
+        if ($stripIds !== []) {
+            if (in_array('--strip-events', $strips, true)) {
+                $rw->beginTransaction();
+                try {
+                    $stripped['events_rows'] += self::gcPurgeChunkedDelete($rw, 'session_events', $stripIds);
+                    $rw->commit();
+                } catch (\PDOException $error) {
+                    $rw->rollBack();
+
+                    return self::gcStoreUnavailable($args, $asJson, 'purge', $error->getMessage());
+                }
+            }
+            if (in_array('--strip-usage', $strips, true)) {
+                $rw->beginTransaction();
+                try {
+                    $stripped['usage_rows'] += self::gcPurgeChunkedDelete($rw, 'usage_records', $stripIds);
+                    $rw->commit();
+                } catch (\PDOException $error) {
+                    $rw->rollBack();
+
+                    return self::gcStoreUnavailable($args, $asJson, 'purge', $error->getMessage());
+                }
+            }
+            if (in_array('--strip-checkpoints', $strips, true)) {
+                foreach ($stripIds as $id) {
+                    $stripped['checkpoint_rows'] += $store->stripSessionCheckpoints($id);
+                }
+            }
+            if (in_array('--strip-journal', $strips, true)) {
+                $journalPaths = GcSessionSizes::scanJournalPaths($configDir);
+                foreach ($stripIds as $id) {
+                    foreach ($journalPaths[$id] ?? [] as $path) {
+                        $size = \is_file($path) && !\is_link($path) ? (int) \filesize($path) : 0;
+                        if (@\unlink($path)) {
+                            ++$stripped['journal_files'];
+                            $releasedFileBytes += $size;
+                        }
+                    }
+                }
+            }
+            if (in_array('--strip-fts', $strips, true)) {
+                // Anchor-table count first (the public forget route reports
+                // nothing); then ride the house route, outside any
+                // transaction — the index latches itself on failure.
+                $stripped['search_rows'] += self::gcPurgeCountSessions($rw, 'session_message_rows', $stripIds);
+                SessionSearchIndex::create($rw)->forgetSessions($stripIds);
+            }
+        }
+
+        // Whole-session deletes LAST, one public store call each — the
+        // house path's cascade/revoke/tombstone/blob/FTS laws ride it.
+        $deletedJournalFor = [];
+        if ($deleteIds !== []) {
+            $journalPaths = GcSessionSizes::scanJournalPaths($configDir);
+            foreach ($deleteIds as $id) {
+                $deletedJournalFor[$id] = $journalPaths[$id] ?? [];
+            }
+            foreach ($deleteIds as $id) {
+                $deleted['sessions'] += \count($store->deleteSession($id));
+            }
+            // deleteSessionTrees never unlinks transcript mirrors (that is
+            // WHY the orphan-journals census exists); purge deletes them
+            // for the sessions it removed — best-effort, post-commit.
+            foreach ($deletedJournalFor as $paths) {
+                foreach ($paths as $path) {
+                    $size = \is_file($path) && !\is_link($path) ? (int) \filesize($path) : 0;
+                    if (@\unlink($path)) {
+                        ++$deleted['journal_files'];
+                        $releasedFileBytes += $size;
+                    }
+                }
+            }
+        }
+
+        $after = GcStoreFiles::sizes($storePath);
+        $plan['locked'] = $lockedExecute;
+        $plan['deleteIds'] = $deleteIds;
+        $plan['stripIds'] = $stripIds;
+        $plan['acted'] = \array_values(\array_unique(\array_merge($deleteIds, $stripIds)));
+        $totals = self::gcPurgeCensusTotals($censusBefore, $cleans);
+        $freed = \max(0, ((int) $before['total'] - (int) $after['total'])) + $releasedFileBytes;
+        self::gcPurgeReport($asJson, $plan, $cleans, $totals, false, true, GcInventory::reclaimableBytes($rw), $now, [
+            'deleted' => $deleted,
+            'stripped' => $stripped,
+            'cleaned' => $cleaned,
+            'force_locked' => $crossed,
+            'bytes_before' => $before,
+            'bytes_after' => $after,
+            'freed_bytes' => $freed,
+        ]);
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * The shared purge plan, derived identically on the read-only plan
+     * connection and the read-write execute connection so a dry run and
+     * a real run never disagree about what WOULD happen.
+     *
+     * Fold rows lack title_source, so the exemption law (prune-predicate
+     * inverse, see gcPurge docblock) rides one direct SELECT when the
+     * column exists and degrades to the name-only leg when it does not
+     * (older stores). Locked truth is the per-file flock probe; the
+     * execute pass re-verifies through the store for its own acted ids.
+     *
+     * @param array<string,mixed> $selectors
+     * @return array<string,mixed>|int plan, or the propagated door exit code
+     */
+    private static function gcPurgePlan(\PDO $connection, string $configDir, int $now, array $selectors, ParsedArgs $args, bool $asJson): array|int
+    {
+        $fold = (new GcSessionSizes($connection, $configDir))->fold();
+        $rows = self::gcDisplayRows($fold['sessions']);
+        $byId = [];
+        foreach ($rows as $row) {
+            $byId[(string) $row['id']] = $row;
+        }
+
+        $wanted = null;
+        if ($selectors['tokens'] !== []) {
+            $wanted = [];
+            foreach ($selectors['tokens'] as $token) {
+                $candidates = [];
+                if (isset($byId[$token])) {
+                    $candidates = [$token];
+                } else {
+                    foreach ($byId as $id => $row) {
+                        if (\is_string($row['name']) && $row['name'] === $token) {
+                            $candidates[] = $id;
+                        }
+                    }
+                    if ($candidates === []) {
+                        foreach (\array_keys($byId) as $id) {
+                            if (\str_starts_with($id, $token)) {
+                                $candidates[] = $id;
+                            }
+                        }
+                    }
+                }
+                if (\count($candidates) > 1) {
+                    // Same doors resolveSessionTarget shows for the session
+                    // verb (the store-side resolver re-checks at execute).
+                    return NonInteractive::failUsage(
+                        'candy-code: ' . Lang::t('cli.session.ambiguous', ['action' => 'purge', 'target' => $token, 'count' => (string) \count($candidates)]),
+                        $args->outputFormat,
+                        Lang::t('cli.session.candidates', ['candidates' => self::gcPurgeCandidateList(\array_slice($candidates, 0, 10)) . (\count($candidates) > 10 ? ', …' : '')])
+                    );
+                }
+                if ($candidates === []) {
+                    \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.session.not_found', ['target' => $token]) . "\n");
+                    if ($asJson) {
+                        self::emitDocument([
+                            'verb' => 'gc',
+                            'action' => 'purge',
+                            'result' => null,
+                            'error' => ['type' => 'not-found', 'message' => Lang::t('cli.session.not_found_message', ['target' => $token])],
+                        ]);
+                    }
+
+                    return NonInteractive::EXIT_FAILURE;
+                }
+                $wanted[$candidates[0]] = true;
+            }
+        }
+
+        $matched = [];
+        foreach ($byId as $id => $row) {
+            if ($wanted !== null && !isset($wanted[$id])) {
+                continue;
+            }
+            if ($selectors['subagents'] && $row['parent_id'] === null) {
+                continue;
+            }
+            if ($selectors['archived'] && !$row['archived']) {
+                continue;
+            }
+            if ($selectors['older'] !== null) {
+                $epoch = $row['created_epoch'];
+                if ($epoch === null || (int) $epoch > $now - (int) $selectors['older']) {
+                    continue;
+                }
+            }
+            if ($selectors['larger'] !== null && (int) $row['total_bytes'] < (int) $selectors['larger']) {
+                continue;
+            }
+            $matched[$id] = $row;
+        }
+        if ($selectors['keep'] !== null) {
+            // Keep the newest N of the matched set; they leave the acted
+            // set entirely (deletes AND strips — ruling 4).
+            $ordered = \array_values($matched);
+            \usort($ordered, static function (array $left, array $right): int {
+                $leftEpoch = $left['created_epoch'] === null ? -1 : (int) $left['created_epoch'];
+                $rightEpoch = $right['created_epoch'] === null ? -1 : (int) $right['created_epoch'];
+                return $rightEpoch <=> $leftEpoch;
+            });
+            foreach (\array_slice($ordered, 0, (int) $selectors['keep']) as $kept) {
+                unset($matched[(string) $kept['id']]);
+            }
+        }
+
+        $deleteIds = $selectors['deleteMode'] ? \array_keys($matched) : [];
+        $stripIds = $selectors['strips'] !== [] ? \array_keys($matched) : [];
+
+        $exemptions = [];
+        if ($deleteIds !== [] && !$selectors['includeNamed']) {
+            $exempt = self::gcPurgeExemptIds($connection);
+            foreach ($deleteIds as $id) {
+                if (isset($exempt[$id])) {
+                    $exemptions[] = $id;
+                }
+            }
+            $deleteIds = \array_values(\array_diff($deleteIds, $exemptions));
+        }
+
+        $locked = [];
+        $locksDirectory = $configDir . '/' . SessionLock::DIRECTORY;
+        foreach (\array_unique(\array_merge($deleteIds, $stripIds)) as $id) {
+            if (\preg_match(GcSessionSizes::SESSION_ID_PATTERN, (string) $id) !== 1) {
+                continue;
+            }
+            $path = $locksDirectory . '/' . $id . '.lock';
+            if (\is_file($path) && !\is_link($path) && self::gcLockIsHeld($path)) {
+                $locked[] = (string) $id;
+            }
+        }
+
+        $plannedIds = \array_values(\array_unique(\array_merge($deleteIds, $stripIds)));
+        $census = (new GcOrphanCensus($connection, $configDir))->census($now);
+
+        return [
+            'rows' => $matched,
+            'deleteIds' => $deleteIds,
+            'stripIds' => $stripIds,
+            'acted' => $plannedIds,
+            'exemptions' => $exemptions,
+            'locked' => $locked,
+            'census' => $census,
+            'planned_bytes' => self::gcPurgePlannedBytes($connection, $configDir, $deleteIds, $stripIds, $selectors['strips']),
+            'strip_stats' => self::gcPurgeStripStats($connection, $configDir, $stripIds, $selectors['strips']),
+            'selectors' => $selectors,
+        ];
+    }
+
+    /**
+     * The named+pinned exemption set, derived as the INVERSE of the
+     * retention victim law in SessionStore::pruneSessions so gc-status's
+     * weaker name-only count can never widen what purge protects:
+     * pinned rows and rows carrying a real (non-'auto') title are exempt.
+     *
+     * @return array<string,true>
+     */
+    private static function gcPurgeExemptIds(\PDO $connection): array
+    {
+        $exempt = [];
+        if (!GcInventory::tablePresent($connection, 'sessions')) {
+            return $exempt;
+        }
+        $columns = GcInventory::columnsOf($connection, 'sessions');
+        // The retention victim law is (unnamed OR auto-titled) AND
+        // unpinned; its inverse protects pinned rows and rows carrying a
+        // REAL title. A NULL/'' title_source never satisfies the victim's
+        // equality leg, so named + unknown-source rows are exempt — IFNULL
+        // mirrors that reading exactly.
+        $namedLeg = \in_array('title_source', $columns, true)
+            ? "(name IS NOT NULL AND name <> '' AND IFNULL(title_source, '') <> 'auto')"
+            : "(name IS NOT NULL AND name <> '')";
+        $statement = $connection->prepare('SELECT id FROM sessions WHERE pinned <> 0 OR ' . $namedLeg);
+        $statement->execute();
+        while (($id = $statement->fetchColumn()) !== false) {
+            $exempt[(string) $id] = true;
+        }
+        $statement->closeCursor();
+
+        return $exempt;
+    }
+
+    /**
+     * Bytes the matched-set work releases AS FILES right now: the journal
+     * mirrors purge unlinks for the ids it deletes (the house delete path
+     * leaves them behind) plus strip-journal targets. Deleted DB rows do
+     * NOT shrink the file until a vacuum runs — their LENGTH bytes are
+     * previewed separately through the fold/census families, and the
+     * post-delete hint names exactly that gap.
+     *
+     * @param list<string> $deleteIds
+     * @param list<string> $stripIds
+     * @param list<string> $strips
+     */
+    private static function gcPurgePlannedBytes(\PDO $connection, string $configDir, array $deleteIds, array $stripIds, array $strips): int
+    {
+        $unlinkJournals = $deleteIds !== [] || \in_array('--strip-journal', $strips, true);
+        if (!$unlinkJournals) {
+            return 0;
+        }
+        $bytes = 0;
+        $journalPaths = GcSessionSizes::scanJournalPaths($configDir);
+        foreach (\array_unique(\array_merge($deleteIds, $stripIds)) as $id) {
+            foreach ($journalPaths[$id] ?? [] as $path) {
+                if (\is_file($path) && !\is_link($path)) {
+                    $bytes += (int) \filesize($path);
+                }
+            }
+        }
+
+        return $bytes;
+    }
+
+    /**
+     * Per-family previews for the selected strip flags: the row families
+     * ride gcPurgeFamilyStats (the same LENGTH accounting as the inventory
+     * rosters); journals ride the id-shaped scan (their bytes live in
+     * files, not a table).
+     *
+     * @param list<string> $stripIds
+     * @param list<string> $strips
+     *
+     * @return array<string,array{count:int,bytes:int}>
+     */
+    private static function gcPurgeStripStats(\PDO $connection, string $configDir, array $stripIds, array $strips): array
+    {
+        $preview = [];
+        foreach ($strips as $flag) {
+            $preview[$flag] = match ($flag) {
+                '--strip-events' => self::gcPurgeFamilyStats($connection, 'session_events', $stripIds),
+                '--strip-usage' => self::gcPurgeFamilyStats($connection, 'usage_records', $stripIds),
+                '--strip-checkpoints' => self::gcPurgeFamilyStats($connection, 'checkpoints', $stripIds),
+                '--strip-fts' => self::gcPurgeFamilyStats($connection, 'session_message_rows', $stripIds),
+                default => ['count' => 0, 'bytes' => 0],
+            };
+        }
+        if (\in_array('--strip-journal', $strips, true)) {
+            $files = 0;
+            $bytes = 0;
+            $journalPaths = GcSessionSizes::scanJournalPaths($configDir);
+            foreach ($stripIds as $id) {
+                foreach ($journalPaths[$id] ?? [] as $path) {
+                    if (\is_file($path) && !\is_link($path)) {
+                        ++$files;
+                        $bytes += (int) \filesize($path);
+                    }
+                }
+            }
+            $preview['--strip-journal'] = ['count' => $files, 'bytes' => $bytes];
+        }
+
+        return $preview;
+    }
+
+    /**
+     * Rows and bytes a strip family holds for the given session ids —
+     * the SAME LENGTH(...) accounting law GcInventory's rosters use, over
+     * the matched ids only.
+     *
+     * @param list<string> $ids
+     * @return array{count:int,bytes:int}
+     */
+    private static function gcPurgeFamilyStats(\PDO $connection, string $table, array $ids): array
+    {
+        if ($ids === [] || !GcInventory::tablePresent($connection, $table)) {
+            return ['count' => 0, 'bytes' => 0];
+        }
+        $roster = GcInventory::TABLE_ROSTERS[$table] ?? [];
+        $columns = \array_values(\array_intersect($roster, GcInventory::columnsOf($connection, $table)));
+        $byteExpr = $columns === []
+            ? '0'
+            : \implode(' + ', \array_map(static fn(string $column): string => 'COALESCE(SUM(LENGTH("' . $column . '")), 0)', $columns));
+        $count = 0;
+        $bytes = 0;
+        foreach (\array_chunk($ids, 400) as $chunk) {
+            $placeholders = \implode(', ', \array_fill(0, \count($chunk), '?'));
+            $statement = $connection->prepare('SELECT COUNT(*), ' . $byteExpr . ' FROM "' . $table . '" WHERE "session_id" IN (' . $placeholders . ')');
+            $statement->execute($chunk);
+            $line = $statement->fetch(\PDO::FETCH_NUM);
+            $statement->closeCursor();
+            if ($line !== false) {
+                $count += (int) $line[0];
+                $bytes += (int) $line[1];
+            }
+        }
+
+        return ['count' => $count, 'bytes' => $bytes];
+    }
+
+    /**
+     * Count rows for the ids without claiming byte totals (search-anchor
+     * preview — the anchor table is not in the byte rosters).
+     *
+     * @param list<string> $ids
+     */
+    private static function gcPurgeCountSessions(\PDO $connection, string $table, array $ids): int
+    {
+        if ($ids === [] || !GcInventory::tablePresent($connection, $table)) {
+            return 0;
+        }
+        $count = 0;
+        foreach (\array_chunk($ids, 400) as $chunk) {
+            $placeholders = \implode(', ', \array_fill(0, \count($chunk), '?'));
+            $statement = $connection->prepare('SELECT COUNT(*) FROM "' . $table . '" WHERE "session_id" IN (' . $placeholders . ')');
+            $statement->execute($chunk);
+            $line = $statement->fetchColumn();
+            $statement->closeCursor();
+            $count += (int) $line;
+        }
+
+        return $count;
+    }
+
+    /**
+     * DELETE ... WHERE "session_id" IN (...) over 400-id chunks — the
+     * same placeholder-chunk shape SessionStore::deleteSessionTrees uses.
+     * The caller owns the transaction.
+     *
+     * @param list<string> $ids
+     */
+    private static function gcPurgeChunkedDelete(\PDO $connection, string $table, array $ids): int
+    {
+        $deleted = 0;
+        foreach (\array_chunk($ids, 400) as $chunk) {
+            $placeholders = \implode(', ', \array_fill(0, \count($chunk), '?'));
+            $statement = $connection->prepare('DELETE FROM "' . $table . '" WHERE "session_id" IN (' . $placeholders . ')');
+            $statement->execute($chunk);
+            $deleted += $statement->rowCount();
+            $statement->closeCursor();
+        }
+
+        return $deleted;
+    }
+
+    /**
+     * Recursively delete one census-accused shadow directory. Never
+     * follows a symlink (a linked entry is unlinked itself, not walked),
+     * best-effort throughout — residue is the next census's problem, not
+     * a purge failure. Returns [files removed, bytes released]; the
+     * caller counts directories by accusation, not by this return.
+     *
+     * @return array{0:int,1:int}
+     */
+    private static function gcPurgeRemoveDirectory(string $path): array
+    {
+        $files = 0;
+        $bytes = 0;
+        if (!\is_dir($path) || \is_link($path)) {
+            return [0, 0];
+        }
+        $entries = (array) \scandir($path);
+        foreach ($entries as $entry) {
+            if (!\is_string($entry) || $entry === '.' || $entry === '..') {
+                continue;
+            }
+            $child = $path . '/' . $entry;
+            if (\is_link($child)) {
+                if (@\unlink($child)) {
+                    ++$files;
+                }
+
+                continue;
+            }
+            if (\is_dir($child)) {
+                $inner = self::gcPurgeRemoveDirectory($child);
+                $files += $inner[0];
+                $bytes += $inner[1];
+                @\rmdir($child);
+
+                continue;
+            }
+            $size = \is_file($child) ? (int) @\filesize($child) : 0;
+            if (@\unlink($child)) {
+                ++$files;
+                $bytes += $size;
+            }
+        }
+        @\rmdir($path);
+
+        return [$files, $bytes];
+    }
+
+    /**
+     * Candidate list for the ambiguity door, mirroring the session verb's
+     * first-ten render exactly (ids and sanitized labels).
+     *
+     * @param list<string> $ids
+     */
+    private static function gcPurgeCandidateList(array $ids): string
+    {
+        return \implode(', ', $ids);
+    }
+
+    /**
+     * Selected-clean-family totals out of a census payload — the FLAT
+     * {@see GcOrphanCensus::census()} shape, whose top-level keys are the
+     * family names this method's constant pairs them with.
+     *
+     * @param array<string,mixed> $census
+     * @param list<string>        $cleans
+     *
+     * @return array{count:int,bytes:int,families:array<string,array{count:int,bytes:int}>}
+     */
+    private static function gcPurgeCensusTotals(array $census, array $cleans): array
+    {
+        $families = [];
+        foreach (self::GC_PURGE_CLEAN_FAMILIES as $flag => $family) {
+            if (!\in_array($flag, $cleans, true)) {
+                continue;
+            }
+            $cell = $census[$family[0]] ?? ['count' => 0, 'bytes' => 0];
+            $families[$flag] = ['count' => (int) $cell['count'], 'bytes' => (int) $cell['bytes'], 'label' => $family[1]];
+        }
+        $count = 0;
+        $bytes = 0;
+        foreach ($families as $cell) {
+            $count += $cell['count'];
+            $bytes += $cell['bytes'];
+        }
+
+        return ['count' => $count, 'bytes' => $bytes, 'families' => $families];
+    }
+
+    /**
+     * The purge report, shared by --dry-run, the pre-confirm preview and
+     * the post-execute summary so the plan a user confirms is byte-for-
+     * byte the plan that was computed. Tallies ride $outcome only after
+     * execution.
+     *
+     * @param array<string,mixed>                                             $plan
+     * @param list<string>                                                    $cleans
+     * @param array{count:int,bytes:int,families:array<string,mixed>}         $totals
+     * @param array<string,mixed>|null                                        $outcome
+     */
+    private static function gcPurgeReport(
+        bool $asJson,
+        array $plan,
+        array $cleans,
+        array $totals,
+        bool $dryRun,
+        bool $executed,
+        int $reclaimableBytes,
+        int $now,
+        ?array $outcome = null
+    ): void {
+        $selectors = $plan['selectors'];
+        $rows = [];
+        foreach ($plan['deleteIds'] as $id) {
+            if (isset($plan['rows'][$id])) {
+                $rows[] = $plan['rows'][$id];
+            }
+        }
+        $stripRows = [];
+        foreach ($plan['stripIds'] as $id) {
+            if (isset($plan['rows'][$id])) {
+                $stripRows[] = $plan['rows'][$id];
+            }
+        }
+
+        if ($asJson) {
+            $result = [
+                'dry_run' => $dryRun,
+                'executed' => $executed,
+                'mode' => $plan['deleteIds'] !== [] ? 'delete' : ($plan['stripIds'] !== [] ? 'strip' : 'clean'),
+                'filters' => [
+                    'flags' => $selectors['deleteMode'] || $selectors['strips'] !== [] ? self::gcPurgeFilterSpelling($selectors) : [],
+                    'older_than_seconds' => $selectors['older'],
+                    'larger_than_bytes' => $selectors['larger'],
+                    'keep_latest' => $selectors['keep'],
+                    'sessions' => $selectors['tokens'],
+                ],
+                'plan' => [
+                    'target_sessions' => $plan['deleteIds'],
+                    'strip_sessions' => $plan['stripIds'],
+                    'exemptions' => $plan['exemptions'],
+                    'locked' => $plan['locked'],
+                    'strips' => $selectors['strips'],
+                    'strip_stats' => $plan['strip_stats'],
+                    'cleans' => $cleans,
+                    'clean_totals' => ['count' => $totals['count'], 'bytes' => $totals['bytes']],
+                    'planned_bytes' => (int) $plan['planned_bytes'],
+                ],
+            ];
+            if ($outcome !== null) {
+                $result['deleted'] = $outcome['deleted'];
+                $result['stripped'] = $outcome['stripped'];
+                $result['cleaned'] = $outcome['cleaned'];
+                $result['force_locked'] = $outcome['force_locked'] ?? [];
+                $result['bytes_before'] = $outcome['bytes_before'];
+                $result['bytes_after'] = $outcome['bytes_after'];
+                $result['freed_bytes'] = $outcome['freed_bytes'];
+            }
+            self::emitDocument(['verb' => 'gc', 'action' => 'purge', 'result' => $result]);
+
+            return;
+        }
+
+        echo 'candy-code gc purge', $dryRun ? ' [--dry-run]' : '', \PHP_EOL;
+        if ($selectors['deleteMode'] && $plan['deleteIds'] !== []) {
+            echo '  ' . Lang::t('cli.gc.purge.targets_header', ['count' => (string) \count($plan['deleteIds'])]) . \PHP_EOL;
+            self::gcPurgeEchoRows($rows, $now);
+        }
+        if ($selectors['strips'] !== []) {
+            echo '  ' . Lang::t('cli.gc.purge.strips_header') . ': ' . \implode(', ', $selectors['strips']) . \PHP_EOL;
+            if ($plan['stripIds'] !== []) {
+                echo '  ' . Lang::t('cli.gc.purge.targets_header', ['count' => (string) \count($plan['stripIds'])]) . \PHP_EOL;
+                self::gcPurgeEchoRows($stripRows, $now);
+            }
+        }
+        if ($plan['exemptions'] !== []) {
+            echo '  ' . Lang::t('cli.gc.purge.exemptions_header', ['count' => (string) \count($plan['exemptions'])])
+                . ': ' . \implode(', ', $plan['exemptions']) . \PHP_EOL;
+        }
+        if ($plan['locked'] !== []) {
+            echo '  ' . Lang::t('cli.gc.purge.locked_header', ['count' => (string) \count($plan['locked'])])
+                . ': ' . \implode(', ', $plan['locked']) . \PHP_EOL;
+        }
+        if ($cleans !== []) {
+            echo '  ' . Lang::t('cli.gc.purge.cleans_header') . \PHP_EOL;
+            foreach ($totals['families'] as $cell) {
+                echo '  ' . Lang::t($cell['label'], [
+                    'count' => (string) $cell['count'],
+                    'bytes' => self::gcFormatBytes((int) $cell['bytes']),
+                ]) . \PHP_EOL;
+            }
+        }
+        if (\in_array('--strip-usage', $selectors['strips'], true)) {
+            echo '  ' . Lang::t('cli.gc.purge.usage_strip_disclosure') . \PHP_EOL;
+        }
+        $anyWork = $plan['deleteIds'] !== [] || $plan['stripIds'] !== [] || $totals['count'] > 0 || $plan['planned_bytes'] > 0;
+        if (!$anyWork) {
+            echo '  ' . Lang::t('cli.gc.purge.nothing_matched') . \PHP_EOL;
+        } else {
+            echo '  ' . Lang::t('cli.gc.purge.total_row', [
+                'count' => (string) (\count($plan['deleteIds']) + $totals['count']),
+                'bytes' => self::gcFormatBytes((int) $plan['planned_bytes'] + $totals['bytes']),
+            ]) . \PHP_EOL;
+        }
+        if ($outcome !== null) {
+            echo '  ' . Lang::t('cli.gc.purge.summary', [
+                'deleted' => (string) $outcome['deleted']['sessions'],
+                'stripped' => (string) \array_sum($outcome['stripped']),
+                'cleaned' => (string) \array_sum($outcome['cleaned']),
+                'bytes' => self::gcFormatBytes((int) $outcome['freed_bytes']),
+            ]) . \PHP_EOL;
+            if ($plan['locked'] !== []) {
+                echo '  ' . Lang::t('cli.gc.purge.locks_refused', ['count' => (string) \count($plan['locked'])]) . \PHP_EOL;
+            }
+            $crossedOut = $outcome['force_locked'] ?? [];
+            if ($crossedOut !== []) {
+                echo '  ' . Lang::t('cli.gc.purge.force_locks_crossed', ['count' => (string) \count($crossedOut)]) . \PHP_EOL;
+            }
+            if ($outcome['deleted']['sessions'] > 0 && $reclaimableBytes > 0) {
+                echo '  ' . Lang::t('cli.gc.purge.vacuum_hint', ['bytes' => self::gcFormatBytes($reclaimableBytes)]) . \PHP_EOL;
+            }
+        }
+    }
+
+    /**
+     * @param list<array<string,mixed>> $rows
+     */
+    private static function gcPurgeEchoRows(array $rows, int $now): void
+    {
+        foreach ($rows as $row) {
+            $cells = self::gcRowCells($row, $now);
+            echo '  ' . Lang::t('cli.gc.purge.row', [
+                'id' => $cells['id'],
+                'flags' => $cells['flags'],
+                'age' => $cells['age'],
+                'title' => $cells['title'],
+                'size' => $cells['size'],
+            ]) . \PHP_EOL;
+        }
+    }
+
+    /**
+     * @param array<string,mixed> $selectors
+     *
+     * @return list<string>
+     */
+    private static function gcPurgeFilterSpelling(array $selectors): array
+    {
+        $spelling = [];
+        if ($selectors['older'] !== null) {
+            $spelling[] = '--older-than';
+        }
+        if ($selectors['tokens'] !== []) {
+            $spelling[] = '--session';
+        }
+        if ($selectors['subagents']) {
+            $spelling[] = '--subagents';
+        }
+        if ($selectors['larger'] !== null) {
+            $spelling[] = '--larger-than';
+        }
+        if ($selectors['keep'] !== null) {
+            $spelling[] = '--keep-latest';
+        }
+        if ($selectors['archived']) {
+            $spelling[] = '--archived';
+        }
+
+        return $spelling;
+    }
+
+    /**
      * The store path every `gc` action reads, WITHOUT constructing a store:
      * {@see \SugarCraft\Code\Session\EnhancedSessionStore}'s constructor
      * CREATES the database and its schema, and a diagnostic that mints a
@@ -1918,11 +2980,38 @@ final class Subcommands
     }
 
     /**
+     * Whether one lock file carries a LIVE flock right now. A lock this
+     * process can take is a dead window's residue (free); one it cannot —
+     * or a file it cannot even open — is held. The pid INSIDE the file is
+     * never trusted for liveness (ISS-079's law), and no process-name
+     * probe is used. Callers that delete on the strength of a FREE answer
+     * must re-probe immediately before the unlink: a holder can appear at
+     * any moment.
+     */
+    private static function gcLockIsHeld(string $path): bool
+    {
+        $handle = @\fopen($path, 'r');
+        if ($handle === false) {
+            return true;
+        }
+
+        if (@\flock($handle, \LOCK_EX | \LOCK_NB)) {
+            @\flock($handle, \LOCK_UN);
+            @\fclose($handle);
+
+            return false;
+        }
+
+        @\fclose($handle);
+
+        return true;
+    }
+
+    /**
      * How many per-session lock files under the config dir carry a LIVE
-     * flock, the ground truth behind the locked-store advice line. A lock
-     * this process can take is a dead window's residue (stale); one it
-     * cannot is held right now. The pid INSIDE the file is never trusted
-     * for liveness (ISS-079's law), and no process-name probe is used.
+     * flock, the ground truth behind the locked-store advice line. The
+     * per-file probe is {@see self::gcLockIsHeld} — the same law
+     * `gc purge --clean-locks` re-probes with before every unlink.
      */
     private static function gcLiveLockCount(): int
     {
@@ -1937,22 +3026,9 @@ final class Subcommands
                 continue;
             }
 
-            $handle = @\fopen($directory . '/' . $entry, 'r');
-            if ($handle === false) {
+            if (self::gcLockIsHeld($directory . '/' . $entry)) {
                 ++$live;
-
-                continue;
             }
-
-            if (@\flock($handle, \LOCK_EX | \LOCK_NB)) {
-                @\flock($handle, \LOCK_UN);
-                @\fclose($handle);
-
-                continue;
-            }
-
-            @\fclose($handle);
-            ++$live;
         }
 
         return $live;
@@ -1993,9 +3069,9 @@ final class Subcommands
      * Each `gc` action and the {@see ParsedArgs::SUBCOMMAND_FLAGS} it
      * accepts — the verb-level door {@see self::gc()} checks before any
      * work, exactly like {@see self::SESSION_ACTION_FLAGS} does for
-     * `session`. Both `--force` spellings sit in `vacuum`'s list because
-     * `-f` is its alias, and the vacuum rewrite is the only write this verb
-     * performs.
+     * `session`. Both `--force` spellings sit in every list that carries a
+     * write: `vacuum`'s rewrite and `purge`'s deletes/strips/cleans each
+     * take `-f` as the `--force` alias.
      *
      * @var array<string, list<string>>
      */
@@ -2003,7 +3079,51 @@ final class Subcommands
         'status' => ['--format'],
         'sessions' => ['--sort', '--limit', '--archived', '--children', '--format'],
         'analyze' => ['--top', '--format'],
+        'purge' => [
+            '--older-than',
+            '--session',
+            '--subagents',
+            '--larger-than',
+            '--keep-latest',
+            '--archived',
+            '--include-named',
+            '--dry-run',
+            '-n',
+            '--strip-events',
+            '--strip-usage',
+            '--strip-checkpoints',
+            '--strip-journal',
+            '--strip-fts',
+            '--clean-orphan-journals',
+            '--clean-orphan-events',
+            '--clean-orphan-usage',
+            '--clean-locks',
+            '--clean-shares',
+            '--clean-imports',
+            '--clean-shadows',
+            '--clean-expired-tombstones',
+            '--format',
+            '--force',
+            '-f',
+        ],
         'vacuum' => ['--check', '--incremental', '--force', '-f'],
+    ];
+
+    /**
+     * Purge clean flags mapped to their GcOrphanCensus family key and the
+     * cli.gc.orphans_* label the analyze table already prints. The census
+     * is the sole accuser: what appears here as count/bytes is exactly
+     * what the same-family listers delete at execute time.
+     */
+    private const GC_PURGE_CLEAN_FAMILIES = [
+        '--clean-orphan-journals' => ['journals', 'cli.gc.orphans_journals'],
+        '--clean-orphan-events' => ['events', 'cli.gc.orphans_events'],
+        '--clean-orphan-usage' => ['usage_records', 'cli.gc.orphans_usage_records'],
+        '--clean-locks' => ['stale_locks', 'cli.gc.orphans_stale_locks'],
+        '--clean-shares' => ['stale_shares', 'cli.gc.orphans_stale_shares'],
+        '--clean-imports' => ['session_imports', 'cli.gc.orphans_session_imports'],
+        '--clean-shadows' => ['abandoned_shadows', 'cli.gc.orphans_abandoned_shadows'],
+        '--clean-expired-tombstones' => ['expired_tombstones', 'cli.gc.orphans_expired_tombstones'],
     ];
 
     /**
@@ -5579,9 +6699,9 @@ final class Subcommands
         // C-SES-7.b: 'import' sits with the verbs that CREATE rows — it never
         // needs a <target>, its operand is a transcript file.
         'session' => ['list', 'show', 'import', 'rename', 'delete', 'pin', 'unpin', 'archive', 'unarchive'],
-        // gc-cli-1106: only the actions that exist TODAY are listed;
-        // purge rides the last rung.
-        'gc' => ['status', 'sessions', 'analyze', 'vacuum'],
+        // gc-cli-1106: all five rungs landed (B1 status/vacuum, B2 sessions/
+        // analyze, B3 purge); order matches the gc() dispatch arms.
+        'gc' => ['status', 'sessions', 'analyze', 'purge', 'vacuum'],
         'bundles' => ['list', 'install', 'marketplace', 'update', 'search', 'recommend'],
         'lsp' => ['install', 'list'],
         'mcp' => ['list', 'auth', 'import', 'trust', 'serve'],
