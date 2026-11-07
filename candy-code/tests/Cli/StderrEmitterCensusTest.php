@@ -57,7 +57,11 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — forty-nine sites (RS-DRIVER.b 2026-11-06: +1 in
+ *  1. `fwrite(STDERR, …)` — fifty-two sites (gc-cli-1106 closeout 2026-11-06:
+ *     +3 in `Subcommands`' gc verb family — the vacuum headroom notice and
+ *     the two refusal doors on status/vacuum, stderr-alone by the same
+ *     detached-process decision as every sibling subcommand writer;
+ *     RS-DRIVER.b 2026-11-06: +1 in
  *     `NonInteractive::run()` — the stream-json ignored-lines notice,
  *     stderr-alone because the run continues past the shapes it counts;
  *     CC-QA-2 2026-11-05: +1 in
@@ -447,7 +451,12 @@ final class StderrEmitterCensusTest extends TestCase
         // CC-QA-1 2026-11-04: +1 — sessionStoreForVerbs()' funnel notice for
         // a session.db that will not open at all; the six session verbs share
         // the one door, so the file gains one site, not six.
-        'src/Cli/Subcommands.php' => 9,
+        // gc-cli-1106 closeout 2026-11-06: +3 — the gc verb's own stderr
+        // lines (the vacuum headroom notice and the two refusal notices on
+        // the status/vacuum doors). Stderr alone by the same detached-process
+        // decision as every sibling subcommand writer: a verb run is a
+        // separate process with no live transcript to name.
+        'src/Cli/Subcommands.php' => 12,
         // `/new` into another directory: SessionRelaunch::tell(), the one
         // line saying why candy-code could not restart there (no
         // pcntl_exec, an unenterable directory, a failed exec) and the
@@ -694,7 +703,10 @@ final class StderrEmitterCensusTest extends TestCase
         // prefix into the message {@see NonInteractive::failUsage()} carries;
         // the verb's own prose never touches stderr — preview, refusals and
         // the settle lines are all stdout echoes on the login arm's model.
-        'src/Cli/Subcommands.php' => 55, // CC-QA-1: the funnel notice literal
+        // gc-cli-1106 closeout 2026-11-06: +7 — the gc verb family's prefixed
+        // message literals (usage doors, refusals and the settle-line writer's
+        // own envelope beside its fwrite), same spelling as every sibling verb.
+        'src/Cli/Subcommands.php' => 62, // CC-QA-1: the funnel notice literal
         // C-EXT-6.b: the three prefixed reason strings of a refused hook-log
         // write (directory not private, symlinked leaf, throwing append). All
         // three ride RuntimeNoticeSink::warn() behind a once-per-process latch
@@ -1172,7 +1184,7 @@ final class StderrEmitterCensusTest extends TestCase
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39, 'forty' => 40,
         'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44, 'forty-five' => 45,
         'forty-six' => 46, 'forty-seven' => 47, 'forty-eight' => 48, 'forty-nine' => 49,
-        'fifty' => 50, 'fifty-one' => 51,
+        'fifty' => 50, 'fifty-one' => 51, 'fifty-two' => 52,
     ];
 
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void
