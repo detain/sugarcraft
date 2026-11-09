@@ -1800,16 +1800,6 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 completedAt: new \DateTimeImmutable(),
             );
         };
-        // C13 substrate: per-stage input-identity hashes, seeded from the
-        // record a resume consumes and extended as each stage settles.
-        // Purely additive — old records carry none, and a later cache-side
-        // consumer reads absence as a cache miss, never as corruption.
-        $inputHashes = is_array($prior['stageInputHashes'] ?? null) ? $prior['stageInputHashes'] : [];
-        // C8 substrate: the materialised wave lists, seeded from the pause
-        // file and extended the first time each dynamic stage is entered.
-        // A resume replays from this ledger — a stage that already started
-        // never globs again (mid-run divergence would fork different work).
-        $priorWaves = is_array($prior['dynamicWaves'] ?? null) ? $prior['dynamicWaves'] : [];
 
         $liveToken = ++$this->liveRunSequence;
 
@@ -1820,8 +1810,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 'loadPath' => $loadPath,
                 'snapshot' => $snapshot,
                 'pauseRequested' => false,
-                'inputHashes' => $inputHashes,
-                'dynamicWaves' => $priorWaves,
+                // C13/C8 replay ledgers, seeded from the pause record; an old
+                // record has neither and absence downstream is a cache miss.
+                'inputHashes' => $prior['stageInputHashes'] ?? [],
+                'dynamicWaves' => $prior['dynamicWaves'] ?? [],
             ];
 
             foreach ($workflow->stages as $stageIndex => $stage) {
@@ -1916,9 +1908,6 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     if (array_key_exists('uses', $stage)) {
                         $stageResult = $this->executeIncludedWorkflow($stage, $context, $workflow, $stageStartedAt);
                     } elseif ($stageType === 'parallel') {
-                        // C8: the wave ledger is threaded by reference so a
-                        // first expansion lands in the slot and every pause
-                        // writer persists it; static stages never touch it.
                         $stageResult = $this->executeParallelStage($stage, $context, $workflow, $dispatched, $this->liveRuns[$liveToken]['dynamicWaves']);
                     } elseif ($stageType === 'stage') {
                         $stageResult = $this->executeStage($stage, $context, $dispatched, $workflow->timeout);
