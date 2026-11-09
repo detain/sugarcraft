@@ -2247,10 +2247,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * The glob is matched with the same {@see PathGlob} engine the permission
      * globs use, over paths RELATIVE to the environment root ("/" separators)
      * — a pattern like src/*.{php,js} fans out the session project's files,
-     * never the directory the workflow YAML was loaded from. `**` crosses
-     * directory boundaries because the matcher walks them; every match is a
-     * regular file, so an empty result means nothing matched, not "a
-     * directory did".
+     * never the directory the workflow YAML was loaded from. Stars keep the
+     * matcher's fnmatch answer, which includes crossing "/" for a lone `*`:
+     * `*.txt` sweeps the whole tree, so a wave that means one directory
+     * spells the prefix (`src/*.txt`). Every match is a regular file, so an
+     * empty result means nothing matched, not "a directory did".
      *
      * The list is sorted for determinism: the pause record names files in
      * this exact order, so a replayed stage builds the same fan-out. Patterns
