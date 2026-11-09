@@ -202,7 +202,10 @@ final class AgentLaunchPresetTest extends TestCase
         // buildChat is too heavy to drive from a unit, so this structural pin
         // walks the source slice: the override must be read between the
         // launch-notice drain and the session lock, or the confirmation row
-        // lands above the warnings it belongs under (or past the lock).
+        // lands above the warnings it belongs under (or past the lock). Since
+        // the ratchet extraction the read-and-apply body lives in the family
+        // trait, so the pin is two-leg: the Bootstrap tail must CALL the hook,
+        // and the hook must keep reading the shelf and guarding no-flag.
         $src = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
         $start = (int) \strpos($src, '$chat = $chat->withLaunchNotices(self::launchNotices());');
         $end = (int) \strpos($src, '$chat = $chat->withSessionLocking();', $start);
@@ -216,9 +219,10 @@ final class AgentLaunchPresetTest extends TestCase
             \explode("\n", $slice),
             static fn (string $line): bool => !str_starts_with(ltrim($line), '//'),
         ));
-        self::assertStringContainsString('LaunchContext::agentPresetOverride();', $live);
-        self::assertStringContainsString('withLaunchPrimaryAgent($agentPreset)', $live);
-        self::assertStringContainsString('if ($agentPreset !== null)', $live, 'untouched launches must byte-preserve the no-flag path');
+        self::assertStringContainsString('self::appliedLaunchAgentPreset($chat);', $live, 'the launch tail must route through the extracted hook');
+        $trait = (string) \file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/CarriesAgentLaunchPreset.php');
+        self::assertStringContainsString('LaunchContext::agentPresetOverride();', $trait);
+        self::assertStringContainsString('$agentPreset === null ? $chat : $chat->withLaunchPrimaryAgent($agentPreset)', $trait, 'untouched launches must byte-preserve the no-flag path');
     }
 
     // --------------------------------------------------------------- fixtures
