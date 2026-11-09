@@ -190,6 +190,47 @@ fixer that edits files may apply a change twice. `AgentPoolConfig::$maxRetries`
 gives every agent of a pool at least that many retries. It defaults to 0, and
 the launch leaves it there.
 
+### `when:` makes a stage conditional
+
+`when:` on a stage — or `->when($clause)` on the PHP builder — decides whether
+the stage runs at all, from the text prior stages already produced. The clause
+is a closed mini-grammar. A **leaf** names one stage and exactly one op on its
+output:
+
+```yaml
+  - name: deploy
+    agent: coder
+    prompt: ship it
+    when:
+      stage: review
+      equals: GO
+```
+
+The ops are `equals` (whole-string identity), `contains` (substring,
+case-sensitive) and `matches` (PCRE, validated at load exactly like `reject:`).
+A **combinator** node — `all:` or `any:` — carries a non-empty list of leaves;
+one layer of nesting is legal (an `any:` of `all:`s), and a combinator inside a
+combinator past that ceiling refuses the file. Everything else — an unknown
+key, a leaf with two ops, `when: ready`, an empty list — raises
+`WorkflowLoadException` at load; the grammar refuses, never coerces.
+
+Evaluation reads a named stage's recorded output (its `{{name.output}}` value,
+falling back to the per-agent results map). A name that never ran — or never
+existed, since a misspelling fails closed like every other unknown in this
+system — carries no text, and no text satisfies any op: **the guarded stage
+skips.** A skip is a recorded fact, not a failure: the run lists the stage as
+`skipped`, it counts neither as success nor as failure, nothing is dispatched,
+nothing is spent, and the stage contributes **no `name.output` key** — a
+downstream `{{deploy.output}}` stays the raw token, honest that the answer
+never came. The gate sits ahead of the cache door, so a stage skipped today is
+not resurrected by a stale cached row. On resume a skip is settled: its row
+survives the pause file, the run prefix counts it, and the stage is never
+re-decided — re-evaluating a guard under outputs that changed since the file
+was written could run a stage its condition once refused.
+
+`when:` is stage-level in v1; there is no per-task clause inside a `tasks:`
+list. Give each conditional step its own stage.
+
 ### `outputSchema` gives a stage a structured verdict
 
 `outputSchema:` on a stage (or on one agent of a parallel stage, or on one task
@@ -421,6 +462,12 @@ of these rather than loading a workflow that quietly does less:
 - `config:` not a map; `maxConcurrent` not a whole number >= 0 (0 means no cap);
   `timeout` not a positive integer.
 - `retries:` not a whole number of at least 0 (`retries: -1`, `retries: lots`).
+- `when:` outside the closed grammar: `when:` not a map, an unknown key in a
+  condition (`gt:`), a leaf missing `stage:` or carrying more than one of
+  `equals`/`contains`/`matches`, a combinator other than `all:`/`any:` or one
+  nested past the two-layer ceiling, a list that is not non-empty, a
+  non-string value, or a broken `matches:` PCRE — each fails the load naming
+  the offender, so a half-meaningless guard never reaches a run.
 - `outputSchema:` is not a schema-shaped value: a sequence, a bare number,
   malformed inline JSON, or a path that names no readable file (`WorkflowLoadException`
   at load; the same refusals fire at `build()` for `->outputSchema('…')` strings),
