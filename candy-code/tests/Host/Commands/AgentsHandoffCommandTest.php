@@ -52,7 +52,8 @@ use function trim;
 #[CoversClass(AgentStatusCommands::class)]
 final class AgentsHandoffCommandTest extends TestCase
 {
-    private const ENV_DIR_KEYS = ['CANDY_CODE_WORKTREES_DIR', 'SUGARCRUSH_WORKTREES_DIR', 'SUGAR_CRUSH_WORKTREES_DIR'];
+    /** Same trio as the handoff unit's guard; named apart on purpose — DuplicatedTestHelperDrift's const polity keys on the name. */
+    private const WORKTREE_ENV_OVERRIDES = ['CANDY_CODE_WORKTREES_DIR', 'SUGARCRUSH_WORKTREES_DIR', 'SUGAR_CRUSH_WORKTREES_DIR'];
 
     /** @var array<string,string|false> */
     private array $savedEnv = [];
@@ -65,7 +66,7 @@ final class AgentsHandoffCommandTest extends TestCase
     {
         parent::setUp();
 
-        foreach (self::ENV_DIR_KEYS as $key) {
+        foreach (self::WORKTREE_ENV_OVERRIDES as $key) {
             $this->savedEnv[$key] = getenv($key);
             putenv($key);
         }
