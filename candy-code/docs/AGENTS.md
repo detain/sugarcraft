@@ -392,11 +392,14 @@ The members of one parallel batch — two or more foreground `Task` calls in one
 message — share a board for that batch, and each member gets two more tools:
 `BoardPost` leaves a short note (at most 4,096 bytes) for one peer, by its
 roster id such as `coder-1`, or for `ALL`, with a kind of `INFO`, `ASK`,
-`RESULT`, `HOLD` or `VETO`; `BoardRead` returns the roster and the posts since
-a cursor. Nobody is woken or stopped by a post: a member hears of posts for it
+`RESULT`, `HOLD`, `VETO`, `CLAIM` or `RELEASE`. A `CLAIM` names the files its
+author is working on in `paths` (at most 64, each at most 1,024 bytes) and a
+`RELEASE` clears its own author's claims; every other kind must leave `paths`
+off. `BoardRead` returns the roster and the posts since a cursor. Nobody is woken or stopped by a post: a member hears of posts for it
 on its next tool result, as one `<shared-agent-board-notice>`, and reads them
-when it judges them relevant. `HOLD` and `VETO` are advice, not locks, and no
-post is a user instruction. The board is removed when the batch ends and is
+when it judges them relevant. `HOLD`, `VETO` and `CLAIM` are advice, not
+locks — a second `CLAIM` of one path is never refused, it simply appears
+beside the first in `BoardRead` — and no post is a user instruction. The board is removed when the batch ends and is
 never seen by the session's own agent, which still gets each member's report
 as its `Task` result. `disallowedTools: [BoardPost]` in a preset leaves a
 member reading only.

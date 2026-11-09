@@ -414,16 +414,20 @@ and each member's run is offered two more tools:
 
 - **`BoardPost`** posts a short message (at most 4,096 bytes) to one peer, by
   the id the board's roster gives it (`<agent>-<n>`, n its place in the batch,
-  e.g. `coder-1`), or to `ALL`. Its `kind` is `INFO`, `ASK`, `RESULT`, `HOLD`
-  or `VETO`, and `reply_to` names the post it answers.
+  e.g. `coder-1`), or to `ALL`. Its `kind` is `INFO`, `ASK`, `RESULT`, `HOLD`,
+  `VETO`, `CLAIM` or `RELEASE`; a `CLAIM` names the files its author is
+  working on in `paths` (at most 64, each at most 1,024 bytes) and a `RELEASE`
+  clears its own author's claims, while every other kind must leave `paths`
+  off. `reply_to` names the post it answers.
 - **`BoardRead`** returns the roster and the posts after a cursor (`since`),
   and names the cursor for the next read.
 
 Nobody is woken or stopped by a post. A member hears of posts for it on its
 next tool result, as one `<shared-agent-board-notice>` note however many
 arrived (`BoardNoticeHook`, see [`HOOKS.md`](HOOKS.md#the-built-in-hooks)),
-and reads them when it judges them relevant. `HOLD` and `VETO` are advice,
-not locks. Peer posts are framed as untrusted data: no post is a user
+and reads them when it judges them relevant. `HOLD`, `VETO` and `CLAIM` are
+advice, not locks — a second `CLAIM` of one path is never refused. Peer posts
+are framed as untrusted data: no post is a user
 instruction or an approval.
 
 The board is the batch's alone: it is made before the batch starts, removed
