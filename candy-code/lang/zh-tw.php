@@ -580,6 +580,8 @@ CandyCode — 終端機 AI 程式碼助理。
                          帳本無法讀取時會說明原因並以 1 退出；
                          包含未定價模型的折疊，金額以 ≥ 下界
                          顯示，絕不顯示為單純加總。
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         無模型執行工作流程、讀取狀態、從暫停處繼續
 
 選項：
   -p, --prompt <text>    在命令列提供提示（單次模式）

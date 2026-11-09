@@ -701,6 +701,8 @@ Opções:
   -v, --version          Mostra a versão instalada e sai
       --                 Fim das opções: todo argumento posterior é posicional,
                          nunca uma flag
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         executa fluxos sem o modelo, lê o estado, retoma os pausados
 
 Variáveis de ambiente:
    CANDY_CODE_PROVIDER    Provedor a usar: openai, azure, anthropic, claude-code,

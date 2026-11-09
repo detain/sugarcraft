@@ -152,6 +152,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private const ESCALATION_PATTERN = '/^[ \t]*ESCALATE:/m';
 
     /**
+     * The prefix every escalated-verifier failure reason carries, spelled
+     * exactly as {@see self::scanVerdict()} builds it. The CLI surface
+     * (`candy-code workflow`) keys its exit-3 mapping on this constant rather
+     * than re-spelling the sentence: a verifier escalation is a stop FOR A
+     PERSON, not a plain stage failure, and the two must stay tellable apart from
+     * outside the engine without parsing prose.
+     */
+    public const ESCALATION_MARKER = 'escalated: ';
+
+    /**
      * Finished (or interrupted) runs this engine can still pause, keyed by the
      * NAME {@see run()} was called with — which is also the name
      * {@see WorkflowRegistry::load()} resolves.
@@ -4054,7 +4064,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
             return [
                 'kind' => self::VERDICT_ESCALATED,
-                'reason' => "escalated: verifier asked for a human decision on: \"{$line}\""
+                'reason' => self::ESCALATION_MARKER . "verifier asked for a human decision on: \"{$line}\""
                     . ' [not retried — the run stops for a person; answer it, then /workflow resume'
                     . ' re-runs this stage]' . $after,
             ];

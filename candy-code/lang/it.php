@@ -580,6 +580,8 @@ esecuzione; acp esegue turni per un editor, finché l'editor non si disconnette)
                          registro illeggibile indica il motivo ed esce con 1;
                          i dollari per raggruppamenti che includono un modello non prezzato
                          vengono stampati come limite inferiore ≥, mai come somma semplice.
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         esegui i workflow senza il modello, leggi lo stato, riprendi
 
 Opzioni:
   -p, --prompt <text>    Fornisci un prompt sulla riga di comando (modalità one-shot)

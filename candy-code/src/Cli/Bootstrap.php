@@ -2404,7 +2404,7 @@ final class Bootstrap
      *        skills the same way the session's own set does — the same sharing
      *        {@see agentManager()} documents for itself. Null re-scans at $root.
      */
-    private static function workflowEngine(?string $root, PermissionGate $gate, ?SkillRegistry $skills = null): WorkflowEngine
+    public static function workflowEngine(?string $root, PermissionGate $gate, ?SkillRegistry $skills = null): WorkflowEngine
     {
         [$provider, $model] = self::selectedProviderLabel();
 

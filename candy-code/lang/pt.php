@@ -580,6 +580,8 @@ de um servidor em execução; acp executa turnos para um editor, até este se de
                          página foi construída. Um livro-razão ilegível indica
                          o motivo e termina com 1; os dólares de agregações
                          com modelo sem preço: ≥ limite inferior, nunca soma simples.
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         executa fluxos sem o modelo, lê o estado, retoma os pausados
 
 Opções:
   -p, --prompt <text>    Fornece um prompt na linha de comandos (modo de execução única)

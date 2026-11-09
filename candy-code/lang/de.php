@@ -580,6 +580,8 @@ Sitzung aus; acp führt Runden für einen Editor aus, bis der Editor sich trennt
                          unlesbares Ledger nennt seinen Grund und beendet sich mit 1;
                          Dollar für Folds, die ein nicht bepreistes Modell enthalten
                          als ≥ Untergrenze ausgeben, niemals als einfache Summe.
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         Workflows ohne Modell ausführen, Status lesen, pausierte fortsetzen
 
 Optionen:
   -p, --prompt <text>    Prompt in der Befehlszeile angeben (Einmalmodus)

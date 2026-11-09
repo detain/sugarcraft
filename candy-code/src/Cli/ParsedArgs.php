@@ -77,7 +77,7 @@ final readonly class ParsedArgs
      *
      * @var list<string>
      */
-    public const SUBCOMMANDS = ['acp', 'attach', 'bundles', 'completion', 'doctor', 'gc', 'import', 'login', 'lsp', 'mcp', 'models', 'self-update', 'serve', 'session', 'usage'];
+    public const SUBCOMMANDS = ['acp', 'attach', 'bundles', 'completion', 'doctor', 'gc', 'import', 'login', 'lsp', 'mcp', 'models', 'self-update', 'serve', 'session', 'usage', 'workflow'];
 
     /**
      * The flags each subcommand verb owns, keyed by verb: `true` when the flag
@@ -232,6 +232,14 @@ final readonly class ParsedArgs
         'usage' => [
             '--session' => true,
         ],
+        // `workflow` (W-1 native headless verb): `--param k=v` is REPEATABLE
+        // (self::REPEATABLE_SUBCOMMAND_FLAGS): repeats COMMA-JOIN into one
+        // string, and the verb splits them back apart quote-aware. Which ACTION
+        // a flag belongs to is {@see Subcommands::WORKFLOW_ACTION_FLAGS}.
+        'workflow' => [
+            '--format' => true,
+            '--param' => true,
+        ],
     ];
 
     /**
@@ -246,6 +254,7 @@ final readonly class ParsedArgs
     public const REPEATABLE_SUBCOMMAND_FLAGS = [
         'serve' => ['--allowed-host', '--allowed-ips', '--allowed-origin'],
         'gc' => ['--session'],
+        'workflow' => ['--param'],
     ];
 
     /**

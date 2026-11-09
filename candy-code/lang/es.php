@@ -580,6 +580,8 @@ detenerse — y attach, que es la excepción a ambos: ejecuta la TUI en una sesi
                          libro ilegible indica su motivo y sale con 1;
                          los dólares de pliegues que incluyen un modelo sin precio
                          se imprimen como un límite inferior ≥, nunca como suma simple.
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         ejecuta flujos sin el modelo, lee su estado, reanuda los pausados
 
 Opciones:
   -p, --prompt <text>    Proporciona un prompt en la línea de comandos (modo one-shot)

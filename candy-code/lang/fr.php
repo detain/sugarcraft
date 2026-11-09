@@ -580,6 +580,8 @@ d'exécution ; acp exécute des tours pour un éditeur, jusqu'à la déconnexion
                          registre illisible indique sa raison et quitte avec 1 ;
                          les dollars pour les replis incluant un modèle non tarifé
                          s'affichent comme une borne inférieure ≥, jamais comme une simple somme.
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         exécuter les workflows sans le modèle, lire l'état, reprendre
 
 Options :
   -p, --prompt <text>    Fournit un prompt en ligne de commande (mode one-shot)

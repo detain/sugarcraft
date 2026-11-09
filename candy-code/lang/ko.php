@@ -580,6 +580,8 @@ CandyCode — 터미널용 AI 코딩 어시스턴트.
                          대장은 사유를 밝히고 1로 종료;
                          미가격 모델이 포함된 폴드의 달러는
                          ≥ 하한으로만 표시되며, 단순 합산으로는 표시되지 않는다.
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         워크플로를 모델 없이 실행, 상태 확인, 중단 지점부터 재개
 
 옵션:
   -p, --prompt <text>    명령줄에서 프롬프트 제공 (원샷 모드)

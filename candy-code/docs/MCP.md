@@ -1405,11 +1405,14 @@ Git itself, hooks included, runs under three guarantees:
   `git rev-parse --local-env-vars` lists are removed. Every call runs against
   the contained root.
 
-`candy-code --help` lists exactly fifteen under its **Subcommands** heading —
+`candy-code --help` lists exactly sixteen under its **Subcommands** heading —
 `doctor`, `gc`, `import claude`, `login <provider>`, `models`, `session list|show|rename|delete|pin|unpin|archive|unarchive`, `mcp list|trust|import|serve`, `lsp install|list`, `serve`,
-`self-update`, `attach`, `acp`, `bundles list|install`, `completion bash|zsh|fish`, `usage [7|30|all]` — and none of those but `attach`
-and `acp` needs a provider, an API key or a terminal; `login` answers with the
-criterion's own tool or a written key; twelve answer and exit, and
+`self-update`, `attach`, `acp`, `bundles list|install`, `completion bash|zsh|fish`, `usage [7|30|all]`, `workflow run|status|resume` —
+and none of those but `attach` and `acp` needs a terminal, and none needs a
+provider or an API key but `attach`, `acp` and `workflow` — `workflow run`
+reaches the configured provider when a stage runs a model, while `status`
+answers from the pause records alone; `login` answers with the
+criterion's own tool or a written key; thirteen answer and exit, and
 `serve` runs until it is stopped; `mcp serve` is the same kind of long-runner,
 nested one word inside the `mcp` verb. `self-update` exits too, but it is the one that
 rewrites the running file: a phar-only swap verified against the release sidecar.
@@ -1417,8 +1420,8 @@ rewrites the running file: a phar-only swap verified against the release sidecar
 running `serve`, whose turns run there; `acp` runs turns for an editor that
 started it, speaking the Agent Client Protocol on stdio.
 
-Fifteen is the subcommand count, not the count of bare words argv treats specially:
-`run` is a sixteenth (the `$arg === 'run'` arm in `Cli\ArgvParser`,
+Sixteen is the subcommand count, not the count of bare words argv treats specially:
+`run` is a seventeenth (the `$arg === 'run'` arm in `Cli\ArgvParser`,
 `candy-code run "<prompt>"` in the help's Usage block), but it is an alias for
 `-p` and therefore a turn of conversation rather than a question about the
 install.

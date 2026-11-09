@@ -580,6 +580,8 @@ CandyCode — 终端 AI 编程助手。
                          账本不可读时说明原因并退出码 1；
                          包含未定价模型的聚合中，金额
                          以 ≥ 下界显示，而非简单求和。
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         无模型运行工作流、读取状态、从暂停处继续
 
 选项：
   -p, --prompt <text>    在命令行提供提示词（单次模式）

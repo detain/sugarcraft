@@ -393,7 +393,9 @@ Usage:
 Subcommands (none of them opens the TUI or needs a provider, an API key or a
 terminal; each answers and exits except serve and mcp serve, which run until
 stopped — and attach, which is the exception to both: it runs the TUI on a running server's
-session; acp runs turns for an editor, until the editor disconnects):
+session; acp runs turns for an editor, until the editor disconnects; workflow run
+and resume reach the configured provider when a stage runs a model, while status
+answers from the pause records alone):
   bundles list           List the plugin bundles this directory sees: name,
                          version, tier, and the surfaces each carries —
                          including the hooks and .mcp.json candy-code
@@ -619,6 +621,10 @@ session; acp runs turns for an editor, until the editor disconnects):
                          unreadable ledger states its reason and exits 1;
                          dollars for folds that include an unpriced model
                          print as a ≥ lower bound, never as a plain sum.
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         Run a workflow headless — the engine, not the model,
+                         drives it; exit 3 when a verifier escalates or a pause
+                         lands (see docs/WORKFLOWS.md)
 
 Options:
   -p, --prompt <text>    Provide a prompt on the command line (one-shot mode)
