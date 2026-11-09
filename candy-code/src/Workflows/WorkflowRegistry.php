@@ -1571,9 +1571,11 @@ final class WorkflowRegistry
      * {@see StageCondition::parse()}. The grammar is refused, never coerced —
      * a malformed clause fails the file exactly like an unknown key does
      * ("Everything malformed is refused, not coerced", docs/WORKFLOWS.md).
+     * The RAW author spelling is returned: normalization happens exactly
+     * once, when {@see WorkflowBuilder::when()} attaches the clause.
      *
      * @param array<array-key, mixed> $stage
-     * @return array<string, mixed>|null the normalized clause, or null when absent
+     * @return array<array-key, mixed>|null the raw clause, or null when absent
      */
     private function requireStageWhen(array $stage, string $where): ?array
     {
@@ -1590,10 +1592,12 @@ final class WorkflowRegistry
         }
 
         try {
-            return StageCondition::parse($clause);
+            StageCondition::parse($clause);
         } catch (\InvalidArgumentException $error) {
             throw new WorkflowLoadException("{$where} " . $error->getMessage());
         }
+
+        return $clause;
     }
 
     /**
