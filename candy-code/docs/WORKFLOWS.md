@@ -499,6 +499,36 @@ templates — not the inner workflow's own content: editing the included plan
 leaves a cached include row carrying, the same author-stability law every other
 `cache:` stage follows.
 
+### `from:` fans a parallel stage out at runtime
+
+```yaml
+  - name: sweep
+    parallel: true
+    from:
+      glob: src/**/*.php         # relative to the environment root, never the YAML's directory
+      chunk: 4                   # optional; max agents of THIS stage in flight at once
+    prompt: Audit {{path}} and report findings.
+```
+
+A `parallel:` stage may carry `from:` instead of `agents:` or `tasks:` — the
+spelling is one at a time, refused at load otherwise. The stage's `prompt:` is
+the template; the engine expands the glob **once** when the stage is entered,
+against the run's environment root (the session project — not the directory the
+workflow file lives in). Every matching file becomes one task sharing the
+template's arms, named by its relative path, and `{{path}}` interpolates to
+that path per item (an unresolved `{{path}}` elsewhere is left as written, like
+any other token). `chunk` caps the stage's in-flight window — a ceiling, never
+a floor: it can narrow the workflow's `maxConcurrent` width, never widen it;
+omit it and the workflow's own width applies.
+
+The expansion is the pause record's, not the disk's: the materialised file
+list rides every pause write, and a resume replays *that recorded list* — it
+never re-globs, because files that changed mid-run would otherwise silently
+fork different work from what was paused. A dynamic stage that resumes against
+a missing or corrupt record fails the stage loudly instead of re-expanding.
+Static and dynamic spellings feed the same machinery, so `retries:`, the stage
+`timeout:`, and `stopOnFirstFailure` ride a fan-out unchanged.
+
 ### Everything malformed is refused, not coerced
 
 `WorkflowRegistry::parseYamlWorkflow()` raises `WorkflowLoadException` for each
