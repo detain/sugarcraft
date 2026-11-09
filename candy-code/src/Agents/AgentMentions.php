@@ -204,4 +204,69 @@ final class AgentMentions
     {
         return \in_array(\strtolower($name), self::RESERVED_HEADS, true);
     }
+
+    /**
+     * The '@coder fix X' addressing door (RS-AGENT-C2) wired to a live
+     * manager: a line-initial address to a preset this run holds is
+     * rewritten into the reserved '@agent:<name>' spelling the mention
+     * channel already resolves. Null — the line keeps every byte it arrived
+     * with — for anything that is not an address, for names the roster does
+     * not hold (refusalThrough() beside this door handles those), and for a
+     * run with no agent manager at all, where bare '@' names are prose
+     * because there is nothing to delegate TO. The roster closure is the SAME
+     * predicate the mention leg and the headless host hold, built the same
+     * way {@see \SugarCraft\Code\Chat::userTurnMessage()} wires its
+     * agentRoster.
+     */
+    public static function draftThrough(?AgentManager $manager, string $text): ?string
+    {
+        if ($manager === null) {
+            return null;
+        }
+
+        return self::draft($text, static fn (string $name): bool => $manager->get($name) !== null);
+    }
+
+    /**
+     * The refusal behind that door: why a line-initial '@<name>' the roster
+     * doesn't hold costs a notice instead of a turn — the same economy
+     * {@see \SugarCraft\Code\Chat::unknownSlashNotice()} argues for the slash
+     * door: sending it to the model spends a paid turn to answer a typo with
+     * an essay, and here the essay would additionally be the model's guess
+     * at who 'name' is. The notice names the roster this run holds.
+     * Deliberately NOT Lang-wrapped, matching the mention channel's own
+     * roster notices in
+     * {@see \SugarCraft\Code\Attachments\ContextMentions}::agent(), which
+     * answer the identical question in plain English — inventing a lang key
+     * here would fork one message across two channels. A run with no agent
+     * manager refuses nothing: with no roster to name, '@anything' stays the
+     * prose it always was.
+     */
+    public static function refusalThrough(?AgentManager $manager, string $text): ?string
+    {
+        if ($manager === null) {
+            return null;
+        }
+
+        $name = self::addressedName($text);
+
+        if ($name === null || !self::refuses($name, static fn (string $n): bool => $manager->get($n) !== null)) {
+            return null;
+        }
+
+        $roster = [];
+
+        foreach ($manager->all() as $agent) {
+            $roster[] = $agent->name;
+        }
+
+        return '@'.$name.' reads like an agent address, and this run holds no agent named "'
+            .$name.'" — the line was not delegated and no turn was sent.'
+            .($roster === []
+                ? ' This run has no agents to delegate to at all.'
+                : ' The agents here are: '.\implode(', ', $roster).'.')
+            .' A name the roster holds delegates from the front of the line; put any'
+            .' character in front of this one (a backslash works) and it travels to'
+            .' the model as the plain prose it is.';
+    }
 }

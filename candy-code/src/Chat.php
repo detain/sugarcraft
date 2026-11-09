@@ -10304,7 +10304,7 @@ final class Chat implements Model
             // model would only essay the typo. Every other '@' — mid-line,
             // a domain or path, the keyword colons — is not an address and
             // travels byte-identical (AgentMentions holds the polarity).
-            $agented = $skilled === null ? $this->agentMentionDraft($text) : null;
+            $agented = $skilled === null ? AgentMentions::draftThrough($this->agentManager, $text) : null;
             if ($skilled !== null) {
                 $text = $skilled;
             } elseif ($agented !== null) {
@@ -10320,7 +10320,7 @@ final class Chat implements Model
                 // `accepts()` gate declined the argument — still falls through to
                 // the prose path below, exactly as before.
                 $unknown = $this->unknownSlashNotice($text);
-                $refused = $unknown ?? $this->agentMentionRefusal($text);
+                $refused = $unknown ?? AgentMentions::refusalThrough($this->agentManager, $text);
                 if ($refused !== null) {
                     return [$this->mutate([
                         'history' => [...$this->history, Message::notice($refused)],
@@ -12266,73 +12266,6 @@ final class Chat implements Model
         }
 
         return $notice;
-    }
-
-    /**
-     * The '@coder fix X' addressing door (RS-AGENT-C2): a line-initial
-     * address to a preset this run holds is rewritten into the reserved
-     * '@agent:<name>' spelling the mention channel already resolves. Null —
-     * the line keeps every byte it arrived with — for anything that is not
-     * an address, for names the roster does not hold (the refusal beside
-     * this door handles those), and for a run with no agent manager at all,
-     * where bare '@' names are prose because there is nothing to delegate
-     * TO. The roster closure is the SAME predicate the mention leg and the
-     * headless host hold, built the same way {@see userTurnMessage()} wires
-     * its agentRoster.
-     */
-    private function agentMentionDraft(string $text): ?string
-    {
-        $manager = $this->agentManager;
-
-        if ($manager === null) {
-            return null;
-        }
-
-        return AgentMentions::draft($text, static fn (string $name): bool => $manager->get($name) !== null);
-    }
-
-    /**
-     * Why a line-initial '@<name>' the roster doesn't hold costs a notice
-     * instead of a turn — the same economy {@see unknownSlashNotice()}
-     * argues for the slash door: sending it to the model spends a paid turn
-     * to answer a typo with an essay, and here the essay would additionally
-     * be the model's guess at who 'name' is. The notice names the roster
-     * this run holds. Deliberately NOT Lang-wrapped, matching the mention
-     * channel's own roster notices in
-     * {@see \SugarCraft\Code\Attachments\ContextMentions}::agent(), which
-     * answer the identical question in plain English — inventing a lang key
-     * here would fork one message across two channels. A run with no agent
-     * manager refuses nothing: with no roster to name, '@anything' stays the
-     * prose it always was.
-     */
-    private function agentMentionRefusal(string $text): ?string
-    {
-        $manager = $this->agentManager;
-
-        if ($manager === null) {
-            return null;
-        }
-
-        $name = AgentMentions::addressedName($text);
-
-        if ($name === null || !AgentMentions::refuses($name, static fn (string $n): bool => $manager->get($n) !== null)) {
-            return null;
-        }
-
-        $roster = [];
-
-        foreach ($manager->all() as $agent) {
-            $roster[] = $agent->name;
-        }
-
-        return '@'.$name.' reads like an agent address, and this run holds no agent named "'
-            .$name.'" — the line was not delegated and no turn was sent.'
-            .($roster === []
-                ? ' This run has no agents to delegate to at all.'
-                : ' The agents here are: '.\implode(', ', $roster).'.')
-            .' A name the roster holds delegates from the front of the line; put any'
-            .' character in front of this one (a backslash works) and it travels to'
-            .' the model as the plain prose it is.';
     }
 
     /**
