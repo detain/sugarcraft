@@ -223,6 +223,36 @@ final class WorkflowBuilder
     }
 
     /**
+     * Add an include-compose stage (C11): the stage's body is the whole of
+     * another registered workflow, run to completion as ONE outer stage row.
+     *
+     * `uses:` is an ARM, not a fifth stage type: the stored shape keeps
+     * `type: 'stage'` (the shared list in {@see Workflow} stays the engine's
+     * dispatch truth) and carries the included workflow's name under `uses`,
+     * optionally with `with` values interpolated in the OUTER context and
+     * injected as the inner start context. Exactly one body per stage — the
+     * loader refuses `uses:` alongside agent:/tasks:/task:/agents:/stages:/
+     * parallel:/a non-stage type:, and the engine refuses chains deeper than
+     * three nodes or that cycle, both raw English carrying the chain like
+     * `a -> b -> c -> d`.
+     *
+     * @param array<string, string> $with
+     */
+    public function uses(string $name, string $included, array $with = [], bool $capture = false, bool $cache = false): self
+    {
+        $this->stages[] = [
+            'name' => $name,
+            'type' => 'stage',
+            'uses' => $included,
+        ]
+            + ($with !== [] ? ['with' => $with] : [])
+            + ($capture === true ? ['capture' => true] : [])
+            + ($cache === true ? ['cache' => true] : []);
+
+        return $this;
+    }
+
+    /**
      * Set the per-stage timeout in seconds.
      */
     public function timeout(int $seconds): self

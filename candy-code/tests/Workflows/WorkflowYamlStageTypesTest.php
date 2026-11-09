@@ -461,4 +461,145 @@ final class WorkflowYamlStageTypesTest extends TestCase
         self::assertTrue($verified->stages[0]['capture']);
         self::assertTrue($verified->stages[0]['cache']);
     }
+
+    public function testTheBuilderUsesArmStoresTheShapeTheEngineArmsOn(): void
+    {
+        $workflow = (new \SugarCraft\Code\Workflows\WorkflowBuilder())
+            ->name('b3')
+            ->description('d')
+            ->uses('one', 'inner')
+            ->uses('two', 'inner', ['topic' => 'x'], capture: true, cache: true)
+            ->build();
+
+        // `uses:` is an arm: the stored type stays 'stage' (the shared list
+        // stays the engine's dispatch truth) and the key presence is the arm.
+        self::assertSame('stage', $workflow->stages[0]['type']);
+        self::assertSame('inner', $workflow->stages[0]['uses']);
+        self::assertArrayNotHasKey('with', $workflow->stages[0], 'an empty with: is no key at all');
+        self::assertSame(['topic' => 'x'], $workflow->stages[1]['with']);
+        self::assertTrue($workflow->stages[1]['capture']);
+        self::assertTrue($workflow->stages[1]['cache']);
+    }
+
+    // ------------------------------------------------------- C11 uses: / with:
+
+    public function testAUsesStageParsesTheArmAndStringifiesItsWithValues(): void
+    {
+        $workflow = $this->registry()->fromYamlString(
+            "name: u\ndescription: d\nstages:\n"
+            . "  - name: wrap\n"
+            . "    uses: inner\n"
+            . "    with: {topic: deep, count: 3, flag: true}\n"
+            . "    capture: true\n"
+            . "    cache: true\n",
+            'uses-yaml',
+        );
+
+        $stage = $workflow->stages[0];
+        self::assertSame('stage', $stage['type'], 'the arm never invents a fifth stage type');
+        self::assertSame('inner', $stage['uses']);
+        self::assertSame(
+            ['topic' => 'deep', 'count' => '3', 'flag' => '1'],
+            $stage['with'],
+            'scalars ride as their string spelling; the inner context is a plain map'
+        );
+        self::assertTrue($stage['capture']);
+        self::assertTrue($stage['cache']);
+        self::assertArrayNotHasKey('tasks', $stage);
+        self::assertArrayNotHasKey('agent', $stage);
+    }
+
+    /**
+     * @return array<array{string, string}>
+     */
+    public static function refusedUsesStageShapes(): array
+    {
+        return [
+            // One body per stage: every container the arm replaces.
+            'agent tail' => ["    uses: inner\n    agent: coder\n    prompt: p\n", 'cannot accompany "agent"'],
+            'tasks list' => ["    uses: inner\n    tasks:\n      - agent: coder\n        prompt: p\n", 'cannot accompany "tasks"'],
+            'verification slot' => ["    uses: inner\n    task:\n      prompt: p\n", 'cannot accompany "task"'],
+            'parallel flag' => ["    uses: inner\n    parallel: true\n", 'cannot accompany "parallel: true"'],
+            'pipeline type' => ["    uses: inner\n    type: pipeline\n", 'cannot accompany "type: pipeline"'],
+            'nested steps' => ["    uses: inner\n    type: pipeline\n    stages:\n      - name: s\n        agent: coder\n        prompt: p\n", 'cannot accompany "stages"'],
+            'empty name' => ["    uses: ''\n", 'must name the workflow to include'],
+            'non-string name' => ["    uses: {a: b}\n", 'must name the workflow to include, got array'],
+            'with scalar' => ["    uses: inner\n    with: 5\n", '"with" must be a map, got int'],
+            'with list key' => ["    uses: inner\n    with: [a]\n", '"with" key is not a name'],
+            'with nested map' => ["    uses: inner\n    with: {a: {b: c}}\n", 'must be a string or scalar, got array'],
+            'with null' => ["    uses: inner\n    with: {a: ~}\n", 'must be a string or scalar, got null'],
+        ];
+    }
+
+    /**
+     * @dataProvider refusedUsesStageShapes
+     */
+    public function testUsesStageShapesThatBreakOneBodyOrTheArmContractAreRefused(string $stageYaml, string $needle): void
+    {
+        try {
+            $this->registry()->fromYamlString(
+                "name: u\ndescription: d\nstages:\n  - name: wrap\n" . $stageYaml,
+                'uses-refusal',
+            );
+            self::fail('expected a WorkflowLoadException naming ' . $needle);
+        } catch (WorkflowLoadException $error) {
+            self::assertStringContainsString($needle, $error->getMessage());
+        }
+    }
+
+    public function testUsesIsNotAStageTypeSpellingAndWithAloneDoesNotArmASubject(): void
+    {
+        // C11 keeps `uses:` an arm, so a `type: uses` stage is the unknown-type
+        // refusal (which names every real spelling — and does not name 'uses').
+        try {
+            $this->registry()->fromYamlString(
+                "name: u\ndescription: d\nstages:\n  - name: wrap\n    type: uses\n",
+                'uses-as-type',
+            );
+            self::fail('expected the unknown-stage-type refusal');
+        } catch (WorkflowLoadException $error) {
+            self::assertStringContainsString('declares type: uses', $error->getMessage());
+            self::assertStringNotContainsString("'uses'", $error->getMessage());
+        }
+
+        // `with:` is a stage key the roster now knows, but without `uses:` it
+        // arms nothing: the stage still refuses for having no body of its own.
+        try {
+            $this->registry()->fromYamlString(
+                "name: u\ndescription: d\nstages:\n  - name: wrap\n    with: {a: b}\n",
+                'with-alone',
+            );
+            self::fail('expected the missing-body refusal');
+        } catch (WorkflowLoadException $error) {
+            self::assertStringContainsString('stage', strtolower($error->getMessage()));
+        }
+    }
+
+    public function testWithIsAStageKeyOnlyBesideUsesAndNeverOnTheTaskTail(): void
+    {
+        // `with:` without `uses:` arms nothing, so the loader refuses it as a
+        // dormant knob instead of parsing it into silence.
+        try {
+            $this->registry()->fromYamlString(
+                "name: u\ndescription: d\nstages:\n  - name: wrap\n    agent: coder\n    prompt: p\n    with: {a: b}\n",
+                'with-without-uses',
+            );
+            self::fail('expected the dormant-knob refusal');
+        } catch (WorkflowLoadException $error) {
+            self::assertStringContainsString('only arms a "uses" stage', $error->getMessage());
+        }
+
+        // On a task map (a `tasks:` entry) `with` is no key the task roster
+        // knows — the refusal names it as unknown to the task side.
+        try {
+            $this->registry()->fromYamlString(
+                "name: u\ndescription: d\nstages:\n  - name: wrap\n    tasks:\n      - agent: coder\n        prompt: p\n        with: {a: b}\n",
+                'with-on-task',
+            );
+            self::fail('expected the unknown-task-key refusal');
+        } catch (WorkflowLoadException $error) {
+            self::assertStringContainsString('"with"', $error->getMessage());
+            self::assertStringContainsString('unknown key', $error->getMessage());
+        }
+    }
 }

@@ -44,7 +44,7 @@ final class WorkflowRegistry
      * {@see self::YAML_TASK_KEYS}, because a single-task stage legitimately
      * carries its task keys at stage level.
      */
-    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when'];
+    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when', 'uses', 'with'];
 
     /** @var array<string, Workflow> */
     private array $registered = [];
@@ -1418,7 +1418,25 @@ final class WorkflowRegistry
                 // load — the engine only ever evaluates a parsed shape.
                 $when = $this->requireStageWhen($stage, $where);
 
-                if ($stageType === 'verification') {
+                if (array_key_exists('with', $stage) && !array_key_exists('uses', $stage)) {
+                    // A knob that arms nothing is a silent lie on the page;
+                    // `with:` only means something beside `uses:` (C11).
+                    throw new WorkflowLoadException(
+                        "{$where} carries \"with\", which only arms a \"uses\" stage; add \"uses\" or drop it"
+                    );
+                }
+
+                if (array_key_exists('uses', $stage)) {
+                    // C11: `uses:` arms the stage with another workflow's body;
+                    // the shape stays 'stage' and no task container may ride.
+                    $builder = $builder->uses(
+                        $stageName,
+                        $this->requireUsesArm($stage, $where, $stageType, $flaggedParallel),
+                        $this->parseUsesWithSubMap($stage, $where),
+                        capture: $capture,
+                        cache: $cache,
+                    );
+                } elseif ($stageType === 'verification') {
                     $builder = $builder->withVerification(
                         $stageName,
                         $this->parseVerificationSubMap($stage, 'task', $where),
@@ -2071,6 +2089,92 @@ final class WorkflowRegistry
         }
 
         return $this->readTaskMap($map, "{$where} \"{$slot}\"");
+    }
+
+    /**
+     * The `uses:` value of an include-compose stage (C11): a workflow name,
+     * and exactly one body per stage.
+     *
+     * The arm IS the body, so any other body spelling — `agent:`, `tasks:`,
+     * `task:`, `agents:`, a nested `stages:` list, the `parallel: true` flag,
+     * or a `type:` other than stage — refuses at load. Raw English: the name
+     * is the author's own, and the loader never reaches the engine.
+     *
+     * @param array<array-key, mixed> $stage
+     */
+    private function requireUsesArm(array $stage, string $where, string $stageType, bool $flaggedParallel): string
+    {
+        $uses = $stage['uses'];
+        if (!is_string($uses) || trim($uses) === '') {
+            throw new WorkflowLoadException(
+                "{$where} \"uses\" must name the workflow to include, got "
+                . (is_string($uses) ? 'an empty string' : get_debug_type($uses))
+            );
+        }
+
+        foreach (['agent', 'tasks', 'task', 'agents', 'stages'] as $bodyKey) {
+            if (array_key_exists($bodyKey, $stage)) {
+                throw new WorkflowLoadException(
+                    "{$where} carries \"uses\", which is itself a stage body; it cannot accompany \"{$bodyKey}\""
+                );
+            }
+        }
+
+        if ($flaggedParallel) {
+            throw new WorkflowLoadException(
+                "{$where} carries \"uses\", which is itself a stage body; it cannot accompany \"parallel: true\""
+            );
+        }
+
+        if ($stageType !== 'stage') {
+            throw new WorkflowLoadException(
+                "{$where} carries \"uses\", which is itself a stage body; it cannot accompany \"type: {$stageType}\""
+            );
+        }
+
+        return $uses;
+    }
+
+    /**
+     * The optional `with:` sub-map of an include-compose stage (C11).
+     *
+     * Names to values; values are stringified scalars. The inner workflow
+     * receives them as plain run-context seeds, so a number or boolean rides
+     * as its string spelling and a container or null refuses instead of being
+     * silently JSON-encoded. Absent `with:` is an empty map.
+     *
+     * @param array<array-key, mixed> $stage
+     * @return array<string, string>
+     */
+    private function parseUsesWithSubMap(array $stage, string $where): array
+    {
+        if (!array_key_exists('with', $stage)) {
+            return [];
+        }
+
+        $map = $stage['with'];
+        if (!is_array($map)) {
+            throw new WorkflowLoadException("{$where} \"with\" must be a map, got " . get_debug_type($map));
+        }
+
+        $values = [];
+        foreach ($map as $key => $value) {
+            if (!is_string($key)) {
+                throw new WorkflowLoadException(
+                    "{$where} \"with\" key is not a name, got " . get_debug_type($key)
+                );
+            }
+
+            if (is_array($value) || $value === null) {
+                throw new WorkflowLoadException(
+                    "{$where} \"with\" value for \"{$key}\" must be a string or scalar, got " . get_debug_type($value)
+                );
+            }
+
+            $values[$key] = is_string($value) ? $value : (string) $value;
+        }
+
+        return $values;
     }
 
     /**
