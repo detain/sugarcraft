@@ -80,6 +80,9 @@ final class ServeBridge
     /** @var list<\Closure(array<string,mixed>): void> Called after each successful hello (resume hooks). */
     private array $readyListeners = [];
 
+    /** @var list<\Closure(string, array<string,mixed>): void> */
+    private array $followResultListeners = [];
+
     /** @var array<string, array{afterSeq: ?int, cursor: ?\Closure}> sessions to keep followed */
     private array $followed = [];
 
@@ -277,6 +280,22 @@ final class ServeBridge
         $this->listeners[] = $listener;
     }
 
+    /**
+     * Each subscribe/re-subscribe result lands here (pendingAsks re-presentation
+     * is the Bridge's job after a restart or a gap).
+     *
+     * @param \Closure(string $sessionId, array<string,mixed> $result): void $listener
+     */
+    public function onFollowResult(\Closure $listener): void
+    {
+        $this->followResultListeners[] = $listener;
+    }
+
+    public function cancel(string $sessionId, string $mode = 'hard'): PromiseInterface
+    {
+        return $this->call('session.cancel', ['sessionId' => $sessionId, 'mode' => $mode]);
+    }
+
     /** @param \Closure(): void $listener */
     public function onReady(\Closure $listener): void
     {
@@ -394,12 +413,21 @@ final class ServeBridge
                         $seq = $spec['cursor'] !== null ? ($spec['cursor'])() : $spec['afterSeq'];
                         $this->follow($sessionId, $seq === null || $seq === 0 ? null : $seq, $spec['cursor'])
                             ->then(
-                                fn (array $r) => $this->log->info('serve_follow', [
-                                    'session' => $sessionId,
-                                    'fromSeq' => $r['fromSeq'] ?? null,
-                                    'throughSeq' => $r['throughSeq'] ?? null,
-                                    'reset' => isset($r['reset']) ? 1 : 0,
-                                ]),
+                                function (array $r) use ($sessionId): void {
+                                    $this->log->info('serve_follow', [
+                                        'session' => $sessionId,
+                                        'fromSeq' => $r['fromSeq'] ?? null,
+                                        'throughSeq' => $r['throughSeq'] ?? null,
+                                        'reset' => isset($r['reset']) ? 1 : 0,
+                                    ]);
+                                    foreach ($this->followResultListeners as $listener) {
+                                        try {
+                                            $listener($sessionId, $r);
+                                        } catch (\Throwable $e) {
+                                            $this->log->error('follow_result_listener_failed', ['error' => $e->getMessage()]);
+                                        }
+                                    }
+                                },
                                 fn (\Throwable $e) => $this->log->warn('serve_follow_failed', ['session' => $sessionId, 'error' => $e->getMessage()]),
                             );
                     }

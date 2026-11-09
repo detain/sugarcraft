@@ -128,6 +128,32 @@ final class SessionMap
         ]);
     }
 
+    /**
+     * Move every binding that shares this session. One session can back
+     * several keys (the `main` DM scope collapses them); a cursor that
+     * walked per-key would double-answer the collapse.
+     */
+    public function noteSeqForSession(string $sessionId, int $seq): void
+    {
+        $stmt = $this->db->prepare(
+            'UPDATE bindings SET last_seq = :seq, updated_at = :now WHERE session_id = :session AND last_seq < :seq_below',
+        );
+        $stmt->execute([
+            'seq' => $seq,
+            'seq_below' => $seq,
+            'session' => $sessionId,
+            'now' => \time(),
+        ]);
+    }
+
+    public function cursorForSession(string $sessionId): int
+    {
+        $stmt = $this->db->prepare('SELECT MAX(last_seq) FROM bindings WHERE session_id = :session');
+        $stmt->execute(['session' => $sessionId]);
+
+        return (int) ($stmt->fetchColumn() ?: 0);
+    }
+
     /** The most recent conversation a session answered to (outbound address). */
     public function rememberConversation(string $sessionId, string $key, array $ref): void
     {
