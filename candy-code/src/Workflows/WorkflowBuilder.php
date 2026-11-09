@@ -117,8 +117,12 @@ final class WorkflowBuilder
      *   - AgentWorkerPool.php: executeAll() runs agents concurrently
      *
      * @param TaskBuilder[] $tasks
+     * @param array{glob: string, chunk: int|null}|array{} $from C8 dynamic-wave
+     *        spec, empty for the static list spelling. The engine expands the
+     *        glob at run time and replaces $tasks with one built task per
+     *        match; the template in $tasks[0] is what gets fanned out.
      */
-    public function parallel(string $name, array $tasks, bool $capture = false, bool $cache = false): self
+    public function parallel(string $name, array $tasks, bool $capture = false, bool $cache = false, array $from = []): self
     {
         $builtTasks = array_map(
             static fn(TaskBuilder $t) => $t->build(),
@@ -131,7 +135,8 @@ final class WorkflowBuilder
             'tasks' => $builtTasks,
         ]
             + ($capture === true ? ['capture' => true] : [])
-            + ($cache === true ? ['cache' => true] : []);
+            + ($cache === true ? ['cache' => true] : [])
+            + ($from !== [] ? ['from' => $from] : []);
 
         return $this;
     }

@@ -44,7 +44,7 @@ final class WorkflowRegistry
      * {@see self::YAML_TASK_KEYS}, because a single-task stage legitimately
      * carries its task keys at stage level.
      */
-    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when', 'uses', 'with'];
+    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from'];
 
     /** @var array<string, Workflow> */
     private array $registered = [];
@@ -1407,6 +1407,15 @@ final class WorkflowRegistry
                     );
                 }
                 $isParallel = $flaggedParallel || $stageType === 'parallel';
+                // C8: the dynamic-wave fan-out is a parallel-stage affordance.
+                // Refused here — before any type arm dispatches — so a
+                // `from:` beside tasks:, a single task, a verification pair or
+                // a pipeline list is named, never silently dropped (rider law).
+                if (!$isParallel && array_key_exists('from', $stage)) {
+                    throw new WorkflowLoadException(
+                        "{$where} carries \"from\", which only a parallel stage can fan out"
+                    );
+                }
                 // S3: the capture flag is stage-scoped like `parallel:` — a
                 // key the author wrote beside `tasks:` is legitimate, not a
                 // task key misplaced.
@@ -1453,7 +1462,12 @@ final class WorkflowRegistry
                     // parallel() primitive chain spans: WorkflowEngine,
                     // WorkflowBuilder, Workflow, WorkflowRegistry, AgentWorkerPool.
                     $parsed = $this->parseYamlStage($stage, $stageName, $yamlPath, $isParallel);
-                    $builder = $builder->parallel($stageName, $parsed, capture: $capture, cache: $cache);
+                    // C8: the `from:` sub-map is validated only when the
+                    // author wrote it; absent means the static list rides on.
+                    $fromSpec = array_key_exists('from', $stage)
+                        ? $this->parseDynamicWaveSubMap($stage, $where)
+                        : [];
+                    $builder = $builder->parallel($stageName, $parsed, capture: $capture, cache: $cache, from: $fromSpec);
                 } else {
                     // $parsed is a single TaskBuilder for a regular stage, or
                     // a list of them for a `tasks:` stage run in sequence.
@@ -1805,6 +1819,34 @@ final class WorkflowRegistry
             throw new WorkflowLoadException(
                 "{$where} is parallel, so it lists \"agents\", not \"tasks\" (a \"tasks\" stage runs its tasks in sequence)"
             );
+        }
+
+        // C8: the dynamic-wave spelling. The stage carries a template task
+        // (stage-level task keys, prompt required) instead of an agents list;
+        // the engine fans the template out per glob match at run time. The
+        // parser reads the shape once and returns the template builder in a
+        // list, so parallel()'s TaskBuilder[] contract holds unchanged.
+        if ($isParallel && array_key_exists('from', $stage)) {
+            if (array_key_exists('agents', $stage)) {
+                throw new WorkflowLoadException(
+                    "{$where} carries both \"from\" and \"agents\"; the fan-out replaces the static list, one spelling at a time"
+                );
+            }
+            if (array_key_exists('name', $stage)) {
+                throw new WorkflowLoadException(
+                    "{$where} sets stage-level \"name\" beside \"from\"; each fanned-out item is named by its path, so a shared name would silently overwrite the next item's"
+                );
+            }
+            if (!array_key_exists('prompt', $stage)) {
+                throw new WorkflowLoadException(
+                    "{$where} fans out from a glob, so it needs a stage-level \"prompt\" for each item to run"
+                );
+            }
+
+            return [$this->readTaskMap(
+                array_intersect_key($stage, array_flip(self::YAML_TASK_KEYS)),
+                "{$where} \"from\" template"
+            )];
         }
 
         if (!$isParallel && array_key_exists('tasks', $stage)) {
@@ -2175,6 +2217,46 @@ final class WorkflowRegistry
         }
 
         return $values;
+    }
+
+    /**
+     * A parallel stage's `from:` sub-map (C8): the glob the engine expands
+     * at run time, plus the optional `chunk` — a ceiling on how many of the
+     * fanned-out items run at once (a cap, never a floor).
+     *
+     * The parser refuses shapes only; expansion is the engine's job
+     * (rider law — a sub-map is checked where it is read, and this one is
+     * read to a spec, not to a materialised list, because the list can only
+     * exist while the workflow runs).
+     *
+     * @param array<array-key, mixed> $stage
+     *
+     * @return array{glob: string, chunk: int|null}
+     */
+    private function parseDynamicWaveSubMap(array $stage, string $where): array
+    {
+        $map = $stage['from'];
+        $at = "{$where} \"from\"";
+        if (!is_array($map)) {
+            throw new WorkflowLoadException("{$at} must be a map, got " . get_debug_type($map));
+        }
+
+        $this->requireNoUnknownTaskKeys($map, $at, ['glob', 'chunk']);
+
+        if (!array_key_exists('glob', $map)) {
+            throw new WorkflowLoadException("{$at} needs a \"glob\" to expand against the environment root");
+        }
+        $glob = trim($this->requireString($map, 'glob', '', $at));
+        if ($glob === '') {
+            throw new WorkflowLoadException("{$at} \"glob\" must not be empty");
+        }
+
+        $chunk = null;
+        if (array_key_exists('chunk', $map)) {
+            $chunk = $this->requireTaskPositiveInt($map['chunk'], 'chunk', $at);
+        }
+
+        return ['glob' => $glob, 'chunk' => $chunk];
     }
 
     /**
