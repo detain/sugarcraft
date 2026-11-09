@@ -522,6 +522,157 @@ final class WorkflowPauseResumeTest extends TestCase
         $this->assertFileDoesNotExist($file);
     }
 
+    // -------------------------------------------------------------------------
+    // C8: a "from:" fan-out replays its recorded list, never a fresh glob
+    // -------------------------------------------------------------------------
+
+    public function testAResumedFanOutReplaysTheRecordedListInsteadOfReGlobbing(): void
+    {
+        $envRoot = $this->tempDir . '/fanenv';
+        mkdir($envRoot, 0755, true);
+        file_put_contents($envRoot . '/a.txt', 'one');
+        file_put_contents($envRoot . '/b.txt', 'two');
+
+        $this->registerFanOut();
+        $engine = $this->fanOutEngine($envRoot);
+
+        // The wave fails mid-stage — but a live pause lands first, so the file
+        // is written while the run still holds its materialised list.
+        $this->script['fix b'] = static function (SubAgent $a) use ($engine): AgentResult {
+            $engine->pause('fan');
+
+            return new AgentResult(
+                agentId: $a->id,
+                status: AgentStatus::Failed,
+                error: new \RuntimeException('b broke'),
+                tokensUsed: 1,
+                costUsd: 0.1,
+                startedAt: new \DateTimeImmutable(),
+                completedAt: new \DateTimeImmutable(),
+            );
+        };
+
+        $run = $engine->run('fan');
+        $this->assertSame(WorkflowStatus::Failed, $run->status);
+
+        $data = $this->fanOutPauseData();
+        $this->assertSame(['a.txt', 'b.txt'], $data['dynamicWaves']['sweep']['paths'], 'the pause record carries the materialised list');
+        $this->assertSame(2, $data['dynamicWaves']['sweep']['chunk'], 'and the chunk it expanded under');
+        $this->assertSame(1, $data['stagesCompleted'], 'the failed stage must not count as completed');
+
+        // The tree changes under the record — a fresh glob could only answer
+        // differently, and answering differently would fork different work.
+        unlink($envRoot . '/a.txt');
+        file_put_contents($envRoot . '/z.txt', 'late');
+        unset($this->script['fix b']);
+        $this->prompts = [];
+
+        $resumed = $engine->resume($run->workflowId);
+
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status, (string) $resumed->firstFailure()?->error);
+        $this->assertSame(
+            ['fix a.txt', 'fix b.txt', 'ship the sweep'],
+            $this->prompts,
+            'the failed stage re-ran from the RECORDED names — a.txt is replayed without its file, z.txt never joins',
+        );
+    }
+
+    public function testACorruptWaveRecordIsRefusedLoudlyWithoutAnyExpansion(): void
+    {
+        $envRoot = $this->tempDir . '/fanenv-live';
+        mkdir($envRoot, 0755, true);
+        file_put_contents($envRoot . '/a.txt', 'one');
+
+        $this->registerFanOut();
+
+        $at = (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM);
+        mkdir($this->tempDir . '/workflows/.running', 0700, true);
+        file_put_contents($this->tempDir . '/workflows/.running/fan.json', (string) json_encode([
+            'workflowId' => 'fan-0badc0de',
+            'workflowPath' => 'fan',
+            'status' => 'paused',
+            'stagesCompleted' => 1,
+            'context' => ['pre.output' => 'OUT[do pre]'],
+            'stageResults' => [[
+                'stageName' => 'pre',
+                'status' => 'completed',
+                'output' => 'OUT[do pre]',
+                'error' => null,
+                'agents' => [],
+                'startedAt' => $at,
+                'completedAt' => $at,
+            ]],
+            'dynamicWaves' => ['sweep' => ['paths' => 'not-a-list']],
+            'totalTokens' => 10,
+            'totalCost' => 0.5,
+            'startedAt' => $at,
+        ]));
+
+        $resumed = $this->fanOutEngine($envRoot)->resume('fan-0badc0de');
+
+        $this->assertSame(WorkflowStatus::Failed, $resumed->status);
+        $this->assertSame('sweep', $resumed->firstFailure()?->stageName);
+        $this->assertStringContainsString('cannot replay', (string) $resumed->firstFailure()?->error);
+        $this->assertSame([], $this->prompts, 'a corrupt record is refused — the engine must not silently re-glob over it');
+        $this->assertFileDoesNotExist($this->tempDir . '/workflows/.running/fan.json');
+    }
+
+    private function registerFanOut(): void
+    {
+        // chr(42)-assembled glob: a bare wildcard literal would be harvested
+        // into the GlobDialect corpus (house law).
+        $star = chr(42);
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('fan')
+                ->stage('pre', Tasks::agent('coder')->prompt('do pre'))
+                ->parallel('sweep', [Tasks::agent('coder')->prompt('fix {{path}}')], from: ['glob' => $star . '.txt', 'chunk' => 2])
+                ->stage('tail', Tasks::agent('coder')->prompt('ship the sweep'))
+                ->build(),
+        );
+    }
+
+    private function fanOutEngine(string $envRoot): WorkflowEngine
+    {
+        $test = $this;
+        $executor = new class ($test) implements ExecutorInterface {
+            public function __construct(private readonly WorkflowPauseResumeTest $test)
+            {
+            }
+
+            public function execute(SubAgent $subAgent, CompleteRequest $request): AgentResult
+            {
+                return $this->test->dispatch($subAgent);
+            }
+
+            public function executeStream(SubAgent $subAgent, CompleteRequest $request): \Generator
+            {
+                yield $this->execute($subAgent, $request);
+            }
+
+            public function cancel(string $agentId): void
+            {
+            }
+
+            public function cancelAll(): void
+            {
+            }
+        };
+
+        return new WorkflowEngine($this->registry, new AgentWorkerPool(1, $executor), environmentRoot: $envRoot);
+    }
+
+    /** @return array<string, mixed> */
+    private function fanOutPauseData(): array
+    {
+        $file = $this->tempDir . '/workflows/.running/fan.json';
+        $this->assertFileExists($file);
+        $data = json_decode((string) file_get_contents($file), true);
+        $this->assertIsArray($data);
+
+        return $data;
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {

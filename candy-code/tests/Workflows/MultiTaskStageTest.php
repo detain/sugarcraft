@@ -46,11 +46,29 @@ final class MultiTaskStageTest extends TestCase
 
     protected function tearDown(): void
     {
+        $this->removeDirectory($this->tempDir . '/fanenv');
         foreach (glob($this->tempDir . '/workflows/*') ?: [] as $file) {
             @unlink($file);
         }
         @rmdir($this->tempDir . '/workflows');
         @rmdir($this->tempDir);
+    }
+
+    private function removeDirectory(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+
+        foreach (scandir($dir) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $entry;
+            is_dir($path) && !is_link($path) ? $this->removeDirectory($path) : @unlink($path);
+        }
+
+        @rmdir($dir);
     }
 
     /** @internal the fake executor's body; public only so the anonymous class can reach it */
@@ -221,6 +239,86 @@ final class MultiTaskStageTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("Stage 'mixed' task #1 must be a TaskBuilder, got string");
         (new WorkflowBuilder())->stage('mixed', [Tasks::agent('coder'), 'nope']);
+    }
+
+    // -------------------------------------------------------------------------
+    // C8: `from:` dynamic waves
+    // -------------------------------------------------------------------------
+
+    public function testAFanOutStageExpandsAtEntryAndNamesEachItemByItsPath(): void
+    {
+        $envRoot = $this->tempDir . '/fanenv';
+        mkdir($envRoot . '/src', 0755, true);
+        file_put_contents($envRoot . '/a.txt', 'one');
+        file_put_contents($envRoot . '/b.txt', 'two');
+        file_put_contents($envRoot . '/src/c.txt', 'deep');
+
+        // The glob is assembled from chr(42) on purpose: a bare wildcard
+        // string literal here would be harvested into the GlobDialect corpus.
+        // Stars keep PathGlob's fnmatch answer, which crosses "/" for a lone
+        // `*`: all three files fan out, each named by its root-relative path
+        // in sorted order — the nested match proves the walk is a real descent.
+        $star = chr(42);
+        $this->yaml('fanout', "name: fanout\n"
+            . "stages:\n"
+            . "  - name: sweep\n"
+            . "    parallel: true\n"
+            . "    from:\n"
+            . "      glob: '" . $star . ".txt'\n"
+            . "      chunk: 2\n"
+            . "    agent: coder\n"
+            . "    prompt: \"fix {{path}}\"\n");
+
+        $result = (new WorkflowEngine(
+            $this->registry(),
+            new AgentWorkerPool(1, $this->executor()),
+            environmentRoot: $envRoot,
+        ))->run('fanout');
+
+        self::assertSame(WorkflowStatus::Completed, $result->status, (string) $result->firstFailure()?->error);
+        self::assertSame(
+            ['fix a.txt', 'fix b.txt', 'fix src/c.txt'],
+            $this->prompts,
+            'one task per match in sorted order — a lone star crosses separators (fnmatch lineage), so the nested file joins the sweep',
+        );
+
+        $sweep = $result->stageResults[0];
+        self::assertCount(3, $sweep->agents, 'all three items are carried, so tokens and cost add up');
+        self::assertSame("OUT[fix a.txt]\nOUT[fix b.txt]\nOUT[fix src/c.txt]", $sweep->output);
+
+        $results = $result->context[WorkflowEngine::RESULTS_CONTEXT_KEY];
+        self::assertSame('OUT[fix a.txt]', $results['a.txt'], 'each item is recorded under its relative path');
+        self::assertSame('OUT[fix b.txt]', $results['b.txt']);
+        self::assertSame('OUT[fix src/c.txt]', $results['src/c.txt']);
+    }
+
+    public function testAStaticParallelStageLeavesPathBracesAsWritten(): void
+    {
+        $registry = new WorkflowRegistry($this->tempDir . '/workflows');
+        $registry->register(
+            (new WorkflowBuilder())
+                ->name('staticpair')
+                ->parallel('pair', [Tasks::agent('coder')->prompt('keep {{path}} intact')])
+                ->build(),
+        );
+
+        $result = $this->engine($registry)->run('staticpair');
+
+        self::assertSame(WorkflowStatus::Completed, $result->status, (string) $result->firstFailure()?->error);
+        self::assertSame(['keep {{path}} intact'], $this->prompts, 'no path is invented for a static stage');
+    }
+
+    public function testTheFanOutChunkIsACeilingNeverAFloor(): void
+    {
+        // The fake pool cannot report the width a stage asked for, so the cap
+        // formula itself is pinned: chunk meets the workflow width through
+        // min(), never max() — a fan-out may narrow concurrency, not widen it.
+        $source = (string) file_get_contents((new \ReflectionClass(WorkflowEngine::class))->getFileName());
+        self::assertSame(1, substr_count($source, 'min($workflow->maxConcurrent, $chunk)'));
+        self::assertSame(0, substr_count($source, 'max($workflow->maxConcurrent, $chunk)'));
+        // A replay takes its width from the RECORD, not the re-read YAML:
+        // the chunk of a materialised wave was decided when it expanded.
+        self::assertSame(1, substr_count($source, "\$chunk = \$recorded['chunk'] ?? \$from['chunk'];"));
     }
 
     // -------------------------------------------------------------------------
