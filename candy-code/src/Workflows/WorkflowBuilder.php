@@ -232,6 +232,32 @@ final class WorkflowBuilder
     }
 
     /**
+     * C2: attach a `when:` condition to the stage most recently added by
+     * {@see stage()}, {@see parallel()}, {@see pipeline()} or
+     * {@see withVerification()}. The clause is normalized and refused at
+     * call time by {@see StageCondition::parse()} — malformed grammar never
+     * rides into the built workflow (the same law the YAML loader enforces,
+     * and the same raw-English InvalidArgumentException shape
+     * {@see TaskBuilder::reject()} uses).
+     *
+     * @param array<string, mixed> $clause the author's `when:` map
+     *
+     * @throws \InvalidArgumentException when no stage exists to attach to,
+     *         or the clause is not the closed grammar.
+     */
+    public function when(array $clause): self
+    {
+        if ($this->stages === []) {
+            throw new \InvalidArgumentException('when() needs a stage to attach to; call it after stage(), parallel(), pipeline() or withVerification()');
+        }
+
+        $normalized = StageCondition::parse($clause);
+        $this->stages[array_key_last($this->stages)]['when'] = $normalized;
+
+        return $this;
+    }
+
+    /**
      * Configure whether a parallel stage stops immediately on the first agent failure.
      *
      * When true (fail-fast), all queued agents are cancelled as soon as any agent

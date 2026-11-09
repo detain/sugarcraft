@@ -44,7 +44,7 @@ final class WorkflowRegistry
      * {@see self::YAML_TASK_KEYS}, because a single-task stage legitimately
      * carries its task keys at stage level.
      */
-    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages'];
+    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when'];
 
     /** @var array<string, Workflow> */
     private array $registered = [];
@@ -1414,6 +1414,9 @@ final class WorkflowRegistry
                 // C13's door rides the same stage-scoped law: strict bool,
                 // absent means off.
                 $cache = $this->requireCacheFlag($stage, $where);
+                // C2: the `when:` clause is read and grammar-checked here, at
+                // load — the engine only ever evaluates a parsed shape.
+                $when = $this->requireStageWhen($stage, $where);
 
                 if ($stageType === 'verification') {
                     $builder = $builder->withVerification(
@@ -1438,6 +1441,12 @@ final class WorkflowRegistry
                     // a list of them for a `tasks:` stage run in sequence.
                     $parsed = $this->parseYamlStage($stage, $stageName, $yamlPath, $isParallel);
                     $builder = $builder->stage($stageName, $parsed, capture: $capture, cache: $cache);
+                }
+
+                // C2: the clause lands on the stage THIS iteration just added,
+                // after whichever arm shaped it — same order law as capture.
+                if ($when !== null) {
+                    $builder = $builder->when($when);
                 }
             }
         }
@@ -1555,6 +1564,36 @@ final class WorkflowRegistry
         }
 
         return $stage['cache'];
+    }
+
+    /**
+     * C2: read and shape-validate a stage's `when:` clause at LOAD time via
+     * {@see StageCondition::parse()}. The grammar is refused, never coerced —
+     * a malformed clause fails the file exactly like an unknown key does
+     * ("Everything malformed is refused, not coerced", docs/WORKFLOWS.md).
+     *
+     * @param array<array-key, mixed> $stage
+     * @return array<string, mixed>|null the normalized clause, or null when absent
+     */
+    private function requireStageWhen(array $stage, string $where): ?array
+    {
+        if (!array_key_exists('when', $stage)) {
+            return null;
+        }
+
+        $clause = $stage['when'];
+        if (!is_array($clause)) {
+            throw new WorkflowLoadException(
+                "{$where} \"when\" must be a map carrying one of all, any, equals, contains, matches (with stage), got "
+                . get_debug_type($clause)
+            );
+        }
+
+        try {
+            return StageCondition::parse($clause);
+        } catch (\InvalidArgumentException $error) {
+            throw new WorkflowLoadException("{$where} " . $error->getMessage());
+        }
     }
 
     /**
