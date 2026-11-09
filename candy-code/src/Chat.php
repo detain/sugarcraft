@@ -54,6 +54,7 @@ use SugarCraft\Code\Support\ClipboardImage;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\QueueMode;
 use SugarCraft\Code\Agents\AgentManager;
+use SugarCraft\Code\Agents\AgentMentions;
 use SugarCraft\Code\Events\MediaProgress;
 use SugarCraft\Code\Events\ReasoningDelta;
 use SugarCraft\Code\Events\SpendCapBreached;
@@ -10293,8 +10294,21 @@ final class Chat implements Model
             // command name is consumed by the branch above, and every
             // built-in spelling was just handed to dispatchCommand().
             $skilled = $this->skillInvocationDraft($text);
+            // RS-AGENT-C2: the same lesson for '@name args' — a line that
+            // OPENS with an address to a preset this run holds is the same
+            // request as the reserved '@agent:name args' spelling the
+            // mention leg already resolves, so the token is REWRITTEN and
+            // the ordinary prose path (spend cap, tiers, attachments)
+            // proceeds. An address to a name the roster does NOT hold is
+            // refused below beside the unknown slash — same cost law: the
+            // model would only essay the typo. Every other '@' — mid-line,
+            // a domain or path, the keyword colons — is not an address and
+            // travels byte-identical (AgentMentions holds the polarity).
+            $agented = $skilled === null ? $this->agentMentionDraft($text) : null;
             if ($skilled !== null) {
                 $text = $skilled;
+            } elseif ($agented !== null) {
+                $text = $agented;
             } else {
                 // ISS-037: a draft whose first token LOOKS like a slash command was
                 // advertised as one and nothing claimed it. Sending it to the model
@@ -10306,9 +10320,10 @@ final class Chat implements Model
                 // `accepts()` gate declined the argument — still falls through to
                 // the prose path below, exactly as before.
                 $unknown = $this->unknownSlashNotice($text);
-                if ($unknown !== null) {
+                $refused = $unknown ?? $this->agentMentionRefusal($text);
+                if ($refused !== null) {
                     return [$this->mutate([
-                        'history' => [...$this->history, Message::notice($unknown)],
+                        'history' => [...$this->history, Message::notice($refused)],
                     ]), null];
                 }
             }
@@ -12251,6 +12266,73 @@ final class Chat implements Model
         }
 
         return $notice;
+    }
+
+    /**
+     * The '@coder fix X' addressing door (RS-AGENT-C2): a line-initial
+     * address to a preset this run holds is rewritten into the reserved
+     * '@agent:<name>' spelling the mention channel already resolves. Null —
+     * the line keeps every byte it arrived with — for anything that is not
+     * an address, for names the roster does not hold (the refusal beside
+     * this door handles those), and for a run with no agent manager at all,
+     * where bare '@' names are prose because there is nothing to delegate
+     * TO. The roster closure is the SAME predicate the mention leg and the
+     * headless host hold, built the same way {@see userTurnMessage()} wires
+     * its agentRoster.
+     */
+    private function agentMentionDraft(string $text): ?string
+    {
+        $manager = $this->agentManager;
+
+        if ($manager === null) {
+            return null;
+        }
+
+        return AgentMentions::draft($text, static fn (string $name): bool => $manager->get($name) !== null);
+    }
+
+    /**
+     * Why a line-initial '@<name>' the roster doesn't hold costs a notice
+     * instead of a turn — the same economy {@see unknownSlashNotice()}
+     * argues for the slash door: sending it to the model spends a paid turn
+     * to answer a typo with an essay, and here the essay would additionally
+     * be the model's guess at who 'name' is. The notice names the roster
+     * this run holds. Deliberately NOT Lang-wrapped, matching the mention
+     * channel's own roster notices in
+     * {@see \SugarCraft\Code\Attachments\ContextMentions}::agent(), which
+     * answer the identical question in plain English — inventing a lang key
+     * here would fork one message across two channels. A run with no agent
+     * manager refuses nothing: with no roster to name, '@anything' stays the
+     * prose it always was.
+     */
+    private function agentMentionRefusal(string $text): ?string
+    {
+        $manager = $this->agentManager;
+
+        if ($manager === null) {
+            return null;
+        }
+
+        $name = AgentMentions::addressedName($text);
+
+        if ($name === null || !AgentMentions::refuses($name, static fn (string $n): bool => $manager->get($n) !== null)) {
+            return null;
+        }
+
+        $roster = [];
+
+        foreach ($manager->all() as $agent) {
+            $roster[] = $agent->name;
+        }
+
+        return '@'.$name.' reads like an agent address, and this run holds no agent named "'
+            .$name.'" — the line was not delegated and no turn was sent.'
+            .($roster === []
+                ? ' This run has no agents to delegate to at all.'
+                : ' The agents here are: '.\implode(', ', $roster).'.')
+            .' A name the roster holds delegates from the front of the line; put any'
+            .' character in front of this one (a backslash works) and it travels to'
+            .' the model as the plain prose it is.';
     }
 
     /**
