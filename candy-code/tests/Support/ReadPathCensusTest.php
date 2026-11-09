@@ -1622,6 +1622,10 @@ final class ReadPathCensusTest extends TestCase
             'NAMES_ONLY — readPauseLedger(): lists the pause directory to match a ledger whose '
                 . 'workflowId equals the requested identifier; nothing is read through the listing',
         ],
+        'Workflows/WorkflowRegistry.php|file_get_contents' => [
+            'CONTAINED — sourceDeclaresFileScopeSymbols(): the C16 edited-memo scan reads the very '
+                . '`.php` bytes the require row below executes, the same tier-confined path',
+        ],
         'Workflows/WorkflowRegistry.php|require' => [
             'CONTAINED — THE TENTH READ PATH: the user tier\'s directory is anchored to $HOME and '
                 . 'the resolved `.php` is confined to it. This row is why this file exists',
