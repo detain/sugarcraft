@@ -2255,6 +2255,112 @@ final class WorkflowEngineTest extends TestCase
         return [$agents, $requests];
     }
 
+    // -------------------------------------------------------------------------
+    // C2: the when: guard — an unsatisfied clause settles a Skipped row
+    // -------------------------------------------------------------------------
+
+    public function testAStageWhoseWhenIsUnsatisfiedIsSkippedWithoutDispatch(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('skip-test')
+            ->description('b waits for a GO that never comes')
+            ->stage('a', Tasks::agent('coder')->prompt('plan'))
+            ->stage('b', Tasks::agent('coder')->prompt('build'))
+            ->when(['stage' => 'a', 'contains' => 'GO'])
+            ->stage('c', Tasks::agent('coder')->prompt('ship after {{b.output}}'))
+            ->build();
+
+        $this->registry->register($workflow);
+
+        $prompts = [];
+        $this->mockExecutor
+            ->expects($this->exactly(2))
+            ->method('execute')
+            ->willReturnCallback(function (SubAgent $agent, CompleteRequest $request) use (&$prompts) {
+                $prompts[] = $request->messages[0]['content'];
+
+                return $this->successfulAgentResult('halt, no green light', 100, 0.01);
+            });
+
+        $result = $this->engine->run('skip-test', []);
+
+        $this->assertSame(WorkflowStatus::Completed, $result->status, 'a skip is not a failure — the run sails on');
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame(['a', 'b', 'c'], array_map(static fn ($s): string => $s->stageName, $result->stageResults));
+        $this->assertSame(WorkflowStatus::Skipped, $result->stageResults[1]->status);
+        $this->assertNull($result->stageResults[1]->output);
+        $this->assertNull($result->stageResults[1]->error);
+        $this->assertSame(200, $result->totalTokens, 'a skip bills nothing');
+        $this->assertEqualsWithDelta(0.02, $result->totalCost, 1e-9);
+        $this->assertArrayNotHasKey('b.output', $result->context, 'a skipped stage has no output to hand downstream');
+        $this->assertStringContainsString(
+            '{{b.output}}',
+            $prompts[1],
+            'the missing reference stays raw in the prompt — absence is never fabricated into an empty string',
+        );
+    }
+
+    public function testAStageWhoseWhenIsSatisfiedRunsLikeAnyOtherStage(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('pass-test')
+            ->description('b gets its GO')
+            ->stage('a', Tasks::agent('coder')->prompt('plan'))
+            ->stage('b', Tasks::agent('coder')->prompt('build'))
+            ->when(['stage' => 'a', 'contains' => 'GO'])
+            ->build();
+
+        $this->registry->register($workflow);
+
+        $count = 0;
+        $this->mockExecutor
+            ->expects($this->exactly(2))
+            ->method('execute')
+            ->willReturnCallback(function () use (&$count): AgentResult {
+                $count++;
+
+                return $count === 1
+                    ? $this->successfulAgentResult('ALL-GO', 100, 0.01)
+                    : $this->successfulAgentResult('built', 50, 0.005);
+            });
+
+        $result = $this->engine->run('pass-test', []);
+
+        $this->assertSame(WorkflowStatus::Completed, $result->status);
+        $this->assertCount(2, $result->stageResults);
+        foreach ($result->stageResults as $row) {
+            $this->assertNotSame(WorkflowStatus::Skipped, $row->status, "stage {$row->stageName} must have run");
+        }
+        $this->assertSame('built', $result->context['b.output']);
+    }
+
+    public function testAConditionOnAStageThatNeverRanSkipsItsStageWithoutDispatch(): void
+    {
+        // The misspelled-stage law end-to-end: a clause naming a stage with
+        // nothing recorded reads unsatisfied — the honest answer to "judge
+        // text that does not exist" is skip, not silent run.
+        $workflow = (new WorkflowBuilder())
+            ->name('ghost-test')
+            ->description('a references a stage that never existed')
+            ->stage('a', Tasks::agent('coder')->prompt('p'))
+            ->when(['stage' => 'nope', 'equals' => 'x'])
+            ->build();
+
+        $this->registry->register($workflow);
+
+        $this->mockExecutor
+            ->expects($this->never())
+            ->method('execute');
+
+        $result = $this->engine->run('ghost-test', []);
+
+        $this->assertSame(WorkflowStatus::Completed, $result->status);
+        $this->assertCount(1, $result->stageResults);
+        $this->assertSame(WorkflowStatus::Skipped, $result->stageResults[0]->status);
+        $this->assertSame(0, $result->totalTokens);
+        $this->assertArrayNotHasKey('a.output', $result->context);
+    }
+
     /**
      * An engine gated at $mode, sharing this test's registry and mock-executor
      * pool.

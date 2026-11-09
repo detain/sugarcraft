@@ -189,6 +189,29 @@ final class StageResultTest extends TestCase
         }
     }
 
+    /**
+     * C2: the skip row is a recorded fact, not an outcome — it is neither
+     * success (no output, nothing billed, no cache hash) nor failure (the
+     * run continues past it). isFailure() must not claim it.
+     */
+    public function testASkippedRowIsNeitherSuccessNorFailure(): void
+    {
+        $startedAt = new \DateTimeImmutable('2026-02-01T08:00:00Z');
+        $result = new StageResult(
+            stageName: 's',
+            status: WorkflowStatus::Skipped,
+            startedAt: $startedAt,
+            completedAt: $startedAt,
+        );
+
+        $this->assertFalse($result->isSuccess(), 'a skip never claims a result');
+        $this->assertFalse($result->isFailure(), 'a skip must not stop a run');
+        $this->assertNull($result->output);
+        $this->assertNull($result->error);
+        $this->assertSame([], $result->agents);
+        $this->assertSame(0, $result->durationMs(), 'the engine settles the row with start == stop');
+    }
+
     // -------------------------------------------------------------------------
     // durationMs()
     // -------------------------------------------------------------------------

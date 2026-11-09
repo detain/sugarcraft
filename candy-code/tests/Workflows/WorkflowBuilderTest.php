@@ -216,4 +216,47 @@ final class WorkflowBuilderTest extends TestCase
         $this->assertSame(900, $workflow->timeout);
         $this->assertCount(3, $workflow->stages);
     }
+
+    // -------------------------------------------------------------------------
+    // C2: when() attaches a parsed clause to the stage just added
+    // -------------------------------------------------------------------------
+
+    public function testWhenAttachesTheNormalizedClauseToTheLastStage(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('when-chain')
+            ->stage('a', Tasks::agent('coder')->prompt('p'))
+            ->stage('b', Tasks::agent('coder')->prompt('q'))
+            ->when(['stage' => 'a', 'contains' => 'GO'])
+            ->build();
+
+        $this->assertArrayNotHasKey('when', $workflow->stages[0]);
+        $this->assertSame(
+            ['stage' => 'a', 'op' => 'contains', 'value' => 'GO'],
+            $workflow->stages[1]['when'],
+            'the builder stores the PARSED shape — the engine never re-parses',
+        );
+    }
+
+    public function testWhenWithoutAStageIsRefused(): void
+    {
+        try {
+            (new WorkflowBuilder())->name('lonely')->when(['stage' => 'a', 'equals' => 'x']);
+            $this->fail('a clause with nothing to attach to must be refused');
+        } catch (\InvalidArgumentException $error) {
+            $this->assertStringContainsString('needs a stage to attach to', $error->getMessage());
+        }
+    }
+
+    public function testWhenRefusesAMalformedClauseAtBuildTimeLikeRejectDoes(): void
+    {
+        $builder = (new WorkflowBuilder())->stage('a', Tasks::agent('coder')->prompt('p'));
+
+        try {
+            $builder->when(['stage' => 'a', 'gt' => 3]);
+            $this->fail('the grammar must not admit a made-up op');
+        } catch (\InvalidArgumentException $error) {
+            $this->assertStringContainsString('where a condition belongs', $error->getMessage());
+        }
+    }
 }

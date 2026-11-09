@@ -261,7 +261,7 @@ final class WorkflowYamlKeyRosterTest extends TestCase
         );
         self::assertSame(
             ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks',
-                'task', 'verifier', 'stages'],
+                'task', 'verifier', 'stages', 'when'],
             $registry->getConstant('YAML_STAGE_KEYS'),
             'the stage-shape vocabulary is one pinned list'
         );
@@ -284,6 +284,174 @@ final class WorkflowYamlKeyRosterTest extends TestCase
             "['stage', 'parallel', 'pipeline', 'verification']",
             $source
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // C2: "when" joined the stage roster — grammar survives, junk refuses
+    // -------------------------------------------------------------------------
+
+    public function testWhenClausesSurviveTheRosterOnEveryLegalShape(): void
+    {
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: a\n"
+            . "    agent: coder\n"
+            . "    prompt: p\n"
+            . "  - name: b\n"
+            . "    agent: coder\n"
+            . "    prompt: q\n"
+            . "    when:\n"
+            . "      stage: a\n"
+            . "      contains: GO\n"
+            . "  - name: c\n"
+            . "    agent: coder\n"
+            . "    prompt: r\n"
+            . "    when:\n"
+            . "      any:\n"
+            . "        - stage: a\n"
+            . "          equals: x\n"
+            . "        - all:\n"
+            . "            - stage: b\n"
+            . "              matches: '/^ok/'\n";
+
+        $workflow = $this->registry()->fromYamlString($yaml);
+
+        $this->assertArrayNotHasKey('when', $workflow->stages[0], 'no clause means no key');
+        $this->assertSame(
+            ['stage' => 'a', 'op' => 'contains', 'value' => 'GO'],
+            $workflow->stages[1]['when'],
+        );
+        $this->assertSame(
+            ['combinator' => 'any', 'conditions' => [
+                ['stage' => 'a', 'op' => 'equals', 'value' => 'x'],
+                ['combinator' => 'all', 'conditions' => [
+                    ['stage' => 'b', 'op' => 'matches', 'value' => '/^ok/'],
+                ]],
+            ]],
+            $workflow->stages[2]['when'],
+            'the stored clause is the PARSED shape, not the author spelling',
+        );
+    }
+
+    public function testAWhenLeafWithAMadeUpOpRefusesAtLoadNamingTheOffender(): void
+    {
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: one\n"
+            . "    agent: coder\n"
+            . "    prompt: p\n"
+            . "    when:\n"
+            . "      stage: one\n"
+            . "      gt: 3\n";
+
+        try {
+            $this->registry()->fromYamlString($yaml);
+            $this->fail('the grammar must not admit a made-up op');
+        } catch (WorkflowLoadException $error) {
+            $this->assertStringContainsString("stage 'one'", $error->getMessage());
+            $this->assertStringContainsString('where a condition belongs', $error->getMessage());
+        }
+    }
+
+    public function testAnEmptyCombinatorListRefusesAtLoad(): void
+    {
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: one\n"
+            . "    agent: coder\n"
+            . "    prompt: p\n"
+            . "    when:\n"
+            . "      all: []\n";
+
+        try {
+            $this->registry()->fromYamlString($yaml);
+            $this->fail('an empty all: list is not a condition');
+        } catch (WorkflowLoadException $error) {
+            $this->assertStringContainsString('non-empty list', $error->getMessage());
+        }
+    }
+
+    public function testNestingPastTheGrammarCeilingRefusesAtLoad(): void
+    {
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: one\n"
+            . "    agent: coder\n"
+            . "    prompt: p\n"
+            . "    when:\n"
+            . "      any:\n"
+            . "        - all:\n"
+            . "            - any:\n"
+            . "                - stage: one\n"
+            . "                  equals: x\n";
+
+        try {
+            $this->registry()->fromYamlString($yaml);
+            $this->fail('three combinator layers is past the ceiling');
+        } catch (WorkflowLoadException $error) {
+            $this->assertStringContainsString('nests combinators 3 deep', $error->getMessage());
+        }
+    }
+
+    public function testABrokenMatchesPatternRefusesAtLoadLikeRejectDoes(): void
+    {
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: one\n"
+            . "    agent: coder\n"
+            . "    prompt: p\n"
+            . "    when:\n"
+            . "      stage: one\n"
+            . "      matches: '/unclosed('\n";
+
+        try {
+            $this->registry()->fromYamlString($yaml);
+            $this->fail('a broken PCRE must not ride in to fail at every dispatch');
+        } catch (WorkflowLoadException $error) {
+            $this->assertStringContainsString('is not a valid PCRE', $error->getMessage());
+        }
+    }
+
+    public function testANonMapWhenRefusesAtLoad(): void
+    {
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: one\n"
+            . "    agent: coder\n"
+            . "    prompt: p\n"
+            . "    when: ready\n";
+
+        try {
+            $this->registry()->fromYamlString($yaml);
+            $this->fail('a scalar when is not a clause');
+        } catch (WorkflowLoadException $error) {
+            $this->assertStringContainsString('must be a map', $error->getMessage());
+        }
+    }
+
+    public function testAWhenAdjacentMisspellingIsStillTheUnknownKeyRefusal(): void
+    {
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: one\n"
+            . "    agent: coder\n"
+            . "    prompt: p\n"
+            . "    whenx: 1\n";
+
+        try {
+            $this->registry()->fromYamlString($yaml);
+            $this->fail('a near-miss key must not load quietly');
+        } catch (WorkflowLoadException $error) {
+            $this->assertStringContainsString('unknown key', $error->getMessage());
+            $this->assertStringContainsString('"whenx"', $error->getMessage());
+        }
     }
 
     private function registry(): WorkflowRegistry

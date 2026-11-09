@@ -460,6 +460,68 @@ final class WorkflowPauseResumeTest extends TestCase
         $this->assertSame(37, $resumed->totalTokens);
     }
 
+    /**
+     * C2: a skip is a settled fact. Stage b's `when` fails, so b never runs; the
+     * pause during c must still count b in `stagesCompleted` and persist its
+     * Skipped row, and the resume must dispatch ONLY d — b is never re-decided,
+     * because a skip re-evaluated under outputs that changed since the file was
+     * written could run a stage whose guard said no.
+     */
+    public function testASkippedStageSurvivesThePauseFileAndIsNeverReDecidedOnResume(): void
+    {
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('skips')
+                ->description('a, skipped b, c, d')
+                ->stage('a', Tasks::agent('coder')->prompt('do a'))
+                ->stage('b', Tasks::agent('coder')->prompt('do b using {{a.output}}'))
+                ->when(['stage' => 'a', 'contains' => 'NEED-B'])
+                ->stage('c', Tasks::agent('coder')->prompt('do c using {{b.output}}'))
+                ->stage('d', Tasks::agent('coder')->prompt('do d using {{c.output}}'))
+                ->build(),
+        );
+
+        $this->pauseDuring('do c', 'skips');
+        $run = $this->engine->run('skips');
+
+        $this->assertSame(WorkflowStatus::Paused, $run->status);
+        // b was never dispatched; d was never started.
+        $this->assertSame(['do a', 'do c using {{b.output}}'], $this->prompts);
+        // The paused snapshot carries the skip row settled between the runners.
+        $this->assertSame(['a', 'b', 'c'], self::stageNames($run));
+        $this->assertSame(
+            [WorkflowStatus::Completed, WorkflowStatus::Skipped, WorkflowStatus::Completed],
+            array_map(static fn ($s): WorkflowStatus => $s->status, $run->stageResults),
+        );
+
+        $file = $this->tempDir . '/workflows/.running/skips.json';
+        $this->assertFileExists($file);
+        $data = json_decode((string) file_get_contents($file), true);
+        $this->assertIsArray($data);
+        // Without the settled-prefix fix this would count only stages a and c (2).
+        $this->assertSame(3, $data['stagesCompleted']);
+        $this->assertSame(['a', 'b', 'c'], array_column($data['stageResults'], 'stageName'));
+        $this->assertSame(['completed', 'skipped', 'completed'], array_column($data['stageResults'], 'status'));
+
+        $this->prompts = [];
+        $resumed = $this->engine->resume($run->workflowId);
+
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status);
+        // Exactly one dispatch on resume: d. b never runs and is never re-decided.
+        $this->assertSame(['do d using OUT[do c using {{b.output}}]'], $this->prompts);
+        $this->assertSame(['a', 'b', 'c', 'd'], self::stageNames($resumed));
+        $this->assertSame(
+            [
+                WorkflowStatus::Completed,
+                WorkflowStatus::Skipped,
+                WorkflowStatus::Completed,
+                WorkflowStatus::Completed,
+            ],
+            array_map(static fn ($s): WorkflowStatus => $s->status, $resumed->stageResults),
+        );
+        $this->assertFileDoesNotExist($file);
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {
