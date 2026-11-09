@@ -130,7 +130,6 @@ candy-code/tests/Backend/ForkChannelClientCallRoundTripTest.php	4.296	7
 candy-code/tests/Config/DocFigureProseDriftTest.php	4.283	92
 candy-code/tests/Tools/InteractivePromptContainmentTest.php	4.244	13
 candy-code/tests/ClaudeCodeMcpClientShutdownTest.php	4.172	7
-candy-code/tests/Cli/GcSubcommandTest.php	4.121	16
 candy-code/tests/Session/RedoStackTest.php	4.099	6
 candy-code/tests/Tools/BuiltIn/BashTimeoutTest.php	4.084	18
 candy-code/tests/Session/DebouncedTranscriptPersistenceTest.php	4.070	8
