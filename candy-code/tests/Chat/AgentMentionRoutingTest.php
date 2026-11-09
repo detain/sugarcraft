@@ -54,7 +54,7 @@ final class AgentMentionRoutingTest extends TestCase
     protected function tearDown(): void
     {
         $this->restoreHomeSandbox();
-        \exec('rm -rf '.\escapeshellarg(\dirname($this->project)));
+        \exec('rm -rf '.\escapeshellarg(\dirname($this->project)).' 2>&1');
     }
 
     private function manager(string ...$names): AgentManager
