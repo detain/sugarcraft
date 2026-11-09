@@ -298,6 +298,7 @@ final class RestrictedSafeModeFlagsTest extends TestCase
             'trustedProjectCommands' => [$this->projectRoot],
             'trustedProjectMcp' => [$this->projectRoot],
             'trustedBundleCommands' => ['kit'],
+            'trustedBundleChannels' => ['relay'],
             'mcpPromptShell' => ['srv'],
         ]);
 
@@ -310,6 +311,7 @@ final class RestrictedSafeModeFlagsTest extends TestCase
         self::assertTrue(self::invokePrivate('projectHooksAreTrusted', [$this->projectRoot]));
         // C-SEC-3.b: the origin-name opt-ins answer their lists unarmed…
         self::assertSame(['kit'], Bootstrap::trustedBundleCommandNames());
+        self::assertSame(['relay'], Bootstrap::trustedBundleChannelNames(), 'the twin control arms the channel list too');
         self::assertSame(['srv'], Bootstrap::mcpPromptShellServers());
     }
 
@@ -324,6 +326,7 @@ final class RestrictedSafeModeFlagsTest extends TestCase
             'trustedProjectCommands' => [$this->projectRoot],
             'trustedProjectMcp' => [$this->projectRoot],
             'trustedBundleCommands' => ['kit'],
+            'trustedBundleChannels' => ['relay'],
             'mcpPromptShell' => ['srv'],
         ]);
 
@@ -338,6 +341,7 @@ final class RestrictedSafeModeFlagsTest extends TestCase
         // C-SEC-3.b: the origin-name opt-ins are trust grants too — the switch
         // refuses them at their own source, before any memo answers.
         self::assertSame([], Bootstrap::trustedBundleCommandNames());
+        self::assertSame([], Bootstrap::trustedBundleChannelNames(), 'safe mode answers zero channels before any load');
         self::assertSame([], Bootstrap::mcpPromptShellServers());
     }
 

@@ -215,6 +215,19 @@ final class Bootstrap
     private const TRUSTED_BUNDLE_COMMANDS_CONFIG_KEY = 'trustedBundleCommands';
 
     /**
+     * The ONE setting that says which named bundles may have their declared
+     * `entrypoints.channel` PHP files loaded IN-PROCESS. C-SEC-3.b laws apply
+     * unchanged — user tier only, no layering, entries are bundle NAMES from
+     * the manifests of bundles already discovered from the roots the operator
+     * picked. {@see TRUSTED_BUNDLE_COMMANDS_CONFIG_KEY} (which only ever
+     * launched an external binary) is the precedent; this door is wider: a
+     * require_once runs the bundle's code as candy-code itself, which is why
+     * the launch refuses anything the manifest never named and the loader
+     * re-asserts containment at the read.
+     */
+    private const TRUSTED_BUNDLE_CHANNELS_CONFIG_KEY = 'trustedBundleChannels';
+
+    /**
      * C-SEC-3.b: the per-origin opt-in naming the MCP SERVERS whose fetched
      * prompt bodies may put their `` !`cmd` `` forms to the permission gate.
      * Entries are the server key as the user's own MCP config spells it.
@@ -7197,6 +7210,40 @@ public static function useMaxCost(?string $maxCost): void
         }
 
         return LaunchContext::trustedBundleNamesFor($path);
+    }
+
+    /**
+     * The bundle NAMES allowed to load their declared channel entrypoints
+     * in-process, frozen for the life of this process — the third gate on that
+     * door, and the only one a bundle can never touch, since the list is read
+     * exclusively from the user's own configuration file.
+     *
+     * The same C-SEC-3.b laws as {@see trustedBundleCommandNames()} answer
+     * this call, through the same shared parser. They matter MORE here: the
+     * command list ends up in front of an external binary, while a named
+     * bundle's entrypoint file is require_once'd into this very process.
+     * Hence the same trio of holds: no layering (a key absent from
+     * LAYERED_KEYS — only the user's config file answers it, so a
+     * checked-out project cannot name a bundle to load), safe mode refusing
+     * every opt-in before the file is even read ({@see safeMode()}), and
+     * entries being bundle NAMES as their manifests spell them, matched
+     * strictly — never a path, never case-folded. A shipped install has an
+     * empty list; nothing loads its code in-process until the operator
+     * names the bundle.
+     */
+    public static function trustedBundleChannelNames(): array
+    {
+        $path = self::trustedConfigDirPath() . '/config.json';
+
+        if (!LaunchContext::hasTrustedChannelNamesFor($path)) {
+            LaunchContext::rememberTrustedChannelNames($path, self::trustedOriginNames(
+                self::permissionConfig(),
+                self::TRUSTED_BUNDLE_CHANNELS_CONFIG_KEY,
+                Lang::t('cli.warn.untrusted_channels'),
+            ));
+        }
+
+        return LaunchContext::trustedChannelNamesFor($path);
     }
 
     /**

@@ -99,8 +99,10 @@ final class LayeredSettingsTest extends TestCase
         // be able to name the bundle or server whose shell it trusts on the
         // operator's behalf.
         self::assertNotContains('trustedBundleCommands', LayeredSettings::LAYERED_KEYS);
+        self::assertNotContains('trustedBundleChannels', LayeredSettings::LAYERED_KEYS);
         self::assertNotContains('mcpPromptShell', LayeredSettings::LAYERED_KEYS);
         self::assertNotContains('trustedBundleCommands', LayeredSettings::PROJECT_TIER_KEYS);
+        self::assertNotContains('trustedBundleChannels', LayeredSettings::PROJECT_TIER_KEYS);
         self::assertNotContains('mcpPromptShell', LayeredSettings::PROJECT_TIER_KEYS);
         self::assertNotContains(
             LayeredSettings::PROJECT_SETTINGS_TRUST_KEY,

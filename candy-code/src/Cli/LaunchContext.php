@@ -1526,6 +1526,9 @@ final class LaunchContext
     /** @var array<string, list<string>> see {@see self::$trustedBundleNames} */
     private static array $mcpPromptShellNames = [];
 
+    /** @var array<string, list<string>> see {@see self::$trustedBundleNames} */
+    private static array $trustedChannelNames = [];
+
     /**
      * The project root {@see Bootstrap::readUserConfig()}'s project layer is read from, or
      * null for "no project named yet" — see
@@ -1618,6 +1621,22 @@ final class LaunchContext
     public static function rememberMcpPromptShellNames(string $path, array $names): void
     {
         self::$mcpPromptShellNames[$path] = $names;
+    }
+
+    public static function trustedChannelNamesFor(string $path): array
+    {
+        return self::$trustedChannelNames[$path];
+    }
+
+    public static function hasTrustedChannelNamesFor(string $path): bool
+    {
+        return \array_key_exists($path, self::$trustedChannelNames);
+    }
+
+    /** The frozen C-SEC-3.b bundle channel opt-ins for $path (see Bootstrap::trustedBundleChannelNames()). */
+    public static function rememberTrustedChannelNames(string $path, array $names): void
+    {
+        self::$trustedChannelNames[$path] = $names;
     }
 
     public static function trustedSettingsRootsFor(string $path): array

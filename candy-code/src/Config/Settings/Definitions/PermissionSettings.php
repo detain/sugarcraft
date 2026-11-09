@@ -240,6 +240,18 @@ final class PermissionSettings implements SettingDefinitionSet
                 ->withLabel(Lang::t('settings.trustedBundleCommands.label'))
                 ->withHelp(Lang::t('settings.trustedBundleCommands.help'))
                 ->withReaderSymbol(Bootstrap::class . '::trustedBundleCommandNames'),
+            // The same door, one notch further in: a named bundle may have its
+            // `entrypoints.channel` PHP files loaded IN-PROCESS — require_once,
+            // no sandbox, the bundle's code runs as candy-code. The same three
+            // laws apply for the same reasons.
+            SettingDefinition::new('trustedBundleChannels', SettingType::StringList, [])
+                ->withCategory(SettingCategory::Permissions)
+                ->withRiskClass(RiskClass::Security)
+                ->withApplyMode(ApplyMode::Frozen)
+                ->withUi(UiEditability::List)
+                ->withLabel(Lang::t('settings.trustedBundleChannels.label'))
+                ->withHelp(Lang::t('settings.trustedBundleChannels.help'))
+                ->withReaderSymbol(Bootstrap::class . '::trustedBundleChannelNames'),
             SettingDefinition::new('mcpPromptShell', SettingType::StringList, [])
                 ->withCategory(SettingCategory::Permissions)
                 ->withRiskClass(RiskClass::Security)

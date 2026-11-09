@@ -456,6 +456,7 @@ final class SettingsWriterTest extends TestCase
         // silently otherwise, so the exact-four pin above is the double
         // discriminator and these arms name the WHY).
         self::assertNotContains('trustedBundleCommands', SettingsWriter::trustKeys());
+        self::assertNotContains('trustedBundleChannels', SettingsWriter::trustKeys());
         self::assertNotContains('mcpPromptShell', SettingsWriter::trustKeys());
 
         $this->expectException(\InvalidArgumentException::class);
