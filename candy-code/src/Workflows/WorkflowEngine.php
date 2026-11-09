@@ -25,6 +25,7 @@ use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Permissions\ToolDeclaration;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Code\Util\PathGlob;
 
 /**
  * Executes workflows sequentially, stage by stage.
@@ -990,7 +991,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param array<string, mixed> $data    the decoded pause file
      * @param array<string, mixed> $context the pause file's context
-     * @return array{0: int, 1: array{stageResults: list<StageResult>, totalTokens: int, totalCost: float, startedAt: \DateTimeImmutable, stageInputHashes: array<string, string>, recordedResults: array<string, StageResult>, totalsCountRecordedRows: bool}}
+     * @return array{0: int, 1: array{stageResults: list<StageResult>, totalTokens: int, totalCost: float, startedAt: \DateTimeImmutable, stageInputHashes: array<string, string>, dynamicWaves: array<string, mixed>, recordedResults: array<string, StageResult>, totalsCountRecordedRows: bool}}
      */
     private function priorProgress(array $data, Workflow $workflow, array $context): array
     {
@@ -1054,6 +1055,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // An old record has none, and an empty map is what the resumed
             // run seeds with — absence downstream is a cache miss, by law.
             'stageInputHashes' => is_array($data['stageInputHashes'] ?? null) ? $data['stageInputHashes'] : [],
+            // C8 substrate, same law: the materialised wave lists ride the
+            // pause file verbatim. A resume replays what this map records and
+            // NEVER re-globs; a pre-C8 record carries none, which is exactly
+            // the state where a fresh (unstarted) dynamic stage may expand.
+            'dynamicWaves' => is_array($data['dynamicWaves'] ?? null) ? $data['dynamicWaves'] : [],
             'recordedResults' => $recordedByName,
             // Whether the seed totals are the file's cumulative spend (which
             // was written in the same snapshot as the rows above, so it ALREADY
@@ -1473,6 +1479,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($hashes !== []) {
             $data['stageInputHashes'] = $hashes;
         }
+        // C8 substrate, same law: the materialised wave lists. A resume
+        // replays what this map records; a run with no dynamic stage omits
+        // the key entirely.
+        $waves = $slotToken === null ? [] : ($this->liveRuns[$slotToken]['dynamicWaves'] ?? []);
+        if ($waves !== []) {
+            $data['dynamicWaves'] = $waves;
+        }
 
         // Audit M4: the pre-fix write ignored file_put_contents' return (a
         // failed pause silently lost the run) and wrote the live path
@@ -1792,6 +1805,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // Purely additive — old records carry none, and a later cache-side
         // consumer reads absence as a cache miss, never as corruption.
         $inputHashes = is_array($prior['stageInputHashes'] ?? null) ? $prior['stageInputHashes'] : [];
+        // C8 substrate: the materialised wave lists, seeded from the pause
+        // file and extended the first time each dynamic stage is entered.
+        // A resume replays from this ledger — a stage that already started
+        // never globs again (mid-run divergence would fork different work).
+        $priorWaves = is_array($prior['dynamicWaves'] ?? null) ? $prior['dynamicWaves'] : [];
 
         $liveToken = ++$this->liveRunSequence;
 
@@ -1803,6 +1821,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 'snapshot' => $snapshot,
                 'pauseRequested' => false,
                 'inputHashes' => $inputHashes,
+                'dynamicWaves' => $priorWaves,
             ];
 
             foreach ($workflow->stages as $stageIndex => $stage) {
@@ -1897,7 +1916,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     if (array_key_exists('uses', $stage)) {
                         $stageResult = $this->executeIncludedWorkflow($stage, $context, $workflow, $stageStartedAt);
                     } elseif ($stageType === 'parallel') {
-                        $stageResult = $this->executeParallelStage($stage, $context, $workflow, $dispatched);
+                        // C8: the wave ledger is threaded by reference so a
+                        // first expansion lands in the slot and every pause
+                        // writer persists it; static stages never touch it.
+                        $stageResult = $this->executeParallelStage($stage, $context, $workflow, $dispatched, $this->liveRuns[$liveToken]['dynamicWaves']);
                     } elseif ($stageType === 'stage') {
                         $stageResult = $this->executeStage($stage, $context, $dispatched, $workflow->timeout);
                     } elseif ($stageType === 'pipeline') {
@@ -2217,6 +2239,87 @@ final class WorkflowEngine implements WorkflowEngineInterface
             startedAt: $stageStartedAt,
             completedAt: new \DateTimeImmutable(),
         );
+    }
+
+    /**
+     * C8: materialise a "from:" glob against the run's environment root.
+     *
+     * The glob is matched with the same {@see PathGlob} engine the permission
+     * globs use, over paths RELATIVE to the environment root ("/" separators)
+     * — a pattern like src/*.{php,js} fans out the session project's files,
+     * never the directory the workflow YAML was loaded from. `**` crosses
+     * directory boundaries because the matcher walks them; every match is a
+     * regular file, so an empty result means nothing matched, not "a
+     * directory did".
+     *
+     * The list is sorted for determinism: the pause record names files in
+     * this exact order, so a replayed stage builds the same fan-out. Patterns
+     * that try to leave the root (absolute, or carrying a ".." segment) are
+     * refused here rather than expanded into a surprising walk; a run with no
+     * environment root is refused too — there is nothing to expand against.
+     * Refusals throw: the engine loop's catch turns them into the loudly-
+     * failed stage, never a silently-empty fan-out.
+     *
+     * @return list<string> relative paths of every matching file
+     */
+    private function expandFromGlob(string $pattern): array
+    {
+        $root = $this->environmentRoot;
+        if ($root === null || $root === '') {
+            throw new WorkflowLoadException('a from: stage needs an environment root to expand');
+        }
+
+        if ($pattern === '' || str_starts_with($pattern, '/')) {
+            throw new WorkflowLoadException(
+                "a from: glob must be a relative pattern, got \"{$pattern}\""
+            );
+        }
+
+        if (preg_match('~(?:^|/)\.\.(?:/|$)~', $pattern) === 1) {
+            throw new WorkflowLoadException(
+                "a from: glob must not traverse above the environment root, got \"{$pattern}\""
+            );
+        }
+
+        $compiled = PathGlob::compile($pattern);
+        $root = rtrim($root, '/');
+        $matches = [];
+
+        // Iterative walk, newest directory first off the stack — order does
+        // not matter here because the result is sorted before it is returned.
+        // An unreadable directory is skipped: the run either matches what it
+        // can read or fails the "expanded no files" door loudly.
+        $stack = [''];
+
+        while ($stack !== []) {
+            $dir = array_pop($stack);
+            $entries = @scandir($root . ($dir === '' ? '' : '/' . $dir));
+
+            if ($entries === false) {
+                continue;
+            }
+
+            foreach ($entries as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
+
+                $relative = $dir === '' ? $entry : $dir . '/' . $entry;
+
+                if (is_dir($root . '/' . $relative)) {
+                    $stack[] = $relative;
+                    continue;
+                }
+
+                if (is_file($root . '/' . $relative) && PathGlob::matchCompiled($compiled, $relative) === true) {
+                    $matches[] = $relative;
+                }
+            }
+        }
+
+        sort($matches);
+
+        return $matches;
     }
 
     /**
@@ -3174,9 +3277,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @param array    $context Current workflow context for interpolation.
      * @param Workflow $workflow The workflow definition (provides maxConcurrent, stopOnFirstFailure).
      * @param list<array{key: string, result: AgentResult}> $dispatched Out: one entry per agent that settled.
+     * @param ?array<string, mixed> $waveLedger C8 in/out: the live run's
+     *     dynamic-wave record, keyed by stage name. A first expansion writes
+     *     its MATERIALIZED list here (so pause writers persist it); a resume
+     *     reads the recorded list back. Null means the caller keeps no
+     *     ledger — expansion then happens fresh on every call.
      * @return StageResult
      */
-    private function executeParallelStage(array $stage, array $context, Workflow $workflow, array &$dispatched): StageResult
+    private function executeParallelStage(array $stage, array $context, Workflow $workflow, array &$dispatched, ?array &$waveLedger = null): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
@@ -3191,6 +3299,92 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 startedAt: $stageStartedAt,
                 completedAt: new \DateTimeImmutable(),
             );
+        }
+
+        // C8: a "from:" parallel stage swaps its single template task for a
+        // runtime fan-out, expanded ONCE here at stage entry against the
+        // workflow's environment root. The pause record keeps the MATERIALIZED
+        // list — a resume replays that recorded list and never re-globs,
+        // because files that changed mid-run must fail the resume loudly
+        // rather than silently fork different work from what was paused.
+        $dynamic = isset($stage['from']);
+        $chunk = null;
+        if ($dynamic) {
+            $template = $tasks[0] ?? null;
+            if (count($tasks) !== 1 || !$template instanceof WorkflowTask) {
+                return new StageResult(
+                    stageName: $stageName,
+                    status: WorkflowStatus::Failed,
+                    error: "Stage '{$stageName}' carries a from: fan-out without its single template task",
+                    startedAt: $stageStartedAt,
+                    completedAt: new \DateTimeImmutable(),
+                );
+            }
+
+            $from = $stage['from'];
+            $recorded = $waveLedger[$stageName] ?? null;
+            if ($recorded === null) {
+                $paths = $this->expandFromGlob((string) $from['glob']);
+                $chunk = $from['chunk'];
+                if ($waveLedger !== null) {
+                    $waveLedger[$stageName] = ['paths' => $paths, 'chunk' => $chunk];
+                }
+            } else {
+                $replayable = false;
+                if (is_array($recorded)) {
+                    $replayable = isset($recorded['paths'])
+                        && is_array($recorded['paths']) && array_is_list($recorded['paths'])
+                        && (!array_key_exists('chunk', $recorded)
+                            || $recorded['chunk'] === null || is_int($recorded['chunk']));
+                    if ($replayable) {
+                        foreach ($recorded['paths'] as $candidate) {
+                            if (!is_string($candidate) || $candidate === '') {
+                                $replayable = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!$replayable) {
+                    return new StageResult(
+                        stageName: $stageName,
+                        status: WorkflowStatus::Failed,
+                        error: "Stage '{$stageName}' resumed with a dynamic-wave record it cannot replay — refusing to re-glob over files that may have changed",
+                        startedAt: $stageStartedAt,
+                        completedAt: new \DateTimeImmutable(),
+                    );
+                }
+
+                $paths = $recorded['paths'];
+                $chunk = $recorded['chunk'] ?? $from['chunk'];
+            }
+
+            if ($paths === []) {
+                return new StageResult(
+                    stageName: $stageName,
+                    status: WorkflowStatus::Failed,
+                    error: "Stage '{$stageName}' expanded no files from \"{$from['glob']}\"",
+                    startedAt: $stageStartedAt,
+                    completedAt: new \DateTimeImmutable(),
+                );
+            }
+
+            $tasks = array_map(static fn (string $rel): WorkflowTask => new WorkflowTask(
+                agentType: $template->agentType,
+                prompt: $template->prompt,
+                tools: $template->tools,
+                timeout: $template->timeout,
+                retries: $template->retries,
+                isolation: $template->isolation,
+                name: $rel,
+                outputSchema: $template->outputSchema,
+                model: $template->model,
+                reject: $template->reject,
+                rejectMinOccurrences: $template->rejectMinOccurrences,
+                resource: $template->resource,
+                lockWaitSeconds: $template->lockWaitSeconds,
+            ), $paths);
         }
 
         // Every task's declaration is checked before this method builds
@@ -3215,7 +3409,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // parallel stages with non-identical prompts work correctly.
         /** @var WorkflowTask $firstTask */
         $firstTask = $tasks[0];
-        $firstInterpolated = $this->interpolateContext($firstTask->prompt, $context);
+        // C8: a fanned-out item interpolates against its own {{path}}; the
+        // static spelling keeps the workflow context exactly as it was.
+        $firstContext = $dynamic && $firstTask->name !== null
+            ? $context + ['path' => $firstTask->name]
+            : $context;
+        $firstInterpolated = $this->interpolateContext($firstTask->prompt, $firstContext);
 
         $firstAgent = new Agent(
             name: $firstTask->name ?? $firstTask->agentType,
@@ -3264,7 +3463,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $unreachedGrant = $this->resolveRequestTools($task->tools);
             unset($unreachedGrant);
 
-            $interpolatedPrompt = $this->interpolateContext($task->prompt, $context);
+            // C8: on a "from:" fan-out, {{path}} names the item; static
+            // stages keep the workflow context exactly as it was.
+            $itemContext = $dynamic && $task->name !== null
+                ? $context + ['path' => $task->name]
+                : $context;
+
+            $interpolatedPrompt = $this->interpolateContext($task->prompt, $itemContext);
 
             $agent = new Agent(
                 name: $task->name ?? $task->agentType,
@@ -3313,8 +3518,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // the SYNCHRONOUS custom executor), so a stage pool rebuilt without it
         // drops back to a self-built worker and the caller's choice of worker
         // silently applies to sequential stages only.
+        // C8: "chunk" caps this stage's in-flight window — a ceiling, never
+        // a floor: it can narrow the workflow width, never widen it.
+        $concurrency = $dynamic && $chunk !== null
+            ? ($workflow->maxConcurrent === null ? $chunk : min($workflow->maxConcurrent, $chunk))
+            : $workflow->maxConcurrent;
+
         $pool = new AgentWorkerPool(
-            maxConcurrent: $workflow->maxConcurrent,
+            maxConcurrent: $concurrency,
             executor: $this->pool->executor(),
             workerProvider: $this->pool->workerProvider(),
             forkedExecutor: $this->pool->forkedExecutor(),
