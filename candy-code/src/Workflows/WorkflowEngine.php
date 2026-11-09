@@ -261,6 +261,23 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private array $previousSignalHandlers = [];
 
     /**
+     * Optional observer invoked by {@see installInterruptHandlers()}'s handler
+     * AFTER the cooperative pause record has been written and BEFORE the
+     * process exits, receiving the partial result and the pause file path (or
+     * null if the record could not be located) and returning the exit code.
+     *
+     * Null — the default — keeps the historical behaviour byte-identical:
+     * `exit(130/143)` straight through the load-bearing shutdown sequence.
+     * The headless `candy-code workflow` verb (W-1/D4) installs an observer
+     * so a signal-pause can emit its machine document on stdout and exit 3;
+     * nothing else in-tree sets it. Mutable-service precedent: same shape as
+     * {@see setAgentManager()} — the engine is a service the caller wires.
+     *
+     * @var (callable(WorkflowResult, ?string): int)|null
+     */
+    private ?\Closure $signalPauseHandler = null;
+
+    /**
      * The owner of every run currently live on this engine, innermost last —
      * the `\Fiber` it is executing in, or `null` for the main call stack.
      *
@@ -4559,6 +4576,22 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // this comment used to credit), so this exit() still restores
             // through the single authoritative release path. See
             // installInterruptHandlers()'s doc-block.
+            $pauseFilePath = null;
+            try {
+                $pauseFilePath = $this->pauseFileFor($interruptId);
+            } catch (\Throwable) {
+                // The path is a courtesy for the observer; the record write
+                // above is what matters, and its absence must not change
+                // the exit — or block it.
+            }
+            if ($this->signalPauseHandler !== null) {
+                // A caller that owns the process lifecycle (the headless CLI
+                // verb, W-1/D4) decides the exit code — and may emit its
+                // machine document to stdout first. Plain exit() semantics
+                // below are unchanged for every other caller.
+                exit((int) ($this->signalPauseHandler)($partialResult, $pauseFilePath));
+            }
+
             exit($signo === \SIGINT ? 130 : 143);
         };
 
@@ -4566,6 +4599,19 @@ final class WorkflowEngine implements WorkflowEngineInterface
         pcntl_signal(\SIGTERM, $handler);
 
         return $previousAsyncSignals;
+    }
+
+    /**
+     * Install (or clear with null) the observer the SIGINT/SIGTERM handler
+     * consults on a cooperative pause — see {@see self::$signalPauseHandler}.
+     * Call BEFORE the run that may be signalled; the handler reads the
+     * property at signal time.
+     *
+     * @param (callable(WorkflowResult, ?string): int)|null $observer
+     */
+    public function setSignalPauseHandler(?\Closure $observer): void
+    {
+        $this->signalPauseHandler = $observer;
     }
 
     /**
