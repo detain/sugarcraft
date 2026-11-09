@@ -111,12 +111,19 @@ final class WorktreeHandoff
 
         try {
             $path = $manager->worktreePath($agentId);
-            $report['directoryPresent'] = true;
-            $report['uncommitted'] = $manager->worktreeHasUncommittedDiff($path);
+            // worktreePath answers from the REGISTRY, not the disk: a released
+            // or manually-removed directory still has a path. The present-flag
+            // is the is_dir truth, and uncommitted stays null when there is
+            // nothing to be dirty — a false here would claim a verified-clean
+            // tree we never looked at.
+            if (is_dir($path)) {
+                $report['directoryPresent'] = true;
+                $report['uncommitted'] = $manager->worktreeHasUncommittedDiff($path);
+            }
         } catch (\RuntimeException) {
-            // Directory released out from under the registry: the branch
-            // facts below still answer the decision, and `uncommitted`
-            // stays null because anything that was uncommitted is gone.
+            // Never on the registry at all: the branch facts below still
+            // answer the decision, and `uncommitted` stays null because
+            // anything that was uncommitted is gone.
         }
 
         if (preg_match(self::BRANCH_SAFE, $branch) !== 1) {
@@ -173,12 +180,22 @@ final class WorktreeHandoff
         if (($merge['exitCode'] ?? 1) === 0 && $merge['ok']) {
             $self['mergeVerdict'] = 'clean';
         } elseif (($merge['exitCode'] ?? 0) === 1) {
-            // First stdout line is the resulting (unwritten) tree oid; the
-            // `--name-only` section after it lists conflicted paths.
-            $lines = array_map('trim', explode("\n", trim($merge['stdout'])));
+            // First stdout line is the resulting (unwritten) tree oid, then
+            // the `--name-only` conflicted-path section, then a blank line,
+            // then informational messages ("Auto-merging …", "CONFLICT …").
+            // The paths are everything BEFORE the blank separator — the
+            // messages must not inflate the count of files a human must fix.
+            $lines = array_map('trim', explode("\n", $merge['stdout']));
             array_shift($lines);
+            $paths = [];
+            foreach ($lines as $line) {
+                if ($line === '') {
+                    break;
+                }
+                $paths[] = $line;
+            }
             $self['mergeVerdict'] = 'conflicts';
-            $self['conflicts'] = array_values(array_filter($lines, static fn (string $l): bool => $l !== ''));
+            $self['conflicts'] = $paths;
         } else {
             $self['mergeVerdict'] = 'unavailable';
             $self['problems'][] = 'the merge could not be predicted (git merge-tree failed)';
