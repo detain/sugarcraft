@@ -10,6 +10,7 @@ use SugarCraft\Code\Agents\CapabilityCardStore;
 use SugarCraft\Code\Agents\Live\AgentInbox;
 use SugarCraft\Code\Agents\Live\AgentRunCards;
 use SugarCraft\Code\Agents\Live\AgentRunStatus;
+use SugarCraft\Code\Agents\WorktreeHandoff;
 
 /**
  * The command-output half of the agent run status surface (roadmap A3): a
@@ -33,6 +34,11 @@ use SugarCraft\Code\Agents\Live\AgentRunStatus;
  * The prose is literal English like the messaging tools' output, not a locale
  * key: these strings carry run data mid-sentence and belong with the tool
  * surface that shares their shape (SubagentsTool precedent).
+ *
+ * RS-AGENT-A5 adds {@see self::handoff()}: the same command-output posture
+ * applied to a finished agent's WORKTREE — branch facts, a read-only
+ * merge prediction, and (only on explicit `--apply`) the plumbing merge
+ * into a fresh ref, rendered one physical row per line.
  */
 final class AgentStatusCommands
 {
@@ -174,6 +180,92 @@ final class AgentStatusCommands
                 $line .= " · STALE (this session's current roster no longer names it)";
             }
             $lines[] = $line;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * The hand-off report for one agent worktree (RS-AGENT-A5), rendered
+     * from {@see WorktreeHandoff::inspect()}. With `$apply` the attempt is
+     * made FIRST and its outcome printed as the final row(s) under the
+     * report — the report is what the human justified `--apply` on, so it
+     * stays on screen either way, refused or done.
+     *
+     * Every field here is repository-chosen data — ids, branch names,
+     * commit lines, paths, git stderr — so each crosses the same
+     * one-transcript-line filter the tree rows use before it prints.
+     */
+    public static function handoff(string $agentId, string $repoRoot, bool $apply, ?int $now = null): string
+    {
+        $outcome = $apply ? WorktreeHandoff::apply($repoRoot, $agentId, $now) : null;
+        $report = WorktreeHandoff::inspect($repoRoot, $agentId);
+
+        if (!$report['known']) {
+            return 'No worktree is on record for "' . PermissionsCommand::reportField($agentId)
+                . '" in this repository — `agents handoff` reports trees this project\'s agent runtime created.';
+        }
+
+        $lines = ['Hand-off report for "' . PermissionsCommand::reportField($agentId) . '":'];
+
+        $line = '  · branch "' . PermissionsCommand::reportField((string) $report['branch']) . '"';
+        if ($report['ahead'] !== null && $report['behind'] !== null) {
+            $line .= ' · ' . $report['ahead'] . ' commit(s) ahead, ' . $report['behind'] . ' behind the current main tree';
+        } else {
+            $line .= ' · ahead/behind against the main tree unavailable';
+        }
+        $lines[] = $line;
+
+        if ($report['directoryPresent']) {
+            $lines[] = $report['uncommitted'] === true
+                ? '  · working directory present; UNCOMMITTED CHANGES — the hand-off moves committed history only'
+                : '  · working directory present; uncommitted changes: no';
+        } else {
+            $lines[] = '  · working directory removed (any work left uncommitted there is gone with it)';
+        }
+
+        if ($report['ahead'] !== null && $report['behind'] === 0 && $report['ahead'] > 0) {
+            $lines[] = '  · the main tree is an ancestor of the branch; merging could fast-forward';
+        }
+
+        if ($report['commits'] !== []) {
+            $lines[] = '  · branch commits (newest first):';
+            foreach ($report['commits'] as $commitLine) {
+                $lines[] = '    ' . PermissionsCommand::reportField($commitLine);
+            }
+        }
+
+        if ($report['diffStat'] !== null) {
+            $lines[] = '  · diffstat against the merge base:';
+            foreach (explode("\n", $report['diffStat']) as $statLine) {
+                $lines[] = '    ' . PermissionsCommand::reportField($statLine);
+            }
+        }
+
+        if ($report['mergeVerdict'] === 'clean') {
+            $lines[] = '  · merging into the main tree now: clean';
+        } elseif ($report['mergeVerdict'] === 'conflicts') {
+            $lines[] = '  · merging into the main tree now: CONFLICTS in '
+                . count($report['conflicts']) . ' file(s):';
+            foreach (array_slice($report['conflicts'], 0, WorktreeHandoff::CONFLICT_ROWS) as $path) {
+                $lines[] = '    ' . PermissionsCommand::reportField($path);
+            }
+            if (count($report['conflicts']) > WorktreeHandoff::CONFLICT_ROWS) {
+                $lines[] = '    …';
+            }
+        } else {
+            $lines[] = '  · merging into the main tree now: could not be predicted';
+        }
+
+        foreach ($report['problems'] as $problem) {
+            $lines[] = '  · PROBLEM: ' . PermissionsCommand::reportField($problem);
+        }
+
+        if ($outcome !== null) {
+            $lines[] = $outcome['ok']
+                ? '  · APPLIED: merged into new branch "' . PermissionsCommand::reportField((string) $outcome['ref'])
+                    . '"; master, HEAD and the agent worktree were not touched.'
+                : '  · APPLY REFUSED: ' . PermissionsCommand::reportField($outcome['reason']);
         }
 
         return implode("\n", $lines);
