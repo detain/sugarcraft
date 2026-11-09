@@ -331,6 +331,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
     /** The error a stage the cancel interrupted carries ({@see cancelledRun()}). */
     public const CANCELLED_STAGE_ERROR = 'cancelled with Esc Esc while it ran; its agents were stopped';
 
+    /**
+     * C11: how many workflows one run may span through `uses:` stages, outer
+     * included — a -> b -> c is depth 3 and legal, the fourth node refuses.
+     * The linter pre-checks the same bound statically; this is the runtime
+     * door for plans assembled at run time.
+     */
+    public const MAX_USES_DEPTH = 3;
+
     /** Source of {@see $liveRuns} keys. */
     private int $liveRunSequence = 0;
 
@@ -353,6 +361,21 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @var list<\WeakReference<AgentWorkerPool>>
      */
     private array $dispatchPools = [];
+
+    /**
+     * C11 include-compose: the names of the workflows whose stage loops this
+     * engine is executing right now, outermost first — the uses-chain this
+     * run is walking. {@see executeIncludedWorkflow()} refuses an include
+     * whose name is already on it (a cycle) or whose addition would exceed
+     * {@see MAX_USES_DEPTH} (depth), and sets it for the nested run so the
+     * refusal sees the whole path, not just one hop. Engine state rather
+     * than a loop parameter because a resume re-enters at a stage boundary
+     * and rebuilds the chain by walking its outer stages again — the same
+     * reason the pause-within-an-inner limitation is what it is.
+     *
+     * @var list<string>
+     */
+    private array $usesChain = [];
 
     /**
      * @param string $model    The model every stage's agent runs on. A workflow
@@ -1722,37 +1745,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $interruptId = $pauseId ?? $resolvedWorkflowId;
 
         // Whole-workflow pre-flight: a stage 5 that declares a refused tool
-        // must not cost four stages of real agent work first. See
-        // firstDeclarationRefusal() for why the per-stage checks stay as well.
-        // firstRejectMisuse() rides the same channel but is gate-independent:
-        // a mis-anchored reject() is a placement bug, not a permission call,
-        // and it must refuse under every configuration (firstDeclarationRefusal
-        // abstains when there is no permission gate).
-        // Reported as that stage's failure rather than thrown, so the shape a
-        // caller sees is the same one a refusal discovered inside the stage
-        // produces -- a Failed WorkflowResult carrying the message on the
-        // stage it belongs to. Nothing ran, so there are no agents on it and
-        // no tokens or cost.
-        $refusal = $this->firstDeclarationRefusal($workflow) ?? $this->firstRejectMisuse($workflow);
-        if ($refusal !== null) {
-            [$refusedStageName, $refusalMessage] = $refusal;
+        // must not cost four stages of real agent work first. Reported as that
+        // stage's failure rather than thrown — see preflightRefusal().
+        $refusalResult = $this->preflightRefusal($workflow, $resolvedWorkflowId, $stageResults, $context, $totalTokens, $totalCost, $startedAt);
 
-            return new WorkflowResult(
-                workflowId: $resolvedWorkflowId,
-                status: WorkflowStatus::Failed,
-                stageResults: [...$stageResults, new StageResult(
-                    stageName: $refusedStageName,
-                    status: WorkflowStatus::Failed,
-                    error: $refusalMessage,
-                    startedAt: new \DateTimeImmutable(),
-                    completedAt: new \DateTimeImmutable(),
-                )],
-                context: $context,
-                totalTokens: $totalTokens,
-                totalCost: $totalCost,
-                startedAt: $startedAt,
-                completedAt: new \DateTimeImmutable(),
-            );
+        if ($refusalResult !== null) {
+            return $refusalResult;
         }
 
         $previousAsyncSignals = !$interruptible ? null : $this->installInterruptHandlers(
@@ -1894,7 +1892,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     // resource BEFORE dispatch — full law: acquireStageResources().
                     $heldLocks = $this->acquireStageResources($stage, $stageType);
 
-                    if ($stageType === 'parallel') {
+                    // C11: an include-compose stage runs a named workflow as
+                    // its body; the registry already refused body+uses.
+                    if (array_key_exists('uses', $stage)) {
+                        $stageResult = $this->executeIncludedWorkflow($stage, $context, $workflow, $stageStartedAt);
+                    } elseif ($stageType === 'parallel') {
                         $stageResult = $this->executeParallelStage($stage, $context, $workflow, $dispatched);
                     } elseif ($stageType === 'stage') {
                         $stageResult = $this->executeStage($stage, $context, $dispatched, $workflow->timeout);
@@ -2029,6 +2031,192 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $this->restoreInterruptHandlers($previousAsyncSignals);
             }
         }
+    }
+
+    /**
+     * The whole-workflow pre-flight, extracted from
+     * {@see runGuardedFromWorkflow()}'s head: a stage that declares a refused
+     * tool must not cost four stages of real agent work first. See
+     * firstDeclarationRefusal() for why the per-stage checks stay as well.
+     * firstRejectMisuse() rides the same channel but is gate-independent:
+     * a mis-anchored reject() is a placement bug, not a permission call, and
+     * it must refuse under every configuration (firstDeclarationRefusal
+     * abstains when there is no permission gate).
+     *
+     * Reported as that stage's failure rather than thrown, so the shape a
+     * caller sees is the same one a refusal discovered inside the stage
+     * produces -- a Failed WorkflowResult carrying the message on the
+     * stage it belongs to. Nothing ran, so there are no agents on it and
+     * no tokens or cost.
+     *
+     * @param list<StageResult> $stageResults
+     * @param array<string, mixed> $context
+     */
+    private function preflightRefusal(
+        Workflow $workflow,
+        string $resolvedWorkflowId,
+        array $stageResults,
+        array $context,
+        int $totalTokens,
+        float $totalCost,
+        \DateTimeImmutable $startedAt,
+    ): ?WorkflowResult {
+        $refusal = $this->firstDeclarationRefusal($workflow) ?? $this->firstRejectMisuse($workflow);
+
+        if ($refusal === null) {
+            return null;
+        }
+
+        [$refusedStageName, $refusalMessage] = $refusal;
+
+        return new WorkflowResult(
+            workflowId: $resolvedWorkflowId,
+            status: WorkflowStatus::Failed,
+            stageResults: [...$stageResults, new StageResult(
+                stageName: $refusedStageName,
+                status: WorkflowStatus::Failed,
+                error: $refusalMessage,
+                startedAt: new \DateTimeImmutable(),
+                completedAt: new \DateTimeImmutable(),
+            )],
+            context: $context,
+            totalTokens: $totalTokens,
+            totalCost: $totalCost,
+            startedAt: $startedAt,
+            completedAt: new \DateTimeImmutable(),
+        );
+    }
+
+    /**
+     * C11 include-compose: run a named workflow as this stage's body and
+     * settle the WHOLE inner run into exactly one outer StageResult.
+     *
+     * The door order is the refusal order: cycle first (the same name on the
+     * chain being walked), then depth (one node past {@see MAX_USES_DEPTH}
+     * would start the inner run), then the load itself. Every refusal is a
+     * raw-English throw — the stage loop's existing catch turns it into this
+     * stage's Failed row carrying the message verbatim, which is the shape
+     * the linter aims to pre-empt at lint time. A chain refusal names the
+     * full attempted path (`a -> b -> c -> d`) because a two-name message
+     * cannot locate the hop a long plan went wrong at.
+     *
+     * The inner run is NESTED on this fiber deliberately: null pauseId and
+     * loadPath keep its live frame addressable only by its generated id, so
+     * a user pause() can never select it and it writes no pause file of its
+     * own; interruptible false means one signal-handler frame, the outer's.
+     * Cancellation is shared state, not a parameter — $this->runCancellation
+     * stops inner and outer alike (see its property note).
+     *
+     * THE v1 LIMIT, stated here so the fold's honesty is local: inner stage
+     * results enter the OUTER run's live state only when this method returns,
+     * so a pause landing mid-inner records the outer snapshot WITHOUT any of
+     * the inner's finished stages, and resume replays the WHOLE inner stage.
+     *
+     * @param array<string, mixed> $stage        The uses stage ('uses' string, 'with' string map).
+     * @param array<string, mixed> $context      The OUTER run context — `with:` values interpolate here.
+     * @param Workflow             $workflow     The workflow this stage belongs to (chain member).
+     * @return StageResult One row: outer stage name, inner agents for the
+     *         totals, one `name: status` line per inner stage as output.
+     */
+    private function executeIncludedWorkflow(
+        array $stage,
+        array $context,
+        Workflow $workflow,
+        \DateTimeImmutable $stageStartedAt,
+    ): StageResult {
+        /** @var string $includedName */
+        $includedName = $stage['uses'];
+        $chain = [...$this->usesChain, $workflow->name];
+
+        if (in_array($includedName, $chain, true)) {
+            throw new \RuntimeException(sprintf(
+                'Workflow "%s" is already in this run\'s uses chain (%s); includes must not cycle.',
+                $includedName,
+                implode(' -> ', [...$chain, $includedName]),
+            ));
+        }
+
+        if (count($chain) + 1 > self::MAX_USES_DEPTH) {
+            throw new \RuntimeException(sprintf(
+                'Include chain too deep: %s (maximum depth is %d).',
+                implode(' -> ', [...$chain, $includedName]),
+                self::MAX_USES_DEPTH,
+            ));
+        }
+
+        $inner = $this->registry->load($includedName);
+
+        // with: is the inner run's START context, interpolated in the OUTER
+        // scope — {{b.output}} in a `with:` value reads the outer's settled
+        // stages. Nothing flows back out: inner stage names never enter the
+        // outer context (v1; the outer reads the inner's answer through
+        // this stage's own capture, like any other stage's output).
+        $innerContext = [];
+
+        foreach (($stage['with'] ?? []) as $key => $value) {
+            $innerContext[$key] = $this->interpolateContext((string) $value, $context);
+        }
+
+        $previousChain = $this->usesChain;
+        $this->usesChain = $chain;
+        $innerPauseRequested = false;
+
+        try {
+            $innerResult = $this->runFromWorkflow(
+                $inner,
+                $innerContext,
+                0,
+                null,
+                null,
+                null,
+                [],
+                $innerPauseRequested,
+                false,
+            );
+        } finally {
+            $this->usesChain = $previousChain;
+        }
+
+        // Fold: every agent the inner run spent rides this one row, because
+        // sumTokens()/sumCost() read the row's agents — dropping them would
+        // silently under-bill the outer totals.
+        $agents = [];
+        $lines = [];
+        $failedRow = null;
+
+        foreach ($innerResult->stageResults as $innerStage) {
+            foreach ($innerStage->agents as $agent) {
+                $agents[] = $agent;
+            }
+
+            $lines[] = $innerStage->stageName . ': ' . $innerStage->status->value;
+
+            if ($failedRow === null && $innerStage->isFailure()) {
+                $failedRow = $innerStage;
+            }
+        }
+
+        $error = match ($innerResult->status) {
+            WorkflowStatus::Completed => null,
+            WorkflowStatus::Cancelled => sprintf('included workflow "%s" was cancelled', $includedName),
+            // A nested frame the user cannot name cannot be paused; if one
+            // ever comes back Paused, say so rather than folding it silently
+            // into a generic failure.
+            WorkflowStatus::Paused => sprintf('included workflow "%s" paused, which an inner run cannot do', $includedName),
+            default => $failedRow !== null && $failedRow->error !== null
+                ? sprintf('included workflow "%s" failed: %s', $includedName, $failedRow->error)
+                : sprintf('included workflow "%s" failed', $includedName),
+        };
+
+        return new StageResult(
+            stageName: $stage['name'] ?? 'unknown',
+            status: $error === null ? WorkflowStatus::Completed : WorkflowStatus::Failed,
+            output: implode("\n", $lines),
+            error: $error,
+            agents: $agents,
+            startedAt: $stageStartedAt,
+            completedAt: new \DateTimeImmutable(),
+        );
     }
 
     /**
@@ -2285,6 +2473,17 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private static function stageInputHash(array $stage, string $stageType): string
     {
         $material = ['type' => $stageType, 'tasks' => []];
+
+        // C11: an include-compose stage's identity is its SUBJECT NAME and
+        // its with: templates (pre-interpolation, same policy as task
+        // prompts). The inner workflow's own content is deliberately NOT in
+        // the material — `cache: true` beside `uses:` is the author's
+        // stability assertion about the include, and inner drift on disk is
+        // invisible to this hash until the declaration itself changes.
+        if (array_key_exists('uses', $stage)) {
+            $material['uses'] = $stage['uses'];
+            $material['with'] = $stage['with'] ?? [];
+        }
 
         $push = static function (mixed $task) use (&$material): void {
             if ($task instanceof WorkflowTask) {
