@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use SugarCraft\Code\Workflows\WorkflowLoadException;
 use SugarCraft\Code\Workflows\WorkflowRegistry;
+use SugarCraft\Code\Workflows\WorkflowTask;
 
 /**
  * The rider law (wftpl linter NIT-1): a workflow YAML key the parser never
@@ -258,6 +259,169 @@ final class WorkflowYamlKeyRosterTest extends TestCase
         } catch (WorkflowLoadException $error) {
             self::assertStringContainsString('lists "tasks"', $error->getMessage());
             self::assertStringContainsString('belongs on each task', $error->getMessage());
+        }
+    }
+
+    public function testAFanOutStageLoadsItsSubMapAndTemplate(): void
+    {
+        // C8: the fan-out spelling loads as ONE template task plus the
+        // recorded spec. The stage's own label must not leak into the
+        // template — the engine names every item by its path.
+        $glob = 'src/' . chr(42) . chr(42);
+        $workflow = $this->registry()->fromYamlString(
+            "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: waves\n"
+            . "    parallel: true\n"
+            . "    agent: coder\n"
+            . "    prompt: fix {{path}}\n"
+            . "    from:\n"
+            . "      glob: {$glob}\n"
+            . "      chunk: 3\n"
+        );
+
+        $stage = $workflow->stages[0];
+        self::assertSame('parallel', $stage['type']);
+        self::assertSame(['glob' => $glob, 'chunk' => 3], $stage['from']);
+        self::assertCount(1, $stage['tasks']);
+        $template = $stage['tasks'][0];
+        self::assertInstanceOf(WorkflowTask::class, $template);
+        self::assertNull($template->name);
+        self::assertSame('fix {{path}}', $template->prompt);
+        self::assertSame('coder', $template->agentType);
+    }
+
+    public function testAFanOutStageWithoutAChunkRecordsANullCap(): void
+    {
+        $glob = 'src/' . chr(42) . chr(42);
+        $workflow = $this->registry()->fromYamlString(
+            "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: waves\n"
+            . "    parallel: true\n"
+            . "    agent: coder\n"
+            . "    prompt: fix {{path}}\n"
+            . "    from:\n"
+            . "      glob: {$glob}\n"
+        );
+
+        self::assertSame(['glob' => $glob, 'chunk' => null], $workflow->stages[0]['from']);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function refusedFanOutShapes(): array
+    {
+        $body = static fn(string $fromYaml): string => "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: waves\n"
+            . "    parallel: true\n"
+            . "    agent: coder\n"
+            . "    prompt: fix {{path}}\n"
+            . $fromYaml;
+
+        return [
+            'a scalar from' => [
+                $body("    from: now\n"),
+                '"from" must be a map',
+            ],
+            'an unknown sub-map key' => [
+                $body("    from:\n      glob: x\n      root: /tmp\n"),
+                'has unknown key "root"; supported keys: glob, chunk',
+            ],
+            'a missing glob' => [
+                $body("    from:\n      chunk: 2\n"),
+                'needs a "glob" to expand against the environment root',
+            ],
+            'a blank glob' => [
+                $body("    from:\n      glob: '   '\n"),
+                '"glob" must not be empty',
+            ],
+            'a zero chunk' => [
+                $body("    from:\n      glob: x\n      chunk: 0\n"),
+                '"chunk" must be at least 1, got 0',
+            ],
+            'a half chunk' => [
+                $body("    from:\n      glob: x\n      chunk: half\n"),
+                '"chunk" must be a whole number, got string',
+            ],
+        ];
+    }
+
+    /**
+     * @dataProvider refusedFanOutShapes
+     */
+    public function testARefusedFanOutShapeDiesAtLoad(string $yaml, string $needle): void
+    {
+        try {
+            $this->registry()->fromYamlString($yaml);
+            self::fail("the fan-out shape '{$needle}' still loaded");
+        } catch (WorkflowLoadException $error) {
+            self::assertStringContainsString($needle, $error->getMessage());
+        }
+    }
+
+    public function testAFanOutBesideAStaticListIsRefused(): void
+    {
+        try {
+            $this->registry()->fromYamlString(
+                "name: r\n"
+                . "description: d\n"
+                . "stages:\n"
+                . "  - name: waves\n"
+                . "    parallel: true\n"
+                . "    agent: coder\n"
+                . "    prompt: fix {{path}}\n"
+                . "    from:\n"
+                . "      glob: x\n"
+                . "    agents:\n"
+                . "      - agent: coder\n"
+            );
+            self::fail('both spellings at once still loaded');
+        } catch (WorkflowLoadException $error) {
+            self::assertStringContainsString('one spelling at a time', $error->getMessage());
+        }
+    }
+
+    public function testAFanOutOnASerialStageIsRefused(): void
+    {
+        try {
+            $this->registry()->fromYamlString(
+                "name: r\n"
+                . "description: d\n"
+                . "stages:\n"
+                . "  - name: solo\n"
+                . "    agent: coder\n"
+                . "    prompt: fix it\n"
+                . "    from:\n"
+                . "      glob: x\n"
+            );
+            self::fail('a serial stage carried a fan-out');
+        } catch (WorkflowLoadException $error) {
+            self::assertStringContainsString('only a parallel stage can fan out', $error->getMessage());
+        }
+    }
+
+    public function testAFanOutWithoutAPromptIsRefused(): void
+    {
+        try {
+            $this->registry()->fromYamlString(
+                "name: r\n"
+                . "description: d\n"
+                . "stages:\n"
+                . "  - name: waves\n"
+                . "    parallel: true\n"
+                . "    agent: coder\n"
+                . "    from:\n"
+                . "      glob: x\n"
+            );
+            self::fail('a fan-out with nothing to run still loaded');
+        } catch (WorkflowLoadException $error) {
+            self::assertStringContainsString('needs a stage-level "prompt"', $error->getMessage());
         }
     }
 
