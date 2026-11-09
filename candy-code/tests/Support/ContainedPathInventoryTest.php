@@ -173,12 +173,19 @@ final class ContainedPathInventoryTest extends TestCase
      */
     public const ROUTED_CALL_SITES = [
         'Agents/AgentPresetRegistry.php' => 3,
+        // The a2a lane added this call but never took the row; cured here so
+        // the derivation and the map agree again (the scan found it, the map
+        // did not name it — exactly the drift this guard exists for).
+        'Agents/CapabilityCardStore.php' => 1,
         'Agents/ForeignAgentPresetRegistry.php' => 2,
         'Agents/WorktreeConfig.php' => 2,
         'Agents/WorktreeManager.php' => 2,
         // C-WEB-7.c: the non-git walk's per-frame containment re-check moved
         // with the walk into the memoized lister.
         'Attachments/WorkspaceWalk.php' => 1,
+        // The entrypoints reader bounds every declared file with one
+        // ContainedPath::below() compare before the loader may touch it.
+        'Bundles/Bundle.php' => 1,
         'Bundles/BundleDiscovery.php' => 1,
         // C-EXT-4.a: the provenance record is read inside the boundary the
         // caller names, never through a link out of it.
@@ -305,7 +312,7 @@ final class ContainedPathInventoryTest extends TestCase
      * be confined to itself. `within()` and not `below()`, because a prefix
      * mapped to `""` means the package root itself.
      *
-     * "SIXTY-SEVEN call sites in THIRTY-FOUR files", per file — the sum and the key
+     * "SIXTY-NINE call sites in THIRTY-SIX files", per file — the sum and the key
      * count of {@see ROUTED_CALL_SITES} as it stands below, which is what
      * {@see testTheRoutedCallSiteInventory()} checks against the derivation over
      * `src/`. (It read "twenty-seven in eleven", then "twenty-eight in twelve",
@@ -402,7 +409,7 @@ final class ContainedPathInventoryTest extends TestCase
             'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38, 'THIRTY-NINE' => 39,
             'FORTY' => 40, 'FORTY-ONE' => 41, 'FORTY-TWO' => 42, 'FORTY-THREE' => 43,
             'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53, 'FIFTY-FOUR' => 54, 'FIFTY-FIVE' => 55, 'FIFTY-SIX' => 56,
-            'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64, 'SIXTY-FIVE' => 65, 'SIXTY-SEVEN' => 67,
+            'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64, 'SIXTY-FIVE' => 65, 'SIXTY-SEVEN' => 67, 'SIXTY-NINE' => 69,
             'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24, 'TWENTY-FIVE' => 25,
         ];
 

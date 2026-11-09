@@ -169,4 +169,148 @@ final class BundleManifestTest extends TestCase
 
         self::assertSame([$declared . '/custom/hooks.json'], Bundle::fromDir($declared, 'user')?->hooksPaths());
     }
+
+    public function testEntrypointsAreReadFromEveryDeclaredShape(): void
+    {
+        $dir = $this->bundle('entrypoints-shapes', [
+            'name' => 'shapes',
+            'entrypoints' => [
+                'channel' => 'channels/discord.php',
+                'subscriber' => ['subscribers/a.php', 'subscribers/b.php'],
+                'hook' => ['file' => 'hooks/live.php', 'class' => 'Hooks\\Live'],
+                'tool' => [
+                    ['file' => 'tools/one.php'],
+                    ['file' => 'tools/two.php', 'class' => 'Tools\\Two'],
+                ],
+            ],
+        ]);
+        foreach (['channels', 'subscribers', 'hooks', 'tools'] as $folder) {
+            mkdir($dir . '/' . $folder, 0777, true);
+        }
+        foreach (['channels/discord.php', 'subscribers/a.php', 'subscribers/b.php', 'hooks/live.php', 'tools/one.php', 'tools/two.php'] as $file) {
+            file_put_contents($dir . '/' . $file, "<?php\n");
+        }
+
+        $entrypoints = Bundle::fromDir($dir, 'user')?->entrypoints();
+
+        self::assertNotNull($entrypoints);
+        self::assertSame(
+            [['path' => realpath($dir) . '/channels/discord.php', 'class' => '']],
+            $entrypoints['channel'],
+            'a bare string is one entry with no class name',
+        );
+        self::assertSame(
+            realpath($dir) . '/subscribers/a.php',
+            $entrypoints['subscriber'][0]['path'],
+        );
+        self::assertSame(realpath($dir) . '/subscribers/b.php', $entrypoints['subscriber'][1]['path'], 'declaration order is kept');
+        self::assertSame('Hooks\\Live', $entrypoints['hook'][0]['class'], 'an object entry carries its class name');
+        self::assertSame('Tools\\Two', $entrypoints['tool'][1]['class']);
+        self::assertSame('', $entrypoints['tool'][0]['class'], 'an object entry without a class stays blank for the loader to refuse later');
+    }
+
+    public function testEntrypointsNothingNamesLoadNothing(): void
+    {
+        $silent = $this->bundle('entrypoints-silent', ['name' => 'none']);
+        self::assertSame([], Bundle::fromDir($silent, 'user')?->entrypoints(), 'a manifest that names no entrypoints declares none');
+
+        // A top-level LIST of files is un-named by kind: the kinded-map law
+        // refuses it whole rather than guess a surface for each file.
+        $unkinded = $this->bundle('entrypoints-unkinded', ['name' => 'list', 'entrypoints' => ['index.php']]);
+        file_put_contents($unkinded . '/index.php', "<?php\n");
+        self::assertSame([], Bundle::fromDir($unkinded, 'user')?->entrypoints(), 'nothing is loaded that no manifest names BY KIND');
+
+        $broken = $this->bundle('entrypoints-broken', ['name' => 'scalar', 'entrypoints' => 'index.php']);
+        self::assertSame([], Bundle::fromDir($broken, 'user')?->entrypoints(), 'a scalar where a map must be declares nothing');
+    }
+
+    public function testAnEntrypointEscapingTheBundleDirIsDropped(): void
+    {
+        $dir = $this->bundle('entrypoints-escape', [
+            'name' => 'escape',
+            'entrypoints' => [
+                'channel' => ['../outside.php', $this->tempDir . '/outside.php', 'channels/linked.php'],
+            ],
+        ]);
+        file_put_contents($this->tempDir . '/outside.php', "<?php\n");
+        mkdir($dir . '/channels', 0777, true);
+        file_put_contents($dir . '/channels/real.php', "<?php\n");
+        symlink($this->tempDir . '/outside.php', $dir . '/channels/linked.php');
+
+        $entrypoints = Bundle::fromDir($dir, 'user')?->entrypoints();
+
+        self::assertNotNull($entrypoints);
+        self::assertSame([], $entrypoints, 'dot-dot, absolute-outside and planted-symlink-out paths all fail containment, and a kind whose every declaration escapes disappears whole');
+        $kept = $this->bundle('entrypoints-kept', ['name' => 'kept', 'entrypoints' => ['channel' => 'kept.php']]);
+        file_put_contents($kept . '/kept.php', "<?php\n");
+        self::assertCount(1, Bundle::fromDir($kept, 'user')?->entrypoints()['channel'] ?? [], 'a plain file inside survives as proof the kind itself was read');
+    }
+
+    public function testMissingAndDirectoryEntrypointsAreDroppedWhileContainedAbsolutesSurvive(): void
+    {
+        $absInside = $this->tempDir . '/entrypoints-missing/channels/abs-inside.php';
+        $dir = $this->bundle('entrypoints-missing', [
+            'name' => 'gaps',
+            'entrypoints' => [
+                'channel' => ['channels/gone.php', 'channels', $absInside, '  '],
+            ],
+        ]);
+        mkdir($dir . '/channels', 0777, true);
+        file_put_contents($dir . '/channels/abs-inside.php', "<?php\n");
+
+        $entrypoints = Bundle::fromDir($dir, 'user')?->entrypoints();
+
+        self::assertNotNull($entrypoints);
+        self::assertCount(1, $entrypoints['channel'], 'a missing file, a directory and a blank entry drop; the contained absolute survives');
+        self::assertSame(realpath($absInside), $entrypoints['channel'][0]['path']);
+    }
+
+    public function testEntrypointsDedupePerKindAcrossShapes(): void
+    {
+        $dir = $this->bundle('entrypoints-dedupe', [
+            'name' => 'twice',
+            'entrypoints' => [
+                'channel' => ['channels/one.php', ['file' => 'channels/one.php', 'class' => 'A'], 'channels/./one.php', 'channels//one.php'],
+            ],
+        ]);
+        mkdir($dir . '/channels', 0777, true);
+        file_put_contents($dir . '/channels/one.php', "<?php\n");
+
+        $entrypoints = Bundle::fromDir($dir, 'user')?->entrypoints();
+
+        self::assertNotNull($entrypoints);
+        self::assertCount(1, $entrypoints['channel'], 'the same realpath appears once per kind however many shapes declare it');
+    }
+
+    public function testUnknownEntrypointKindsPassThroughTheReader(): void
+    {
+        $dir = $this->bundle('entrypoints-unknown-kind', [
+            'name' => 'future',
+            'entrypoints' => ['server-tools' => 'future/register.php', ' ' => 'named-but-kindless.php'],
+        ]);
+        mkdir($dir . '/future', 0777, true);
+        file_put_contents($dir . '/future/register.php', "<?php\n");
+        file_put_contents($dir . '/named-but-kindless.php', "<?php\n"); // would appear if the blank kind were not skipped
+
+        $entrypoints = Bundle::fromDir($dir, 'user')?->entrypoints();
+
+        self::assertNotNull($entrypoints);
+        self::assertSame(['server-tools'], array_keys($entrypoints), 'the reader answers what is named; the registry refuses kinds it has no home for, and a blank kind-name is no name at all');
+    }
+
+    public function testTheBlankKindNameIsSkipped(): void
+    {
+        $dir = $this->bundle('entrypoints-blank-kind', [
+            'name' => 'blank',
+            'entrypoints' => ['' => 'kindless.php', 'channel' => 'channels/ok.php'],
+        ]);
+        file_put_contents($dir . '/kindless.php', "<?php\n"); // exists on purpose: only the blank KIND may drop it
+        mkdir($dir . '/channels', 0777, true);
+        file_put_contents($dir . '/channels/ok.php', "<?php\n");
+
+        $entrypoints = Bundle::fromDir($dir, 'user')?->entrypoints();
+
+        self::assertNotNull($entrypoints);
+        self::assertSame(['channel'], array_keys($entrypoints));
+    }
 }

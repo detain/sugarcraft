@@ -4,19 +4,26 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Bundles;
 
+use SugarCraft\Code\Support\ContainedPath;
+
 /**
  * One installed Claude-format plugin bundle: a directory carrying a
  * `.claude-plugin/plugin.json` manifest (a bare top-level `plugin.json` is
  * accepted too — the format's own README shows both shapes).
  *
- * A bundle is a CONTAINER of the surfaces candy-code already imports
- * individually — `skills/`, `commands/`, `agents/`, `.mcp.json` (or the
- * manifest's own `mcp`/`mcpServers` keys), hooks (paths OR an inline `hooks`
- * object) — and
+ * A bundle is a CONTAINER of the surfaces candy-code knows how to read —
+ * `skills/`, `commands/`, `agents/`, `.mcp.json` (or the manifest's own
+ * `mcp`/`mcpServers` keys), hooks (paths OR an inline `hooks` object), and
+ * `entrypoints` (per-kind PHP files the manifest names for in-process
+ * loading) — and
  * this class is only the reader of that layout. Nothing here executes or
  * installs anything: {@see BundleDiscovery} finds bundles on disk, and each
  * surface is mapped onto its own existing loader by the wiring in
- * `Cli\Bootstrap`. Two of the five surfaces are refused by construction and
+ * `Cli\Bootstrap`. `entrypoints()` keeps that discipline for the one surface
+ * whose payload is CODE: the declaration is parsed here, and whether a named
+ * file is ever required lives behind the trust gate in the bundle channel
+ * loader — an untrusted bundle's entrypoint file is never touched. Two
+ * surfaces are refused by construction and
  * this class is where their SHAPE is pinned so the refusal can be asserted:
  * `hooksPaths()` (bundle hooks are never registered — a launch notice names
  * the decline) and `mcpFile()` (a bundle's MCP declaration is never
@@ -232,6 +239,144 @@ final class Bundle
         }
 
         return $paths;
+    }
+
+    /**
+     * The manifest's `entrypoints` declaration: contributor KIND => the files
+     * it names, each with the class it promises. This is a PARSE, not a load
+     * — no bytes of any named file are read here. The decision whether an
+     * entrypoint is ever required lives behind the trust gate of the bundle
+     * channel loader, which refuses an untrusted bundle before its file is
+     * touched; this method only answers what the manifest itself names.
+     *
+     * The law this shape serves: NOTHING IS LOADED THAT NO MANIFEST NAMES —
+     * there is no directory sniffing. A top-level LIST (entries carrying no
+     * kind) therefore answers nothing: an un-kinded declaration cannot be
+     * dispatched, and guessing a kind would be the sniffing the law forbids.
+     *
+     * Shapes tolerated from the wild, mirroring {@see declared()}'s: per
+     * kind, a single path string, a list of path strings, an object with
+     * `file` (plus optional `class`), or a list of either. A path resolves
+     * like every other manifest path (a leading '/' kept, anything else
+     * relative to the bundle dir); an entry whose file is missing, is not a
+     * file, or whose realpath falls outside the bundle dir — including
+     * through a planted symlink — is DROPPED here rather than trusted later.
+     * Unknown kinds pass through the reader: the registry refuses a kind no
+     * consumer serves, and that refusal names it. The same realpath is kept
+     * ONCE per kind however many shapes declare it — first declaration
+     * wins, a repeat cannot re-class it — and a kind whose every declaration
+     * fails to resolve disappears from the answer whole: there is nothing
+     * left in it to dispatch.
+     *
+     * @return array<string, list<array{path: string, class: string}>>
+     */
+    public function entrypoints(): array
+    {
+        $declared = $this->manifest['entrypoints'] ?? null;
+
+        if (!\is_array($declared) || array_is_list($declared)) {
+            return [];
+        }
+
+        $kinds = [];
+
+        foreach ($declared as $kind => $value) {
+            $kind = \is_string($kind) ? trim($kind) : '';
+
+            if ($kind === '') {
+                continue;
+            }
+
+            foreach ($this->entrypointItems($value) as $item) {
+                $path = $this->entrypointPath($item);
+
+                if ($path === null) {
+                    continue;
+                }
+
+                $entry = ['path' => $path, 'class' => $this->entrypointClass($item)];
+
+                if (!\in_array($path, array_column($kinds[$kind] ?? [], 'path'), true)) {
+                    $kinds[$kind][] = $entry;
+                }
+            }
+        }
+
+        return $kinds;
+    }
+
+    /**
+     * One `entrypoints` kind value shaped into a list of items: a path
+     * string, an object, or a list of either. A nested map (a list-less,
+     * string-keyed array that is not one `{file, class}` shape) rides the
+     * object arm and dies at the missing-`file` door — fail-closed, never
+     * guessed into a second kind level.
+     *
+     * @return list<array<string, mixed>|string>
+     */
+    private function entrypointItems(mixed $value): array
+    {
+        if (\is_string($value)) {
+            return [$value];
+        }
+
+        if (!\is_array($value)) {
+            return [];
+        }
+
+        if (array_is_list($value)) {
+            $items = [];
+
+            foreach ($value as $item) {
+                if (\is_string($item) || \is_array($item)) {
+                    $items[] = $item;
+                }
+            }
+
+            return $items;
+        }
+
+        return [$value];
+    }
+
+    /**
+     * The existing, contained realpath of one entrypoint item's `file`, or
+     * null when it names nothing loadable: an empty or non-string file, a
+     * miss on disk, a directory, or a path escaping the bundle dir. The
+     * escape door is ContainedPath::below() comparing REALPATHS, so `..`
+     * hops, absolute paths outside the bundle, and a symlink planted inside
+     * pointing out all answer null before any file is opened.
+     *
+     * @param array<string, mixed>|string $item
+     */
+    private function entrypointPath(array|string $item): ?string
+    {
+        $file = trim(\is_string($item) ? $item : (string) ($item['file'] ?? ''));
+
+        if ($file === '') {
+            return null;
+        }
+
+        $candidate = str_starts_with($file, '/') ? $file : $this->dir . '/' . $file;
+        $real = realpath($candidate);
+
+        if ($real === false || !is_file($real)) {
+            return null;
+        }
+
+        return ContainedPath::below($real, $this->dir) ? $real : null;
+    }
+
+    /**
+     * The class an entrypoint item promises, '' when it names none — a class
+     * is NEVER guessed from a file path, and the loader refuses a
+     * class-less entry by name rather than inventing one.
+     *
+     * @param array<string, mixed>|string $item
+     */
+    private function entrypointClass(array|string $item): string
+    {
+        return \is_string($item) ? '' : trim((string) ($item['class'] ?? ''));
     }
 
     /**
