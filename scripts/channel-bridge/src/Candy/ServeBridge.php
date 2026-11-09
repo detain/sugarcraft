@@ -162,7 +162,7 @@ final class ServeBridge
      */
     public function call(string $method, array $params = []): PromiseInterface
     {
-        if ($this->buffer === null || !$this->helloDone) {
+        if ($this->buffer === null || (!$this->helloDone && $method !== 'server.hello')) {
             return reject(new ServeError('not_connected', "channel-bridge: not connected ({$method})"));
         }
 
@@ -306,7 +306,7 @@ final class ServeBridge
             . "Upgrade: websocket\r\n"
             . "Connection: Upgrade\r\n"
             . 'Sec-WebSocket-Key: ' . $key . "\r\n"
-            . 'Sec-WebSocket-Version: 13\r\n'
+            . "Sec-WebSocket-Version: 13\r\n"
             . 'Sec-WebSocket-Protocol: ' . \implode(', ', $subprotocols) . "\r\n"
             . ($this->authDoor === 'subprotocol' ? '' : 'Authorization: Bearer ' . $this->token . "\r\n")
             . "User-Agent: candy-code-channel-bridge/0.1\r\n"
@@ -315,7 +315,7 @@ final class ServeBridge
         $deferred = new Deferred();
         $connector = new Connector(['timeout' => 15.0, 'tls' => ['peer_name' => $host]], $this->loop);
         $connector->connect(($secure ? 'tls://' : 'tcp://') . (\str_contains($host, ':') && !\str_starts_with($host, '[') ? '[' . $host . ']' : $host) . ':' . $port)->then(
-            function (ConnectionInterface $connection) use ($headers, $deferred, $secure): void {
+            function (ConnectionInterface $connection) use ($headers, $deferred, $secure, $key): void {
                 $buffer = '';
                 $settled = false;
                 $fail = static function (string $reason) use (&$settled, $connection, $deferred): void {
@@ -348,7 +348,8 @@ final class ServeBridge
 
                         return;
                     }
-                    if (!\str_contains(\strtolower($head), 'sec-websocket-accept: ' . \base64_encode(\sha1($key . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11', true)))) {
+                    $accepted = \preg_match('/^Sec-WebSocket-Accept:\s*(\S+)/mi', $head, $am) === 1 ? $am[1] : '';
+                    if ($accepted !== \base64_encode(\sha1($key . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11', true))) {
                         $fail('bad Sec-WebSocket-Accept');
 
                         return;
