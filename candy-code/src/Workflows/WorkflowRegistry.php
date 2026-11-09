@@ -1832,21 +1832,19 @@ final class WorkflowRegistry
                     "{$where} carries both \"from\" and \"agents\"; the fan-out replaces the static list, one spelling at a time"
                 );
             }
-            if (array_key_exists('name', $stage)) {
-                throw new WorkflowLoadException(
-                    "{$where} sets stage-level \"name\" beside \"from\"; each fanned-out item is named by its path, so a shared name would silently overwrite the next item's"
-                );
-            }
             if (!array_key_exists('prompt', $stage)) {
                 throw new WorkflowLoadException(
                     "{$where} fans out from a glob, so it needs a stage-level \"prompt\" for each item to run"
                 );
             }
 
-            return [$this->readTaskMap(
-                array_intersect_key($stage, array_flip(self::YAML_TASK_KEYS)),
-                "{$where} \"from\" template"
-            )];
+            // The stage's own \"name\" is its label, not a task name — it is
+            // read by the caller above and must NOT leak into the template
+            // (the engine names every fanned-out item by its path).
+            $template = array_intersect_key($stage, array_flip(self::YAML_TASK_KEYS));
+            unset($template['name']);
+
+            return [$this->readTaskMap($template, "{$where} \"from\" template")];
         }
 
         if (!$isParallel && array_key_exists('tasks', $stage)) {
