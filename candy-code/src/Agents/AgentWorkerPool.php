@@ -600,7 +600,7 @@ final class AgentWorkerPool
             while ($this->queue !== []
                 && ($this->maxConcurrent === null || count($this->active) < $this->maxConcurrent)
             ) {
-                $agent = array_shift($this->queue);
+                $agent = $this->maxConcurrent === null ? array_shift($this->queue) : $this->dequeueNext();
                 if ($agent === null) {
                     break;
                 }
@@ -662,6 +662,10 @@ final class AgentWorkerPool
                 $agentRequest = new CompleteRequest(
                     model: $request->model,
                     messages: [
+                        // A fork's inherited rows ride ahead of the delegated
+                        // prompt; an empty list leaves the request literally
+                        // the pre-fork shape.
+                        ...$agent->inheritedContext,
                         ['role' => 'user', 'content' => $agent->task],
                     ],
                     tools: $agentTools,
@@ -1072,6 +1076,33 @@ final class AgentWorkerPool
     public function activeCount(): int
     {
         return count($this->active);
+    }
+
+    /**
+     * Take the next submission for a freed seat when a width cap queues work:
+     * the highest-priority waiter goes first, and equal priorities keep their
+     * submission order (the first strictly-greater match wins, so the scan is
+     * a stable priority-first drain). Uncapped batches never reach here —
+     * they dispatch the whole queue in submission order through
+     * {@see array_shift()}, where priority is inert by construction (no cap,
+     * no contention). Retried submissions re-queue at the tail and keep their
+     * own priority. There is no aging: a normal-priority waiter can be passed
+     * over indefinitely while higher-priority work keeps arriving, which is
+     * the documented cost of opting into priority lanes.
+     */
+    private function dequeueNext(): SubAgent
+    {
+        $bestKey = null;
+        foreach ($this->queue as $key => $agent) {
+            if ($bestKey === null || $agent->priority > $this->queue[$bestKey]->priority) {
+                $bestKey = $key;
+            }
+        }
+
+        $agent = $this->queue[$bestKey];
+        unset($this->queue[$bestKey]);
+
+        return $agent;
     }
 
     /**

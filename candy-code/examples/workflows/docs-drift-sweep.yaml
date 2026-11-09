@@ -16,33 +16,37 @@
 #
 # Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow):
 #   - top-level "name" is required; "description" and "config" are optional.
-#   - each item in "stages" is either a regular stage (agent/prompt/tools)
-#     or a parallel stage (parallel: true + a list of "agents").
+#   - the stages this file uses are regular stages (agent/prompt/tools) and
+#     one parallel stage (parallel: true + a list of "agents"); WORKFLOWS.md
+#     is the source of truth for every stage shape and key the grammar
+#     accepts.
 #   - {{var}} interpolates initial run() context; {{stageName.output}}
 #     interpolates a prior stage's collected output.
 #   - config.maxConcurrent bounds how many parallel-stage agents run at
-#     once; config.timeout is each stage's wall-clock budget in seconds —
-#     there is no per-finding or per-task timeout spelling in YAML.
+#     once; config.timeout is each stage's wall-clock budget in seconds, the
+#     only timeout this file sets. WORKFLOWS.md is the source of truth for
+#     every timeout spelling the grammar accepts.
 #   - "retries" goes only on agents that are safe to run twice: the audit
 #     and recheck stages merely read, so they carry one; the fixers edit
 #     files, so a second run could apply a correction twice, and they carry
 #     none. The fixers are disjoint by finding category, the same partition
 #     lint-then-fix.yaml uses for its style/correctness fixers.
 #
-# Expressible-only notes (what today's YAML cannot say):
-#   - "recheck" emits a schema-shaped clean/remaining verdict, but NOTHING
-#     in the workflow can condition on it: verification stages that reject a
-#     run on a bad verdict are PHP-builder-only, and there is no when:/skip
-#     clause. The recheck output is for the DRIVER — read it, and if
-#     "remaining" is non-empty, re-run the sweep. This file is one pass.
+# Driver-contract notes (what nothing in this file gates):
+#   - "recheck" emits a schema-shaped clean/remaining verdict, but nothing
+#     in this file conditions on it: the stages above run unconditionally,
+#     so the verdict is for the DRIVER — read it, and if "remaining" is
+#     non-empty, re-run the sweep. This file is one pass. WORKFLOWS.md is
+#     the source of truth for what the grammar can gate or condition on.
 #   - "recheck" uses tools before answering, and outputSchema rides the
 #     first request, so its output can arrive wrapped in the engine's "not
 #     constrained to the output schema" disclosure instead of the JSON
 #     shape below. A driver should treat any output that does not parse as
 #     a verdict as "still dirty" and re-run.
 #   - {{audit.output}} reaches the fixers as a text blob, not data: each
-#     fixer self-selects its category by reading, and there is no way to
-#     fan out one fixer per FINDING (agent count is fixed at write time).
+#     fixer self-selects its category by reading, and this file fans out
+#     one fixer per CATEGORY, not per FINDING — its agent list is written
+#     in full above.
 
 name: docs-drift-sweep
 description: >

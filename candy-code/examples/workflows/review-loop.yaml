@@ -17,27 +17,29 @@
 #
 # Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow):
 #   - top-level "name" is required; "description" and "config" are optional.
-#   - each item in "stages" is either a regular stage (agent/prompt/tools)
-#     or a parallel stage (parallel: true + a list of "agents").
+#   - the stages this file uses are regular stages (agent/prompt/tools);
+#     WORKFLOWS.md is the source of truth for every stage shape and key the
+#     grammar accepts.
 #   - {{var}} interpolates initial run() context; {{stageName.output}}
 #     interpolates a prior stage's collected output.
-#   - config.timeout is each stage's wall-clock budget in seconds; there is
-#     no per-task timeout spelling in YAML. maxConcurrent is omitted because
-#     this workflow has no parallel stage.
+#   - config.timeout is each stage's wall-clock budget in seconds, the only
+#     timeout spelling this file uses. maxConcurrent is omitted because this
+#     workflow has no parallel stage. WORKFLOWS.md is the source of truth
+#     for every timeout spelling the grammar accepts.
 #   - "retries" goes only on agents that are safe to run twice: "review"
 #     just reads, so it carries one; "build" and "address" edit files, so
 #     they carry none.
 #
-# Expressible-only notes (why this is a three-stage pass, not a loop):
-#   - "address" runs UNCONDITIONALLY. Today's YAML has neither a
-#     verification stage that can reject the run on a NEEDS-FIX verdict
-#     (that is PHP-builder-only) nor a when:/skip clause, so the APPROVE
-#     branch is carried by the address prompt itself: with a clean verdict
-#     it must change nothing and say so. That is a convention, not a gate.
+# Driver-contract notes (why this is a three-stage pass, not a loop):
+#   - "address" runs UNCONDITIONALLY. Nothing in this file gates the run on
+#     the verdict, so the APPROVE branch is carried by the address prompt
+#     itself: with a clean verdict it must change nothing and say so. That
+#     is a convention, not a gate. WORKFLOWS.md is the source of truth for
+#     what the grammar can gate or condition on.
 #   - The loop therefore lives with the DRIVER: re-run this workflow until
-#     the review stage's verdict reads APPROVE with zero findings. A
-#     verification stage with reject semantics, or a when: clause, would
-#     collapse build-review-address into a single self-governing run.
+#     the review stage's verdict reads APPROVE with zero findings. The
+#     gating spellings the grammar can express live in WORKFLOWS.md, not
+#     in this file — the shape above is deliberately a single pass.
 #   - "review" uses tools before answering, and outputSchema rides the
 #     first request, so its output can arrive wrapped in the engine's "not
 #     constrained to the output schema" disclosure instead of the JSON

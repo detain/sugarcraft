@@ -18,6 +18,8 @@ use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Providers\ProviderResponseException;
 use SugarCraft\Code\Providers\TransientFailure;
+use SugarCraft\Code\Session\EnhancedSessionStore;
+use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Skills\SkillListingSection;
 use SugarCraft\Code\Skills\SkillMatcher;
 use SugarCraft\Code\Skills\SkillRegistry;
@@ -586,6 +588,21 @@ final class AgentManager
     public function childSessionIdOf(string $subAgentId): ?string
     {
         return $this->childSessionIds[$subAgentId] ?? null;
+    }
+
+    /**
+     * The session store reader {@see recordChildSessionsIn()} bound, run
+     * once — or null when nothing is bound. A conversation-inheriting fork
+     * reads the parent transcript through this handle: the store a launch
+     * records child sessions INTO is the only one its fork may honestly
+     * inherit FROM, so the two paths can never disagree about what the
+     * parent conversation is.
+     */
+    public function boundSessionStore(): SessionStore|EnhancedSessionStore|null
+    {
+        $reader = $this->childSessionStore;
+
+        return $reader === null ? null : $reader();
     }
 
     /**

@@ -12,15 +12,18 @@
 #
 # Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow):
 #   - top-level "name" is required; "description" and "config" are optional.
-#   - each item in "stages" is either a regular stage (agent/prompt/tools)
-#     or a parallel stage (parallel: true + a list of "agents").
+#   - the stages this file uses are regular stages (agent/prompt/tools) and
+#     one parallel stage (parallel: true + a list of "agents"); WORKFLOWS.md
+#     is the source of truth for every stage shape and key the grammar
+#     accepts.
 #   - {{var}} interpolates initial run() context; {{stageName.output}}
 #     interpolates a prior stage's collected output.
 #   - config.maxConcurrent bounds how many parallel-stage agents run at
 #     once; config.timeout is each stage's wall-clock budget in seconds. A
 #     stage that runs past it has its agent killed (with every process the
-#     agent started) and fails as timed out, which stops the run. A task's
-#     own timeout has no YAML spelling.
+#     agent started) and fails as timed out, which stops the run. That
+#     stage-level budget is the only timeout this file sets; WORKFLOWS.md
+#     is the source of truth for every timeout spelling the grammar accepts.
 #   - "retries" (on a stage, or on one agent of a parallel stage) re-runs a
 #     failed or timed-out agent up to that many times, inside the same stage
 #     budget; the stage fails only if the last attempt does. Give it only to

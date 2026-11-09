@@ -21,26 +21,32 @@
 #
 # Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow):
 #   - top-level "name" is required; "description" and "config" are optional.
-#   - each item in "stages" is either a regular stage (agent/prompt/tools)
-#     or a parallel stage (parallel: true + a list of "agents").
+#   - the stages this file uses are one parallel stage (parallel: true + a
+#     list of "agents") and one regular stage (agent/prompt/tools);
+#     WORKFLOWS.md is the source of truth for every stage shape and key the
+#     grammar accepts.
 #   - {{var}} interpolates initial run() context; {{stageName.output}}
 #     interpolates a prior stage's collected output.
 #   - config.maxConcurrent bounds how many parallel-stage agents run at
-#     once; config.timeout is each stage's wall-clock budget in seconds —
-#     there is no per-file or per-task timeout spelling in YAML.
+#     once; config.timeout is each stage's wall-clock budget in seconds, the
+#     only timeout this file sets. WORKFLOWS.md is the source of truth for
+#     every timeout spelling the grammar accepts.
 #   - "retries" re-runs a failed agent inside the stage budget; it goes only
 #     on agents that are safe to run twice. The shards edit files, so they
 #     carry none; "summarize" is read-only, so it carries one.
 #
-# Expressible-only notes (what today's YAML cannot say):
-#   - The shard count is fixed at write-time; it cannot be generated from
-#     {{files}} (no dynamic fan-out). Three static shards therefore split the
-#     list by position: every 3rd entry starting at 1/2/3 covers it exactly.
+# Driver-contract notes (what nothing in this file gates):
+#   - This file's shard count is fixed at write-time — the three shards
+#     above are written in full, not generated from {{files}}. Three static
+#     shards therefore split the list by position: every 3rd entry starting
+#     at 1/2/3 covers it exactly.
 #   - Each shard's outputSchema result comes back as TEXT inside
-#     {{wave.output}}; summarize re-reads it, but YAML cannot treat it as
-#     data (no filtering, counting, or merging of fields).
-#   - There is no when:/skip clause: the run cannot branch on a shard's
-#     result, and cannot stop early when every file is already clean.
+#     {{wave.output}}; summarize re-reads it as prose — this file does no
+#     filtering, counting, or merging of fields between the stages.
+#   - Nothing in this file branches on a shard's result or stops the run
+#     early when every file is already clean: the two stages above are
+#     unconditional. WORKFLOWS.md is the source of truth for what the
+#     grammar can gate or condition on.
 #   - The shards edit the SHARED checkout — safe only because their file
 #     sets are disjoint by list position. Set `isolation: worktree` on each
 #     shard to keep each one in its own branch instead, but NOTHING merges
