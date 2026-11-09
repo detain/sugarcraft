@@ -207,7 +207,12 @@ final class WorkflowYamlKeyRosterTest extends TestCase
             . "        prompt: p\n"
             . "        timeout: 3\n"
             . "      - agent: reviewer\n"
-            . "        prompt: r\n";
+            . "        prompt: r\n"
+            . "  - name: e\n"
+            . "    uses: author-draft\n"
+            . "    with:\n"
+            . "      notes: \"{{a.output}}\"\n"
+            . "    capture: true\n";
 
         $workflow = $this->registry()->fromYamlString($yaml);
 
@@ -215,14 +220,22 @@ final class WorkflowYamlKeyRosterTest extends TestCase
             static fn (array $stage): string => (string) $stage['type'],
             $workflow->stages
         );
-        self::assertSame(['stage', 'stage', 'verification', 'pipeline'], $types);
+        self::assertSame(['stage', 'stage', 'verification', 'pipeline', 'stage'], $types);
 
         $verifier = $workflow->stages[2]['verifier'];
         self::assertInstanceOf(\SugarCraft\Code\Workflows\WorkflowTask::class, $verifier);
         self::assertSame('/\bREJECT\b/', $verifier->reject);
         self::assertSame(2, $verifier->rejectMinOccurrences);
 
-        self::assertSame(['a', 'b', 'c', 'd'], \array_map(
+        // The C11 arm's keys survive the roster the same way the compound
+        // sections do: a uses stage arrives typed 'stage', carrying its
+        // subject name, its with: map, and the flags the arm shares with
+        // ordinary stages.
+        self::assertSame('author-draft', $workflow->stages[4]['uses']);
+        self::assertSame(['notes' => '{{a.output}}'], $workflow->stages[4]['with']);
+        self::assertSame(true, $workflow->stages[4]['capture']);
+
+        self::assertSame(['a', 'b', 'c', 'd', 'e'], \array_map(
             static fn (array $stage): string => (string) $stage['name'],
             $workflow->stages
         ));

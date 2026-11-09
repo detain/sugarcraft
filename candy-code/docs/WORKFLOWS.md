@@ -447,6 +447,58 @@ putting it on a plain task parses into the DTO, and the engine's pre-flight
 refuses the run naming the misuse — the parser refuses shapes, the engine owns
 placement policy.
 
+### `uses:` / `with:` compose one workflow into another
+
+`uses:` arms a stage with the name of another workflow. The stage runs that
+workflow — all of its stages, in order — as its body, and settles as exactly
+ONE outer stage row labeled with the outer stage's own name; the inner run's
+detail rides the row's output as one `name: status` line per inner stage, and
+every agent it dispatched bills the outer run's token and cost totals.
+
+```yaml
+name: ship-notes
+stages:
+  - name: research
+    agent: coder
+    prompt: Gather notes on {{topic}}
+  - name: draft                 # one row in this run's stage list, named "draft"
+    uses: author-draft          # runs the named workflow as the stage's body
+    with:
+      notes: "{{research.output}}"   # interpolated in the OUTER scope first
+```
+
+`with:` is the inner run's START context: each value interpolates against the
+outer run's settled stages before the inner run begins, and nothing the inner
+workflow names flows back out — later outer stages read the composed body
+through `draft.output` like any other stage's output. The included name is
+resolved through the registry's ordinary tiers, the same lookup `run` performs,
+so a checked-in plan composes with a personal library exactly as it runs alone.
+
+Two placement rules hold the recursion safe, and both read the whole chain, not
+just one hop. Depth counts workflows, outer one included, up to three: `a -> b
+-> c` runs, a fourth node refuses as the stage's own failure naming the full
+attempted path — `Include chain too deep: a -> b -> c -> d (maximum depth is
+3).` A name already on the path is a cycle and refuses the same way —
+`Workflow "b" is already in this run's uses chain (a -> b -> a); includes must
+not cycle.` The linter walks the `uses:` edges for both verdicts before the run
+starts, so a plan that would refuse at dispatch is refused at lint instead of
+after four stages of real work.
+
+An inner run is driven by the same engine, on the same call stack: Esc Esc
+stops it with the run around it, and its live frame is deliberately not
+selectable by `pause()`. That carries the one honest limit of v1 composition:
+a pause during an inner run replays the WHOLE inner stage on resume (inner
+stage results land in the outer pause snapshot only at stage settle).
+
+The loader keeps one-body-per-stage honest: `uses:` cannot sit beside `agent:`,
+`tasks:`, `task:`, `agents:` or `stages:`, cannot accompany `parallel: true` or
+a `type:` of `verification` or `pipeline`, and a `with:` with no `uses:` to seed
+is refused rather than ignored. `cache: true` beside `uses:` is legal, and it
+hashes the DECLARATION — the included name plus the pre-interpolation `with:`
+templates — not the inner workflow's own content: editing the included plan
+leaves a cached include row carrying, the same author-stability law every other
+`cache:` stage follows.
+
 ### Everything malformed is refused, not coerced
 
 `WorkflowRegistry::parseYamlWorkflow()` raises `WorkflowLoadException` for each
