@@ -66,8 +66,14 @@ final class WorkflowLinter
      * @param Workflow            $workflow    DTO as the registry produced it.
      * @param array<string,mixed> $seedContext run-context keys the plan will be handed (bare `{{X}}` resolves from these; [] for a pure lint).
      * @param ?list<string>       $toolNames   the session's tool universe; null = universe unknown (file lint without a backend) => the declared-vs-known leg is SKIPPED, pattern validity is still checked.
+     * @param ?callable(string):(?Workflow) $resolver
+     *        C11: loads a `uses:` name to its workflow so the include edges can
+     *        be walked before the run is billed; null (the default) skips the
+     *        walk entirely — a caller with no registry view keeps byte-identical
+     *        pre-C11 verdicts. An edge whose name the resolver cannot load is
+     *        left to load()'s own refusal, not guessed at here.
      */
-    public static function lint(Workflow $workflow, array $seedContext = [], ?array $toolNames = null): self
+    public static function lint(Workflow $workflow, array $seedContext = [], ?array $toolNames = null, ?callable $resolver = null): self
     {
         $findings = [];
         $planRows = [];
@@ -109,6 +115,10 @@ final class WorkflowLinter
                 self::checkTask($stageName, $slot, $task, $ordinal, $producers, $outputs, $seedContext, $toolNames, $findings);
             }
         }
+
+        // C11: include-compose edges — cycles and too-deep chains are errors
+        // here, before the run that would refuse them burns a single agent.
+        self::checkIncludes($workflow, $findings, $resolver);
 
         return new self($workflow->name, $findings, $planRows);
     }
@@ -653,6 +663,75 @@ final class WorkflowLinter
             }
         }
         self::add($findings, 'warning', $stageName, 'Every agent in this parallel stage writes the shared checkout (no worktree isolation); concurrent file edits can clobber each other.');
+    }
+
+    /**
+     * C11: walk the `uses:` edges outward from this workflow. Two verdicts,
+     * both errors: a name already on the path being walked CYCLES (the engine
+     * refuses it at dispatch), and a path past WorkflowEngine::MAX_USES_DEPTH
+     * is TOO DEEP. Both findings spell the chain `a -> b -> c -> d` because a
+     * two-name message cannot locate the hop a long plan went wrong at.
+     * Absent resolver = no registry view = the whole leg is skipped; a name
+     * the resolver cannot load is left to load()'s run-start refusal.
+     *
+     * @param list<array{severity: string, stage: string, message: string}> $findings
+     * @param ?callable(string):(?Workflow) $resolver
+     */
+    private static function checkIncludes(Workflow $workflow, array &$findings, ?callable $resolver): void
+    {
+        if ($resolver === null) {
+            return;
+        }
+
+        foreach ($workflow->stages as $stage) {
+            if (!is_array($stage) || !is_string($stage['uses'] ?? null) || $stage['uses'] === '') {
+                continue;
+            }
+
+            $stageName = is_string($stage['name'] ?? null) && $stage['name'] !== '' ? $stage['name'] : 'unknown';
+            self::walkInclude($stageName, $stage['uses'], [$workflow->name], $findings, $resolver);
+        }
+    }
+
+    /**
+     * One include edge, then its subtree. Path-relative DFS with no visit
+     * memo: cycle verdicts depend on the path, human plans are tiny, and the
+     * worst case a DAG admits is bounded by the depth refusal itself.
+     *
+     * @param list<string> $path   workflows already running around this edge
+     * @param list<array{severity: string, stage: string, message: string}> $findings
+     * @param callable(string):(?Workflow) $resolver
+     */
+    private static function walkInclude(string $stageName, string $included, array $path, array &$findings, callable $resolver): void
+    {
+        if (in_array($included, $path, true)) {
+            self::add($findings, 'error', $stageName, 'uses-chain cycles: ' . implode(' -> ', [...$path, $included]) . ' — the engine refuses the include before any agent runs.');
+
+            return;
+        }
+
+        $chain = [...$path, $included];
+
+        if (count($chain) > WorkflowEngine::MAX_USES_DEPTH) {
+            self::add($findings, 'error', $stageName, 'uses-chain too deep: ' . implode(' -> ', $chain) . ' — maximum depth is ' . WorkflowEngine::MAX_USES_DEPTH . '.');
+
+            return;
+        }
+
+        $inner = $resolver($included);
+
+        if ($inner === null) {
+            return;
+        }
+
+        foreach ($inner->stages as $innerStage) {
+            if (!is_array($innerStage) || !is_string($innerStage['uses'] ?? null) || $innerStage['uses'] === '') {
+                continue;
+            }
+
+            $innerStageName = is_string($innerStage['name'] ?? null) && $innerStage['name'] !== '' ? $innerStage['name'] : $included;
+            self::walkInclude($innerStageName, $innerStage['uses'], $chain, $findings, $resolver);
+        }
     }
 
     /**
