@@ -975,14 +975,19 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $rows = is_array($data['stageResults'] ?? null) ? array_values($data['stageResults']) : [];
 
         $succeeded = [];
-        // C13: every successful recorded row, keyed by stage name, not just
-        // the positionally-skipped prefix. The skip stays positional (skipping
-        // an unrecorded stage is not recoverable); this map exists so the
-        // hash-gated cache can find a later stage's recorded answer.
+        // C13: every settled recorded row — successes and C2 skips — keyed by
+        // stage name, not just the positionally-skipped prefix. The skip stays
+        // positional (skipping an unrecorded stage is not recoverable); this
+        // map exists so the hash-gated cache can find a later stage's recorded
+        // answer (a skip row can never serve one: cachedStageResult demands
+        // a success).
         $recordedByName = [];
         foreach ($rows as $row) {
             $stage = is_array($row) ? $this->deserializeStageResult($row) : null;
-            if ($stage === null || !$stage->isSuccess()) {
+            // C2: a recorded skip is a settled fact of the prefix, not a
+            // break — the resume must neither re-dispatch nor re-decide the
+            // stage; failures and cancellations still end the walk.
+            if ($stage === null || (!$stage->isSuccess() && $stage->status !== WorkflowStatus::Skipped)) {
                 break;
             }
             $succeeded[] = $stage;
@@ -1343,12 +1348,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
-     * The stages a run has DONE — the successful prefix of its results.
+     * The stages a run has DONE — the settled prefix of its results:
+     * successes, with C2's recorded skips riding along.
      *
-     * The loop fails fast, so successes are always a prefix and the first
-     * failure ends it; stopping at the first non-success also keeps a stage
-     * that is neither out of the count, since re-running a stage on resume is
-     * recoverable and skipping one is not.
+     * The loop fails fast, so settled rows are always a prefix and the first
+     * failure ends it; a skip belongs in the prefix because its stage is a
+     * settled fact of the run — re-running a stage on resume is recoverable,
+     * but re-deciding a skip would let it run under outputs that changed
+     * since the file was written.
      *
      * @return list<StageResult>
      */
@@ -1356,7 +1363,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
     {
         $done = [];
         foreach ($result->stageResults as $stage) {
-            if (!$stage->isSuccess()) {
+            if (!$stage->isSuccess() && $stage->status !== WorkflowStatus::Skipped) {
                 break;
             }
             $done[] = $stage;
@@ -1370,10 +1377,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * a live pause, a finished-run pause, the stage loop's own stop, and the
      * SIGINT/SIGTERM handler, so the format cannot drift between them.
      *
-     * Only the successful prefix is persisted ({@see completedStages()}), and
-     * `stagesCompleted` is its length, so a resume re-runs a stage that failed
-     * instead of skipping it (AUDIT WF-2). The totals are the run's whole
-     * spend, a failed attempt's included.
+     * Only the settled prefix — successes and recorded skips ({@see
+     * completedStages()}) — is persisted, and `stagesCompleted` is its length,
+     * so a resume re-runs a stage that failed instead of skipping it (AUDIT
+     * WF-2). The totals are the run's whole spend, a failed attempt's included.
      *
      * $clean is the writer's declaration of HOW this record came to exist:
      * true when a cooperative stop (explicit pause, the stage loop's own
@@ -1841,6 +1848,25 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     throw new UnsupportedStageTypeException(
                         "Stage type '{$stageType}' is not supported. Only 'stage', 'parallel', 'pipeline', and 'verification' are implemented."
                     );
+                }
+
+                // C2: a `when:` clause that answers unsatisfied settles the
+                // stage as Skipped WITHOUT dispatch — the row is a recorded
+                // fact, neither success nor failure. Nothing is billed, no
+                // output key is written (downstream reads see the stage as
+                // absent, which is the truth), no input hash is recorded (a
+                // skip re-decides nothing), and the clause gate stands ahead
+                // of the cache door: an unrun stage has nothing to replay.
+                $when = $stage['when'] ?? null;
+                if (is_array($when) && !StageCondition::evaluate($when, $context)) {
+                    $stageResults[] = new StageResult(
+                        stageName: (string) ($stage['name'] ?? ''),
+                        status: WorkflowStatus::Skipped,
+                        startedAt: $stageStartedAt,
+                        completedAt: $stageStartedAt,
+                    );
+
+                    continue;
                 }
 
                 // C13 opt-in: a `cache: true` stage whose record still matches

@@ -663,7 +663,11 @@ final class DocFigureProseDriftTest extends TestCase
         );
         self::assertSame(
             3,
-            preg_match_all('/\$workflow->timeout\);/', self::bodyExcerpt($engine, 'runGuardedFromWorkflow', 9000)),
+            // C2 (wave-R, 2026-11-09) widened 9000 -> 10000: the `when:` guard
+            // block sits ahead of the three dispatch arms, shifting them ~1k
+            // bytes; the file carries exactly three '$workflow->timeout);'
+            // spellings tree-wide, so no fourth can enter the wider window.
+            preg_match_all('/\$workflow->timeout\);/', self::bodyExcerpt($engine, 'runGuardedFromWorkflow', 10_000)),
             'runGuardedFromWorkflow() no longer hands Workflow::$timeout to the stage, pipeline and verification executors',
         );
         preg_match_all('/maxRetries: \$\w+->retries \?\? (\d+)/', $engine, $engineRetries);
