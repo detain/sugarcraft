@@ -23,8 +23,9 @@ use PHPUnit\Framework\TestCase;
  *
  * README blocks are self-contained: each runs against the lib autoloader
  * plus `declare(strict_types=1)` prepended, so snippet-local imports are
- * part of what this test pins. Child stdin is /dev/null — the pipe demo
- * example reads STDIN and must terminate, not block.
+ * part of what this test pins. Child stdin is the platform null device
+ * (/dev/null, NUL on Windows) — the pipe demo example reads STDIN and
+ * must terminate, not block.
  */
 final class ReadmeSnippetsTest extends TestCase
 {
@@ -126,6 +127,12 @@ final class ReadmeSnippetsTest extends TestCase
      */
     private static function phpBlocks(string $readme): array
     {
+        // A Windows checkout with core.autocrlf=true materialises README.md
+        // with CRLF endings. Every fence and closer anchor below ends at
+        // [ \t]*$, so an un-stripped trailing \r makes no fence ever match and
+        // the extractor yields zero blocks. Normalise at the boundary; on an
+        // LF checkout this replace is a byte-exact no-op.
+        $readme = str_replace("\r\n", "\n", $readme);
         $lines  = explode("\n", $readme);
         $count  = count($lines);
         $blocks = [];
@@ -174,7 +181,11 @@ final class ReadmeSnippetsTest extends TestCase
         foreach ($args as $arg) {
             $command .= ' ' . escapeshellarg($arg);
         }
-        $command .= ' </dev/null 2>' . escapeshellarg($errorFile);
+        // cmd.exe cannot redirect from /dev/null; the platform null device is
+        // NUL there. The child stdin still closes immediately either way, so
+        // the STDIN-reading pipe demo terminates instead of blocking.
+        $nullDevice = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
+        $command .= ' <' . $nullDevice . ' 2>' . escapeshellarg($errorFile);
 
         $lines = [];
         exec($command, $lines, $status);
