@@ -316,8 +316,10 @@ final class MultiTaskStageTest extends TestCase
         $source = (string) file_get_contents((new \ReflectionClass(WorkflowEngine::class))->getFileName());
         self::assertSame(1, substr_count($source, 'min($workflow->maxConcurrent, $chunk)'));
         self::assertSame(0, substr_count($source, 'max($workflow->maxConcurrent, $chunk)'));
-        // A replay takes its width from the RECORD, not the re-read YAML:
-        // the chunk of a materialised wave was decided when it expanded.
+        // A recorded chunk wins on replay, not the re-read YAML: the width
+        // of a materialised wave was decided when it expanded. (A record
+        // written with a null chunk keeps no ceiling to win with — that leg
+        // falls back to the current YAML, and a ceiling can only narrow.)
         self::assertSame(1, substr_count($source, "\$chunk = \$recorded['chunk'] ?? \$from['chunk'];"));
     }
 
