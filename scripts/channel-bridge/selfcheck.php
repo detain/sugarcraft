@@ -9,7 +9,9 @@
  *      drop -> reconnect -> re-follow from the persisted seq);
  *   2. a real `candy-code serve` dial when one is reachable (the strongest
  *      proof; skipped with an honest line when the sandbox cannot run one,
- *      in which case the fixture is what the parse logic is pinned against);
+ *      in which case the fixture is what the parse logic is pinned against;
+ *      pass --with-serve to start a sandbox serve for exactly this run and
+ *      tear it down afterwards);
  *   3. unit paths: chunker, session-map keys/cursors/dedupe, credential
  *      store security refusals, PromptFence reuse, Discord grammar +
  *      commands + buttons, Teams JWT fail paths + cards.
@@ -33,6 +35,9 @@ use ChannelBridge\Teams\ConnectorApi;
 use ChannelBridge\Teams\JwtValidator;
 use ChannelBridge\TextSafety;
 use React\EventLoop\Loop;
+use SugarCraft\Code\Server\Auth\TokenStore;
+use SugarCraft\Code\Server\DiscoveryFile;
+use SugarCraft\Code\Server\StateDir;
 
 require __DIR__ . '/src/autoload.php';
 
@@ -193,7 +198,173 @@ $bridge->stop();
 $fixture->stop();
 echo "  (cursor after re-follow: seq " . $map->cursor('discord:default:1001') . ")\n";
 
-// -- 2. unit lanes --------------------------------------------------------
+// -- 2. live serve lane -----------------------------------------------------
+
+$spawnRequested = in_array('--with-serve', array_slice((array) ($argv ?? []), 1), true);
+$serveStateDir = getenv('CANDY_CODE_SERVER_DIR');
+$serveStateDir = is_string($serveStateDir) && $serveStateDir !== ''
+    ? $serveStateDir
+    : rtrim((string) getenv('HOME'), '/') . '/.candy-code/server';
+$repoRoot = dirname(__DIR__, 2);
+$sandboxBase = null;
+$servePid = 0;
+
+if ($spawnRequested) {
+    // Our own sandbox serve: 0700 BEFORE serve opens the dir (StateDir
+    // refuses a loose one), a random high port (the default may be someone
+    // else's), and --detach returns as soon as the daemon is bound.
+    $sandboxBase = '/tmp/opencode/code-chat-1106/bridge/serve-sandbox-' . getmypid();
+    $serveStateDir = $sandboxBase . '/server';
+    @mkdir($serveStateDir, 0700, true);
+    @chmod($serveStateDir, 0700);
+    $servePort = random_int(20000, 60000);
+    $spawn = proc_open(
+        [PHP_BINARY, $repoRoot . '/candy-code/bin/candy-code', 'serve', '--host', '127.0.0.1', '--port', (string) $servePort, '--no-web', '--detach'],
+        [1 => ['file', $sandboxBase . '/spawn.out', 'a'], 2 => ['file', $sandboxBase . '/spawn.err', 'a']],
+        $spawnPipes,
+        $repoRoot,
+        array_merge((array) getenv(), ['CANDY_CODE_SERVER_DIR' => $serveStateDir]),
+    );
+    if (is_resource($spawn)) {
+        $deadline = microtime(true) + 15.0;
+        while (proc_get_status($spawn)['running'] && microtime(true) < $deadline) {
+            usleep(50000);
+        }
+        if (proc_get_status($spawn)['running']) {
+            proc_terminate($spawn);
+        }
+        proc_close($spawn);
+    }
+}
+
+$discover = static function () use ($serveStateDir): ?array {
+    try {
+        $state = StateDir::existing($serveStateDir);
+    } catch (\RuntimeException) {
+        return null; // present but refused (foreign owner, loose mode): not ours to dial
+    }
+    if ($state === null) {
+        return null;
+    }
+    $record = DiscoveryFile::read($state);
+
+    return $record !== null && $record->isLive() ? [$state, $record] : null;
+};
+
+$found = $discover();
+if ($sandboxBase !== null && $found === null) {
+    $deadline = microtime(true) + 20.0;
+    while ($found === null && microtime(true) < $deadline) {
+        usleep(100000);
+        $found = $discover();
+    }
+}
+
+if ($found === null && $sandboxBase === null) {
+    skipped('live serve lane', 'no live serve discovered at ' . $serveStateDir . ' (start one, set CANDY_CODE_SERVER_DIR, or run with --with-serve)');
+} elseif ($found === null) {
+    check('live serve spawned', false, 'spawned serve never became discoverable at ' . $serveStateDir);
+} else {
+    [$serveState, $serveRecord] = $found;
+    $servePid = (int) ($serveRecord->pid ?? 0);
+    echo "Live serve against {$serveRecord->url}...\n";
+    $liveUrl = ServeBridge::wsUrlFrom($serveRecord->url);
+    $liveToken = getenv('CANDY_CODE_SERVER_TOKEN');
+    if (!is_string($liveToken) || $liveToken === '') {
+        // Read the minted token the way Attach does: regular file, never mint.
+        $tokenFile = $serveState->path . '/' . TokenStore::FILE;
+        $tokenStat = @lstat($tokenFile);
+        $tokenRaw = $tokenStat !== false && (($tokenStat['mode'] & 0170000) === 0100000) ? @file_get_contents($tokenFile) : false;
+        $liveToken = is_string($tokenRaw) ? trim($tokenRaw) : '';
+    }
+    $liveEvents = [];
+    $liveBridge = new ServeBridge((string) $liveUrl, $liveToken, 'subprotocol', new Log($stateDir . '/live.log', 'info'), $loop);
+    $liveBridge->onEvent(static function (array $e) use (&$liveEvents): void {
+        $liveEvents[] = $e;
+    });
+    [$done, $hello] = await($liveBridge->start(), 15.0);
+    $liveOk = $done && $hello === true;
+    check('live hello ok', $liveOk, $hello instanceof \Throwable ? $hello->getMessage() : ($done ? 'resolved to ' . gettype($hello) : 'timeout'));
+    $liveSid = null;
+    if ($liveOk) {
+        [$done, $createdLive] = await($liveBridge->createSession('selfcheck-live'));
+        $liveSid = is_array($createdLive) ? ($createdLive['id'] ?? null) : null;
+        check('live session.create', $done && is_string($liveSid) && $liveSid !== '', $done ? json_encode($createdLive) : 'timeout');
+    }
+    if ($liveOk && is_string($liveSid) && $liveSid !== '') {
+        [$done, $subLive] = await($liveBridge->follow($liveSid, null));
+        $resetBranch = $done && is_array($subLive) && ($subLive['reset'] ?? false) === true && is_int($subLive['throughSeq'] ?? null);
+        check('live follow takes the reset branch', $resetBranch, $done ? json_encode(is_array($subLive) ? array_keys($subLive) : gettype($subLive)) : 'timeout');
+        [$done, $sentLive] = await($liveBridge->send($liveSid, 'selfcheck live probe', 'queue'));
+        $admitted = $done && is_array($sentLive) ? (string) ($sentLive['admitted'] ?? '') : '';
+        check('live send admitted', in_array($admitted, ['started', 'queued', 'steered', 'pending'], true), $admitted !== '' ? $admitted : 'no admission');
+        $durableSeen = waitUntil(static function () use (&$liveEvents, $liveSid): bool {
+            foreach ($liveEvents as $e) {
+                if (($e['sessionId'] ?? '') === $liveSid && ($e['type'] ?? '') === 'message.created' && !empty($e['durable']) && (int) ($e['seq'] ?? 0) >= 1) {
+                    return true;
+                }
+            }
+
+            return false;
+        }, 20.0);
+        check('live durable message.created reaches the listener', $durableSeen, 'events=' . count($liveEvents));
+    } elseif (!$liveOk) {
+        skipped('live session.create', 'hello failed');
+        skipped('live follow takes the reset branch', 'hello failed');
+        skipped('live send admitted', 'hello failed');
+        skipped('live durable message.created reaches the listener', 'hello failed');
+    }
+    $liveBridge->stop();
+}
+
+if ($sandboxBase !== null) {
+    // Stop with the SAME env (serve stop resolves its state dir from it),
+    // then reap by pid regardless: a hung `serve stop` once left an orphan
+    // behind, which is why both legs run.
+    $stop = proc_open(
+        [PHP_BINARY, $repoRoot . '/candy-code/bin/candy-code', 'serve', 'stop'],
+        [1 => ['file', $sandboxBase . '/stop.out', 'a'], 2 => ['file', $sandboxBase . '/stop.err', 'a']],
+        $stopPipes,
+        $repoRoot,
+        array_merge((array) getenv(), ['CANDY_CODE_SERVER_DIR' => $sandboxBase . '/server']),
+    );
+    if (is_resource($stop)) {
+        $deadline = microtime(true) + 8.0;
+        while (proc_get_status($stop)['running'] && microtime(true) < $deadline) {
+            usleep(20000);
+        }
+        if (proc_get_status($stop)['running']) {
+            proc_terminate($stop);
+        }
+        proc_close($stop);
+    }
+    if ($servePid > 0) {
+        @posix_kill($servePid, SIGTERM);
+        $reaped = waitUntil(static fn (): bool => !@posix_kill($servePid, 0), 5.0);
+        if (!$reaped) {
+            @posix_kill($servePid, SIGKILL);
+            waitUntil(static fn (): bool => !@posix_kill($servePid, 0), 2.0);
+        }
+    }
+    $wipeSandbox = static function (string $dir): void {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $walk = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS), \RecursiveIteratorIterator::CHILD_FIRST);
+        foreach ($walk as $entry) {
+            if ($entry->isDir()) {
+                @rmdir($entry->getPathname());
+            } else {
+                @unlink($entry->getPathname());
+            }
+        }
+        @rmdir($dir);
+    };
+    $wipeSandbox($sandboxBase);
+    check('live serve torn down', $servePid <= 0 || !@posix_kill($servePid, 0), 'leftover pid ' . $servePid);
+}
+
+// -- 3. unit lanes --------------------------------------------------------
 
 echo "Units...\n";
 
@@ -351,7 +522,7 @@ check('the emulator door accepts unsigned tokens explicitly', is_array($emulator
 check('two-part garbage is refused', $validator->validate('aaa.bbb') === null);
 
 echo "\n";
-// -- 3. summary -----------------------------------------------------------
+// -- 4. summary -----------------------------------------------------------
 
 printf("selfcheck: %d ok, %d fail, %d skip\n", $GLOBALS['pass'], $GLOBALS['fail'], $GLOBALS['skip']);
 exit($GLOBALS['fail'] === 0 ? 0 : 1);
