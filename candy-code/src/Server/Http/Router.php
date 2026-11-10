@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Server\Http;
 
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use SugarCraft\Code\Channels\ChannelRegistry;
 use SugarCraft\Code\Server\ErrorLog;
 use SugarCraft\Code\Share\ShareStore;
 use SugarCraft\Code\Support\Log;
@@ -40,6 +41,10 @@ final class Router
      *        the {@see CanvasPageController}; null means this server publishes
      *        no canvas pages, and `/canvas/...` falls through to the UI while
      *        `POST /api/canvas` reaches the API's own unknown-method refusal.
+     * @param (\Closure(ServerRequestInterface): ?ResponseInterface)|null $channels
+     *        the plugin-channel webhook surface ({@see \SugarCraft\Code\Channels\ChannelRegistry::httpRouter()});
+     *        null means no channel registered an HTTP route, and
+     *        `/channels/...` falls through to the UI like any unknown path.
      */
     public function __construct(
         private readonly \Closure $upgrade,
@@ -47,6 +52,7 @@ final class Router
         private readonly \Closure $static,
         private readonly ?\Closure $share = null,
         private readonly ?\Closure $canvas = null,
+        private readonly ?\Closure $channels = null,
     ) {
     }
 
@@ -98,6 +104,19 @@ final class Router
         // its per-request expiry check) behind a client-side 404.
         if ($this->share !== null && str_starts_with($path, '/' . ShareStore::URL_PREFIX . '/')) {
             $response = ($this->share)($request);
+            if ($response !== null) {
+                return Responses::secured($response);
+            }
+        }
+
+        // Ahead of BOTH fall-throughs, for the same masking reason the canvas
+        // and share branches state: a plugin webhook is not an RPC method
+        // (ApiController would answer it as an unknown method) and the SPA
+        // would swallow /channels/... into index.html. The channel owns its
+        // signature verification and rate limiting (HookWebhooks doctrine);
+        // the router only addresses the named route. code-chat P1.
+        if ($this->channels !== null && str_starts_with($path, ChannelRegistry::HTTP_PREFIX)) {
+            $response = ($this->channels)($request);
             if ($response !== null) {
                 return Responses::secured($response);
             }

@@ -150,6 +150,7 @@ final class Server
         private readonly ?\Closure $share = null,
         private readonly ?\Closure $canvas = null,
         private readonly ?HookWebhooks $webhooks = null,
+        private readonly ?\Closure $channels = null,
     ) {
     }
 
@@ -170,6 +171,7 @@ final class Server
         ?\Closure $share = null,
         ?\Closure $canvas = null,
         ?HookWebhooks $webhooks = null,
+        ?\Closure $channels = null,
     ): self {
         return new self(
             $config,
@@ -184,6 +186,7 @@ final class Server
             $share,
             $canvas,
             $webhooks,
+            $channels,
         );
     }
 
@@ -226,7 +229,7 @@ final class Server
         // SES-3: serve publishes share pages from the session database; a
         // server built without $share answers /s/... through the UI, as before;
         // the same holds for $canvas and the /canvas/... pages.
-        $router = new Router($upgrade(...), $api(...), ($this->static)(...), $this->share === null ? null : ($this->share)(...), $this->canvas === null ? null : ($this->canvas)(...));
+        $router = new Router($upgrade(...), $api(...), ($this->static)(...), $this->share === null ? null : ($this->share)(...), $this->canvas === null ? null : ($this->canvas)(...), $this->channels);
 
         $http = new HttpServer(
             $this->loop,

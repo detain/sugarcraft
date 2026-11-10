@@ -2333,6 +2333,13 @@ final class Bootstrap
                 \SugarCraft\Code\Automation\WebhookDispatcher::fromConfig($outboundWebhooks),
             );
         }
+        // code-chat P1 step 4: the plugin-channel registry rides the same
+        // workspace service slot the webhooks use, so the serve startup boots
+        // it and the ServerContext event seam feeds it. Inert until boot().
+        $workspace = $workspace->withService(
+            \SugarCraft\Code\Channels\ChannelRegistry::class,
+            \SugarCraft\Code\Channels\ChannelRegistry::new(),
+        );
 
         $events = $transcripts->events();
 

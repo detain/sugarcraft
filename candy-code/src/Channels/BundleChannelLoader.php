@@ -51,15 +51,21 @@ use SugarCraft\Code\Support\ContainedPath;
 final class BundleChannelLoader
 {
     /**
-     * Load every trusted bundle's `channel` entrypoints into this process.
+     * Load every trusted bundle's entrypoints of $kinds into this process.
+     *
+     * The GAP-3 subscriber entries ride the SAME gate as channel entries —
+     * one trust list, one quarantine ledger, one private-bytes door; the
+     * kind only selects which manifest section is read. A path named under
+     * two kinds is still loaded (and recorded) exactly once.
      *
      * @param list<Bundle> $bundles        discovered bundles (any tier)
      * @param list<string> $trustedNames   exact origin names from the user-tier list
      * @param ChannelsStore $store         the seen-ledger backing quarantine
+     * @param list<string> $kinds          manifest entrypoint kinds to read
      *
-     * @return array{loaded: list<array{bundle: string, path: string, class: string}>, quarantined: list<array{bundle: string, path: string, class: string}>, refusals: list<array{bundle: string, path: string, class: string, reason: string}>}
+     * @return array{loaded: list<array{bundle: string, path: string, class: string, kind: string}>, quarantined: list<array{bundle: string, path: string, class: string, kind: string}>, refusals: list<array{bundle: string, path: string, class: string, kind: string, reason: string}>}
      */
-    public static function load(array $bundles, array $trustedNames, ChannelsStore $store): array
+    public static function load(array $bundles, array $trustedNames, ChannelsStore $store, array $kinds = ['channel']): array
     {
         $loaded = [];
         $quarantined = [];
@@ -76,48 +82,57 @@ final class BundleChannelLoader
                 continue; // trust is by exact name, never case-folded
             }
 
-            foreach ($bundle->entrypoints()['channel'] ?? [] as $entry) {
-                $where = ['bundle' => $bundle->name, 'path' => $entry['path'], 'class' => $entry['class']];
+            $seenPaths = [];
 
-                if (!ContainedPath::below($entry['path'], $bundle->dir)) {
-                    // Belt over braces: the reader already refused this, but a
-                    // require_once gets its own containment assertion, not a
-                    // borrowed one (this compare is what the census measures).
-                    $refusals[] = $where + ['reason' => 'uncontained'];
-                    continue;
+            foreach ($kinds as $kind) {
+                foreach ($bundle->entrypoints()[$kind] ?? [] as $entry) {
+                    if (isset($seenPaths[$entry['path']])) {
+                        continue; // one path, one load, however many kinds name it
+                    }
+                    $seenPaths[$entry['path']] = true;
+
+                    $where = ['bundle' => $bundle->name, 'path' => $entry['path'], 'class' => $entry['class'], 'kind' => $kind];
+
+                    if (!ContainedPath::below($entry['path'], $bundle->dir)) {
+                        // Belt over braces: the reader already refused this, but a
+                        // require_once gets its own containment assertion, not a
+                        // borrowed one (this compare is what the census measures).
+                        $refusals[] = $where + ['reason' => 'uncontained'];
+                        continue;
+                    }
+
+                    $private = self::privateEntrypointRefusal($entry['path']);
+                    if ($private !== null) {
+                        $refusals[] = $where + ['reason' => $private];
+                        continue;
+                    }
+
+                    if (!$store->seenEntrypoint($entry['path'])) {
+                        // Quarantine first: recorded now so the NEXT launch loads
+                        // it; this launch only lists it. A refusal after loading
+                        // would still have executed the file, which is why the
+                        // ledger is written BEFORE the require and why a loaded
+                        // file that then fails the class check stays recorded —
+                        // honest bookkeeping for the notice that follows.
+                        $store->recordEntrypoint($entry['path']);
+                        $quarantined[] = $where;
+                        continue;
+                    }
+
+                    require_once $entry['path'];
+
+                    if ($entry['class'] === '') {
+                        $refusals[] = $where + ['reason' => 'class-missing'];
+                        continue;
+                    }
+
+                    if (!\class_exists($entry['class'], false)) {
+                        $refusals[] = $where + ['reason' => 'class-not-declared'];
+                        continue;
+                    }
+
+                    $loaded[] = $where;
                 }
-
-                $private = self::privateEntrypointRefusal($entry['path']);
-                if ($private !== null) {
-                    $refusals[] = $where + ['reason' => $private];
-                    continue;
-                }
-
-                if (!$store->seenEntrypoint($entry['path'])) {
-                    // Quarantine first: recorded now so the NEXT launch loads
-                    // it; this launch only lists it. A refusal after loading
-                    // would still have executed the file, which is why the
-                    // ledger is written BEFORE the require and why a loaded
-                    // file that then fails the class check stays recorded —
-                    // honest bookkeeping for the notice that follows.
-                    $store->recordEntrypoint($entry['path']);
-                    $quarantined[] = $where;
-                    continue;
-                }
-
-                require_once $entry['path'];
-
-                if ($entry['class'] === '') {
-                    $refusals[] = $where + ['reason' => 'class-missing'];
-                    continue;
-                }
-
-                if (!\class_exists($entry['class'], false)) {
-                    $refusals[] = $where + ['reason' => 'class-not-declared'];
-                    continue;
-                }
-
-                $loaded[] = $where;
             }
         }
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Cli\Serve;
 
+use SugarCraft\Code\Channels\ChannelRegistry;
+use SugarCraft\Code\Channels\ChannelsStore;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\Help;
 use SugarCraft\Code\Cli\NonInteractive;
@@ -46,6 +48,7 @@ use SugarCraft\Code\Server\Workspace\Gateway;
 use SugarCraft\Code\Support\Daemonize;
 use SugarCraft\Code\Support\Directories\DirectoryBrowser;
 use SugarCraft\Code\Support\Directories\DirectoryBrowserException;
+use SugarCraft\Code\Server\ErrorLog;
 use SugarCraft\Code\Support\HomeDirectory;
 
 /**
@@ -355,7 +358,37 @@ trait ServeStartup
                 return $events->summary($session);
             },
         );
-        $server = Server::new($config, $auth, $static, $gateway, $loop, $log, null, null, $share(...), $canvas(...), $hooks);
+        // code-chat P1 step 4: plugin channels boot before the port is bound.
+        // Trust comes from the same user-tier trustedBundleChannels list the
+        // launch doors use (ruling 2c: nothing loads untrusted, and a channel
+        // that collides on a name is refused there, never shadowing a
+        // built-in or another accepted bundle). Webhook-kind channels mount
+        // their own routes under /channels/ - never /api/ - and verify their
+        // own signatures per the HookWebhooks doctrine; the webhooksOut
+        // envelope is untouched (ruling 5b). Field fact from the bridge lane:
+        // trust prompts ride the ephemeral permission.asked kind "trust", so
+        // a channel surface must never assume permission.requested; and the
+        // RESET subscribe shape must never be filtered by a seq cursor.
+        $channelRegistry = $protocol->context()->hub()->workspace()->service(ChannelRegistry::class);
+        $channels = null;
+        if ($channelRegistry instanceof ChannelRegistry) {
+            try {
+                self::reportChannelBuckets($channelRegistry->boot(
+                    Bootstrap::bundles($config->root),
+                    Bootstrap::trustedBundleChannelNames(),
+                    ChannelsStore::create(),
+                    $config->root,
+                    $loop,
+                    $log,
+                ));
+            } catch (\Throwable $e) {
+                // A broken channel never takes the serve down with it.
+                $log(ErrorLog::line($e, 'channel boot'));
+                self::stderr('candy-code serve: ' . $e->getMessage());
+            }
+            $channels = $channelRegistry->httpRouter();
+        }
+        $server = Server::new($config, $auth, $static, $gateway, $loop, $log, null, null, $share(...), $canvas(...), $hooks, $channels);
 
         try {
             $server->start();
@@ -376,6 +409,9 @@ trait ServeStartup
             $server->stop();
             $gateway->stop($e->getMessage());
             $protocol->stop();
+            if ($channelRegistry instanceof ChannelRegistry) {
+                $channelRegistry->disposeAll($log);
+            }
             $protocol->context()->hub()->closeAll();
             $state->releaseLock();
             self::stderr('candy-code serve: ' . $e->getMessage());
@@ -414,7 +450,7 @@ trait ServeStartup
 
         $stopping = false;
         $handlers = [];
-        $finish = static function (string $reason) use (&$stopping, &$handlers, $server, $protocol, $gateway, $state, $record, $control, $watchdog, $rotation, $loop): void {
+        $finish = static function (string $reason) use (&$stopping, &$handlers, $server, $protocol, $gateway, $state, $record, $control, $watchdog, $rotation, $loop, $channelRegistry, $log): void {
             if ($stopping) {
                 return;
             }
@@ -428,6 +464,9 @@ trait ServeStartup
             @\unlink($state->controlSocketPath());
             $protocol->stop($reason);
             $server->stop();
+            if ($channelRegistry instanceof ChannelRegistry) {
+                $channelRegistry->disposeAll($log);
+            }
             $gateway->stop($reason);
             $protocol->context()->hub()->closeAll();
             $record->removeFrom($state);
@@ -481,6 +520,47 @@ trait ServeStartup
         Loop::run();
 
         return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * code-chat P1 step 4: the launch notices rendering the channel buckets -
+     * loaded/quarantined lists and refusals through the lang keys, plus one
+     * line per named collision. Ruling 2c keeps the refusal localised: a
+     * plugin channel never shadows a built-in or another accepted bundle.
+     *
+     * @param array{loaded: list<array<array-key, mixed>>, quarantined: list<array<array-key, mixed>>, refusals: list<array<array-key, mixed>>} $buckets
+     */
+    private static function reportChannelBuckets(array $buckets): void
+    {
+        /** @param list<array<array-key, mixed>> $rows */
+        $names = static fn (array $rows): string => \implode(', ', \array_map(static fn (array $row): string => (string) ($row['class'] ?? '?'), $rows));
+        if ($buckets['loaded'] !== []) {
+            self::stderr(Lang::t('bundles.channels.loaded', [
+                'names' => $names($buckets['loaded']),
+                'count' => \count($buckets['loaded']),
+            ]));
+        }
+        if ($buckets['quarantined'] !== []) {
+            self::stderr(Lang::t('bundles.channels.quarantined', [
+                'names' => $names($buckets['quarantined']),
+                'count' => \count($buckets['quarantined']),
+            ]));
+        }
+        $refusals = $buckets['refusals'];
+        foreach ($refusals as $refusal) {
+            if (($refusal['reason'] ?? '') === 'collision') {
+                self::stderr(Lang::t('bundles.channels.collision', [
+                    'name' => (string) ($refusal['name'] ?? $refusal['class'] ?? '?'),
+                    'bundle' => (string) ($refusal['bundle'] ?? '?'),
+                ]));
+            }
+        }
+        if ($refusals !== []) {
+            self::stderr(Lang::t('bundles.channels.refused', [
+                'names' => $names($refusals),
+                'count' => \count($refusals),
+            ]));
+        }
     }
 
     /**
