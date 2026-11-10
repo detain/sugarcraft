@@ -294,6 +294,4 @@ final class SessionHostChannelScopeTest extends TestCase
 
         $this->assertFalse($host->isBusy(), 'the turn settled');
     }
-
-    private ?SessionHost $hostUnderTest = null;
 }
