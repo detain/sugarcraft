@@ -300,6 +300,7 @@ candy-code/tests/Commands/McpAuthCommandEnableDisableTest.php	1.779	7
 candy-code/tests/Config/Settings/SettingsSchemaTest.php	1.775	46
 candy-code/tests/Integration/ForeignAgentPresetWiringTest.php	1.760	17
 candy-code/tests/Support/OneSidedHomeSandboxTest.php	1.732	5
+candy-code/tests/Host/SessionHostChannelScopeTest.php	1.732	9
 candy-code/tests/Runtime/ThinkingBlocksProductionFoldTest.php	1.731	8
 candy-code/tests/Commands/MemoryImportCommandTest.php	1.730	16
 candy-code/tests/Host/SessionHostIdleAutoTest.php	1.715	17
@@ -739,6 +740,7 @@ candy-code/tests/Tools/ReadLedgerStalenessTest.php	0.232	20
 candy-code/tests/Tools/BuiltIn/GrepSecretFileTest.php	0.231	18
 candy-code/tests/Tools/ToolPromptGuidanceTest.php	0.230	6
 candy-code/tests/Cli/AppendSystemPromptTest.php	0.230	18
+candy-code/tests/Hooks/PermissionGateHookTest.php	0.230	16
 candy-code/tests/Chat/AgentViewShowsChildAskTest.php	0.229	7
 candy-code/tests/Media/BatchResultsTest.php	0.226	8
 candy-code/tests/Support/ManifestDependencyReachTest.php	0.224	3
@@ -870,6 +872,7 @@ candy-code/tests/Tui/Components/ContextPaneTest.php	0.112	10
 candy-code/tests/Server/BackpressureTest.php	0.112	5
 candy-code/tests/Chat/InstructionQuickAddTest.php	0.112	16
 candy-code/tests/Backend/AutoTestReflectionTest.php	0.111	3
+candy-code/tests/Permissions/PermissionGateChannelScopeTest.php	0.111	13
 candy-code/tests/Integration/SkillPathScopingWiringTest.php	0.109	6
 candy-code/tests/Support/MediaStoreTest.php	0.108	29
 candy-code/tests/Chat/EffortCommandTest.php	0.108	13
@@ -1021,6 +1024,8 @@ candy-code/tests/Cli/BootstrapLayeredSettingsTest.php	0.056	66
 candy-code/tests/Providers/BedrockPromptCacheTest.php	0.056	30
 candy-code/tests/Tui/MediaForm/MediaFormKeysTest.php	0.056	12
 candy-code/tests/Context/AbsoluteThresholdTest.php	0.056	23
+candy-code/tests/Channels/ChannelToolPolicyServiceTest.php	0.056	19
+candy-code/tests/Permissions/ChannelToolScopeTest.php	0.056	10
 candy-code/tests/Cli/BootstrapContextWindowTest.php	0.055	5
 candy-code/tests/Tools/Edit/BomPreservationTest.php	0.055	10
 candy-code/tests/App/VideoPlayerWiringTest.php	0.055	12
@@ -1561,7 +1566,6 @@ candy-code/tests/Config/McpBrowserPresetDocTest.php	0.005	4
 candy-code/tests/MessageTest.php	0.005	27
 candy-code/tests/Skills/SkillRosterDiffTrackerTest.php	0.005	13
 candy-code/tests/Tools/BoardToolsTest.php	0.005	9
-candy-code/tests/Hooks/PermissionGateHookTest.php	0.005	15
 candy-code/tests/Support/PosixShellQuoteTest.php	0.005	30
 candy-code/tests/Chat/PrCommandTest.php	0.005	6
 candy-code/tests/Protocol/WebStringsDriftTest.php	0.005	2
