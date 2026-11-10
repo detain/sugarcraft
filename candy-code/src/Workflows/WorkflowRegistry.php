@@ -1439,6 +1439,19 @@ final class WorkflowRegistry
                     );
                 }
 
+                if (array_key_exists('uses', $stage) && $loop !== null) {
+                    // C4 rider (NIT-1): a carried workflow keeps the plain-stage
+                    // shape, so the stage-only door below would wave it through —
+                    // but per-round re-carrying has semantics neither the include
+                    // lane nor the loop lane specified (expansion, cache rows and
+                    // fan-out capture all interact). v1 refuses the pairing at
+                    // load, the same closed-pair idiom as with-without-uses,
+                    // rather than freeze an accidental one.
+                    throw new WorkflowLoadException(
+                        "{$where} carries \"loop\" beside \"uses\"; v1 loops plain stages, not carried workflows"
+                    );
+                }
+
                 if (array_key_exists('uses', $stage)) {
                     // C11: `uses:` arms the stage with another workflow's body;
                     // the shape stays 'stage' and no task container may ride.

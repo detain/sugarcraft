@@ -744,6 +744,35 @@ final class WorkflowYamlKeyRosterTest extends TestCase
         }
     }
 
+    public function testLoopBesideUsesRefusesAtLoad(): void
+    {
+        // C4 rider (NIT-1): a carried stage keeps the plain-stage shape, so the
+        // stage-only door alone would admit the pairing. Per-round carrying has
+        // semantics no lane specified — the closed-pair door refuses it at load.
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: a\n"
+            . "    agent: coder\n"
+            . "    prompt: p\n"
+            . "  - name: b\n"
+            . "    uses: author-draft\n"
+            . "    loop:\n"
+            . "      max: 2\n"
+            . "      until:\n"
+            . "        stage: a\n"
+            . "        contains: GO\n";
+
+        try {
+            $this->registry()->fromYamlString($yaml);
+            $this->fail('v1 refuses a loop riding a carried workflow');
+        } catch (WorkflowLoadException $error) {
+            $this->assertStringContainsString('"loop"', $error->getMessage());
+            $this->assertStringContainsString('"uses"', $error->getMessage());
+            $this->assertStringContainsString('carried workflows', $error->getMessage());
+        }
+    }
+
     public function testLoopRefusesUnknownSubKeys(): void
     {
         $yaml = "name: r\n"

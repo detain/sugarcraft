@@ -280,8 +280,9 @@ settles `cancelled` like any in-flight stage's.
 `loop:` is stage-only in v1 in the narrow sense too: a `when:` guard can still
 skip the whole thing, a `cache:` hit short-circuits every round (the door sits
 ahead of the loop), and attaching a `loop:` to a `parallel:`, `pipeline:`, or
-verification stage refuses the load. Give each repeating step its own plain
-stage.
+verification stage refuses the load — as does a `loop:` beside a `uses:` stage,
+because v1 loops plain stages, not carried workflows. Give each repeating step
+its own plain stage.
 
 ### `outputSchema` gives a stage a structured verdict
 
@@ -614,9 +615,10 @@ of these rather than loading a workflow that quietly does less:
   the offender, so a half-meaningless guard never reaches a run.
 - `loop:` outside the closed pair: `loop:` not a map, a map carrying any key
   besides `max` and `until` or missing either half, a `max:` that is not a
-  whole number of at least 1, an `until:` outside the `when:` grammar, or a
+  whole number of at least 1, an `until:` outside the `when:` grammar, a
   `loop:` attached to a `parallel:`, `pipeline:`, or verification stage
-  (stage-only in v1) — each fails the load naming the offender.
+  (stage-only in v1), or a `loop:` beside a `uses:` stage (carried workflows
+  are not looped in v1) — each fails the load naming the offender.
 - `outputSchema:` is not a schema-shaped value: a sequence, a bare number,
   malformed inline JSON, or a path that names no readable file (`WorkflowLoadException`
   at load; the same refusals fire at `build()` for `->outputSchema('…')` strings),
