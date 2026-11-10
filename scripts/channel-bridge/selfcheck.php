@@ -401,6 +401,24 @@ foreach ($chunks as $c) {
 }
 check('chunker splits an oversized word at the byte cap', $tooBig === 0 && count($chunks) >= 2, count($chunks) . ' chunks');
 
+// Fence bookkeeping by LINE, not by chunk-list offset (P2 r1 + P2DISCORD-HALT
+// repro): a 30-line fenced doc over maxLines 8 must reopen the fence on
+// every chunk that starts inside it. array_key_first($chunk) always credited
+// source-line 0, so mid-document chunks shipped a close without an open.
+$fenceDoc = "```php\n" . implode("\n", array_map(
+    static fn (int $i): string => "line {$i} of the fenced document",
+    range(1, 28),
+)) . "\n```";
+$chunks = OutboundChunker::split($fenceDoc, 500, 8);
+check('multi-chunk fenced send splits the 30-line doc', count($chunks) >= 4, count($chunks) . ' chunks');
+$unbalanced = [];
+foreach ($chunks as $ci => $c) {
+    if (preg_match_all('/^```/m', $c) % 2 !== 0) {
+        $unbalanced[] = $ci;
+    }
+}
+check('every fenced chunk is self-balanced (open+close, synthetic edges included)', $unbalanced === [], 'unbalanced chunks: ' . implode(',', $unbalanced));
+
 // SessionMap: cursor moves, greatest-wins, dedupe, conversation refs.
 $map2 = new SessionMap($stateDir . '/units.sqlite3');
 $map2->bind('discord:default:42', 'sessA');

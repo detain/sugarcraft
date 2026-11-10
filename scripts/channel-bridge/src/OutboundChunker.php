@@ -29,7 +29,7 @@ final class OutboundChunker
             return [];
         }
         if (self::len($text) <= $limit && \substr_count($text, "\n") + 1 <= $maxLines) {
-            return [$text];
+            return self::dropNoise([$text]);
         }
 
         $lines = \explode("\n", $text);
@@ -61,6 +61,7 @@ final class OutboundChunker
         // Pass 2: greedy fill.
         $out = [];
         $chunk = [];          // real source lines of the chunk being filled
+        $chunkStart = 0;      // line index of $chunk's first line (fence bookkeeping)
         $chunkChars = 0;
         $i = 0;
         $n = \count($lines);
@@ -85,26 +86,41 @@ final class OutboundChunker
             $fits = $tryChars + $overhead <= $limit && \count($chunk) + 1 <= $maxLines;
 
             if (!$fits && $chunk !== []) {
-                $out[] = $decorate(\implode("\n", $chunk), $before[\array_key_first($chunk)], $after[$i - 1]);
+                $out[] = $decorate(\implode("\n", $chunk), $before[$chunkStart], $after[$i - 1]);
                 $chunk = [];
                 $chunkChars = 0;
                 continue; // re-try this line into the fresh chunk
             }
 
+            if ($chunk === []) {
+                $chunkStart = $i;
+            }
             $chunk[] = $line;
             $chunkChars = $chunkChars === 0 ? $lineLen : $chunkChars + 1 + $lineLen;
             $i++;
         }
 
         if ($chunk !== []) {
-            $out[] = $decorate(\implode("\n", $chunk), $before[\array_key_first($chunk)], $after[$n - 1]);
+            $out[] = $decorate(\implode("\n", $chunk), $before[$chunkStart], $after[$n - 1]);
         }
 
-        $out = \array_values(\array_filter($out, static fn (string $c): bool => \trim($c) !== ''));
+        return self::dropNoise($out);
+    }
 
-        // A chunk that is nothing but fence decoration carries no text.
+    /**
+     * Chunks that are empty, or nothing but fence decoration, carry no text
+     * and are never sent — the law holds for the fast path too.
+     *
+     * @param list<string> $chunks
+     *
+     * @return list<string>
+     */
+    private static function dropNoise(array $chunks): array
+    {
+        $chunks = \array_values(\array_filter($chunks, static fn (string $c): bool => \trim($c) !== ''));
+
         return \array_values(\array_filter(
-            $out,
+            $chunks,
             static fn (string $c): bool => \trim((string) \preg_replace('/^```\S*$/m', '', $c)) !== '',
         ));
     }
