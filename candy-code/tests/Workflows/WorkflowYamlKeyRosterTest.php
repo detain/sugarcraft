@@ -438,7 +438,8 @@ final class WorkflowYamlKeyRosterTest extends TestCase
         );
         self::assertSame(
             ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks',
-                'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from'],
+                'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from',
+                'loop'],
             $registry->getConstant('YAML_STAGE_KEYS'),
             'the stage-shape vocabulary is one pinned list'
         );
@@ -628,6 +629,242 @@ final class WorkflowYamlKeyRosterTest extends TestCase
         } catch (WorkflowLoadException $error) {
             $this->assertStringContainsString('unknown key', $error->getMessage());
             $this->assertStringContainsString('"whenx"', $error->getMessage());
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // C4: "loop" joined the stage roster — closed pair survives, junk refuses
+    // -------------------------------------------------------------------------
+
+    public function testLoopRidesAPlainStageAndStoresTheNormalizedPair(): void
+    {
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: a\n"
+            . "    agent: coder\n"
+            . "    prompt: p\n"
+            . "  - name: b\n"
+            . "    agent: coder\n"
+            . "    prompt: 'attempt {{round}}'\n"
+            . "    loop:\n"
+            . "      max: 3\n"
+            . "      until:\n"
+            . "        stage: a\n"
+            . "        contains: GO\n";
+
+        $workflow = $this->registry()->fromYamlString($yaml);
+
+        $this->assertArrayNotHasKey('loop', $workflow->stages[0], 'no map means no key');
+        $this->assertSame(
+            ['max' => 3, 'until' => ['stage' => 'a', 'op' => 'contains', 'value' => 'GO']],
+            $workflow->stages[1]['loop'],
+            'the stored pair is normalized once, at attach: int max and the PARSED clause',
+        );
+    }
+
+    public function testAQuotedNumericMaxMeansTheSameRoundCount(): void
+    {
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: a\n"
+            . "    agent: coder\n"
+            . "    prompt: p\n"
+            . "  - name: b\n"
+            . "    agent: coder\n"
+            . "    prompt: q\n"
+            . "    loop:\n"
+            . "      max: \"4\"\n"
+            . "      until:\n"
+            . "        stage: a\n"
+            . "        equals: GO\n";
+
+        $workflow = $this->registry()->fromYamlString($yaml);
+
+        $this->assertSame(4, $workflow->stages[1]['loop']['max']);
+    }
+
+    public function testLoopOnAParallelStageRefusesAtLoad(): void
+    {
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: a\n"
+            . "    agent: coder\n"
+            . "    prompt: p\n"
+            . "  - name: b\n"
+            . "    parallel: true\n"
+            . "    agents:\n"
+            . "      - name: left\n"
+            . "        prompt: q\n"
+            . "    loop:\n"
+            . "      max: 2\n"
+            . "      until:\n"
+            . "        stage: a\n"
+            . "        contains: GO\n";
+
+        try {
+            $this->registry()->fromYamlString($yaml);
+            $this->fail('v1 refuses a loop riding a parallel stage');
+        } catch (WorkflowLoadException $error) {
+            $this->assertStringContainsString('stage-only in v1', $error->getMessage());
+            $this->assertStringContainsString('"parallel"', $error->getMessage());
+        }
+    }
+
+    public function testLoopOnAVerificationStageRefusesAtLoad(): void
+    {
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: a\n"
+            . "    agent: coder\n"
+            . "    prompt: p\n"
+            . "  - name: b\n"
+            . "    type: verification\n"
+            . "    task:\n"
+            . "      agent: coder\n"
+            . "      prompt: q\n"
+            . "    verifier:\n"
+            . "      agent: reviewer\n"
+            . "      prompt: check\n"
+            . "    loop:\n"
+            . "      max: 2\n"
+            . "      until:\n"
+            . "        stage: a\n"
+            . "        contains: GO\n";
+
+        try {
+            $this->registry()->fromYamlString($yaml);
+            $this->fail('v1 refuses a loop riding a verification stage');
+        } catch (WorkflowLoadException $error) {
+            $this->assertStringContainsString('stage-only in v1', $error->getMessage());
+            $this->assertStringContainsString('"verification"', $error->getMessage());
+        }
+    }
+
+    public function testLoopRefusesUnknownSubKeys(): void
+    {
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: a\n"
+            . "    agent: coder\n"
+            . "    prompt: p\n"
+            . "  - name: b\n"
+            . "    agent: coder\n"
+            . "    prompt: q\n"
+            . "    loop:\n"
+            . "      max: 2\n"
+            . "      until:\n"
+            . "        stage: a\n"
+            . "        contains: GO\n"
+            . "      every: 5\n";
+
+        try {
+            $this->registry()->fromYamlString($yaml);
+            $this->fail('the loop grammar is closed; an extra sub-key must refuse');
+        } catch (WorkflowLoadException $error) {
+            $this->assertStringContainsString('unknown key', $error->getMessage());
+            $this->assertStringContainsString('every', $error->getMessage());
+        }
+    }
+
+    public function testLoopRefusesWhenEitherHalfIsMissing(): void
+    {
+        $noUntil = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: b\n"
+            . "    agent: coder\n"
+            . "    prompt: q\n"
+            . "    loop:\n"
+            . "      max: 2\n";
+        $noMax = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: b\n"
+            . "    agent: coder\n"
+            . "    prompt: q\n"
+            . "    loop:\n"
+            . "      until:\n"
+            . "        stage: b\n"
+            . "        contains: GO\n";
+
+        foreach (['until' => $noUntil, 'max' => $noMax] as $missing => $yaml) {
+            try {
+                $this->registry()->fromYamlString($yaml);
+                $this->fail("a loop without \"{$missing}\" must refuse, not guess");
+            } catch (WorkflowLoadException $error) {
+                $this->assertStringContainsString('both max and until', $error->getMessage());
+            }
+        }
+    }
+
+    public function testLoopRefusesJunkMaxThroughTheTimeoutParser(): void
+    {
+        foreach (
+            ['abc' => 'whole number', '0' => 'at least 1', '-2' => 'at least 1', '1.5' => 'whole number']
+            as $spelling => $needle
+        ) {
+            $yaml = "name: r\n"
+                . "description: d\n"
+                . "stages:\n"
+                . "  - name: b\n"
+                . "    agent: coder\n"
+                . "    prompt: q\n"
+                . "    loop:\n"
+                . "      max: " . $spelling . "\n"
+                . "      until:\n"
+                . "        stage: b\n"
+                . "        contains: GO\n";
+
+            try {
+                $this->registry()->fromYamlString($yaml);
+                $this->fail("\"max: {$spelling}\" must refuse, not coerce");
+            } catch (WorkflowLoadException $error) {
+                $this->assertStringContainsString('loop.max', $error->getMessage());
+                $this->assertStringContainsString($needle, $error->getMessage());
+            }
+        }
+    }
+
+    public function testLoopRefusesAMalformedUntilClause(): void
+    {
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: b\n"
+            . "    agent: coder\n"
+            . "    prompt: q\n"
+            . "    loop:\n"
+            . "      max: 2\n"
+            . "      until: ready\n";
+
+        try {
+            $this->registry()->fromYamlString($yaml);
+            $this->fail('until rides the C2 grammar and must refuse a bare scalar');
+        } catch (WorkflowLoadException $error) {
+            $this->assertStringContainsString('"loop" "until"', $error->getMessage());
+        }
+    }
+
+    public function testAScalarLoopRefusesAtLoad(): void
+    {
+        $yaml = "name: r\n"
+            . "description: d\n"
+            . "stages:\n"
+            . "  - name: b\n"
+            . "    agent: coder\n"
+            . "    prompt: q\n"
+            . "    loop: 3\n";
+
+        try {
+            $this->registry()->fromYamlString($yaml);
+            $this->fail('loop: is a map, never a bare count');
+        } catch (WorkflowLoadException $error) {
+            $this->assertStringContainsString('must be a map carrying exactly max and until', $error->getMessage());
         }
     }
 

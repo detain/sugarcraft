@@ -293,6 +293,55 @@ final class WorkflowBuilder
     }
 
     /**
+     * C4: attach a `loop:` round policy to the stage most recently added by
+     * {@see stage()}. The map is a closed pair — `max` (whole number ≥ 1) and
+     * `until` (a C2 clause) — normalized and refused at call time, the same
+     * raw-English InvalidArgumentException shape {@see when()} rides. v1 is
+     * stage-only: {@see parallel()}, {@see pipeline()} and
+     * {@see withVerification()} rows refuse it, so a built workflow can never
+     * carry a round policy its runner would not honour.
+     *
+     * @param array<string, mixed> $loop the author's `loop:` map
+     *
+     * @throws \InvalidArgumentException when no stage exists to attach to, the
+     *         last stage is not a plain one, or the map is not the closed pair.
+     */
+    public function loop(array $loop): self
+    {
+        if ($this->stages === []) {
+            throw new \InvalidArgumentException('loop() needs a stage to attach to; call it after stage() (loop: is stage-only in v1)');
+        }
+
+        $lastKey = array_key_last($this->stages);
+        $last = $this->stages[$lastKey];
+        if (($last['type'] ?? '') !== 'stage') {
+            throw new \InvalidArgumentException(
+                "loop() is stage-only in v1; the last stage '" . $last['name'] . "' is a '" . ($last['type'] ?? '') . "' stage"
+            );
+        }
+
+        if (!array_key_exists('max', $loop) || !array_key_exists('until', $loop)) {
+            throw new \InvalidArgumentException('loop() needs both max and until');
+        }
+
+        $max = null;
+        if (is_int($loop['max'])) {
+            $max = $loop['max'];
+        } elseif (is_string($loop['max']) && preg_match('/^-?\d+$/', trim($loop['max'])) === 1) {
+            $max = (int) trim($loop['max']);
+        }
+
+        if ($max === null || $max < 1) {
+            throw new \InvalidArgumentException('loop() needs "max" to be a whole number of at least 1');
+        }
+
+        $normalized = ['max' => $max, 'until' => StageCondition::parse($loop['until'])];
+        $this->stages[$lastKey]['loop'] = $normalized;
+
+        return $this;
+    }
+
+    /**
      * Configure whether a parallel stage stops immediately on the first agent failure.
      *
      * When true (fail-fast), all queued agents are cancelled as soon as any agent

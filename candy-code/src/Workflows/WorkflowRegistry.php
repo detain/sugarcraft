@@ -44,7 +44,7 @@ final class WorkflowRegistry
      * {@see self::YAML_TASK_KEYS}, because a single-task stage legitimately
      * carries its task keys at stage level.
      */
-    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from'];
+    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from', 'loop'];
 
     /** @var array<string, Workflow> */
     private array $registered = [];
@@ -1426,6 +1426,10 @@ final class WorkflowRegistry
                 // C2: the `when:` clause is read and grammar-checked here, at
                 // load — the engine only ever evaluates a parsed shape.
                 $when = $this->requireStageWhen($stage, $where);
+                // C4: the `loop:` map is read and grammar-checked on the same
+                // leg — shape before the builder sees it, normalization once
+                // at attach.
+                $loop = $this->requireStageLoop($stage, $where);
 
                 if (array_key_exists('with', $stage) && !array_key_exists('uses', $stage)) {
                     // A knob that arms nothing is a silent lie on the page;
@@ -1479,6 +1483,21 @@ final class WorkflowRegistry
                 // after whichever arm shaped it — same order law as capture.
                 if ($when !== null) {
                     $builder = $builder->when($when);
+                }
+
+                // C4: the loop rides the same attach-after-shape law. The v1
+                // scope door refuses it off a plain stage here, before the
+                // builder ever sees it, so a YAML plan can never carry a
+                // round policy its runner would not honour.
+                if ($loop !== null) {
+                    $shape = $isParallel ? 'parallel' : $stageType;
+                    if ($shape !== 'stage') {
+                        throw new WorkflowLoadException(
+                            "{$where} \"loop\" is stage-only in v1: it cannot attach to a \"{$shape}\" stage"
+                        );
+                    }
+
+                    $builder = $builder->loop($loop);
                 }
             }
         }
@@ -1630,6 +1649,69 @@ final class WorkflowRegistry
         }
 
         return $clause;
+    }
+
+    /**
+     * C4: read and shape-validate a stage's `loop:` map at LOAD time. The
+     * grammar is a closed pair — `max` (a whole number of at least 1, the
+     * same {@see requireTaskPositiveInt()} family `timeout` rides) and
+     * `until` (a C2 {@see StageCondition} clause) — and both are required:
+     * a loop that names no exit clause would be a fixed count wearing a
+     * conditioner's coat, and the system refuses rather than guesses
+     * ("Everything malformed is refused, not coerced", docs/WORKFLOWS.md).
+     * The RAW author spelling is returned: normalization happens exactly
+     * once, when {@see WorkflowBuilder::loop()} attaches the map.
+     *
+     * @param array<array-key, mixed> $stage
+     * @return array<array-key, mixed>|null the raw map, or null when absent
+     */
+    private function requireStageLoop(array $stage, string $where): ?array
+    {
+        if (!array_key_exists('loop', $stage)) {
+            return null;
+        }
+
+        $loop = $stage['loop'];
+        if (!is_array($loop)) {
+            throw new WorkflowLoadException(
+                "{$where} \"loop\" must be a map carrying exactly max and until, got "
+                . get_debug_type($loop)
+            );
+        }
+
+        $unknown = array_diff_key($loop, array_flip(['max', 'until']));
+        if ($unknown !== []) {
+            throw new WorkflowLoadException(
+                "{$where} \"loop\" carries unknown key(s) '" . implode("', '", array_keys($unknown))
+                . "'; the grammar is max and until only"
+            );
+        }
+
+        if (!array_key_exists('max', $loop) || !array_key_exists('until', $loop)) {
+            throw new WorkflowLoadException(
+                "{$where} \"loop\" must carry both max and until"
+            );
+        }
+
+        // Validated for the refusal; the RAW spelling rides on, and the
+        // (int) normalization is the builder's once-and-only-once job.
+        $this->requireTaskPositiveInt($loop['max'], 'loop.max', $where);
+
+        $clause = $loop['until'];
+        if (!is_array($clause)) {
+            throw new WorkflowLoadException(
+                "{$where} \"loop\" \"until\" must be a map carrying one of all, any, equals, contains, matches (with stage), got "
+                . get_debug_type($clause)
+            );
+        }
+
+        try {
+            StageCondition::parse($clause);
+        } catch (\InvalidArgumentException $error) {
+            throw new WorkflowLoadException("{$where} \"loop\" \"until\" " . $error->getMessage());
+        }
+
+        return $loop;
     }
 
     /**
