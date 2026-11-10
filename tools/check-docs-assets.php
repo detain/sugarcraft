@@ -12,7 +12,8 @@ declare(strict_types=1);
  *     for every package, and CI compared the two icon directories only as a
  *     printed diff step; a missing file (candy-image.png) rendered as a broken
  *     image with nothing going red.
- *  b) dead demo GIFs — cards in `docs/index.html` and the hand-written bodies
+ *  b) dead demo GIFs — cards in `docs/index.html`, `docs/libraries.html` and
+ *     `docs/apps.html` and the hand-written bodies
  *     under `docs/_data/` point at raw.githubusercontent.com URLs for
  *     `<slug>/.vhs/*.gif`; when a tape was renamed or deleted the URL 404s.
  *  c) mis-relativised links — bodies are embedded into `docs/lib/<slug>.html`,
@@ -26,7 +27,7 @@ declare(strict_types=1);
  *     tools/gen-docs.php), so the leg is green by construction — its job is to
  *     catch a generator regression or a hand-edit before pages.yml publishes.
  *  f) the search affordance on every chrome-bearing nav surface (the static
- *     homepage/compare/404 pages plus generated detail pages): a page that
+ *     homepage/libraries/apps/compare/404 pages plus generated detail pages): a page that
  *     carries the shared nav must also carry EXACTLY ONE visible trigger
  *     (`id="search-trigger"` — HTML ids are unique by definition, so a planted
  *     decoy outside the nav that doubles the id is broken chrome, not affordance),
@@ -36,7 +37,7 @@ declare(strict_types=1);
  *  g) nav copy identity: every surface that carries the dropdown nav must hold
  *     exactly one `<!--nav:start-->` / `<!--nav:end-->` marker pair, and the
  *     block between them must be byte-identical across every copy (the five
- *     authored copies — index/compare/404/gen-docs template/the two
+ *     authored copies — index/libraries/apps/compare/404/gen-docs template/the two
  *     prefixOverride pages — are maintained in lockstep; the guard is the trip
  *     wire that keeps them there).
  *
@@ -161,7 +162,13 @@ final class CheckDocsAssets
      */
     private static function chromePages(string $root): array
     {
-        $pages = ["$root/docs/index.html", "$root/docs/compare.html", "$root/docs/404.html"];
+        $pages = [
+            "$root/docs/index.html",
+            "$root/docs/libraries.html",
+            "$root/docs/apps.html",
+            "$root/docs/compare.html",
+            "$root/docs/404.html",
+        ];
         foreach (glob("$root/docs/lib/*.html") ?: [] as $page) {
             $pages[] = $page;
         }
@@ -262,7 +269,13 @@ final class CheckDocsAssets
      */
     public static function localLinks(string $root): array
     {
-        $targets = ["$root/docs/index.html", "$root/docs/compare.html", "$root/docs/404.html"];
+        $targets = [
+            "$root/docs/index.html",
+            "$root/docs/libraries.html",
+            "$root/docs/apps.html",
+            "$root/docs/compare.html",
+            "$root/docs/404.html",
+        ];
         foreach ((glob("$root/docs/lib/*.html") ?: []) as $page) {
             $targets[] = $page;
         }
@@ -355,7 +368,7 @@ final class CheckDocsAssets
      */
     private static function docsHtmlFiles(string $root): array
     {
-        $files = ["$root/docs/index.html"];
+        $files = ["$root/docs/index.html", "$root/docs/libraries.html", "$root/docs/apps.html"];
         foreach (["$root/docs/lib/*.html", "$root/docs/_data/*.html"] as $glob) {
             foreach (glob($glob) ?: [] as $file) {
                 $files[] = $file;
