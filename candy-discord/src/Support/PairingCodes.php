@@ -32,6 +32,14 @@ final class PairingCodes
     public const CODE_LENGTH = 8;
     public const TTL_SECONDS = 3600;
     public const MAX_PENDING = 3;
+    /**
+     * Deliberately equal to TTL_SECONDS: the reminder window reopens exactly
+     * when the code minted beside it expires, and livePending() prunes dead
+     * rows before that window is ever consulted — so a peer who waits out
+     * the hour is handed a freshly minted code, never a re-announcement of
+     * a dead one. Change one constant and the other must move with it; the
+     * rotation test pins the defense for manually decoupled stale rows.
+     */
     public const REMINDER_SECONDS = 3600;
 
     public function __construct(
