@@ -45,7 +45,7 @@ final class Cards
      */
     public static function approvalCard(array $ask, string $summary, array $roster): array
     {
-        $askId = (string) ($ask['id'] ?? '');
+        $askId = (string) ($ask['askId'] ?? $ask['id'] ?? '');
         $body = [
             ['type' => 'TextBlock', 'weight' => 'Bolder', 'size' => 'Medium', 'text' => 'candy-code approval'],
             ['type' => 'TextBlock', 'wrap' => true, 'text' => $summary],
@@ -73,10 +73,11 @@ final class Cards
     }
 
     /** Wrap a card into the message-activity attachment envelope (§8.4). */
-    public static function cardActivity(array $card): array
+    public static function cardActivity(string $fromId, array $card): array
     {
         return [
             'type' => 'message',
+            'from' => ['id' => $fromId],
             'attachmentLayout' => 'robust',
             'attachments' => [[
                 'contentType' => 'application/vnd.microsoft.card.adaptive',

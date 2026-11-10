@@ -42,7 +42,7 @@ final class CardsTest extends TestCase
 
     public function testTheCardActivityWrapsTheAdaptiveContentType(): void
     {
-        $activity = Cards::cardActivity(Cards::retiredCard('done'));
+        $activity = Cards::cardActivity('app-9', Cards::retiredCard('done'));
 
         self::assertSame('message', $activity['type']);
         self::assertSame('application/vnd.microsoft.card.adaptive', $activity['attachments'][0]['contentType']);
