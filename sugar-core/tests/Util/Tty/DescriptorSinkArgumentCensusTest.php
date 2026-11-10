@@ -474,6 +474,13 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             . 'server.hello first\') on Server\Ws\Connection, whose close(int $code, string $reason) '
             . 'frames an RFC6455 close. The int is a status code, not a descriptor.',
         ],
+        'candy-code/src/Protocol/Dispatcher.php::->close(Frame::CLOSE_TOO_BIG) #2' => [
+            DescriptorSinkScanner::VARIABLE,
+            'NOT A LIBC CALL, the CWPD-1 transport-ceiling refusal in onMessage(): close(1009, \'the '
+            . 'frame exceeds the transport ceiling\') on the same Server\Ws\Connection::close(int $code, '
+            . 'string $reason) as the pre-hello row above -- the second spelling-identical CLOSE_TOO_BIG '
+            . 'site, added by 50c24306e, judged separately as the ordinal demands.',
+        ],
         'candy-code/src/Protocol/Dispatcher.php::->close(self::CLOSE_NOT_INITIALIZED)' => [
             DescriptorSinkScanner::VARIABLE,
             'NOT A LIBC CALL, the not-initialized refusal: close(4002, \'not initialized\') -- a private '

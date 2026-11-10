@@ -489,7 +489,7 @@ final class WorkflowYamlStageTypesTest extends TestCase
             "name: u\ndescription: d\nstages:\n"
             . "  - name: wrap\n"
             . "    uses: inner\n"
-            . "    with: {topic: deep, count: 3, flag: true}\n"
+            . "    with: {topic: deep, count: 3, flag: true, off: false, zero: 0}\n"
             . "    capture: true\n"
             . "    cache: true\n",
             'uses-yaml',
@@ -499,9 +499,10 @@ final class WorkflowYamlStageTypesTest extends TestCase
         self::assertSame('stage', $stage['type'], 'the arm never invents a fifth stage type');
         self::assertSame('inner', $stage['uses']);
         self::assertSame(
-            ['topic' => 'deep', 'count' => '3', 'flag' => '1'],
+            ['topic' => 'deep', 'count' => '3', 'flag' => '1', 'off' => '', 'zero' => '0'],
             $stage['with'],
-            'scalars ride as their string spelling; the inner context is a plain map'
+            'scalars ride as their string spelling; the inner context is a plain map — a YAML-false
+                sub-value stringifies to the empty string and zero to "0", both load, neither vanishes'
         );
         self::assertTrue($stage['capture']);
         self::assertTrue($stage['cache']);
@@ -525,6 +526,7 @@ final class WorkflowYamlStageTypesTest extends TestCase
             'empty name' => ["    uses: ''\n", 'must name the workflow to include'],
             'non-string name' => ["    uses: {a: b}\n", 'must name the workflow to include, got array'],
             'with scalar' => ["    uses: inner\n    with: 5\n", '"with" must be a map, got int'],
+            'with bare string' => ["    uses: inner\n    with: deep\n", '"with" must be a map, got string'],
             'with list key' => ["    uses: inner\n    with: [a]\n", '"with" key is not a name'],
             'with nested map' => ["    uses: inner\n    with: {a: {b: c}}\n", 'must be a string or scalar, got array'],
             'with null' => ["    uses: inner\n    with: {a: ~}\n", 'must be a string or scalar, got null'],

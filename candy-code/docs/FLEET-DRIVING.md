@@ -41,7 +41,7 @@ Success shape (assembled at src/Cli/NonInteractive.php:2371):
 | `result` | always (success) | The final assistant text. |
 | `refusals` | always (success doc) | Denials recorded during the run; `[]` when there were none. |
 | `session_id` | when present | 16-hex id of the session that served the turn. |
-| `usage` | when present | Token/cost record for the turn; fields declared at src/Usage.php:140-218 (`totalTokens`, `costUsd`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheCreationTokens`, `reasoningTokens`, `delegatedTokens`, `unpricedModel`, `webSearchRequests`). |
+| `usage` | when present | Token/cost record for the turn; fields declared at src/Usage.php:140-233 (`totalTokens`, `costUsd`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheCreationTokens`, `reasoningTokens`, `delegatedTokens`, `unpricedModel`, `webSearchRequests`). |
 | `steps_truncated` / `length_stopped` / `loop_guard_stopped_by` | only when true | The stop-reason trio: a step budget cut, an output-length stop, or a loop-guard intervention. |
 | `json_schema_applied` | only when `false` | Appears only when a schema was requested and the answer rode a tool result instead — the schema was not enforced on that turn. |
 
@@ -115,7 +115,7 @@ Until that weld lands, both options exit 2 as unrecognized on shipped builds.
 ## Follow-up turns and lineage
 
 - `--resume=<session_id>` continues the same conversation and keeps the same
-  session id (flag plumbing at src/Cli/ArgvParser.php:152). A measured
+  session id (flag plumbing at src/Cli/ArgvParser.php:153 and :921-925). A measured
   follow-up turn finished in ~1.7 s against the same `session_id`.
 - Post-hoc lineage: `session show <id> --output-format json` returns the full
   record — including `parent_id` and `parent_call_id`, so delegated sub-agent

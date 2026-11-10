@@ -55,8 +55,13 @@ final class WorktreeHandoff
      */
     private const REF_SAFE = '/^[A-Za-z0-9][A-Za-z0-9._-]*$/';
 
-    /** Shape a registry-held branch name must satisfy to be used as a git argument. */
-    private const BRANCH_SAFE = '/^[A-Za-z0-9._\/-]+$/';
+    /**
+     * Shape a registry-held branch name must satisfy to be used as a git
+     * argument. The leading class matches {@see REF_SAFE}: a name starting
+     * with anything but an alphanumeric would reach git as an option-lookalike
+     * (`-evil` reads as a flag), so the shape gate refuses it before any leg.
+     */
+    private const BRANCH_SAFE = '/^[A-Za-z0-9][A-Za-z0-9._\/-]*$/';
 
     /** Every static; the hand-off is a question, not a thing to hold. */
     private function __construct()
