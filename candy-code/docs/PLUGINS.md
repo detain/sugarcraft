@@ -134,6 +134,35 @@ One list gates both surfaces, so the audit you do before adding a name is
 the whole decision: that bundle can run code in-process and react to every
 session event. The notices at launch exist to keep that decision visible.
 
+### Worked example: the `@candy/discord` bundle
+
+The reference bundle shipped in this repository lives at `candy-discord/` and
+declares one `channel` entrypoint. Installing it exercises every rule above:
+
+1. Place (or `bundles install`) the directory at `~/.candy-code/bundles/candy-discord`,
+   add `"candy-discord"` to `trustedBundleChannels`, and launch once — the
+   entrypoint is *listed*, not loaded. The second launch loads it.
+2. The channel stays dark until `channels.discord` says otherwise: it is a
+   user-tier Map (`enabled`, intent, DM/guild gates, queue mode, chunk and
+   media caps, approval posture, slash deploy, per-account overrides — see
+   [SETTINGS.md](SETTINGS.md)). The bot token never lives in settings: it
+   lives in `~/.candy-code/channels.json` under `platforms.discord.accounts`,
+   mode 0600, with `DISCORD_BOT_TOKEN` honored for the default account only.
+3. It dials the local serve process over the ordinary WebSocket protocol —
+   no new server surface, and `gen-protocol-schema --check` stays clean by
+   construction. Chunking, redaction, and prompt-fencing happen in the
+   bundle, never in a model loop.
+4. Unpaired DM senders receive an expiring pairing code (8 characters, one
+   hour, at most three pending); an approver answers `/pair approve <code>`
+   (or the text spelling), which writes the allowlist into the same 0600
+   store. Codes are registered as redaction secrets, so they never echo into
+   transcripts or logs.
+5. Approvals surface as message buttons only for the configured approvers;
+   the roster check runs server-side in the bundle's router, and the button
+   list is a courtesy filter. With `approvals.enabled` false (or where a
+   button cannot render) the ask falls back to a same-chat `/approve <id>
+   once|always|deny` line — never a silent bypass.
+
 ## The declined surfaces
 
 A bundle may ship things candy-code will not run. The first two declines fire
