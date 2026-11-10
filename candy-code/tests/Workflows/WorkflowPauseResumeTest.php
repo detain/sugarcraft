@@ -567,6 +567,23 @@ final class WorkflowPauseResumeTest extends TestCase
         unset($this->script['fix b']);
         $this->prompts = [];
 
+        // C8 r2 NIT-1: pin each replayed fork's OWN recorded item, not just
+        // the prompt strings the stage-level collector already sees. The
+        // per-fork surface a dispatch can read is SubAgent->task plus
+        // SubAgent->agent->name — executeParallelStage sets that name to the
+        // recorded path on a dynamic wave (a static stage falls back to the
+        // agent type), so the pair binds the materialised list itself.
+        // Returning null lets dispatch fall through to the default success.
+        // Honest scope limit: a fork's context carries only its own item —
+        // the chunk grouping of the wave is NOT observable on SubAgent and
+        // is deliberately not claimed here.
+        $childRows = [];
+        $this->script['fix '] = static function (SubAgent $a) use (&$childRows): ?AgentResult {
+            $childRows[] = [$a->task, $a->agent->name];
+
+            return null;
+        };
+
         $resumed = $engine->resume($run->workflowId);
 
         $this->assertSame(WorkflowStatus::Completed, $resumed->status, (string) $resumed->firstFailure()?->error);
@@ -574,6 +591,11 @@ final class WorkflowPauseResumeTest extends TestCase
             ['fix a.txt', 'fix b.txt', 'ship the sweep'],
             $this->prompts,
             'the failed stage re-ran from the RECORDED names — a.txt is replayed without its file, z.txt never joins',
+        );
+        $this->assertSame(
+            [['fix a.txt', 'a.txt'], ['fix b.txt', 'b.txt']],
+            $childRows,
+            'each resumed fork carried its RECORDED path as its own item name — a.txt forked without its file and z.txt never forked at all',
         );
     }
 
