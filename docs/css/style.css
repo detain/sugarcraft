@@ -210,10 +210,19 @@ code, pre, .mono {
     margin: 0 0 16px 0;
     letter-spacing: -0.025em;
     line-height: 1.05;
-    background: var(--gradient-hero);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    /* Fallback: a solid color from the hero gradient's first stop. Without
+       background-clip:text support the transparent fill below would render
+       the heading invisible, so the trick is gated behind @supports. */
+    color: #ff5f87;
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+    .hero h1 {
+        background: var(--gradient-hero);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
 }
 
 .hero .tag {
@@ -680,12 +689,20 @@ pre.code .num  { color: #fcd5b4; }
     display: block;
     font-size: 2.2rem;
     font-weight: 700;
-    background: var(--gradient-hero);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    /* Fallback solid color; see the .hero h1 note above for why the
+       gradient-clip trick is gated behind @supports. */
+    color: #ff5f87;
     line-height: 1.1;
     letter-spacing: -0.02em;
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+    .stat .num {
+        background: var(--gradient-hero);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
 }
 
 .stat .label {
