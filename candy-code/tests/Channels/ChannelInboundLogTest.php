@@ -133,17 +133,25 @@ final class ChannelInboundLogTest extends TestCase
     {
         $ledger = $this->inboxLedger();
         $ledger->record('chan', 'm-old', ['n' => 'stuck body']);
-        $this->now += ChannelInboundLog::RETENTION_SECONDS;
+        $this->now += ChannelInboundLog::RETENTION_SECONDS - 60;
+
+        self::assertSame(ChannelInboundLog::STATE_PENDING, $ledger->noteFailure('chan', 'm-old'), 'a row at 23h59m has not aged out — the door sits at the retention window, never lower');
+        $this->now += 60;
 
         self::assertSame(ChannelInboundLog::STATE_DEAD, $ledger->noteFailure('chan', 'm-old'));
-        self::assertSame(1, $ledger->rows()['chan|m-old']['attempts'], 'age alone dead-letters, no retry storm needed');
+        self::assertSame(2, $ledger->rows()['chan|m-old']['attempts'], 'age alone dead-letters, no retry storm needed');
     }
 
     public function testSweepAgesPendingRowsToDeadWithoutQuarantine(): void
     {
         $ledger = $this->inboxLedger();
         $ledger->record('chan', 'm-age', ['n' => 'never dispatched']);
-        $this->now += ChannelInboundLog::RETENTION_SECONDS;
+        $this->now += ChannelInboundLog::RETENTION_SECONDS - 60;
+
+        $young = $ledger->pending();
+        self::assertCount(1, $young['records'], 'the sweep keeps a 23h59m row pending — its age door is the retention window, never lower');
+
+        $this->now += 60;
 
         self::assertSame([], $ledger->pending()['records']);
         self::assertSame(ChannelInboundLog::STATE_DEAD, $ledger->rows()['chan|m-age']['state']);
