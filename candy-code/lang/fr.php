@@ -609,6 +609,13 @@ Options :
                          — le fournisseur vient toujours de $CANDY_CODE_PROVIDER ou
                          du paramètre `provider` persisté, et les deux sont
                          des axes indépendants.
+      --agent <name>     Lance la session avec <name> comme agent principal :
+                         remplace par un preset configuré. Accepte aussi
+                         --agent=<name> ; la forme nue est stricte, c'est
+                         donc la forme à utiliser quand un nom commence par
+                         "-". Refusé avec exit 2 à côté de -p, --batch ou
+                         d'un sous-commande : aucun ne construit de session
+                         à restreindre.
       --permission-mode <mode>
                          Exécute sous <mode> au lieu du mode du fichier de
                          configuration. Accepte aussi --permission-mode=<mode>. Priorité
@@ -662,6 +669,13 @@ Options :
                          sans prompt auquel ajouter les règles refuse avec
                          le code de sortie 2 plutôt que de les ignorer
                          silencieusement.
+      --batch            Exécute chaque événement utilisateur stream-json de
+                         --input-format comme son propre tour séquentiel dans
+                         un seul processus, et autorise un prompt -p vide :
+                         le mode pilote pour nourrir candy-code une
+                         conversation tour par tour. Simple commutateur :
+                         sans valeur, sans forme courte. Refusé avec exit 2
+                         sauf si le format d'entrée est stream-json.
   -c, --continue         Rouvrir la dernière session utilisée, transcript
                          et tout le reste, au lieu d'en démarrer une nouvelle. Sans
                          cette option, chaque lancement ouvre une nouvelle session ;

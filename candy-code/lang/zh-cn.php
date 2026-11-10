@@ -609,6 +609,11 @@ CandyCode — 终端 AI 编程助手。
                          ——提供者仍来自 $CANDY_CODE_PROVIDER 或
                          持久化的 `provider` 设置，两者是
                          独立的维度。
+      --agent <name>     以 <name> 为主智能体运行会话：
+                         换上配置好的预设。也接受 --agent=<name>；
+                         裸形式严格，故名称以 "-" 开头时用它。与 -p、
+                         --batch 或子命令并用时以 exit 2 拒绝：
+                         这些启动都不构建可收窄的会话。
       --permission-mode <mode>
                          以 <mode> 运行，而非配置文件中的模式
                          。也接受 --permission-mode=<mode>。最高
@@ -660,6 +665,11 @@ CandyCode — 终端 AI 编程助手。
                          仅配合 -p 或 run 子命令使用：无
                          可追加提示词的启动将以退出码 2 拒绝，而非
                          静默忽略你提供的规则。
+      --batch            将 --input-format stream-json 的每个用户事件
+                         作为本进程内各自顺序执行的回合，并允许空
+                         的 -p 提示：逐回合向 candy-code 供给对话的
+                         驱动模式。裸开关：无值、无短形式。除非
+                         输入格式为 stream-json，否则 exit 2 拒绝。
   -c, --continue         重新打开最近使用的会话（含完整记录），
                          而非新建会话。未指定时
                          每次启动都新建会话；在空输入框中按 Up

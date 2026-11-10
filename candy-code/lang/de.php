@@ -609,6 +609,12 @@ Optionen:
                          — der Anbieter kommt weiterhin aus $CANDY_CODE_PROVIDER oder
                          der gespeicherten `provider`-Einstellung, und beide sind
                          unabhängige Achsen.
+      --agent <name>     Sitzung mit <name> als primärem Agenten starten:
+                         ein konfiguriertes Preset einsetzen. Akzeptiert auch
+                         --agent=<name>; die bloße Form ist streng, sie ist
+                         die Form für Namen, die mit "-" beginnen. Abgewiesen
+                         mit Exit 2 neben -p, --batch oder einem Unterbefehl:
+                         keine dieser Startarten baut eine Sitzung auf.
       --permission-mode <mode>
                          Unter <mode> laufen lassen statt des Modus in der Konfigurations-
                          datei. Akzeptiert auch --permission-mode=<mode>. Höchste
@@ -660,6 +666,13 @@ Optionen:
                          Nur mit -p oder dem run-Verb: Ein Start ohne
                          Prompt zum Anhängen verweigert mit Exit-Code 2, statt
                          die übergebenen Regeln stillschweigend zu ignorieren.
+      --batch            Jedes --input-format stream-json-Benutzerereignis als
+                         eigenen Zug in diesem einen Prozess ausführen und
+                         einen leeren -p-Prompt erlauben: der Treibermodus,
+                         um candy-code eine Sitzung Zug für Zug zuzuspielen.
+                         Ein bloßer Schalter: kein Wert, keine Kurzform.
+                         Abgewiesen mit Exit 2, außer das Eingabeformat ist
+                         stream-json — dessen Ereigniszufuhr er verbraucht.
   -c, --continue         Zuletzt verwendete Sitzung wieder öffnen, Transcript
                          und alles, statt eine neue zu starten. Ohne diese
                          Option öffnet jeder Start eine neue Sitzung; ↑ in einem leeren

@@ -609,6 +609,12 @@ Opções:
                          fornecedor — o fornecedor vem de $CANDY_CODE_PROVIDER ou
                          da definição `provider` persistida, e os dois são
                          eixos independentes.
+      --agent <name>     Executa a sessão com <name> como agente primário:
+                         troca por um preset configurado. Aceita também
+                         --agent=<name>; a forma simples é rigorosa, pelo que
+                         é a forma para nomes que começam com "-". Recusado
+                         com exit 2 junto de -p, --batch ou um subcomando:
+                         nenhum deles constrói sessão para restringir.
       --permission-mode <mode>
                          Executa com <mode> em vez do modo no ficheiro de
                          configuração. Aceita também --permission-mode=<mode>.
@@ -660,6 +666,13 @@ Opções:
                          Apenas com -p ou o verbo run: um arranque sem
                          prompt para anexar recusa com saída 2 em vez de
                          ignorar silenciosamente as regras fornecidas.
+      --batch            Executa cada evento de utilizador stream-json de
+                         --input-format como turno próprio e sequencial neste
+                         único processo, e permite um -p vazio: o modo
+                         controlador para fornecer a candy-code uma
+                         conversa turno a turno. Interruptor simples: sem
+                         valor, sem forma curta. Recusado com exit 2 salvo
+                         se o formato de entrada for stream-json.
   -c, --continue         Reabrir a sessão mais recentemente utilizada, transcrição
                          incluída, em vez de iniciar uma nova. Sem esta opção
                          cada arranque abre uma nova sessão; Up numa caixa
