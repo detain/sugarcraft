@@ -137,6 +137,12 @@ final class DocumentedApiTest extends TestCase
      */
     private function scanTable(string $markdown): array
     {
+        // Parse the document, not the checkout encoding: with core.autocrlf
+        // (Windows CI) the README arrives CRLF, and so do the raw newlines
+        // inside the in-memory fixtures below — the LF needle would miss on
+        // both legs.
+        $markdown = str_replace("\r\n", "\n", $markdown);
+
         $start = strpos($markdown, "\n### Field types\n");
         if ($start === false) {
             $this->fail('README lost its "### Field types" section');
