@@ -540,6 +540,38 @@ check('M1 composition assigns $policy before the TextSafety wiring', $m1PolicyPo
 $m1Safety = (new TextSafety())->withSecrets(['sup3r-secret-value']);
 check('M1 withSecrets redaction is live', !str_contains($m1Safety->outbound('leak sup3r-secret-value here'), 'sup3r-secret-value'));
 
+// M2: TeamsAdapter::listen() built its handler without `use ($path)` —
+// EVERY webhook request died in a TypeError (strict string param ← null).
+$m2Dir = $stateDir . '/m2';
+@mkdir($m2Dir, 0700, true);
+$m2Log = new Log($m2Dir . '/teams.log', 'info');
+$m2Serve = new ServeBridge('ws://127.0.0.1:9/ws', 'x', 'subprotocol', $m2Log, $loop);
+$m2Bridge = new Bridge($m2Serve, new SessionMap($m2Dir . '/m2.sqlite3'), $m2Log, new TextSafety(), $loop, []);
+$m2Adapter = new TeamsAdapter(
+    'default',
+    new ConnectorApi(new BotToken($appId, 'pw', 'tenant', $m2Log), $m2Log),
+    new JwtValidator($appId, $keySource, false),
+    $m2Bridge,
+    ['host' => '127.0.0.1', 'port' => 0, 'path' => '/custom'],
+    $m2Log,
+    $loop,
+);
+$m2Adapter->listen();
+$m2SocketProp = new ReflectionProperty(TeamsAdapter::class, 'socket');
+$m2SocketProp->setAccessible(true);
+$m2Port = (int) (parse_url((string) $m2SocketProp->getValue($m2Adapter)?->getAddress(), PHP_URL_PORT) ?: 0);
+$m2Http = (new \React\Http\Browser())->withTimeout(5.0);
+[$m2d1, $m2healthz] = await($m2Http->request('GET', "http://127.0.0.1:{$m2Port}/healthz"), 8.0);
+check('M2 GET /healthz answers 200 through the handler', $m2d1 && $m2healthz instanceof \Psr\Http\Message\ResponseInterface && $m2healthz->getStatusCode() === 200, !$m2d1 ? 'timeout' : ($m2healthz instanceof \Throwable ? $m2healthz->getMessage() : 'got HTTP ' . $m2healthz->getStatusCode()));
+$m2code = static fn ($r): int => $r instanceof \Psr\Http\Message\ResponseInterface
+    ? $r->getStatusCode()
+    : ($r instanceof \React\Http\Message\ResponseException ? $r->getCode() : -1);
+[$m2d2, $m2wrong] = await($m2Http->request('POST', "http://127.0.0.1:{$m2Port}/wrong", [], '{}'), 8.0);
+check('M2 POST on a foreign path answers 404', $m2d2 && $m2code($m2wrong) === 404, !$m2d2 ? 'timeout' : ($m2wrong instanceof \Psr\Http\Message\ResponseInterface ? 'got HTTP ' . $m2wrong->getStatusCode() : ($m2wrong instanceof \Throwable ? get_class($m2wrong) . ': ' . $m2wrong->getMessage() : 'no response')));
+[$m2d3, $m2custom] = await($m2Http->request('POST', "http://127.0.0.1:{$m2Port}/custom", ['Authorization' => 'Bearer aaa.bbb'], '{}'), 8.0);
+check('M2 POST on the configured path reaches the JWT door (401)', $m2d3 && $m2code($m2custom) === 401, !$m2d3 ? 'timeout' : ($m2custom instanceof \Psr\Http\Message\ResponseInterface ? 'got HTTP ' . $m2custom->getStatusCode() : ($m2custom instanceof \Throwable ? get_class($m2custom) . ': ' . $m2custom->getMessage() : 'no response')));
+$m2Adapter->stop();
+
 echo "\n";
 // -- 4. summary -----------------------------------------------------------
 

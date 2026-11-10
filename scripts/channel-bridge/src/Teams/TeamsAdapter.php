@@ -76,7 +76,7 @@ final class TeamsAdapter implements ChannelInterface
         $host = (string) ($this->cfg['host'] ?? '127.0.0.1');
         $port = (int) ($this->cfg['port'] ?? 3978);
         $path = (string) ($this->cfg['path'] ?? '/api/messages');
-        $handler = function (ServerRequestInterface $request): PromiseInterface {
+        $handler = function (ServerRequestInterface $request) use ($path): PromiseInterface {
             return $this->handle($request, $path);
         };
         $server = new HttpServer($handler);
