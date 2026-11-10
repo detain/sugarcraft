@@ -166,7 +166,7 @@ final class ServeBridge
     public function call(string $method, array $params = []): PromiseInterface
     {
         if ($this->buffer === null || (!$this->helloDone && $method !== 'server.hello')) {
-            return reject(new ServeError('not_connected', "channel-bridge: not connected ({$method})"));
+            return reject(new ServeError('not_connected', "discord-bundle: not connected ({$method})"));
         }
 
         $id = 'b' . (++$this->rpcSeq);
@@ -184,7 +184,7 @@ final class ServeBridge
             }
             $entry = $this->pending[$id];
             unset($this->pending[$id]);
-            $entry['deferred']->reject(new ServeError('timeout', "channel-bridge: {$entry['method']} got no answer in " . self::CALL_TIMEOUT_SECONDS . 's'));
+            $entry['deferred']->reject(new ServeError('timeout', "discord-bundle: {$entry['method']} got no answer in " . self::CALL_TIMEOUT_SECONDS . 's'));
         });
 
         $this->pending[$id] = ['deferred' => $deferred, 'timer' => $timer, 'method' => $method];
@@ -202,7 +202,7 @@ final class ServeBridge
             'minProtocol' => Dispatcher::PROTOCOL,
             'maxProtocol' => Dispatcher::PROTOCOL,
             'client' => (object) [
-                'name' => 'candy-code-channel-bridge',
+                'name' => 'candy-code-discord-bundle',
                 'version' => '0.1',
                 'instanceId' => 'pid-' . \getmypid(),
             ],
@@ -246,14 +246,26 @@ final class ServeBridge
      * a retry of the same key answers with the original admission, so an
      * at-least-once platform can resend without double-running a turn).
      */
-    public function send(string $sessionId, string $text, string $delivery = 'queue', ?string $idempotencyKey = null): PromiseInterface
+    public function send(string $sessionId, string $text, string $delivery = 'queue', ?string $idempotencyKey = null, array $images = [], array $documents = []): PromiseInterface
     {
-        return $this->call('session.send', [
+        $params = [
             'sessionId' => $sessionId,
             'text' => $text,
             'delivery' => $delivery,
             'idempotencyKey' => $idempotencyKey ?? \bin2hex(\random_bytes(12)),
-        ]);
+        ];
+        // session.send media wire (TurnMethods): lists of {name?, mime,
+        // data: strict-base64}. The serve re-sniffs bytes and refuses on
+        // mime mismatch; the caller decides what a refusal means (the
+        // Discord face retries once without attachments and says so).
+        if ($images !== []) {
+            $params['images'] = $images;
+        }
+        if ($documents !== []) {
+            $params['documents'] = $documents;
+        }
+
+        return $this->call('session.send', $params);
     }
 
     public function createSession(?string $name = null, ?string $permissionMode = null): PromiseInterface
@@ -309,7 +321,7 @@ final class ServeBridge
     {
         $uri = \parse_url($this->wsUrl);
         if (!\is_array($uri) || !isset($uri['host'])) {
-            return reject(new ServeError('bad_url', "channel-bridge: bad serve URL {$this->wsUrl}"));
+            return reject(new ServeError('bad_url', "discord-bundle: bad serve URL {$this->wsUrl}"));
         }
         $secure = ($uri['scheme'] ?? 'ws') === 'wss';
         $port = $uri['port'] ?? ($secure ? 443 : 80);
@@ -328,7 +340,7 @@ final class ServeBridge
             . "Sec-WebSocket-Version: 13\r\n"
             . 'Sec-WebSocket-Protocol: ' . \implode(', ', $subprotocols) . "\r\n"
             . ($this->authDoor === 'subprotocol' ? '' : 'Authorization: Bearer ' . $this->token . "\r\n")
-            . "User-Agent: candy-code-channel-bridge/0.1\r\n"
+            . "User-Agent: candy-code-discord-bundle/0.1\r\n"
             . "\r\n";
 
         $deferred = new Deferred();
@@ -343,7 +355,7 @@ final class ServeBridge
                     }
                     $settled = true;
                     $connection->close();
-                    $deferred->reject(new ServeError('handshake_failed', "channel-bridge: {$reason}"));
+                    $deferred->reject(new ServeError('handshake_failed', "discord-bundle: {$reason}"));
                 };
                 $connection->on('close', static fn () => $fail('closed during handshake'));
                 $onData = null;
@@ -384,7 +396,7 @@ final class ServeBridge
                 $connection->on('data', $onData);
                 $connection->write($headers);
             },
-            static fn (\Throwable $e) => $deferred->reject(new ServeError('unreachable', 'channel-bridge: ' . $e->getMessage(), [], $e)),
+            static fn (\Throwable $e) => $deferred->reject(new ServeError('unreachable', 'discord-bundle: ' . $e->getMessage(), [], $e)),
         );
 
         return $deferred->promise();
@@ -613,7 +625,7 @@ final class ServeBridge
     {
         foreach ($this->pending as $entry) {
             $this->loop->cancelTimer($entry['timer']);
-            $entry['deferred']->reject(new ServeError('dropped', "channel-bridge: {$entry['method']} lost the socket ({$reason})"));
+            $entry['deferred']->reject(new ServeError('dropped', "discord-bundle: {$entry['method']} lost the socket ({$reason})"));
         }
         $this->pending = [];
     }
@@ -626,7 +638,7 @@ final class ServeBridge
         }
         $this->attempts++;
         if ($this->attempts > self::MAX_CONNECT_ATTEMPTS) {
-            $message = "channel-bridge: give up after {$this->attempts} attempts ({$reason})";
+            $message = "discord-bundle: give up after {$this->attempts} attempts ({$reason})";
             $this->log->error('serve_give_up', ['attempts' => $this->attempts, 'reason' => $reason]);
             ($this->onGivenUp ?? static function (): void {})($message);
 
