@@ -3427,7 +3427,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
         /** @var WorkflowTask $firstTask */
         $firstTask = $tasks[0];
         // C8: a fanned-out item interpolates against its own {{path}}; the
-        // static spelling keeps the workflow context exactly as it was.
+        // static spelling keeps the workflow context exactly as it was. Note
+        // the array-plus direction: a context that already defines 'path'
+        // wins, so an author-set path variable shadows the item's own path.
         $firstContext = $dynamic && $firstTask->name !== null
             ? $context + ['path' => $firstTask->name]
             : $context;
@@ -3481,7 +3483,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
             unset($unreachedGrant);
 
             // C8: on a "from:" fan-out, {{path}} names the item; static
-            // stages keep the workflow context exactly as it was.
+            // stages keep the workflow context exactly as it was. Left-wins
+            // array-plus: a context 'path' variable shadows the item path.
             $itemContext = $dynamic && $task->name !== null
                 ? $context + ['path' => $task->name]
                 : $context;
