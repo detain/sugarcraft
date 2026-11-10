@@ -243,22 +243,27 @@ foreach ($stubs as $old => $final) {
     $written++;
 }
 
-// index.html count patch — the generator OWNS the homepage's library/app counts
-// so they can never drift from the authoritative MATCHUPS split. Every count
-// token (meta/og/JSON-LD descriptions, the hero prose, the two .stat numerals,
-// and the two section <h2> headings) is rewritten from the computed $nLib/$nApp.
-// The patch is idempotent: it matches count POSITIONS, not specific values, so a
-// second run is a no-op and --check catches any hand-edit that reintroduces drift.
-if (is_file($index)) {
-    $currentIndex = (string) file_get_contents($index);
-    $patchedIndex = patch_index_counts($currentIndex, $nLib, $nApp);
+// Catalogue count patch — the generator OWNS the library/app counts on the
+// homepage AND on the two full-catalogue pages (docs-fix L2b), so they can never
+// drift from the authoritative MATCHUPS split. Every count token on a page (the
+// meta/og/JSON-LD descriptions, the hero prose, the two .stat numerals, and the
+// section <h2> headings) is rewritten from the computed $nLib/$nApp; regexes whose
+// shape a page does not carry are no-ops there. The patch is idempotent: it
+// matches count POSITIONS, not specific values, so a second run is a no-op and
+// --check catches any hand-edit that reintroduces drift.
+foreach ([$index, "$docs/libraries.html", "$docs/apps.html"] as $counted) {
+    if (!is_file($counted)) {
+        continue;
+    }
+    $currentCounts = (string) file_get_contents($counted);
+    $patchedCounts = patch_index_counts($currentCounts, $nLib, $nApp);
     if ($mode === '--check') {
-        if ($currentIndex !== $patchedIndex) {
-            fwrite(STDERR, "drift: index.html counts differ from computed $nLib/$nApp\n");
+        if ($currentCounts !== $patchedCounts) {
+            fwrite(STDERR, 'drift: ' . basename($counted) . " counts differ from computed $nLib/$nApp\n");
             $drift++;
         }
-    } elseif ($currentIndex !== $patchedIndex) {
-        file_put_contents($index, $patchedIndex);
+    } elseif ($currentCounts !== $patchedCounts) {
+        file_put_contents($counted, $patchedCounts);
         $written++;
     }
 }
@@ -904,12 +909,12 @@ function normalize_port_label(string $meta): string
 }
 
 // ---------------------------------------------------------------------------
-// index.html count patch
+// Catalogue pages count patch (index.html + libraries.html + apps.html)
 // ---------------------------------------------------------------------------
 
 /**
- * Rewrite every library/app COUNT token on the homepage from the computed
- * $nLib/$nApp so index.html can never drift from the authoritative MATCHUPS
+ * Rewrite every library/app COUNT token on one catalogue page from the computed
+ * $nLib/$nApp so the page can never drift from the authoritative MATCHUPS
  * split. The generator is the single owner of these numbers.
  *
  * Every replacement matches the count POSITION (surrounding literal text), not

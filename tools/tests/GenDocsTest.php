@@ -89,6 +89,8 @@ final class GenDocsTest extends TestCase
         \mkdir($root . '/docs/lib', 0777, true);
         \file_put_contents($root . '/docs/MATCHUPS.md', $this->matchupsFixture());
         \file_put_contents($root . '/docs/index.html', $this->indexFixture());
+        \file_put_contents($root . '/docs/libraries.html', $this->catalogueFixture('libraries'));
+        \file_put_contents($root . '/docs/apps.html', $this->catalogueFixture('apps'));
         foreach ($dataSlugs as $slug) {
             $this->writeData($root, $slug);
         }
@@ -175,6 +177,28 @@ final class GenDocsTest extends TestCase
         <h2>Two apps built on the stack.</h2>
         </body></html>
         HTML;
+    }
+
+    /**
+     * One of the two full-catalogue pages (docs-fix L2b): a head description
+     * carrying the numeral count tokens and the section <h2> heading, arriving
+     * with every count WRONG, exactly like indexFixture(). The hero prose, the
+     * .stat spans and the "(N packages)" total live only on the homepage, so
+     * this shape also proves the patcher is a no-op where a token family is
+     * absent (it must NOT invent spans or un-parenthesise anything).
+     */
+    private function catalogueFixture(string $kind): string
+    {
+        $heading = $kind === 'apps'
+            ? '<h2>Two apps built on the stack.</h2>'
+            : '<h2>Seven libraries, one ecosystem.</h2>';
+
+        return "<!doctype html>\n"
+            . '<html lang="en"><head>' . "\n"
+            . '<meta name="description" content="SugarCraft: 7 libraries and 2 apps (9 packages). The full ' . $kind . ' catalogue.">' . "\n"
+            . '</head><body>' . "\n"
+            . $heading . "\n"
+            . "</body></html>\n";
     }
 
     private function writeData(string $root, string $slug): void
@@ -377,10 +401,28 @@ final class GenDocsTest extends TestCase
         $this->assertStringNotContainsString('7 libraries and 2 apps', $index);
         $this->assertStringNotContainsString('seven libraries', $index);
 
+        // L2b: the two full-catalogue pages carry the SAME patcher duty — the
+        // head numeral tokens and their own <h2> are rewritten, and token
+        // families absent from a page (hero prose, .stat spans) are NOT invented.
+        $libraries = (string) \file_get_contents("$root/docs/libraries.html");
+        $apps = (string) \file_get_contents("$root/docs/apps.html");
+        $this->assertStringContainsString("{$c['lib']} libraries and {$c['app']} apps ({$c['total']} packages)", $libraries);
+        $this->assertStringContainsString("{$c['lib']} libraries and {$c['app']} apps ({$c['total']} packages)", $apps);
+        $this->assertStringContainsString('<h2>Twenty-three libraries, one ecosystem.</h2>', $libraries);
+        $this->assertStringNotContainsString('<h2>Four apps built on the stack.</h2>', $libraries);
+        $this->assertStringContainsString('<h2>Four apps built on the stack.</h2>', $apps);
+        $this->assertStringNotContainsString('<h2>Twenty-three libraries, one ecosystem.</h2>', $apps);
+        $this->assertStringNotContainsString('7 libraries and 2 apps', $libraries);
+        $this->assertStringNotContainsString('7 libraries and 2 apps', $apps);
+        $this->assertStringNotContainsString('<span class="num">', $libraries);
+        $this->assertStringNotContainsString('nine packages total', $apps);
+
         // Idempotent: the patch matches count POSITIONS, not values, which is
         // the property that makes --check a reliable drift guard.
         $this->runScript($root);
         $this->assertSame($index, (string) \file_get_contents("$root/docs/index.html"));
+        $this->assertSame($libraries, (string) \file_get_contents("$root/docs/libraries.html"));
+        $this->assertSame($apps, (string) \file_get_contents("$root/docs/apps.html"));
     }
 
     // -----------------------------------------------------------------
@@ -436,6 +478,31 @@ final class GenDocsTest extends TestCase
         $this->assertSame(1, $r['exit'], 'homepage count drift must fail --check');
         $this->assertStringContainsString('drift: index.html counts differ from computed 23/4', $r['output']);
         $this->assertStringNotContainsString('drift: fixture-alpha.html', $r['output']);
+    }
+
+    /**
+     * L2b: each catalogue page's count drift is its OWN named verdict — hand-
+     * editing libraries.html must name libraries.html and leave the other two
+     * counted pages out of it.
+     */
+    public function testCheckFailsNamingTheCataloguePageWhoseCountsWereHandEdited(): void
+    {
+        $root = $this->makeFixtureRoot();
+        $this->runScript($root);
+        $this->assertSame(0, $this->runScript($root, ['--check'])['exit']);
+
+        $path = "$root/docs/libraries.html";
+        \file_put_contents($path, \str_replace(
+            '<h2>Twenty-three libraries, one ecosystem.</h2>',
+            '<h2>Ninety-nine libraries, one ecosystem.</h2>',
+            (string) \file_get_contents($path)
+        ));
+
+        $r = $this->runScript($root, ['--check']);
+        $this->assertSame(1, $r['exit'], 'catalogue count drift must fail --check');
+        $this->assertStringContainsString('drift: libraries.html counts differ from computed 23/4', $r['output']);
+        $this->assertStringNotContainsString('drift: index.html counts', $r['output']);
+        $this->assertStringNotContainsString('drift: apps.html counts', $r['output']);
     }
 
     /** --check must not write. A drift guard that repairs the drift reports nothing. */
