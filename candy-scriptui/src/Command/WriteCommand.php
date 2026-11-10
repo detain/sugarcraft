@@ -112,7 +112,8 @@ final class WriteCommand extends Command
         if ($final->isAborted() || !$final->isSubmitted()) {
             return Command::FAILURE;
         }
-        $output->write($final->value(), true, OutputInterface::OUTPUT_RAW);
+        // LF-pinned trailer: write(..., true) emits PHP_EOL (CRLF on Windows).
+        $output->write($final->value() . "\n", false, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 }

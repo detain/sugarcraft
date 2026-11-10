@@ -147,7 +147,8 @@ final class TableCommand extends Command
             }
         }
 
-        $output->write($rendered, true, OutputInterface::OUTPUT_RAW);
+        // LF-pinned trailer: write(..., true) emits PHP_EOL (CRLF on Windows).
+        $output->write($rendered . "\n", false, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 

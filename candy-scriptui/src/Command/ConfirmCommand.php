@@ -118,7 +118,9 @@ final class ConfirmCommand extends Command
             return self::EXIT_ABORT;
         }
         if ($input->getOption('show-output')) {
-            $output->write($final->answer() ? $affirm : $negate, true, OutputInterface::OUTPUT_RAW);
+            // LF-pinned trailer (parenthesised: ternary must not lose the
+            // affirmative branch): write(..., true) emits PHP_EOL (CRLF on Windows).
+            $output->write(($final->answer() ? $affirm : $negate) . "\n", false, OutputInterface::OUTPUT_RAW);
         }
         return $final->answer() ? self::EXIT_YES : self::EXIT_NO;
     }
