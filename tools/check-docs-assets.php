@@ -154,9 +154,10 @@ final class CheckDocsAssets
     }
 
     /**
-     * Every page that renders the shared nav chrome: the three static
-     * surfaces plus the generated detail pages. Keyed on the nav container,
-     * so chromeless redirect stubs fall out without a name-based special case.
+     * Every page that renders the shared nav chrome: the static surfaces,
+     * the generated detail pages, and the rendered documentation pages.
+     * Keyed on the nav container, so chromeless redirect stubs fall out
+     * without a name-based special case.
      *
      * @return list<string>
      */
@@ -172,11 +173,15 @@ final class CheckDocsAssets
         foreach (glob("$root/docs/lib/*.html") ?: [] as $page) {
             $pages[] = $page;
         }
+        foreach (glob("$root/docs/*.html") ?: [] as $page) {
+            $pages[] = $page;
+        }
+        $pages[] = "$root/docs/cookbook/index.html";
 
-        return array_values(array_filter(
+        return array_values(array_unique(array_filter(
             $pages,
             static fn (string $p): bool => is_file($p) && str_contains((string) file_get_contents($p), '<div class="nav-links">'),
-        ));
+        )));
     }
 
     /**
@@ -261,9 +266,10 @@ final class CheckDocsAssets
     }
 
     /**
-     * (c) every local href/src in the homepage and the generated detail pages
-     * must resolve, relative to the file that carries it. Remote URLs,
-     * fragments, and javascript:/mailto:/data: schemes are not assets.
+     * (c) every local href/src in the static surfaces, the generated detail
+     * pages and the rendered documentation pages must resolve, relative to
+     * the file that carries it. Remote URLs, fragments, and
+     * javascript:/mailto:/data: schemes are not assets.
      *
      * @return list<string>
      */
@@ -279,9 +285,13 @@ final class CheckDocsAssets
         foreach ((glob("$root/docs/lib/*.html") ?: []) as $page) {
             $targets[] = $page;
         }
+        foreach ((glob("$root/docs/*.html") ?: []) as $page) {
+            $targets[] = $page;
+        }
+        $targets[] = "$root/docs/cookbook/index.html";
 
         $findings = [];
-        foreach ($targets as $file) {
+        foreach (array_unique($targets) as $file) {
             if (!is_file($file)) {
                 continue;
             }
