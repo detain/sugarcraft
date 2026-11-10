@@ -99,9 +99,13 @@ final class AgentRunStatus
     /**
      * Push one card, then each of its children one level deeper, never twice.
      *
+     * The by-ref $seen ledger is typed array-key rather than string: PHP
+     * int-casts numeric-string array keys, so the map's honest type admits
+     * both shapes whatever the wire spells a run id as.
+     *
      * @param  array<string, mixed>                                                    $card
      * @param  array<string, list<array<string, mixed>>>                               $children
-     * @param  array<string, true>                                                     $seen
+     * @param  array<array-key, true>                                                  $seen
      * @param  list<array{card: array<string, mixed>, depth: int, orphan: bool, cycle: bool}> $rows
      */
     private static function emit(
