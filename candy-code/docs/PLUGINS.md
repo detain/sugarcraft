@@ -5,9 +5,11 @@ skills, slash commands and agent presets in one folder, shipped and installed
 as a unit. candy-code **reads** bundles. It does not install registries,
 resolve dependencies, or run anything a bundle ships beyond the content its
 existing loaders already understand. That reader-first boundary is the whole
-page in one sentence; the two surfaces a bundle may carry that candy-code
-deliberately never execute are documented below, and they are declined by
-design, not pending work.
+page in one sentence. One surface a bundle may carry is still never executed:
+its MCP declaration is declined for auto-start, by design and not pending
+work. Two others — hooks, and in-process **channels** declared as manifest
+entrypoints — do run, but only from bundles **you** have trusted by name. That
+gate is documented below; what remains declined is, too.
 
 ## What a bundle is
 
@@ -19,8 +21,9 @@ my-bundle/
 ├── skills/<name>/SKILL.md         → the skill loaders
 ├── commands/<name>.md             → the slash-command pipeline
 ├── agents/<name>.md               → the agent-preset registry
-├── hooks/…                        → DECLINED, never registered
-└── .mcp.json                      → DECLINED for auto-start, offered for import
+├── hooks/…                        → registered only from bundles trusted by name
+├── .mcp.json                      → DECLINED for auto-start, offered for import
+└── plugin.json "entrypoints"      → channel/subscriber PHP, trust-gated
 ```
 
 The manifest needs a `name`; `version` and `description` are shown where
@@ -75,21 +78,80 @@ Everything the [precedence section of SKILLS.md](SKILLS.md) says about
 shadowing applies per-surface; the bundle badge is how you tell which side of
 a shadow you are looking at.
 
+## Channels, subscribers, and trust-gated hooks
+
+A bundle's `plugin.json` may name PHP files under an `entrypoints` key,
+grouped by kind. Nothing is ever globbed or sniffed: a file that no manifest
+names, by kind, cannot load. The kinds that run today:
+
+- **`channel`** — a class implementing `ChannelInterface`: it is loaded
+  in-process, `start()`ed with a small context (its bundle and channel name,
+  the project root, the event loop, a log-line writer), and `dispose()`d when
+  a serve process shuts down. A channel that also implements
+  `AcceptsHttpRequests` receives HTTP requests under `/channels/<name>/…` —
+  the one URL namespace plugin channels live in, deliberately outside
+  `/api/`. The **channel owns its own signature verification and rate
+  limiting** for those routes: candy-code hands it the request and nothing
+  more, the same doctrine the built-in webhook receiver follows. An unknown
+  name under the prefix answers 404; after shutdown the surface answers 503.
+- **`subscriber`** — a channel that also implements
+  `SubscribesToSessionEvents` is fed every event of every session the process
+  serves, including message text and streaming deltas: a richer view than the
+  content-free `webhooksOut` envelope, by design. An envelope that cannot
+  survive a JSON round-trip is refused at the door rather than delivered
+  lossy.
+
+Two refusals are structural, not configurable. A named class that fails to
+instantiate, or is not a channel, is refused with a logged reason; and a
+channel name that collides with a built-in or with another accepted bundle is
+**refused, never overridden** — names are unique across the registry, and the
+`candy-code` and `builtin` bundle namespaces are reserved against plugins.
+
+All of this sits behind one setting: `trustedBundleChannels`, a list of bundle
+names read **only from your own user-tier config file** — a checked-out
+project can never add to it, and it applies at the next launch
+([SETTINGS.md](SETTINGS.md)). Safe mode answers the empty list before any
+file is read at all, so `--safe-mode` loads zero plugin code by construction.
+
+Naming a bundle is necessary, not sufficient. Even for a trusted bundle:
+
+1. **First sight is quarantine.** An entrypoint never seen before is *listed*
+   at launch and loaded only at the **next** launch, so a manifest swapped
+   under a trusted name cannot smuggle new code in silently. The seen-ledger
+   lives in `~/.candy-code/channels.json`, mode 0600.
+2. **The bytes must be private.** The file and its directory must be owned by
+   your account and not world-writable, or the entry is refused. A trusted
+   name records who consented; it says nothing about the file being intact.
+
+**Bundle hooks ride the same gate.** A bundle named in
+`trustedBundleChannels` gets its `hooks/` files registered through the
+ordinary hook pipeline — same containment and private-bytes checks, and a
+broken hook file refuses *itself* with a notice while the launch continues.
+Unlike channels, hook files are not entry-quarantined in this first phase:
+the typed, user-tier name list *is* the consent. Everything else about hooks
+is still declined, exactly as before, for every bundle you have not named.
+One list gates both surfaces, so the audit you do before adding a name is
+the whole decision: that bundle can run code in-process and react to every
+session event. The notices at launch exist to keep that decision visible.
+
 ## The declined surfaces
 
 A bundle may ship things candy-code will not run. The first two declines fire
 **once per session at launch**, naming the bundles affected, as ordinary
 system rows in the transcript:
 
-- **Hooks.** Bundle hook content is never registered — neither the `hooks/`
-  directory, nor a `hooks` path declared in the manifest, nor an **inline
-  `hooks` object** inside `plugin.json` (the declined-surface
-  reader answers with the manifest path — `hooksPaths()` names where the
-  hooks ride inside it — while the decline notice names the affected
-  bundles). Lifecycle hooks execute
-  arbitrary programs at every session event; the hooks that do run are
-  declared in the project's own `hooks.yaml` under
-  [HOOKS.md](HOOKS.md) trust, not smuggled in by a third-party folder.
+- **Hooks from bundles you have not trusted.** Their hook content is never
+  registered — neither the `hooks/` directory, nor a `hooks` path declared in
+  the manifest, nor an **inline `hooks` object** inside `plugin.json` (the
+  declined-surface reader answers with the manifest path — `hooksPaths()`
+  names where the hooks ride inside it — while the decline notice names the
+  affected bundles). A bundle named in `trustedBundleChannels` reverses this
+  for its `hooks/` files, through the gate described above; inline
+  `plugin.json` hook manifests remain refused on every path, as their shape
+  is not the accepted one yet. Lifecycle hooks execute arbitrary programs at
+  every session event; the hooks that do run are declared in the project's
+  own `hooks.yaml` under [HOOKS.md](HOOKS.md) trust, or come from a bundle
+  you trusted by name — never smuggled in by a third-party folder.
 - **`.mcp.json` — and its manifest twins.** A bundle's MCP declarations are
   never auto-started: neither a shipped `.mcp.json`, nor the manifest's
   `mcp`/`mcpServers` keys as path strings, nor an **inline `mcpServers`
@@ -134,8 +196,10 @@ What matters from the plugin side:
 - the project tier has no script-tool surface — a `tools/` directory inside a
   repository is never read, which is the same law that keeps a bundle's
   `.mcp.json` from auto-starting;
-- bundles run only their commands, skills, agents and deliberately
-  imported MCP declarations.
+- bundles run their commands, skills and agents always; their hooks and
+  channel/subscriber entrypoints only when the bundle is named in
+  `trustedBundleChannels`; and MCP servers only through a declaration you
+  imported deliberately.
 
 ## Installing and listing
 
@@ -229,5 +293,5 @@ because deleting trees is not what a remove verb is for.
 - [SKILLS.md](SKILLS.md) — discovery roots and precedence for skill content
 - [COMMANDS.md](COMMANDS.md) — the slash-command file format bundles reuse
 - [MCP.md](MCP.md) — what `.mcp.json` is, and what trusting one means
-- [HOOKS.md](HOOKS.md) — the hook system bundles deliberately do not join
+- [HOOKS.md](HOOKS.md) — the hook system trusted bundles join through the gate
 - [SETTINGS.md](SETTINGS.md) — the `pluginPaths` key

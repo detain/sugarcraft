@@ -97,7 +97,7 @@ Claude Code, OpenCode and OpenClaw.
 | [`docs/HOOKS.md`](docs/HOOKS.md) | `hooks.yaml`, every hook event, the exit-code and JSON stdout contract, post-edit lint, diagnostics, auto-commit and auto-test |
 | [`docs/MEMORY.md`](docs/MEMORY.md) | Memory notes, the `Memory` tool, recall, auto-consolidation, the dream pass, instruction files |
 | [`docs/SKILLS.md`](docs/SKILLS.md) | Writing a skill, where skills load from, how they reach the model, `$name` mentions |
-| [`docs/PLUGINS.md`](docs/PLUGINS.md) | Claude-format plugin bundles: what a bundle may ship, which surfaces it feeds, why its hooks and `.mcp.json` are declined, `candy-code bundles list|install|marketplace|update|search|recommend` |
+| [`docs/PLUGINS.md`](docs/PLUGINS.md) | Claude-format plugin bundles: what a bundle may ship, which surfaces it feeds, how `trustedBundleChannels` decides which hooks and channels run and why `.mcp.json` stays declined, `candy-code bundles list|install|marketplace|update|search|recommend` |
 | [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) | Multi-stage workflows in YAML or PHP, `/workflow`, and the model-authored `Workflow` tool |
 | [`docs/MEDIA.md`](docs/MEDIA.md) | Image and video generation: endpoint dialects, the capability probe, the `Ctrl+D` form and `/play`, presets, the PNG infotext round-trip, the RPC surface |
 | [`docs/SCHEDULES.md`](docs/SCHEDULES.md) | Scheduled prompts: `schedules.json` rows, the cadence, the `root` project binding, and the `Schedule` tool |
