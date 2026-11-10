@@ -17,9 +17,27 @@
   }
 
   /* ── Path resolution ────────────────────────────────────────────── */
+  function onLibPage() {
+    return window.location.pathname.includes('/lib/');
+  }
+
   function getIndexPath() {
-    var isLibPage = window.location.pathname.includes('/lib/');
-    return isLibPage ? '../js/search-index.json' : 'js/search-index.json';
+    return onLibPage() ? '../js/search-index.json' : 'js/search-index.json';
+  }
+
+  /* Search-index entries are root-anchored relative hrefs (lib/<slug>.html,
+     or index.html#… for cross-page anchors). Emitted raw on a /lib/* page
+     they resolve against /lib/ and 404 (→ /lib/lib/<slug>.html), so apply
+     the same depth shim getIndexPath() uses for the fetch: on a /lib page,
+     root-anchored relative hrefs get a '../' hop. Already-escaped ('../…'),
+     absolute ('/…') or scheme-ful URLs pass through untouched. */
+  function resolveResultHref(url) {
+    if (typeof url !== 'string' || url === '') {
+      return url;
+    }
+    var hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(url);
+    var isRootAnchored = !hasScheme && !url.startsWith('/') && !url.startsWith('../');
+    return onLibPage() && isRootAnchored ? '../' + url : url;
   }
 
   /* ── Fetch index once ───────────────────────────────────────────── */
@@ -114,7 +132,7 @@
       link.className = 'search-result-item';
       link.setAttribute('role', 'option');
       link.setAttribute('aria-selected', 'false');
-      link.href = item.url;
+      link.href = resolveResultHref(item.url);
 
       var contentDiv = document.createElement('div');
       contentDiv.className = 'search-result-content';
@@ -143,9 +161,14 @@
       link.addEventListener('click', function (e) {
         e.preventDefault();
         closeModal();
-        // Validate URL to prevent XSS via javascript: or data: URIs
-        var url = item.url;
-        if (typeof url === 'string' && /^[a-z][a-z0-9+.-]*:/i.test(url) && !/^(javascript|data|vbscript):/i.test(url)) {
+        // Navigate via the depth-resolved href (see resolveResultHref): the
+        // old arm demanded a scheme before navigating at all, which deadened
+        // every root-relative result (i.e. all of them). The XSS refusal
+        // stays — scheme-ful URLs must never be javascript:/data:/vbscript:
+        // (tested on the trimmed form, because browsers trim before scheme
+        // detection). Relative and absolute-path URLs are inherently safe.
+        var url = resolveResultHref(item.url);
+        if (typeof url === 'string' && !/^(javascript|data|vbscript):/i.test(url.trim())) {
           window.location.href = url;
         }
       });
