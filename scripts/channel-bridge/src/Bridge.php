@@ -99,7 +99,7 @@ final class Bridge
             return;
         }
 
-        $this->sessionFor($key, $ref)->then(function (string $sessionId) use ($platform, $key, $ref, $text, $isMention, $channel): void {
+        $this->sessionFor($key, $ref)->then(function (string $sessionId) use ($key, $ref, $text, $isMention, $channel): void {
             $this->map->rememberConversation($sessionId, $key, $ref);
             $delivery = ($this->busy[$sessionId] ?? 'idle') !== 'idle' && $isMention ? 'steer' : 'queue';
             $this->serve->send($sessionId, $this->safety->fence($text), $delivery)

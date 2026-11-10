@@ -95,17 +95,20 @@ final class CredentialStore
         return $data;
     }
 
-    /**
-     * One account's credential row, or null when the operator has not
-     * configured it. Policy decisions belong to the caller; this only reads.
-     *
-     * @return array<string, mixed>|null
-     */
+    /** The store file path this object reads and writes. */
     public function path(): string
     {
         return $this->path;
     }
 
+    /**
+     * One account's credential row, or null when the operator has not
+     * configured it. Policy decisions belong to the caller; this only reads.
+     *
+     * @param array<string, mixed> $contents
+     *
+     * @return array<string, mixed>|null
+     */
     public function account(array $contents, string $platform, string $account): ?array
     {
         $row = $contents['platforms'][$platform]['accounts'][$account] ?? null;

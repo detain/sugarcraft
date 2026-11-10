@@ -77,7 +77,7 @@ final class ServeBridge
     /** @var list<\Closure(array<string,mixed>): void> */
     private array $listeners = [];
 
-    /** @var list<\Closure(array<string,mixed>): void> Called after each successful hello (resume hooks). */
+    /** @var list<\Closure(): void> Called after each successful hello (resume hooks). */
     private array $readyListeners = [];
 
     /** @var list<\Closure(string, array<string,mixed>): void> */
@@ -334,7 +334,7 @@ final class ServeBridge
         $deferred = new Deferred();
         $connector = new Connector(['timeout' => 15.0, 'tls' => ['peer_name' => $host]], $this->loop);
         $connector->connect(($secure ? 'tls://' : 'tcp://') . (\str_contains($host, ':') && !\str_starts_with($host, '[') ? '[' . $host . ']' : $host) . ':' . $port)->then(
-            function (ConnectionInterface $connection) use ($headers, $deferred, $secure, $key): void {
+            function (ConnectionInterface $connection) use ($headers, $deferred, $key): void {
                 $buffer = '';
                 $settled = false;
                 $fail = static function (string $reason) use (&$settled, $connection, $deferred): void {
@@ -431,9 +431,9 @@ final class ServeBridge
                                 fn (\Throwable $e) => $this->log->warn('serve_follow_failed', ['session' => $sessionId, 'error' => $e->getMessage()]),
                             );
                     }
-                    foreach ($this->readyListeners as $listener) {
+                    foreach ($this->readyListeners as $readyListener) {
                         try {
-                            $listener();
+                            $readyListener();
                         } catch (\Throwable $e) {
                             $this->log->error('ready_listener_failed', ['error' => $e->getMessage()]);
                         }
@@ -514,7 +514,7 @@ final class ServeBridge
         }
     }
 
-    /** @param array<string,mixed> $message */
+    /** @param string $payload */
     private function receive(string $payload): void
     {
         try {

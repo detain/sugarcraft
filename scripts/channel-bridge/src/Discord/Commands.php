@@ -95,7 +95,7 @@ final class Commands
             return null;
         }
 
-        return ['name' => $name, 'args' => \array_values($words)];
+        return ['name' => $name, 'args' => $words];
     }
 
     /**

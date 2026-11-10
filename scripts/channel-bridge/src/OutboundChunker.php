@@ -41,7 +41,7 @@ final class OutboundChunker
         foreach ($lines as $i => $line) {
             $before[$i] = $fence;
             if (\preg_match('/^```(\S*)/', $line, $m) === 1) {
-                $fence = $fence === null ? ($m[1] ?? '') : null;
+                $fence = $fence === null ? $m[1] : null;
             }
             $after[$i] = $fence;
         }

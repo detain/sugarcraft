@@ -196,7 +196,7 @@ final class DiscordAdapter implements ChannelInterface
         if (Keys::ignoreAuthor($authorId !== '' && $authorId === $this->ownUserId, $isBot, $this->boolCfg('allowBots', false))) {
             return;
         }
-        if (isset($message['webhook_id']) && $message['webhook_id'] !== null) {
+        if (isset($message['webhook_id'])) {
             return; // a webhook/integration post is not a human (§7.3 loop floor)
         }
 
@@ -283,7 +283,7 @@ final class DiscordAdapter implements ChannelInterface
         }
     }
 
-    /** @param array{name:string,args:list<string>} $command */
+    /** @param string $name */
     private static function ackFor(string $name): string
     {
         return match ($name) {
@@ -314,7 +314,7 @@ final class DiscordAdapter implements ChannelInterface
             return $allow !== [] && \in_array($authorId, $allow, true);
         }
         $guilds = $this->mapCfg('guilds');
-        if (!\is_array($guilds) || $guilds === []) {
+        if ($guilds === []) {
             return false; // no guild policy configured: the bridge stays out of guilds
         }
         $guild = \is_array($guilds[$guildId] ?? null) ? $guilds[$guildId] : null;
@@ -347,7 +347,7 @@ final class DiscordAdapter implements ChannelInterface
         }
         $guilds = $this->mapCfg('guilds');
         $commands = Commands::definitions();
-        if (\is_array($guilds) && $guilds !== []) {
+        if ($guilds !== []) {
             // Guild-scoped deploy is instant; global PUTs cache for an hour.
             foreach (\array_keys($guilds) as $guildId) {
                 $this->rest->deployGuildCommands($app, (string) $guildId, $commands)

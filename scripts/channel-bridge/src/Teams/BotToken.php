@@ -61,8 +61,9 @@ final class BotToken
                     throw new \RuntimeException('teams token endpoint returned no access_token');
                 }
                 $this->token = $token;
-                $this->expiresAt = \time() + (int) (\is_array($decoded) ? $decoded['expires_in'] ?? 3600 : 3600);
-                $this->log->info('teams_token_minted', ['expiresIn' => (int) (\is_array($decoded) ? $decoded['expires_in'] ?? 3600 : 3600)]);
+                $expiresIn = (int) (\is_array($decoded) ? $decoded['expires_in'] ?? 3600 : 3600);
+                $this->expiresAt = \time() + $expiresIn;
+                $this->log->info('teams_token_minted', ['expiresIn' => $expiresIn]);
 
                 return $token;
             },

@@ -205,7 +205,7 @@ final class FakeServe
         $connection->on('data', $onData);
     }
 
-    /** @param array<string,mixed> $message */
+    /** @param string $payload */
     private function onMessage(ConnectionInterface $connection, string $payload): void
     {
         $id = \spl_object_id($connection);
