@@ -15,14 +15,32 @@ use SugarCraft\Code\Workflows\WorkflowEngine;
  * driven END TO END against the real binary the way RS-DRIVER probe J asks
  * to be answered — exit codes a fleet can gate on.
  *
- * Every leg spawns the shipped bin/candy-code with a temp HOME carrying a
- * user-tier workflow file and CANDY_CODE_BACKEND_CMD pointing at a scripted
- * shell stub: the command-tier backend answers agent and verifier calls
- * WITHOUT provider keys or HTTP (the same offline door
- * NonInteractiveBackendErrorExitTest proves). The run therefore executes the
- * REAL engine — registry load, stage dispatch through the forked pool,
- * verification scanning, pause records — which is what makes the exit-code
- * pins load-bearing rather than tautological.
+ * Every leg spawns the shipped bin/candy-code with a temp HOME whose
+ * .candy-code/config.json selects a `custom` provider pointed at a
+ * php -S stub server answering the OpenAI wire in-process. The run
+ * therefore executes the REAL engine — registry load, stage dispatch
+ * through the forked pool, verification scanning, pause records — which
+ * is what makes the exit-code pins load-bearing rather than tautological.
+ *
+ * Why not CANDY_CODE_BACKEND_CMD: the command tier deliberately carries
+ * NO worker provider spec (E641 — LaunchContext::selectedProviderName()
+ * answers null on that tier, so Bootstrap::workerProviderSpec() has
+ * nothing to hand the forked stage workers, which then refuse
+ * pre-dispatch rather than fabricate). The engine legs must therefore
+ * ride a real provider-tier selection; the custom type dialing a local
+ * 127.0.0.1 stub is the offline spelling that survives with no keys.
+ *
+ * The stub routes by a PORT-KEYED behaviour table: each leg registers its
+ * mode in behavior.json beside the router before the server binds, and the
+ * router answers every request of that port accordingly — 'escalate' and
+ * 'reject' reply with the verdict texts, 'slow' sleeps mid-request so a
+ * SIGTERM provably lands, and the default answers 'STUBGOT ' plus the
+ * request's joined user content, which doubles as the --param round-trip
+ * oracle. Request CONTENT is never scanned for markers: the CLI embeds a
+ * live git-state <turn-context> block inside the user message, so any
+ * marker vocabulary present in the repo (it would live in this very file)
+ * rides EVERY request and a content scan answers every stage with the
+ * first branch.
  *
  * The signal legs skip when the build lacks posix_kill/SIGTERM; every leg is
  * self-bounded with pcntl_alarm so a wedged child fails fast and never hangs
@@ -40,7 +58,16 @@ final class WorkflowSubcommandTest extends TestCase
     /** Seconds to wait for the backend stub to have started a stage. */
     private const STAGE_START_WAIT_SECONDS = 40.0;
 
+    /** Seconds to wait for the stub server to bind its port. */
+    private const STUB_BIND_WAIT_SECONDS = 10.0;
+
+    /** Seconds to wait for the slow stub request to finish being served. */
+    private const STUB_SLOW_REQUEST_SECONDS = 60.0;
+
     private string $home;
+
+    /** @var array{0: resource, 1: string}|null proc handle + log path of the live stub */
+    private static ?array $stubServer = null;
 
     protected function setUp(): void
     {
@@ -53,6 +80,7 @@ final class WorkflowSubcommandTest extends TestCase
     protected function tearDown(): void
     {
         self::cancelWorkflowVerbAlarm();
+        self::stopWorkflowVerbStub();
         self::removeWorkflowVerbTree($this->home);
     }
 
@@ -64,12 +92,9 @@ final class WorkflowSubcommandTest extends TestCase
     {
         self::boundWorkflowVerbAlarm();
         self::writeWorkflowVerbDemoFile($this->home);
-        $script = self::writeWorkflowVerbScript($this->home, self::workflowVerbEchoBody([
-            'ummarise' => 'first summary',
-            'Check' => 'second pass: VERDICT: pass',
-        ]));
+        self::startWorkflowVerbStub($this->home);
 
-        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'demo', '--format', 'json'], $script);
+        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'demo', '--format', 'json']);
 
         self::assertSame(0, $code, 'a completed run must exit 0; stderr was: ' . $err);
         $doc = self::decodeSingleWorkflowVerbDocument($out);
@@ -100,12 +125,9 @@ final class WorkflowSubcommandTest extends TestCase
     {
         self::boundWorkflowVerbAlarm();
         self::writeWorkflowVerbDemoFile($this->home);
-        $script = self::writeWorkflowVerbScript($this->home, self::workflowVerbEchoBody([
-            'ummarise' => 'first summary',
-            'Check' => 'second pass: VERDICT: pass',
-        ]));
+        self::startWorkflowVerbStub($this->home);
 
-        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'demo'], $script);
+        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'demo']);
 
         self::assertSame(0, $code, 'stderr was: ' . $err);
         self::assertStringContainsString('completed', $out);
@@ -115,16 +137,13 @@ final class WorkflowSubcommandTest extends TestCase
     public function testEscalatedVerificationExitsThreeAndCarriesTheMarker(): void
     {
         self::boundWorkflowVerbAlarm();
+        // The escalate mode answers the line-anchored escalation text on
+        // every request of this stub port; the scan reads ONLY the
+        // verifier's output, so the task call's duplicate answer is inert.
         self::writeWorkflowVerbDemoFile($this->home);
-        // 'Check' BEFORE 'ummarise': the verifier call's history still
-        // carries the gather prompt, so a gather branch placed first would
-        // shadow the verification answer.
-        $script = self::writeWorkflowVerbScript($this->home, self::workflowVerbEchoBody([
-            'Check' => 'ESCALATE: is the tone right?',
-            'ummarise' => 'first summary',
-        ]));
+        self::startWorkflowVerbStub($this->home, 'escalate');
 
-        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'demo', '--format', 'json'], $script);
+        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'demo', '--format', 'json']);
 
         self::assertSame(3, $code, 'an escalated verification must stop for a person at exit 3; stderr: ' . $err);
         $doc = self::decodeSingleWorkflowVerbDocument($out);
@@ -140,17 +159,34 @@ final class WorkflowSubcommandTest extends TestCase
         self::assertStringStartsWith('escalated: ', (string) ($verifyRow['error'] ?? ''), 'the D4 predicate keys on the public marker');
     }
 
-    public function testFailingBackendExitsOne(): void
+    public function testRejectedVerificationExitsOneWithoutTheMarker(): void
     {
         self::boundWorkflowVerbAlarm();
-        self::writeWorkflowVerbDemoFile($this->home);
-        $script = self::writeWorkflowVerbScript($this->home, "in=\$(cat)\nprintf '%s\\n' boom >&2\nexit 9");
+        // The reject mode answers with text matching the verifier slot's own
+        // reject PCRE — a rejection, which must exit 1 while the error line
+        // carries NO 'escalated: ' marker. Paired with the escalation leg
+        // above, this is the whole exit 1-vs-3 split.
+        self::writeWorkflowVerbDemoFile($this->home, reject: true);
+        self::startWorkflowVerbStub($this->home, 'reject');
 
-        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'demo', '--format', 'json'], $script);
+        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'demo', '--format', 'json']);
 
-        self::assertSame(1, $code, 'a failed stage must exit 1; stderr: ' . $err);
+        self::assertSame(1, $code, 'a rejected verification must exit 1; stderr: ' . $err);
         $doc = self::decodeSingleWorkflowVerbDocument($out);
-        self::assertSame('failed', $doc['result']['status'] ?? null);
+        $result = $doc['result'] ?? null;
+        self::assertSame('failed', $result['status'] ?? null);
+        $verifyRow = null;
+        foreach ((array) ($result['stages'] ?? []) as $row) {
+            if (($row['name'] ?? null) === 'verify') {
+                $verifyRow = $row;
+            }
+        }
+        self::assertIsArray($verifyRow);
+        self::assertStringStartsNotWith(
+            WorkflowEngine::ESCALATION_MARKER,
+            (string) ($verifyRow['error'] ?? ''),
+            'a plain rejection must not wear the escalation marker the exit-3 predicate keys on',
+        );
     }
 
     public function testUnknownWorkflowNameIsRefusedWithExitOne(): void
@@ -180,15 +216,10 @@ final class WorkflowSubcommandTest extends TestCase
     {
         self::boundWorkflowVerbAlarm();
         self::writeWorkflowVerbSoloFile($this->home);
+        self::startWorkflowVerbStub($this->home);
         $needle = 'zzcjqx';
-        $body = "in=\$(cat)\n"
-            . "case \"\$in\" in\n"
-            . "  *{$needle}*) printf '%s\\n' \"themed answer for {$needle}\";;\n"
-            . "  *) printf '%s\\n' 'theme never arrived';;\n"
-            . "esac\nexit 0\n";
-        $script = self::writeWorkflowVerbScript($this->home, $body);
 
-        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'solo', '--param', 'theme=' . $needle, '--format', 'json'], $script);
+        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'solo', '--param', 'theme=' . $needle, '--format', 'json']);
 
         self::assertSame(0, $code, 'stderr: ' . $err);
         $doc = self::decodeSingleWorkflowVerbDocument($out);
@@ -222,7 +253,11 @@ final class WorkflowSubcommandTest extends TestCase
 
         self::assertSame(2, $code, 'expected exit 2; stderr was: ' . $err);
         self::assertStringContainsString($needle, $err, 'the usage refusal must name the problem');
-        self::assertStringContainsString('candy-code workflow', $err, 'the hint line carries the verb usage');
+        // The refusal names the tool and the verb — but not always glued:
+        // a flag-tier refusal reads 'candy-code: ... workflow status accepts',
+        // so the two halves are asserted separately.
+        self::assertStringContainsString('candy-code', $err, 'the refusal carries the tool name');
+        self::assertStringContainsString('workflow', $err, 'the refusal carries the verb name');
     }
 
     // ------------------------------------------------------------------
@@ -330,11 +365,14 @@ final class WorkflowSubcommandTest extends TestCase
             self::markTestSkipped('the cooperative-pause pin needs posix_kill + SIGTERM');
         }
         self::boundWorkflowVerbAlarm();
+        // The slow mode makes the stub sleep while serving the stage,
+        // touching stage-started first — so the SIGTERM provably lands
+        // mid-flight.
         self::writeWorkflowVerbSoloFile($this->home);
+        self::startWorkflowVerbStub($this->home, 'slow');
         $marker = $this->home . '/stage-started';
-        $script = self::writeWorkflowVerbScript($this->home, "in=\$(cat)\ntouch " . $marker . "\nsleep 40\nprintf '%s\\n' 'never finishes'\nexit 0");
 
-        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'solo', '--format', 'json'], $script, $marker);
+        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'solo', '--format', 'json'], $marker);
 
         self::assertSame(3, $code, 'a cooperative signal-pause exits 3, not 143; stderr: ' . $err);
         $doc = self::decodeSingleWorkflowVerbDocument($out);
@@ -346,9 +384,14 @@ final class WorkflowSubcommandTest extends TestCase
         $id = (string) ($result['workflow'] ?? '');
         self::assertNotSame('', $id);
 
-        // And the record RESUMES: same HOME, backend now answers instantly.
-        $resumeScript = self::writeWorkflowVerbScript($this->home, "in=\$(cat)\nprintf '%s\\n' 'resumed fine'\nexit 0");
-        [$code2, $out2, $err2] = self::runWorkflowVerbChild($this->home, ['workflow', 'resume', $id, '--format', 'json'], $resumeScript);
+        // The sleeping request must finish being served BEFORE the resume is
+        // dispatched: the stub server serves one request at a time, and the
+        // orphaned first worker still holds it. The router then answers the
+        // replayed stage instantly (done-marker path) — a resume that
+        // provably replays the recorded context, not a fresh run.
+        self::awaitWorkflowVerbStubFile($this->home . '/stage-finished');
+
+        [$code2, $out2, $err2] = self::runWorkflowVerbChild($this->home, ['workflow', 'resume', $id, '--format', 'json']);
         self::assertSame(0, $code2, 'resume must complete the paused run; stderr: ' . $err2);
         $doc2 = self::decodeSingleWorkflowVerbDocument($out2);
         self::assertSame('completed', $doc2['result']['status'] ?? null);
@@ -360,14 +403,14 @@ final class WorkflowSubcommandTest extends TestCase
     // ------------------------------------------------------------------
 
     /**
-     * Two-stage demo: gather (agent) + verify (verification whose pass
-     * criterion is the literal VERDICT: pass token).
+     * One-stage demo: a verification stage whose task gathers and whose
+     * verifier reads clean — the verdict texts come from the stub's port
+     * mode, never from the prompts. With $reject the verifier slot carries
+     * the live reject PCRE the reject mode's answer matches.
      */
-    private static function writeWorkflowVerbDemoFile(string $home): void
+    private static function writeWorkflowVerbDemoFile(string $home, bool $reject = false): void
     {
-        \file_put_contents(
-            $home . '/.candy-code/workflows/demo.yaml',
-            "name: demo\n"
+        $yaml = "name: demo\n"
             . "description: the W-1 exit-code fixture\n"
             . "stages:\n"
             . "  - name: verify\n"
@@ -379,11 +422,14 @@ final class WorkflowSubcommandTest extends TestCase
             . "    verifier:\n"
             . "      agent: coder\n"
             . "      prompt: >-\n"
-            . "        Check the summary\n"
-        );
+            . "        Check the summary\n";
+        if ($reject) {
+            $yaml .= "      reject: '/WRONG/'\n";
+        }
+        \file_put_contents($home . '/.candy-code/workflows/demo.yaml', $yaml);
     }
 
-    /** Single stage, no verification — the signal/resume choreography target. */
+    /** Single stage, no verification — the signal/resume and param choreography target. */
     private static function writeWorkflowVerbSoloFile(string $home): void
     {
         \file_put_contents(
@@ -399,50 +445,223 @@ final class WorkflowSubcommandTest extends TestCase
     }
 
     /**
-     * @param array<string,string> $branches keyed by a prompt substring,
-     *   answered IN ORDER — first match wins (the verifier request's history
-     *   also contains the gather prompt, so callers order keys narrow-first).
+     * Point the temp HOME's user config at a provider-tier `custom` backend
+     * on the stub port. The whole merged spec rides to forked stage workers
+     * (Bootstrap::workerProviderSpec), which build the provider child-side —
+     * supportsFunctionCalling stays false so no tools ride the wire and the
+     * stub's plain-text answer IS the stage output.
      */
-    private static function workflowVerbEchoBody(array $branches): string
+    private static function writeWorkflowVerbConfig(string $home, int $port): void
     {
-        // Substring tests, NOT case-globs: the request JSON carries the
-        // prompt's markdown asterisks, and a `*needle*` case pattern
-        // matches them literally, answering every stage with the first
-        // branch. ${in#*needle} strips up to the needle: a change proves
-        // the needle was present, with pure POSIX arithmetic expansion.
-        $lines = ["in=\$(cat)"];
-        foreach ($branches as $key => $reply) {
-            $lines[] = 'if printf %s "$in" | grep -qF -- ' . \escapeshellarg((string) $key)
-                . '; then printf "%s\n" ' . \escapeshellarg((string) $reply) . '; exit 0; fi';
-        }
-        $lines[] = "printf 'no branch matched\n'";
-        $lines[] = 'exit 0';
-
-        return \implode("\n", $lines) . "\n";
+        \file_put_contents(
+            $home . '/.candy-code/config.json',
+            (string) \json_encode([
+                'provider' => 'wstub',
+                'providers' => [
+                    'wstub' => [
+                        'type' => 'custom',
+                        'name' => 'wstub',
+                        'baseUrl' => 'http://127.0.0.1:' . $port . '/v1',
+                        'model' => 'stub-model',
+                        'supportsStreaming' => false,
+                        'supportsFunctionCalling' => false,
+                    ],
+                ],
+            ], \JSON_PRETTY_PRINT),
+        );
     }
 
-    private static function writeWorkflowVerbScript(string $home, string $body): string
+    /**
+     * The stub's router: a PORT-KEYED behaviour table. The leg registers its
+     * mode in behavior.json (beside the router, under the temp HOME) before
+     * the server binds, and every request arriving on that port is answered
+     * per mode — no request content is ever scanned. Content matching is
+     * unsafe HERE because the CLI embeds a live git-state <turn-context>
+     * block inside the user message: any marker vocabulary present in the
+     * repo files (it would live in this very file) rides every request, and
+     * the first branch would win forever. The default mode echoes every
+     * user row joined — the --param round-trip oracle — and every answer rides
+     * the OpenAI chat-completions wire shape CustomProvider::parseResponse
+     * reads.
+     */
+    private static function writeWorkflowVerbRouter(string $home): string
     {
-        $path = $home . '/backend-' . \uniqid('b', true) . '.sh';
-        if (\file_put_contents($path, "#!/bin/sh\n" . $body) === false) {
-            self::fail('could not write the backend stub');
+        $router = <<<'PHP'
+<?php
+// Workflow-verb test stub — served by php -S, single request at a time.
+$home = __DIR__;
+$raw = (string) file_get_contents('php://input');
+$decoded = json_decode($raw, true);
+$allUsers = '';
+if (is_array($decoded) && isset($decoded['messages']) && is_array($decoded['messages'])) {
+    foreach ($decoded['messages'] as $message) {
+        if (is_array($message) && ($message['role'] ?? null) === 'user') {
+            $content = $message['content'] ?? '';
+            if (is_array($content)) {
+                $joined = '';
+                foreach ($content as $part) {
+                    if (is_array($part) && isset($part['text']) && is_string($part['text'])) {
+                        $joined .= $part['text'];
+                    }
+                }
+                $content = $joined;
+            }
+            $allUsers .= ((string) $content) . "\n";
         }
-        \chmod($path, 0700);
+    }
+}
+$behavior = json_decode((string) @file_get_contents($home . '/behavior.json'), true);
+$mode = is_array($behavior) ? (string) ($behavior['mode'] ?? '') : '';
+if ($mode === 'slow') {
+    if (file_exists($home . '/stage-finished')) {
+        $answer = 'resumed fine';
+    } else {
+        file_put_contents($home . '/stage-started', '1');
+        sleep(12);
+        touch($home . '/stage-finished');
+        $answer = 'slow answer';
+    }
+} elseif ($mode === 'escalate') {
+    $answer = 'ESCALATE: is it round?';
+} elseif ($mode === 'reject') {
+    $answer = 'WRONG: the tone is off';
+} else {
+    $answer = 'STUBGOT ' . $allUsers;
+}
+echo json_encode([
+    'id' => 'chatcmpl-workflow-verb-stub',
+    'object' => 'chat.completion',
+    'created' => 1700000000,
+    'model' => 'stub-model',
+    'choices' => [[
+        'index' => 0,
+        'message' => ['role' => 'assistant', 'content' => $answer],
+        'finish_reason' => 'stop',
+    ]],
+    'usage' => ['prompt_tokens' => 11, 'completion_tokens' => 7, 'total_tokens' => 18],
+]);
+PHP;
+        $path = $home . '/router.php';
+        if (\file_put_contents($path, $router) === false) {
+            self::fail('could not write the stub router');
+        }
 
         return $path;
     }
 
     /**
-     * Run bin/candy-code with one temp HOME, no inherited CANDY_CODE_* state,
-     * and the command-tier backend armed. When $signalAfterMarker is given,
-     * the child's SIGTERM is delivered as soon as the marker file appears —
-     * the stage is provably mid-flight when the signal lands.
+     * Bind a throwaway listener to learn a free loopback port. The gap
+     * between close and php -S binding it is not race-free — the probe
+     * socket cannot be held, since holding it IS the bind — so the starter
+     * below re-reserves and retries once when a server dies on arrival.
+     */
+    private static function reserveWorkflowVerbPort(): int
+    {
+        $probe = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $error);
+        if ($probe === false) {
+            self::fail('no loopback port could be reserved for the stub: ' . $error);
+        }
+        $name = (string) \stream_socket_get_name($probe, false);
+        \fclose($probe);
+        $port = (int) \substr($name, (int) \strrpos($name, ':') + 1);
+        if ($port <= 0) {
+            self::fail('could not read the reserved stub port from ' . $name);
+        }
+
+        return $port;
+    }
+
+    /**
+     * Start the php -S stub for this temp HOME, registering the port-keyed
+     * behaviour mode BEFORE the server binds, and wait until it answers. A
+     * reserved-then-released port can be taken before php -S binds it, so a
+     * dead-on-arrival server retries once on a fresh port instead of flaking.
+     */
+    private static function startWorkflowVerbStub(string $home, string $mode = ''): void
+    {
+        if (\file_put_contents($home . '/behavior.json', (string) \json_encode(['mode' => $mode])) === false) {
+            self::fail('could not write the stub behaviour table');
+        }
+        $router = self::writeWorkflowVerbRouter($home);
+        $logPath = $home . '/stub-server.log';
+
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            $port = self::reserveWorkflowVerbPort();
+            self::writeWorkflowVerbConfig($home, $port);
+            $process = \proc_open(
+                [\PHP_BINARY, '-S', '127.0.0.1:' . $port, $router],
+                [0 => ['file', '/dev/null', 'r'], 1 => ['file', $logPath, 'a'], 2 => ['file', $logPath, 'a']],
+                $pipes,
+                $home,
+                ['PATH' => \getenv('PATH') ?: '/usr/bin:/bin', 'HOME' => $home],
+            );
+            if (!\is_resource($process)) {
+                self::fail('could not launch the php -S workflow-verb stub');
+            }
+            self::$stubServer = [$process, $logPath];
+
+            $deadline = \microtime(true) + self::STUB_BIND_WAIT_SECONDS;
+            while (\microtime(true) < $deadline) {
+                $socket = @\fsockopen('127.0.0.1', $port, $errno, $error, 0.2);
+                if ($socket !== false) {
+                    \fclose($socket);
+
+                    return;
+                }
+                if (!\proc_get_status($process)['running']) {
+                    \proc_close($process);
+                    self::$stubServer = null;
+                    break;
+                }
+                \usleep(20_000);
+            }
+            if ($attempt === 1) {
+                self::stopWorkflowVerbStub();
+                self::fail('the stub server never bound its port within the watch window; log: ' . (string) @\file_get_contents($logPath));
+            }
+        }
+    }
+
+    private static function stopWorkflowVerbStub(): void
+    {
+        if (self::$stubServer === null) {
+            return;
+        }
+        [$process] = self::$stubServer;
+        self::$stubServer = null;
+        if (\is_resource($process)) {
+            \proc_terminate($process, 9);
+            \proc_close($process);
+        }
+    }
+
+    /**
+     * Wait (bounded) for the stub's slow request to finish being served, so
+     * the single-threaded server is free again for the resume dispatch.
+     */
+    private static function awaitWorkflowVerbStubFile(string $path): void
+    {
+        $deadline = \microtime(true) + self::STUB_SLOW_REQUEST_SECONDS;
+        while (!\file_exists($path)) {
+            if (\microtime(true) >= $deadline) {
+                self::fail('the stub never finished serving the slow request within the bound');
+            }
+            \usleep(20_000);
+        }
+    }
+
+    /**
+     * Run bin/candy-code with one temp HOME and no inherited CANDY_CODE_*
+     * state: the config-tier provider is the only backend the child can
+     * see. When $signalAfterMarker is given, the child's SIGTERM is
+     * delivered as soon as the marker file appears — the stage is provably
+     * mid-flight when the signal lands.
      *
      * @param list<string> $argv
      *
      * @return array{0:int, 1:string, 2:string} exit code, stdout, stderr
      */
-    private static function runWorkflowVerbChild(string $home, array $argv, ?string $scriptPath = null, ?string $signalAfterMarker = null): array
+    private static function runWorkflowVerbChild(string $home, array $argv, ?string $signalAfterMarker = null): array
     {
         $binary = \dirname(__DIR__, 2) . '/bin/candy-code';
         \assert(\is_file($binary), 'bin/candy-code must exist beside the tests');
@@ -453,9 +672,6 @@ final class WorkflowSubcommandTest extends TestCase
             'TMPDIR' => $home,
             'CANDY_CODE_MCP_DISABLE' => '1',
         ];
-        if ($scriptPath !== null) {
-            $env['CANDY_CODE_BACKEND_CMD'] = 'sh ' . \escapeshellarg($scriptPath);
-        }
 
         $process = \proc_open(
             [\PHP_BINARY, $binary, ...$argv],
