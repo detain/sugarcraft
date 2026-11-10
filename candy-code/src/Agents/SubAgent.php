@@ -135,6 +135,28 @@ final class SubAgent
      *                        time budget; the pool's own floor
      *                        ({@see AgentPoolConfig::$maxRetries}) applies
      *                        when it is higher (audit WF-1(b)).
+     * @param int $stallTimeout Idle bound in seconds, re-armable: the pool's
+     *                          forking path expires the run when the forked
+     *                          worker goes SILENT — publishing no new progress
+     *                          bytes for this many seconds — even while its
+     *                          wall-clock $timeout has not passed
+     *                          ({@see AgentWorkerPool::pumpProgress()} re-arms
+     *                          the deadline on every growth). Zero or less
+     *                          means no stall bound: the default, fully inert,
+     *                          so every existing construction keeps today's
+     *                          bytes. Fork path only — the synchronous and
+     *                          inline dispatch paths never publish progress,
+     *                          so there is nothing to re-arm; those stay
+     *                          wall-clock-only. Option A of the C7' decision
+     *                          (/tmp/opencode/cc-eval-1106/C7PRIME-DECISION.md).
+     * @param int $stallRestarts How many times a stall-expiry may re-dispatch
+     *                           this agent. A SEPARATE budget from
+     *                           $maxRetries: a silent worker consumes neither
+     *                           model retries, and a failed model attempt
+     *                           consumes no restarts, so neither counter can
+     *                           starve the other. Zero (default) disables
+     *                           stall re-dispatch: a stall expires exactly as
+     *                           an un-restarted timeout does today.
      */
     public function __construct(
         public readonly string $id,
@@ -154,6 +176,8 @@ final class SubAgent
         // Distinct from $runModel (what actually ran) and $agent->model (preset
         // ask); null keeps today's session-default path byte-identical.
         public readonly ?string $model = null,
+        public readonly int $stallTimeout = 0,
+        public readonly int $stallRestarts = 0,
     ) {
         $this->isolation = $isolation ?? $agent->isolation ?? Isolation::None;
         $this->status = self::STATUS_PENDING;
@@ -259,6 +283,8 @@ final class SubAgent
             'teammate_id' => $this->teammateId,
             'output_schema' => $this->outputSchema,
             'model' => $this->model,
+            'stall_timeout' => $this->stallTimeout,
+            'stall_restarts' => $this->stallRestarts,
         ];
     }
 }

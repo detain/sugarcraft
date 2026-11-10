@@ -82,6 +82,23 @@ final class AgentWorkerPool
     private array $deadlines = [];
 
     /**
+     * @var array<string, array{0: int, 1: float}> agent id =>
+     *      [idle deadline as an hrtime(true) nanosecond reading, the silence
+     *      bound in seconds that set it]
+     *
+     * The re-armable half of the same WF-1 machinery (Option A of the C7'
+     * decision): armed beside the absolute deadline at dispatch for FORKED
+     * agents whose {@see SubAgent::$stallTimeout} is positive, and RE-ARMED
+     * by {@see pumpProgress()} every time a worker publishes new output
+     * bytes. An agent that keeps making progress is therefore never expired
+     * for silence however long the whole run takes; one that goes quiet for
+     * the bound is expired with a distinct cause
+     * ({@see AgentResult::$stalled}) so the restart budget is judged apart
+     * from model retries. Cleared alongside {@see $deadlines} at every site.
+     */
+    private array $stallDeadlines = [];
+
+    /**
      * Wall-clock budget, in seconds, for one {@see executeAll()} run as a
      * whole — set by {@see withTimeBudget()}; null means no run-level bound.
      *
@@ -106,7 +123,7 @@ final class AgentWorkerPool
     private int $maxRetries = 0;
 
     /**
-     * @var array<string, array{attempts: int, tokens: int, cost: float, startedAt: ?\DateTimeImmutable, last: ?AgentResult, pending: bool}>
+     * @var array<string, array{attempts: int, tokens: int, cost: float, startedAt: ?\DateTimeImmutable, last: ?AgentResult, pending: bool, stalls: int}>
      *      agent id => the current executeAll() run's attempts at it
      *
      * Audit WF-1(b): a failed or timed-out agent is re-queued instead of
@@ -117,7 +134,11 @@ final class AgentWorkerPool
      * a retry that is queued but never runs — the run was cancelled, a
      * fail-fast stage stopped, or the time budget ran out while it waited for
      * a slot: the last real attempt's result is what the run yields for it,
-     * so every dispatched agent still yields exactly one result.
+     * so every dispatched agent still yields exactly one result. `stalls`
+     * counts the stall-expiry re-dispatches already GRANTED for this agent
+     * in this run — the restart budget ({@see SubAgent::$stallRestarts}) is
+     * spent from it and NEVER from the model-retry gate, so the two budgets
+     * stay independent.
      */
     private array $attemptLog = [];
 
@@ -401,6 +422,7 @@ final class AgentWorkerPool
         // itself is configuration and carries over (withTimeBudget() relies
         // on that).
         $this->deadlines = [];
+        $this->stallDeadlines = [];
         $this->runDeadlineNs = null;
         // Per-run state, like the deadlines; the retry floor is configuration
         // and carries over.
@@ -759,6 +781,14 @@ final class AgentWorkerPool
      * budget is spent: a retry started then would be killed, or never
      * started, at once, and the attempt that really ran is the more useful
      * result.
+     *
+     * The two budgets are independent (Option A of the C7' decision): a
+     * STALLED expiry spends only the agent's restart budget
+     * ({@see SubAgent::$stallRestarts}), and stall re-dispatches are
+     * subtracted from the model-retry gate so an agent that went silent
+     * never steals retries from a later model failure. When no stall was
+     * ever granted the subtraction is zero and the comparison is the
+     * original one, byte for byte.
      */
     private function retryAllowed(SubAgent $agent, AgentResult $result, int $attempts, ?int $deadlineNs): bool
     {
@@ -766,7 +796,16 @@ final class AgentWorkerPool
             return false;
         }
 
-        if ($attempts > $this->retriesFor($agent) || $this->wasCancelledByUser) {
+        if ($this->wasCancelledByUser) {
+            return false;
+        }
+
+        $stallsUsed = $this->attemptLog[$agent->id]['stalls'] ?? 0;
+        $withinBudget = $result->stalled
+            ? $stallsUsed < max(0, $agent->stallRestarts)
+            : ($attempts - $stallsUsed) <= $this->retriesFor($agent);
+
+        if (!$withinBudget) {
             return false;
         }
 
@@ -811,6 +850,7 @@ final class AgentWorkerPool
                 'startedAt' => null,
                 'last' => null,
                 'pending' => false,
+                'stalls' => 0,
             ];
 
             return;
@@ -831,6 +871,9 @@ final class AgentWorkerPool
         if ($log['last'] !== null) {
             $log['tokens'] += $log['last']->tokensUsed;
             $log['cost'] += $log['last']->costUsd;
+        }
+        if ($result->stalled) {
+            $log['stalls'] = ($log['stalls'] ?? 0) + 1;
         }
         $log['last'] = $result;
         $log['startedAt'] ??= $result->startedAt;
@@ -914,6 +957,7 @@ final class AgentWorkerPool
             startedAt: $firstStartedAt ?? $result->startedAt,
             completedAt: $result->completedAt,
             attempts: $attempts,
+            stalled: $result->stalled,
         );
     }
 
@@ -1000,6 +1044,11 @@ final class AgentWorkerPool
             // silently run unconstrained and off its asked model.
             outputSchema: $agent->outputSchema,
             model: $agent->model,
+            // The stall ask rides too: it is part of how long the run is
+            // allowed to be silent, and the every-argument law above says a
+            // rebuild that drops it is a lie by omission.
+            stallTimeout: $agent->stallTimeout,
+            stallRestarts: $agent->stallRestarts,
         );
     }
 
@@ -1569,6 +1618,7 @@ final class AgentWorkerPool
                     $this->activePids[$agentId],
                     $this->active[$agentId],
                     $this->deadlines[$agentId],
+                    $this->stallDeadlines[$agentId],
                     $this->cancelled[$agentId],
                 );
 
@@ -1732,17 +1782,37 @@ final class AgentWorkerPool
         if ($deadline !== null) {
             $this->deadlines[$agent->id] = [$deadline, $seconds, $byBudget];
         }
+
+        // The stall deadline is armed independently: an agent may carry an
+        // idle bound with no absolute one at all, and must still expire when
+        // it goes silent.
+        if ($agent->stallTimeout > 0) {
+            $this->stallDeadlines[$agent->id] = [
+                hrtime(true) + $agent->stallTimeout * 1_000_000_000,
+                (float) $agent->stallTimeout,
+            ];
+        }
     }
 
     private function deadlinePassed(string $agentId): bool
     {
         $deadline = $this->deadlines[$agentId] ?? null;
+        $now = hrtime(true);
 
-        return $deadline !== null && hrtime(true) >= $deadline[0];
+        if ($deadline !== null && $now >= $deadline[0]) {
+            return true;
+        }
+
+        $stall = $this->stallDeadlines[$agentId] ?? null;
+
+        return $stall !== null && $now >= $stall[0];
     }
 
     /**
-     * Kill a forked agent that ran out of time and settle it TimedOut.
+     * Kill a forked agent that ran out of time — or ran out of speech, its
+     * re-armable idle bound having gone unrenewed since its last published
+     * progress byte — and settle it TimedOut, carrying the distinct cause on
+     * {@see AgentResult::$stalled}.
      *
      * {@see ProcessContainment::killTree()}, like {@see terminateWorker()}
      * but straight to SIGKILL — an overrun is not a request to wind down. The
@@ -1764,9 +1834,21 @@ final class AgentWorkerPool
      */
     private function expireWorker(string $agentId, int $pid): string
     {
-        [, $seconds, $byBudget] = $this->deadlines[$agentId];
+        $absolute = $this->deadlines[$agentId] ?? null;
+        $stall = $this->stallDeadlines[$agentId] ?? null;
+        $now = hrtime(true);
+        $absoluteFired = $absolute !== null && $now >= $absolute[0];
+        // When both bounds fire on the same poll the outer one is the honest
+        // cause: the agent ran out of time, not merely out of speech.
+        $stalled = !$absoluteFired && $stall !== null && $now >= $stall[0];
+
         $agent = $this->active[$agentId] ?? null;
-        unset($this->deadlines[$agentId], $this->activePids[$agentId], $this->active[$agentId]);
+        unset(
+            $this->deadlines[$agentId],
+            $this->stallDeadlines[$agentId],
+            $this->activePids[$agentId],
+            $this->active[$agentId],
+        );
 
         if ($this->loopDriven()) {
             // On the TUI's loop (audit R3): the walk and the reap run in loop
@@ -1798,15 +1880,22 @@ final class AgentWorkerPool
                 agentId: $agentId,
                 status: AgentStatus::TimedOut,
                 output: null,
-                error: new \RuntimeException(sprintf(
-                    $byBudget
-                        ? 'AgentWorkerPool: agent %s ran past the %s s time budget it was dispatched under and was killed, together with every process it started.'
-                        : 'AgentWorkerPool: agent %s ran past its %s s timeout and was killed, together with every process it started.',
-                    $agentId,
-                    self::formatSeconds($seconds),
-                )),
+                error: $stalled
+                    ? new \RuntimeException(sprintf(
+                        'AgentWorkerPool: agent %s went silent for %s s without publishing progress and was killed, together with every process it started.',
+                        $agentId,
+                        self::formatSeconds($stall[1]),
+                    ))
+                    : new \RuntimeException(sprintf(
+                        $absolute[2]
+                            ? 'AgentWorkerPool: agent %s ran past the %s s time budget it was dispatched under and was killed, together with every process it started.'
+                            : 'AgentWorkerPool: agent %s ran past its %s s timeout and was killed, together with every process it started.',
+                        $agentId,
+                        self::formatSeconds($absolute[1]),
+                    )),
                 startedAt: $agent?->startedAt,
                 completedAt: new \DateTimeImmutable(),
+                stalled: $stalled,
             ));
         }
 
@@ -1995,6 +2084,7 @@ final class AgentWorkerPool
 
         $this->activePids = [];
         $this->deadlines = [];
+        $this->stallDeadlines = [];
     }
 
     /**
@@ -2317,6 +2407,17 @@ final class AgentWorkerPool
             // never-dispatched task by, and `streaming` is what every
             // liveness-aware reader means by "working".
             $agent->status = SubAgent::STATUS_STREAMING;
+
+            // Progress is speech: a worker that publishes new bytes renews
+            // its idle bound, so only a SILENT agent ever expires for it
+            // (Option A of the C7' decision — no new timers, the bound is
+            // just a timestamp the next poll compares against).
+            if ($agent->stallTimeout > 0) {
+                $this->stallDeadlines[(string) $agentId] = [
+                    hrtime(true) + $agent->stallTimeout * 1_000_000_000,
+                    (float) $agent->stallTimeout,
+                ];
+            }
         }
     }
 
