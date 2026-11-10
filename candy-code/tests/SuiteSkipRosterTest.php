@@ -380,6 +380,10 @@ final class SuiteSkipRosterTest extends TestCase
                 unset($unarmed[self::PHAR_PREMISE_ENTRY]);
                 unset($unarmed[self::PHAR_RENAME_ENTRY]);
             }
+            if (SuiteSkipRoster::scriptJailRuns()) {
+                unset($unarmed[self::JAIL_ENTRY]);
+                unset($unarmed[self::JAIL_TOOL_ENTRY]);
+            }
 
             self::assertSame(
                 $unarmed,
@@ -387,7 +391,8 @@ final class SuiteSkipRosterTest extends TestCase
                     static fn () => SuiteSkipRoster::expectedForLayout($farm),
                 ),
                 'the unarmed gate may not lift anything -- the smokes skip and stay rostered (the '
-                . 'premise and the rename arm lift only where phar writing is possible)',
+                . 'premise and the rename arm lift only where phar writing is possible, and the '
+                . 'jail arm wherever bubblewrap starts)',
             );
 
             putenv('CANDY_CODE_LIVE_SGLANG=0');
