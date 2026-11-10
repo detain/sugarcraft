@@ -1115,6 +1115,37 @@ final class HelpTest extends TestCase
         );
     }
 
+    public function testADoubleWidthRecordPrefixSurvivesTheReflowByteIntact(): void
+    {
+        // HELP NIT-1: the gap-column walker counted DISPLAY cells but cut the
+        // raw line with a codepoint-indexed cursor — so any record whose
+        // prefix carried a double-width (CJK) character was split at the wrong
+        // byte, cutting its first word in half. The fix keeps bytes, codepoints
+        // and width separate; ASCII pages answer byte-identically before and
+        // after, so ONLY a width-2 fixture can pin the defect.
+        $filler = str_repeat('filler ', 24);
+        $page = implode("\n", [
+            '漢字 cmd  ' . $filler . 'end of the first record description',
+            '      ' . $filler . 'first continuation tail words here',
+            'other cmd  ' . $filler . 'end of the second record description',
+            '      ' . $filler . 'second continuation tail words here',
+        ]) . "\n";
+
+        $out = \SugarCraft\Code\Cli\HelpPageReflow::reflow($page, 100);
+
+        self::assertMatchesRegularExpression(
+            '/^漢字 cmd  filler/',
+            explode("\n", $out)[0],
+            'a double-width prefix and its raw gap must ride the reflowed row byte-intact',
+        );
+        self::assertSame(
+            preg_replace('/\s+/u', '', $page),
+            preg_replace('/\s+/u', '', $out),
+            'the reflow moved or changed no words — only whitespace may differ',
+        );
+        self::assertStringContainsString('other cmd', $out, 'the ASCII record keeps its prefix too');
+    }
+
     /** @return array<string, array{0: string}> */
     public static function wideTerminalWidths(): array
     {
