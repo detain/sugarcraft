@@ -8,6 +8,7 @@ use SugarCraft\Code\Attachments\ContextMentions;
 use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\AttachmentType;
 use SugarCraft\Code\Backend;
+use SugarCraft\Code\Backend\ObservesReasoning;
 use SugarCraft\Code\Events\SpendCapBreached;
 use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Hooks\HookEvent;
@@ -766,7 +767,15 @@ final class NonInteractive
         $batchFailed = false;
 
         try {
-            $message = $backend->complete($history, $emitter === null ? null : $onToken, $onEvent, $emitter === null ? null : $onReasoning);
+            // ObservesReasoning doctrine (see the interface docblock): a narrow
+            // userland complete() silently DROPS a surplus positional argument,
+            // so ask the backend whether it observes reasoning before passing
+            // the tracker — the capability check TurnRunner performs. The
+            // 4-arg consumers (EngineBackend, RemoteBackend) keep their path
+            // bit-for-bit; narrow backends received nothing anyway.
+            $message = $backend instanceof ObservesReasoning
+                ? $backend->complete($history, $emitter === null ? null : $onToken, $onEvent, $emitter === null ? null : $onReasoning)
+                : $backend->complete($history, $emitter === null ? null : $onToken, $onEvent);
         } catch (\Throwable $e) {
             // 1021 F-7: same choke as failUsage() — the emitter owns the
             // stderr label, the document carries the raw sentence.
@@ -944,7 +953,10 @@ final class NonInteractive
                 $sawToolResult = false;
                 $trial = [...$history, Message::user($row)];
                 try {
-                    $answer = $backend->complete($trial, $emitter === null ? null : $onToken, $onEvent, $emitter === null ? null : $onReasoning);
+                    // Same capability check as the single-pass arm above.
+                    $answer = $backend instanceof ObservesReasoning
+                        ? $backend->complete($trial, $emitter === null ? null : $onToken, $onEvent, $emitter === null ? null : $onReasoning)
+                        : $backend->complete($trial, $emitter === null ? null : $onToken, $onEvent);
                 } catch (\Throwable $e) {
                     // 1021 F-7 law holds per row: emitter owns the label,
                     // the document carries the raw sentence.

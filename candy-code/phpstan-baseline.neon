@@ -835,12 +835,6 @@ parameters:
 			path: src/Cli/NonInteractive.php
 
 		-
-			message: '#^Method SugarCraft\\Code\\Backend\:\:complete\(\) invoked with 4 parameters, 1\-3 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: src/Cli/NonInteractive.php
-
-		-
 			message: '#^Method SugarCraft\\Code\\Cli\\NonInteractive\:\:historyFrom\(\) never assigns null to &\$mentionNotices so it can be removed from the by\-ref type\.$#'
 			identifier: parameterByRef.unusedType
 			count: 1
