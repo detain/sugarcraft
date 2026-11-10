@@ -6,7 +6,6 @@ namespace SugarCraft\Code\Tests\Channels;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Channels\ChannelInboundLog;
-use SugarCraft\Code\Memory\SecretRedactor;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 
 /**
