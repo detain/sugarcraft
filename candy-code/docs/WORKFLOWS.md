@@ -781,6 +781,56 @@ that agent's tokens. **A context key starting with `@` is refused**:
 `run()` and `runFromPhp()` throw `InvalidArgumentException` before anything is
 dispatched, and `/workflow run` prints it as an error.
 
+### Joining prior stages with `input:`
+
+A stage's `input:` reads the **prior stages** of the same file. The join is
+built just before the stage's prompt is assembled and injected into the
+interpolation context only — it never lands in the run's context, so the pause
+file never carries it and a resumed run re-derives identical bytes from the
+recorded rows.
+
+```yaml
+- name: gather
+  prompt: "List the failing modules."
+- name: check
+  prompt: "Re-run the smoke suite."
+- name: triage
+  input:
+    from: [gather, check]
+    as: file-list
+  prompt: "Triage everything collected below."
+```
+
+The joined text is addressed by the fixed handle `input`: `{{input}}` and
+`{{input.results}}` both read it, and `as: results` additionally makes it
+pointer-traversable — `{{input.gather/summary}}` (the dot names the row, the
+rest is an RFC 6901 pointer). A stage actually named `input` is shadowed inside
+a joining stage's prompt only; its recorded rows elsewhere are untouched. The
+four `as:` shapes:
+
+| `as:` | the rows become | when every source is missing |
+|---|---|---|
+| `file-list` | rows joined by newlines | the note `[input: no sources joined]` |
+| `first` | the first present row, verbatim | the stage **fails**: every source is missing |
+| `all` | a labeled `=== name ===` block per present row | the stage **fails** |
+| `results` | a JSON document keyed by source name | the stage **fails** |
+
+- **Prior stages only.** A `from:` name must be a stage declared before the
+  joining stage: self-references, forward references and unknown names are
+  refused at parse, because the registry sees the whole file. A `uses:` stage
+  cannot carry a join — v1 joins stages of the same file, not carried
+  workflows.
+- A source skipped by an unsatisfied `when:` clause records nothing, so it is
+  simply absent: a partial join skips it, an all-skipped `from:` list answers
+  per the table. That refusal is deliberately a run-time one — a parse cannot
+  know what will be skipped — and lands as an ordinary stage failure.
+- On a `capture:`d source the recorded row carries its `[output captured to
+  …]` header, so `file-list` reads as a manifest of capture paths and
+  previews — what a fan-in triage stage usually wants.
+- The join is a task key: on a `tasks:` list it belongs on each task (a
+  stage-level `input:` beside `tasks:` is refused), and it rides the same
+  single arm verification slots and pipeline steps read.
+
 ---
 
 ## Running one
