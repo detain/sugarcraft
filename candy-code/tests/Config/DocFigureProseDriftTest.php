@@ -665,9 +665,11 @@ final class DocFigureProseDriftTest extends TestCase
             3,
             // C2 (wave-R, 2026-11-09) widened 9000 -> 10000: the `when:` guard
             // block sits ahead of the three dispatch arms, shifting them ~1k
-            // bytes; the file carries exactly three '$workflow->timeout);'
-            // spellings tree-wide, so no fourth can enter the wider window.
-            preg_match_all('/\$workflow->timeout\);/', self::bodyExcerpt($engine, 'runGuardedFromWorkflow', 10_000)),
+            // bytes; C6 (2026-11-09) widened 10000 -> 10600: the stage-lifecycle
+            // announce lines inside the same dispatch region shifted the third
+            // arm's '$workflow->timeout);' to +10,066. The file carries exactly
+            // three spellings tree-wide, so no fourth can enter the window.
+            preg_match_all('/\$workflow->timeout\);/', self::bodyExcerpt($engine, 'runGuardedFromWorkflow', 10_600)),
             'runGuardedFromWorkflow() no longer hands Workflow::$timeout to the stage, pipeline and verification executors',
         );
         preg_match_all('/maxRetries: \$\w+->retries \?\? (\d+)/', $engine, $engineRetries);
@@ -2319,7 +2321,7 @@ final class DocFigureProseDriftTest extends TestCase
     public function testHookEventsTableSurvivesTheLiveEnumAndDispatchSites(): void
     {
         $hooksRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
-        $words = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12];
+        $words = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'sixteen' => 16];
         $cases = HookEvent::cases();
         $caseNames = array_map(static fn (HookEvent $case): string => $case->name, $cases);
 
@@ -2363,8 +2365,9 @@ final class DocFigureProseDriftTest extends TestCase
 
         // Wired rows: the cited methods are EXACTLY where each event is reached.
         // An event HookManager has no method for is reached only through a
-        // HookDispatcher (roadmap 4.6-2's team events), so its origin is the
-        // dispatcher call rather than a HookEvent case handed to the manager.
+        // HookDispatcher (roadmap 4.6-2's team events and C6's workflow
+        // quartet), so its origin is the dispatcher call rather than a
+        // HookEvent case handed to the manager.
         foreach ($citations as $event => $cited) {
             $toolScoped = str_contains($event, 'ToolUse');
             $viaDispatcher = !method_exists(\SugarCraft\Code\Hooks\HookManager::class, lcfirst($event));
@@ -2389,11 +2392,14 @@ final class DocFigureProseDriftTest extends TestCase
             self::assertEqualsCanonicalizing($cited, $found, "docs/HOOKS.md's Dispatched-from column for {$event} no longer matches where {$token} is actually called in src/");
         }
 
-        // The dispatcher paragraph (roadmap 4.6-2 wired the team events): every
-        // row is cited, the three it names are exactly the rows HookManager has
-        // no method for, and the chain they ride is the launch's — built from
+        // The dispatcher paragraph (roadmap 4.6-2 wired the team events; C6
+        // wired the workflow quartet the same way): every row is cited, the
+        // seven it names are exactly the rows HookManager has no method for,
+        // and each dispatch is guarded by a null check on its owner's
+        // dispatcher. The team chain is the launch's — built from
         // HookManager::dispatcher() inside Bootstrap::hooks() and installed on
-        // TeamManager there, nowhere else.
+        // TeamManager there, nowhere else; the workflow chain is whatever the
+        // engine's host handed it.
         $paraEnd = strpos($hooksRaw, 'What a **block**');
         self::assertIsInt($paraEnd);
         $para = self::markdownProse(substr($hooksRaw, $sectionEnd, $paraEnd - $sectionEnd));
@@ -2404,13 +2410,23 @@ final class DocFigureProseDriftTest extends TestCase
         ));
         preg_match_all('/`(\w+)`/', (string) strstr($section, '| `TeammateIdle`'), $teamRowEvents);
         self::assertSame(1, preg_match('/The three team rows are the ones raised outside a tool call/', $para), 'the team-rows sentence of the dispatcher paragraph moved');
-        self::assertCount(3, $viaDispatcherEvents, 'the paragraph says THREE events bypass HookManager');
+        self::assertSame(1, preg_match('/The four workflow rows are raised by `(\w+)` on the same guarded-dispatch/', $para, $workflowRows), 'the workflow-rows sentence of the dispatcher paragraph moved');
+        self::assertSame('WorkflowEngine', $workflowRows[1], 'the page names a different class as what raises the stage lifecycle events');
+        self::assertTrue(class_exists(\SugarCraft\Code\Workflows\WorkflowEngine::class), 'WorkflowEngine vanished — the page still says it raises the four workflow rows');
+        self::assertCount(7, $viaDispatcherEvents, 'the paragraph says SEVEN events bypass HookManager — three team rows and four workflow rows');
         foreach ($viaDispatcherEvents as $event) {
             self::assertArrayHasKey($event, $citations, "{$event} reaches only a HookDispatcher but its table row cites nothing");
-            self::assertContains($event, $teamRowEvents[1], "{$event} bypasses HookManager but is not one of the team rows the paragraph is about");
+            $fromWorkflowEngine = array_reduce(
+                $citations[$event],
+                static fn (bool $carry, string $pair): bool => $carry && str_starts_with($pair, 'WorkflowEngine::'),
+                true,
+            );
+            if (!$fromWorkflowEngine) {
+                self::assertContains($event, $teamRowEvents[1], "{$event} bypasses HookManager but is neither a team row nor a workflow row the paragraph is about");
+            }
             foreach (self::srcOccurrences('$this->hookDispatcher->dispatch' . $event . '(') as [$relative, $pos]) {
-                self::assertSame('TaskList.php', basename($relative), "{$event} is dispatched outside TaskList — the page names TaskList as what raises the team events");
-                self::assertMatchesRegularExpression('/hookDispatcher [!=]== null/', self::enclosingFunctionSlice($relative, $pos), "the {$event} dispatch lost its null-dispatcher guard — a list built without a chain must raise nothing");
+                self::assertSame($fromWorkflowEngine ? 'WorkflowEngine.php' : 'TaskList.php', basename($relative), "{$event} is dispatched from somewhere other than the class the page names as raising it");
+                self::assertMatchesRegularExpression('/hookDispatcher [!=]== null/', self::enclosingFunctionSlice($relative, $pos), "the {$event} dispatch lost its null-dispatcher guard — an owner built without a chain must raise nothing");
             }
         }
         self::assertSame(1, preg_match('/`(\w+)::(\w+)\(\)` hands\s+`HookManager::dispatcher\(\)` to `TeamManager::(\w+)\(\)`/', $para, $install), 'the install sentence of the dispatcher paragraph moved');

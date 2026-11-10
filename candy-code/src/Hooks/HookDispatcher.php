@@ -603,4 +603,24 @@ final class HookDispatcher
     {
         return $this->dispatch(HookEvent::TaskCompleted, $context);
     }
+
+    public function dispatchStageStarted(HookContext $context): HookDispatchResult
+    {
+        return $this->dispatch(HookEvent::StageStarted, $context);
+    }
+
+    public function dispatchStageComplete(HookContext $context): HookDispatchResult
+    {
+        return $this->dispatch(HookEvent::StageComplete, $context);
+    }
+
+    public function dispatchStageFail(HookContext $context): HookDispatchResult
+    {
+        return $this->dispatch(HookEvent::StageFail, $context);
+    }
+
+    public function dispatchWorkflowComplete(HookContext $context): HookDispatchResult
+    {
+        return $this->dispatch(HookEvent::WorkflowComplete, $context);
+    }
 }

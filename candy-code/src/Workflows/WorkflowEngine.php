@@ -19,6 +19,8 @@ use SugarCraft\Code\Agents\EngineExecutor;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Hooks\HookContext;
+use SugarCraft\Code\Hooks\HookDispatcher;
 use SugarCraft\Code\Permissions\PermissionAction;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionRule;
@@ -532,6 +534,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
          * declaration at all is unresolvable and refused loudly.
          */
         private readonly ?array $toolRegistry = null,
+        /**
+         * C6: the hook dispatcher this run announces stage lifecycle to
+         * ({@see HookEvent::StageStarted()} and siblings). NULL, THE DEFAULT,
+         * IS UNARMED: every announce site early-returns, so an engine built
+         * without it behaves byte-identically to one built before C6 existed
+         * — pinned, not asserted in prose. When present, the four lifecycle
+         * events are dispatched inline and synchronously on the run's own
+         * path; they are observe-only and cannot alter the run.
+         */
+        private readonly ?HookDispatcher $hookDispatcher = null,
     ) {}
 
     /**
@@ -1706,7 +1718,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $this->enterRun();
 
         try {
-            return $this->runGuardedFromWorkflow(
+            $result = $this->runGuardedFromWorkflow(
                 $workflow,
                 $context,
                 $currentStageIndex,
@@ -1717,6 +1729,15 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $pauseRequested,
                 $interruptible,
             );
+            // C6: the single run terminal for every entry point. Announced
+            // here — not in a finally — so a throwing run announces nothing
+            // (a crash is not a completion), while every RETURNED result,
+            // including a pre-flight refusal, passes the natural-terminal
+            // check inside the announce method. Nested `uses:` include runs
+            // re-enter this funnel and announce their own completion.
+            $this->announceWorkflowCompleted($result);
+
+            return $result;
         } finally {
             // In a finally so a throwing run cannot strand its slot and wedge
             // the engine against every later run.
@@ -1891,6 +1912,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $skipped = $this->skippedWhenRow($stage, $context, $stageStartedAt);
                 if ($skipped !== null) {
                     $stageResults[] = $skipped;
+                    // C6 adjudication: a skipped stage never reached a
+                    // dispatch, so it raises ONLY StageComplete — status
+                    // carries the distinction — and no StageStarted. Round
+                    // 0 says "no round ever ran".
+                    $this->announceStageComplete($resolvedWorkflowId, $skipped->stageName, $skipped->status->value, 0);
                     continue;
                 }
 
@@ -1898,6 +1924,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // its declaration carries without dispatch — door defaults closed.
                 $cached = $this->cachedStageResult($stage, $stageType, $prior);
                 if ($cached !== null) {
+                    // C6: a cache replay announces NOTHING — no dispatch
+                    // happened this run, so neither StageStarted nor a settle
+                    // event would be true. The replayed row still rides the
+                    // workflow's own totals and its WorkflowComplete totals.
                     $context[$cached->stageName . '.output'] = ($stage['capture'] ?? false) === true
                         ? $this->captureStageOutput($interruptId, $stageIndex, $cached)
                         : $cached->output ?? '';
@@ -1919,6 +1949,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     if ($loop !== null) {
                         $context['round'] = $round;
                     }
+
+                    // C6: one StageStarted per dispatched ROUND, raised before
+                    // any resource acquisition — a looped stage announces once
+                    // per round, matching what the executor will see.
+                    $this->announceStageStarted($resolvedWorkflowId, (string) ($stage['name'] ?? 'unknown'), $round);
 
                     // Every agent the stage ran is recorded by the executor as each
                     // settles — an executor that throws AFTER one ran still bills it.
@@ -1988,6 +2023,29 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 }
 
                 $stageResults[] = $stageResult;
+
+                // C6: the settle event. The engine's own fail-fast predicate
+                // (StageResult::isFailure() — the same one the fail-fast door
+                // below consults) is the SOLE trigger, so every settled stage
+                // raises exactly ONE of StageFail / StageComplete, never both
+                // and never none. `round` is the round that settled it
+                // ($round has just been incremented, so rounds-run == $round-1).
+                if ($stageResult->isFailure()) {
+                    $this->announceStageFail(
+                        $resolvedWorkflowId,
+                        $stageResult->stageName,
+                        $stageResult->status->value,
+                        $round - 1,
+                        $stageResult->error ?? '',
+                    );
+                } else {
+                    $this->announceStageComplete(
+                        $resolvedWorkflowId,
+                        $stageResult->stageName,
+                        $stageResult->status->value,
+                        $round - 1,
+                    );
+                }
 
                 // C13 substrate: record WHAT THIS STAGE WAS ASKED to run —
                 // the pre-interpolation prompt template plus model and
@@ -4680,5 +4738,115 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         pcntl_async_signals($previousAsyncSignals);
+    }
+
+    /**
+     * C6 lifecycle announces. Every one early-returns UNARMED (no
+     * dispatcher), so an engine constructed without {@see $hookDispatcher}
+     * cannot differ from a pre-C6 engine by a single observable byte — the
+     * pin lives in WorkflowStageHookEventsTest. Dispatch is inline and
+     * synchronous (E646-clean: no timers, no budgets); the verdict is
+     * discarded by design — these events are observe-only, and the only
+     * consumer today (the checkpoint-commit recipe in docs/HOOKS.md) acts on
+     * the announce itself, never on a refusal.
+     *
+     * Each named helper is invoked from exactly ONE call site (the DocFigure
+     * events-table arm derives its citation census from these), so the four
+     * sites below are the whole lifecycle surface: the do-head round, the
+     * C2 skip door, the post-record settle, and the runFromWorkflow choke.
+     */
+    private function announceStageStarted(string $workflowId, string $stageName, int $round): void
+    {
+        if ($this->hookDispatcher === null) {
+            return;
+        }
+
+        $this->hookDispatcher->dispatchStageStarted(
+            $this->lifecycleHookContext($workflowId, ['stage' => $stageName, 'round' => $round]),
+        );
+    }
+
+    private function announceStageComplete(string $workflowId, string $stageName, string $status, int $round): void
+    {
+        if ($this->hookDispatcher === null) {
+            return;
+        }
+
+        $this->hookDispatcher->dispatchStageComplete(
+            $this->lifecycleHookContext($workflowId, [
+                'stage' => $stageName,
+                'status' => $status,
+                'round' => $round,
+            ]),
+        );
+    }
+
+    private function announceStageFail(string $workflowId, string $stageName, string $status, int $round, string $error): void
+    {
+        if ($this->hookDispatcher === null) {
+            return;
+        }
+
+        $this->hookDispatcher->dispatchStageFail(
+            $this->lifecycleHookContext($workflowId, [
+                'stage' => $stageName,
+                'status' => $status,
+                'round' => $round,
+                'error' => $error,
+            ]),
+        );
+    }
+
+    /**
+     * The run-terminal adjudication, pinned in both polarities: the natural
+     * terminals (`completed`, `failed` — a pre-flight refusal included, which
+     * is a terminal that dispatched nothing) announce; `paused` and
+     * `cancelled` do NOT, because both are resumable and announcing here
+     * would double-count the completion when the resumed run reaches its own
+     * natural terminal. Exceptions never reach this method — the choke calls
+     * it only with a RETURNED result, so a crashed run announces nothing.
+     */
+    private function announceWorkflowCompleted(WorkflowResult $result): void
+    {
+        if ($this->hookDispatcher === null) {
+            return;
+        }
+
+        if ($result->status !== WorkflowStatus::Completed && $result->status !== WorkflowStatus::Failed) {
+            return;
+        }
+
+        $this->hookDispatcher->dispatchWorkflowComplete(
+            $this->lifecycleHookContext($result->workflowId, [
+                'status' => $result->status->value,
+                'stages' => count($result->stageResults),
+                'totalTokens' => $result->totalTokens,
+                'totalCost' => $result->totalCost,
+            ]),
+        );
+    }
+
+    /**
+     * TaskList's board-event shape (docs/HOOKS.md, *The team events*): a
+     * fixed `toolName` token is what entry matchers filter on, the payload
+     * rides `toolArgs` and its JSON mirror in `toolInput`. `sessionId`
+     * carries the workflow run id — the same role teamId plays for boards.
+     *
+     * @param array<string,mixed> $payload
+     */
+    private function lifecycleHookContext(string $workflowId, array $payload): HookContext
+    {
+        $payload = ['workflow' => $workflowId] + $payload;
+
+        return new HookContext(
+            sessionId: $workflowId,
+            toolName: 'Workflow',
+            toolArgs: $payload,
+            toolInput: json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+            toolOutput: '',
+            model: $this->model,
+            provider: $this->provider,
+            projectRoot: $this->environmentRoot ?? (getcwd() ?: ''),
+        );
     }
 }

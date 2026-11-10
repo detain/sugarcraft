@@ -30,6 +30,7 @@ use SugarCraft\Code\Hooks\BuiltIn\BashEscapeDenyHook;
 use SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook;
 use SugarCraft\Code\Hooks\BuiltIn\RepeatCallCountHook;
 use SugarCraft\Code\Hooks\BuiltIn\RepeatCallGuardHook;
+use SugarCraft\Code\Hooks\HookDispatcher;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Attachment;
@@ -1322,6 +1323,19 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     public function permissionGate(): ?PermissionGate
     {
         return $this->permissionGate;
+    }
+
+    /**
+     * The session's hook dispatcher over the hooks it was given — the same
+     * registry {@see dispatchTurnHooks()} judges tool calls against, handed
+     * out so collaborators that are NOT tools can announce lifecycle events
+     * the way the turn path does (C6: the workflow engine's stage events).
+     * Null exactly when the backend was built without a HookManager; the
+     * dispatcher is cheap to re-mint, so no memo.
+     */
+    public function hookDispatcher(): ?HookDispatcher
+    {
+        return $this->hookManager?->dispatcher();
     }
 
     /**
