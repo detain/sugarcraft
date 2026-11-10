@@ -315,7 +315,7 @@ final class ChannelInboundLogTest extends TestCase
         self::assertCount(ChannelInboundLog::MAX_RECORDS, $ledger->pending()['records']);
     }
 
-    public function testAckedRowsPruneAfterTheWindowPendingSurvive(): void
+    public function testAckedRowsPruneAfterTheWindowWhileAgedPendingRowsSurviveAsDead(): void
     {
         $ledger = $this->inboxLedger();
         $ledger->record('chan', 'm-done', ['n' => 'acked body']);
