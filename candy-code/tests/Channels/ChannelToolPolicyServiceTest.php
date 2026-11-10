@@ -221,6 +221,21 @@ final class ChannelToolPolicyServiceTest extends TestCase
         self::assertTrue($svc->scopeFor('agent:main:discord:group:g1:thread:t3')->blocksEverything());
     }
 
+    public function testASixSegmentAgentNameFailsClosed(): void
+    {
+        $svc = (self::service())(static fn (): array => [
+            'channels' => ['candy-discord|discord' => ['tools' => ['allow' => ['Read']]]],
+        ]);
+
+        // The 6-segment shape has no level the grammar can honour: the lone
+        // tail is neither a topic id (the 7-segment form) nor anything the
+        // loader spells. A name we cannot parse must refuse rather than
+        // silently borrow the channel-wide policy as if it had said so.
+        $scope = $svc->scopeFor('agent:m:discord:group:g1:x');
+        self::assertTrue($scope->blocksEverything(), 'a six-segment name is unparsed, and unparsed means refusing');
+        self::assertStringContainsString('unparsed agent session name', $scope->label());
+    }
+
     public function testTopicTailsAddressTheirGroupAndNotThemselves(): void
     {
         $svc = (self::service())(static fn (): array => [
