@@ -384,6 +384,27 @@ final class WorkflowStageHookEventsTest extends TestCase
         self::assertSame('failed', $terminal['status'], 'a Failed run IS a natural terminal');
     }
 
+    public function testARunThatThrowsBeforeDispatchingAnnouncesNothing(): void
+    {
+        $trace = new \ArrayObject();
+        $registry = new WorkflowRegistry();
+        $engine = $this->wf6Engine($registry, $this->wf6RecorderDispatcher($trace));
+
+        try {
+            $engine->run('never-registered-here');
+            self::fail('an unknown workflow must throw out of run() before any stage runs');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('never-registered-here', $e->getMessage());
+        }
+
+        self::assertSame(
+            [],
+            $trace->getArrayCopy(),
+            'C6 polarity: a run that throws before dispatching announces NOTHING — every announce '
+            . 'site rides the run body, never a finally, so an unstarted run cannot mint a terminal',
+        );
+    }
+
     public function testANestedIncludeAnnouncesItsOwnTerminalBeforeTheOuterOne(): void
     {
         $trace = new \ArrayObject();
