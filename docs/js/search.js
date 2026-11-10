@@ -22,7 +22,17 @@
   }
 
   function getIndexPath() {
-    return onLibPage() ? '../js/search-index.json' : 'js/search-index.json';
+    // The index lives next to this script: climb one '../' per directory
+    // segment above the site root, so any page depth (root, /lib/, a future
+    // nested /cookbook/ tree) resolves the same file. Depth counts non-empty
+    // dotless pathname segments, so '/lib/x.html' climbs exactly once and
+    // root pages climb zero times - identical to the old binary test.
+    var depth = window.location.pathname
+        .split('/')
+        .filter(function (segment) { return segment !== '' && segment.indexOf('.') === -1; })
+        .length;
+
+    return '../'.repeat(depth) + 'js/search-index.json';
   }
 
   /* Search-index entries are root-anchored relative hrefs (lib/<slug>.html,
