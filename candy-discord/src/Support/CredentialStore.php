@@ -37,6 +37,13 @@ final class CredentialStore
 {
     public const CURRENT_VERSION = 1;
 
+    /**
+     * Environment fallback for the default account's token only (§7.2): a
+     * bundle-side read, deliberately outside the candy-code src env roster —
+     * the settings tree carries policy, the store carries credentials.
+     */
+    public const TOKEN_ENV = 'DISCORD_BOT_TOKEN';
+
     public function __construct(
         private readonly string $path,
     ) {

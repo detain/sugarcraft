@@ -124,6 +124,17 @@ final class PairingCodes
     }
 
     /**
+     * The approved roster (§7.3's user-tier allowlist) — the DM policy door
+     * unions this with the settings' allowFrom names.
+     *
+     * @return list<string>
+     */
+    public function allowUsers(string $account): array
+    {
+        return $this->store->discordAllowUsers($account);
+    }
+
+    /**
      * Live pending codes for /pair list — the approver-facing surface
      * (TextSafety would redact these in any transcript-routed chunk, so
      * the list must be delivered directly, never through deliver()).
