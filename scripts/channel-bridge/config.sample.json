@@ -1,0 +1,49 @@
+{
+    "_about": "candy-code channel bridge - enablement and policy ONLY. Credentials live in the 0600 channels.json store (bridge.php creds set ...), never here.",
+    "log": "bridge.log",
+    "level": "info",
+    "db": "bridge.sqlite",
+    "credentials": "~/.candy-code/channels.json",
+    "serve": {
+        "_about": "Leave stateDir/token empty to use CANDY_CODE_SERVER_DIR / CANDY_CODE_SERVER_TOKEN / the default ~/.candy-code/server discovery. authDoor: subprotocol (proven) or bearer.",
+        "stateDir": "",
+        "token": "",
+        "authDoor": "subprotocol"
+    },
+    "policy": {
+        "approvers": [],
+        "secrets": [],
+        "dedupeKeepDays": 7
+    },
+    "discord": {
+        "enabled": false,
+        "accounts": {
+            "default": {}
+        },
+        "dmScope": "per-peer",
+        "dmPolicy": "allowlist",
+        "allowUsers": [],
+        "allowBots": false,
+        "respondWithoutMention": false,
+        "typing": true,
+        "appCommands": true,
+        "guilds": {}
+    },
+    "teams": {
+        "enabled": false,
+        "accounts": {
+            "default": {}
+        },
+        "host": "127.0.0.1",
+        "port": 3978,
+        "path": "/api/messages",
+        "dmScope": "per-peer",
+        "dmPolicy": "allowlist",
+        "allowUsers": [],
+        "groupPolicy": "disabled",
+        "allowGroups": [],
+        "allowUnsignedEmulator": false,
+        "textLimit": 4000,
+        "maxLines": 40
+    }
+}

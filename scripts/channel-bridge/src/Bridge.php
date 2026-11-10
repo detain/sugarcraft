@@ -74,6 +74,12 @@ final class Bridge
         return $this->channels[$name] ?? null;
     }
 
+    /** @return list<ChannelInterface> */
+    public function allChannels(): array
+    {
+        return \array_values($this->channels);
+    }
+
     /**
      * One inbound human message.
      *

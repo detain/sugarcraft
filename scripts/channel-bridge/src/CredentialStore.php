@@ -101,6 +101,11 @@ final class CredentialStore
      *
      * @return array<string, mixed>|null
      */
+    public function path(): string
+    {
+        return $this->path;
+    }
+
     public function account(array $contents, string $platform, string $account): ?array
     {
         $row = $contents['platforms'][$platform]['accounts'][$account] ?? null;
