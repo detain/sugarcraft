@@ -3278,7 +3278,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         // --- Run the task ---
-        $taskPrompt = $this->interpolateContext($task->prompt, $context);
+        // C9: the join reads this task's own input: spec against the run context;
+        // the helper returns a copy, so the persisted $context never carries it.
+        $taskPrompt = $this->interpolateContext($task->prompt, self::resolveStageInput($context, $task->input));
 
         $taskAgent = new Agent(
             name: $task->name ?? $task->agentType,
@@ -3328,7 +3330,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $verifierContext = self::withResults($context, [$taskRecord]);
         $verifierContext['prevResult'] = $taskResult->output ?? '';
 
-        $verifierPrompt = $this->interpolateContext($verifier->prompt, $verifierContext);
+        $verifierPrompt = $this->interpolateContext($verifier->prompt, self::resolveStageInput($verifierContext, $verifier->input));
 
         $verifierAgent = new Agent(
             name: $verifier->name ?? $verifier->agentType,
@@ -3708,7 +3710,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $firstContext = $dynamic && $firstTask->name !== null
             ? $context + ['path' => $firstTask->name]
             : $context;
-        $firstInterpolated = $this->interpolateContext($firstTask->prompt, $firstContext);
+        $firstInterpolated = $this->interpolateContext($firstTask->prompt, self::resolveStageInput($firstContext, $firstTask->input));
 
         $firstAgent = new Agent(
             name: $firstTask->name ?? $firstTask->agentType,
@@ -3764,7 +3766,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 ? $context + ['path' => $task->name]
                 : $context;
 
-            $interpolatedPrompt = $this->interpolateContext($task->prompt, $itemContext);
+            $interpolatedPrompt = $this->interpolateContext($task->prompt, self::resolveStageInput($itemContext, $task->input));
 
             $agent = new Agent(
                 name: $task->name ?? $task->agentType,

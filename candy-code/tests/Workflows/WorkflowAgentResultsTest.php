@@ -773,6 +773,92 @@ final class WorkflowAgentResultsTest extends TestCase
         }
     }
 
+    public function testTheJoinReachesTheVerificationTaskPrompt(): void
+    {
+        $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('verify-task-join')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->withVerification(
+                'v',
+                Tasks::agent('coder')->prompt('V {{input}}')->input(['from' => ['a'], 'as' => 'first']),
+                Tasks::agent('coder')->prompt('ok?'),
+            )
+            ->build());
+
+        self::assertSame(WorkflowStatus::Completed, $result->status);
+        self::assertSame('V OUT[do a]', $this->prompts[1], 'the verification task prompt carries the join');
+    }
+
+    public function testTheJoinReachesTheVerifierPrompt(): void
+    {
+        $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('verify-verifier-join')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->withVerification(
+                'v2',
+                Tasks::agent('coder')->prompt('work v2'),
+                Tasks::agent('coder')->prompt('OK? {{input}}')->input(['from' => ['a'], 'as' => 'first']),
+            )
+            ->build());
+
+        self::assertSame(WorkflowStatus::Completed, $result->status);
+        $verifierPrompts = array_values(array_filter(
+            $this->prompts,
+            static fn (string $prompt): bool => str_starts_with($prompt, 'OK?'),
+        ));
+        self::assertSame(['OK? OUT[do a]'], $verifierPrompts, 'the verifier prompt carries the join too');
+    }
+
+    public function testTheJoinReachesEveryParallelTaskPrompt(): void
+    {
+        $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('parallel-join')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->parallel('p', [
+                Tasks::agent('coder')->prompt('P1 {{input}}')->input(['from' => ['a'], 'as' => 'first']),
+                Tasks::agent('coder')->prompt('P2 {{input}}')->input(['from' => ['a'], 'as' => 'first']),
+            ])
+            ->build());
+
+        self::assertSame(WorkflowStatus::Completed, $result->status);
+        self::assertContains('P1 OUT[do a]', $this->prompts, 'task zero dispatches its own resolved prompt');
+        self::assertContains('P2 OUT[do a]', $this->prompts, 'and so does every task after it');
+    }
+
+    public function testEveryPromptInterpolationCarriesTheJoin(): void
+    {
+        // Structural census over the engine source: every prompt that travels
+        // through interpolateContext either resolves the join first, or is the
+        // uses-carry surface where no task of the carried stage is in scope.
+        // This is also the discriminator for the parallel-first leg, whose
+        // interpolation seeds request metadata while the dispatched content
+        // rides the per-task line the parallel pin above proves.
+        $enginePath = (string) (new \ReflectionClass(WorkflowEngine::class))->getFileName();
+        $needle = '$this->interpolateContext(';
+        $joined = 0;
+        $carried = 0;
+
+        foreach (explode("\n", (string) file_get_contents($enginePath)) as $line) {
+            if (strpos($line, $needle) === false) {
+                continue;
+            }
+
+            if (str_contains($line, 'self::resolveStageInput(')) {
+                ++$joined;
+                continue;
+            }
+
+            self::assertTrue(
+                str_contains($line, '$innerContext['),
+                'a prompt interpolation that skips the join must be the uses-carry surface: ' . trim($line),
+            );
+            ++$carried;
+        }
+
+        self::assertSame(6, $joined, 'six prompt paths resolve the join before interpolating');
+        self::assertSame(1, $carried, 'exactly one surface is join-less by design');
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {

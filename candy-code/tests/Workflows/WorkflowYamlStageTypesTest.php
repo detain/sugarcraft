@@ -621,7 +621,7 @@ final class WorkflowYamlStageTypesTest extends TestCase
         );
     }
 
-    public function testInputRidesEveryTaskSurfaceThroughTheOneArm(): void
+    public function testInputRidesEveryTaskSurfaceThroughTheOneArmAtParse(): void
     {
         // Tasks-list entries, verification sub-maps and pipeline steps all
         // reach applyTaskArms — one arm, one choke, proven on three surfaces.
