@@ -73,9 +73,8 @@ try {
 }
 
 $map = new SessionMap($config->path('db', 'scripts/channel-bridge/bridge.sqlite'));
-$safety = (new TextSafety())->withSecrets(\array_map('strval', (array) ($policy['secrets'] ?? [])));
 $policy = $config->section('policy');
-$logCfg = $config;
+$safety = (new TextSafety())->withSecrets(\array_map('strval', (array) ($policy['secrets'] ?? [])));
 
 // The serve endpoint: discovery record, validated for liveness the product's
 // own way (pid + process start time — a stale file is a corpse, not a door).

@@ -31,8 +31,13 @@ use ChannelBridge\Keys;
 use ChannelBridge\Log;
 use ChannelBridge\OutboundChunker;
 use ChannelBridge\SessionMap;
+use ChannelBridge\Bridge;
+use ChannelBridge\Discord\Gateway;
+use ChannelBridge\Discord\Rest;
+use ChannelBridge\Teams\BotToken;
 use ChannelBridge\Teams\ConnectorApi;
 use ChannelBridge\Teams\JwtValidator;
+use ChannelBridge\Teams\TeamsAdapter;
 use ChannelBridge\TextSafety;
 use React\EventLoop\Loop;
 use SugarCraft\Code\Server\Auth\TokenStore;
@@ -520,6 +525,20 @@ check('alg none is refused unless the emulator door is open', $validator->valida
 $emulator = new JwtValidator($appId, $keySource, true);
 check('the emulator door accepts unsigned tokens explicitly', is_array($emulator->validate(rtrim(strtr(base64_encode('{"alg":"none"}'), '+/', '-_'), '=') . '.' . rtrim(strtr(base64_encode(json_encode($mk([]))), '+/', '-_'), '=') . '.')));
 check('two-part garbage is refused', $validator->validate('aaa.bbb') === null);
+
+// -- 4b. FIX-1 review pins (bridge.review.md M1-M5, minors m1-m3) ------
+
+echo "FIX-1 review pins...\n";
+
+$bridgeSrc = (string) file_get_contents(__DIR__ . '/bridge.php');
+
+// M1: bridge.php assigned $policy AFTER wiring TextSafety from it, so
+// configured policy.secrets never reached redaction (§9.4 death).
+$m1PolicyPos = strpos($bridgeSrc, "\$policy = \$config->section('policy');");
+$m1SafetyPos = strpos($bridgeSrc, '$safety = (new TextSafety())');
+check('M1 composition assigns $policy before the TextSafety wiring', $m1PolicyPos !== false && $m1SafetyPos !== false && $m1PolicyPos < $m1SafetyPos, $m1PolicyPos === false || $m1SafetyPos === false ? 'composition markers not found' : "policy assignment at {$m1PolicyPos} comes AFTER safety wiring at {$m1SafetyPos}");
+$m1Safety = (new TextSafety())->withSecrets(['sup3r-secret-value']);
+check('M1 withSecrets redaction is live', !str_contains($m1Safety->outbound('leak sup3r-secret-value here'), 'sup3r-secret-value'));
 
 echo "\n";
 // -- 4. summary -----------------------------------------------------------
