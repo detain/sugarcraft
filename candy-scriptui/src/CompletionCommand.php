@@ -78,7 +78,8 @@ final class CompletionCommand extends Command
             'fish' => (new FishCompletion())->generate($application),
         };
 
-        $output->write($completion, true, OutputInterface::OUTPUT_RAW);
+        // LF-pinned trailer: write(..., true) emits PHP_EOL (CRLF on Windows).
+        $output->write($completion . "\n", false, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 }

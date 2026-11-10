@@ -75,7 +75,7 @@ final class FilterCommand extends Command
             return Command::FAILURE;
         }
         if ($input->getOption('select-if-one') && count($lines) === 1) {
-            $output->write(\SugarCraft\Core\Util\Sanitize::cellValue($lines[0]), true, OutputInterface::OUTPUT_RAW);
+            $output->write(\SugarCraft\Core\Util\Sanitize::cellValue($lines[0]) . "\n", false, OutputInterface::OUTPUT_RAW);
             return Command::SUCCESS;
         }
 
@@ -152,17 +152,19 @@ final class FilterCommand extends Command
         // Output contract, deliberate (gum-parity raw capture): the query
         // echo and the selection results below are the DATA channel and
         // print VERBATIM; app-emitted refusals elsewhere in this command
-        // pass through Sanitize::cellValue.
+        // pass through Sanitize::cellValue. Trailers are pinned to "\n" —
+        // write(..., true) emits PHP_EOL, CRLF on Windows, while the
+        // raw-capture contract is LF on every platform.
         if ($final->isAborted() || !$final->isSubmitted()) {
             return Command::FAILURE;
         }
         if ($printQuery) {
-            $output->write($final->list->filterValue(), true, OutputInterface::OUTPUT_RAW);
+            $output->write($final->list->filterValue() . "\n", false, OutputInterface::OUTPUT_RAW);
         }
         if ($final->isMulti()) {
-            $output->write(implode($delim, $final->selectedAll()), true, OutputInterface::OUTPUT_RAW);
+            $output->write(implode($delim, $final->selectedAll()) . "\n", false, OutputInterface::OUTPUT_RAW);
         } else {
-            $output->write((string) $final->selected(), true, OutputInterface::OUTPUT_RAW);
+            $output->write((string) $final->selected() . "\n", false, OutputInterface::OUTPUT_RAW);
         }
         return Command::SUCCESS;
     }
@@ -174,7 +176,14 @@ final class FilterCommand extends Command
             return [];
         }
         $raw = stream_get_contents(STDIN) ?: '';
-        $raw = rtrim($raw, "\n");
-        return $raw === '' ? [] : explode("\n", $raw);
+        // Split on any newline shape (\R): a CRLF stream (Windows console pipes)
+        // otherwise carries a stray "\r" into every line and corrupts the raw
+        // output channel. rtrim covers both trailer shapes.
+        $raw = rtrim($raw, "\r\n");
+        if ($raw === '') {
+            return [];
+        }
+        $lines = preg_split('/\R/', $raw);
+        return $lines === false ? [] : $lines;
     }
 }

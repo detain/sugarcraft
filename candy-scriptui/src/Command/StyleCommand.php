@@ -109,7 +109,8 @@ final class StyleCommand extends Command
         if ($input->getOption('trim')) {
             $rendered = implode("\n", array_map(static fn(string $l) => rtrim($l), explode("\n", $rendered)));
         }
-        $output->write($rendered, true, OutputInterface::OUTPUT_RAW);
+        // LF-pinned trailer: write(..., true) emits PHP_EOL (CRLF on Windows).
+        $output->write($rendered . "\n", false, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 

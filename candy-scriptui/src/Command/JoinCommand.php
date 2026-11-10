@@ -49,19 +49,20 @@ final class JoinCommand extends Command
         $separator  = $input->getOption('separator');
         $align      = strtolower((string) $input->getOption('align'));
 
+        // LF-pinned trailers: write(..., true) emits PHP_EOL (CRLF on Windows).
         if ($horizontal) {
             $output->write(self::joinHorizontal(
                 $parts,
                 is_string($separator) ? $separator : '',
                 $align,
-            ), true, OutputInterface::OUTPUT_RAW);
+            ) . "\n", false, OutputInterface::OUTPUT_RAW);
             return Command::SUCCESS;
         }
         $output->write(self::joinVertical(
             $parts,
             is_string($separator) ? $separator : "\n",
             $align,
-        ), true, OutputInterface::OUTPUT_RAW);
+        ) . "\n", false, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 

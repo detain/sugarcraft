@@ -107,7 +107,8 @@ final class InputCommand extends Command
         if ($input->getOption('strip-ansi')) {
             $value = \SugarCraft\Core\Util\Ansi::strip($value);
         }
-        $output->write($value, true, OutputInterface::OUTPUT_RAW);
+        // LF-pinned trailer: write(..., true) emits PHP_EOL (CRLF on Windows).
+        $output->write($value . "\n", false, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 }
