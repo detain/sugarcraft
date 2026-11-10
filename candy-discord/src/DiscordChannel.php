@@ -113,12 +113,20 @@ final class DiscordChannel implements ChannelInterface
         }
 
         $transport = (array) ($cfg['transport'] ?? []);
+        // §7.1/§7.2: the DISCORD_API_URL / DISCORD_GATEWAY_URL environment overrides
+        // win over the settings tree. Both are read HERE, inside the bundle: the
+        // candy-code env roster scans candy-code/src only, so a bundle-side getenv
+        // costs zero documentation churn by design.
+        $apiOverride = self::nonEmptyString(getenv('DISCORD_API_URL'))
+            ?? self::nonEmptyString((string) ($transport['apiBaseUrl'] ?? ''));
+        $gatewayOverride = self::nonEmptyString(getenv('DISCORD_GATEWAY_URL'))
+            ?? self::nonEmptyString((string) ($transport['gatewayUrl'] ?? ''));
         $apiBase = Endpoint::apiBase(
-            (string) ($transport['apiBaseUrl'] ?? ''),
+            (string) ($apiOverride ?? ''),
             (bool) ($transport['insecureLoopbackProxy'] ?? false),
         );
         $gatewayUrl = Endpoint::gatewayUrl(
-            (string) ($transport['gatewayUrl'] ?? ''),
+            (string) ($gatewayOverride ?? ''),
             (bool) ($transport['insecureLoopbackProxy'] ?? false),
         );
 

@@ -184,6 +184,28 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.webhooksOut.help'))
                 ->withReaderSymbol(Bootstrap::class . '::outboundWebhookEndpoints')
                 ->withReadBy('`Cli\Bootstrap::workspace()` → `Automation\WebhookDispatcher` service'),
+            // code-chat §7/§10 (P2): the ONE settings row the `@candy/discord`
+            // bundle needs. The whole policy tree — enablement, the message-
+            // content intent, DM and guild gates, queue mode, chunk limits,
+            // media caps, approval posture, slash deploy, per-account
+            // overrides — lives under this single Map so the account rows
+            // (§7.11) ride the same user-tier door as everything else.
+            // Credentials deliberately do NOT live here (ruling D4): the bot
+            // token lives only in the 0600 `channels.json` store the bundle
+            // reads through its own disciplined reader. Not a layered key:
+            // the reader consults the user tier alone, so a cloned repository
+            // can never widen a channel's reach. The reader never throws —
+            // malformed fields fall back to dark defaults the bundle
+            // announces, and a truly unusable transport lands as a loud
+            // channel start-failed refusal in the registry report.
+            SettingDefinition::new('channels.discord', SettingType::Map, [])
+                ->withCategory(SettingCategory::Server)
+                ->withRiskClass(RiskClass::Security)
+                ->withUi(UiEditability::Complex)
+                ->withLabel(Lang::t('settings.channels.discord.label'))
+                ->withHelp(Lang::t('settings.channels.discord.help'))
+                ->withReaderSymbol(Bootstrap::class . '::channelsDiscordSettings')
+                ->withReadBy('the `@candy/discord` bundle → `DiscordChannel::start()`'),
         ];
     }
 }
