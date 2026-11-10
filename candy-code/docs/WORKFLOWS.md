@@ -345,6 +345,11 @@ unreadable path — is refused at load or build time, never coerced.
 - **And it composes:** a verification stage's accept/reject pattern and an
   `outputSchema` are independent features that stack — give the verifier a
   schema and its verdict arrives machine-readable, not pattern-matched prose.
+- **And the document stays addressable:** a schema'd stage that answers with
+  valid JSON records a typed row beside its text, so later prompts read
+  single leaves — `{{build.summary}}`, `{{build.items/0/id}}` — while
+  `{{build.output}}` and `{{build.results}}` keep showing the whole document.
+  See `Interpolation` below.
 
 ### `isolation` runs a stage agent in its own git worktree
 
@@ -703,11 +708,12 @@ an error.
 
 ### Interpolation
 
-Three forms, substituted in this order (`WorkflowEngine::interpolateContext()`):
+Four forms, substituted in this order (`WorkflowEngine::interpolateContext()`):
 
 | Form | Resolves to |
 |---|---|
 | `{{name.results}}` | one agent's output, by its result name (below) — any stage type |
+| `{{name.<pointer>}}` | one leaf inside a schema'd stage's JSON document (below) |
 | `{{stageName.output}}` | a prior stage's collected output (a parallel stage's is every agent's output joined by newlines) |
 | `{{variable}}` | a key from the context passed to `run()` (`/workflow run <name> key=val …`) |
 
@@ -716,6 +722,26 @@ as written, not blanked — so a typo appears verbatim in the prompt rather than
 vanishing. So is a context value that is not a string or a number (a PHP
 caller's array, say). Pipeline steps and a verifier also see `{{prevResult}}`,
 the previous step's or the task's output.
+
+#### Pointing inside a schema'd result
+
+A stage whose task carries an `outputSchema` records its JSON answer a second
+time as a typed row, and the pointer form reads one leaf of that document by
+RFC 6901: `{{build.summary}}` reaches a member, `{{build.items/0/id}}` nests
+with `/` and indexes arrays, and the leading-`/` from-root spelling
+(`{{build./items/0/id}}`) addresses the same document. Escapes decode `~1`
+to `/` first and `~0` to `~` second — so `~01` names the key `~1`, not `/`.
+Dots carry no structure: `{{build.a.b}}` names one key spelled `a.b`.
+
+Misses stay loud like every other form: an unknown stage, leaf or index, a
+`null` or interior object, and any answer a schema never shaped into JSON all
+leave the `{{…}}` as written. The tails `results` and `output` are never
+pointers — they belong to their own forms — so reaching a document member
+actually named `output` takes the from-root spelling `{{build./output}}`.
+Pass order is visible in emitted text: the pointer pass runs before the
+`{{stageName.output}}` pass (a leaf whose value is `{{c.output}}` resolves)
+and after the `{{name.results}}` one (a leaf spelling `{{b.results}}` does
+not re-resolve and survives verbatim).
 
 #### What `{{name.results}}` is named by
 
