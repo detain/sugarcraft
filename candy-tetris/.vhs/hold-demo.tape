@@ -13,11 +13,13 @@ Enter
 Sleep 2s
 
 Space Sleep 800ms
-c Sleep 800ms
+Type "c"
+Sleep 800ms
 Space Sleep 800ms
-c Sleep 800ms
+Type "c"
+Sleep 800ms
 Space Sleep 800ms
 
 Sleep 2000ms
-q
-Enter
+Type "q"
+Sleep 500ms
