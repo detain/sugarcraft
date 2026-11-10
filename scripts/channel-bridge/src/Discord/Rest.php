@@ -30,7 +30,7 @@ final class Rest
         $this->http = (new Browser())
             ->withBase(null)
             ->withTimeout(20.0)
-            ->followRedirects(false);
+            ->withFollowRedirects(false);
     }
 
     /** @return \React\Promise\PromiseInterface<array<string,mixed>> */

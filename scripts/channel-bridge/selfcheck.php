@@ -596,6 +596,15 @@ $m3Redials = waitUntil(static function () use ($stateDir): bool {
 $m3Ladder->stop();
 check('M3 reconnect ladder logs serve_redial attempt>=2 against a dead port', $m3Redials, 'no serve_redial arm fired within 8s (pre-fix: rejection never reaches the ladder)');
 
+// M4: Browser::followRedirects() does not exist in the vendored react/http —
+// `new Rest` fataled, so the Discord side was dead at boot.
+try {
+    new Rest('token-x', new Log($stateDir . '/m4-rest.log', 'info'));
+    check('M4 Rest constructs against the vendored react/http Browser', true);
+} catch (\Throwable $m4e) {
+    check('M4 Rest constructs against the vendored react/http Browser', false, $m4e::class . ': ' . $m4e->getMessage());
+}
+
 echo "\n";
 // -- 4. summary -----------------------------------------------------------
 
