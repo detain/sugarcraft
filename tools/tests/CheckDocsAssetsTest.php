@@ -168,6 +168,9 @@ final class CheckDocsAssetsTest extends TestCase
         $this->assertSame('img/i.png', \CheckDocsAssets::localTarget('img/i.png?v=2#frag'));
         $this->assertSame('..', \CheckDocsAssets::localTarget('../'));
         $this->assertSame('css/style.css', \CheckDocsAssets::localTarget('css/style.css'));
+        $this->assertSame('/lib/x.html', \CheckDocsAssets::localTarget('/lib/x.html'));
+        $this->assertSame('/index.html', \CheckDocsAssets::localTarget('/#apps'));
+        $this->assertSame('/index.html', \CheckDocsAssets::localTarget('/'));
     }
 
     public function testAGifImgMissingItsCrutchOnALibPageIsNamed(): void
@@ -225,6 +228,7 @@ final class CheckDocsAssetsTest extends TestCase
             '<button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">Search</button>' => 'no search trigger',
             '<div id="search-modal" class="search-modal" aria-hidden="true"></div>' => 'no search modal',
             '<script src="../js/search.js" defer></script>' => 'no search script',
+            '<script src="../js/nav.js" defer></script>' => 'no nav script',
         ] as $fragment => $expectation) {
             $root = $this->makeCleanFixture();
             $this->put("$root/docs/lib/alpha.html", str_replace(
@@ -257,6 +261,47 @@ final class CheckDocsAssetsTest extends TestCase
         $findings = $this->filter($root, 'carries 2 search trigger elements (expected exactly 1)');
         $this->assertCount(1, $findings);
         $this->assertStringContainsString('docs/lib/alpha.html', $findings[0]);
+    }
+
+    /**
+     * The nav-copy identity legs: a chrome page whose nav carries the nav
+     * class but no marker pair cannot participate in comparison and must be
+     * named; a page whose between-marker block drifts from the reference
+     * copy must be named too — the five nav sources live in different files
+     * and only byte-equality keeps the rollout honest.
+     */
+    public function testANavCopyWithoutItsMarkersIsNamed(): void
+    {
+        $root = $this->makeCleanFixture();
+        $this->put("$root/docs/lib/gamma.html", '<html><body>'
+            . '<nav class="nav" aria-label="Main navigation"><div class="nav-links">'
+            . '<button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">Search</button>'
+            . '</div></nav>'
+            . '<div id="search-modal" class="search-modal" aria-hidden="true"></div>'
+            . '<script src="../js/search.js" defer></script>'
+            . '<script src="../js/nav.js" defer></script>'
+            . '</body></html>');
+
+        $findings = $this->filter($root, 'has no nav markers');
+        $this->assertCount(1, $findings);
+        $this->assertStringContainsString('docs/lib/gamma.html', $findings[0]);
+    }
+
+    public function testADivergentNavCopyIsNamed(): void
+    {
+        $root = $this->makeCleanFixture();
+        $this->put("$root/docs/lib/gamma.html", '<html><body>'
+            . '<nav class="nav" aria-label="Main navigation"><!--nav:start--><div class="nav-links">'
+            . '<button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">Search</button>'
+            . '</div><!--nav:end--></nav>'
+            . '<div id="search-modal" class="search-modal" aria-hidden="true"></div>'
+            . '<script src="../js/search.js" defer></script>'
+            . '<script src="../js/nav.js" defer></script>'
+            . '</body></html>');
+
+        $findings = $this->filter($root, 'nav block differs from');
+        $this->assertCount(1, $findings);
+        $this->assertStringContainsString('docs/lib/gamma.html', $findings[0]);
     }
 
     /**
@@ -322,15 +367,17 @@ final class CheckDocsAssetsTest extends TestCase
         // green and the new legs' clean-fixture arm is not vacuous.
         $this->put("$root/docs/css/search.css", '/* fixture */');
         $this->put("$root/docs/js/search.js", '/* fixture */');
+        $this->put("$root/docs/js/nav.js", '/* fixture */');
         $this->put("$root/docs/js/search-index.json", '[]');
         $this->put("$root/docs/lib/alpha.html", '<html><body>'
-            . '<nav><div class="nav-links">'
+            . '<nav class="nav" aria-label="Main navigation"><!--nav:start--><div class="nav-links">'
             . '<button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">Search</button>'
-            . '<a href="../index.html">home</a></div></nav>'
+            . '<a href="../index.html">home</a></div><!--nav:end--></nav>'
             . '<img src="../img/icons/alpha.png" alt="">'
             . '<img src="' . self::RAW . 'alpha/.vhs/d.gif" alt="demo" ' . self::GIF_CRUTCH . '>'
             . '<div id="search-modal" class="search-modal" aria-hidden="true"></div>'
             . '<script src="../js/search.js" defer></script>'
+            . '<script src="../js/nav.js" defer></script>'
             . '</body></html>');
 
         return $root;

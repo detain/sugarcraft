@@ -25,12 +25,20 @@ declare(strict_types=1);
  *     The generator guarantees this (`guarantee_demo_gif_onerror`,
  *     tools/gen-docs.php), so the leg is green by construction — its job is to
  *     catch a generator regression or a hand-edit before pages.yml publishes.
- *  f) the search affordance on chrome-bearing detail pages: a page that carries
- *     the shared nav must also carry EXACTLY ONE visible trigger
+ *  f) the search affordance on every chrome-bearing nav surface (the static
+ *     homepage/compare/404 pages plus generated detail pages): a page that
+ *     carries the shared nav must also carry EXACTLY ONE visible trigger
  *     (`id="search-trigger"` — HTML ids are unique by definition, so a planted
  *     decoy outside the nav that doubles the id is broken chrome, not affordance),
- *     the modal DOM (`id="search-modal"`) and the `search.js` include. Redirect
- *     stubs (no nav) are out of scope — they render no chrome at all.
+ *     the modal DOM (`id="search-modal"`), and EXACTLY ONE include each of
+ *     `js/search.js` and `js/nav.js`. Redirect stubs (no nav) are out of scope —
+ *     they render no chrome at all.
+ *  g) nav copy identity: every surface that carries the dropdown nav must hold
+ *     exactly one `<!--nav:start-->` / `<!--nav:end-->` marker pair, and the
+ *     block between them must be byte-identical across every copy (the five
+ *     authored copies — index/compare/404/gen-docs template/the two
+ *     prefixOverride pages — are maintained in lockstep; the guard is the trip
+ *     wire that keeps them there).
  *
  * Existence for (b)/(d) is measured on the filesystem: the CI job runs on a
  * fresh checkout, so a tracked file IS a file on disk, and this avoids
@@ -60,6 +68,7 @@ final class CheckDocsAssets
             self::vhsStat($root),
             self::demoGifCrutches($root),
             self::searchAffordance($root),
+            self::navBlockIdentity($root),
         );
     }
 
@@ -116,24 +125,83 @@ final class CheckDocsAssets
     public static function searchAffordance(string $root): array
     {
         $findings = [];
-        foreach (glob("$root/docs/lib/*.html") ?: [] as $file) {
+        foreach (self::chromePages($root) as $file) {
             $html = (string) file_get_contents($file);
-            if (!str_contains($html, '<div class="nav-links">')) {
-                continue;
-            }
             $triggers = substr_count($html, 'id="search-trigger"');
             if ($triggers !== 1) {
                 $findings[] = $triggers === 0
                     ? 'chrome: ' . self::relative($root, $file) . ' has no search trigger (id="search-trigger")'
                     : 'chrome: ' . self::relative($root, $file) . ' carries ' . $triggers . ' search trigger elements (expected exactly 1)';
             }
+            if (!str_contains($html, 'id="search-modal"')) {
+                $findings[] = 'chrome: ' . self::relative($root, $file) . ' has no search modal (id="search-modal")';
+            }
             foreach ([
-                'search modal (id="search-modal")' => 'id="search-modal"',
-                'search script (../js/search.js)'  => 'src="../js/search.js"',
-            ] as $what => $needle) {
-                if (!str_contains($html, $needle)) {
-                    $findings[] = 'chrome: ' . self::relative($root, $file) . ' has no ' . $what;
+                'search' => '~src="[^"]*js/search\.js"~',
+                'nav'    => '~src="[^"]*js/nav\.js"~',
+            ] as $what => $re) {
+                $count = preg_match_all($re, $html);
+                if ($count === 0) {
+                    $findings[] = 'chrome: ' . self::relative($root, $file) . " has no $what script";
+                } elseif ($count > 1) {
+                    $findings[] = 'chrome: ' . self::relative($root, $file) . " carries $count $what script includes (expected exactly 1)";
                 }
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Every page that renders the shared nav chrome: the three static
+     * surfaces plus the generated detail pages. Keyed on the nav container,
+     * so chromeless redirect stubs fall out without a name-based special case.
+     *
+     * @return list<string>
+     */
+    private static function chromePages(string $root): array
+    {
+        $pages = ["$root/docs/index.html", "$root/docs/compare.html", "$root/docs/404.html"];
+        foreach (glob("$root/docs/lib/*.html") ?: [] as $page) {
+            $pages[] = $page;
+        }
+
+        return array_values(array_filter(
+            $pages,
+            static fn (string $p): bool => is_file($p) && str_contains((string) file_get_contents($p), '<div class="nav-links">'),
+        ));
+    }
+
+    /**
+     * (g) the nav is authored in five places (three static pages, the gen-docs
+     * template, and the two prefixOverride pages); the marker pair delimits
+     * the single source of truth, so every rendered page must carry it exactly
+     * once and agree byte-for-byte between the markers.
+     *
+     * @return list<string>
+     */
+    public static function navBlockIdentity(string $root): array
+    {
+        $findings = [];
+        $reference = null;
+        $referenceFile = '';
+        foreach (self::chromePages($root) as $file) {
+            $html = (string) file_get_contents($file);
+            if (!str_contains($html, '<nav class="nav"')) {
+                continue;
+            }
+            if (substr_count($html, '<!--nav:start-->') !== 1 || substr_count($html, '<!--nav:end-->') !== 1) {
+                $findings[] = 'nav: ' . self::relative($root, $file) . ' has no nav markers (<!--nav:start--> / <!--nav:end--> pair, exactly once)';
+                continue;
+            }
+            $start = strpos($html, '<!--nav:start-->');
+            $end = strpos($html, '<!--nav:end-->') + strlen('<!--nav:end-->');
+            $block = substr($html, $start, $end - $start);
+            if ($reference === null) {
+                $reference = $block;
+                $referenceFile = self::relative($root, $file);
+            } elseif ($block !== $reference) {
+                $findings[] = 'nav: ' . self::relative($root, $file) . ' nav block differs from ' . $referenceFile . ' (all nav copies must be byte-identical between markers)';
             }
         }
 
@@ -194,7 +262,7 @@ final class CheckDocsAssets
      */
     public static function localLinks(string $root): array
     {
-        $targets = ["$root/docs/index.html"];
+        $targets = ["$root/docs/index.html", "$root/docs/compare.html", "$root/docs/404.html"];
         foreach ((glob("$root/docs/lib/*.html") ?: []) as $page) {
             $targets[] = $page;
         }
@@ -212,7 +280,10 @@ final class CheckDocsAssets
                     continue;
                 }
                 $base = (string) dirname($file);
-                $resolved = $path === '' ? $base : "$base/$path";
+                // Root-absolute nav hrefs ('/lib/x.html') resolve against docs/
+                // itself — the site is served at the domain root, so a leading
+                // '/' means "under docs/" regardless of the carrying page's depth.
+                $resolved = $path === '' ? $base : ($path[0] === '/' ? "$root/docs$path" : "$base/$path");
                 if (!file_exists($resolved)) {
                     $findings[] = 'links: ' . self::relative($root, $file) . " points at missing '" . $raw . "'";
                 }
@@ -260,6 +331,12 @@ final class CheckDocsAssets
         }
         if (preg_match('~^(?:[a-z]+:)?//~i', $value) === 1) {
             return null; // scheme:// or protocol-relative //host
+        }
+        if ($value[0] === '/') {
+            // Root-absolute target: '/' alone (e.g. '/#apps') is the homepage.
+            $trimmed = rtrim($value, '/');
+
+            return $trimmed === '' ? '/index.html' : $trimmed;
         }
         foreach (['mailto:', 'javascript:', 'data:'] as $scheme) {
             if (stripos($value, $scheme) === 0) {
