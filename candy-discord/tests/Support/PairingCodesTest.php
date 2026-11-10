@@ -144,8 +144,8 @@ final class PairingCodesTest extends TestCase
         self::assertSame(\count($glyphs), \count(\array_unique($glyphs)), 'one slot per glyph');
 
         // Behavioural leg: sample the REAL generator, not the constant — 40
-        // draws from a 36-glyph alphabet hide a reintroduced '0' with
-        // probability (35/36)^320 < 2e-5; the structural leg above is the
+        // draws from a 32-glyph alphabet hide a reintroduced '0' with
+        // probability (31/32)^320 < 4e-5; the structural leg above is the
         // deterministic keystone.
         $mint = new \ReflectionMethod(PairingCodes::class, 'mintCode');
         $mint->setAccessible(true);
