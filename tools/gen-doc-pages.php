@@ -36,16 +36,20 @@ const USAGE = <<<TXT
 gen-doc-pages.php — render the allow-listed docs/*.md sources into site pages.
 
 Usage:
-  php tools/gen-doc-pages.php [--check] [--root=PATH]
+  php tools/gen-doc-pages.php [--check] [--root=PATH] [--can-render]
 
 Flags:
-  --check      Compare generated output against the files on disk; exit 1 on drift.
-  --root=PATH  Repository root containing docs/ (default: the tools/ parent dir).
-  --help       Show this text.
+  --check       Compare generated output against the files on disk; exit 1 on drift.
+  --root=PATH   Repository root containing docs/ (default: the tools/ parent dir).
+  --can-render  Resolve league/commonmark and exit without rendering: 0 when it is
+                autoloadable here, 1 with the loud looked-in failure otherwise.
+                This is the probe guards use to tell "cannot run here" from drift.
+  --help        Show this text.
 
 Exit codes:
-  0  all pages are up to date (or were written)
-  1  drift detected in --check mode, or a render/dependency failure
+  0  all pages are up to date (or were written, or --can-render resolved)
+  1  drift detected in --check mode, a render/dependency failure, or --can-render
+     found no autoloader
   2  usage error
 TXT;
 
@@ -111,6 +115,10 @@ function findAutoloader(): string
 {
     $candidates = [
         \dirname(__DIR__) . '/vendor/autoload.php',
+        // The documented per-lib install shape: sugar-markdown is the package
+        // that requires league/commonmark, so any checkout that ran its own
+        // `composer install -d sugar-markdown` resolves here, worktree-relative.
+        \dirname(__DIR__) . '/sugar-markdown/vendor/autoload.php',
         '/home/sites/sugarcraft/vendor/autoload.php',
         '/home/sites/sugarcraft/sugar-markdown/vendor/autoload.php',
     ];
@@ -129,7 +137,7 @@ function findAutoloader(): string
         \STDERR,
         "error: league/commonmark could not be autoloaded. Looked in:\n  - "
         . \implode("\n  - ", $candidates)
-        . "\nRun `composer install` at the repo root (or point the tree at a checkout that has vendor/league/commonmark) and re-run.\n",
+        . "\nRun `composer install -d sugar-markdown` (the package that requires league/commonmark), or a `composer install` at the repo root on a manifest that pulls it in, and re-run.\n",
     );
     exit(1);
 }
@@ -346,6 +354,7 @@ function render_all(string $root, array $slugs, string $navBlock): array
 
 $args = \array_slice($argv, 1);
 $check = false;
+$canRender = false;
 $root = \dirname(__DIR__);
 
 foreach ($args as $arg) {
@@ -355,6 +364,10 @@ foreach ($args as $arg) {
     }
     if ($arg === '--check') {
         $check = true;
+        continue;
+    }
+    if ($arg === '--can-render') {
+        $canRender = true;
         continue;
     }
     if (\str_starts_with($arg, '--root=')) {
@@ -368,6 +381,16 @@ foreach ($args as $arg) {
     }
     \fwrite(\STDERR, USAGE . "\n");
     exit(2);
+}
+
+// The probe: resolve exactly what a render would resolve, sharing this file's
+// own findAutoloader() so the answer cannot drift from the real dependency
+// path. Success prints and exits 0; failure falls into findAutoloader()'s
+// loud looked-in exit(1) — the same text an actual render would print.
+if ($canRender) {
+    findAutoloader();
+    echo "ok: league/commonmark is autoloadable here\n";
+    exit(0);
 }
 
 findAutoloader();

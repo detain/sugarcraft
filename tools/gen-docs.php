@@ -529,6 +529,16 @@ function extract_one(string $slug, string $html): array
     $tagln  = $grab('#<p class="detail-sub">(.*?)</p>#s');
     $php    = $grab('#MIT-licensed · PHP (8\.[0-9]+\+)</div>#');
 
+    // Since MD-9 (site a11y wave) the generator hides the decorative emoji from
+    // assistive tech inside the heading: <h2><span aria-hidden="true">EMOJI</span>
+    // NAME</h2>. Unwrap that shape back to the plain "EMOJI NAME" text before the
+    // split below — otherwise extract stores the span markup inside displayName
+    // and the next regen prints it raw into the codecov badge's alt attribute,
+    // breaking the generate → extract → generate fixed point (LANE-D, 2026-11-11).
+    if (preg_match('#^<span aria-hidden="true">([^\x00-\x7F]+)</span> (.+)$#su', $h2, $m)) {
+        $h2 = $m[1] . ' ' . $m[2];
+    }
+
     // Split the h2 into an optional leading emoji and the display name. Display
     // names are ASCII CamelCase, so a leading non-ASCII run is the emoji.
     $emoji = '';

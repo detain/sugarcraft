@@ -31,6 +31,41 @@ final class GenDocPagesTest extends TestCase
     private const NAV_START = '<!--nav:start-->';
     private const NAV_END = '<!--nav:end-->';
 
+    /** Memoised answer to "can the tool render in this environment?". */
+    private static ?bool $commonmarkReady = null;
+
+    /**
+     * THE FIVE RENDERING ARMS NEED league/commonmark, and commonmark exists
+     * ONLY inside a vendor autoload: sugar-markdown is the one package whose
+     * manifest requires it, and the CI `tools/ guards` job runs
+     * checkout + setup-php + a PHPUnit PHAR with no composer install at all.
+     * There, the tool genuinely cannot render — the failing thing would be the
+     * environment, not drift — so the arms skip LOUD (`Skipped: 5` in the
+     * summary, never a silently-green guard). The probe asks the TOOL itself
+     * via --can-render, which resolves through the very findAutoloader() the
+     * render path uses, so the skip predicate cannot drift from reality. The
+     * cure that makes these arms actually run in CI is a vendor step on the
+     * job (`composer install -d sugar-markdown --no-progress`), which is a
+     * .github/workflows change owned by another lane — see the LANE-D
+     * handoff row. Help-text and skip-logic arms always run.
+     */
+    private function requireCommonmark(): void
+    {
+        if (self::$commonmarkReady === null) {
+            $run = $this->runScript(\dirname(__DIR__, 2), ['--can-render']);
+            self::$commonmarkReady = $run['exit'] === 0;
+        }
+        if (!self::$commonmarkReady) {
+            self::markTestSkipped(
+                'gen-doc-pages cannot render here: league/commonmark is not autoloadable'
+                . ' (--can-render exited 1). The CI tools-guards job installs no vendor, so the'
+                . ' rendering arms cannot distinguish drift from a missing dependency. Give the'
+                . ' job `composer install -d sugar-markdown` to exercise this guard for real;'
+                . ' until then it is SKIPPED loudly, never green by silence.',
+            );
+        }
+    }
+
     /** @var list<string> */
     private const PAGES = [
         'GETTING-STARTED',
@@ -53,6 +88,7 @@ final class GenDocPagesTest extends TestCase
 
     public function testTheShippedPagesMatchTheirMarkdownSources(): void
     {
+        $this->requireCommonmark();
         $run = $this->runScript(\dirname(__DIR__, 2), ['--check']);
         $this->assertSame(0, $run['exit'], 'generated pages drifted: ' . $run['output']);
         $this->assertStringContainsString('match their Markdown sources', $run['output']);
@@ -68,6 +104,7 @@ final class GenDocPagesTest extends TestCase
 
     public function testTheFixtureRootRendersFiveChromeBearingPages(): void
     {
+        $this->requireCommonmark();
         $root = $this->makeFixture();
         $run = $this->runScript($root, ['--root=' . $root]);
         $this->assertSame(0, $run['exit'], $run['output']);
@@ -91,6 +128,7 @@ final class GenDocPagesTest extends TestCase
 
     public function testRenderedBodiesPointAtSitePagesNotRepoPaths(): void
     {
+        $this->requireCommonmark();
         $root = $this->makeFixture();
         $this->assertSame(0, $this->runScript($root, ['--root=' . $root])['exit']);
         $body = (string) \file_get_contents("$root/docs/GETTING-STARTED.html");
@@ -116,6 +154,7 @@ final class GenDocPagesTest extends TestCase
 
     public function testCheckIsCleanThenOneByteOfTamperTurnsItRed(): void
     {
+        $this->requireCommonmark();
         $root = $this->makeFixture();
         $this->assertSame(0, $this->runScript($root, ['--root=' . $root])['exit']);
 
@@ -131,6 +170,7 @@ final class GenDocPagesTest extends TestCase
 
     public function testAMissingSourceFailsLoudInsteadOfSilentlySkipping(): void
     {
+        $this->requireCommonmark();
         $root = $this->makeFixture();
         unlink("$root/docs/KEYMAPS.md");
         $run = $this->runScript($root, ['--root=' . $root]);
