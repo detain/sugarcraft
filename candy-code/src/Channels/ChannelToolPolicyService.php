@@ -18,10 +18,15 @@ use SugarCraft\Code\Permissions\ChannelToolScope;
  *
  * Identity grammar (code-chat.md §2.3): a channel-originated session is named
  * `agent:<agentId>:<channel>:<kind>:<id>`, with `:topic:<threadId>` appended
- * for Telegram topics and `kind` one of `group`, `channel`, or `slash` (the
- * native slash-session shape `agent:<id>:discord:slash:<userId>` carries the
- * sender as its tail — that is where per-sENDER policy can bind, because the
- * sender IS the session there). The name rides the existing `session.create`
+ * for Telegram topics and `kind` one of `group`, `channel`, `slash`, or `dm`
+ * (both sender-shaped kinds — the native slash-session shape
+ * `agent:<id>:discord:slash:<userId>` and a per-peer direct-message session
+ * `agent:<id>:discord:dm:<userId>` — carry the sender as their tail; that is
+ * where per-sENDER policy can bind, because the sender IS the session there.
+ * An aggregate DM session, which folds many humans into one conversation,
+ * is named as a `channel` session instead: sender policy cannot resolve per
+ * message there, and an invented grammar segment would lie about it).
+ * The name rides the existing `session.create`
  * wire field: this design needed no new protocol method.
  *
  * A name that does not start with `agent:` is not a channel session and gets
@@ -58,7 +63,7 @@ use SugarCraft\Code\Permissions\ChannelToolScope;
 final class ChannelToolPolicyService
 {
     /** @var array<int, string> grammar kinds that address a policy level */
-    private const KINDS = ['group', 'channel', 'slash'];
+    private const KINDS = ['group', 'channel', 'slash', 'dm'];
 
     /** @var \Closure():array<string, mixed> reads the stored record fresh per admission */
     private \Closure $record;
@@ -117,7 +122,9 @@ final class ChannelToolPolicyService
         $levelTools = $channelTools;
         $label = $channel . ' ' . $kind;
 
-        if ('group' === $kind || 'slash' === $kind) {
+        if ('group' === $kind || 'slash' === $kind || 'dm' === $kind) {
+            // Both sender-shaped kinds — native slash sessions and per-peer DM
+            // sessions — address the sender section: the session IS one human.
             $section = 'group' === $kind ? 'groups' : 'toolsBySender';
             $levels = $entry[$section] ?? [];
             if (!\is_array($levels)) {

@@ -120,6 +120,37 @@ final class ChannelToolPolicyServiceTest extends TestCase
         self::assertStringContainsString('denied by the discord channel tool policy', (string) $other->verdict('WebFetch'), 'the channel deny still binds it, and the refusal says the channel');
     }
 
+    public function testAPerPeerDmSessionAddressesTheSameSenderLevel(): void
+    {
+        $svc = (self::service())(static fn (): array => [
+            'channels' => ['candy-discord|discord' => [
+                'tools' => ['deny' => ['WebFetch']],
+                'toolsBySender' => ['u9' => ['tools' => ['deny' => ['Bash']]]],
+            ]],
+        ]);
+
+        $peer = $svc->scopeFor('agent:main:discord:dm:u9');
+        self::assertStringContainsString('denied by the discord dm u9 tool policy', (string) $peer->verdict('Bash'), 'the DM session IS one human, so sender policy binds and says so');
+        self::assertStringContainsString('denied by the discord dm u9 tool policy', (string) $peer->verdict('WebFetch'), 'the channel deny unions into the per-peer level');
+
+        $unlisted = $svc->scopeFor('agent:main:discord:dm:u8');
+        self::assertNull($unlisted->verdict('Bash'), 'a peer with no sender entry is not bound by another peers deny');
+        self::assertStringContainsString('denied by the discord channel tool policy', (string) $unlisted->verdict('WebFetch'), 'the channel deny still reaches the unlisted peer');
+    }
+
+    public function testAPerPeerDmInheritsTheChannelAllowlistLikeAGroupWould(): void
+    {
+        $svc = (self::service())(static fn (): array => [
+            'channels' => ['candy-discord|discord' => [
+                'tools' => ['allow' => ['Read']],
+            ]],
+        ]);
+
+        $scope = $svc->scopeFor('agent:main:discord:dm:u7');
+        self::assertNull($scope->verdict('Read'), 'the inherited channel allowlist speaks for the peer');
+        self::assertStringContainsString('not in the discord channel tool allowlist', (string) $scope->verdict('Edit'), 'with no sender entry the channel level speaks, and the refusal says which level bound');
+    }
+
     public function testAnEmptyAllowlistAtTheLevelInheritsTheChannelOne(): void
     {
         $svc = (self::service())(static fn (): array => [
