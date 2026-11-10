@@ -213,6 +213,7 @@ candy-code/tests/Tools/TaskToolPresetModelTest.php	2.608	14
 candy-code/tests/Backend/EngineBackendParallelConfigTest.php	2.601	29
 candy-code/tests/Server/ReplayResyncTest.php	2.583	7
 candy-code/tests/Tools/Sandbox/EgressProxyProcessTest.php	2.574	6
+candy-code/tests/Channels/MsTeamsBundleWeldTest.php	2.570	3
 candy-code/tests/Tools/BuiltIn/AtomicEditWriteTest.php	2.568	21
 candy-code/tests/Backend/ProviderErrorSurfacingTest.php	2.563	10
 candy-code/tests/Integration/ParallelDeadlineExemptionTest.php	2.542	1
