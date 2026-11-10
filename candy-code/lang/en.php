@@ -652,6 +652,12 @@ Options:
                          — the provider still comes from $CANDY_CODE_PROVIDER or
                          the persisted `provider` setting, and the two are
                          independent axes.
+      --agent <name>     Run the session with <name> as its primary agent:
+                         swap in a configured preset. Also accepts
+                         --agent=<name>; the bare form is strict, so that is
+                         the form to use when a name begins with "-". Refused
+                         with exit 2 beside -p, --batch or a subcommand:
+                         none of those builds a session to narrow.
       --permission-mode <mode>
                          Run under <mode> instead of the mode in the config
                          file. Also accepts --permission-mode=<mode>. Highest
@@ -730,6 +736,13 @@ Options:
                          before parsing, and a run with nothing to read
                          refuses with exit 2. Requires -p or the run verb,
                          and refuses beside a subcommand.
+      --batch            Run each --input-format stream-json user event as
+                         its own sequential turn in this one process, and
+                         allow an empty -p prompt: the driver mode for
+                         feeding candy-code a conversation turn by turn.
+                         A bare switch: no value, no short form. Refused
+                         with exit 2 unless the input format is stream-json,
+                         whose event feed it consumes.
   -c, --continue         Reopen the most recently used session, transcript
                          and all, instead of starting a new one. Without it
                          every launch opens a new session; Up in an empty
