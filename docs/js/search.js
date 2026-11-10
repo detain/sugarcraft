@@ -17,29 +17,31 @@
   }
 
   /* ── Path resolution ────────────────────────────────────────────── */
-  function onLibPage() {
-    return window.location.pathname.includes('/lib/');
+  /* Depth counts non-empty dotless pathname segments, so '/lib/x.html' and
+     '/cookbook/index.html' climb exactly once and root pages climb zero
+     times. Both the index fetch and the result hrefs climb by this number —
+     a shim keyed on '/lib/' alone silently 404s every result for any page
+     living in another directory (site-code 11-11 indexed the narrative
+     pages, one of which lives under /cookbook/). */
+  function siteDepth() {
+    return window.location.pathname
+        .split('/')
+        .filter(function (segment) { return segment !== '' && segment.indexOf('.') === -1; })
+        .length;
   }
 
   function getIndexPath() {
     // The index lives next to this script: climb one '../' per directory
     // segment above the site root, so any page depth (root, /lib/, a future
-    // nested /cookbook/ tree) resolves the same file. Depth counts non-empty
-    // dotless pathname segments, so '/lib/x.html' climbs exactly once and
-    // root pages climb zero times - identical to the old binary test.
-    var depth = window.location.pathname
-        .split('/')
-        .filter(function (segment) { return segment !== '' && segment.indexOf('.') === -1; })
-        .length;
-
-    return '../'.repeat(depth) + 'js/search-index.json';
+    // nested /cookbook/ tree) resolves the same file.
+    return '../'.repeat(siteDepth()) + 'js/search-index.json';
   }
 
   /* Search-index entries are root-anchored relative hrefs (lib/<slug>.html,
-     or index.html#… for cross-page anchors). Emitted raw on a /lib/* page
-     they resolve against /lib/ and 404 (→ /lib/lib/<slug>.html), so apply
-     the same depth shim getIndexPath() uses for the fetch: on a /lib page,
-     root-anchored relative hrefs get a '../' hop. Already-escaped ('../…'),
+     GETTING-STARTED.html, cookbook/index.html, or index.html#… for cross-page
+     anchors). Emitted raw from a page inside a directory they resolve against
+     that directory and 404 (→ /lib/lib/<slug>.html), so apply the same depth
+     climb getIndexPath() uses for the fetch. Already-escaped ('../…'),
      absolute ('/…') or scheme-ful URLs pass through untouched. */
   function resolveResultHref(url) {
     if (typeof url !== 'string' || url === '') {
@@ -47,7 +49,7 @@
     }
     var hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(url);
     var isRootAnchored = !hasScheme && !url.startsWith('/') && !url.startsWith('../');
-    return onLibPage() && isRootAnchored ? '../' + url : url;
+    return isRootAnchored ? '../'.repeat(siteDepth()) + url : url;
   }
 
   /* Dangerous-scheme refusal — the single source of truth consulted by BOTH

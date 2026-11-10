@@ -60,5 +60,10 @@
   {"name":"SugarTreelist","slug":"sugar-treelist","category":"library","description":"List view with box-drawing prefixes, cursor navigation, word-wrap, and live filtering.","url":"lib/sugar-treelist.html"},
   {"name":"SugarVideo","slug":"sugar-video","category":"library","description":"Terminal video player — mp4/gif/webm/webp/avi → ascii/ansi256/truecolor/half- & quarter-block/sixel/kitty/iTerm2, with WebVTT subtitles.","url":"lib/sugar-video.html"},
   {"name":"SugarVterm","slug":"sugar-vterm","category":"library","description":"In-memory virtual terminal emulator. ANSI byte stream → cell grid + cursor + mode state.","url":"lib/sugar-vterm.html"},
-  {"name":"SugarWidgets","slug":"sugar-widgets","category":"library","description":"A collection of ready-made TUI components — inputs, tables, spinners, progress bars, and more.","url":"lib/sugar-widgets.html"}
+  {"name":"SugarWidgets","slug":"sugar-widgets","category":"library","description":"A collection of ready-made TUI components — inputs, tables, spinners, progress bars, and more.","url":"lib/sugar-widgets.html"},
+  {"name":"Getting started with SugarCraft","slug":"getting-started","category":"docs","description":"Install and run SugarCraft terminal apps, and build your own with the Model-Update-View runtime.","url":"GETTING-STARTED.html"},
+  {"name":"SugarCraft glossary","slug":"glossary","category":"docs","description":"The vocabulary of the SugarCraft terminal UI ecosystem: runtimes, frames, zones, and protocols.","url":"GLOSSARY.html"},
+  {"name":"SugarCraft keymaps","slug":"keymaps","category":"docs","description":"Default key bindings for every candy-* terminal app, with cross-references to each README.","url":"KEYMAPS.html"},
+  {"name":"Trust boundary — the fleet security contract","slug":"trust-boundary","category":"docs","description":"What the SugarCraft terminal sanitizers defend, where the boundary sits, and what remains your duty.","url":"TRUST-BOUNDARY.html"},
+  {"name":"SugarCraft composability cookbook","slug":"cookbook","category":"docs","description":"Runnable recipes for embedding SugarCraft widgets — spinners, sparklines, programs within programs.","url":"cookbook/index.html"}
 ]

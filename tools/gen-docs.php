@@ -107,6 +107,18 @@ const SEARCH_TRIGGER_BUTTON =
  * cannot discover; documented-but-unread is a knob they set with no effect.
  * The row shape is load-bearing: two spaces, the NAME, then the description.
  */
+/* The five narrative pages tools/gen-doc-pages.php renders, in the order they
+   appear in the search index (packages first, then these). Paths are relative
+   to docs/. Declared up here because the top-level main flow below runs the
+   moment the file is invoked. */
+const DOC_SEARCH_PAGES = [
+    'GETTING-STARTED.html',
+    'GLOSSARY.html',
+    'KEYMAPS.html',
+    'TRUST-BOUNDARY.html',
+    'cookbook/index.html',
+];
+
 const USAGE = <<<'TXT'
     usage: gen-docs.php [--extract|--check|--help]
 
@@ -273,8 +285,13 @@ foreach ([$index, "$docs/libraries.html", "$docs/apps.html"] as $counted) {
 // package the site no longer ships (the hand-rolled file had rotted to 46/62
 // entries with pre-rework prose baked in). Schema is search.js's contract:
 // {name, slug, category, description, url}, one compact object per line.
+// The five narrative pages tools/gen-doc-pages.php renders are indexed too
+// (site-code 11-11): they have no _data row, so each field is parsed back out
+// of the committed page itself — its visible <h1> for the name, its own
+// og:description meta for the snippet, the same fields the _data-backed
+// entries are built from (displayName/ogDescription) in the same priority.
 $searchPath = $docs . '/js/search-index.json';
-$searchJson = build_search_index($slugs, $types, $dataDir);
+$searchJson = build_search_index($slugs, $types, $dataDir, $docs);
 if ($mode === '--check') {
     $currentSearch = is_file($searchPath) ? (string) file_get_contents($searchPath) : '';
     if ($currentSearch !== $searchJson) {
@@ -1174,10 +1191,18 @@ function data_slugs(string $dataDir): array
  * contract. Slugs without a MATCHUPS row are skipped, exactly as in the page
  * loop (they render no page, so they must not appear in search).
  *
+ * The rendered narrative pages in DOC_SEARCH_PAGES join after the packages.
+ * They have no _data row, so each field is parsed back out of the committed
+ * page itself — the same fields the _data-backed entries read (displayName /
+ * ogDescription), in the same priority. A page that is not in this tree is
+ * skipped rather than failed, so fixture roots that carry only _data keep
+ * working; in the real tree the pages always exist and --check pins the index
+ * to their bytes.
+ *
  * @param list<string> $slugs
  * @param array<string, string> $types
  */
-function build_search_index(array $slugs, array $types, string $dataDir): string
+function build_search_index(array $slugs, array $types, string $dataDir, string $docs): string
 {
     $entries = [];
     foreach ($slugs as $slug) {
@@ -1194,10 +1219,73 @@ function build_search_index(array $slugs, array $types, string $dataDir): string
         ];
     }
 
+    foreach (DOC_SEARCH_PAGES as $page) {
+        if (!is_file("$docs/$page")) {
+            continue;
+        }
+        $html = (string) file_get_contents("$docs/$page");
+        $entries[] = [
+            'name'        => doc_page_title($html, $page),
+            'slug'        => doc_page_slug($page),
+            'category'    => 'docs',
+            'description' => doc_page_description($html, $page),
+            'url'         => $page,
+        ];
+    }
+
     $lines = [];
     foreach ($entries as $entry) {
         $lines[] = '  ' . json_encode($entry, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     }
 
     return "[\n" . implode(",\n", $lines) . "\n]\n";
+}
+
+/**
+ * The visible heading of a rendered narrative page: its first <h1>, with the
+ * heading-permalink anchor (which contributes only the literal "#") and any
+ * other markup removed. The S9 permalink lands its id on the anchor, not the
+ * h1, so this text is exactly what a reader sees as the page title.
+ */
+function doc_page_title(string $html, string $page): string
+{
+    if (preg_match('~<h1\b[^>]*>(.*?)</h1>~s', $html, $m) !== 1) {
+        fwrite(STDERR, "tools/gen-docs.php: docs/$page carries no <h1> to index\n");
+        exit(2);
+    }
+    $text = preg_replace('~<a\b[^>]*>.*?</a>~s', '', $m[1]) ?? '';
+    $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = trim((string) preg_replace('~\s+~u', ' ', $text));
+    if ($text === '') {
+        fwrite(STDERR, "tools/gen-docs.php: docs/$page has an empty <h1> to index\n");
+        exit(2);
+    }
+
+    return $text;
+}
+
+/**
+ * The index slug for a docs-relative page path: lowercased basename without
+ * .html, except directory indexes, which take their directory's name
+ * (cookbook/index.html → "cookbook").
+ */
+function doc_page_slug(string $page): string
+{
+    $name = strtolower(basename($page, '.html'));
+
+    return $name === 'index' ? strtolower(basename(dirname($page))) : $name;
+}
+
+/**
+ * The snippet of a rendered narrative page: its own og:description meta —
+ * the same field _data-backed entries prefer.
+ */
+function doc_page_description(string $html, string $page): string
+{
+    if (preg_match('~<meta\s+property="og:description"\s+content="([^"]*)"~i', $html, $m) !== 1) {
+        fwrite(STDERR, "tools/gen-docs.php: docs/$page carries no og:description to index\n");
+        exit(2);
+    }
+
+    return trim(html_entity_decode($m[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
 }

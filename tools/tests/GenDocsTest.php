@@ -920,4 +920,167 @@ final class GenDocsTest extends TestCase
         $this->assertSame(2, $r['exit']);
         $this->assertStringContainsString('SUGARCRAFT_GEN_DOCS_ROOT is not a valid path', $r['output']);
     }
+
+    // -----------------------------------------------------------------
+    // Search index (site-code 11-11: narrative pages join the packages)
+    // -----------------------------------------------------------------
+
+    /**
+     * A minimal stand-in for a tools/gen-doc-pages.php rendered page: the
+     * permalink-first <h1> the S9 heading anchors produce, and the
+     * og:description meta the renderer writes beside the plain one.
+     */
+    private function docPageFixture(string $h1Inner, string $ogDescription): string
+    {
+        return "<!doctype html>\n<html lang=\"en\"><head>\n"
+            . '<meta property="og:description" content="' . $ogDescription . '">' . "\n"
+            . "</head><body>\n"
+            . "<div class=\"nav-links\">nav</div>\n"
+            . "<main id=\"main\"><article class=\"prose\">\n"
+            . "<h1>" . $h1Inner . "</h1>\n"
+            . "</article></main>\n</body></html>\n";
+    }
+
+    /**
+     * @return list<array<string,string>>
+     */
+    private function readIndex(string $root): array
+    {
+        return json_decode(
+            (string) \file_get_contents("$root/docs/js/search-index.json"),
+            true,
+            512,
+            \JSON_THROW_ON_ERROR
+        );
+    }
+
+    /**
+     * The package half of the index, unpinned before this lane: one entry per
+     * generated page in slug order, the five-key schema search.js reads,
+     * ogDescription-first descriptions, and nothing else — with no narrative
+     * pages in the tree the docs loop must stay entirely silent (the skip
+     * leg, non-vacuous: planting pages is what lights up test 2 below).
+     */
+    public function testTheSearchIndexCarriesEveryPackageEntryInSlugOrderAndNothingElse(): void
+    {
+        $root = $this->makeFixtureRoot();
+        $r = $this->runScript($root);
+        $this->assertSame(0, $r['exit'], $r['output']);
+
+        $index = $this->readIndex($root);
+        $slugs = array_column($index, 'slug');
+        $this->assertSame(['fixture-alpha', 'fixture-appy'], $slugs, 'one row per _data slug with a MATCHUPS row, in slug order');
+        foreach ($index as $entry) {
+            $this->assertSame(
+                ['name', 'slug', 'category', 'description', 'url'],
+                array_keys($entry),
+                "entry for {$entry['slug']} carries exactly search.js's five keys in contract order"
+            );
+        }
+        $this->assertSame('library', $index[0]['category']);
+        $this->assertSame('app', $index[1]['category']);
+        $this->assertSame('Fixture og description for fixture-alpha.', $index[0]['description'], 'ogDescription wins the field priority');
+        $this->assertSame('lib/fixture-alpha.html', $index[0]['url']);
+        $this->assertNotContains('docs', array_column($index, 'category'), 'absent narrative pages index nothing');
+    }
+
+    /**
+     * The narrative half: present rendered pages join AFTER the packages in
+     * DOC_SEARCH_PAGES order, named by their visible <h1> (the permalink
+     * anchor's "#" stripped, entities decoded), slugged from the path
+     * (directory indexes take their directory), snippet from their own
+     * og:description, url docs-relative.
+     */
+    public function testRenderedDocPagesJoinTheIndexInDeclaredOrderAfterThePackages(): void
+    {
+        $root = $this->makeFixtureRoot();
+        \mkdir("$root/docs/cookbook", 0777, true);
+        \file_put_contents("$root/docs/GETTING-STARTED.html", $this->docPageFixture(
+            '<a id="user-content-getting-started" href="#getting-started" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Getting started &amp; setup',
+            'Install and run the apps &amp; build your own.'
+        ));
+        \file_put_contents("$root/docs/cookbook/index.html", $this->docPageFixture(
+            '<a id="user-content-cookbook" href="#cookbook" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Composability cookbook',
+            'Runnable recipes for widgets.'
+        ));
+
+        $r = $this->runScript($root);
+        $this->assertSame(0, $r['exit'], $r['output']);
+
+        $index = $this->readIndex($root);
+        $this->assertSame(
+            ['fixture-alpha', 'fixture-appy', 'getting-started', 'cookbook'],
+            array_column($index, 'slug'),
+            'packages keep slug order and the planted doc pages follow, in declared order'
+        );
+        $docs = array_slice($index, 2);
+        $this->assertSame(['docs', 'docs'], array_column($docs, 'category'));
+        $this->assertSame(
+            'Getting started & setup',
+            $docs[0]['name'],
+            'visible h1: permalink anchor removed, entity decoded'
+        );
+        $this->assertSame('Composability cookbook', $docs[1]['name']);
+        $this->assertSame('Install and run the apps & build your own.', $docs[0]['description']);
+        $this->assertSame(['GETTING-STARTED.html', 'cookbook/index.html'], array_column($docs, 'url'), 'urls stay docs-relative verbatim paths');
+
+        // The artifact's line shape is part of the committed-bytes contract:
+        // one compact object per two-space-indented line, closing bracket bare.
+        $raw = (string) \file_get_contents("$root/docs/js/search-index.json");
+        $this->assertStringStartsWith("[\n  {\"", $raw);
+        $this->assertStringEndsWith("\n]\n", $raw);
+        $this->assertSame(1 + count($index) + 1, substr_count($raw, "\n"), 'exactly one entry per line');
+    }
+
+    /**
+     * Fail loud, name the page: a present narrative page missing either of
+     * the fields the index parses out of it is a broken source page, not a
+     * row to invent — the run dies on stderr naming docs/<page>.
+     */
+    public function testADocPageInTheIndexWithoutItsFieldsFailsLoudNamingIt(): void
+    {
+        $root = $this->makeFixtureRoot();
+        \file_put_contents("$root/docs/GLOSSARY.html", "<!doctype html>\n<html><body>no heading here</body></html>\n");
+        $r = $this->runScript($root);
+        $this->assertSame(2, $r['exit']);
+        $this->assertStringContainsString('docs/GLOSSARY.html carries no <h1> to index', $r['output']);
+
+        // Same tmp root: the h1-less GLOSSARY must go, or it keeps failing
+        // first (declared order) and the KEYMAPS leg never runs.
+        \unlink("$root/docs/GLOSSARY.html");
+        \file_put_contents("$root/docs/KEYMAPS.html", "<!doctype html>\n<html><body><h1>Keys</h1></body></html>\n");
+        $r = $this->runScript($root);
+        $this->assertSame(2, $r['exit']);
+        $this->assertStringContainsString('docs/KEYMAPS.html carries no og:description to index', $r['output']);
+    }
+
+    /**
+     * The --check half of the contract: when gen-doc-pages re-renders a
+     * narrative page with a new og:description, the committed index is
+     * stale, the check fails naming it, and a regeneration settles it.
+     * Without the doc loop this exact drift would pass green — the check
+     * only ever compared the 62 package rows.
+     */
+    public function testCheckFailsWhenAReRenderedDocPageLeavesTheIndexStale(): void
+    {
+        $root = $this->makeFixtureRoot();
+        \file_put_contents("$root/docs/KEYMAPS.html", $this->docPageFixture(
+            '<a id="x" href="#x" class="heading-permalink">#</a>Key bindings',
+            'Default bindings for every app.'
+        ));
+        $this->assertSame(0, $this->runScript($root)['exit']);
+
+        \file_put_contents("$root/docs/KEYMAPS.html", $this->docPageFixture(
+            '<a id="x" href="#x" class="heading-permalink">#</a>Key bindings',
+            'Re-rendered with a fresh snippet.'
+        ));
+        $r = $this->runScript($root, ['--check']);
+        $this->assertSame(1, $r['exit']);
+        $this->assertStringContainsString('drift: js/search-index.json differs from generated output', $r['output']);
+
+        $this->assertSame(0, $this->runScript($root)['exit']);
+        $r = $this->runScript($root, ['--check']);
+        $this->assertSame(0, $r['exit'], $r['output']);
+        $this->assertSame('Re-rendered with a fresh snippet.', $this->readIndex($root)[2]['description']);
+    }
 }
