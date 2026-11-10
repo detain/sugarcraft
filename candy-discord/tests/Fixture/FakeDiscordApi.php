@@ -12,8 +12,10 @@ use React\Socket\SocketServer;
  * A loopback stand-in for the Discord REST API: it logs every call
  * {method, path, body} and answers with canned JSON, so the outbound
  * payload tests (message shape, approval components, thread probe and
- * archive) pin exactly what the bundle PUT/POSTs/PATCHes — never the
- * real service, never real tokens.
+ * archive) pin exactly what the bundle PUT/POSTs/PATCHes/DELETEs — never
+ * the real service, never real tokens. The failNextWith knob answers the
+ * next call with a real status line, because the status arms in Rest must
+ * be driven by LIVE statuses, not by transport errors.
  */
 final class FakeDiscordApi
 {
@@ -27,6 +29,14 @@ final class FakeDiscordApi
      * green test proves nothing about the react/http rejection default.
      */
     public ?int $failNextWith = null;
+
+    /**
+     * Persistent sibling of the one-shot knob: while set, EVERY request is
+     * answered with that live status. A single test can therefore drive the
+     * undeploy walk over two failing legs — which is what the loud-once
+     * notice in DiscordAccount needs to be observable against.
+     */
+    public ?int $failAllWith = null;
 
     private ?SocketServer $server = null;
 
@@ -98,6 +108,11 @@ final class FakeDiscordApi
 
                 return;
             }
+            if ($this->failAllWith !== null) {
+                $connection->end($this->frame($this->failAllWith, '{}'));
+
+                return;
+            }
             $connection->end($this->frame(200, $payload));
         });
     }
@@ -135,7 +150,11 @@ final class FakeDiscordApi
             return '{"id":"c9","type":0}';
         }
         if ($method === 'PUT') {
-            return '[]';
+            return '[]'; // Bulk overwrite (deploy) — accepted roster is pinned by the calls array.
+        }
+        if ($method === 'GET' && \str_ends_with($path, '/commands')) {
+            // N5 undeploy listing: two deployed commands for the face to retract.
+            return '[{"id":"cmd1","name":"new"},{"id":"cmd2","name":"stop"}]';
         }
 
         return '{}';

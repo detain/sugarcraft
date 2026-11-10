@@ -36,6 +36,8 @@ final class DiscordAccountTest extends TestCase
     private LoopInterface $loop;
     private FakeDiscordApi $api;
     private DiscordAccount $face;
+    private ?Gateway $faceGateway = null;
+    private ?Log $faceLog = null;
     private CredentialStore $store;
     private PairingCodes $pairing;
     private string $tempDir;
@@ -54,6 +56,8 @@ final class DiscordAccountTest extends TestCase
     protected function tearDown(): void
     {
         $this->face?->cancelAllTimers();
+        $this->faceGateway = null;
+        $this->faceLog = null;
         $this->api->stop();
         @\unlink($this->tempDir . '/sessions.db');
         @\rmdir($this->tempDir);
@@ -215,10 +219,176 @@ final class DiscordAccountTest extends TestCase
         self::assertStringContainsString('big.bin', (string) $notice['body']['content']);
     }
 
-    private function buildFace(array $cfg): void
+    /**
+     * N5: a face that deployed globally retracts exactly its global roster
+     * when the channel tears it down — the deploy path scoped it global, so
+     * the walk-back must list and delete global, never a guild.
+     */
+    public function testDisablingAFaceUndeploysItsGlobalCommands(): void
+    {
+        $this->buildFace([]);
+        $gateway = $this->faceGateway;
+        self::assertNotNull($gateway);
+        $gateway->applicationId = 'app-9';
+
+        $this->face->stop();
+        $this->settle();
+
+        $deletes = [];
+        $listedGlobal = false;
+        foreach ($this->api->calls as $call) {
+            if ($call['method'] === 'GET' && $call['path'] === '/applications/app-9/commands') {
+                $listedGlobal = true;
+            }
+            if ($call['method'] === 'DELETE') {
+                $deletes[] = $call['path'];
+            }
+        }
+        self::assertTrue($listedGlobal, 'the undeploy walk must list the global roster');
+        self::assertSame(
+            ['/applications/app-9/commands/cmd1', '/applications/app-9/commands/cmd2'],
+            $deletes,
+        );
+    }
+
+    /**
+     * N5: a guild-scoped face walks back each listed guild and touches no
+     * global roster — the scope law mirrors the deploy exactly.
+     */
+    public function testAGuildScopedFaceUndeploysOnlyItsGuild(): void
+    {
+        $this->buildFace(['guilds' => ['g1' => []]]);
+        $gateway = $this->faceGateway;
+        self::assertNotNull($gateway);
+        $gateway->applicationId = 'app-9';
+
+        $this->face->stop();
+        $this->settle();
+
+        $deletes = [];
+        foreach ($this->api->calls as $call) {
+            if ($call['method'] === 'DELETE') {
+                $deletes[] = $call['path'];
+            }
+            self::assertNotSame('/applications/app-9/commands', $call['path'], 'no global listing for a guild-scoped face');
+        }
+        self::assertSame(
+            [
+                '/applications/app-9/guilds/g1/commands/cmd1',
+                '/applications/app-9/guilds/g1/commands/cmd2',
+            ],
+            $deletes,
+        );
+    }
+
+    /**
+     * N5: a deployless face (appCommands false) retracts nothing and says
+     * nothing — no listing, no deletes, no notice, teardown still lands.
+     */
+    public function testADeploylessFaceRetractsNothingAndSaysNothing(): void
+    {
+        $lines = [];
+        $this->buildFace(['appCommands' => false], new Log(
+            static function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            },
+        ));
+        $gateway = $this->faceGateway;
+        self::assertNotNull($gateway);
+        $gateway->applicationId = 'app-9';
+
+        $this->face->stop();
+        $this->settle();
+
+        foreach ($this->api->calls as $call) {
+            self::assertFalse(
+                \str_ends_with($call['path'], '/commands')
+                    || (bool) \preg_match('#/commands/cmd[0-9]+$#', $call['path']),
+                'a never-deployed face must not retract: ' . $call['method'] . ' ' . $call['path'],
+            );
+        }
+        self::assertSame([], \array_filter($lines, static fn (string $l): bool => \str_contains($l, 'discord_slash_undeploy')));
+        // stop() returning without throwing is itself the teardown proof;
+        // stopped() reads the reconnect ladder's give-up flag, not teardown.
+    }
+
+    /**
+     * N5: the retraction is a COURTESY — one transport failure notices once,
+     * and the teardown proceeds regardless (the gateway is stopped either
+     * way; stop() returning normally is itself the never-blocks assertion).
+     */
+    public function testAFailingUndeployNoticesOnceAndTeardownProceeds(): void
+    {
+        $lines = [];
+        $this->buildFace([], new Log(
+            static function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            },
+        ));
+        $gateway = $this->faceGateway;
+        self::assertNotNull($gateway);
+        $gateway->applicationId = 'app-9';
+        $this->api->failNextWith = 503;
+
+        $this->face->stop();
+        $this->settle();
+
+        $notices = \array_filter($lines, static fn (string $l): bool => \str_contains($l, 'discord_slash_undeploy_failed'));
+        self::assertCount(1, $notices, 'the failure notices exactly once: ' . \implode(' | ', $lines));
+        self::assertSame(
+            [],
+            \array_filter($lines, static fn (string $l): bool => \str_contains($l, 'discord_slash_undeployed')),
+        );
+        $listed = false;
+        foreach ($this->api->calls as $call) {
+            if ($call['method'] === 'GET' && $call['path'] === '/applications/app-9/commands') {
+                $listed = true;
+            }
+        }
+        self::assertTrue($listed, 'the retraction was attempted: the notice follows a real leg, and stop() itself never blocks');
+    }
+
+    /**
+     * N5 keystone for loud-ONCE: two failing legs (both guild listings die
+     * under the persistent knob) still produce a single notice — without the
+     * guard this test sees two and the face would shout per leg on teardown.
+     */
+    public function testALoudOnceNoticeDoesNotStutterAcrossLegs(): void
+    {
+        $lines = [];
+        $this->buildFace(['guilds' => ['g1' => [], 'g2' => []]], new Log(
+            static function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            },
+        ));
+        $gateway = $this->faceGateway;
+        self::assertNotNull($gateway);
+        $gateway->applicationId = 'app-9';
+        $this->api->failAllWith = 500;
+
+        $this->face->stop();
+        $this->settle();
+
+        $notices = \array_filter($lines, static fn (string $l): bool => \str_contains($l, 'discord_slash_undeploy_failed'));
+        self::assertCount(1, $notices, 'two dead legs must still notice once: ' . \implode(' | ', $lines));
+        $g1 = false;
+        $g2 = false;
+        foreach ($this->api->calls as $call) {
+            if ($call['method'] === 'GET' && $call['path'] === '/applications/app-9/guilds/g1/commands') {
+                $g1 = true;
+            }
+            if ($call['method'] === 'GET' && $call['path'] === '/applications/app-9/guilds/g2/commands') {
+                $g2 = true;
+            }
+        }
+        self::assertTrue($g1, 'the first guild leg was attempted before the single notice');
+        self::assertTrue($g2, 'the second guild leg was attempted before the single notice');
+    }
+
+    private function buildFace(array $cfg, ?Log $faceLog = null): void
     {
         $rest = new Rest('tok', Log::silent(), 'http://127.0.0.1:' . $this->apiPort());
-        $gateway = new Gateway('tok', Log::silent(), $this->loop, 'ws://127.0.0.1:1/never');
+        $this->faceGateway = new Gateway('tok', Log::silent(), $this->loop, 'ws://127.0.0.1:1/never');
         $router = new ConversationRouter(
             new ServeBridge('ws://127.0.0.1:1/never', '', 'subprotocol', Log::silent(), $this->loop),
             new SessionMap($this->tempDir . '/sessions.db'),
@@ -226,7 +396,8 @@ final class DiscordAccountTest extends TestCase
             new TextSafety(),
             $this->loop,
         );
-        $this->face = new DiscordAccount('default', $rest, $gateway, $router, $cfg, Log::silent(),
+        $this->faceLog = $faceLog ?? Log::silent();
+        $this->face = new DiscordAccount('default', $rest, $this->faceGateway, $router, $cfg, $this->faceLog,
             $this->pairing, new TextSafety(), $this->loop);
         $router->addChannel($this->face, 'default');
         $own = new \ReflectionProperty(DiscordAccount::class, 'ownUserId');

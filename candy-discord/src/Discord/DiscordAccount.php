@@ -145,6 +145,7 @@ final class DiscordAccount implements PlatformFace
 
     public function stop(): void
     {
+        $this->undeployCommands();
         $this->gateway->stop();
     }
 
@@ -721,6 +722,57 @@ final class DiscordAccount implements PlatformFace
             fn () => $this->log->info('discord_slash_deployed', ['scope' => 'global']),
             fn (\Throwable $e) => $this->log->warn('discord_slash_deploy_failed', ['error' => $e->getMessage()]),
         );
+    }
+
+    /**
+     * §7.10 (ruling D7=7a, N5): disabling or removing a face walks back the
+     * deploy — every slash command the face pushed is deleted again, scoped
+     * exactly as the deploy was (listed guilds => per-guild, otherwise
+     * global). This is a courtesy on the way out: it never throws, announces
+     * a failure at most once however many legs fell over, and if the loop
+     * is already down the deletes simply do not land. Teardown must never
+     * block behind a dead API.
+     */
+    private function undeployCommands(): void
+    {
+        if (!$this->boolCfg('appCommands', true)) {
+            // A face that never deployed has nothing to retract — silently.
+            return;
+        }
+        $app = $this->gateway->applicationId ?? '';
+        if ($app === '') {
+            return;
+        }
+        $noticed = false;
+        $notice = function (\Throwable $e) use (&$noticed): void {
+            if ($noticed) {
+                return;
+            }
+            $noticed = true;
+            $this->log->warn('discord_slash_undeploy_failed', ['error' => $e->getMessage()]);
+        };
+        $paths = [];
+        foreach (\array_keys($this->mapCfg('guilds')) as $guildId) {
+            $paths[] = '/applications/' . $app . '/guilds/' . $guildId . '/commands';
+        }
+        if ($paths === []) {
+            $paths[] = '/applications/' . $app . '/commands';
+        }
+        foreach ($paths as $path) {
+            $this->rest->get($path)->then(
+                function (array $rows) use ($path, $notice): void {
+                    foreach ($rows as $row) {
+                        $id = (string) (\is_array($row) ? ($row['id'] ?? '') : '');
+                        if ($id === '') {
+                            continue;
+                        }
+                        $this->rest->delete($path . '/' . $id)->then(null, $notice);
+                    }
+                    $this->log->info('discord_slash_undeployed', ['path' => $path]);
+                },
+                $notice,
+            );
+        }
     }
 
     /**
