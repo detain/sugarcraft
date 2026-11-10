@@ -1,0 +1,8 @@
+{
+    "name": "candy-discord",
+    "version": "0.1.0",
+    "description": "Discord channel bundle for candy-code served sessions: gateway WSS + REST, pairing and allowlist policy, threads, queue verbs, Components V2 approval buttons, native slash commands (code-chat spec section 7).",
+    "entrypoints": {
+        "channel": ["src/DiscordChannel.php"]
+    }
+}
