@@ -1283,3 +1283,41 @@ pre.code .num  { color: #fcd5b4; }
 .carousel-dot.is-active {
     background: var(--accent, #ff5da2);
 }
+
+/* --- long-form documentation surfaces (contents cards, measures, code and tables) --- */
+.doc-toc {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin: 0 0 28px;
+    font-size: .92em;
+    box-shadow: var(--shadow-sm);
+}
+.doc-toc-list { list-style: none; margin: 0; padding: 0; }
+.doc-toc-list li { margin: 0 0 6px; }
+.doc-toc-list a { color: var(--pink); text-decoration: none; }
+.doc-toc-list a:hover { text-decoration: underline; }
+.toc-h3 { padding-left: 18px; }
+.docs-body p, .docs-body li { max-width: 78ch; line-height: 1.65; }
+.docs-body h2 { margin: 40px 0 12px; font-size: 1.35em; }
+.docs-body h3 { margin: 28px 0 10px; font-size: 1.12em; }
+.docs-body ul, .docs-body ol { margin: 0 0 18px 22px; }
+.docs-body table { display: block; overflow-x: auto; width: 100%; margin: 0 0 20px; }
+.prose { max-width: 84ch; }
+.prose h2 { margin: 40px 0 12px; font-size: 1.35em; }
+.prose h3 { margin: 28px 0 10px; font-size: 1.12em; }
+.prose h4 { margin: 22px 0 8px; }
+.prose p, .prose li { line-height: 1.7; }
+.prose ul, .prose ol { margin: 0 0 18px 22px; }
+.prose li { margin: 0 0 6px; }
+.prose blockquote { border-left: 3px solid var(--pink); margin: 0 0 16px; padding: 2px 0 2px 16px; color: var(--ink-2); }
+.prose pre { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; line-height: 1.55; font-size: .92em; }
+.prose code { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font-size: .92em; }
+.prose pre code { background: none; border: 0; padding: 0; }
+.prose table { width: 100%; border-collapse: collapse; margin: 0 0 20px; }
+.prose th, .prose td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; }
+.prose a { color: var(--pink); }
+.prose a:hover { text-decoration: underline; }
+.prose .heading-permalink { opacity: .35; margin-left: .35em; text-decoration: none; }
+.prose .heading-permalink:hover { opacity: 1; }
