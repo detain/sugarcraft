@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Cli\Serve;
 
+use SugarCraft\Code\Channels\ChannelInboundLog;
 use SugarCraft\Code\Channels\ChannelRegistry;
 use SugarCraft\Code\Channels\ChannelsStore;
 use SugarCraft\Code\Cli\Bootstrap;
@@ -380,6 +381,7 @@ trait ServeStartup
                     $config->root,
                     $loop,
                     $log,
+                    ChannelInboundLog::create(),
                 ));
             } catch (\Throwable $e) {
                 // A broken channel never takes the serve down with it.

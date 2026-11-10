@@ -64,6 +64,8 @@ final class ChannelRegistry
 
     private bool $disposed = false;
 
+    private ?ChannelInboundLog $inboundLog = null;
+
     /**
      * A workspace SERVICE (registered in Bootstrap::workspace(), consumed by
      * ServeStartup and the ServerContext event seam — the WebhookDispatcher
@@ -95,11 +97,13 @@ final class ChannelRegistry
         ?string $root,
         LoopInterface $loop,
         ?\Closure $log = null,
+        ?ChannelInboundLog $inbound = null,
     ): array {
         if ($this->booted) {
             throw new \LogicException('ChannelRegistry::boot() runs once per launch.');
         }
         $this->booted = true;
+        $this->inboundLog = $inbound;
         $log ??= static function (string $line): void {
         };
 
@@ -132,7 +136,7 @@ final class ChannelRegistry
             }
 
             try {
-                $instance->start(ChannelContext::for($entry['bundle'], $instance->name(), $root, $loop, $log));
+                $instance->start(ChannelContext::for($entry['bundle'], $instance->name(), $root, $loop, $log, $inbound));
             } catch (\Throwable $e) {
                 $log(ErrorLog::line($e, 'channel start ' . $entry['class']));
                 $this->unregister($entry['bundle'], $instance->name());
@@ -146,7 +150,68 @@ final class ChannelRegistry
             }
         }
 
+        $this->replayInbound($log);
+
         return $buckets;
+    }
+
+    /**
+     * Spec §9.5 Track B restart replay: everything the ledger still holds as
+     * pending is delivered again, in first-seen order, to started channels
+     * that can take it. This is the REPLAY-vs-RESET law in action: an intact
+     * ledger replays its exact pending set; a ledger that had to be
+     * quarantined answers RESET, and we announce that loudly on the boot log
+     * instead of silently skipping — a consumer that cannot trust the cursor
+     * must know the hole is there (field fact: never cursor-skip on RESET).
+     *
+     * A row whose channel is not registered, or was started without the
+     * capability, stays pending: delivering "nothing happened" would be the
+     * silent loss the ledger exists to prevent. The attempt/age doors bound
+     * any row that can never be acked, so a poison row can never hot-loop.
+     */
+    private function replayInbound(\Closure $log): void
+    {
+        if ($this->inboundLog === null) {
+            return;
+        }
+
+        $state = $this->inboundLog->pending();
+        if ($this->inboundLog->quarantinedAt() !== null) {
+            $log('channel inbound log was unreadable and has been quarantined; '
+                . 'this boot replays in the RESET shape — nothing before the '
+                . 'quarantine point can be replayed, only re-delivered by the platform');
+        }
+
+        if ($state['records'] === []) {
+            return;
+        }
+
+        $delivered = 0;
+        $faulted = 0;
+
+        foreach ($state['records'] as $row) {
+            $channel = $this->channelNamed((string) $row['channel']);
+            if (!$channel instanceof DispatchesInboundEvents) {
+                continue;
+            }
+
+            try {
+                if ($channel->dispatchInboundEvent($row['payload']) === true) {
+                    $this->inboundLog->markAcked((string) $row['channel'], (string) $row['key']);
+                    ++$delivered;
+                    continue;
+                }
+                $this->inboundLog->noteFailure((string) $row['channel'], (string) $row['key']);
+                ++$faulted;
+            } catch (\Throwable $e) {
+                $this->inboundLog->noteFailure((string) $row['channel'], (string) $row['key']);
+                $log(ErrorLog::line($e, 'channel inbound replay ' . $row['channel']));
+                ++$faulted;
+            }
+        }
+
+        $log('channel inbound replay: ' . $delivered . ' acked, ' . $faulted
+            . ' faulted, ' . (\count($state['records']) - $delivered - $faulted) . ' left pending');
     }
 
     /**
@@ -299,6 +364,12 @@ final class ChannelRegistry
         $key = $this->byName[$name] ?? null;
 
         return $key === null ? null : ($this->channels[$key] ?? null);
+    }
+
+    /** The durable inbound ledger this launch boots with, if any (§9.5 Track B). */
+    public function inboundLog(): ?ChannelInboundLog
+    {
+        return $this->inboundLog;
     }
 
     private function unregister(string $bundleName, string $name): void

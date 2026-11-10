@@ -30,11 +30,19 @@ final class ChannelContext
         public readonly ?string $root,
         public readonly LoopInterface $loop,
         public readonly \Closure $log,
+        public readonly ?ChannelInboundLog $inbound = null,
     ) {
     }
 
     /**
      * @param \Closure(string): void|null $log
+     *
+     * $inbound is the spec §9.5 Track B durable ledger: a channel that
+     * accepts inbound from outside hands each event to the ledger BEFORE
+     * dispatching it and acks after, so a crash between the two replays
+     * instead of losing (or double-acting — the ledger dedupes). Null when
+     * the launch runs no channel boot, which is the byte-identical pre-§9.5
+     * shape.
      */
     public static function for(
         string $bundle,
@@ -42,6 +50,7 @@ final class ChannelContext
         ?string $root,
         LoopInterface $loop,
         ?\Closure $log = null,
+        ?ChannelInboundLog $inbound = null,
     ): self {
         return new self(
             $bundle,
@@ -50,6 +59,7 @@ final class ChannelContext
             $loop,
             $log ?? static function (string $line): void {
             },
+            $inbound,
         );
     }
 }
