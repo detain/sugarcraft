@@ -7013,6 +7013,39 @@ final class Subcommands
     }
 
     /**
+     * The engine for the verbs that DISPATCH (`run` and `resume`), with the
+     * launch's session backend bound.
+     *
+     * {@see Bootstrap::workflowEngine()} answers the same engine the TUI
+     * launches with, but the TUI's binding step runs inside `Chat`'s
+     * constructor - the headless verb has no Chat. Without this bind the
+     * pool forks a stage worker whose engine-backed executor holds no
+     * session engine, and every stage dies at the executor's "no session
+     * engine is bound" refusal without dispatching a single turn (the gap
+     * the E641 command-tier refusal used to mask one level earlier). The
+     * remedy is the step `Chat` already proves correct: hand the engine
+     * this launch's backend before dispatch, which {@see
+     * \SugarCraft\Code\Workflows\WorkflowEngine::bindEngineBackend()}
+     * applies to the pool's forking executor.
+     *
+     * A command-tier launch answers a {@see
+     * \SugarCraft\Code\Backend\CommandBackend}, the instanceof guard skips
+     * the bind, and the run fails closed at the refusing worker exactly as
+     * before - E663's posture, untouched here.
+     */
+    private static function workflowVerbEngine(?string $root): \SugarCraft\Code\Workflows\WorkflowEngine
+    {
+        $gate = Bootstrap::permissionGate();
+        $engine = Bootstrap::workflowEngine($root, $gate);
+        $backend = Bootstrap::backend($root, gate: $gate);
+        if ($backend instanceof \SugarCraft\Code\Backend\EngineBackend) {
+            $engine->bindEngineBackend($backend);
+        }
+
+        return $engine;
+    }
+
+    /**
      * `workflow run <name> [--param k=v]...` - load by name or path through
      * the shared engine and execute to completion here. Refusals (unknown
      * name, malformed definition, permission door) pass the engine's raw
@@ -7036,7 +7069,7 @@ final class Subcommands
             );
         }
 
-        $engine = Bootstrap::workflowEngine($args->root, Bootstrap::permissionGate());
+        $engine = self::workflowVerbEngine($args->root);
         $engine->setSignalPauseHandler(
             static fn (\SugarCraft\Code\Workflows\WorkflowResult $partial, ?string $pausePath): int
                 => self::workflowSignalPause($asJson, 'run', $partial, $pausePath),
@@ -7096,7 +7129,7 @@ final class Subcommands
             return NonInteractive::failUsage('candy-code: ' . Lang::t('cli.workflow.need_id'), $args->outputFormat, self::workflowUsage());
         }
 
-        $engine = Bootstrap::workflowEngine($args->root, Bootstrap::permissionGate());
+        $engine = self::workflowVerbEngine($args->root);
         $engine->setSignalPauseHandler(
             static fn (\SugarCraft\Code\Workflows\WorkflowResult $partial, ?string $pausePath): int
                 => self::workflowSignalPause($asJson, 'resume', $partial, $pausePath),
