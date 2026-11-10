@@ -562,9 +562,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
          * without it behaves byte-identically to one built before C6 existed
          * — pinned, not asserted in prose. When present, the four lifecycle
          * events are dispatched inline and synchronously on the run's own
-         * path; they are observe-only and cannot alter the run.
+         * path; they are observe-only and cannot alter the run. The TUI seat
+         * hands it over after construction — {@see bindHookDispatcher()}.
          */
-        private readonly ?HookDispatcher $hookDispatcher = null,
+        private ?HookDispatcher $hookDispatcher = null,
     ) {}
 
     /**
@@ -638,6 +639,20 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($executor instanceof EngineExecutor) {
             $executor->bind($engine, $this->agentManager);
         }
+    }
+
+    /**
+     * Late and mutable for the same reason as {@see bindEngineBackend()}: the
+     * session build site owns the hook chain and hands it over only after the
+     * launch workspace closes, through {@see
+     * \SugarCraft\Code\Hooks\HookManager::armWorkflow()}, before the engine's
+     * first run. Null keeps the constructor's documented unarmed contract —
+     * the engine announces nothing. The CLI verb seat never calls this, so a
+     * headless run stays byte-identical to the shape it has always had.
+     */
+    public function bindHookDispatcher(?HookDispatcher $hookDispatcher): void
+    {
+        $this->hookDispatcher = $hookDispatcher;
     }
 
     /**

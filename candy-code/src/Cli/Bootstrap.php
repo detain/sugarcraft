@@ -2235,6 +2235,7 @@ final class Bootstrap
             trustedBundleCommands: self::trustedBundleCommandNames(),
             mcpPromptShell: self::mcpPromptShellServers(),
         );
+        $workspace->hooks?->armWorkflow($workspace->workflowEngine);
 
         // THE HOST SERVICES (Appendix O §4.3), registered where the workspace
         // is built so the TUI and any host built on this workspace share ONE
