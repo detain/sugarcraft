@@ -602,4 +602,137 @@ final class WorkflowYamlStageTypesTest extends TestCase
             self::assertStringContainsString('unknown key', $error->getMessage());
         }
     }
+
+    // ------------------------------------------------------- C9 input: fan-in joins
+
+    public function testAPlainStageCarriesAnInputJoinOntoItsTaskDto(): void
+    {
+        $workflow = $this->registry()->fromYamlString(
+            "name: j\ndescription: d\nstages:\n"
+            . "  - name: prep\n    agent: coder\n    prompt: warm up\n"
+            . "  - name: join\n    agent: coder\n    prompt: merge\n    input: {from: [prep], as: first}\n",
+            'join-yaml',
+        );
+
+        self::assertSame(
+            ['from' => ['prep'], 'as' => 'first'],
+            $workflow->stages[1]['tasks'][0]->input,
+            'the join spec is normalized onto the task the engine reads',
+        );
+    }
+
+    public function testInputRidesEveryTaskSurfaceThroughTheOneArm(): void
+    {
+        // Tasks-list entries, verification sub-maps and pipeline steps all
+        // reach applyTaskArms — one arm, one choke, proven on three surfaces.
+        $workflow = $this->registry()->fromYamlString(
+            "name: s\ndescription: d\nstages:\n"
+            . "  - name: prep\n    agent: coder\n    prompt: warm up\n"
+            . "  - name: pair\n    tasks:\n"
+            . "      - agent: coder\n        prompt: one\n"
+            . "        input: {from: [prep], as: file-list}\n"
+            . "  - name: check\n    type: verification\n"
+            . "    task: {agent: coder, prompt: do, input: {from: [prep], as: all}}\n"
+            . "    verifier: {agent: reviewer, prompt: 'ok?', input: {from: [prep], as: results}}\n",
+            'surfaces-yaml',
+        );
+
+        self::assertSame(
+            ['from' => ['prep'], 'as' => 'file-list'],
+            $workflow->stages[1]['tasks'][0]->input,
+        );
+        self::assertSame(['from' => ['prep'], 'as' => 'all'], $workflow->stages[2]['task']->input);
+        self::assertSame(['from' => ['prep'], 'as' => 'results'], $workflow->stages[2]['verifier']->input);
+    }
+
+    /**
+     * @return array<array{string, string}>
+     */
+    public static function refusedInputJoins(): array
+    {
+        return [
+            // The join arms plain stages only — carried workflows are their own subject.
+            'uses beside input' => [
+                "  - name: prep\n    agent: coder\n    prompt: p\n"
+                . "  - name: wrap\n    uses: inner\n    input: {from: [prep], as: first}\n",
+                'carries "input" beside "uses"',
+            ],
+            // trustedJoin shape law, wrapped by the load door.
+            'input scalar' => [
+                "  - name: solo\n    agent: coder\n    prompt: p\n    input: first\n",
+                '"input" must be a map carrying "from" and "as", got string',
+            ],
+            'unknown inner key' => [
+                "  - name: solo\n    agent: coder\n    prompt: p\n    input: {from: [x], as: first, bogus: 1}\n",
+                'has unknown key "bogus"; supported keys: from, as',
+            ],
+            'missing as' => [
+                "  - name: solo\n    agent: coder\n    prompt: p\n    input: {from: [x]}\n",
+                'needs an "as" shape',
+            ],
+            'missing from' => [
+                "  - name: solo\n    agent: coder\n    prompt: p\n    input: {as: first}\n",
+                'needs a "from" list',
+            ],
+            'from not a list' => [
+                "  - name: solo\n    agent: coder\n    prompt: p\n    input: {from: x, as: first}\n",
+                '"from" must be a list of stage names, got string',
+            ],
+            'from empty' => [
+                "  - name: solo\n    agent: coder\n    prompt: p\n    input: {from: [], as: first}\n",
+                '"from" must name at least one stage',
+            ],
+            'from blank entry' => [
+                "  - name: solo\n    agent: coder\n    prompt: p\n    input: {from: [x, ''], as: first}\n",
+                'must hold only non-empty stage-name strings',
+            ],
+            'from duplicate' => [
+                "  - name: solo\n    agent: coder\n    prompt: p\n    input: {from: [x, x], as: first}\n",
+                'names stage "x" twice',
+            ],
+            'as outside the vocabulary' => [
+                "  - name: solo\n    agent: coder\n    prompt: p\n    input: {from: [x], as: everything}\n",
+                'must be one of file-list, first, all, results',
+            ],
+            'as not a string' => [
+                "  - name: solo\n    agent: coder\n    prompt: p\n    input: {from: [x], as: 3}\n",
+                '"as" must be one of file-list, first, all, results, got int',
+            ],
+            // The order law: sources are visible names, so refusal is at parse.
+            'forward reference' => [
+                "  - name: join\n    agent: coder\n    prompt: p\n    input: {from: [later], as: first}\n"
+                . "  - name: later\n    agent: coder\n    prompt: q\n",
+                '"later" is not a stage declared before this one',
+            ],
+            'self reference' => [
+                "  - name: join\n    agent: coder\n    prompt: p\n    input: {from: [join], as: first}\n",
+                '"join" is not a stage declared before this one',
+            ],
+            'unknown name' => [
+                "  - name: solo\n    agent: coder\n    prompt: p\n    input: {from: [ghost], as: first}\n",
+                '"ghost" is not a stage declared before this one',
+            ],
+            // Placement: a tasks list owns its keys per-task.
+            'input beside a tasks list' => [
+                "  - name: pair\n    input: {from: [x], as: first}\n    tasks:\n      - agent: coder\n        prompt: p\n",
+                '"input" belongs on each task',
+            ],
+        ];
+    }
+
+    /**
+     * @dataProvider refusedInputJoins
+     */
+    public function testInputJoinsThatLieAboutShapeOrderOrPlacementAreRefused(string $stagesYaml, string $needle): void
+    {
+        try {
+            $this->registry()->fromYamlString(
+                "name: r\ndescription: d\nstages:\n" . $stagesYaml,
+                'input-refusal',
+            );
+            self::fail('expected a WorkflowLoadException naming ' . $needle);
+        } catch (WorkflowLoadException $error) {
+            self::assertStringContainsString($needle, $error->getMessage());
+        }
+    }
 }

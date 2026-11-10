@@ -2278,6 +2278,15 @@ final class WorkflowRegistry
         // declared before its own. A null joinStage means a task surface was
         // parsed outside any stage loop; index -1 then fails closed there.
         if (array_key_exists('input', $map)) {
+            // trustedJoin is typed array: a scalar spelling must refuse loudly
+            // through the load door, never leak a TypeError past the parse.
+            if (!is_array($map['input'])) {
+                throw new WorkflowLoadException(
+                    "{$at} \"input\" must be a map carrying \"from\" and \"as\", got "
+                    . get_debug_type($map['input'])
+                );
+            }
+
             try {
                 $spec = TaskBuilder::trustedJoin($map['input']);
             } catch (\InvalidArgumentException $error) {

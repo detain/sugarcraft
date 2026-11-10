@@ -623,6 +623,156 @@ final class WorkflowAgentResultsTest extends TestCase
         };
     }
 
+    // ------------------------------------------------------- C9 input: fan-in joins
+
+    public function testTheFourJoinShapesRenderPriorRowsThroughTheHandles(): void
+    {
+        $expected = [
+            'first' => 'M OUT[do a]',
+            'file-list' => "M OUT[do a]\nOUT[do b]",
+            'all' => "M === a ===\nOUT[do a]\n=== b ===\nOUT[do b]",
+            'results' => 'M {"a":"OUT[do a]","b":"OUT[do b]"}',
+        ];
+
+        foreach ($expected as $as => $want) {
+            $this->prompts = [];
+            $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+                ->name('shape-' . $as)
+                ->stage('a', Tasks::agent('coder')->prompt('do a'))
+                ->stage('b', Tasks::agent('coder')->prompt('do b'))
+                ->stage('m', Tasks::agent('coder')->prompt('M {{input}}')->input(['from' => ['a', 'b'], 'as' => $as]))
+                ->build());
+
+            self::assertSame(WorkflowStatus::Completed, $result->status, $as);
+            self::assertSame($want, end($this->prompts), "as: {$as} joins prior rows under the fixed handle");
+        }
+
+        $this->prompts = [];
+        $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('shape-handles')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->stage('m', Tasks::agent('coder')->prompt('R={{input.results}} D={{input.output}}')
+                ->input(['from' => ['a'], 'as' => 'first']))
+            ->build());
+
+        self::assertSame(
+            'R=OUT[do a] D={{input.output}}',
+            end($this->prompts),
+            'the results handle reads the same local row; .output is not a join spelling and stays loud',
+        );
+    }
+
+    public function testAPointerReachesInsideTheJoinedResultsDocument(): void
+    {
+        $this->script['emit'] = fn (SubAgent $agent): AgentResult => $this->typedResult($agent, '{"summary":"green"}');
+
+        $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('typed-join')
+            ->stage('build', Tasks::agent('coder')->prompt('emit json')->outputSchema(['type' => 'object']))
+            ->stage('ship', Tasks::agent('coder')->prompt('S={{input.build/summary}} D={{input.build}}')
+                ->input(['from' => ['build'], 'as' => 'results']))
+            ->build());
+
+        self::assertSame(
+            'S=green D={{input.build}}',
+            end($this->prompts),
+            'as: results injects a typed row so C3 pointers traverse the joined document (slash-pointer law: the '
+            . 'dot only names the row); an interior object leaf stays verbatim exactly as the pointer law spells it',
+        );
+    }
+
+    public function testFileListDegradesToTheNoteAndTheOtherShapesRefuseWhenEverySourceIsSkipped(): void
+    {
+        $clauses = static fn (): array => ['stage' => 'gate', 'equals' => 'NEVER'];
+
+        $this->prompts = [];
+        $degrade = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('skip-file-list')
+            ->stage('gate', Tasks::agent('coder')->prompt('do gate'))
+            ->stage('b', Tasks::agent('coder')->prompt('do b'))->when($clauses())
+            ->stage('m', Tasks::agent('coder')->prompt('M {{input}}')->input(['from' => ['b'], 'as' => 'file-list']))
+            ->build());
+        self::assertSame(WorkflowStatus::Completed, $degrade->status);
+        self::assertSame('M [input: no sources joined]', end($this->prompts), 'file-list is a manifest: empty is honest');
+
+        foreach (['first', 'all', 'results'] as $as) {
+            $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+                ->name('skip-' . $as)
+                ->stage('gate', Tasks::agent('coder')->prompt('do gate'))
+                ->stage('b', Tasks::agent('coder')->prompt('do b'))->when($clauses())
+                ->stage('m', Tasks::agent('coder')->prompt('M {{input}}')->input(['from' => ['b'], 'as' => $as]))
+                ->build());
+
+            self::assertSame(WorkflowStatus::Failed, $result->status, $as);
+            self::assertStringContainsString('every source is missing', (string) $result->firstFailure()?->error);
+        }
+    }
+
+    public function testASkippedSourceVanishesFromAnOtherwiseLiveJoin(): void
+    {
+        $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('half-skip')
+            ->stage('gate', Tasks::agent('coder')->prompt('do gate'))
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->stage('b', Tasks::agent('coder')->prompt('do b'))->when(['stage' => 'a', 'equals' => 'NEVER'])
+            ->stage('m', Tasks::agent('coder')->prompt('M {{input}}')->input(['from' => ['a', 'b'], 'as' => 'all']))
+            ->build());
+
+        self::assertSame(WorkflowStatus::Completed, $result->status);
+        self::assertSame("M === a ===\nOUT[do a]", end($this->prompts), 'absent sources are skipped, not mourned');
+    }
+
+    public function testTheJoinReDerivesByteIdenticalAcrossPauseAndResume(): void
+    {
+        foreach (['first', 'results'] as $as) {
+            $name = 'pause-' . $as;
+            $this->registry->register((new WorkflowBuilder())
+                ->name($name)
+                ->stage('a', Tasks::agent('coder')->prompt('do a'))
+                ->stage('b', Tasks::agent('coder')->prompt('do b'))
+                ->stage('m', Tasks::agent('coder')->prompt('M {{input}} R={{input.results}}')
+                    ->input(['from' => ['a', 'b'], 'as' => $as]))
+                ->build());
+
+            $engine = $this->engine();
+            $this->script['do b'] = static function () use ($engine, $name): ?AgentResult {
+                $engine->pause($name);
+
+                return null;
+            };
+
+            $paused = $engine->run($name);
+            self::assertSame(WorkflowStatus::Paused, $paused->status);
+
+            $raw = (string) file_get_contents($this->tempDir . '/workflows/.running/' . $name . '.json');
+            self::assertStringNotContainsString(
+                '"input"',
+                $raw,
+                'the pause record never carries a join row — the join is re-derived from recorded rows, not replayed',
+            );
+
+            unset($this->script['do b']);
+            $this->prompts = [];
+            $resumed = $this->engine()->resume($name);
+            self::assertSame(WorkflowStatus::Completed, $resumed->status);
+
+            $joinPrompts = array_values(array_filter(
+                $this->prompts,
+                static fn (string $prompt): bool => str_starts_with($prompt, 'M '),
+            ));
+            self::assertCount(1, $joinPrompts, 'the joining stage dispatches exactly once, after the resume');
+
+            $joined = $as === 'first'
+                ? 'OUT[do a]'
+                : '{"a":"OUT[do a]","b":"OUT[do b]"}';
+            self::assertSame(
+                'M ' . $joined . ' R=' . $joined,
+                $joinPrompts[0],
+                'resumed join bytes equal what a live run would have built from the same rows',
+            );
+        }
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {

@@ -2163,6 +2163,124 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
+     * C9: build a fan-in join payload and inject it into a COPY of the
+     * interpolation context for one stage task.
+     *
+     * The join never persists into the running context: pause files carry no
+     * `input` row, and a resumed run re-derives the same bytes from the same
+     * recorded rows — the whole byte-stability story across pause/resume (the
+     * same discipline {@see withSanitizedResults()} gives the typed map by
+     * neutralizing hand-edited junk AT READ TIME; here even the hand-edit
+     * surface is absent, because nothing is stored). The fixed name `input`
+     * shadows a prior stage named `input` inside the joining stage's own
+     * prompt only; downstream stages and the results map that survives the
+     * stage keep the legacy meaning.
+     *
+     * Shapes ({@see \SugarCraft\Code\Workflows\TaskBuilder::trustedJoin()}
+     * gated the vocabulary at load; this helper is the runtime half):
+     * - `file-list`: present source rows joined by newlines — capture paths
+     *   ride the rows themselves per the capture shape, so a file list IS the
+     *   joined text. Every source missing degrades to a note line, NOT a
+     *   refusal: a fan-in over optional producers must be able to say
+     *   "nothing".
+     * - `first`: the first present row verbatim.
+     * - `all`: every present row under a `=== name ===` banner, declaration
+     *   order, absent sources skipped.
+     * - `results`: a JSON document keyed by source name whose members are the
+     *   decoded typed rows ({@see TYPED_RESULTS_CONTEXT_KEY}) where present,
+     *   falling back to the text row; the join's text row IS that JSON, so
+     *   `{{input.results}}` and pointer paths like `{{input.a/b}}` agree (the
+     *   dot names the row, the remainder is an RFC 6901 pointer) — mirroring
+     *   how a schema'd stage's own text row already carries its raw JSON.
+     *
+     * `first`/`all`/`results` refuse loudly when EVERY named source is
+     * missing: text conjured from nothing would let a `when:`-skipped source
+     * ({@see skippedWhenRow()} — a skipped stage writes NOTHING to the
+     * context) pass as if it had contributed. The refusal is raw English and
+     * lands as a stage failure through the dispatch catch — parse cannot know
+     * skips, only run can.
+     *
+     * @param array<array-key, mixed> $context
+     * @param array{from: list<string>, as: string}|null $spec
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function resolveStageInput(array $context, ?array $spec): array
+    {
+        if ($spec === null) {
+            return $context;
+        }
+
+        /** @var array<string, string> $rows */
+        $rows = [];
+        /** @var array<string, mixed> $members */
+        $members = [];
+        $typedRows = $context[self::TYPED_RESULTS_CONTEXT_KEY] ?? null;
+        if (!is_array($typedRows)) {
+            $typedRows = [];
+        }
+
+        foreach ($spec['from'] as $name) {
+            $row = $context[$name . '.output'] ?? null;
+            if (!is_string($row)) {
+                $textMap = $context[self::RESULTS_CONTEXT_KEY] ?? null;
+                $row = is_array($textMap) ? ($textMap[$name] ?? null) : null;
+            }
+
+            if (!is_string($row)) {
+                continue;
+            }
+
+            $rows[$name] = $row;
+
+            if ($spec['as'] === 'results') {
+                $typed = $typedRows[$name] ?? null;
+                $decoded = is_string($typed) ? json_decode($typed, true) : null;
+                $members[$name] = is_array($decoded) ? $decoded : $row;
+            }
+        }
+
+        if ($rows === []) {
+            if ($spec['as'] !== 'file-list') {
+                throw new \RuntimeException(
+                    'input join: every source is missing (' . implode(', ', $spec['from'])
+                    . ') - joins read prior stages; a stage skipped by when: records nothing'
+                );
+            }
+
+            $text = '[input: no sources joined]';
+        } else {
+            $text = match ($spec['as']) {
+                'file-list' => implode("\n", $rows),
+                'first' => $rows[array_key_first($rows)],
+                'all' => implode("\n", array_map(
+                    static fn (string $name, string $row): string => "=== {$name} ===\n{$row}",
+                    array_keys($rows),
+                    $rows
+                )),
+                default => (string) json_encode($members, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            };
+        }
+
+        $context['input'] = $text;
+
+        $textMap = $context[self::RESULTS_CONTEXT_KEY] ?? null;
+        if (!is_array($textMap)) {
+            $textMap = [];
+        }
+
+        $textMap['input'] = $text;
+        $context[self::RESULTS_CONTEXT_KEY] = $textMap;
+
+        if ($spec['as'] === 'results') {
+            $typedRows['input'] = $text;
+            $context[self::TYPED_RESULTS_CONTEXT_KEY] = $typedRows;
+        }
+
+        return $context;
+    }
+
+    /**
      * C2: a `when:` clause that answers unsatisfied settles the stage as
      * Skipped WITHOUT dispatch — the row is a recorded fact, neither success
      * nor failure. Nothing is billed, no output key is written (downstream
@@ -2862,7 +2980,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             }
 
             // Interpolate prompt with context
-            $interpolatedPrompt = $this->interpolateContext($task->prompt, $taskContext);
+            $interpolatedPrompt = $this->interpolateContext($task->prompt, self::resolveStageInput($taskContext, $task->input));
 
             // Build SubAgent
             $agent = new Agent(
@@ -3020,7 +3138,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
             /** @var WorkflowTask $task */
             $task = $nestedTasks[0];
-            $interpolatedPrompt = $this->interpolateContext($task->prompt, $pipelineContext);
+            $interpolatedPrompt = $this->interpolateContext($task->prompt, self::resolveStageInput($pipelineContext, $task->input));
 
             // Build SubAgent for this pipeline stage
             $agent = new Agent(
