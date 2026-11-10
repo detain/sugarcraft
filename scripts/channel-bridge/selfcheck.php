@@ -605,6 +605,20 @@ try {
     check('M4 Rest constructs against the vendored react/http Browser', false, $m4e::class . ': ' . $m4e->getMessage());
 }
 
+// M5: Discord READY carries a STRING session_id; the property was ?int under
+// strict_types — the first READY died in a TypeError.
+$m5Gateway = new Gateway('tok', new Log($stateDir . '/m5-gw.log', 'info'), $loop);
+try {
+    $m5Dispatch = new ReflectionMethod(Gateway::class, 'dispatch');
+    $m5Dispatch->setAccessible(true);
+    $m5Dispatch->invoke($m5Gateway, 'READY', ['session_id' => 'sess-fix-m5', 'application' => ['id' => '9']]);
+    $m5Prop = new ReflectionProperty(Gateway::class, 'sessionId');
+    $m5Prop->setAccessible(true);
+    check('M5 READY stores a string session_id on the Gateway', $m5Prop->getValue($m5Gateway) === 'sess-fix-m5', 'stored ' . var_export($m5Prop->getValue($m5Gateway), true));
+} catch (\Throwable $m5e) {
+    check('M5 READY stores a string session_id on the Gateway', false, $m5e::class . ': ' . $m5e->getMessage());
+}
+
 echo "\n";
 // -- 4. summary -----------------------------------------------------------
 

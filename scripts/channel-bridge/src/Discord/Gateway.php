@@ -53,7 +53,7 @@ final class Gateway
     public const DEFAULT_URL = 'wss://gateway.discord.gg/?v=10&encoding=json';
 
     private ?WebSocket $socket = null;
-    private ?int $sessionId = null;
+    private ?string $sessionId = null;
     private ?int $seq = null;
     private ?\React\EventLoop\TimerInterface $heartbeatTimer = null;
     private int $epoch = 0;
