@@ -777,6 +777,13 @@ final class StderrEmitterCensusTest extends TestCase
         // config-shape notice; the pair parses both opt-in lists, so both arms
         // of the parse warn once each.
         'src/Cli/Bootstrap.php' => 51,
+        // +3 in P1 FIX-2 (L-P1FIX): the three transcript-seam notices of the
+        // trusted-bundle hooks arm — uncontained, loose bytes, refused file —
+        // moved with the arm's bytes into the TrustedBundleHooks trait under
+        // the size ratchet's M6 path. The credit follows the bytes, the same
+        // way CarriesSessionLaunchPreset's collision rows above did; the
+        // Bootstrap row above is its pre-extraction figure again.
+        'src/Cli/TrustedBundleHooks.php' => 3,
     ];
 
     /**
