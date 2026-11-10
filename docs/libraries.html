@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Libraries — SugarCraft</title>
+    <meta name="description" content="SugarCraft — 40 libraries and 22 apps (62 packages). The full library catalogue: each package with its README, examples, and PHPUnit suite.">
+    <meta property="og:title" content="Libraries — SugarCraft">
+    <meta property="og:description" content="40 libraries and 22 apps for building beautiful terminal UIs in PHP. The full library catalogue.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://sugarcraft.github.io/libraries.html">
+    <meta property="og:image" content="https://sugarcraft.github.io/img/social-preview.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://sugarcraft.github.io/img/social-preview.png">
+    <link rel="canonical" href="https://sugarcraft.github.io/libraries.html">
+    <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
+    <link rel="icon" type="image/png" href="img/profile.png">
+    <link rel="apple-touch-icon" href="img/profile.png">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/search.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<!--nav:start-->
+<nav class="nav" aria-label="Main navigation"><div class="nav-inner">
+    <a class="brand" href="/"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
+    <div class="nav-links">
+        <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
+            <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <span>Search</span>
+        </button>
+        <ul class="nav-items">
+            <li class="nav-item"><a href="/">Home</a></li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Libraries <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <!-- L2b retargets this header link to libraries.html -->
+                    <a class="nav-drop-all" href="/#libraries">All libraries →</a>
+                    <a href="/lib/sugar-core.html">sugar-core</a>
+                    <a href="/lib/sugar-style.html">sugar-style</a>
+                    <a href="/lib/sugar-cellbuffer.html">sugar-cellbuffer</a>
+                    <a href="/lib/sugar-async.html">sugar-async</a>
+                    <a href="/lib/sugar-spring.html">sugar-spring</a>
+                    <a href="/lib/sugar-mouse.html">sugar-mouse</a>
+                    <a href="/lib/sugar-widgets.html">sugar-widgets</a>
+                    <a href="/lib/sugar-charts.html">sugar-charts</a>
+                    <a href="/lib/sugar-forms.html">sugar-forms</a>
+                    <a href="/lib/sugar-markdown.html">sugar-markdown</a>
+                    <a href="/lib/sugar-cli.html">sugar-cli</a>
+                    <a href="/lib/sugar-ssh-server.html">sugar-ssh-server</a>
+                    <a href="/lib/sugar-metrics.html">sugar-metrics</a>
+                    <a href="/lib/sugar-log.html">sugar-log</a>
+                    <a href="/lib/sugar-image.html">sugar-image</a>
+                    <a href="/lib/sugar-animation.html">sugar-animation</a>
+                    <a href="/lib/sugar-video.html">sugar-video</a>
+                    <a href="/lib/sugar-colorprofile.html">sugar-colorprofile</a>
+                    <a href="/lib/sugar-ansi-parser.html">sugar-ansi-parser</a>
+                    <a href="/lib/sugar-vterm.html">sugar-vterm</a>
+                    <a href="/lib/sugar-pty.html">sugar-pty</a>
+                    <a href="/lib/sugar-focus.html">sugar-focus</a>
+                    <a href="/lib/sugar-gallery.html">sugar-gallery</a>
+                    <a href="/lib/sugar-treelist.html">sugar-treelist</a>
+                    <a href="/lib/sugar-constraints.html">sugar-constraints</a>
+                    <a href="/lib/sugar-panels.html">sugar-panels</a>
+                    <a href="/lib/sugar-overlay.html">sugar-overlay</a>
+                    <a href="/lib/sugar-navstack.html">sugar-navstack</a>
+                    <a href="/lib/sugar-dashboard.html">sugar-dashboard</a>
+                    <a href="/lib/sugar-quickpick.html">sugar-quickpick</a>
+                    <a href="/lib/sugar-input.html">sugar-input</a>
+                    <a href="/lib/sugar-fuzzy.html">sugar-fuzzy</a>
+                    <a href="/lib/sugar-flexbox.html">sugar-flexbox</a>
+                    <a href="/lib/sugar-toast.html">sugar-toast</a>
+                    <a href="/lib/sugar-datepicker.html">sugar-datepicker</a>
+                    <a href="/lib/sugar-readline.html">sugar-readline</a>
+                    <a href="/lib/sugar-table.html">sugar-table</a>
+                    <a href="/lib/sugar-diff.html">sugar-diff</a>
+                    <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
+                    <a href="/lib/sugar-testing.html">sugar-testing</a>
+                </div>
+            </li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Apps <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <!-- L2b retargets this header link to apps.html -->
+                    <a class="nav-drop-all" href="/#apps">All apps →</a>
+                    <a href="/lib/candy-starter.html">candy-starter</a>
+                    <a href="/lib/candy-scriptui.html">candy-scriptui</a>
+                    <a href="/lib/candy-codeshot.html">candy-codeshot</a>
+                    <a href="/lib/candy-mdview.html">candy-mdview</a>
+                    <a href="/lib/candy-ansi-inspect.html">candy-ansi-inspect</a>
+                    <a href="/lib/candy-ssh-launcher.html">candy-ssh-launcher</a>
+                    <a href="/lib/candy-kv.html">candy-kv</a>
+                    <a href="/lib/candy-mail.html">candy-mail</a>
+                    <a href="/lib/candy-git-server.html">candy-git-server</a>
+                    <a href="/lib/candy-tetris.html">candy-tetris</a>
+                    <a href="/lib/candy-files.html">candy-files</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
+                    <a href="/lib/candy-code-web.html">candy-code-web</a>
+                    <a href="/lib/candy-vcr.html">candy-vcr</a>
+                    <a href="/lib/candy-git.html">candy-git</a>
+                    <a href="/lib/candy-sql.html">candy-sql</a>
+                    <a href="/lib/candy-codetime.html">candy-codetime</a>
+                    <a href="/lib/candy-minesweeper.html">candy-minesweeper</a>
+                    <a href="/lib/candy-gifview.html">candy-gifview</a>
+                    <a href="/lib/candy-image.html">candy-image</a>
+                    <a href="/lib/candy-top.html">candy-top</a>
+                    <a href="/lib/candy-flappy.html">candy-flappy</a>
+                </div>
+            </li>
+            <li class="nav-item nav-item-drop-right">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Docs <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop">
+                    <a href="/#architecture">Architecture</a>
+                    <a href="/#quickstart">Quickstart</a>
+                    <a href="/compare.html">Compare</a>
+                    <a href="/GETTING-STARTED.md">Getting Started</a>
+                    <a href="/GLOSSARY.md">Glossary</a>
+                    <a href="/KEYMAPS.md">Keymaps</a>
+                    <a href="/cookbook/README.md">Cookbook</a>
+                </div>
+            </li>
+            <li class="nav-item"><a href="/#demos">Demos</a></li>
+            <li class="nav-item"><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a></li>
+        </ul>
+    </div>
+</div></nav>
+<!--nav:end-->
+
+<main id="main">
+<section class="section" id="libraries" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Forty libraries, one ecosystem.</h2>
+        <p class="lede">
+            Each library has its own composer package, README, examples, and
+            PHPUnit suite. Pull just the ones you need — or grab the umbrella
+            metapackage and get the lot.
+        </p>
+
+        <div class="lib-grid">
+
+            <a class="lib-card" href="lib/sugar-core.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-core/.vhs/counter.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-core.png" alt="" aria-hidden="true">
+                    <h3>SugarCraft</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-core">GitHub →</span>
+                </div>
+                <p class="summary">MVC-style Model–Update–View runtime — Model / Msg / Cmd / Program. Cell-diff renderer saves SSH bandwidth.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-style.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-style/.vhs/dashboard.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-style.png" alt="" aria-hidden="true">
+                    <h3>SugarStyle</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-style">GitHub →</span>
+                </div>
+                <p class="summary">Declarative styling + layout. Style, Border, Table\Table, Listing\ItemList, Tree\Tree, Layout::joinHorizontal/joinVertical, Layout::place, multi-layer Canvas, and Theme.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-cellbuffer.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-cellbuffer.png" alt="" aria-hidden="true">
+                    <h3>SugarCellbuffer</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-cellbuffer">GitHub →</span>
+                </div>
+                <p class="summary">Cell-grid value objects — immutable Buffer (2-D cell grid) and Cell (rune/style/link/width). Shared foundation for all rendering, with minimal-repaint diffs via Buffer::diff().</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-async.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-async.png" alt="" aria-hidden="true">
+                    <h3>SugarAsync</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-async">GitHub →</span>
+                </div>
+                <p class="summary">Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, withDeadline, cancellable, retry, debounce, throttle, all/race, onPending, singleFlight) + TTL async cache. Dependents: sugar-forms, sugar-vterm, candy-sql, candy-mail, candy-git-server, candy-codetime.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-spring.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-spring/.vhs/spring.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-spring.png" alt="" aria-hidden="true">
+                    <h3>SugarSpring</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-spring">GitHub →</span>
+                </div>
+                <p class="summary">Damped spring physics + Newtonian projectile sim. The physics behind candy-flappy's bird and the fade/scale/slide animations sugar-widgets drives through it.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-mouse.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-mouse/.vhs/zones-buttons.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-mouse.png" alt="" aria-hidden="true">
+                    <h3>SugarMouse</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-mouse">GitHub →</span>
+                </div>
+                <p class="summary">Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker for press/release deduplication, plus the bubblezone-style <code>Zones</code> Manager under <code>SugarCraft\Mouse\Zones</code>.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-widgets.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/spinners.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-widgets.png" alt="" aria-hidden="true">
+                    <h3>SugarWidgets</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-widgets">GitHub →</span>
+                </div>
+                <p class="summary">Seventeen components: TextInput, TextArea (dynamic-height), ItemList, Table (per-cell <code>styleFunc</code>), Tree, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Scrollbar, Tabs, Stopwatch, Timer.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-charts.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-charts/.vhs/heatmap.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-charts.png" alt="" aria-hidden="true">
+                    <h3>SugarCharts</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-charts">GitHub →</span>
+                </div>
+                <p class="summary">Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, plus Sixel / Kitty / iTerm2 image rendering.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-forms.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-forms/.vhs/form.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-forms.png" alt="" aria-hidden="true">
+                    <h3>SugarForms</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-forms">GitHub →</span>
+                </div>
+                <p class="summary">Form library (port of charmbracelet/huh) and foundation for the form primitives SugarWidgets re-exports — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker, multi-page Groups, six themes. Form-level <code>KeyMap</code> override per binding.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-markdown.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-markdown/.vhs/render.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-markdown.png" alt="" aria-hidden="true">
+                    <h3>SugarMarkdown</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-markdown">GitHub →</span>
+                </div>
+                <p class="summary">Markdown → ANSI renderer. Word-wrap, OSC 8 hyperlinks, syntax highlighting, eight themes, custom themes via JSON.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-cli.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-cli/.vhs/cli-page.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-cli.png" alt="" aria-hidden="true">
+                    <h3>SugarCli</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-cli">GitHub →</span>
+                </div>
+                <p class="summary">Terminal UI building blocks — StatusLine, Banner, Section, Stage, HelpText, Frame, Logo, and themes.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-ssh-server.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-ssh-server/.vhs/showcase.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-ssh-server.png" alt="" aria-hidden="true">
+                    <h3>SugarSshServer</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-ssh-server">GitHub →</span>
+                </div>
+                <p class="summary">SSH server middleware framework — Logger, Auth, RateLimit, and a terminal middleware that runs a full SugarCraft app in each session. OpenSSH ForceCommand handles the wire protocol.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-metrics.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-metrics/.vhs/showcase.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-metrics.png" alt="" aria-hidden="true">
+                    <h3>SugarMetrics</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-metrics">GitHub →</span>
+                </div>
+                <p class="summary">Telemetry primitives — six instrument kinds (Counter, Gauge, Histogram, UpDownCounter, AsyncCounter, AsyncGauge), five backends (InMemory, JsonStream, StatsD, Prometheus textfile, Multi fan-out), SugarSshServer session middleware; the demo GIF shows the flagship showcase.php example.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-log.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-log/.vhs/demo.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-log.png" alt="" aria-hidden="true">
+                    <h3>SugarLog</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-log">GitHub →</span>
+                </div>
+                <p class="summary">Colorful leveled logger. Debug / Info / Warn / Error / Fatal with structured context, Text / JSON / Logfmt formatters, and sub-loggers.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-image.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-image/.vhs/inline-image.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-image.png" alt="" aria-hidden="true">
+                    <h3>SugarImage</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-image">GitHub →</span>
+                </div>
+                <p class="summary">Image-to-cell renderer — Sixel, Kitty, iTerm2, Unicode half-block; Picker facade; ext-gd.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-animation.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-animation/.vhs/play.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-animation.png" alt="" aria-hidden="true">
+                    <h3>SugarAnimation</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-animation">GitHub →</span>
+                </div>
+                <p class="summary">ANSI/GIF animation toolkit — ext-gd decode, cell-grid downsample, solid / luminance-ramp presets, .ansi art playback. Viewer CLI: candy-gifview.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-video.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-video/.vhs/play.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-video.png" alt="" aria-hidden="true">
+                    <h3>SugarVideo</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-video">GitHub →</span>
+                </div>
+                <p class="summary">Terminal video player — decodes mp4 (and more) on the fly and renders to ASCII / ANSI / truecolor half-block / sixel / kitty.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-colorprofile.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-colorprofile/.vhs/detect.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-colorprofile.png" alt="" aria-hidden="true">
+                    <h3>SugarColorprofile</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-colorprofile">GitHub →</span>
+                </div>
+                <p class="summary">Terminal color profile detection + ANSI / ANSI256 / TrueColor conversion. StandardColors and ProfileWriter.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-ansi-parser.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-ansi-parser.png" alt="" aria-hidden="true">
+                    <h3>SugarAnsiParser</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-ansi-parser">GitHub →</span>
+                </div>
+                <p class="summary">ANSI escape-sequence parser + state machine (SGR, cursor, erase, DEC modes). Feeds into SugarVterm for cell-grid rendering.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-vterm.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-vterm/.vhs/snapshot-demo.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-vterm.png" alt="" aria-hidden="true">
+                    <h3>SugarVterm</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-vterm">GitHub →</span>
+                </div>
+                <p class="summary">In-memory virtual terminal emulator. ANSI byte stream → cell grid + cursor + mode state.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-pty.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-pty.png" alt="" aria-hidden="true">
+                    <h3>SugarPty</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-pty">GitHub →</span>
+                </div>
+                <p class="summary">Pseudo-terminal primitives for Linux, macOS &amp; Windows (ConPTY) — PtySystemFactory → Contract master/slave: open / spawn / read / write / resize / size, Child lifecycle, SignalForwarder (SIGWINCH → resize).</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-focus.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-focus.png" alt="" aria-hidden="true">
+                    <h3>SugarFocus</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-focus">GitHub →</span>
+                </div>
+                <p class="summary">Focus-ring state machine — ordered focusable regions with a single focused member + wrap-around Tab/Shift-Tab traversal. Dependency-free.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-gallery.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-gallery.png" alt="" aria-hidden="true">
+                    <h3>SugarGallery</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-gallery">GitHub →</span>
+                </div>
+                <p class="summary">Poster grids & rails for media TUIs — a 2-D virtualized, sparse PosterGrid with owner-driven range paging, a Rail carousel, and a renderer-agnostic PosterCard tile.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-treelist.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-treelist/.vhs/basic.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-treelist.png" alt="" aria-hidden="true">
+                    <h3>SugarTreelist</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-treelist">GitHub →</span>
+                </div>
+                <p class="summary">Tree/list view with box-drawing prefixes, cursor navigation, word-wrap, and filter-as-you-type.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-constraints.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-constraints.png" alt="" aria-hidden="true">
+                    <h3>SugarConstraints</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-constraints">GitHub →</span>
+                </div>
+                <p class="summary">Constraint-based layout solver — a deterministic greedy solver (GreedySolver) behind a one-method LayoutSolver interface; the deprecated CassowarySolver name delegates to it. Swap solver classes without touching call-sites.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-panels.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-panels/.vhs/borders.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-panels.png" alt="" aria-hidden="true">
+                    <h3>SugarPanels</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-panels">GitHub →</span>
+                </div>
+                <p class="summary">H/V panels with flex/natural sizing, borders, nesting, and stateful delta rendering.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-overlay.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-overlay/.vhs/basic.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-overlay.png" alt="" aria-hidden="true">
+                    <h3>SugarOverlay</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-overlay">GitHub →</span>
+                </div>
+                <p class="summary">Terminal overlay compositor. Composites Veil overlays with backdrop dimming, z-stack ordering, positioning, and click-outside hit-testing.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-navstack.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-navstack/.vhs/navigation.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-navstack.png" alt="" aria-hidden="true">
+                    <h3>SugarNavstack</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-navstack">GitHub →</span>
+                </div>
+                <p class="summary">Navigation breadcrumbs. Mutable NavStack with explicit push/pop, width-aware breadcrumbs, and substring filter.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-dashboard.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-showcase.gif" alt="" onerror="this.style.display='none'">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-dashboard.png" alt="" aria-hidden="true">
+                    <h3>SugarDashboard</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-dashboard">GitHub →</span>
+                </div>
+                <p class="summary">Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-quickpick.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-quickpick/.vhs/basic.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-quickpick.png" alt="" aria-hidden="true">
+                    <h3>SugarQuickpick</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-quickpick">GitHub →</span>
+                </div>
+                <p class="summary">Fuzzy finder overlay. Type to filter a list, arrow keys to select, Enter to confirm. Renders over your app's view string while the background keeps updating.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-input.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-input.png" alt="" aria-hidden="true">
+                    <h3>SugarInput</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-input">GitHub →</span>
+                </div>
+                <p class="summary">Terminal escape sequence decoder — legacy keys, Kitty keyboard, SGR/urxvt/X10 mouse, focus, bracketed paste. The missing input layer for PHP TUI.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-fuzzy.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-fuzzy.png" alt="" aria-hidden="true">
+                    <h3>SugarFuzzy</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-fuzzy">GitHub →</span>
+                </div>
+                <p class="summary">Fuzzy string matching with scored matched indices — Smith-Waterman + Sahilm algorithms. Extracted from sugar-forms; unblocks filter-highlighting UI.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-flexbox.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/flexbox.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-flexbox.png" alt="" aria-hidden="true">
+                    <h3>SugarFlexbox</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-flexbox">GitHub →</span>
+                </div>
+                <p class="summary">FlexBox layout engine + simple sort/filter table. Ratio-based sizing, gap, justify, align, per-column styling.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-toast.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-toast/.vhs/types.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-toast.png" alt="" aria-hidden="true">
+                    <h3>SugarToast</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-toast">GitHub →</span>
+                </div>
+                <p class="summary">Floating notification overlays. Error / Warning / Info / Success types, configurable position and host-driven auto-dismiss.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-datepicker.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-datepicker/.vhs/basic.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-datepicker.png" alt="" aria-hidden="true">
+                    <h3>SugarDatepicker</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-datepicker">GitHub →</span>
+                </div>
+                <p class="summary">DatePicker, Calendar and TimePicker widgets with min/max date constraints, locale-ready day names (English ships today), ANSI rendering; weeks start Monday (firstDayOfWeek is not configurable).</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-readline.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-readline/.vhs/basic.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-readline.png" alt="" aria-hidden="true">
+                    <h3>SugarReadline</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-readline">GitHub →</span>
+                </div>
+                <p class="summary">Interactive prompts — Text, Confirm, Selection, MultiSelect, Textarea. State-machine model, no external readline dependency.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-table.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-table/.vhs/features.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-table.png" alt="" aria-hidden="true">
+                    <h3>SugarTable</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-table">GitHub →</span>
+                </div>
+                <p class="summary">Full-featured interactive data table — column definitions, StyledCell ANSI formatting, pagination, frozen rows and columns.</p>
+            </a>
+            <a class="lib-card" href="lib/sugar-diff.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-diff.png" alt="" aria-hidden="true">
+                    <h3>SugarDiff</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-diff">GitHub →</span>
+                </div>
+                <p class="summary">Unified-diff engine — LCS line diff, context hunks, GNU diff -u writer and line-number scanner.</p>
+            </a>
+            <a class="lib-card" href="lib/sugar-mcp-client.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-mcp-client.png" alt="" aria-hidden="true">
+                    <h3>Sugar MCP Client</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-mcp-client">GitHub →</span>
+                </div>
+                <p class="summary">MCP client core — JSON-RPC 2.0 codec, stdio transport with bounded child lifecycle, initialize/tools handshake, tool narrowing.</p>
+            </a>
+
+            <a class="lib-card" href="lib/sugar-testing.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-testing.png" alt="" aria-hidden="true">
+                    <h3>SugarTesting</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-testing">GitHub →</span>
+                </div>
+                <p class="summary">Test harness for SugarCraft apps — ProgramSimulator, golden-file assertions, snapshot helpers. Deterministic Model–Update–View testing down to the byte.</p>
+            </a>
+
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer class="footer">
+    <div class="container">
+        <div>
+            <span class="logo-mark" aria-hidden="true"></span>
+            <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+
+        </div>
+        <p class="credits" style="color: var(--ink-2); font-size: 0.85em; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px;">SugarCraft is a PHP-native project. Its original design inspiration came from the Go terminal ecosystem — notably <a href="https://github.com/charmbracelet/bubbletea">Bubble Tea</a> and the wider <a href="https://github.com/charmbracelet">Charm</a> family of libraries — reimagined here for PHP 8.3+.</p>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/sugar-core/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="js/search.js" defer></script>
+<script src="js/nav.js" defer></script>
+</body>
+</html>
