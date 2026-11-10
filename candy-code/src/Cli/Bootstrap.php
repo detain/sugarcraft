@@ -2335,12 +2335,8 @@ final class Bootstrap
             \SugarCraft\Code\Channels\ChannelRegistry::class,
             \SugarCraft\Code\Channels\ChannelRegistry::new(),
         );
-        // code-chat D6: the channel TOOL POLICY resolver rides the same
-        // workspace service slot as the registry it is configured beside.
-        // It reads channels.json fresh at every admission and is the door a
-        // Track-B session's tool scope walks through; the trust list is the
-        // SAME user-tier consent the registry boots under, so an untrusted
-        // bundle's policy is inert by construction.
+        // code-chat D6: the channel TOOL POLICY resolver shares the registry's workspace slot and user-tier trust list;
+        // fresh channels.json reads at every admission are the door a Track-B scope walks, leaving untrusted bundles inert.
         $workspace = $workspace->withService(
             \SugarCraft\Code\Channels\ChannelToolPolicyService::class,
             \SugarCraft\Code\Channels\ChannelToolPolicyService::forStore(
@@ -2348,7 +2344,6 @@ final class Bootstrap
                 self::trustedBundleChannelNames(),
             ),
         );
-
         $events = $transcripts->events();
 
         return $events === null
