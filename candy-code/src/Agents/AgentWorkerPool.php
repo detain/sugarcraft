@@ -2709,6 +2709,13 @@ final class AgentWorkerPool
             'costUsd' => is_finite($result->costUsd) ? $result->costUsd : null,
             'startedAt' => $result->startedAt?->format('U.u'),
             'completedAt' => $result->completedAt?->format('U.u'),
+            // Audit WF-1(b)'s retry count and C7' Option A's distinct stall
+            // cause both ride the IPC frame: a settled TimedOut that lost
+            // 'attempts' would misreport how many runs produced it, and one
+            // that lost 'stalled' would silently recolor a went-silent expiry
+            // as an ordinary timeout at the parent's read-back.
+            'attempts' => $result->attempts,
+            'stalled' => $result->stalled,
         ];
     }
 
@@ -2736,6 +2743,11 @@ final class AgentWorkerPool
             costUsd: (float) ($decoded['costUsd'] ?? 0.0),
             startedAt: $this->parseTimestamp($decoded['startedAt'] ?? null),
             completedAt: $this->parseTimestamp($decoded['completedAt'] ?? null),
+            // Both legs carry what the frame now ships; a legacy or corrupt
+            // frame missing either key falls back to the pre-C7 shape
+            // (single attempt, ordinary timeout) rather than inventing one.
+            attempts: max(1, (int) ($decoded['attempts'] ?? 1)),
+            stalled: (bool) ($decoded['stalled'] ?? false),
         );
     }
 
