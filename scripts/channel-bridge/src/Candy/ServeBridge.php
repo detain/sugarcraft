@@ -384,7 +384,7 @@ final class ServeBridge
                 $connection->on('data', $onData);
                 $connection->write($headers);
             },
-            static fn (\Throwable $e) => $deferred->reject(new ServeError('unreachable', 'channel-bridge: ' . $e->getMessage(), 0, $e)),
+            static fn (\Throwable $e) => $deferred->reject(new ServeError('unreachable', 'channel-bridge: ' . $e->getMessage(), [], $e)),
         );
 
         return $deferred->promise();

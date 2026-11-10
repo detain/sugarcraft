@@ -572,6 +572,30 @@ check('M2 POST on a foreign path answers 404', $m2d2 && $m2code($m2wrong) === 40
 check('M2 POST on the configured path reaches the JWT door (401)', $m2d3 && $m2code($m2custom) === 401, !$m2d3 ? 'timeout' : ($m2custom instanceof \Psr\Http\Message\ResponseInterface ? 'got HTTP ' . $m2custom->getStatusCode() : ($m2custom instanceof \Throwable ? get_class($m2custom) . ': ' . $m2custom->getMessage() : 'no response')));
 $m2Adapter->stop();
 
+// M3: the unreachable arm of ServeBridge::dial() handed int 0 to ServeError's
+// array $data under strict_types — the deferred never settled and the
+// documented reconnect ladder (serve_redial) never fired.
+$m3Dead = new \React\Socket\SocketServer('127.0.0.1:0', [], $loop);
+$m3Port = (int) (parse_url((string) $m3Dead->getAddress(), PHP_URL_PORT) ?: 0);
+$m3Dead->close();
+$m3Log = new Log($stateDir . '/m3-dial.log', 'info');
+$m3Bridge = new ServeBridge("ws://127.0.0.1:{$m3Port}/ws", 't', 'subprotocol', $m3Log, $loop);
+$m3Dial = new ReflectionMethod(ServeBridge::class, 'dial');
+$m3Dial->setAccessible(true);
+[$m3Settled, $m3Err] = await($m3Dial->invoke($m3Bridge), 6.0);
+check('M3 dead-dial promise settles with ServeError(kind=unreachable)', $m3Settled && $m3Err instanceof ServeError && $m3Err->kind === 'unreachable', !$m3Settled ? 'promise STILL PENDING after 6s (pre-fix: TypeError inside the rejection arm)' : ($m3Err instanceof ServeError ? 'kind=' . $m3Err->kind : get_class($m3Err)));
+// Ladder leg: start() against the same dead port must log serve_redial with
+// attempt >= 2 (ECONNREFUSED is immediate; backoff 0.25s then 0.5s).
+$m3Ladder = new ServeBridge("ws://127.0.0.1:{$m3Port}/ws", 't', 'subprotocol', $m3Log, $loop);
+$m3Ladder->start();
+$m3Redials = waitUntil(static function () use ($stateDir): bool {
+    $src = (string) @file_get_contents($stateDir . '/m3-dial.log');
+
+    return substr_count($src, '"event":"serve_redial"') >= 2;
+}, 8.0);
+$m3Ladder->stop();
+check('M3 reconnect ladder logs serve_redial attempt>=2 against a dead port', $m3Redials, 'no serve_redial arm fired within 8s (pre-fix: rejection never reaches the ladder)');
+
 echo "\n";
 // -- 4. summary -----------------------------------------------------------
 
