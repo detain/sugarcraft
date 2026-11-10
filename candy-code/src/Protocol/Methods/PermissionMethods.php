@@ -109,6 +109,22 @@ final class PermissionMethods
             }
         }
 
+        // P1 core (approval-expiry parity): an aged question is never
+        // honored silently. It settles on the existing answer path as an
+        // honest reject — the blocked turn is released and every watcher
+        // sees the resolution — and the caller is refused with its own
+        // kind, so an approver that missed its window learns the truth
+        // instead of steering a ghost. No timer decided this; the stamp
+        // did, here at consume time.
+        if ($asked !== null && $asked->hasExpired()) {
+            $host->answer($askId, PermissionReply::Reject, 'the approval request aged out of its 30-minute window before it was answered');
+
+            throw RpcError::of(ErrorCode::NotFound, 'this question expired unanswered; the answer was not applied', 'ask_expired', [
+                'askId' => $askId,
+                'askedAt' => $asked->askedAt(),
+            ]);
+        }
+
         $resolution = $host->answer($askId, $reply, $note);
         if ($resolution === null) {
             $previous = $host->resolution($askId);
@@ -139,7 +155,8 @@ final class PermissionMethods
             // `git push`.
             $grants = $host->grants();
             foreach ($host->pendingAsks() as $other) {
-                if ($other->offers(PermissionReply::Always)
+                if (!$other->hasExpired()
+                    && $other->offers(PermissionReply::Always)
                     && $grants->allows($other->tool, $other->arguments, $host->workspace()->root)
                     && $host->answer($other->askId, PermissionReply::Once) !== null) {
                     $cascaded[] = $other->askId;
@@ -264,6 +281,14 @@ final class PermissionMethods
         $items = [];
         foreach ($sessionIds as $sessionId) {
             foreach ($hub->get($sessionId)?->pendingAsks() ?? [] as $ask) {
+                // An aged question is never presented: the pairing ghost
+                // law (livePending prunes before announcing), so a client
+                // polling here cannot be handed a card it is doomed to
+                // have refused. The row still holds its turn until the
+                // settle — respond names the expiry honestly (ask_expired).
+                if ($ask->hasExpired()) {
+                    continue;
+                }
                 $items[] = ['sessionId' => $sessionId, ...SessionFeed::askSummary($ask)];
             }
         }
