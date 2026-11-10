@@ -207,6 +207,17 @@ final class PermissionGate
     private bool $forcedAsk = false;
 
     /**
+     * Why the latest {@see evaluate()} was refused by the CHANNEL tool scope
+     * (code-chat D6) — the operator's per-group / per-channel policy naming
+     * what bound — or null. Read by
+     * {@see \SugarCraft\Code\Hooks\BuiltIn\PermissionGateHook} so the refusal
+     * says "Channel tool policy" and not "Permission mode". Like
+     * {@see $lastAutoReason} it is written only on a real evaluate(), never
+     * on the declaration-only {@see refuses()} path.
+     */
+    private ?string $lastChannelReason = null;
+
+    /**
      * Where plan mode may write its plan (roadmap 5.7-1), relative to the
      * project root: a `.md` file directly in this directory is the one write
      * {@see evaluatePlan()} allows. Kilo and opencode carve out the same kind
@@ -254,6 +265,15 @@ final class PermissionGate
      * @var list<PermissionRule>
      */
     private array $turnDenyRules = [];
+
+    /**
+     * The channel tool scope this gate decides under (code-chat D6), pinned by
+     * {@see withChannelScope()}; null means the session answers to no channel
+     * policy. Not a constructor parameter and not readonly: set only on a
+     * CLONE, exactly like the grants above, and carried by {@see withMode()}
+     * so a mode toggle cannot drop the scope the admission resolved.
+     */
+    private ?ChannelToolScope $channelScope = null;
 
     /**
      * The read-only auto-allow, pinned by {@see withReadOnlyAutoAllow()}; null
@@ -307,6 +327,17 @@ final class PermissionGate
     }
 
     /**
+     * Why the latest {@see evaluate()} was refused by a channel tool scope
+     * (code-chat D6), or null — see {@see $lastChannelReason}. The hook reads
+     * this to word the refusal as the operator's channel policy speaking,
+     * rather than as the permission mode.
+     */
+    public function lastChannelReason(): ?string
+    {
+        return $this->lastChannelReason;
+    }
+
+    /**
      * Whether the latest {@see evaluate()} asked because of a security
      * finding — a question no remembered "always" may answer
      * ({@see $forcedAsk}), so the modal must not offer to remember it.
@@ -350,6 +381,7 @@ final class PermissionGate
         $gate->sessionRules = $this->sessionRules;
         $gate->turnAllowRules = $this->turnAllowRules;
         $gate->turnDenyRules = $this->turnDenyRules;
+        $gate->channelScope = $this->channelScope;
         $gate->toggledFrom = $this->mode;
         $gate->launchMode = $this->launchMode();
 
@@ -442,6 +474,43 @@ final class PermissionGate
     public function sessionRules(): array
     {
         return $this->sessionRules;
+    }
+
+    /**
+     * This gate, deciding under the given channel tool scope (code-chat D6) —
+     * the policy an operator wrote for the channel, group, or sender a session
+     * answers to, RESOLVED AT ADMISSION by
+     * {@see \SugarCraft\Code\Channels\ChannelToolPolicyService} and attached
+     * where the per-dispatch gate is chosen.
+     *
+     * A RESTRICTION, never a grant: {@see ChannelToolScope} can refuse a tool
+     * before rules and modes speak, and can stand a call down into the normal
+     * chain, but it can never ALLOW anything the chain would not. Null — the
+     * shape every local session carries — returns this same gate untouched, so
+     * an unscoped session's decisions stay byte-identical, object for object.
+     *
+     * A CLONE otherwise, like {@see withSessionRules()}: the launch's gate is
+     * never changed under anybody holding it.
+     */
+    public function withChannelScope(?ChannelToolScope $scope): self
+    {
+        if ($scope === null) {
+            return $this;
+        }
+
+        $copy = clone $this;
+        $copy->channelScope = $scope;
+
+        return $copy;
+    }
+
+    /**
+     * The channel tool scope this gate decides under, or null — read-only,
+     * for the surfaces that SHOW policy.
+     */
+    public function channelScope(): ?ChannelToolScope
+    {
+        return $this->channelScope;
     }
 
     /**
@@ -725,6 +794,7 @@ final class PermissionGate
         // them, like every other piece of auto state.
         if ($commitAutoStrikes) {
             $this->lastAutoReason = null;
+            $this->lastChannelReason = null;
             $this->forcedAsk = false;
         }
 
@@ -732,6 +802,23 @@ final class PermissionGate
         // in every mode, before rules are considered — no Allow rule and no mode
         // (including BypassPermissions) can talk this gate into a self-destruct.
         if ($this->isRmRfRootOrHome($call)) {
+            return PermissionDecision::Deny;
+        }
+
+        // 0.5 Channel tool scope (code-chat D6): the policy the operator wrote
+        // for the channel, group, or sender this session answers to, resolved
+        // at admission. Like the breaker above and a skill's turn denies, this
+        // refuses BEFORE rules and before every mode — an operator's channel
+        // allowlist is not something a stale permissive Allow rule or
+        // `bypass-permissions` can talk past. It can only RESTRICT: a name the
+        // scope allows falls through to the chain below, where a configured
+        // Deny still speaks. The reason is written only on a real call, never
+        // on a declaration, exactly like the auto reason.
+        if ($this->channelScope !== null && ($channelWhy = $this->channelScope->verdict($call->name)) !== null) {
+            if ($commitAutoStrikes) {
+                $this->lastChannelReason = $channelWhy;
+            }
+
             return PermissionDecision::Deny;
         }
 

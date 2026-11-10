@@ -10,6 +10,7 @@ use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
+use SugarCraft\Code\Permissions\ChannelToolScope;
 use SugarCraft\Code\Permissions\PermissionAction;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
@@ -56,6 +57,26 @@ final class PermissionGateHookTest extends TestCase
         $this->assertTrue($result->isDenied());
         $this->assertStringContainsString("mode 'plan'", $result->message);
         $this->assertStringContainsString('Edit', $result->message);
+    }
+
+    /**
+     * D6: when the refusal is the CHANNEL scope speaking, the denial names
+     * the channel policy — not the mode — and carries the resolver's reason,
+     * even while the session itself sits in the silentest mode there is.
+     */
+    public function testAChannelScopeDenialNamesThePolicyAndNotTheMode(): void
+    {
+        $hook = new PermissionGateHook(
+            (new PermissionGate(PermissionMode::BypassPermissions))
+                ->withChannelScope(ChannelToolScope::of('discord group guild-1', 'group', [], [], ['Edit']))
+        );
+
+        $result = $hook->execute($this->context('Edit', ['path' => 'a.txt']));
+
+        $this->assertTrue($result->isDenied());
+        $this->assertStringStartsWith('Channel tool policy does not allow Edit', $result->message);
+        $this->assertStringContainsString('denied by the discord group guild-1 tool policy', $result->message);
+        $this->assertStringNotContainsString('mode', $result->message, 'the mode did not speak, so the mode must not be named');
     }
 
     /**

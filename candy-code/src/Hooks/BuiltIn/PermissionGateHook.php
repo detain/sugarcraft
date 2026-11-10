@@ -142,13 +142,19 @@ final readonly class PermissionGateHook implements HookInterface
         // asked for (roadmap 5.11-2); the reason it leaves says why a call was
         // asked about or refused, so the person is not answering blind.
         $decision = $this->gate->evaluate($call, $root, $context->sessionId === '' ? null : $context->sessionId);
-        $reason = $this->gate->lastAutoReason();
+        // A channel scope refusal names the operator's policy, not the mode:
+        // the two accessors are never both set for one call (the scope arm
+        // runs before anything that writes the auto reason, and it only ever
+        // denies, so an Ask can never carry a channel reason).
+        $channelReason = $this->gate->lastChannelReason();
+        $reason = $channelReason ?? $this->gate->lastAutoReason();
         $why = $reason === null ? '' : " — {$reason}";
+        $speaker = $channelReason === null ? "Permission mode '{$mode}'" : 'Channel tool policy';
 
         return match ($decision) {
             PermissionDecision::Allow => HookResult::allow(),
             PermissionDecision::Deny => HookResult::deny(
-                "Permission mode '{$mode}' does not allow {$context->toolName}{$why}.",
+                "{$speaker} does not allow {$context->toolName}{$why}.",
             ),
             // Not collapsed into a deny: ASK is the whole reason the gate was
             // worth wiring into this chain at all. Whoever owns a UI settles
