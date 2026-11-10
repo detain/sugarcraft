@@ -188,6 +188,28 @@ final class SessionHostChannelScopeTest extends TestCase
         $this->assertStringNotContainsString('ran', $this->results($host->history()));
     }
 
+    public function testATightenedPolicyBindsOnTheNextAdmissionThroughTheRealStore(): void
+    {
+        // The production path itself: a real ChannelsStore::create() over the
+        // configDir file, its record closure consulted at every admission. An
+        // operator edit to channels.json must land on the next dispatch without
+        // a restart — the exact security property the store's class docblock
+        // promises; a boot-time snapshot would fail this pin loudly.
+        $this->durableSession('agent:main:discord:group:g1');
+        $this->writeChannels('{"channels":{"candy-discord|discord":{"tools":{"allow":["Read","Write"]}}}}');
+        $host = $this->host(new PermissionGate(PermissionMode::BypassPermissions), service: $this->service(['candy-discord']));
+
+        $open = $host->permissionGate()?->channelScope();
+        $this->assertInstanceOf(ChannelToolScope::class, $open, 'the admitted gate carries the resolved scope');
+        $this->assertNull($open?->verdict('Write'), 'as written, the channel allows Write');
+
+        $this->writeChannels('{"channels":{"candy-discord|discord":{"tools":{"allow":["Read"]}}}}');
+        $tightened = $host->permissionGate()?->channelScope();
+
+        $this->assertSame('discord channel', $tightened?->label(), 'the same host and service, no restart between admissions');
+        $this->assertStringContainsString('not in the discord channel tool allowlist', (string) $tightened?->verdict('Write'), 'the tightened record binds the very next gate computation');
+    }
+
     // ---- wiring ----------------------------------------------------------
 
     private function durableSession(?string $name): void

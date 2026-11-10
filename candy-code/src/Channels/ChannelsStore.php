@@ -37,7 +37,7 @@ final class ChannelsStore
     /** @var \Closure():string resolves the store path without touching HOME mid-run */
     private \Closure $configDir;
 
-    /** @var array<string, mixed> */
+    /** @var array<string, mixed> the record as of the most recent read() */
     private array $data;
 
     /**
@@ -77,10 +77,19 @@ final class ChannelsStore
         $this->write();
     }
 
-    /** @return array<string, mixed> the whole record, for the registry to grow later */
+    /**
+     * The whole record, re-read from disk on every call so an edit to
+     * channels.json lands on the next admission without a restart — the
+     * property the class docblock promises and the policy resolver wired
+     * through {@see ChannelToolPolicyService::forStore()} relies on.
+     * Admissions are cold-path (one call per gate computation), so this
+     * extra stat-and-read never rides a hot loop.
+     *
+     * @return array<string, mixed>
+     */
     public function all(): array
     {
-        return $this->data;
+        return $this->data = $this->read();
     }
 
     /** @return array<string, mixed> */
