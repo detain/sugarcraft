@@ -615,7 +615,7 @@ Options :
                          --agent=<name> ; la forme nue est stricte, c'est
                          donc la forme à utiliser quand un nom commence par
                          "-". Refusé avec exit 2 à côté de -p, --batch ou
-                         d'un sous-commande : aucun ne construit de session
+                         d'une sous-commande : aucun ne construit de session
                          à restreindre.
       --permission-mode <mode>
                          Exécute sous <mode> au lieu du mode du fichier de
