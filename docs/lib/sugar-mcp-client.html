@@ -237,9 +237,9 @@ $server->stop();               // close pipes first, then TERM→KILL→reap —
 <tr><td>ExchangeLock</td><td>acquire(?float $deadline, \Closure $serverAlive): bool / load(): array / store(string $phase, string $buffer): bool / markPhase(string $phase): bool</td><td>Phase byte + carried read buffer under the lock; store()/markPhase() return false when the write did not land, and an empty file loads as dirty</td></tr>
 <tr><td>ExchangeLock</td><td>release(): void / close(): void / destroy(): void</td><td>The three teardown grades, each pid-guarded: release() lifts THIS process' flock only; close() also drops the handle — an inherited handle is dropped, never unlocked, because LOCK_UN on a shared description would release the parent's lock; destroy() closes and, in the owner only, removes the file</td></tr>
 </table>
+    </div>
   </div>
 </section>
-    </div>
 </main>
 
 <footer class="footer">

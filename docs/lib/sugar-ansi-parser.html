@@ -243,9 +243,9 @@ $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</cod
 <tr><td>Codec\Iterm1337</td><td>static parse(data) / static fromDcs(final, data)</td><td>iTerm2/WezTerm 1337 inline-image + control decoder; parse() returns null when the payload is not 1337; malformed() records on a rejected-as-mine payload, never throws</td></tr>
 <tr><td>Codec\KittyApc</td><td>static parse(data)</td><td>Kitty graphics frame decoder (null unless the frame opens with `G`, no space after the `G`): control pairs, geometry labels, payload size</td></tr>
 </table>
+    </div>
   </div>
 </section>
-    </div>
 </main>
 
 <footer class="footer">

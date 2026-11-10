@@ -227,6 +227,7 @@ candy-mdview --theme-config ./my-theme.json README.md</code></pre>
     <h3 id="exit-codes-trust" style="margin-top: 32px;">Exit codes &amp; trust</h3>
     <p>Exit codes: <code>0</code> rendered successfully (an empty <em>file</em> renders blank), <code>1</code> runtime failure, <code>2</code> usage error — bad theme, unreadable or oversized theme config, missing or unreadable file, a directory argument, non-text (binary) input, a document over 64 MiB, invalid <code>--width</code>, or no input.</p>
     <p>Hostile documents render as data. sugar-markdown strips escape, control, and OSC bytes on output, per element (sanitization is default-on and this tool never opts out), so a document cannot move the cursor or restyle the stream. OSC 8 URLs face a refused-scheme denylist: <code>javascript:</code>, <code>data:</code>, and <code>vbscript:</code> never reach a clickable envelope; other schemes pass to the terminal's opener unfiltered. Usage errors go to stderr with argv paths and option values sanitized before display, and the rendered document is written raw — the output formatter never interprets <code>&lt;tags&gt;</code> inside your Markdown.</p>
+    </div>
   </div>
 </section>
 
@@ -248,7 +249,6 @@ candy-mdview --theme-config ./my-theme.json README.md</code></pre>
         </div>
     </div>
 </section>
-    </div>
 </main>
 
 <footer class="footer">

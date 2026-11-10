@@ -325,6 +325,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 <tr><td>AnsiGuard</td><td>static stripSentinels(string $text): string</td><td>Surgically drop forged <code>U+E000/U+E001</code> zone sentinels (delegates to sugar-core <code>Sanitize::stripZoneSentinels()</code>) — anything handed to a zone-marking <code>Manager</code> must pass this sweep first; legitimate <code>U+E002</code>-and-up image markers survive untouched</td></tr>
 <tr><td>Lang</td><td>static t(string $key, array $params = []): string</td><td>i18n facade over the 16-locale <code>lang/</code> family — three keys today: <code>rail.empty</code> (the Rail heading's empty-state line), <code>card.failed</code> (a PosterCard in the failed-fetch state) and <code>grid.empty</code> (the empty PosterGrid message)</td></tr>
 </table>
+    </div>
   </div>
 </section>
 
@@ -342,7 +343,6 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
         </div>
     </div>
 </section>
-    </div>
 </main>
 
 <footer class="footer">

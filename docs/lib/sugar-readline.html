@@ -228,6 +228,7 @@ $prompt-&gt;isSubmitted();                          // false (pending) on Esc/Ct
 <tr><td>UndoManager</td><td>push(state) / undo(current) / redo(current) / canUndo() / canRedo()</td><td>Immutable bounded (512) snapshot stack; attach via withUndoManager(). undo/redo take the current buffer string and return a [manager, state, ok] triple — a host driving the manager directly must re-attach the returned manager, exactly as TextPrompt does internally</td></tr>
 <tr><td>Key</td><td>Up, Down, Enter, Space, Escape, CtrlC, …</td><td>Canonical key names for handleKey() — raw control bytes normalize to the same language</td></tr>
 </table>
+    </div>
   </div>
 </section>
 
@@ -250,7 +251,6 @@ $prompt-&gt;isSubmitted();                          // false (pending) on Esc/Ct
         </div>
     </div>
 </section>
-    </div>
 </main>
 
 <footer class="footer">

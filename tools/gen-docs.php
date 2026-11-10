@@ -635,7 +635,7 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
         . "    </div>\n"
         . '    ' . $codecov . "\n\n"
         . ($toc !== ''
-            ? $toc . "    <div class=\"docs-body\">\n" . $content . "\n    </div>"
+            ? $toc . "    <div class=\"docs-body\">\n" . wrap_docs_body($content, $slug)
             : '    ' . $content) . "\n</main>\n\n"
         . $footer . "\n\n"
         . search_tail() . "\n";
@@ -717,6 +717,49 @@ function doc_toc_for(string $content): array
         . "    </nav>\n\n";
 
     return [$minted, $toc];
+}
+
+/**
+ * Close the docs-body wrapper immediately before the body's own closing of
+ * the template's container and section.
+ *
+ * Hand-written bodies may continue with fully self-balanced sections after
+ * that point, so the wrapper cannot simply close before the last tag run of
+ * the content: it must close before the run that precedes the FIRST
+ * </section> unmatched by any body-opened <section> (the template section's
+ * closer). Emitted anywhere later, the wrapper div is still open when that
+ * closer arrives and libxml reports "Opening and ending tag mismatch:
+ * section and div" on the page. Fails loud when a body deviates from the
+ * closed-container-then-closed-section shape every real body uses rather
+ * than silently shipping a mismatched page.
+ */
+function wrap_docs_body(string $content, string $slug): string
+{
+    if (preg_match_all('~<section\b|</section>~', $content, $sections, PREG_OFFSET_CAPTURE) === false || $sections[0] === []) {
+        throw new RuntimeException("Body for {$slug} never closes the template section; the docs-body wrapper cannot be placed.");
+    }
+
+    $depth = 0;
+    $templateClose = -1;
+    foreach ($sections[0] as $section) {
+        if (str_starts_with((string) $section[0], '</')) {
+            if ($depth === 0) {
+                $templateClose = (int) $section[1];
+                break;
+            }
+            $depth--;
+        } else {
+            $depth++;
+        }
+    }
+
+    $prefix = substr($content, 0, $templateClose);
+    if ($templateClose < 1 || preg_match('~\s*(?:</div>\s*)+$~', $prefix, $closerRun, PREG_OFFSET_CAPTURE) !== 1) {
+        throw new RuntimeException("Body for {$slug} does not close the template container div before its section; the docs-body wrapper cannot be placed.");
+    }
+
+    $start = (int) $closerRun[0][1];
+    return rtrim(substr($prefix, 0, $start)) . "\n    </div>" . substr($prefix, $start) . substr($content, $templateClose);
 }
 
 function build_prefix(string $slug, string $title, string $desc, string $ogTitle, string $ogDesc): string

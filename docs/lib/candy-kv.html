@@ -226,6 +226,7 @@ candy-kv import json backup.json     # atomic within a database; a file spanning
 <tr><td>Database</td><td>get / raw / set / delete / deleteMany / list / allKeys / count / pruneExpired / transaction / close</td><td>One SQLite database; <code>raw()</code> also sees expired rows</td></tr>
 <tr><td>Entry</td><td>key, value, binary, createdAt, modifiedAt, expiresAt / isExpired() / rawValue()</td><td>A stored value; <code>rawValue()</code> returns decoded bytes for binary entries</td></tr>
 </table>
+    </div>
   </div>
 </section>
 
@@ -264,7 +265,6 @@ candy-kv import json backup.json     # atomic within a database; a file spanning
         <p style="margin-top: 20px;">Five GIFs: <code>glob.gif</code> is recorded from live <code>./bin/candy-kv</code> calls; the other four drive the library surface through <code>php examples/*.php</code>. For a text walkthrough of the CLI itself, see the <code>Output&nbsp;format</code> transcript in the <a href="https://github.com/sugarcraft/candy-kv#demos">README</a>.</p>
     </div>
 </section>
-    </div>
 </main>
 
 <footer class="footer">

@@ -259,9 +259,9 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
 <tr><td>Highlighter</td><td>highlight(MatchResult, \Closure(string): string): string</td><td>Apply styler to matched runs</td></tr>
 <tr><td>CharFold</td><td>foldSplit(string): list&lt;string&gt; / fold(string): string</td><td>Per-codepoint case fold that stays 1:1 with the original string — keeps matched code-point indices truthful where whole-string lowercase would expand (U+0130, final sigma); malformed bytes fold to <code>?</code> without desync</td></tr>
 </table>
+    </div>
   </div>
 </section>
-    </div>
 </main>
 
 <footer class="footer">

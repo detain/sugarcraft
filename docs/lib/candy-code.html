@@ -240,6 +240,7 @@ candy-code -p "audit this" --output-format json | jq -r .result</code></pre>
 <tr><td>SessionStore</td><td>listSessions(limit), forkSession(id), renameSession(id, name)</td><td>Back the <code>/sessions</code>, <code>/fork</code> and <code>/rename</code> commands</td></tr>
 <tr><td>SessionStore</td><td>pruneSessions(daysOld, ?exemptSessionId): int</td><td>Opt-in retention sweep; never drops a named or resuming session</td></tr>
 </table>
+    </div>
   </div>
 </section>
 
@@ -256,7 +257,6 @@ candy-code -p "audit this" --output-format json | jq -r .result</code></pre>
         </div>
     </div>
 </section>
-    </div>
 </main>
 
 <footer class="footer">
