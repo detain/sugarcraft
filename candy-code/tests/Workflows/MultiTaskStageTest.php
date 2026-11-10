@@ -323,6 +323,48 @@ final class MultiTaskStageTest extends TestCase
         self::assertSame(1, substr_count($source, "\$chunk = \$recorded['chunk'] ?? \$from['chunk'];"));
     }
 
+    public function testAFanOutExpansionNeverFollowsSymlinks(): void
+    {
+        // Containment is enforced by the walk, not by the pattern: a lone
+        // star crosses separators, so a directory symlink into the outside
+        // world would otherwise fan out work the environment root never
+        // held. The link is skipped — the run sees only the real file.
+        $envRoot = $this->tempDir . '/fanenv';
+        mkdir($envRoot, 0755, true);
+        file_put_contents($envRoot . '/a.txt', 'one');
+
+        $outside = $this->tempDir . '/outside';
+        mkdir($outside, 0755, true);
+        file_put_contents($outside . '/secret.txt', 'two');
+        symlink($outside, $envRoot . '/etclink');
+
+        $star = chr(42);
+        $this->yaml('fanout', "name: fanout\n"
+            . "stages:\n"
+            . "  - name: sweep\n"
+            . "    parallel: true\n"
+            . "    from:\n"
+            . "      glob: '" . $star . ".txt'\n"
+            . "    agent: coder\n"
+            . "    prompt: \"fix {{path}}\"\n");
+
+        $result = (new WorkflowEngine(
+            $this->registry(),
+            new AgentWorkerPool(1, $this->executor()),
+            environmentRoot: $envRoot,
+        ))->run('fanout');
+
+        self::assertSame(WorkflowStatus::Completed, $result->status, (string) $result->firstFailure()?->error);
+        self::assertSame(
+            ['fix a.txt'],
+            $this->prompts,
+            'etclink/secret.txt sits behind a symlink — the walk skips the link, so the outside file never joins the sweep',
+        );
+
+        $results = $result->context[WorkflowEngine::RESULTS_CONTEXT_KEY];
+        self::assertSame(['a.txt'], array_keys($results));
+    }
+
     // -------------------------------------------------------------------------
     // YAML: `tasks:`
     // -------------------------------------------------------------------------

@@ -519,7 +519,9 @@ template's arms, named by its relative path, and `{{path}}` interpolates to
 that path per item (an unresolved `{{path}}` elsewhere is left as written, like
 any other token). `chunk` caps the stage's in-flight window — a ceiling, never
 a floor: it can narrow the workflow's `maxConcurrent` width, never widen it;
-omit it and the workflow's own width applies.
+omit it and the workflow's own width applies. The walk never follows symlinks —
+a linked file or directory is invisible to the expansion, and a name that would
+resolve outside the environment root is refused loudly rather than fanned out.
 
 The expansion is the pause record's, not the disk's: the materialised file
 list rides every pause write, and a resume replays *that recorded list* — it

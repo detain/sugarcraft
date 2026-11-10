@@ -2246,7 +2246,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * this exact order, so a replayed stage builds the same fan-out. Patterns
      * that try to leave the root (absolute, or carrying a ".." segment) are
      * refused here rather than expanded into a surprising walk; a run with no
-     * environment root is refused too — there is nothing to expand against.
+     * environment root, or a root that no longer exists, is refused too —
+     * there is nothing to expand against. Symlinks are never followed: a link
+     * is neither descended nor collected, and every match is re-checked
+     * against the root's realpath before it fans out, so a name that would
+     * resolve outside the root fails the expansion loudly.
      * Refusals throw: the engine loop's catch turns them into the loudly-
      * failed stage, never a silently-empty fan-out.
      *
@@ -2273,6 +2277,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $compiled = PathGlob::compile($pattern);
         $root = rtrim($root, '/');
+        $realRoot = realpath($root);
+
+        if ($realRoot === false) {
+            throw new WorkflowLoadException(
+                "a from: stage needs an environment root that exists, got \"{$root}\""
+            );
+        }
+
         $matches = [];
 
         // Iterative walk, newest directory first off the stack — order does
@@ -2296,12 +2308,27 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
                 $relative = $dir === '' ? $entry : $dir . '/' . $entry;
 
+                // A link is never followed: a directory symlink would let the
+                // walk leave the root laterally (or storm it on a cycle), and
+                // a file link is not the file its name claims to be.
+                if (is_link($root . '/' . $relative)) {
+                    continue;
+                }
+
                 if (is_dir($root . '/' . $relative)) {
                     $stack[] = $relative;
                     continue;
                 }
 
                 if (is_file($root . '/' . $relative) && PathGlob::matchCompiled($compiled, $relative) === true) {
+                    $resolved = realpath($root . '/' . $relative);
+
+                    if ($resolved === false || !str_starts_with($resolved, $realRoot . DIRECTORY_SEPARATOR)) {
+                        throw new WorkflowLoadException(
+                            "a from: expansion reached a path outside the environment root, got \"{$relative}\""
+                        );
+                    }
+
                     $matches[] = $relative;
                 }
             }
