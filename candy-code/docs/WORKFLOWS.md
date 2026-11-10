@@ -101,6 +101,8 @@ stages:                          # a LIST, never a map
     resource: gpu                  # optional; exclusive host lock held for this task's stage
     lockWaitSeconds: 60            # optional; seconds to wait for that lock before the stage fails
     timeout: 60                    # optional; positive int, this ONE task's wall-clock budget
+    stallTimeout: 120              # optional; whole number >= 1; seconds a forked worker may go silent before it expires
+    restarts: 1                    # optional; whole number >= 0; re-dispatch budget for stall expiries — its own, apart from retries:
     capture: true                  # optional; publish this stage's full output to a file (downstream sees path + preview)
 
   - name: fix
@@ -157,6 +159,36 @@ Cancelling a running agent (`AgentWorkerPool::cancel()` or `cancelAll()`) kills
 the same way a timeout does: the worker and every process it started, its Bash
 commands included, die with it, and the agent settles `stopped`.
 
+### `stallTimeout:` bounds silence, and `restarts:` is its own budget
+
+A forked worker can sit out its wall-clock budget while producing nothing:
+wedged on a subprocess, waiting on a prompt that never returns. `timeout:`
+cannot see that — the clock has not run out. `stallTimeout: N` bounds the
+silence itself: if a dispatched worker's published progress has not grown for
+N whole seconds, the pool expires it the way the timeout does — the tree is
+killed, reaped, and the agent settles `timed_out` — but the record carries a
+distinct cause: the error says the agent "went silent for N s without
+publishing progress", and `AgentResult::$stalled` is set.
+
+- **Progress is speech.** The idle clock re-arms every time the pool sees new
+  progress output, so a slow-but-live agent never dies of this. The check is a
+  timestamp comparison inside the poll that already runs: no new timers, and no
+  deadline on any model call.
+- **`restarts:` is spent only by silence.** A stall-expired worker may be
+  re-dispatched up to `restarts: N` times — its own budget, default 0, which
+  leaves the failure shape exactly as it was before the key existed. The
+  budgets are separate in both directions: a stall restart never spends a
+  `retries:` attempt, and stall attempts never count against the retry gate.
+  Once `restarts:` is spent, the stage fails the way a failed stage has always
+  failed, with the distinct-cause note on the record.
+- **Forked workers only.** Progress is published only on the forked path; a
+  task run inline in the parent has no silence to observe, so it stays
+  wall-clock-bound. A `stallTimeout:` on a task that runs inline simply never
+  fires.
+- **The absolute bound still wins.** When both deadlines have fired, the
+  recorded cause is `timeout:` (or the stage's time budget): the outer bound
+  running out is the honest reason, however silent the agent was.
+
 ### `retries` re-runs a failed agent
 
 `retries: N` on a stage (or on one agent of a parallel stage), or `->retries(N)`
@@ -180,6 +212,10 @@ attempt that fails or times out. The default is 0: no retries.
 - **Fail-fast:** under `stopOnFirstFailure` only an agent's last attempt counts
   as its failure. A failure that is about to be retried does not stop the
   other agents in the stage.
+- **Separate from stall restarts:** the `restarts:` budget described above
+  counts only stall expiries. A stall restart spends no retry, and stall
+  attempts are subtracted out of the retry gate, so a silent-then-stuck agent
+  cannot starve a later model failure of its retry.
 - **The live pane:** a retried agent's tile clears and starts again with the
   new attempt.
 
@@ -590,7 +626,8 @@ takes the ceiling from the current YAML, and a ceiling can only narrow the
 concurrency, never the work itself.
 
 Static and dynamic spellings feed the same machinery, so `retries:`, the stage
-`timeout:`, and `stopOnFirstFailure` ride a fan-out unchanged.
+`timeout:`, `stallTimeout:`, `restarts:`, and `stopOnFirstFailure` ride a
+fan-out unchanged.
 
 ### Everything malformed is refused, not coerced
 
@@ -606,6 +643,10 @@ of these rather than loading a workflow that quietly does less:
   interpolates, so duplicates make every reference ambiguous.
 - `config:` not a map; `maxConcurrent` not a whole number >= 0 (0 means no cap);
   `timeout` not a positive integer.
+- `stallTimeout:` not a whole number of at least 1 (`stallTimeout: 0`,
+  `stallTimeout: 2.5`).
+- `restarts:` not a whole number of at least 0 (`restarts: -1`,
+  `restarts: lots`).
 - `retries:` not a whole number of at least 0 (`retries: -1`, `retries: lots`).
 - `when:` outside the closed grammar: `when:` not a map, an unknown key in a
   condition (`gt:`), a leaf missing `stage:` or carrying more than one of
@@ -1095,14 +1136,17 @@ return (new WorkflowBuilder())
 
 `TaskBuilder` carries `agent()`, `prompt()`, `tools()`, `timeout()`,
 `retries()`, `isolation()`, `name()`, `outputSchema()`, `model()`, `reject()`,
-`resource()` and `lockWaitSeconds()`. `timeout` and `reject` have
+`resource()`, `lockWaitSeconds()`, `stallTimeout()` and `restarts()`. `timeout` and `reject` have
 **no
 YAML spelling**, so a YAML-declared task never carries them; `retries`,
 `outputSchema` and `isolation` are the `retries:`, `outputSchema:` and
 `isolation:` keys above. `WorkflowEngine` substitutes defaults for whatever a task
 leaves unset when it builds the `SubAgent`:
 `$task->timeout ?? config.timeout` seconds, `$task->retries ?? 0`,
-`$task->isolation ?? Isolation::None`. A task without its own `timeout()` is
+`$task->isolation ?? Isolation::None`, `$task->stallTimeout ?? 0` and
+`$task->restarts ?? 0` — the last two carry their own YAML spellings
+(`stallTimeout:`, `restarts:`) and reach the forked worker as written: zero is
+"inert", not a bound. A task without its own `timeout()` is
 therefore bounded only by its stage's budget (`config.timeout`, default of 3600
 seconds); see [`timeout` is a per-stage wall-clock budget](#timeout-is-a-per-stage-wall-clock-budget).
 

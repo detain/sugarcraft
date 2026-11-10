@@ -4848,7 +4848,7 @@ Every cell of the matrix in §3 is expanded below with its full detail and evide
 </details>
 <details><summary><b>AUT-10</b> Workflows / multi-step orchestration scripts</summary>
 
-- **candy-code** ✅ — Stage types: sequential, tasks:, parallel; pipeline and verification are PHP-only. Each stage agent runs the real engine loop in a forked child under hooks and the gate, with retries and timeouts. A model-authored plan cannot be resumed. The project tier is YAML-only. — _Evidence:_ `src/Workflows/WorkflowEngine.php:690`; `src/Workflows/WorkflowRegistry.php:300-385,1074`; `src/Tools/BuiltIn/WorkflowTool.php:59`; `docs/WORKFLOWS.md:406-454`
+- **candy-code** ✅ — Stage types: sequential, tasks:, parallel; pipeline and verification are PHP-only. Each stage agent runs the real engine loop in a forked child under hooks and the gate, with retries and timeouts; a worker that goes silent can be bounded separately (`stallTimeout:`) and re-dispatched from its own budget (`restarts:`) — pool fork path only, inline runs stay wall-clock-bound. A model-authored plan cannot be resumed. The project tier is YAML-only. — _Evidence:_ `src/Workflows/WorkflowEngine.php:690`; `src/Workflows/WorkflowRegistry.php:300-385,1074`; `src/Tools/BuiltIn/WorkflowTool.php:59`; `docs/WORKFLOWS.md:444-485`
 - **candy-code-web** ✅ — — — _Evidence:_ `src-web/components/panels/WorkflowPanel.vue`; `src-web/stores/agents/workflows.ts`
 - **Claude Code 2.1.311** ✅ — Bundled `/deep-research`; `/workflows` progress view; Pro must enable. — _Evidence:_ cc:workflows
 - **OpenCode 1.19.4** 🔌 — — — _Evidence:_ DOCS/ecosystem; awesome-opencode
