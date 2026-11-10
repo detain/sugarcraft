@@ -149,12 +149,27 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-vcr"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-vcr" alt="CandyVcr code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Tee every Msg + every byte a sugar-core <code>Program</code> emits into a cassette file, then drive a fresh <code>Program</code> through the same cassette and assert the output matches — byte-strict via <code>ByteAssertion</code> or cell-grid-strict via <code>ScreenAssertion</code> (powered by <a href="sugar-vterm.html">SugarVterm</a>). The same frame pipeline also compiles <code>.tape</code> scripts into themed animated GIFs via <code>render-tape</code>/<code>render-batch</code>.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#record">Record</a></li>
+            <li class="toc-h3"><a href="#replay">Replay</a></li>
+            <li class="toc-h3"><a href="#cassette-format">Cassette format</a></li>
+            <li class="toc-h3"><a href="#cli">CLI</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Tee every Msg + every byte a sugar-core <code>Program</code> emits into a cassette file, then drive a fresh <code>Program</code> through the same cassette and assert the output matches — byte-strict via <code>ByteAssertion</code> or cell-grid-strict via <code>ScreenAssertion</code> (powered by <a href="sugar-vterm.html">SugarVterm</a>). The same frame pipeline also compiles <code>.tape</code> scripts into themed animated GIFs via <code>render-tape</code>/<code>render-batch</code>.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-vcr</code></pre>
 
-    <h3 style="margin-top: 32px;">Record</h3>
+    <h3 id="record" style="margin-top: 32px;">Record</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Core\Program;
 use SugarCraft\Vcr\Recorder;
 
@@ -163,7 +178,7 @@ $program-&gt;setRecorder(Recorder::open('/tmp/session.cas'));
 $program-&gt;run();
 // cassette is closed automatically when the loop ends.</code></pre>
 
-    <h3 style="margin-top: 32px;">Replay</h3>
+    <h3 id="replay" style="margin-top: 32px;">Replay</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Core\{Program, ProgramOptions};
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Assert\ScreenAssertion;
@@ -182,10 +197,10 @@ if (!$result-&gt;ok) {
     exit(1);
 }</code></pre>
 
-    <h3 style="margin-top: 32px;">Cassette format</h3>
+    <h3 id="cassette-format" style="margin-top: 32px;">Cassette format</h3>
     <p>Cassettes are streaming JSONL — each line is a self-contained event with <code>t</code> (absolute timestamp in seconds) or <code>dt</code> (delta since previous event). See the <a href="https://github.com/sugarcraft/candy-vcr/blob/master/docs/CASSETTE.md">full schema reference</a> for all event types and the header structure. Record delta-time cassettes by opening the recorder with a relative-timestamped header — <code>Recorder::open($path, new CassetteHeader(timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE))</code>; <code>withFormat()</code> only confirms the encoding the header already selected and throws on a mismatch — it never flips one.</p>
 
-    <h3 style="margin-top: 32px;">CLI</h3>
+    <h3 id="cli" style="margin-top: 32px;">CLI</h3>
     <pre class="code"><code class="language-shell">vendor/bin/candy-vcr record       --output session.cas -- bash -c 'echo hi'  # capture a real PTY session
 vendor/bin/candy-vcr inspect      session.cas                                # list events
 vendor/bin/candy-vcr replay       session.cas --speed=realtime               # stream output to stdout
@@ -220,7 +235,7 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
     <h4 style="margin-top: 20px;">Playback, the terminal, and assistive tech</h4>
     <p>Replay is <strong>environment-blind</strong>: it streams the recorded bytes verbatim — it does not read <code>NO_COLOR</code>, does not degrade on <code>TERM=dumb</code>, and does not follow live resizes beyond the header's recorded size. Assistive tech therefore sees exactly what the original session emitted rather than a re-adapted stream; for a non-visual outcome signal, replay prints a completion summary to <em>stderr</em> (<code>candy-vcr replay: played N of M events (… output bytes, … s of recorded time)</code>) so a stdout capture stays byte-clean. Interactive replay also guards the host terminal — cursor and alternate-buffer state are saved and restored (CSI ? 1049) and signal dispositions are reinstated on exit — while <code>record</code> arms a raw-mode rescue net (a <code>/tmp/candy-vcr-rescue.&lt;pid&gt;.&lt;rand&gt;</code> marker naming the affected tty) so a crashed child leaves the user's shell recoverable with <code>stty sane</code>.</p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Cassette format</strong><span>Five shipped codecs — JSONL (absolute <code>t</code>, <code>.cas</code>/<code>.jsonl</code>/<code>.cassette</code>), gzip JSONL (<code>.cas.gz</code>), RelativeFormat (delta <code>dt</code>, asciinema-cast style), YAML (<code>.yaml</code>/<code>.yml</code>, hand-written fixtures), and a read-only asciinema importer (<code>.cast</code>, v2/v3); <code>.tape</code> files compile into cassettes through the tape compiler. All decode into the same <code>Cassette</code> value object; <code>Player::open()</code> picks JSONL vs RelativeFormat by content-sniffing (a <code>.gz</code> name routes straight to the gzip codec), while <code>Player::loadAny()</code> dispatches by extension.</span></div>
       <div class="feature"><strong>Recorder hook</strong><span><code>Program::setRecorder()</code> tees input bytes, output bytes (renderer + RawMsg + PrintMsg + cursor / title / mode), resize, and quit events.</span></div>
@@ -231,7 +246,7 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
       <div class="feature"><strong>ScreenAssertion</strong><span>Cell-grid equality via <a href="sugar-vterm.html">SugarVterm</a>. Tolerates ANSI-level reordering (redundant SGR, equivalent cursor moves, partial vs full repaints) — the recommended choice for round-trip tests.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Bug repro from user reports</strong> — user runs <code>candy-vcr record --output bug.cas -- &lt;cmd&gt;</code>, ships the cassette, maintainer replays locally.</li>
       <li><strong>Regression tests in CI</strong> — record a known-good session, replay against the current build, fail the build on cell-grid divergence.</li>
@@ -239,7 +254,7 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
       <li><strong>Fuzzing seeds</strong> — record real sessions, mutate Msgs, replay to find edge cases.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-vcr">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-vcr/blob/master/README.md">Full README</a></li>
@@ -249,7 +264,7 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Recorder</td><td>open(path, header)</td><td>Open a cassette for recording (file created <code>0600</code>, owner-only)</td></tr>
@@ -269,6 +284,7 @@ vendor/bin/candy-vcr replay  session.cas --no-trim                     # use ori
 </table>
   </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

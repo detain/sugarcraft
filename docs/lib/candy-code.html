@@ -147,13 +147,26 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-code"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-code" alt="CandyCode code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Terminal AI coding agent. Eleven provider type keys over nine engines (OpenAI, Anthropic, Claude Code, Codex, SGLang, Bedrock, Vertex, Gemini, custom), thirty-eight built-in tools on every launch gated by hooks and a six-mode permission gate, workspace checkpoints with undo and rewind, a context engine that prunes and compacts on its own, sub-agents you can watch and message, memory, skills, MCP, workflows, SQLite sessions, a WebSocket server with a browser UI, and an Agent Client Protocol agent for editors — over a sugar-core render loop with Markdown replies. Runs offline out of the box.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#key-classes">Key Classes</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#chat">Chat</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Terminal AI coding agent. Eleven provider type keys over nine engines (OpenAI, Anthropic, Claude Code, Codex, SGLang, Bedrock, Vertex, Gemini, custom), thirty-eight built-in tools on every launch gated by hooks and a six-mode permission gate, workspace checkpoints with undo and rewind, a context engine that prunes and compacts on its own, sub-agents you can watch and message, memory, skills, MCP, workflows, SQLite sessions, a WebSocket server with a browser UI, and an Agent Client Protocol agent for editors — over a sugar-core render loop with Markdown replies. Runs offline out of the box.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-code</code></pre>
     <p style="margin-top: 12px;">The package requires its SugarCraft siblings at <code>@dev</code> stability and carries <code>"minimum-stability": "dev"</code> with <code>"prefer-stable": true</code> itself — a host project pinned to <code>minimum-stability: stable</code> cannot resolve that graph, so require it where dev stability is allowed or run it from a checkout.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell">composer install
 ./bin/candy-code
 
@@ -170,7 +183,7 @@ candy-code -p "audit this" --output-format json | jq -r .result</code></pre>
 
     <p style="margin-top: 20px;"><code>CANDY_CODE_PROVIDER</code> accepts <code>openai</code>, <code>azure</code>, <code>anthropic</code>, <code>claude-code</code>, <code>codex</code>, <code>sglang</code>, <code>bedrock</code>, <code>vertex</code>, <code>gemini</code>, <code>openrouter</code> or <code>custom</code> — eleven type keys over nine engines: <code>azure</code> rides the OpenAI engine and <code>openrouter</code> is an OpenAI-compatible preset of the custom one, while <code>claude-code</code> and <code>codex</code> run each turn inside the vendor's own signed-in CLI. To skip PHP SDKs entirely, set <code>CANDY_CODE_BACKEND_CMD</code> to a script that reads JSON history on stdin and writes the reply to stdout. See <a href="https://github.com/sugarcraft/candy-code/blob/master/docs/ENVIRONMENT.md">docs/ENVIRONMENT.md</a> for the full environment-variable reference.</p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Eleven type keys, nine engines</strong><span>One <code>ProviderInterface</code> — OpenAI (and Azure on the same engine), Anthropic, Claude Code CLI, Codex, SGLang, Bedrock, Vertex, Gemini, custom (and OpenRouter on the same engine) — with capability introspection, streaming, function calling, embeddings and per-model cost. The two vendor-CLI routes run each turn inside the vendor's own signed-in child.</span></div>
       <div class="feature"><strong>Bounded agent loop</strong><span><code>EngineBackend</code> calls the provider, runs the returned tool calls through the hook gate, feeds results back, and repeats until the model answers without calling tools or <code>maxSteps</code> is hit.</span></div>
@@ -189,7 +202,7 @@ candy-code -p "audit this" --output-format json | jq -r .result</code></pre>
       <div class="feature"><strong>Real Model–Update–View render loop</strong><span>A sugar-core <code>Model</code>/<code>Program</code> tree with buffer-diffed output: Markdown-rendered replies via SugarMarkdown, live tool-call lifecycle, unified diffs for <code>Edit</code> results, inline images via sugar-image, mouse zones and text selection via sugar-mouse, and a command palette whose fuzzy filter requires every typed character to match. A slash command is offered when any such alignment starts on its first character, so <code>/ab</code> still finds <code>a__ab</code>.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-code">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-code/blob/master/README.md">Full README</a> — the user guide, with an index of every docs page</li>
@@ -199,7 +212,7 @@ candy-code -p "audit this" --output-format json | jq -r .result</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">Key Classes</h3>
+    <h3 id="key-classes" style="margin-top: 32px;">Key Classes</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>ProviderInterface</td><td>complete(CompleteRequest): CompleteResponse</td><td>The single LLM abstraction — one batch completion</td></tr>
@@ -232,17 +245,18 @@ candy-code -p "audit this" --output-format json | jq -r .result</code></pre>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-code/.vhs/chat.gif" alt="Chat" onerror="this.parentElement.style.display='none'">
-                <h3>Chat</h3>
+                <h3 id="chat">Chat</h3>
                 <span class="demo-caption">Full chat session with scrollback + Markdown-rendered replies.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

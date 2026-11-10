@@ -146,12 +146,25 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-gifview"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-gifview" alt="CandyGifView code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">The terminal GIF viewer: point it at a <code>.gif</code> and it sizes to your viewport, decodes via <a href="sugar-animation.html">sugar-animation</a> (which needs <code>ext-gd</code>), and plays the animation in the alternate screen — full-cell 24-bit blocks or an ASCII luminance-density ramp, toggled live. This is the command split out of the animation package into its own app.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#view">View</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">The terminal GIF viewer: point it at a <code>.gif</code> and it sizes to your viewport, decodes via <a href="sugar-animation.html">sugar-animation</a> (which needs <code>ext-gd</code>), and plays the animation in the alternate screen — full-cell 24-bit blocks or an ASCII luminance-density ramp, toggled live. This is the command split out of the animation package into its own app.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-gifview</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell"># with a project-local install, invoke the binary as ./vendor/bin/candy-gifview
 ./vendor/bin/candy-gifview my-animation.gif         # solid 24-bit blocks (default)
 ./vendor/bin/candy-gifview my-animation.gif density # luminance-density ramp
@@ -165,7 +178,7 @@
 #   d       toggle solid <-> density
 #   q / Esc / Ctrl-C  quit</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>One-command viewer</strong><span><code>candy-gifview file.gif</code> — no flags to learn; an optional second argument picks the render preset.</span></div>
       <div class="feature"><strong>Viewport-sized</strong><span>Queries the TTY size behind a core <code>stream_isatty</code> gate and reserves two rows (status line + trailing newline), so output never overflows the screen; off a TTY it falls back to a 60×24 cell grid.</span></div>
@@ -176,7 +189,7 @@
       <div class="feature"><strong>Localized</strong><span>CLI usage and refusal messages ship in sixteen locales via the sugar-core i18n lookup.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-gifview">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-gifview/blob/master/README.md">Full README</a></li>
@@ -187,7 +200,7 @@
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Cli</td><td>main(argv, stdout, stderr, play, watchStat, decode)</td><td>Parse args, decode, wire the Player, run the Program; returns the exit code</td></tr>
@@ -199,17 +212,18 @@
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-gifview/.vhs/view.gif" alt="VHS recording: candy-gifview playing a synthetic GIF — solid 24-bit blocks, then the ASCII density ramp" onerror="this.parentElement.style.display='none'">
-                <h3>View</h3>
+                <h3 id="view">View</h3>
                 <span class="demo-caption">Synthetic gif played through the viewer CLI, both presets.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

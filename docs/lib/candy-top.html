@@ -147,12 +147,25 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-top"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-top" alt="CandyTop code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Originally inspired by <a href="https://github.com/aristocratos/btop">btop</a> (v1.4.7 plus a set of adopted upstream pull requests) and built on the SugarCraft stack, candy-top is a full-screen terminal system monitor in pure PHP. <strong>cpu, memory + disks, network, process and containers boxes, up to six multi-vendor GPU / NPU boxes, a server BMC (ipmi) band and a VM dashboard, drawn with braille / block / sextant graphs, gradient meters and themes in the btop tradition</strong>, fed by Linux <code>/proc</code> + <code>/sys</code> or FreeBSD <code>sysctl</code> collectors and driven by the <a href="sugar-core.html">SugarCore</a> Model/Cmd runtime. It reads btop's config format, so a <code>btop.conf</code> works unchanged.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#run">Run</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#adopted-upstream-btop-prs">Adopted upstream btop PRs</a></li>
+            <li class="toc-h3"><a href="#source">Source</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#tour">Tour</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Originally inspired by <a href="https://github.com/aristocratos/btop">btop</a> (v1.4.7 plus a set of adopted upstream pull requests) and built on the SugarCraft stack, candy-top is a full-screen terminal system monitor in pure PHP. <strong>cpu, memory + disks, network, process and containers boxes, up to six multi-vendor GPU / NPU boxes, a server BMC (ipmi) band and a VM dashboard, drawn with braille / block / sextant graphs, gradient meters and themes in the btop tradition</strong>, fed by Linux <code>/proc</code> + <code>/sys</code> or FreeBSD <code>sysctl</code> collectors and driven by the <a href="sugar-core.html">SugarCore</a> Model/Cmd runtime. It reads btop's config format, so a <code>btop.conf</code> works unchanged.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-top</code></pre>
 
-    <h3 style="margin-top: 32px;">Run</h3>
+    <h3 id="run" style="margin-top: 32px;">Run</h3>
     <pre class="code"><code class="language-shell">vendor/bin/candy-top                      # the live host
 vendor/bin/candy-top --config ~/top.conf  # another config file (also the save target)
 vendor/bin/candy-top --fake               # deterministic demo data, never the real host
@@ -160,7 +173,7 @@ vendor/bin/candy-top --help               # options + the full key list
 vendor/bin/candy-top --version            # version line, no tty needed
 php candy-top.phar self-update            # phar installs: swap in place, no tty needed</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>cpu box</strong><span>Upper/lower dual-sample graphs (any <code>/proc/stat</code> field), per-core grid with mini graphs and temperatures, load / uptime, frequency (aggregate and per-core, value or graph), battery badge with watts, GPU sub-graphs for the GPUs without a box of their own.</span></div>
       <div class="feature"><strong>mem + disks</strong><span>Used / available / cached / free as graphs or meters, a single focused metric (<code>mem_selected</code>), swap + zswap, ZFS ARC, per-mount meters with read/write/busy readouts and a big-graph io mode.</span></div>
@@ -178,10 +191,10 @@ php candy-top.phar self-update            # phar installs: swap in place, no tty
 
     <p>Threshold colour is a gradient, but no information rides on hue alone: every threshold reading carries its number, and the loudest states add words — a full SEL prints <code>full</code>, a starved guest gets a textual <code>psi cpu 23%</code> badge, an unmeasured field prints <code>n/a</code>. The monitor is designed for sighted users though: the braille, block and sextant graph runs carry no text alternative, and <code>tty_mode</code>, the <code>tty</code> <code>graph_symbol</code> and <code>NO_COLOR</code> step the decoration down without adding narration — every numeric readout stays intact.</p>
 
-    <h3 style="margin-top: 32px;">Adopted upstream btop PRs</h3>
+    <h3 id="adopted-upstream-btop-prs" style="margin-top: 32px;">Adopted upstream btop PRs</h3>
     <p>zswap (#1739), per-core frequency (#1785), interface IPs (#1573), command basename (#1859), per-process IO columns and sorts (#1823), container tags, filter and the containers box (#1873), <code>block2</code> sextant graphs (#1783), focused mem graph (#1747), <code>disks_order</code> (#1700), cwd in the detail view (#1546), tree branch sorting, option headings and tree-state persistence in an XDG state file (#1791), proc box width and presets W field (#1476), digit option tabs (#1411), reload repaint (#1849), the <code>mellow</code> theme (#1683), WSL <code>nvidia-smi</code> discovery (#1869), GPU boxes with slots and target arrows (#1730), the GPU box grid and detail levels (#1881), Intel and AMD NPUs (#985, #1839), AMD sysfs and multi-Intel GPUs (#1854, #1888), per-process GPU columns, sorts and filter (#1552), the FreeBSD memory and battery fixes (#1851, #1728, #1830, #1787), keep-last-good on a failed read (#1008), process names with spaces or parentheses (#1856), hidden boxes never sampled (#1858), and the gpu-graph clamping and lower-graph width split (#1614). The README lists the key, config key and theme tables, which track the program exactly. It also covers data sources, permissions, and every deviation from btop.</p>
 
-    <h3 style="margin-top: 40px;">Source</h3>
+    <h3 id="source" style="margin-top: 40px;">Source</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-top">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-top/blob/master/README.md">Full README</a> — key bindings, config keys, themes, collectors</li>
@@ -193,17 +206,18 @@ php candy-top.phar self-update            # phar installs: swap in place, no tty
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIF of the bundled demo (<code>examples/top.php</code>). Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-top/.vhs/top.gif" alt="candy-top demo" onerror="this.parentElement.style.display='none'">
-                <h3>Tour</h3>
+                <h3 id="tour">Tour</h3>
                 <span class="demo-caption">Interval steps, a box toggle, tree view, filter, detailed view, main menu and help, on deterministic fake data.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

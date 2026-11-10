@@ -146,9 +146,25 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-tetris"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-tetris" alt="CandyTetris code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">SugarCraft runtime, SugarStyle for rounded borders + per-piece colours, uniform-shuffled 7-bag (injectable source for deterministic tests), ghost piece, hard drop, hold, level-driven gravity ramp, NES-style base scoring with modern Guideline bonuses. Full SRS wall-kicks via the Tetris Company Guideline tables, T-Spin detection via the centre-diagonal 3-corner rule, Back-to-Back (1.5×) and combo bonuses, and perfect-clear detection (+5000 × (level+1)).</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source">Source</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#play">Play</a></li>
+            <li class="toc-h3"><a href="#hold">Hold</a></li>
+            <li class="toc-h3"><a href="#vs-computer">VS Computer</a></li>
+            <li class="toc-h3"><a href="#vs-computer-simple">VS Computer (simple)</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">SugarCraft runtime, SugarStyle for rounded borders + per-piece colours, uniform-shuffled 7-bag (injectable source for deterministic tests), ghost piece, hard drop, hold, level-driven gravity ramp, NES-style base scoring with modern Guideline bonuses. Full SRS wall-kicks via the Tetris Company Guideline tables, T-Spin detection via the centre-diagonal 3-corner rule, Back-to-Back (1.5×) and combo bonuses, and perfect-clear detection (+5000 × (level+1)).</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <p>Requires <code>php-cli</code> 8.3+ with <code>ext-intl</code> and <code>ext-mbstring</code>. Both are hard-required transitively by sugar-core, whose cell-width math segments through ICU — on a bare php-cli machine <code>composer install</code> is the step that refuses, naming sugar-core.</p>
     <pre class="code"><code class="language-shell"># As a Composer consumer (run from your own project):
 composer require sugarcraft/candy-tetris
@@ -165,7 +181,7 @@ curl -LO https://github.com/detain/sugarcraft/releases/download/candy-tetris/dev
 php candy-tetris.phar              # single player
 php candy-tetris.phar --vs         # VS the computer</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell"># From the candy-tetris/ library directory:
 ./bin/candy-tetris
 
@@ -180,7 +196,7 @@ php candy-tetris.phar --vs         # VS the computer</code></pre>
 # r       Restart after game over
 # q       Quit</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>SRS rotation</strong><span>Full Super Rotation System — kick tables from the Tetris Company Guideline lineage (the code cites tetris.fandom.com/wiki/SRS), two of them: J/L/S/T/Z and I piece. Each transition tries the naive rotation plus the table's five offsets — up to 6 candidates, first fit wins (the list's own first entry repeats the naive `(0, 0)`). The board y-axis is inverted exactly once, in Piece::rotationsWithKicks.</span></div>
       <div class="feature"><strong>7-bag RNG</strong><span>Uniform shuffle of the seven pieces; an injectable RNG closure makes tests and replays reproducible. Value-semantic: next() returns the piece plus an advanced bag, peek() is a pure preview that consumes neither state nor draws.</span></div>
@@ -194,7 +210,7 @@ php candy-tetris.phar --vs         # VS the computer</code></pre>
       <div class="feature"><strong>Pure-state classes</strong><span>Tetromino, Piece, Board, Bag, Score, Game — immutable value semantics throughout, each individually testable without booting the runtime.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source</h3>
+    <h3 id="source" style="margin-top: 40px;">Source</h3>
     <ul>
       <li><a href="https://github.com/detain/sugarcraft/tree/master/candy-tetris">Source on GitHub</a></li>
       <li><a href="https://github.com/detain/sugarcraft/blob/master/candy-tetris/README.md">Full README</a></li>
@@ -203,7 +219,7 @@ php candy-tetris.phar --vs         # VS the computer</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Tetromino</td><td>cases() / color()</td><td>Backed enum of the seven kinds; 256-colour code per kind</td></tr>
@@ -231,32 +247,33 @@ php candy-tetris.phar --vs         # VS the computer</code></pre>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of the shipped tapes. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-tetris/.vhs/play.gif" alt="Play" onerror="this.parentElement.style.display='none'">
-                <h3>Play</h3>
+                <h3 id="play">Play</h3>
                 <span class="demo-caption">Full game with ghost piece, hard drop, level-driven gravity.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-tetris/.vhs/hold-demo.gif" alt="Hold demo" onerror="this.parentElement.style.display='none'">
-                <h3>Hold</h3>
+                <h3 id="hold">Hold</h3>
                 <span class="demo-caption">Piece hold and swap with the sidebar hold card.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-tetris/.vhs/vs-computer.gif" alt="VS computer" onerror="this.parentElement.style.display='none'">
-                <h3>VS Computer</h3>
+                <h3 id="vs-computer">VS Computer</h3>
                 <span class="demo-caption">Split-screen match against the built-in AI opponent.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-tetris/.vhs/vs-computer-simple.gif" alt="VS computer, simple" onerror="this.parentElement.style.display='none'">
-                <h3>VS Computer (simple)</h3>
+                <h3 id="vs-computer-simple">VS Computer (simple)</h3>
                 <span class="demo-caption">The versus match from its opening seconds — the same command as above, filmed shorter; there is no starting-level flag to set.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

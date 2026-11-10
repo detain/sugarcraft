@@ -143,12 +143,27 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-panels"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-panels" alt="SugarPanels code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Compose terminal layouts with horizontal and vertical panels. Attach borders, hint minimum and maximum sizes, let flex children fill the rest, and nest arbitrarily deep.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#border-styles">Border styles</a></li>
+            <li class="toc-h3"><a href="#basic-compose">Basic compose</a></li>
+            <li class="toc-h3"><a href="#nested-grids">Nested grids</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Compose terminal layouts with horizontal and vertical panels. Attach borders, hint minimum and maximum sizes, let flex children fill the rest, and nest arbitrarily deep.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-panels</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Panels\SugarPanels;
 
 $panels = SugarPanels::new();
@@ -169,7 +184,7 @@ echo $panels-&gt;render($layout, 60, 7);</code></pre>
 ╰────────────────────────────╯╰────────────────────────────╯
 Bottom bar</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>H/V panels</strong><span>Row and column composition with weighted sizing.</span></div>
             <div class="feature"><strong>Borders</strong><span>Preset or custom border styles per panel.</span></div>
@@ -183,7 +198,7 @@ Bottom bar</code></pre>
     </div>
     <p>Styled content stays <strong>trusted input</strong> — escape sequences ride through by design; see the README's Trust boundary section.</p>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-panels">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-panels/blob/master/README.md">Full README</a></li>
@@ -193,7 +208,7 @@ Bottom bar</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>SugarPanels</td><td>new()</td><td>Create a panels instance</td></tr>
@@ -233,27 +248,28 @@ Bottom bar</code></pre>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of three of the five examples shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-panels/.vhs/borders.gif" alt="Border styles" onerror="this.parentElement.style.display='none'">
-                <h3>Border styles</h3>
+                <h3 id="border-styles">Border styles</h3>
                 <span class="demo-caption">Every named Border::catalog() preset, side by side with its name.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-panels/.vhs/basic.gif" alt="Basic compose" onerror="this.parentElement.style.display='none'">
-                <h3>Basic compose</h3>
+                <h3 id="basic-compose">Basic compose</h3>
                 <span class="demo-caption">Horizontal + vertical panels with weighted sizing.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-panels/.vhs/nested.gif" alt="Nested grids" onerror="this.parentElement.style.display='none'">
-                <h3>Nested grids</h3>
+                <h3 id="nested-grids">Nested grids</h3>
                 <span class="demo-caption">A grid-of-grids — header / body / footer with sidebars.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

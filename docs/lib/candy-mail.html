@@ -143,12 +143,23 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-mail"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-mail" alt="CandyMail code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Email builder and sender. SMTP transport, Resend API transport, attachment support, HTML + plain-text multipart, and a fluent interface.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Email builder and sender. SMTP transport, Resend API transport, attachment support, HTML + plain-text multipart, and a fluent interface.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-mail</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Mail\{Email, ResendTransport, SmtpTransport};
 
 // Immutable: every with*() returns a new Email
@@ -166,7 +177,7 @@ $transport-&gt;send($email);
 
     <p>Attachment paths are read eagerly at build time — the file on disk must exist when <code>withAttachment()</code> is called, or the builder throws a <code>RuntimeException</code>.</p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>SMTP transport</strong><span>TCP connection with TLS, auth (LOGIN via TLS, fail-closed).</span></div>
             <div class="feature"><strong>Resend transport</strong><span>API-based sending via Resend.com — no SMTP needed.</span></div>
@@ -176,7 +187,7 @@ $transport-&gt;send($email);
             
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-mail">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-mail/blob/master/README.md">Full README</a></li>
@@ -186,7 +197,7 @@ $transport-&gt;send($email);
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Email</td><td>static new(from, to, ?subject, ?body)</td><td>Create an email</td></tr>
@@ -205,6 +216,7 @@ $transport-&gt;send($email);
 </table>
   </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

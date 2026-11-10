@@ -146,12 +146,27 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-spring"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-spring" alt="SugarSpring code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Pure-math animation engine. Damped harmonic oscillators (Ryan-Juckett form, spring core mirrors <code>charmbracelet/harmonica</code>) for smooth scroll / overshoot, Newtonian projectile sim for arcs and particle effects, easing + bezier timing curves, spring chains and collections, and reduced-motion awareness throughout the spring-driven types. No terminal I/O anywhere.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#spring">Spring</a></li>
+            <li class="toc-h3"><a href="#projectile">Projectile</a></li>
+            <li class="toc-h3"><a href="#particle">Particle</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Pure-math animation engine. Damped harmonic oscillators (Ryan-Juckett form, spring core mirrors <code>charmbracelet/harmonica</code>) for smooth scroll / overshoot, Newtonian projectile sim for arcs and particle effects, easing + bezier timing curves, spring chains and collections, and reduced-motion awareness throughout the spring-driven types. No terminal I/O anywhere.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-spring</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Spring\{Spring, Projectile, Point, Vector};
 
 $spring = new Spring(
@@ -175,7 +190,7 @@ for ($i = 0; $i &lt; 60; $i++) {
     $ball = $ball-&gt;update();                   // update() returns a NEW projectile — reassign
 }</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Spring</strong><span><code>dampingRatio &lt; 1</code> oscillates, <code>= 1</code> critical (no overshoot, fastest), <code>&gt; 1</code> over-damped. Non-positive frame time, zero/negative damping and near-zero frequency are refused at construction — a spring that cannot converge is illegal, not slow.</span></div>
       <div class="feature"><strong>Projectile</strong><span>Position, velocity, acceleration vectors. <code>Projectile::gravity()</code> + <code>terminalGravity()</code> helpers (Y-up, with legacy Y-down spellings).</span></div>
@@ -187,7 +202,7 @@ for ($i = 0; $i &lt; 60; $i++) {
       <div class="feature"><strong>i18n</strong><span>Every exception message runs through <code>Lang::t()</code> across 16 shipped locales.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-spring">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-spring/blob/master/README.md">Full README</a></li>
@@ -197,7 +212,7 @@ for ($i = 0; $i &lt; 60; $i++) {
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Spring</td><td>new(deltaTime, angularFrequency, dampingRatio, reducedMotionOverride?)</td><td>Create a spring; non-finite / dt ≤ 0 / ω &lt; 1e-9 / ζ ≤ 0 / coefficient overflow refused</td></tr>
@@ -218,27 +233,28 @@ for ($i = 0; $i &lt; 60; $i++) {
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-spring/.vhs/spring.gif" alt="Looping recording of a damped spring easing smoothly to its target value" onerror="this.parentElement.style.display='none'">
-                <h3>Spring</h3>
+                <h3 id="spring">Spring</h3>
                 <span class="demo-caption">Damped harmonic oscillator — settles smoothly to its target.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-spring/.vhs/projectile.gif" alt="Looping recording of a projectile tracing a gravity arc and bouncing off the floor" onerror="this.parentElement.style.display='none'">
-                <h3>Projectile</h3>
+                <h3 id="projectile">Projectile</h3>
                 <span class="demo-caption">Newtonian projectile sim with gravity + bouncing.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-spring/.vhs/particle.gif" alt="Looping recording of a projectile-driven particle field falling under terminal gravity" onerror="this.parentElement.style.display='none'">
-                <h3>Particle</h3>
+                <h3 id="particle">Particle</h3>
                 <span class="demo-caption">Projectile-driven particle field with terminal gravity.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

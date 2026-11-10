@@ -145,14 +145,27 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-starter"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-starter" alt="CandyStarter code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;"><code>composer create-project sugarcraft/candy-starter my-app --stability=dev</code> — start from the template and you've got a working app. Demo Counter Model, PHPUnit wired up, <code>bin/start</code> entry point.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#counter-from-scratch">Counter from scratch</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;"><code>composer create-project sugarcraft/candy-starter my-app --stability=dev</code> — start from the template and you've got a working app. Demo Counter Model, PHPUnit wired up, <code>bin/start</code> entry point.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer create-project sugarcraft/candy-starter my-app --stability=dev</code></pre>
     <p>Packagist carries only <code>dev-master</code> today, so <code>create-project</code> needs <code>--stability=dev</code> (or pinning the package as <code>sugarcraft/candy-starter:"@dev"</code>) until a <code>candy-starter/*</code> release tag exists.</p>
     <p>This package is <code>type: project</code> — <code>composer create-project</code> is the only install verb that works the way you mean it to. Composer does not refuse a <code>composer require</code> of a project-type package — it is simply the wrong tool: the skeleton would land in <code>vendor/</code> and merge its <code>App\</code> autoload map into your host app.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell">composer create-project sugarcraft/candy-starter my-app --stability=dev
 cd my-app
 ./bin/start
@@ -179,7 +192,7 @@ cd my-app
     ├── start.tape        # CI gif recording of the running app
     └── start.gif         # the rendered demo (un-ignored by !.vhs/start.gif; CI regenerates)</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>composer create-project</strong><span>Three commands and you're running. <code>composer create-project sugarcraft/candy-starter my-app --stability=dev && cd my-app && ./bin/start</code>.</span></div>
       <div class="feature"><strong>Demo Counter</strong><span><code>src/Counter.php</code> — a minimal Model with up/down/quit and a styled border.</span></div>
@@ -189,7 +202,7 @@ cd my-app
       <div class="feature"><strong>Common-next-steps table</strong><span>README points at <code>sugarcraft/sugar-core</code> (its <code>Lang::t()</code>), <code>sugar-forms</code>, <code>sugar-markdown</code>, <code>sugar-charts</code>, <code>sugar-style</code> and <code>sugar-ssh-server</code> — six packages you're likely to reach for next — and flags which of them are not plain renderers.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-starter">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-starter/blob/master/README.md">Full README</a></li>
@@ -198,7 +211,7 @@ cd my-app
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart <span aria-hidden="true">→</span></a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <thead>
 <tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
@@ -218,17 +231,18 @@ cd my-app
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">A VHS-recorded GIF of the demo app as it runs from the skeleton. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-starter/.vhs/start.gif" alt="Terminal recording: the counter app runs from the skeleton — Up/Down change the count, q quits" onerror="this.parentElement.style.display='none'">
-                <h3>Counter from scratch</h3>
+                <h3 id="counter-from-scratch">Counter from scratch</h3>
                 <span class="demo-caption">Live drive of the demo Model that ships in the skeleton — watch the framed count tick up and down before the app quits.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

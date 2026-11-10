@@ -147,12 +147,33 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-forms"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-forms" alt="SugarForms code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Form engine built on SugarCraft — multi-page Group wizards, seven themes, per-field validators, conditional hide predicates. The form is itself a Model — drop it into a Program. Also the foundation for the raw form / input primitives that <code>sugar-widgets</code> re-exports, folded together with the interactive form library into a single standalone dependency.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#form">Form</a></li>
+            <li class="toc-h3"><a href="#input">Input</a></li>
+            <li class="toc-h3"><a href="#confirm">Confirm</a></li>
+            <li class="toc-h3"><a href="#select">Select</a></li>
+            <li class="toc-h3"><a href="#multiselect">MultiSelect</a></li>
+            <li class="toc-h3"><a href="#text">Text</a></li>
+            <li class="toc-h3"><a href="#themes">Themes</a></li>
+            <li class="toc-h3"><a href="#multi-page-form">Multi-page form</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Form engine built on SugarCraft — multi-page Group wizards, seven themes, per-field validators, conditional hide predicates. The form is itself a Model — drop it into a Program. Also the foundation for the raw form / input primitives that <code>sugar-widgets</code> re-exports, folded together with the interactive form library into a single standalone dependency.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-forms</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Forms\Form;
 use SugarCraft\Core\Program;
 use SugarCraft\Forms\Field\{Input, Confirm, Select, Note};
@@ -194,7 +215,7 @@ $matcher = SmithWatermanMatcher::new();
 $score = $matcher-&gt;score('js', 'JavaScript');                   // 3
 $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResult: Python, score 11</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Input primitives</strong><span>TextInput, TextArea, ItemList, Viewport, FilePicker, Cursor, Scrollbar, Spinner.</span></div>
       <div class="feature"><strong>Form engine</strong><span>Field interface + Field\{Input, Text, Confirm, Select, MultiSelect, Note, FilePicker, Date, Slider, Color, NumberField, RadioPills\}, Form, Group, KeyMap, Theme.</span></div>
@@ -216,7 +237,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
     <p style="margin-top: 24px;"><strong>Accessible mode.</strong> <code>Form::withAccessible()</code> flips the form to plain-text rendering — useful when you detect <code>NO_COLOR=1</code> or <code>TERM=dumb</code>. The accessible line is scoped to the focused field only: no group titles, no <code>Step X of Y</code> pagination, no error-summary block.</p>
     <p style="margin-top: 16px;"><strong>Security &amp; trust boundary.</strong> Form content is frequently model- or network-produced, so every display surface runs hostile bytes through <code>RenderSafe::clean()</code>: C0/DEL bytes are stripped (TAB and LF survive) and every ESC-introduced sequence is disarmed except true SGR, so theme colour renders while screen clears, cursor moves and OSC payloads become inert text; the sweep is idempotent and UTF-8 safe. The boundary is the display, never the buffer — <code>value()</code> returns pasted bytes verbatim, and dev-authored placeholders render raw.</p>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Declarative form wizards</strong> — multi-page Groups, validation, themes, fuzzy / async suggestions, out of the box.</li>
       <li><strong>Standalone form primitives</strong> — when you want the raw inputs without sugar-widgets overhead.</li>
@@ -224,7 +245,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
       <li><strong>Spinner and progress components</strong> — standalone spinner and the fork-safe ActionSpinner live here, previously in sugar-widgets / the retired prompt façade.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-forms">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-forms/blob/master/README.md">Full README</a></li>
@@ -234,7 +255,7 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Form</td><td>new(Field ...$fields)</td><td>Create a single-group form with fields</td></tr>
@@ -268,52 +289,53 @@ $best  = $matcher-&gt;matchAll('py', ['Python', 'PHP', 'Ruby'])[0]; // MatchResu
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs — eight tapes covering the library's examples; the burger, hide and spinner demos ship without a recording. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-forms/.vhs/form.gif" alt="Form" onerror="this.parentElement.style.display='none'">
-                <h3>Form</h3>
+                <h3 id="form">Form</h3>
                 <span class="demo-caption">Static frame of a full form — Input, Select and Confirm.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-forms/.vhs/input.gif" alt="Input" onerror="this.parentElement.style.display='none'">
-                <h3>Input</h3>
+                <h3 id="input">Input</h3>
                 <span class="demo-caption">Single-line text with validation.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-forms/.vhs/confirm.gif" alt="Confirm" onerror="this.parentElement.style.display='none'">
-                <h3>Confirm</h3>
+                <h3 id="confirm">Confirm</h3>
                 <span class="demo-caption">Y/N boolean.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-forms/.vhs/select.gif" alt="Select" onerror="this.parentElement.style.display='none'">
-                <h3>Select</h3>
+                <h3 id="select">Select</h3>
                 <span class="demo-caption">Single-choice list.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-forms/.vhs/multi-select.gif" alt="MultiSelect" onerror="this.parentElement.style.display='none'">
-                <h3>MultiSelect</h3>
+                <h3 id="multiselect">MultiSelect</h3>
                 <span class="demo-caption">Toggle multiple options.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-forms/.vhs/text.gif" alt="Text" onerror="this.parentElement.style.display='none'">
-                <h3>Text</h3>
+                <h3 id="text">Text</h3>
                 <span class="demo-caption">Multi-line text input.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-forms/.vhs/themes.gif" alt="Themes" onerror="this.parentElement.style.display='none'">
-                <h3>Themes</h3>
+                <h3 id="themes">Themes</h3>
                 <span class="demo-caption">Five of the seven themes side-by-side — base, charm, dracula, base16 and catppuccin; ansi and plain are omitted from the recording.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-forms/.vhs/prompt-form.gif" alt="Multi-page form" onerror="this.parentElement.style.display='none'">
-                <h3>Multi-page form</h3>
+                <h3 id="multi-page-form">Multi-page form</h3>
                 <span class="demo-caption">Wizard across multiple Groups, driven through a Program loop.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

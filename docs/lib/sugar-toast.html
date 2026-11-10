@@ -143,12 +143,27 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-toast"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-toast" alt="SugarToast code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Non-blocking floating notifications at 9 screen positions. Error, Warning, Info, Success types. Auto-dismiss, an Escape-dismiss preference flag for hosts, and stacked multi-toast support. Severity never rides colour alone: each type carries a distinct symbol, <code>withAccessibleText()</code> adds the plain-text word, and the <code>REDUCE_MOTION</code>/<code>NO_COLOR</code> environment gates drop blink and colour bytes while those text channels keep rendering.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#internationalization">Internationalization</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#types-demo">Types demo</a></li>
+            <li class="toc-h3"><a href="#basic-toast">Basic toast</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Non-blocking floating notifications at 9 screen positions. Error, Warning, Info, Success types. Auto-dismiss, an Escape-dismiss preference flag for hosts, and stacked multi-toast support. Severity never rides colour alone: each type carries a distinct symbol, <code>withAccessibleText()</code> adds the plain-text word, and the <code>REDUCE_MOTION</code>/<code>NO_COLOR</code> environment gates drop blink and colour bytes while those text channels keep rendering.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-toast</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Toast\{Position, Toast, ToastType};
 
 $toast = Toast::new(50)  // max width 50
@@ -161,7 +176,7 @@ $toast = $toast-&gt;alert(ToastType::Error, 'Connection failed');
 $bg = str_repeat("background content\n", 20);
 echo $toast-&gt;view($bg);</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Four types</strong><span>Error, Warning, Info, Success — severity carried by icon + colour; add <code>withAccessibleText()</code> for a plain-text severity word (box shape and border glyphs are the same across types, so colour is never the sole carrier).</span></div>
             <div class="feature"><strong>Positions</strong><span>9 positions: TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight, MiddleLeft, MiddleCenter, MiddleRight.</span></div>
@@ -177,7 +192,7 @@ echo $toast-&gt;view($bg);</code></pre>
 
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-toast">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-toast/blob/master/README.md">Full README</a></li>
@@ -187,7 +202,7 @@ echo $toast-&gt;view($bg);</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Toast</td><td>new(int $maxWidth = 50)</td><td>Factory — max width in cells</td></tr>
@@ -252,7 +267,7 @@ echo $toast-&gt;view($bg);</code></pre>
     <p>Per-alert render size is bounded too: <code>Toast::MAX_MESSAGE_CELLS</code> truncates over-long messages with a visible marker and <code>Toast::MAX_ACTIONS_PER_ALERT</code> folds surplus buttons into a &quot;[+N more]&quot; row — the full text and action list still ride the Alert into history.</p>
     <p><strong>Trust boundary.</strong> In a TUI the terminal is a sink: alert text is composited through the cell grid, so raw ESC/OSC/BEL payloads in a message never reach the output stream — only SGR the renderer itself builds does. Inline SGR in a message is honoured as styling, so sanitise attacker-authored text (<code>Sanitize::untrusted()</code>) before enqueueing. sugar-mouse PUA zone markers (U+E000/U+E001) in toast text pass through as ordinary glyphs — hosts parsing marked frames must sweep with <code>Sanitize::untrustedForMarkedFrames()</code>; the host's own markers on a marked background frame, and its OSC-8 link runs on rows the toast does not cover, survive compositing. Full contract: <code>docs/TRUST-BOUNDARY.md</code> §1.</p>
 
-    <h3 style="margin-top: 32px;">Internationalization</h3>
+    <h3 id="internationalization" style="margin-top: 32px;">Internationalization</h3>
     <p>User-facing strings use <code>SugarCraft\Toast\Lang::t()</code>. All keys live as bare entries in <code>lang/en.php</code>; the <code>toast</code> lookup namespace is baked into <code>src/Lang.php</code>, not a nesting level inside the arrays.</p>
     <table class="api-table">
 <tr><th>Key</th><th>Default</th><th>Parameters</th></tr>
@@ -267,22 +282,23 @@ echo $toast-&gt;view($bg);</code></pre>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of the flagship examples shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-toast/.vhs/types.gif" alt="Toast types, positions and symbol sets" onerror="this.parentElement.style.display='none'">
-                <h3>Types demo</h3>
+                <h3 id="types-demo">Types demo</h3>
                 <span class="demo-caption">Every toast type as its own full-viewport frame, followed by position, configured-duration and symbol-set sections — the duration frames differ only in the printed label: expiry is behaviour, not pixels.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-toast/.vhs/basic.gif" alt="Basic toast" onerror="this.parentElement.style.display='none'">
-                <h3>Basic toast</h3>
+                <h3 id="basic-toast">Basic toast</h3>
                 <span class="demo-caption">Multiple queued toasts across three sections; no duration is set — nothing auto-dismisses, the host drives pruning.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

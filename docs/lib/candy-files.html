@@ -145,12 +145,31 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-files"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-files" alt="CandyFiles code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Two panes side-by-side, Midnight Commander style. Tab to swap focus, multi-select, sort cycling, hidden-file toggle, delete-with-confirm. Pure-state transition layer — filesystem is injected, every transition is unit-testable.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#key-classes">Key Classes</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#navigate">Navigate</a></li>
+            <li class="toc-h3"><a href="#search">Search</a></li>
+            <li class="toc-h3"><a href="#multi-select">Multi-select</a></li>
+            <li class="toc-h3"><a href="#tab-management">Tab management</a></li>
+            <li class="toc-h3"><a href="#sort-cycle">Sort cycle</a></li>
+            <li class="toc-h3"><a href="#undo-delete">Undo delete</a></li>
+            <li class="toc-h3"><a href="#hidden-file-toggle">Hidden-file toggle</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Two panes side-by-side, Midnight Commander style. Tab to swap focus, multi-select, sort cycling, hidden-file toggle, delete-with-confirm. Pure-state transition layer — filesystem is injected, every transition is unit-testable.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-files</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell"># 1. Composer consumer — the package bin (composer.json "bin"):
 vendor/bin/candy-files [LEFT_DIR] [RIGHT_DIR]
 
@@ -200,7 +219,7 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
 # u / Ctrl+z Undo last operation
 # Ctrl+y     Redo last undo</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Dual panes</strong><span>Left + right; Tab swaps focus. Each pane has its own cwd, cursor, selection, sort, hidden-flag.</span></div>
       <div class="feature"><strong>Multi-select</strong><span>Space toggles + advances. Selection survives <code>r</code> relist and sort; it is cleared on navigation (name-keyed selection across directories would let a <code>d</code>+<code>y</code> destroy same-named entries elsewhere). Escape clears.</span></div>
@@ -216,7 +235,7 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
       <div class="feature"><strong>Localized prompts</strong><span>The executable activates a language detected from <code>$LC_ALL</code>/<code>$LANG</code> (16 catalogues, English default). Confirmation gates honor the affirmative each locale's prompt teaches — a German <code>(j/n)</code> answers <code>j</code>, a Russian <code>(д/н)</code> answers <code>д</code> — and <code>y</code> works everywhere.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
        <li><a href="https://github.com/sugarcraft/candy-files">Source on GitHub</a></li>
        <li><a href="https://github.com/sugarcraft/candy-files/blob/master/README.md">Full README</a></li>
@@ -225,7 +244,7 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">Key Classes</h3>
+    <h3 id="key-classes" style="margin-top: 32px;">Key Classes</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Manager</td><td>start(leftCwd, rightCwd, ?lister)</td><td>Factory — initialises two panes + first tab</td></tr>
@@ -250,47 +269,48 @@ php candy-files.phar [LEFT_DIR] [RIGHT_DIR]
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">GIFs recorded against the live app — 7 tapes under <code>.vhs/</code> drive <code>./bin/candy-files</code> over real directories. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/navigate.gif" alt="Navigate" onerror="this.parentElement.style.display='none'">
-                <h3>Navigate</h3>
+                <h3 id="navigate">Navigate</h3>
                 <span class="demo-caption">Tab-swap, multi-select, sort cycle, delete-with-confirm.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/search.gif" alt="Search" onerror="this.parentElement.style.display='none'">
-                <h3>Search</h3>
+                <h3 id="search">Search</h3>
                 <span class="demo-caption">Type "/" to fuzzy-filter the active directory, k/j (or arrows) move results, Enter opens directories.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/multi-select.gif" alt="Multi-select" onerror="this.parentElement.style.display='none'">
-                <h3>Multi-select</h3>
+                <h3 id="multi-select">Multi-select</h3>
                 <span class="demo-caption">Space toggles selection, d+y deletes all selected.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/tabs.gif" alt="Tabs" onerror="this.parentElement.style.display='none'">
-                <h3>Tab management</h3>
+                <h3 id="tab-management">Tab management</h3>
                 <span class="demo-caption">t duplicates, Ctrl+Tab (or Ctrl+PgUp/PgDn) cycles, Ctrl+w closes.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/sort-cycle.gif" alt="Sort cycle" onerror="this.parentElement.style.display='none'">
-                <h3>Sort cycle</h3>
+                <h3 id="sort-cycle">Sort cycle</h3>
                 <span class="demo-caption">s cycles through all 6 sort modes: name/mtime/size × asc/desc.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/undo.gif" alt="Undo" onerror="this.parentElement.style.display='none'">
-                <h3>Undo delete</h3>
+                <h3 id="undo-delete">Undo delete</h3>
                 <span class="demo-caption">u or Ctrl+z restores the last deleted entry.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/hidden-files.gif" alt="Hidden files" onerror="this.parentElement.style.display='none'">
-                <h3>Hidden-file toggle</h3>
+                <h3 id="hidden-file-toggle">Hidden-file toggle</h3>
                 <span class="demo-caption">. reveals and hides dotfiles.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

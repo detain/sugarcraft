@@ -146,12 +146,24 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-async"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-async" alt="SugarAsync code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Shared async vocabulary unifying ReactPHP usage across the SugarCraft monorepo: a CancellationSource owns the mutable flag and its cancel() trigger while consumers hold a read-only CancellationToken, Subscription handles make disposal uniform (compose() gathers many into one), and the AsyncOps helpers cover timeout and deadline ceilings, retry with jittered backoff and a total budget, single-flight coalescing, debounce and throttle timers, all/race fan-in, and a pending-notice combinator — plus a bounded TTL AsyncCache that coalesces in-flight loads.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Shared async vocabulary unifying ReactPHP usage across the SugarCraft monorepo: a CancellationSource owns the mutable flag and its cancel() trigger while consumers hold a read-only CancellationToken, Subscription handles make disposal uniform (compose() gathers many into one), and the AsyncOps helpers cover timeout and deadline ceilings, retry with jittered backoff and a total budget, single-flight coalescing, debounce and throttle timers, all/race fan-in, and a pending-notice combinator — plus a bounded TTL AsyncCache that coalesces in-flight loads.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-async</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Async\{AsyncOps, CancellationSource};
 
 $source = CancellationSource::new();
@@ -180,7 +192,7 @@ $promise = AsyncOps::retry(
     baseBackoffSeconds: 0.5,
 );</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>CancellationToken</strong><span>Read-only view of a cancellation state. Consumers observe isCancelled() and register onCancel() callbacks; the trigger methods are @internal-tagged but public, so restriction is by convention, not visibility — do not hand tokens to untrusted code.</span></div>
       <div class="feature"><strong>CancellationSource</strong><span>Owns the mutable cancellation flag. Create via CancellationSource::new(). Call cancel() to flip the flag and fire all registered callbacks.</span></div>
@@ -202,14 +214,14 @@ $promise = AsyncOps::retry(
       <div class="feature"><strong>Timeout / cancellation exceptions</strong><span>OperationCancelledException and TimeoutException — plain RuntimeException subclasses; TimeoutException carries seconds() and label() context.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Unified cancellation</strong> — replace ad-hoc cancellation scattered across async consumers with one shared pattern; the current dependents census is sugar-forms, sugar-vterm, candy-sql, candy-mail, candy-git-server and candy-codetime.</li>
       <li><strong>Subscription lifecycle ownership</strong> — Subscriptions::compose() gathers many disposal handles so teardown can dispose them all atomically (the sugar-core runtime keeps its own internal variant; this is the public standalone one).</li>
       <li><strong>Async operation helpers</strong> — withTimeout, retry, debounce, throttle built on top of react/promise and react/event-loop.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-async">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-async/blob/master/README.md">Full README</a></li>
@@ -219,7 +231,7 @@ $promise = AsyncOps::retry(
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <caption>Public API surface of sugar-async: class, method signature, and behavior.</caption>
 <thead>
@@ -272,6 +284,7 @@ $promise = AsyncOps::retry(
 </table>
   </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

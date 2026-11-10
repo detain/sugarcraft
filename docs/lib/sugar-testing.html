@@ -145,13 +145,29 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-testing"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-testing" alt="SugarTesting code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">The test harness SugarCraft pioneered: <code>ProgramSimulator</code> for driving SugarCraft apps with scripted input, <code>Assertions</code> for golden-file and cell-grid snapshots, and <code>TapeRecorder</code> for composing VHS demo scripts.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#programsimulator">ProgramSimulator</a></li>
+            <li class="toc-h3"><a href="#scriptedinput">ScriptedInput</a></li>
+            <li class="toc-h3"><a href="#assertions">Assertions</a></li>
+            <li class="toc-h3"><a href="#graphics-stream-assertions">Graphics stream assertions</a></li>
+            <li class="toc-h3"><a href="#taperecorder">TapeRecorder</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">The test harness SugarCraft pioneered: <code>ProgramSimulator</code> for driving SugarCraft apps with scripted input, <code>Assertions</code> for golden-file and cell-grid snapshots, and <code>TapeRecorder</code> for composing VHS demo scripts.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require --dev sugarcraft/sugar-testing:@dev</code></pre>
     <p>This is a PHPUnit test harness: it belongs in <code>require-dev</code> and must not enter runtime dependencies.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <p>This block runs exactly as copy-pasted — the lib's own test suite executes it as a test.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -205,7 +221,7 @@ if (GoldenFile::load($golden) === null) {
 
 Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
 
-    <h3 style="margin-top: 32px;">ProgramSimulator</h3>
+    <h3 id="programsimulator" style="margin-top: 32px;">ProgramSimulator</h3>
     <div class="feature-grid">
       <div class="feature"><strong>for(Model|Program)</strong><span>Factory: wrap a Program, or a bare Model in a default Program, for deterministic testing.</span></div>
       <div class="feature"><strong>send(Msg)</strong><span>Fluent message enqueue — chain multiple sends.</span></div>
@@ -214,7 +230,7 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
       <div class="feature"><strong>withWindowSize() / withEnvironment() / withColorProfile()</strong><span>Arm the startup <code>WindowSizeMsg</code>/<code>EnvMsg</code>/<code>ColorProfileMsg</code> exactly as a real Program dispatches them — before <code>init()</code>. Each returns a clone.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">ScriptedInput</h3>
+    <h3 id="scriptedinput" style="margin-top: 32px;">ScriptedInput</h3>
     <div class="feature-grid">
       <div class="feature"><strong>key() / namedKey() / enter() / arrow() / mouse() / resize() / ticks()</strong><span>Fluent builders for the messages a session produces; <code>build()</code> returns the list.</span></div>
       <div class="feature"><strong>bytes(...$reads)</strong><span>Raw terminal input parsed by sugar-core's real <code>InputReader</code>, one argument per read (split into 4096-byte reads like the runtime), with the runtime's idle recovery afterwards: a lone ESC becomes an Escape key and an unterminated paste is closed.</span></div>
@@ -222,7 +238,7 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
       <div class="feature"><strong>withSanitizePaste(bool)</strong><span>Pasted payloads are sanitized by default, as at runtime; pass <code>false</code> to deliver them verbatim. Call it before <code>bytes()</code>.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">Assertions</h3>
+    <h3 id="assertions" style="margin-top: 32px;">Assertions</h3>
     <div class="feature-grid">
       <div class="feature"><strong>assertGoldenAnsi</strong><span>Byte-exact snapshot test — set <code>SUGAR_TESTING_UPDATE_GOLDENS=1</code> (legacy alias: <code>UPDATE_GOLDENS=1</code>) to create a missing golden; creation is one-way and a mismatch never rewrites, so to re-baseline, delete the file and rerun with it set.</span></div>
       <div class="feature"><strong>assertCellGrid</strong><span>Cell-by-cell diff for Buffer-based renderers.</span></div>
@@ -230,7 +246,7 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
       <div class="feature"><strong>assertViewIdempotent</strong><span>Render-purity check — a second <code>view()</code> must return identical bytes; catches models that mutate state while rendering.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">Graphics stream assertions</h3>
+    <h3 id="graphics-stream-assertions" style="margin-top: 32px;">Graphics stream assertions</h3>
     <div class="feature-grid">
       <div class="feature"><strong>GraphicsAssertions</strong><span><code>assertRendersTo()</code> decodes a protocol byte stream and compares it to a pixel grid, <code>assertInlineImageDimensions()</code> checks placement and size, <code>assertProtocolRoundTrip()</code> re-encodes what it decoded, <code>renderGrid()</code> exposes the grid directly.</span></div>
       <div class="feature"><strong>Mode::detect()</strong><span>Sniff whether a stream speaks Sixel, Kitty, or iTerm2 inline images.</span></div>
@@ -239,7 +255,7 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
       <div class="feature"><strong>DecodeLimits</strong><span>Hard caps on hostile streams — raster cells, number digits, decompressed bytes, image pixels — enforced with <code>MalformedGraphicsException</code>.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">TapeRecorder</h3>
+    <h3 id="taperecorder" style="margin-top: 32px;">TapeRecorder</h3>
     <div class="feature-grid">
       <div class="feature"><strong>to(path)</strong><span>Factory: start a script builder whose <code>save()</code> writes the tape to the given path.</span></div>
       <div class="feature"><strong>header()</strong><span>Write VHS header (theme, font size, width, height).</span></div>
@@ -248,7 +264,7 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
       <div class="feature"><strong>keyMsgToVhs(KeyMsg)</strong><span>Static: map a decoded key message back to VHS <code>Type</code> syntax (null when unsupported), so scripted sessions turn into directives.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Deterministic Model–Update–View testing</strong> — ProgramSimulator drives Programs without real I/O.</li>
       <li><strong>Snapshot regression testing</strong> — Golden files for ANSI output.</li>
@@ -258,7 +274,7 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
       <li><strong>Test-infra hub for 22 sibling packages</strong> — incl. sugar-forms and sugar-widgets, which build their test support on it (census: sibling composer.json require/require-dev at commit time).</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-testing">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-testing/blob/master/README.md">Full README</a></li>
@@ -268,7 +284,7 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart <span aria-hidden="true">→</span></a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <caption>sugar-testing public API — every class, method, and constant named above, verified against the shipped source.</caption>
 <thead>
@@ -326,6 +342,7 @@ Assertions::assertGoldenAnsi($golden, $result-&gt;view);</code></pre>
 </table>
   </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

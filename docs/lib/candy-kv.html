@@ -143,12 +143,30 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-kv"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-kv" alt="CandyKv code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Personal key/value store — one SQLite database per store, <code>@dbname</code> namespaces, glob listing, TTL, binary values, JSON/YAML import/export, and a bare CLI.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#cli">CLI</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#get-set-list">Get / set / list</a></li>
+            <li class="toc-h3"><a href="#glob-listing">Glob listing</a></li>
+            <li class="toc-h3"><a href="#reverse-order-list">Reverse-order list</a></li>
+            <li class="toc-h3"><a href="#binary-values">Binary values</a></li>
+            <li class="toc-h3"><a href="#multiple-dbs">Multiple DBs</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Personal key/value store — one SQLite database per store, <code>@dbname</code> namespaces, glob listing, TTL, binary values, JSON/YAML import/export, and a bare CLI.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-kv</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Kv\Store;
 
 $store = new Store();                       // SQLite files under $XDG_CONFIG_HOME/skate (else ~/.config/skate)
@@ -168,7 +186,7 @@ foreach ($store-&gt;list('user:*') as $entry) {  // case-sensitive character-wis
 $store-&gt;listDatabases();                    // ['default', 'passwords']
 $store-&gt;pruneExpired();                     // reclaims expired rows in the default database</code></pre>
 
-    <h3 style="margin-top: 32px;">CLI</h3>
+    <h3 id="cli" style="margin-top: 32px;">CLI</h3>
     <pre class="code"><code class="language-shell">candy-kv set color blue              # values with NUL/invalid UTF-8 auto-arm binary mode
 candy-kv get color                   # prints exact stored bytes, no added newline
 candy-kv list 'user-*'               # key&ltTAB&gtvalue rows; binary values show a &lt;binary N bytes&gt; placeholder
@@ -178,7 +196,7 @@ candy-kv export json &gt; backup.json
 candy-kv import json backup.json     # atomic within a database; a file spanning databases needs --no-atomic</code></pre>
     <p style="margin-top: 12px;">Exit codes: <code>0</code> success, <code>1</code> miss / no match / runtime failure, <code>2</code> usage errors (unknown flags and commands are refused before anything is written). Run <code>candy-kv --help</code> for the full flag list.</p>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>SQLite storage</strong><span>One SQLite file per named database under the data directory (<code>$XDG_CONFIG_HOME/skate</code>, else <code>~/.config/skate</code>; files at <code>0600</code>); <code>key@db</code> picks the database and reads never create files.</span></div>
       <div class="feature"><strong>Glob and fuzzy listing</strong><span>Case-sensitive <code>*</code> / <code>?</code> glob patterns (<code>\*</code> spells a literal star), reverse order, keys-only or values-only modes, and <code>fuzzyFilter()</code>.</span></div>
@@ -186,7 +204,7 @@ candy-kv import json backup.json     # atomic within a database; a file spanning
       <div class="feature"><strong>Binary values and transactions</strong><span>Store raw bytes as binary entries (<code>rawValue()</code> decodes them) and group writes in a transaction.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-kv">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-kv/blob/master/README.md">Full README</a></li>
@@ -196,7 +214,7 @@ candy-kv import json backup.json     # atomic within a database; a file spanning
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Store</td><td>__construct(?string $dataDir = null, string $defaultDb = 'default')</td><td>Key-value store over per-database SQLite files; construction touches nothing on disk</td></tr>
@@ -214,38 +232,39 @@ candy-kv import json backup.json     # atomic within a database; a file spanning
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/basic.gif" alt="Get / set / list" onerror="this.parentElement.style.display='none'">
-                <h3>Get / set / list</h3>
+                <h3 id="get-set-list">Get / set / list</h3>
                 <span class="demo-caption">File-backed store — set, get, list, delete.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/glob.gif" alt="Glob listing" onerror="this.parentElement.style.display='none'">
-                <h3>Glob listing</h3>
+                <h3 id="glob-listing">Glob listing</h3>
                 <span class="demo-caption">List keys matching `user-*`, `user-?` and `config-*`.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/reverse-order.gif" alt="Reverse-order list" onerror="this.parentElement.style.display='none'">
-                <h3>Reverse-order list</h3>
+                <h3 id="reverse-order-list">Reverse-order list</h3>
                 <span class="demo-caption">List the same keys forward and in reverse key order.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/binary.gif" alt="Binary values" onerror="this.parentElement.style.display='none'">
-                <h3>Binary values</h3>
+                <h3 id="binary-values">Binary values</h3>
                 <span class="demo-caption">Round-trip raw bytes in / out of the store.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kv/.vhs/multidb.gif" alt="Multiple DBs" onerror="this.parentElement.style.display='none'">
-                <h3>Multiple DBs</h3>
+                <h3 id="multiple-dbs">Multiple DBs</h3>
                 <span class="demo-caption">Two named stores side-by-side, no collisions.</span>
             </div>
         </div>
         <p style="margin-top: 20px;">Five GIFs: <code>glob.gif</code> is recorded from live <code>./bin/candy-kv</code> calls; the other four drive the library surface through <code>php examples/*.php</code>. For a text walkthrough of the CLI itself, see the <code>Output&nbsp;format</code> transcript in the <a href="https://github.com/sugarcraft/candy-kv#demos">README</a>.</p>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

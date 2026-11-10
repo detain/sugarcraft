@@ -145,13 +145,26 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-cli"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-cli" alt="SugarCli code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">StatusLine, Banner, Section, Stage, HelpText, Frame, Logo — themed CLI presentation, down to a shared width budget. Library-only — no Symfony Console requirement. Drop into any Composer project to give CLI output the same look as the rest of the stack.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#cli-page">CLI page</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">StatusLine, Banner, Section, Stage, HelpText, Frame, Logo — themed CLI presentation, down to a shared width budget. Library-only — no Symfony Console requirement. Drop into any Composer project to give CLI output the same look as the rest of the stack.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-cli "@dev"</code></pre>
     <p style="margin-top: 12px;">Install note: <code>sugarcraft/*</code> packages track <code>@dev</code> and the monorepo sets <code>minimum-stability: dev</code> with <code>prefer-stable: true</code>; mirror that pair in your own root manifest or a stable-only install fails to resolve.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php"><?php
 
 use SugarCraft\Cli\{StatusLine, Banner};
@@ -162,7 +175,7 @@ echo StatusLine::success('done in 0.4s'), "\n";
 echo StatusLine::warn   ('disk almost full'), "\n";
 echo StatusLine::error  ('connection refused'), "\n";</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>StatusLine</strong><span><code>success</code> / <code>error</code> / <code>warn</code> / <code>info</code> / <code>prompt</code> static helpers — themed glyph + space + message. Only the glyph is styled; the message stays plain, and an over-long message is clipped with <code>…</code> to the width budget.</span></div>
       <div class="feature"><strong>Banner</strong><span>Bordered title block with optional subtitle, rounded by default. Useful for app intros / <code>--version</code> output. Title and subtitle are single display lines — embedded escapes, newlines and control bytes are stripped.</span></div>
@@ -175,7 +188,7 @@ echo StatusLine::error  ('connection refused'), "\n";</code></pre>
       <div class="feature"><strong>AutoWidth</strong><span>The shared <code>int | AutoWidth | null</code> width sentinel: <code>Auto</code> resolves the exported <code>COLUMNS</code> (else 80 cells; implausible values discarded), an <code>int</code> is exact, <code>null</code> means no cap.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-cli">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-cli/blob/master/README.md">Full README</a></li>
@@ -185,7 +198,7 @@ echo StatusLine::error  ('connection refused'), "\n";</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>StatusLine</td><td>success(msg, ?theme, width = Auto)</td><td>Render a success line (error/warn/info/prompt are the same shape)</td></tr>
@@ -207,17 +220,18 @@ echo StatusLine::error  ('connection refused'), "\n";</code></pre>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">The library's CLI page example rendered as a VHS-recorded GIF. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-cli/.vhs/cli-page.gif" alt="" onerror="this.parentElement.style.display='none'">
-                <h3>CLI page</h3>
+                <h3 id="cli-page">CLI page</h3>
                 <span class="demo-caption">StatusLine + Banner + Section + Stage + HelpText forming a cohesive CLI page.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

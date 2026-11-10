@@ -148,12 +148,23 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-sql"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-sql" alt="CandySql code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Composer-installable multi-driver SQL TUI: connect to SQLite, MySQL, or PostgreSQL, browse tables, peek at row data, run ad-hoc queries, and explore a full MySQL-Workbench-style admin dashboard — all on the SugarCraft stack. SQLite-first; MySQL and PostgreSQL drivers plus a Performance Dashboard, Server Status, Variables, Connections, Reports, and Performance Schema Setup ship on dev-master (rolling prerelease tag <code>candy-sql/dev</code>).</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Composer-installable multi-driver SQL TUI: connect to SQLite, MySQL, or PostgreSQL, browse tables, peek at row data, run ad-hoc queries, and explore a full MySQL-Workbench-style admin dashboard — all on the SugarCraft stack. SQLite-first; MySQL and PostgreSQL drivers plus a Performance Dashboard, Server Status, Variables, Connections, Reports, and Performance Schema Setup ship on dev-master (rolling prerelease tag <code>candy-sql/dev</code>).</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-sql</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell"># SQLite via bare path (inferred as Flavor::Sqlite)
 vendor/bin/candy-sql app.sqlite
 
@@ -170,7 +181,7 @@ use SugarCraft\Sql\Db\Flavor;
 $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname'));
 (new Program(App::start($db, Flavor::MySQL), new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Tables pane</strong><span>Lists every <code>type IN (table, view)</code> in <code>sqlite_master</code> excluding <code>sqlite_*</code> internals.</span></div>
       <div class="feature"><strong>Rows pane</strong><span>First 100 rows of the selected table, with header row + reverse-video cursor.</span></div>
@@ -218,7 +229,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
       <div class="feature"><strong>Status-Snapshot History (default-on, <code>--no-history</code> opt-out)</strong><span>SQLite persistence via <code>SqliteHistoryStore</code> — an implementation of the five-method <code>HistoryStoreInterface</code> port (<code>save()</code> / <code>query()</code> / <code>count()</code> / <code>prune()</code> / <code>close()</code>), with WAL mode, 0600 file / 0700 dir private modes; pruning is explicit — <code>prune()</code> / <code>HistoryRecorder::pruneOlderThan()</code>, no automatic size cap). Stores timestamped admin status-variable snapshots, not SQL text. <code>HistoryRecorder</code> implements <code>StatusSnapshotProviderInterface</code> and records via <code>record()</code> / <code>recordFromProvider()</code>; history faults never crash a session and degrade through two channels — at launch a corrupt or unwritable store warns loudly on stderr (<code>history recording DISABLED</code>) and the session runs history-less, while a mid-session persist failure drops to the in-app query log so the live dashboard and in-memory snapshots stay authoritative. <code>HistoryQuery::query()/querySince()/rate()</code> retrieve snapshots and compute per-variable rates over time ranges.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-sql">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-sql/blob/master/README.md">Full README</a></li>
@@ -228,7 +239,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Database ⚠️</td><td>—</td><td><strong>Deprecated</strong> thin alias to <code>SqliteDatabase</code>. Use <code>DatabaseInterface</code> instead.</td></tr>
@@ -407,6 +418,7 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 </table>
   </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

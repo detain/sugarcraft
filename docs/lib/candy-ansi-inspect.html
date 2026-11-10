@@ -145,12 +145,25 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-ansi-inspect"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-ansi-inspect" alt="CandyAnsiInspect code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Pipe styled output through CandyAnsiInspect and each escape becomes a labelled line. Decodes SGR / CSI / OSC / DCS / APC / SS3, DEC private modes, kitty keyboard protocol, synchronized output, unicode grapheme mode.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#inspect">Inspect</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Pipe styled output through CandyAnsiInspect and each escape becomes a labelled line. Decodes SGR / CSI / OSC / DCS / APC / SS3, DEC private modes, kitty keyboard protocol, synchronized output, unicode grapheme mode.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-ansi-inspect</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-text">$ printf '\e[31mhello\e[0m world\n' | candy-ansi-inspect
 ESC[31m  SGR foreground red
 hello
@@ -165,7 +178,7 @@ ESC]0;new title  set window title to "new title"
 $ printf '\e[?2026h' | candy-ansi-inspect
 ESC[?2026h  enable synchronized output</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>SGR</strong><span>Foreground / background (16 / 256 / 24-bit truecolor) + bold / italic / underline / blink / reverse / strike / faint.</span></div>
       <div class="feature"><strong>CSI</strong><span>Cursor moves, erase, scroll region (DECSTBM), insert/delete line/char, DECSCUSR cursor shape, DECRQM/DECRPM mode query.</span></div>
@@ -175,7 +188,7 @@ ESC[?2026h  enable synchronized output</code></pre>
       <div class="feature"><strong>Library mode</strong><span><code>Inspector::parse($bytes)</code> yields <code>Segment</code> values you can iterate.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-ansi-inspect">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-ansi-inspect/blob/master/README.md">Full README</a></li>
@@ -185,7 +198,7 @@ ESC[?2026h  enable synchronized output</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Inspector</td><td>parse(bytes)</td><td>Parse ANSI bytes into segments</td></tr>
@@ -203,17 +216,18 @@ ESC[?2026h  enable synchronized output</code></pre>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-ansi-inspect/.vhs/inspect.gif" alt="Inspect" onerror="this.parentElement.style.display='none'">
-                <h3>Inspect</h3>
+                <h3 id="inspect">Inspect</h3>
                 <span class="demo-caption">Annotating SGR / OSC / DCS / APC streams in real time.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

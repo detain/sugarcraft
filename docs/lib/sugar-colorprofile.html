@@ -143,13 +143,30 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-colorprofile"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-colorprofile" alt="SugarColorprofile code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Detect the terminal's color capability (TrueColor / Ansi256 / Ansi / Ascii / NoTTY — the five detection-emittable levels) and degrade colors, strings and whole output streams to match it — one-way, TrueColor down, never up; an opt-in perceptual family picks the nearest palette color when a degraded value must land on a fixed set. Detection reads the shared env ladder, honoring <code>NO_COLOR</code>, <code>FORCE_COLOR</code>, <code>TERM=dumb</code> and the reduced-motion request.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#detection-phases">Detection phases</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#profile-detection">Profile detection</a></li>
+            <li class="toc-h3"><a href="#standard-colors">Standard colors</a></li>
+            <li class="toc-h3"><a href="#conversion">Conversion</a></li>
+            <li class="toc-h3"><a href="#degrade">Degrade</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Detect the terminal's color capability (TrueColor / Ansi256 / Ansi / Ascii / NoTTY — the five detection-emittable levels) and degrade colors, strings and whole output streams to match it — one-way, TrueColor down, never up; an opt-in perceptual family picks the nearest palette color when a degraded value must land on a fixed set. Detection reads the shared env ladder, honoring <code>NO_COLOR</code>, <code>FORCE_COLOR</code>, <code>TERM=dumb</code> and the reduced-motion request.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-colorprofile</code></pre>
     <p>Requires PHP 8.3+ and no PHP extensions — the probes' optional <code>posix_*</code> calls are feature-detected, and an absent or unreadable <code>infocmp</code> child degrades the phase-2 answer instead of failing.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\ColorProfile\{Color, ColorProfile, Palette, ProfileWriter};
 
 $profile = Palette::detect(STDOUT);      // ColorProfile::TrueColor | Ansi256 | Ansi | Ascii | NoTTY
@@ -168,7 +185,7 @@ $ansi = (new Palette())-&gt;withProfile(ColorProfile::Ansi256)
 // Or wrap a stream and let it degrade (or strip, under NoTTY) on write
 ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Profile detection</strong><span>One canonical 13-step ladder every surface shares, override-first: <code>CLICOLOR_FORCE=1</code> / <code>FORCE_COLOR</code> outrank every later leg (a falsy <code>FORCE_COLOR</code> spelling lands on the <code>Ascii</code> floor). Suppressors come next: <code>NO_COLOR</code> (empty = unset), <code>CLICOLOR=0</code> and <code>TERM=dumb</code> (case-insensitive) turn color off — dumb outranks an advertised <code>COLORTERM</code>, it is a promise of minimal capabilities. Advertised depth follows: <code>COLORTERM</code> (<code>24bit</code>/<code>truecolor</code>, plus the legacy marker <code>yes</code> that old color terminals set — read here as 24-bit), <code>TERM_PROGRAM</code>, <code>WT_SESSION</code>, <code>GOOGLE_CLOUD_SHELL</code> (any non-empty value declares the environment — even the string <code>false</code>), the <code>TMUX</code>/<code>STY</code> + <code>screen*</code>/<code>tmux*</code> rung and the <code>TERM</code> depth patterns. <code>Palette</code> adds the stream TTY gate on top; <code>Probe</code>/<code>AsyncProbe</code>/<code>TerminalProbe</code> add the phase-2 infocmp <code>Tc</code>/<code>RGB</code> upgrade (a fixed-path binary, run with a minimal child environment). The result is a <code>ColorProfile</code>: TrueColor, Ansi256, Ansi240, Ansi, Ansi8, Fgbg, Ascii or NoTTY.</span></div>
       <div class="feature"><strong>Color degradation</strong><span><code>Palette::toProfile()</code> / <code>Color::convert()</code> downsample a color to the 256-color cube and gray ramp or to the 16 ANSI slots.</span></div>
@@ -177,7 +194,7 @@ ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</c
       <div class="feature"><strong>Perceptual distance</strong><span>CIELAB conversion with ΔE*76 / ΔE*94 / CIEDE2000 (<code>DeltaE</code>) and an opt-in nearest-palette matcher (<code>NearestColor</code>).</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">Detection phases</h3>
+    <h3 id="detection-phases" style="margin-top: 32px;">Detection phases</h3>
     <p>The capability probes run in four phases; phase 1 <em>is</em> the shared <code>DetectionChain</code>, so the ladder cannot drift between surfaces:</p>
     <table class="api-table">
       <tr><th>Phase</th><th>Source</th><th>What it can set</th></tr>
@@ -188,7 +205,7 @@ ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</c
     </table>
     <p>The terminfo leg is an exec surface: the <code>infocmp</code> binary is launched from a fixed absolute-path roster (never looked up on <code>PATH</code>), and the child environment is built in one place — the queried <code>TERM</code> plus a fixed <code>PATH</code> only. <code>TERMINFO</code>, <code>TERMINFO_DIRS</code> and <code>HOME</code> each steer infocmp's database lookup and are never inherited. The parser's name-position guard protects the <em>parse</em> from a hostile terminfo entry but cannot vouch for the <em>source</em>: whoever can write the system terminfo directories owns that answer. Treat every detection result as a rendering hint, never as an authorization signal.</p>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/detain/sugarcraft/tree/master/sugar-colorprofile">Source on GitHub</a></li>
       <li><a href="https://github.com/detain/sugarcraft/blob/master/sugar-colorprofile/README.md">Full README</a></li>
@@ -198,7 +215,7 @@ ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</c
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Palette</td><td>static detect($stream = null, array $env = []): ColorProfile</td><td>Detect the color profile for a stream</td></tr>
@@ -231,32 +248,33 @@ ProfileWriter::wrap(STDOUT)-&gt;write("\x1b[38;2;107;80;255mFancy\x1b[0m\n");</c
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-colorprofile/.vhs/detect.gif" alt="Detecting the terminal profile, then the same sentence forced through each profile" onerror="this.parentElement.style.display='none'">
-                <h3>Profile detection</h3>
+                <h3 id="profile-detection">Profile detection</h3>
                 <span class="demo-caption">Forced rungs print <code>[TrueColor] -&gt; "fancy"</code> through <code>[No TTY] -&gt; "naughty!"</code>.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-colorprofile/.vhs/standard-colors.gif" alt="The sixteen-index ANSI color catalog printed with swatches" onerror="this.parentElement.style.display='none'">
-                <h3>Standard colors</h3>
+                <h3 id="standard-colors">Standard colors</h3>
                 <span class="demo-caption"><code>all()</code> rows from <code>0 black #000000</code> to <code>15 brightWhite #ffffff</code>, plus <code>fromIndex()</code> lookups.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-colorprofile/.vhs/convert.gif" alt="One hex converted for each profile with its per-rung escape shown" onerror="this.parentElement.style.display='none'">
-                <h3>Conversion</h3>
+                <h3 id="conversion">Conversion</h3>
                 <span class="demo-caption">One hex, a different encoder per rung: <code>\e[38;2;107;80;255m</code> → <code>\e[38;5;63m</code> → <code>\e[94m</code>; No TTY strips.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-colorprofile/.vhs/degrade.gif" alt="One TrueColor string written through a ProfileWriter on each rung, escapes shrinking per row" onerror="this.parentElement.style.display='none'">
-                <h3>Degrade</h3>
+                <h3 id="degrade">Degrade</h3>
                 <span class="demo-caption">Same input written per rung: <code>38;2</code> → <code>38;5</code> → <code>91</code> → <code>97</code>; the No TTY row prints <code>[Orange] [Teal] [Purple]</code> with no escapes.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

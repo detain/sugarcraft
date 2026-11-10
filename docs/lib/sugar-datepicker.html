@@ -143,12 +143,26 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-datepicker"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-datepicker" alt="SugarDatepicker code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Month-grid date picker with keyboard navigation, min/max date constraints, locale-ready day names (English ships today), and a fully-rendered ANSI view.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#may-june-2026">May → June 2026</a></li>
+            <li class="toc-h3"><a href="#min-max-constraints">Min / max constraints</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Month-grid date picker with keyboard navigation, min/max date constraints, locale-ready day names (English ships today), and a fully-rendered ANSI view.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-datepicker:@dev</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\DatePicker\DatePicker;
 
 // Opens on January 2026 with the cursor aimed at the seed date, 2026-01-15
@@ -169,7 +183,7 @@ $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
     -&gt;handleKey(DatePicker::KEY_ENTER);
 [$range-&gt;rangeStart()-&gt;format('j'), $range-&gt;rangeEnd()-&gt;format('j')];   // ['22', '24']</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Month grid</strong><span>A 6×7 month view with localized day and month names (English ships today), weeks starting Monday (firstDayOfWeek is not configurable), today and the cursor highlighted, and optional ISO week numbers.</span></div>
       <div class="feature"><strong>Keyboard nav</strong><span><code>handleKey()</code> takes the <code>KEY_*</code> constants: arrows move the cursor, Home/End jump to the first/last valid day of the viewed month, Enter selects (single mode) or sets the range start/end, Esc clears.</span></div>
@@ -178,7 +192,7 @@ $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
       <div class="feature"><strong>SugarCraft model</strong><span><code>Model</code> wraps the picker as a sugar-core Model with an optional event store recording <code>cursor_moved</code>, <code>range_started</code>, <code>date_selected</code>, and <code>date_cleared</code> transitions; the payload contract is in the README's Events section.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-datepicker">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-datepicker/blob/master/README.md">Full README</a></li>
@@ -188,7 +202,7 @@ $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>DatePicker</td><td>static new(?DateTimeImmutable) / withToday(DateTimeImmutable) / SetTime(DateTimeImmutable)</td><td>Create a picker on a month; pin "today"; jump to a date</td></tr>
@@ -213,22 +227,23 @@ $range = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-datepicker/.vhs/basic.gif" alt="May to June 2026" onerror="this.parentElement.style.display='none'">
-                <h3>May → June 2026</h3>
+                <h3 id="may-june-2026">May → June 2026</h3>
                 <span class="demo-caption">Month-grid date picker with cursor and selected day; the recording walks all four sections of examples/basic.php (May and June views, a July selection, a direct-API December cursor move).</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-datepicker/.vhs/constraints.gif" alt="Min / max constraints" onerror="this.parentElement.style.display='none'">
-                <h3>Min / max constraints</h3>
+                <h3 id="min-max-constraints">Min / max constraints</h3>
                 <span class="demo-caption">Same picker bounded between two dates.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

@@ -144,12 +144,29 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-input"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-input" alt="SugarInput code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">The missing input layer for PHP TUI. <code>EscapeDecoder</code> consumes raw TTY bytes and emits typed <code>Event</code> objects — plain and legacy keys (including modified xterm forms), Kitty keyboard protocol, SGR 1006/1016 + urxvt 1015 + X10 mouse, focus events, bracketed paste, and a typed drain for terminal replies (DA, DSR/CPR, mode reports, Kitty flags). Reentrant, chunk-invariant, and fuzz-friendly, with counters that make dropped or discarded input observable.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#escapedecoder">EscapeDecoder</a></li>
+            <li class="toc-h3"><a href="#escapedecoderoptions">EscapeDecoderOptions</a></li>
+            <li class="toc-h3"><a href="#inputdriver">InputDriver</a></li>
+            <li class="toc-h3"><a href="#event-types">Event types</a></li>
+            <li class="toc-h3"><a href="#keymodifier">KeyModifier</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#security-decoded-content-is-untrusted">Security: decoded content is untrusted</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">The missing input layer for PHP TUI. <code>EscapeDecoder</code> consumes raw TTY bytes and emits typed <code>Event</code> objects — plain and legacy keys (including modified xterm forms), Kitty keyboard protocol, SGR 1006/1016 + urxvt 1015 + X10 mouse, focus events, bracketed paste, and a typed drain for terminal replies (DA, DSR/CPR, mode reports, Kitty flags). Reentrant, chunk-invariant, and fuzz-friendly, with counters that make dropped or discarded input observable.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-input:@dev</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Input\Driver\StreamInputDriver;
 use SugarCraft\Input\Event\FocusEvent;
 use SugarCraft\Input\Event\KeyEvent;
@@ -180,7 +197,7 @@ while (!$driver->isEof()) {
 
     <p>One termination caveat: <code>isEof()</code> means "ended <em>and</em> drained", not "ended". A stream that stops mid-sequence leaves the decoder holding a partial, so <code>isEof()</code> stays false and <code>read()</code> answers null forever — call <code>escapeDecoder()->reset()</code> (or bound the loop with a grace period) when shutdown must win over an unfinished frame.</p>
 
-    <h3 style="margin-top: 32px;">EscapeDecoder</h3>
+    <h3 id="escapedecoder" style="margin-top: 32px;">EscapeDecoder</h3>
     <div class="feature-grid">
       <div class="feature"><strong>__construct(?EscapeDecoderOptions $options = null)</strong><span>Protocol toggles at construction; null uses the defaults.</span></div>
       <div class="feature"><strong>decode(string $bytes): list&lt;Event&gt;</strong><span>Decode a byte buffer — emits 0+ Events; buffers partial sequences.</span></div>
@@ -190,16 +207,16 @@ while (!$driver->isEof()) {
       <div class="feature"><strong>reset(): void</strong><span>Clear every buffer — partials, paste state, string state. The recovery lever after an unterminated forged paste.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">EscapeDecoderOptions</h3>
+    <h3 id="escapedecoderoptions" style="margin-top: 32px;">EscapeDecoderOptions</h3>
     <p>Five readonly booleans — <code>enableMouse</code>, <code>enableKitty</code>, <code>enableFocus</code>, <code>enablePaste</code> (all true by default) and <code>deferTrailingEscape</code> (false by default) — decide which protocol families the decoder interprets. A disabled family's frames are counted drops, never mis-decoded keys.</p>
 
-    <h3 style="margin-top: 32px;">InputDriver</h3>
+    <h3 id="inputdriver" style="margin-top: 32px;">InputDriver</h3>
     <div class="feature-grid">
       <div class="feature"><strong>read(): ?Event</strong><span>Return the next Event, or null when the non-blocking stream is idle or at EOF.</span></div>
     </div>
     <p><code>StreamInputDriver</code> additionally answers <code>isEof()</code> and <code>hasPending()</code> — the null alone does not distinguish idle from ended — and both the stream and React drivers expose their owned decoder via <code>escapeDecoder()</code> for <code>reset()</code>, the flush helper, and the counters.</p>
 
-    <h3 style="margin-top: 32px;">Event types</h3>
+    <h3 id="event-types" style="margin-top: 32px;">Event types</h3>
     <div class="feature-grid">
       <div class="feature"><strong>KeyEvent</strong><span>key, modifiers, raw, isRelease(), isRepeat — plain keys, F1-F24 legacy and up to F35 via Kitty, arrows, Home/End/PageUp/PageDown, Insert, Delete, Backspace, Tab, Enter, Escape, Ctrl+letter; Kitty releases arrive as <code>ReleaseA</code> (<code>isRelease()</code>), repeats as <code>isRepeat</code></span></div>
       <div class="feature"><strong>MouseEvent</strong><span>x, y, button, action, modifiers — SGR 1006/1016, urxvt 1015 and X10: press, release, drag, scroll (buttons 96/97 up/down, 98/99 horizontal wheel); the constructor refuses any other action</span></div>
@@ -209,10 +226,10 @@ while (!$driver->isEof()) {
       <div class="feature"><strong>ResizeEvent</strong><span>cols, rows — produced by SignalResizeDriver after SIGWINCH (arm() opt-in)</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">KeyModifier</h3>
+    <h3 id="keymodifier" style="margin-top: 32px;">KeyModifier</h3>
     <p>Modifiers arrive on events and are read with <code>includes()</code> / <code>value()</code>. The constants <code>SHIFT</code>, <code>ALT</code>, <code>CTRL</code>, <code>META</code>, <code>SUPER</code>, <code>HYPER</code>, <code>CAPS_LOCK</code>, <code>NUM_LOCK</code> document the wire bit layout the decoder maps from — Kitty lock-state bits arrive on the explicit-event-type form — and the constructor is private, so masks are not built by hand.</p>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Real-TTY input</strong> — decode raw bytes instead of symbolic key names, on plain streams or ReactPHP loops.</li>
       <li><strong>Interactive TUI programs</strong> — keyboard and mouse input without depending on a specific runtime.</li>
@@ -221,7 +238,7 @@ while (!$driver->isEof()) {
       <li><strong>Foundation for any input-consuming lib</strong> — pure byte decoding with no event-loop requirement; drivers add stream/ReactPHP/pcntl plumbing.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-input">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-input/blob/master/README.md">Full README</a></li>
@@ -232,7 +249,7 @@ while (!$driver->isEof()) {
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>EscapeDecoder</td><td>__construct(?EscapeDecoderOptions $options = null)</td><td>Choose which protocol families decode</td></tr>
@@ -277,11 +294,12 @@ while (!$driver->isEof()) {
 <tr><td>KeyModifier</td><td>value(): int</td><td>Raw bitmask value</td></tr>
 </table>
 
-    <h3 style="margin-top: 40px;">Security: decoded content is untrusted</h3>
+    <h3 id="security-decoded-content-is-untrusted" style="margin-top: 40px;">Security: decoded content is untrusted</h3>
     <p>Everything the decoder emits is attacker-writable input — any process that can write the pts slave, an injected <code>tmux send-keys</code> session, or whatever the clipboard held feeds the stream. Treat key names, <code>PasteEvent::content</code>, <code>TerminalReplyEvent::body</code>/<code>params</code>, and every <code>raw</code> field as hostile bytes: never echo decoded content straight back to the terminal (a crafted paste or reply body can carry OSC-8 hyperlinks and other introducers that command your renderer — sugar-core's <code>Sanitize</code> is the fleet's shared tool for the sweep), and never interpolate it into shell commands, paths, or logs without your own quoting and redaction discipline.</p>
     <p>Two structural laws to design against. <strong>Bracketed paste fences are forgeable</strong>: <code>CSI 200~</code>/<code>CSI 201~</code> are just bytes — use framing for convenience (bulk text without keymap side effects), never as an authenticity boundary between typed and pasted. <strong>Caps never reinterpret</strong>: when a sequence or paste overflows its cap the excess is discarded and counted (<code>discardedPasteBytes()</code>), never pushed back into the stream for a second parse. The fleet's private-use-area arena (zone sentinels U+E000/U+E001, image markers from U+E002) passes through decoding byte-identical — the consumer that renders owns the sweep, with <code>Sanitize::untrustedForMarkedFrames()</code>; sugar-core's <code>InputReader</code> is a consumer that strips. The decoder's own caps contain parser resource use; they do not make the content trustworthy. The fleet-wide contract lives in <a href="https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md">docs/TRUST-BOUNDARY.md</a>.</p>
   </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

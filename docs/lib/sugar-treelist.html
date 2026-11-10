@@ -143,12 +143,26 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-treelist"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-treelist" alt="SugarTreelist code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">List view with customizable box-drawing prefixes, cursor navigation, word-wrap, and live filtering. It is a plain final class, not a TEA Model - render it from your host program's view() and feed it input there.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#cursor-navigation">Cursor navigation</a></li>
+            <li class="toc-h3"><a href="#custom-styling">Custom styling</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">List view with customizable box-drawing prefixes, cursor navigation, word-wrap, and live filtering. It is a plain final class, not a TEA Model - render it from your host program's view() and feed it input there.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-treelist</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\TreeList\{Model, StringItem, DefaultPrefixer};
 
 // Fluent setters return NEW Models - rebind. Data is immutable; view()
@@ -164,7 +178,7 @@ echo $model->view();
 // Renders the list with a ╭ ├ ╰ box-drawing gutter chosen by item position
 // (│ appears only as a wrap-continuation glyph) and a &gt; item &lt; cursor marker</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Box-drawing prefixes</strong><span>Swap in your own prefixer; the shipped one picks its glyph by item position (first / middle / last), not by nesting depth.</span></div>
             <div class="feature"><strong>Cursor navigation</strong><span>Up / Down / Home / End movement with viewport tracking.</span></div>
@@ -175,7 +189,7 @@ echo $model->view();
             
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-treelist">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-treelist/blob/master/README.md">Full README</a></li>
@@ -185,7 +199,7 @@ echo $model->view();
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <caption>Public API surface of sugar-treelist</caption>
 <thead>
@@ -223,22 +237,23 @@ echo $model->view();
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs regenerated automatically from the tapes under <code>.vhs/</code> on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-treelist/.vhs/basic.gif" alt="Cursor navigation" onerror="this.parentElement.style.display='none'">
-                <h3>Cursor navigation</h3>
+                <h3 id="cursor-navigation">Cursor navigation</h3>
                 <span class="demo-caption">Box-drawing gutter with cursor movement, repainted as a full frame after resetPreviousFrame().</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-treelist/.vhs/custom-styling.gif" alt="Custom styling" onerror="this.parentElement.style.display='none'">
-                <h3>Custom styling</h3>
+                <h3 id="custom-styling">Custom styling</h3>
                 <span class="demo-caption">Hand-written ★ Prefixer and ◉ Suffixer plugged into the same list.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

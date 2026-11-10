@@ -146,12 +146,26 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-ansi-parser"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-ansi-parser" alt="SugarAnsiParser code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Parse ANSI escape sequences into structured state transitions — SGR attributes, cursor movement, erase operations, and DEC private modes — without coupling to terminal-cell-grid concerns. This is the VT500 state machine sugar-vterm consumes for its cell-grid rendering.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#limits-hostile-input">Limits &amp; hostile input</a></li>
+            <li class="toc-h3"><a href="#assistive-text-bridge-notes">Assistive / text-bridge notes</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Parse ANSI escape sequences into structured state transitions — SGR attributes, cursor movement, erase operations, and DEC private modes — without coupling to terminal-cell-grid concerns. This is the VT500 state machine sugar-vterm consumes for its cell-grid rendering.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-ansi-parser</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\AnsiParser\Parser\{DebugHandler, Parser};
 
 $handler = new DebugHandler();          // records every parse action
@@ -171,7 +185,7 @@ $handler-&gt;filter('print'); // rows with detail 'H', 'i'</code></pre>
 $parser = new Parser(new HandlerAdapter($myCsiHandler, $myOscHandler));
 $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>VT500 state machine</strong><span><code>Parser</code> implements the Paul Williams DEC parser and dispatches abstract <code>Handler</code> events: printChar, execute, csiDispatch, escDispatch, oscDispatch, dcsDispatch, sosPmApcDispatch.</span></div>
       <div class="feature"><strong>Partial-input safe</strong><span>Feed any chunk size. Incomplete sequences and UTF-8 runes wait for the next <code>feed()</code>; <code>flush()</code> (or <code>parseComplete()</code>) settles a pending OSC/DCS/SOS/PM/APC string at end of stream — an in-flight CSI or ESC, and a half-finished DCS prelude, end undispatched.</span></div>
@@ -181,7 +195,7 @@ $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</cod
       <div class="feature"><strong>DebugHandler</strong><span>Development mirror only — no payload cap: records every action as <code>['type' =&gt; …, 'detail' =&gt; …]</code> in <code>$log</code> (one row per dispatched action, forever); <code>filter($type)</code> selects one kind. Useful in tests and for stream inspection, never for hostile streams.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Limits &amp; hostile input</h3>
+    <h3 id="limits-hostile-input" style="margin-top: 40px;">Limits &amp; hostile input</h3>
     <ul>
       <li><strong>Bounded accumulation</strong> — DCS/OSC/SOS/PM/APC payloads stop at 64 KiB (the third constructor argument changes it; smaller values tighten), CSI parameter lists cap at 32 slots with each value clamped at 65535.</li>
       <li><strong>Byte-space fidelity</strong> — C0 bytes arriving <em>inside</em> an OSC string are dropped, so a payload can differ from the raw bytes sent; the <em>first</em> prefix byte survives and only the last intermediate is kept (disclosed parity deviations).</li>
@@ -189,21 +203,21 @@ $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</cod
       <li><strong>UTF-8 policy splits by mode</strong> — completed runes pass verbatim by default; <code>$replaceMalformed</code> substitutes U+FFFD and also replaces incomplete runes dropped silently in the default mode. Lone C1 bytes never reach <code>printChar()</code>, but UTF-8-encoded C1 (<code>C2 80</code>-<code>C2 9F</code>) is legal text — consumers re-emitting printable text reject or replace U+0080-U+009F themselves.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Assistive / text-bridge notes</h3>
+    <h3 id="assistive-text-bridge-notes" style="margin-top: 40px;">Assistive / text-bridge notes</h3>
     <ul>
       <li><code>printChar()</code> delivers <strong>codepoints, not graphemes</strong> — buffer and cluster with <code>grapheme_str_split()</code>/ICU before re-voicing a stream.</li>
       <li>Dropped bytes produce <em>no</em> character at all, so a reconstructed transcript may be shorter than the sender's intent; U+FFFD appears only in replacement mode.</li>
       <li>Hyperlinks pair: an OSC 8 event opens a span and one with an empty URI closes it; through <code>HandlerAdapter</code> a malformed <code>8;…</code> payload closes the current link rather than being dropped.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>ANSI stream inspection</strong> — parse escape sequences into structured events without spawning a terminal.</li>
       <li><strong>Built into SugarVterm</strong> — give vterm raw bytes and it drives the machine for you.</li>
       <li><strong>SGR decoding</strong> — receive every SGR parameter list, colon sub-parameters included, as the stream arrives.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/detain/sugarcraft/tree/master/sugar-ansi-parser">Source on GitHub</a></li>
       <li><a href="https://github.com/detain/sugarcraft/blob/master/sugar-ansi-parser/README.md">Full README</a></li>
@@ -213,7 +227,7 @@ $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</cod
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Parser</td><td>__construct(Handler, bool $replaceMalformed = false, int $maxStringBuffer = 65536)</td><td>Parser bound to one handler</td></tr>
@@ -231,6 +245,7 @@ $parser-&gt;parseComplete($bytes);          // feed() + flush() in one call</cod
 </table>
   </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

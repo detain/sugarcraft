@@ -149,12 +149,26 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-image"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-image" alt="SugarImage code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Image-to-cell renderer for the terminal. PNG, JPEG, GIF (still and animated), APNG, WebP and BMP decoded via ext-gd plus pure-PHP animated-container decoders and rendered via the best available protocol: Sixel, Kitty graphics, iTerm2 inline images, the chafa CLI — or one of the Unicode text tiers: half-block, quarter-block, an ASCII character ramp, or chafa's coverage-class symbol engine.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#key-classes">Key Classes</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#inline-image">Inline Image</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Image-to-cell renderer for the terminal. PNG, JPEG, GIF (still and animated), APNG, WebP and BMP decoded via ext-gd plus pure-PHP animated-container decoders and rendered via the best available protocol: Sixel, Kitty graphics, iTerm2 inline images, the chafa CLI — or one of the Unicode text tiers: half-block, quarter-block, an ASCII character ramp, or chafa's coverage-class symbol engine.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-image</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\ImageSource;
 
@@ -163,7 +177,7 @@ $image  = ImageSource::fromFile('examples/fixture-gradient.png');
 $ansi   = $mosaic->render($image, width: 40, height: 20);
 echo $ansi;</code></pre>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Mosaic;
 use SugarCraft\Image\Renderer\AsciiColorMode;
@@ -197,7 +211,7 @@ $mosaic = Mosaic::builder()
 $ansi = $mosaic->render($image);          // 40×20 cells
 $ansi = $mosaic->render($image, 60);      // explicit width wins; height from aspect</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Sixel renderer</strong><span>xterm, foot, mlterm, contour support; mlterm and foot are recognised from <code>TERM</code> alone.</span></div>
       <div class="feature"><strong>Kitty graphics protocol</strong><span>kitty, ghostty, wezterm support.</span></div>
@@ -220,7 +234,7 @@ $ansi = $mosaic->render($image, 60);      // explicit width wins; height from as
       <div class="feature"><strong>Animation support</strong><span><code>Animation</code> (immutable frame sequence) + <code>AnimationDriver</code> (Model with tick-based frame timing). Use <code>KittyRenderer::renderFrame()</code> for stable per-frame ids that support targeted redraws.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-image">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-image/blob/master/README.md">Full README</a></li>
@@ -230,7 +244,7 @@ $ansi = $mosaic->render($image, 60);      // explicit width wins; height from as
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">Key Classes</h3>
+    <h3 id="key-classes" style="margin-top: 32px;">Key Classes</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Mosaic</td><td>probe()</td><td>Auto-detect best terminal protocol</td></tr>
@@ -265,17 +279,18 @@ $ansi = $mosaic->render($image, 60);      // explicit width wins; height from as
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-image/.vhs/inline-image.gif" alt="Terminal session rendering the bundled gradient fixture with the best available graphics protocol" onerror="this.parentElement.style.display='none'">
-                <h3>Inline Image</h3>
+                <h3 id="inline-image">Inline Image</h3>
                 <span class="demo-caption">Renders a PNG to the terminal via the best available protocol.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

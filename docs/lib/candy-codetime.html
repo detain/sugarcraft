@@ -146,12 +146,25 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-codetime"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-codetime" alt="CandyCodetime code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Tracks edit-time per project / language to a local append-only JSONL file — or to an optional embedded SQLite backend via <code>--backend=sqlite</code> (no cloud, no database server either way) — and renders a SugarCharts-driven dashboard. Editor integrations can record heartbeats with the <code>push</code> CLI subcommand; the dashboard reads whichever backend you picked.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#key-classes">Key Classes</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#dashboard">Dashboard</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Tracks edit-time per project / language to a local append-only JSONL file — or to an optional embedded SQLite backend via <code>--backend=sqlite</code> (no cloud, no database server either way) — and renders a SugarCharts-driven dashboard. Editor integrations can record heartbeats with the <code>push</code> CLI subcommand; the dashboard reads whichever backend you picked.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-codetime</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell"># Editor plugin / cron / git hook pushes a heartbeat:
 vendor/bin/candy-codetime push sugarcraft php src/App.php 60
 
@@ -168,7 +181,7 @@ from <code>~/.local/share/sugar-tick</code> runs on first launch only, and only
 when <code>CANDY_CODETIME_DIR</code> is unset — an explicit directory
 outranks the migration.</p> <!-- @rename-keep -->
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Heartbeat schema</strong><span><code>{time, project, language, file, duration, tags}</code> — JSONL, one beat per line; <code>tags</code> is never set by the CLI; a plugin-written tag is honored on read and export.</span></div>
       <div class="feature"><strong>Per-day files</strong><span>Storage is one <code>YYYY-MM-DD.jsonl</code> per day — append-only, easy to ship to cold storage.</span></div>
@@ -179,7 +192,7 @@ outranks the migration.</p> <!-- @rename-keep -->
       <div class="feature"><strong>Pure folding</strong><span><code>Stats::compute</code> is total-input deterministic — every dashboard test runs against fixed beats.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-codetime">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-codetime/blob/master/README.md">Full README</a></li>
@@ -189,7 +202,7 @@ outranks the migration.</p> <!-- @rename-keep -->
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">Key Classes</h3>
+    <h3 id="key-classes" style="margin-top: 32px;">Key Classes</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Store</td><td>append(heartbeat)</td><td>Record one heartbeat (fail-loud, private file modes)</td></tr>
@@ -203,17 +216,18 @@ outranks the migration.</p> <!-- @rename-keep -->
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of the shipped demos. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-codetime/.vhs/dashboard.gif" alt="Dashboard" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard</h3>
+                <h3 id="dashboard">Dashboard</h3>
                 <span class="demo-caption">Seven-day window with project + language ranking and timeline sparkline.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

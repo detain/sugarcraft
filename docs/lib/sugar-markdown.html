@@ -146,12 +146,27 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-markdown"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-markdown" alt="SugarMarkdown code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Built on league/commonmark + SugarStyle. Word-wrap, OSC 8 hyperlinks, syntax highlighting, nine built-in themes plus custom JSON themes.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#see-also">See also</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#render">Render</a></li>
+            <li class="toc-h3"><a href="#themes">Themes</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Built on league/commonmark + SugarStyle. Word-wrap, OSC 8 hyperlinks, syntax highlighting, nine built-in themes plus custom JSON themes.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-markdown</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Markdown\{Renderer, Theme};
 
 // render() emits no trailing newline on purpose — those bytes are
@@ -177,7 +192,7 @@ MD), "\n";
 $theme = Theme::fromJsonString('{"heading1":{"bold":true}}');
 echo (new Renderer($theme))-&gt;render("# Styled\n");</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>CommonMark parser</strong><span>Headings, paragraphs, lists, blockquotes, code blocks, tables, rules, links, images. Raw HTML (inline + block) passes through as inert literal text with theme styling, control-stripped regardless of the sanitize flag; refused URL schemes never open an OSC-8 target — see the README <a href="https://github.com/sugarcraft/sugar-markdown/blob/master/README.md#link-safety">Link safety</a> policy.</span></div>
       <div class="feature"><strong>Nine presets (notty aliases plain)</strong><span>ansi, plain, notty, ascii, dark, light, dracula, tokyo-night, pink.</span></div>
@@ -190,7 +205,7 @@ echo (new Renderer($theme))-&gt;render("# Styled\n");</code></pre>
 
     <p style="margin-top: 16px;">Every user-facing string goes through <code>Lang::t()</code> (<code>src/Lang.php</code>) with 16 locales shipped in <code>lang/</code> — consumers such as candy-mdview surface localized messages like <code>theme.read_failed</code>.</p>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-markdown">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-markdown/blob/master/README.md">Full README</a></li>
@@ -198,7 +213,7 @@ echo (new Renderer($theme))-&gt;render("# Styled\n");</code></pre>
       <li>Originally inspired by <a href="https://github.com/charmbracelet/glamour">glamour</a> (Go); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
-    <h3 style="margin-top: 32px;">See also</h3>
+    <h3 id="see-also" style="margin-top: 32px;">See also</h3>
     <ul>
       <li><a href="sugar-style.html">SugarStyle</a> — styling primitives used by SugarMarkdown</li>
       <li><a href="candy-mdview.html">CandyMdview</a> — CLI markdown viewer that uses SugarMarkdown for rendering</li>
@@ -206,7 +221,7 @@ echo (new Renderer($theme))-&gt;render("# Styled\n");</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Renderer</td><td>new Renderer(?Theme $theme = null, …)</td><td>Create renderer with optional theme (also Renderer::ansi() / plain() / ascii() / fromEnvironment())</td></tr>
@@ -222,22 +237,23 @@ echo (new Renderer($theme))-&gt;render("# Styled\n");</code></pre>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push to master that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-markdown/.vhs/render.gif" alt="Render" onerror="this.parentElement.style.display='none'">
-                <h3>Render</h3>
+                <h3 id="render">Render</h3>
                 <span class="demo-caption">The same document through four stock themes (ansi, dracula, tokyo-night, pink).</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-markdown/.vhs/themes.gif" alt="Themes" onerror="this.parentElement.style.display='none'">
-                <h3>Themes</h3>
+                <h3 id="themes">Themes</h3>
                 <span class="demo-caption">Same document rendered through the six colour themes (ansi, dark, light, dracula, tokyo-night, pink).</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

@@ -143,12 +143,28 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-flexbox"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-flexbox" alt="SugarFlexbox code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">FlexBox layout engine for terminal grids — ratio-based item sizing, gap, align. Plus a simple table with sort, filter, cursor nav, and column styling. Viewport and Scrollbar compose the canonical sugar-forms classes (the sugar-widgets symbols are deprecated aliases).</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#trust-boundary">Trust boundary</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#flexbox-row-column">FlexBox row + column</a></li>
+            <li class="toc-h3"><a href="#sort-cursor-table">Sort + cursor table</a></li>
+            <li class="toc-h3"><a href="#sort-filter-table">Sort + filter table</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">FlexBox layout engine for terminal grids — ratio-based item sizing, gap, align. Plus a simple table with sort, filter, cursor nav, and column styling. Viewport and Scrollbar compose the canonical sugar-forms classes (the sugar-widgets symbols are deprecated aliases).</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-flexbox</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Flexbox\Flex\{FlexBox, FlexItem};
 use SugarCraft\Flexbox\Table\{Table, Column};
 
@@ -166,7 +182,7 @@ $table = (new Table())
 echo $flex-&gt;render(40, 1), PHP_EOL;
 echo $table-&gt;render(), PHP_EOL;</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>FlexBox</strong><span>Ratio-based row / column layout. Align: Start, Center, End, Stretch (one value drives both axes — box height plus text placement in row mode, rendered width plus placement in column mode; no CSS justify-content counterpart).</span></div>
             <div class="feature"><strong>Table</strong><span>Sort by column (asc/desc toggle), filter by text, cursor navigation, per-column style.</span></div>
@@ -176,7 +192,7 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
             
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-flexbox">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-flexbox/blob/master/README.md">Full README</a></li>
@@ -184,12 +200,12 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
       <li>Design antecedent: <a href="https://github.com/76creates/stickers">76creates/stickers</a> (PHP); SugarCraft is developed as a native PHP project.</li>
     </ul>
 
-    <h3 style="margin-top: 32px;">Trust boundary</h3>
+    <h3 id="trust-boundary" style="margin-top: 32px;">Trust boundary</h3>
     <p>Table, Column and FlexBox treat everything they render as untrusted data: cell values and column titles pass through <code>Sanitize::untrusted()</code>, and newlines, tabs and carriage returns are replaced with spaces at render time, so no escape sequence can ride in through content. Style strings are gated to legal SGR parameter text (codes 0..255 separated by single <code>;</code>) or empty for no style; anything else throws <code>InvalidArgumentException</code> naming the refused property. Viewport and Scrollbar are trusted-input by design — the Viewport renders your <code>withContent()</code> lines as given and the Scrollbar emits your runes verbatim — so sanitize user input before feeding them. The FlexBox measures an item's raw content before the render-time sweep, so control bytes still consume measured cells even though the printed frame carries the swept text.</p>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>FlexBox</td><td>row(...items)</td><td>Create horizontal flexbox</td></tr>
@@ -233,27 +249,28 @@ echo $table-&gt;render(), PHP_EOL;</code></pre>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/flexbox.gif" alt="Three panels: a ratio row, a stacked column, a centered row" onerror="this.parentElement.style.display='none'">
-                <h3>FlexBox row + column</h3>
+                <h3 id="flexbox-row-column">FlexBox row + column</h3>
                 <span class="demo-caption">Ratio 1:2:1 row + column with gap=1.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/sort-filter.gif" alt="Table frames with sort arrows, then a highlighted cursor row and a raw readout" onerror="this.parentElement.style.display='none'">
-                <h3>Sort + cursor table</h3>
+                <h3 id="sort-cursor-table">Sort + cursor table</h3>
                 <span class="demo-caption">Sort flips on Name and the flag column, then cursor styling, movement and a raw currentRow()/currentCell() readout — no filter call.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-flexbox/.vhs/table.gif" alt="Table frames sorted by column then narrowed to rows containing the letter e" onerror="this.parentElement.style.display='none'">
-                <h3>Sort + filter table</h3>
+                <h3 id="sort-filter-table">Sort + filter table</h3>
                 <span class="demo-caption">Age-ascending and Score-descending sorts plus an "e" filter over per-column widths and right-aligned numerics.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

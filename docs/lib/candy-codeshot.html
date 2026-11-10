@@ -145,12 +145,26 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-codeshot"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-codeshot" alt="CandyCodeshot code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Turn code or terminal output into an SVG or PNG screenshot. SVG needs no extensions — plain text output suitable for git diffs and CI artifacts; PNG renders through ext-gd (no Imagick). ANSI SGR (16 / 256 / 24-bit truecolor + bold / italic / underline) becomes per-segment <code>&lt;text&gt;</code> colour and font attributes plus <code>&lt;rect&gt;</code> background bands in the SVG; the PNG canvas paints the same foreground colours and background bands.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#screenshot">Screenshot</a></li>
+            <li class="toc-h3"><a href="#ansi-input">ANSI input</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Turn code or terminal output into an SVG or PNG screenshot. SVG needs no extensions — plain text output suitable for git diffs and CI artifacts; PNG renders through ext-gd (no Imagick). ANSI SGR (16 / 256 / 24-bit truecolor + bold / italic / underline) becomes per-segment <code>&lt;text&gt;</code> colour and font attributes plus <code>&lt;rect&gt;</code> background bands in the SVG; the PNG canvas paints the same foreground colours and background bands.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-codeshot:dev-master</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\CodeShot\SvgRenderer;
 
 $code = &lt;&lt;&lt;'PHP'
@@ -171,7 +185,7 @@ file_put_contents('out.svg', $svg);
 $svg = SvgRenderer::dark()
     -&gt;render("\x1b[31merror:\x1b[0m something broke");</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Pure-PHP SVG</strong><span>The SVG path has no raster pipeline — its output is a text file, diffable, grep-able. PNG is a separate renderer behind ext-gd.</span></div>
       <div class="feature"><strong>Window chrome</strong><span>macOS-style traffic-light controls, optional drop shadow, configurable border radius.</span></div>
@@ -184,7 +198,7 @@ $svg = SvgRenderer::dark()
       <div class="feature"><strong>CLI + library</strong><span><code>candy-codeshot input.php -o out.svg</code>, or <code>SvgRenderer::dracula()->render($code)</code>.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-codeshot">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-codeshot/blob/master/README.md">Full README</a></li>
@@ -194,7 +208,7 @@ $svg = SvgRenderer::dark()
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>SvgRenderer</td><td>dracula(), dark(), light(), tokyoNight(), nord()</td><td>Create renderer with theme</td></tr>
@@ -224,22 +238,23 @@ $svg = SvgRenderer::dark()
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIF demos of the screenshot and ANSI-pipe flows. Regenerated in CI on pushes to master that change the library.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-codeshot/.vhs/screenshot.gif" alt="Code screenshot with macOS window chrome and line numbers" onerror="this.parentElement.style.display='none'">
-                <h3>Screenshot</h3>
+                <h3 id="screenshot">Screenshot</h3>
                 <span class="demo-caption">Code → SVG with traffic-light chrome + line numbers.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-codeshot/.vhs/ansi-input.gif" alt="ANSI-coloured error line rendered as coloured SVG text" onerror="this.parentElement.style.display='none'">
-                <h3>ANSI input</h3>
+                <h3 id="ansi-input">ANSI input</h3>
                 <span class="demo-caption">SGR foreground colours parsed and painted on per-segment SVG text.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

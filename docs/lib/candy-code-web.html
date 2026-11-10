@@ -145,14 +145,26 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-code-web"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-code-web" alt="CandyCodeWeb code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">The browser face of <a href="candy-code.html">CandyCode</a>'s WebSocket server mode: <strong>a Vite + Vue 3 + TypeScript + Pinia app, built once and committed as <code>dist/</code>, plus a one-class PHP shim that tells <code>candy-code serve</code> where the bundle lives</strong>. PHP users get the UI from <code>composer require</code> alone and never need Node. First-party — inspired by the opencode web UI and the OpenClaw Control UI.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#how-it-ships">How it ships</a></li>
+            <li class="toc-h3"><a href="#developing-the-ui">Developing the UI</a></li>
+            <li class="toc-h3"><a href="#source">Source</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
+
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">The browser face of <a href="candy-code.html">CandyCode</a>'s WebSocket server mode: <strong>a Vite + Vue 3 + TypeScript + Pinia app, built once and committed as <code>dist/</code>, plus a one-class PHP shim that tells <code>candy-code serve</code> where the bundle lives</strong>. PHP users get the UI from <code>composer require</code> alone and never need Node. First-party — inspired by the opencode web UI and the OpenClaw Control UI.</p>
 
     <p><strong>Multi-session.</strong> Over the <code>candy-code.v1</code> protocol: a sessions sidebar, a virtualised transcript with tool cards and diffs, permission cards, a composer that queues, steers or interrupts, and a status bar with a changeable permission mode; tabs and a tiled grid of up to nine live sessions; a server-wide approvals drawer; a settings form generated from the server's schema with a diff preview before saving; the Agents (with an agent view to message, pause or cancel a run), Todo, Background, Workflows, Memory, Rules, Catalog, Changes, Files, Context, Generate and Usage panels; a command palette (Ctrl+K); a folder picker for a new session's project directory when the server runs with <code>--allow-dir-browse</code>; and reconnect-and-resume from a gap-free event cursor.</p>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-code-web:@dev</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell">candy-code serve</code></pre>
     <p>It prints a one-time sign-in URL; open it and the browser UI takes over — users never write a line of PHP. The locator class exists so the server can find the bundle and a distributor can verify a build's identity:</p>
     <pre class="code"><code class="language-php">use SugarCraft\CodeWeb\Assets;
@@ -161,7 +173,7 @@ $root = Assets::distPath();      // absolute, realpath()-resolved dist/ director
 $manifest = Assets::manifest();  // Vite manifest: 'index.html' => ['file' => 'assets/index-….js', …]
 echo Assets::version(), PHP_EOL; // bundle version stamped into dist/build-info.json</code></pre>
 
-    <h3 style="margin-top: 32px;">How it ships</h3>
+    <h3 id="how-it-ships" style="margin-top: 32px;">How it ships</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Committed dist/</strong><span>The built bundle is part of the package, like the committed demo GIFs. Content-hashed file names and no timestamps make a clean rebuild byte-identical.</span></div>
       <div class="feature"><strong>CI parity gate</strong><span>The web workflow runs npm ci, lint, typecheck, unit tests and a build, then fails if the committed dist/ differs from what the source produces.</span></div>
@@ -169,20 +181,20 @@ echo Assets::version(), PHP_EOL; // bundle version stamped into dist/build-info.
       <div class="feature"><strong>Lean Packagist dist</strong><span>archive.exclude drops src-web/, tests/, phpunit.xml, node_modules/ and the Node config, so the Composer download is the built bundle and the one-class PHP shim.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Developing the UI</h3>
+    <h3 id="developing-the-ui" style="margin-top: 40px;">Developing the UI</h3>
     <pre class="code"><code class="language-shell">cd candy-code-web
 npm ci
 npm run dev        # Vite dev server; proxies /ws and /api to 127.0.0.1:7420
 npm run build      # rewrites dist/ — commit it with the source change</code></pre>
 
-    <h3 style="margin-top: 40px;">Source</h3>
+    <h3 id="source" style="margin-top: 40px;">Source</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-code-web">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-code-web/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/candy-code-web/tree/master/tests">Test suite</a></li>
     </ul>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Assets</td><td>static distPath(): string</td><td>Absolute, realpath()-resolved path of the committed bundle; throws RuntimeException when dist/index.html is missing (a broken install)</td></tr>
@@ -193,6 +205,7 @@ npm run build      # rewrites dist/ — commit it with the source change</code><
 </table>
   </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

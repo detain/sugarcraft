@@ -143,12 +143,25 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-log"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-log" alt="SugarLog code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Minimal, colorful leveled logging. Debug / Info / Warn / Error / Fatal with structured key/value context, Text / JSON / Logfmt formatters, and sub-loggers with persistent fields.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#all-log-levels-formats">All log levels + formats</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Minimal, colorful leveled logging. Debug / Info / Warn / Error / Fatal with structured key/value context, Text / JSON / Logfmt formatters, and sub-loggers with persistent fields.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-log</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Log\Logger;
 
 $log = Logger::new();
@@ -159,7 +172,7 @@ $log-&gt;error('Temperature too low', ['err' =&gt; 'underheated']);
 $child = $log-&gt;with(['service' =&gt; 'bakery']);   // every line from $child carries service=bakery
 $child-&gt;info('Batch complete');</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Leveled logging</strong><span>Debug, Info, Warn, Error, Fatal. Color runs in two layers: a construction-time style profile that honors NO_COLOR / CLICOLOR_FORCE, and a per-write gate that downgrades non-TTY destinations so files and pipes get plain bytes.</span></div>
             <div class="feature"><strong>Three formatters</strong><span>TextFormatter (default), JsonFormatter, LogfmtFormatter — swap via <code>withFormatter()</code>.</span></div>
@@ -173,7 +186,7 @@ $child-&gt;info('Batch complete');</code></pre>
 
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-log">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-log/blob/master/README.md">Full README</a></li>
@@ -183,7 +196,7 @@ $child-&gt;info('Batch complete');</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Logger</td><td>new()</td><td>Create a new logger</td></tr>
@@ -239,17 +252,18 @@ $child-&gt;info('Batch complete');</code></pre>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">The flagship demo, recorded as a GIF with VHS. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-log/.vhs/demo.gif" alt="All log levels + formats" onerror="this.parentElement.style.display='none'">
-                <h3>All log levels + formats</h3>
+                <h3 id="all-log-levels-formats">All log levels + formats</h3>
                 <span class="demo-caption">Debug / Info / Warn / Error / Fatal across Text / JSON / Logfmt formatters.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

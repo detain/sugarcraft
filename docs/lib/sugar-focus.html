@@ -145,12 +145,24 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-focus"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-focus" alt="SugarFocus code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">A tiny, dependency-free <strong>focus ring</strong> for full-window terminal UIs: an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal. It is the "which panel has focus" state for a TUI layout — register each focusable region (sidebar, content grid, filter bar…), map <strong>Tab</strong> to <code>next()</code> and <strong>Shift-Tab</strong> to <code>previous()</code>, and give the region <code>current()</code> returns an accent border when you render. The ring carries no rendering or key decoding of its own, so it composes with any sugar-core model without pulling in dependencies. Original SugarCraft component.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#behaviour">Behaviour</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">A tiny, dependency-free <strong>focus ring</strong> for full-window terminal UIs: an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal. It is the "which panel has focus" state for a TUI layout — register each focusable region (sidebar, content grid, filter bar…), map <strong>Tab</strong> to <code>next()</code> and <strong>Shift-Tab</strong> to <code>previous()</code>, and give the region <code>current()</code> returns an accent border when you render. The ring carries no rendering or key decoding of its own, so it composes with any sugar-core model without pulling in dependencies. Original SugarCraft component.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-focus</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Focus\FocusRing;
 
 $ring = FocusRing::of('sidebar', 'grid', 'filter'); // 'sidebar' is focused
@@ -181,7 +193,7 @@ $style = $ring->isFocused('sidebar') &amp;&amp; $ring->isEnabled('sidebar')
 
     <p>On the wire, <strong>Shift+Tab</strong> arrives as <code>Tab</code> with <code>shift: true</code> — sugar-core's <code>InputReader</code> decodes <code>ESC [ Z</code> (CSI-Z, the literal "Backtab" sequence) into that shape. The ring leg is gated on <code>!$msg-&gt;ctrl &amp;&amp; !$msg-&gt;alt</code>, so <strong>Ctrl+Tab</strong> and <strong>Ctrl+Shift+Tab</strong> stay free for other bindings — but only on terminals that <em>report</em> modifiers (kitty keyboard negotiation or an xterm <code>modifyOtherKeys</code>-style decoder); on legacy/basic terminals Ctrl+Tab is byte-identical to bare Tab and moves the ring like a plain Tab would. The <code>isEnabled()</code> conjunct in the paint matters: focus can legally park on a disabled region, so <code>isFocused()</code> alone can accent a dimmed panel.</p>
 
-    <h3 style="margin-top: 32px;">Behaviour</h3>
+    <h3 id="behaviour" style="margin-top: 32px;">Behaviour</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Exactly one focused region</strong><span>A non-empty ring always has exactly one focused region; an empty ring focuses nothing (<code>current()</code> is <code>null</code>, <code>index()</code> is <code>-1</code>).</span></div>
       <div class="feature"><strong>register() appends</strong><span>Adds to the traversal order and focuses the region only when the ring was empty; re-registering an existing id is a no-op.</span></div>
@@ -196,7 +208,7 @@ $style = $ring->isFocused('sidebar') &amp;&amp; $ring->isEnabled('sidebar')
       <div class="feature"><strong>Dependency-free</strong><span>No rendering or key decoding of its own — the owning model wires keys to it and reads <code>isFocused()</code> when drawing. Composes with any sugar-core model.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Full-window TUI layouts</strong> — track which panel (sidebar, content grid, filter bar) currently owns keyboard focus.</li>
       <li><strong>Tab / Shift-Tab traversal</strong> — wrap-around movement across an ordered set of regions, decoupled from key decoding.</li>
@@ -204,7 +216,7 @@ $style = $ring->isFocused('sidebar') &amp;&amp; $ring->isEnabled('sidebar')
       <li><strong>Immutable models</strong> — drop the ring into your Model state; every mutator returns a fresh instance.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-focus">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-focus/blob/master/README.md">Full README</a></li>
@@ -216,7 +228,7 @@ $style = $ring->isFocused('sidebar') &amp;&amp; $ring->isEnabled('sidebar')
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>FocusRing</td><td>new(): self</td><td>An empty ring with nothing registered or focused</td></tr>
@@ -248,6 +260,7 @@ $style = $ring->isFocused('sidebar') &amp;&amp; $ring->isEnabled('sidebar')
 </table>
   </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

@@ -143,21 +143,36 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-quickpick"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-quickpick" alt="SugarQuickpick code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Fuzzy-search overlay: a render-and-state component your event loop drives — you decode keys and forward them (type(), cursorUp()/Down()); Enter is answered by the selected() query and hide() is the lifecycle call — neither is input the library consumes, it reads none itself. Composes into any SugarCraft app via the package-local Model contract. Supports structured Item objects, custom filter predicates, and persistent JSONL history.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart-plain-strings">Quickstart — plain strings</a></li>
+            <li class="toc-h3"><a href="#quickstart-numbered-items-history">Quickstart — numbered items + history</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#background-overlay">Background + overlay</a></li>
+            <li class="toc-h3"><a href="#filter-interaction">Filter interaction</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Fuzzy-search overlay: a render-and-state component your event loop drives — you decode keys and forward them (type(), cursorUp()/Down()); Enter is answered by the selected() query and hide() is the lifecycle call — neither is input the library consumes, it reads none itself. Composes into any SugarCraft app via the package-local Model contract. Supports structured Item objects, custom filter predicates, and persistent JSONL history.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-quickpick</code></pre>
     <p><strong>Requirements:</strong> PHP 8.3+ with <code>ext-ffi</code> — the package hard-requires sugar-pty, which hard-requires FFI at install time even though only the opt-in <code>attachSigwinch()</code> path touches it (via <code>SignalForwarder</code>). <code>ext-pcntl</code> is needed only for that same attach; without it <code>attachSigwinch()</code> returns <code>false</code> and everything else works.</p>
     <p><strong>Stability:</strong> this package requires its <code>sugarcraft/</code> siblings at <code>dev-master</code>. A Composer project left on the default <code>stable</code> minimum-stability cannot resolve them — add <code>"minimum-stability": "dev", "prefer-stable": true</code> to the consuming root (or pin the released <code>sugarcraft/*</code> tags once cut). The monorepo publishes all libs together, so sibling versions always line up.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart — plain strings</h3>
+    <h3 id="quickstart-plain-strings" style="margin-top: 32px;">Quickstart — plain strings</h3>
     <pre class="code"><code class="language-php">use SugarCraft\QuickPick\QuickPick;
 
 $quickpick = QuickPick::new(
     items: ['Ruby', 'PHP', 'Go', 'Rust', 'Python'],
 )->setPrompt('Choose language: ');</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart — numbered items + history</h3>
+    <h3 id="quickstart-numbered-items-history" style="margin-top: 32px;">Quickstart — numbered items + history</h3>
     <pre class="code"><code class="language-php">use SugarCraft\QuickPick\QuickPick;
 use SugarCraft\QuickPick\FilteredItem;
 use SugarCraft\QuickPick\History\FileHistory;
@@ -181,7 +196,7 @@ if ($choice = $quickpick->selected()) {
 }
 $allItems = $history->all();</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Fuzzy matching</strong><span>Case-folded substring filter; a candidate must match in the first half of the text (codepoint-based). setRanker() swaps in true subsequence scoring.</span></div>
             <div class="feature"><strong>Composition wrapper</strong><span>update()/view() Model contract — package-local, no init()/subscriptions plumbing.</span></div>
@@ -194,7 +209,7 @@ $allItems = $history->all();</code></pre>
             <div class="feature"><strong>SIGWINCH resize</strong><span>withOnResize() + attachSigwinch() forward terminal resize events via SignalForwarder.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-quickpick">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-quickpick/blob/master/README.md">Full README</a></li>
@@ -204,7 +219,7 @@ $allItems = $history->all();</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>QuickPick</td><td>new(array $items, ?Closure $itemFormatter)</td><td>Create fuzzy finder (items: string[] or Item[])</td></tr>
@@ -255,22 +270,23 @@ $allItems = $history->all();</code></pre>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of the package-internal demo drivers (present in the repository clone, not shipped as a starter template). Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-quickpick/.vhs/basic.gif" alt="Background + overlay" onerror="this.parentElement.style.display='none'">
-                <h3>Background + overlay</h3>
+                <h3 id="background-overlay">Background + overlay</h3>
                 <span class="demo-caption">QuickPick overlay over a sample background: unfiltered list, one typed filter, cursor move.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-quickpick/.vhs/interaction.gif" alt="Filter interaction" onerror="this.parentElement.style.display='none'">
-                <h3>Filter interaction</h3>
+                <h3 id="filter-interaction">Filter interaction</h3>
                 <span class="demo-caption">Filter narrowing the candidate list as you type.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

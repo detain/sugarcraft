@@ -143,12 +143,26 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-overlay"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-overlay" alt="SugarOverlay code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Composite overlay views (modals, tooltips, toasts) on top of a base TUI frame. Render your models first, then let the compositor handle positioning, backdrop dimming, z-ordering, animated transitions and click-outside hit-testing.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#modal-overlay">Modal overlay</a></li>
+            <li class="toc-h3"><a href="#multiple-overlays">Multiple overlays</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Composite overlay views (modals, tooltips, toasts) on top of a base TUI frame. Render your models first, then let the compositor handle positioning, backdrop dimming, z-ordering, animated transitions and click-outside hit-testing.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-overlay</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Overlay\{Position, Veil, VeilStack};
 
 $baseView  = "underlying text\nmore underlying\ntext underneath";
@@ -167,7 +181,7 @@ $stack = VeilStack::new()
         -&gt;withPosition(Position::TOP, Position::RIGHT));
 echo $stack-&gt;compositeAll($baseView);</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Positioning</strong><span>Nine anchors — Top, Right, Bottom, Left, Center and the four corners — plus X/Y offsets in cells (columns/rows).</span></div>
       <div class="feature"><strong>Backdrop dimming</strong><span>Truecolor opacity blend (0–100): every non-empty background line is wrapped in a computed dim pen during assembly (the blend does not compound across stacked veils — the first dim to touch a cell governs — and the pen assumes a light default foreground: on a terminal that renders dark text, the gray pen brightens that text instead of dimming it).</span></div>
@@ -179,7 +193,7 @@ echo $stack-&gt;compositeAll($baseView);</code></pre>
       <div class="feature"><strong>Untrusted content</strong><span><code>withUntrustedContent()</code> sweeps payloads at set time: control characters, forged U+E000/U+E001 zone sentinels and live OSC-8 links are neutralised (CRLF/CR folded to LF, TAB to its measured four cells), while sugar-image's U+E002 marker band passes through untouched. Backgrounds are as attacker-reachable as foregrounds — both paths are documented trust boundaries. Raw <code>withContent()</code> and <code>composite()</code> payloads pass through verbatim — sweep hostile frames yourself with sugar-core <code>Sanitize::untrustedForMarkedFrames()</code> before <code>mark()</code>: the sweep strips every U+E000/U+E001 sentinel, legitimate zone markers included, so order matters — sweep, then mark, then render.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-overlay">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-overlay/blob/master/README.md">Full README</a></li>
@@ -189,7 +203,7 @@ echo $stack-&gt;compositeAll($baseView);</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Veil</td><td>new()</td><td>Create a new veil</td></tr>
@@ -209,22 +223,23 @@ echo $stack-&gt;compositeAll($baseView);</code></pre>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-overlay/.vhs/basic.gif" alt="Modal overlay" onerror="this.parentElement.style.display='none'">
-                <h3>Modal overlay</h3>
+                <h3 id="modal-overlay">Modal overlay</h3>
                 <span class="demo-caption">Modal pinned over a background frame.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-overlay/.vhs/multiple.gif" alt="Multiple overlays" onerror="this.parentElement.style.display='none'">
-                <h3>Multiple overlays</h3>
+                <h3 id="multiple-overlays">Multiple overlays</h3>
                 <span class="demo-caption">Stacked overlays composited in z-order.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

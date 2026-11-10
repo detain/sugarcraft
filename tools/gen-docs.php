@@ -616,6 +616,8 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
 
     $content = normalize_self_links(rtrim($body));
 
+    [$content, $toc] = doc_toc_for($content);
+
     $footer = build_footer($slug, (string) $meta['phpVersion']);
 
     $page = $prefix
@@ -632,7 +634,9 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
         . "      </div>\n"
         . "    </div>\n"
         . '    ' . $codecov . "\n\n"
-        . '    ' . $content . "\n</main>\n\n"
+        . ($toc !== ''
+            ? $toc . "    <div class=\"docs-body\">\n" . $content . "\n    </div>"
+            : '    ' . $content) . "\n</main>\n\n"
         . $footer . "\n\n"
         . search_tail() . "\n";
 
@@ -641,6 +645,78 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
     // rule set covers standard and divergent chrome alike (both are idempotent,
     // so pages that already comply pass through byte-identical).
     return guarantee_demo_gif_onerror(guarantee_search_trigger($page));
+}
+
+/**
+ * Mint stable ids on h2/h3 headings in a hand-written body and build the
+ * on-page contents card that leads a long detail page. Short bodies (fewer
+ * than four headings), already-outlined bodies, and headingless fixtures
+ * pass through byte-identical so the shared chrome and every test fixture
+ * keep their exact bytes.
+ *
+ * @return array{0: string, 1: string} [content with heading ids, TOC block or empty string]
+ */
+function doc_toc_for(string $content): array
+{
+    if (str_contains($content, 'class="doc-toc"')) {
+        return [$content, ''];
+    }
+
+    $pattern = '/<h([23])((?:\s[^>]*)?)>(.*?)<\/h\1>/s';
+    if (preg_match_all($pattern, $content) < 4) {
+        return [$content, ''];
+    }
+
+    // ids the page chrome already owns; a heading must never shadow them.
+    $reserved = ['main', 'search-input', 'search-results', 'search-modal', 'search-trigger'];
+
+    $seen = [];
+    $entries = [];
+    $minted = preg_replace_callback($pattern, static function (array $m) use (&$seen, &$entries, $reserved): string {
+        $level = (int) $m[1];
+        $attrs = $m[2];
+        $inner = $m[3];
+
+        $plain = trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($inner), ENT_QUOTES, 'UTF-8')));
+        $label = htmlspecialchars($plain, ENT_QUOTES);
+
+        if (preg_match('/\bid="([^"]+)"/', $attrs, $existing) === 1) {
+            $entries[] = [$level, $existing[1], $label];
+            return $m[0];
+        }
+
+        $slug = trim(preg_replace('/[^a-z0-9]+/', '-', strtolower($plain)), '-');
+        if ($slug === '' || in_array($slug, $reserved, true)) {
+            return $m[0];
+        }
+        if (isset($seen[$slug])) {
+            $seen[$slug]++;
+            $slug .= '-' . $seen[$slug];
+        } else {
+            $seen[$slug] = 1;
+        }
+
+        $entries[] = [$level, $slug, $label];
+        return '<h' . $level . ' id="' . $slug . '"' . $attrs . '>' . $inner . '</h' . $level . '>';
+    }, $content);
+
+    if ($minted === null || $entries === []) {
+        return [$content, ''];
+    }
+
+    $lines = '';
+    foreach ($entries as [$level, $id, $label]) {
+        $class = $level === 2 ? 'toc-h2' : 'toc-h3';
+        $lines .= "            <li class=\"{$class}\"><a href=\"#{$id}\">{$label}</a></li>\n";
+    }
+
+    $toc = "    <nav class=\"doc-toc\" aria-label=\"On this page\">\n"
+        . "        <ul class=\"doc-toc-list\">\n"
+        . $lines
+        . "        </ul>\n"
+        . "    </nav>\n\n";
+
+    return [$minted, $toc];
 }
 
 function build_prefix(string $slug, string $title, string $desc, string $ogTitle, string $ogDesc): string

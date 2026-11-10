@@ -147,19 +147,30 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-image"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-image" alt="CandyImage code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">The chafa-independent terminal image viewer: point <code>candy-image</code> at a PNG, JPEG, GIF or static WebP (BMP and other GD-decodable formats ride the <code>getimagesize()</code> fallback) and it detects your terminal, picks the best protocol — <code>sixel</code>, <code>kitty</code>, <code>iTerm2</code>, half/quarter blocks, an ANSI character ramp, or the chafa symbol engine — and writes the rendered bytes to stdout. All capability stays in <a href="sugar-image.html">sugar-image</a>; this app is composition only.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">The chafa-independent terminal image viewer: point <code>candy-image</code> at a PNG, JPEG, GIF or static WebP (BMP and other GD-decodable formats ride the <code>getimagesize()</code> fallback) and it detects your terminal, picks the best protocol — <code>sixel</code>, <code>kitty</code>, <code>iTerm2</code>, half/quarter blocks, an ANSI character ramp, or the chafa symbol engine — and writes the rendered bytes to stdout. All capability stays in <a href="sugar-image.html">sugar-image</a>; this app is composition only.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/candy-image</code></pre>
     <p>Requires PHP 8.3+ and the <code>gd</code> extension — every render path decodes through it. The hard requirement reaches composer consumers transitively through <a href="sugar-image.html">sugar-image</a>; a downloaded phar carries no platform check at all, so that sentence is the guardrail. Packagist serves <code>dev-master</code> only (no tag yet), so under default stability ask for the dev package explicitly: <code>composer require "sugarcraft/candy-image:@dev"</code>.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-shell">candy-image photo.png                     # auto-detect + render
 candy-image --format=half --size=80x24 logo.png
 candy-image --dump-detect                 # why is my image blank?
 candy-image --animate clip.gif            # sugar-animation playback</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>One-command viewer</strong><span><code>candy-image file.png</code> — protocol auto-detection (kitty → iterm2 → sixel → shell-out-free text floors) behind a single flag surface.</span></div>
       <div class="feature"><strong>--dump-detect</strong><span>chafa's debugging gold re-expressed over the native stack: env table, TermDb chain + claims, probe capabilities, cell pixels, default fg/bg, DA1 reply, and the resolved auto() choice.</span></div>
@@ -170,7 +181,7 @@ candy-image --animate clip.gif            # sugar-animation playback</code></pre
       <div class="feature"><strong>Exit-code contract</strong><span>0 success, 1 usage error, 2 input/decode failure — pinned in the suite so scripts can branch on it.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-image">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-image/blob/master/README.md">Full README</a></li>
@@ -181,7 +192,7 @@ candy-image --animate clip.gif            # sugar-animation playback</code></pre
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Cli</td><td>main(argv, stdout, stderr, play)</td><td>Parse args, detect, render or animate; returns the exit code</td></tr>
@@ -192,6 +203,7 @@ candy-image --animate clip.gif            # sugar-animation playback</code></pre
 </table>
   </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

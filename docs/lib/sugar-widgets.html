@@ -146,9 +146,37 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-widgets"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-widgets" alt="SugarWidgets code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer and Stopwatch — first-party components — plus the btop render helpers <code>Input\TextEdit</code> and <code>Menu\OptionRow</code>, and the <em>deprecated alias</em> re-exports from <code>sugarcraft/sugar-forms</code> — the canonical counted inventory lives in the README: depend on <code>sugarcraft/sugar-forms</code> directly for those, the re-exports here exist only for migration. Everything you'd hand-roll on day one of a TUI project, ready to drop into your Model.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#textedit-optionrow">TextEdit + OptionRow</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#spinner-gallery">Spinner gallery</a></li>
+            <li class="toc-h3"><a href="#textinput">TextInput</a></li>
+            <li class="toc-h3"><a href="#enhanced-textinput">Enhanced TextInput</a></li>
+            <li class="toc-h3"><a href="#textarea">TextArea</a></li>
+            <li class="toc-h3"><a href="#itemlist">ItemList</a></li>
+            <li class="toc-h3"><a href="#table">Table</a></li>
+            <li class="toc-h3"><a href="#tree">Tree</a></li>
+            <li class="toc-h3"><a href="#viewport">Viewport</a></li>
+            <li class="toc-h3"><a href="#filepicker">FilePicker</a></li>
+            <li class="toc-h3"><a href="#progress">Progress</a></li>
+            <li class="toc-h3"><a href="#cursor">Cursor</a></li>
+            <li class="toc-h3"><a href="#help">Help</a></li>
+            <li class="toc-h3"><a href="#paginator">Paginator</a></li>
+            <li class="toc-h3"><a href="#stopwatch">Stopwatch</a></li>
+            <li class="toc-h3"><a href="#timer">Timer</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Table, Tabs, Tree, Progress, Paginator, Help, Key, Timer and Stopwatch — first-party components — plus the btop render helpers <code>Input\TextEdit</code> and <code>Menu\OptionRow</code>, and the <em>deprecated alias</em> re-exports from <code>sugarcraft/sugar-forms</code> — the canonical counted inventory lives in the README: depend on <code>sugarcraft/sugar-forms</code> directly for those, the re-exports here exist only for migration. Everything you'd hand-roll on day one of a TUI project, ready to drop into your Model.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-widgets</code></pre>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
@@ -184,7 +212,7 @@ final class Search implements Model {
 [$input] = TextInput::new()-&gt;focus();   // focus() returns [TextInput, ?Cmd]
 (new Program(new Search($input, Spinner::new())))-&gt;run();</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Spinner</strong><span>12 styles — line, dot, miniDot, points, pulse, globe, meter, jump, moon, monkey, hamburger, ellipsis.</span></div>
       <div class="feature"><strong>Progress</strong><span>Static <code>Progress</code> + spring-physics <code>AnimatedProgress</code> driven by SugarSpring.</span></div>
@@ -198,7 +226,7 @@ final class Search implements Model {
       <div class="feature"><strong>Paginator + Help + Key</strong><span>Dot / arabic page indicator, key-help footer, KeyMap binding DSL.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">TextEdit + OptionRow</h3>
+    <h3 id="textedit-optionrow" style="margin-top: 32px;">TextEdit + OptionRow</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Widgets\Input\TextEdit;
 use SugarCraft\Widgets\Menu\OptionRow;
 
@@ -208,7 +236,7 @@ echo $edit-&gt;view();      // "fi\e[4mr\e[24mefox" — underline caret on "r"
 echo OptionRow::renderRow('Update ms', TextEdit::new('2000', numeric: true),
     selected: true, editing: true, hasArrows: true, editable: true);</code></pre>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-widgets">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-widgets/blob/master/README.md">Full README</a></li>
@@ -218,7 +246,7 @@ echo OptionRow::renderRow('Update ms', TextEdit::new('2000', numeric: true),
 
     <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>TextInput</td><td>new()</td><td>Create a new text input instance <em>(deprecated alias — depend on sugarcraft/sugar-forms)</em></td></tr>
@@ -282,87 +310,88 @@ echo OptionRow::renderRow('Update ms', TextEdit::new('2000', numeric: true),
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/spinners.gif" alt="Spinner gallery" onerror="this.parentElement.style.display='none'">
-                <h3>Spinner gallery</h3>
+                <h3 id="spinner-gallery">Spinner gallery</h3>
                 <span class="demo-caption">All 12 spinner styles ticking in parallel.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/text-input.gif" alt="TextInput" onerror="this.parentElement.style.display='none'">
-                <h3>TextInput</h3>
+                <h3 id="textinput">TextInput</h3>
                 <span class="demo-caption">Single-line input with autocomplete + placeholder.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/text-input-enhanced.gif" alt="text-input-enhanced" onerror="this.parentElement.style.display='none'">
-                <h3>Enhanced TextInput</h3>
+                <h3 id="enhanced-textinput">Enhanced TextInput</h3>
                 <span class="demo-caption">Custom placeholder styling, prefix and suffix variants.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/text-area.gif" alt="TextArea" onerror="this.parentElement.style.display='none'">
-                <h3>TextArea</h3>
+                <h3 id="textarea">TextArea</h3>
                 <span class="demo-caption">Multi-line editor with line numbers + soft-wrap.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/item-list.gif" alt="ItemList" onerror="this.parentElement.style.display='none'">
-                <h3>ItemList</h3>
+                <h3 id="itemlist">ItemList</h3>
                 <span class="demo-caption">Filterable scrollable list with status messages.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/table.gif" alt="Table" onerror="this.parentElement.style.display='none'">
-                <h3>Table</h3>
+                <h3 id="table">Table</h3>
                 <span class="demo-caption">Selectable data table with per-cell styleFunc + sort/filter/pagination.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/tree.gif" alt="Tree" onerror="this.parentElement.style.display='none'">
-                <h3>Tree</h3>
+                <h3 id="tree">Tree</h3>
                 <span class="demo-caption">Interactive tree — cursor, expand / collapse, scroll.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/viewport.gif" alt="Viewport" onerror="this.parentElement.style.display='none'">
-                <h3>Viewport</h3>
+                <h3 id="viewport">Viewport</h3>
                 <span class="demo-caption">Scrollable text region with mouse wheel + scrollbar.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/file-picker.gif" alt="FilePicker" onerror="this.parentElement.style.display='none'">
-                <h3>FilePicker</h3>
+                <h3 id="filepicker">FilePicker</h3>
                 <span class="demo-caption">Directory browser with icons + size + sort.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/progress.gif" alt="Progress" onerror="this.parentElement.style.display='none'">
-                <h3>Progress</h3>
+                <h3 id="progress">Progress</h3>
                 <span class="demo-caption">Progress bars driven by the example loop — percent labels, gradients and render modes (<code>AnimatedProgress</code> adds the spring physics).</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/cursor.gif" alt="Cursor" onerror="this.parentElement.style.display='none'">
-                <h3>Cursor</h3>
+                <h3 id="cursor">Cursor</h3>
                 <span class="demo-caption">Animated text cursor with BlinkMsg tick.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/help.gif" alt="Help" onerror="this.parentElement.style.display='none'">
-                <h3>Help</h3>
+                <h3 id="help">Help</h3>
                 <span class="demo-caption">Short / full key-help footer from a KeyMap.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/paginator.gif" alt="Paginator" onerror="this.parentElement.style.display='none'">
-                <h3>Paginator</h3>
+                <h3 id="paginator">Paginator</h3>
                 <span class="demo-caption">Dot + arabic page indicator.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/stopwatch.gif" alt="Stopwatch" onerror="this.parentElement.style.display='none'">
-                <h3>Stopwatch</h3>
+                <h3 id="stopwatch">Stopwatch</h3>
                 <span class="demo-caption">Elapsed-time counter.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-widgets/.vhs/timer.gif" alt="Timer" onerror="this.parentElement.style.display='none'">
-                <h3>Timer</h3>
+                <h3 id="timer">Timer</h3>
                 <span class="demo-caption">Countdown timer.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

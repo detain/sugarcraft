@@ -144,9 +144,21 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-mcp-client"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-mcp-client" alt="Sugar MCP Client code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">A Model Context Protocol client core the whole ecosystem can share: <strong>JSON-RPC 2.0 envelopes, a newline-framed stdio transport with a bounded child lifecycle, the initialize/tools handshake, and deny-before-allow server narrowing — tool rosters follow servers</strong>. Here "client" means the tool-CALLING side: this library spawns and drives an MCP server child process; it does not host one. Extracted from candy-code's <code>src/MCP</code> stack and <code>McpMessage</code> codec, so every surface that talks to an MCP server rides the same framing and the same handshake-and-deadline doctrine wherever the transport is stdio. First-party — MCP is a spec, not a Go port.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#the-model">The model</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#source">Source</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">A Model Context Protocol client core the whole ecosystem can share: <strong>JSON-RPC 2.0 envelopes, a newline-framed stdio transport with a bounded child lifecycle, the initialize/tools handshake, and deny-before-allow server narrowing — tool rosters follow servers</strong>. Here "client" means the tool-CALLING side: this library spawns and drives an MCP server child process; it does not host one. Extracted from candy-code's <code>src/MCP</code> stack and <code>McpMessage</code> codec, so every surface that talks to an MCP server rides the same framing and the same handshake-and-deadline doctrine wherever the transport is stdio. First-party — MCP is a spec, not a Go port.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-mcp-client</code></pre>
 
     <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
@@ -172,7 +184,7 @@ $server->stop();               // close pipes first, then TERM→KILL→reap —
 // __destruct calls stop() for you if you forget.</code></pre>
     <p style="margin-top: 12px;">The example spawns <code>npx -y @modelcontextprotocol/server-everything</code>, so it needs Node.js on PATH; the library itself depends only on PHP 8.3 and sugar-core — substitute any stdio MCP server command (name, command, argv list) for a dependency-free trial.</p>
 
-    <h3 style="margin-top: 32px;">The model</h3>
+    <h3 id="the-model" style="margin-top: 32px;">The model</h3>
     <div class="feature-grid">
       <div class="feature"><strong>McpMessage</strong><span>JSON-RPC 2.0 envelope: parse() / request() / notification() / success() / error(); a resultSet sentinel keeps explicit "result": null representable; toJson() is the wire and fails closed on unencodable payloads, toArray() is inspection.</span></div>
       <div class="feature"><strong>McpTool / McpServer</strong><span>One tool definition value object with a well-typedness gate that refuses malformed server output — control bytes in <em>names</em> are rejected at parse; <em>descriptions</em> are free-form prose that passes through verbatim, so display them through sugar-core Sanitize::untrusted — plus the start/stop/listTools/callTool interface.</span></div>
@@ -182,14 +194,14 @@ $server->stop();               // close pipes first, then TERM→KILL→reap —
       <div class="feature"><strong>Server requests &amp; trust</strong><span>A server's own requests (ping, roots/list, elicitation/create) are answered inline while a call is in flight — default <code>ping</code> acknowledged, anything else refused "Method not found" — with the handler's wall clock paused out of the call's budget. Running a configured stdio entry executes third-party code as the invoking user with the FULL parent environment: see the README's Trust boundary.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Speaking MCP from any PHP process</strong> — spawn a stdio server child, handshake, list and call tools, with the framing and timeout discipline already fought for.</li>
       <li><strong>Agent tool surfaces</strong> — narrow which servers each agent may see with globs and deny-before-allow, tool rosters following servers, the same semantics candy-code builds on.</li>
       <li><strong>Bounded subprocess I/O</strong> — the transport doubles as a reference for newline-framed JSON-RPC over pipes with deadlock-free pumping and bounded child teardown (TERM→KILL→reap on stop and on destruct); the named residual is external — a process SIGKILLed mid-use leaves its child to the embedding process manager.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source</h3>
+    <h3 id="source" style="margin-top: 40px;">Source</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-mcp-client">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-mcp-client/blob/master/README.md">Full README</a></li>
@@ -198,7 +210,7 @@ $server->stop();               // close pipes first, then TERM→KILL→reap —
 
     <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <caption>API surface</caption>
 <thead><tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr></thead>
@@ -227,6 +239,7 @@ $server->stop();               // close pipes first, then TERM→KILL→reap —
 </table>
   </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

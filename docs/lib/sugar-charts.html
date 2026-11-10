@@ -148,9 +148,30 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-charts"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-charts" alt="SugarCharts code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, plus inline image rendering via Sixel / Kitty / iTerm2 protocols. Picture output routes on <code>TERM</code> / <code>TERM_PROGRAM</code>; everything else is explicitly configured.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#per-point-and-per-bar-colors">Per-point and per-bar colors</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#sparkline">Sparkline</a></li>
+            <li class="toc-h3"><a href="#bar-chart">Bar chart</a></li>
+            <li class="toc-h3"><a href="#streamline">Streamline</a></li>
+            <li class="toc-h3"><a href="#heatmap">Heatmap</a></li>
+            <li class="toc-h3"><a href="#scatter">Scatter</a></li>
+            <li class="toc-h3"><a href="#timeseries">TimeSeries</a></li>
+            <li class="toc-h3"><a href="#ohlc">OHLC</a></li>
+            <li class="toc-h3"><a href="#picture">Picture</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, plus inline image rendering via Sixel / Kitty / iTerm2 protocols. Picture output routes on <code>TERM</code> / <code>TERM_PROGRAM</code>; everything else is explicitly configured.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-charts:dev-master</code></pre>
     <p style="margin-top: 8px;">No tagged releases ship yet — Packagist serves the <code>dev-master</code> branch only, so name it explicitly; on a default-<code>stable</code> project a bare <code>sugarcraft/sugar-charts</code> request does not resolve.</p>
 
@@ -170,7 +191,7 @@ echo BarChart::new(
 
 echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)-&gt;view();</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Canvas</strong><span>Fixed cell grid with per-cell runes and sugar-style <code>Style</code>. Foundation for the grid renderers (LineChart, Heatmap, Scatter, OHLCChart, Waveline); Sparkline builds on sugar-cellbuffer and Picture emits raw protocol bytes.</span></div>
       <div class="feature"><strong>Sparkline</strong><span>Single-row series via 8 Unicode bar glyphs. Perfect for log dashboards.</span></div>
@@ -183,7 +204,7 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)-&gt;view();</code></pre>
       <div class="feature"><strong>Per-point / per-bar color</strong><span>btop-style value heat: <code>LineChart::withSeriesColorFn()</code> and <code>BarChart::withBarColor()</code> resolvers.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">Per-point and per-bar colors</h3>
+    <h3 id="per-point-and-per-bar-colors" style="margin-top: 32px;">Per-point and per-bar colors</h3>
     <p>btop tints every graph point and meter by its value through the theme gradient. <code>LineChart::withSeriesColorFn(fn(string $dataset, int $x, float $value): ?Color)</code> colors each sample's dot, fill run and outgoing connector (<code>$dataset</code> is <code>LineChart::PRIMARY_SERIES</code> for the unnamed series; <code>$x</code> is the index in the full series; <code>null</code> keeps the series color). <code>BarChart::withBarColor(fn(Bar $bar, int $i): ?Color)</code> colors each bar's body and eighth-block cap. Passing <code>null</code> restores byte-identical default output; a non-<code>Color</code> return throws <code>UnexpectedValueException</code>.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Charts\BarChart\{Bar, BarChart};
 use SugarCraft\Charts\LineChart\LineChart;
@@ -207,7 +228,7 @@ echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)
     -&gt;withBarColor(static fn (Bar $bar, int $i): ?Color =&gt; $heat($bar-&gt;value * 10))
     -&gt;view() . PHP_EOL;</code></pre>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-charts">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-charts/blob/master/README.md">Full README</a></li>
@@ -217,7 +238,7 @@ echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)
 
     <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Sparkline</td><td>new(data, width)</td><td>Create sparkline chart</td></tr>
@@ -237,52 +258,53 @@ echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5)
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of eight of the ten shipped examples (animated_line.php and braille.php are untaped). Regenerated by CI on pushes to <code>master</code> that touch the tapes, examples, or source, and on manual <code>workflow_dispatch</code>.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-charts/.vhs/sparkline.gif" alt="Sparkline" onerror="this.parentElement.style.display='none'">
-                <h3>Sparkline</h3>
+                <h3 id="sparkline">Sparkline</h3>
                 <span class="demo-caption">Single-row series — eight Unicode glyphs.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-charts/.vhs/bar.gif" alt="Bar chart" onerror="this.parentElement.style.display='none'">
-                <h3>Bar chart</h3>
+                <h3 id="bar-chart">Bar chart</h3>
                 <span class="demo-caption">Auto-scaling labelled vertical bars.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-charts/.vhs/line.gif" alt="Streamline" onerror="this.parentElement.style.display='none'">
-                <h3>Streamline</h3>
+                <h3 id="streamline">Streamline</h3>
                 <span class="demo-caption">Sliding-window stream — recorded from <code>examples/line.php</code>, which drives Streamline.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-charts/.vhs/heatmap.gif" alt="Heatmap" onerror="this.parentElement.style.display='none'">
-                <h3>Heatmap</h3>
+                <h3 id="heatmap">Heatmap</h3>
                 <span class="demo-caption">Density visualisation with palette gradient.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-charts/.vhs/scatter.gif" alt="Scatter" onerror="this.parentElement.style.display='none'">
-                <h3>Scatter</h3>
+                <h3 id="scatter">Scatter</h3>
                 <span class="demo-caption">Cell-quantised XY plot.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-charts/.vhs/timeseries.gif" alt="TimeSeries" onerror="this.parentElement.style.display='none'">
-                <h3>TimeSeries</h3>
+                <h3 id="timeseries">TimeSeries</h3>
                 <span class="demo-caption">Timestamped tuples rendered through LineChart.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-charts/.vhs/ohlc.gif" alt="OHLC" onerror="this.parentElement.style.display='none'">
-                <h3>OHLC</h3>
+                <h3 id="ohlc">OHLC</h3>
                 <span class="demo-caption">Candlestick chart for financial data.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-charts/.vhs/picture.gif" alt="Picture" onerror="this.parentElement.style.display='none'">
-                <h3>Picture</h3>
+                <h3 id="picture">Picture</h3>
                 <span class="demo-caption">Inline image via Sixel / Kitty / iTerm2.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

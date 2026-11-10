@@ -145,12 +145,26 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-vterm"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-vterm" alt="SugarVterm code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Feed an ANSI byte stream in, query a cell grid + cursor + mode state out — without ever spawning a real terminal. Built on a Paul-Williams VT500 state machine.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#feed-and-screenshot">Feed and screenshot</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Feed an ANSI byte stream in, query a cell grid + cursor + mode state out — without ever spawning a real terminal. Built on a Paul-Williams VT500 state machine.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-vterm</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Vterm\Terminal\Terminal;
 
 $term = Terminal::new(cols: 80, rows: 24);
@@ -167,7 +181,7 @@ $term-&gt;windowTitle();                 // 'Demo'
 $term-&gt;feed("\x1b[?1049h");
 $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>VT500 parser</strong><span>15-state Paul-Williams state machine, implemented upstream in <strong>sugar-ansi-parser</strong> and imported here — this lib's <code>src/Parser/</code> holds the handler bridges only. Handles partial input across <code>feed()</code> calls and CSI subparameters (<code>:</code> separator per VT500 spec).</span></div>
       <div class="feature"><strong>Full SGR</strong><span>16-color, bright, 256-color, and truecolor for fg + bg. The emulator pen tracks bold / italic / underline / strikethrough / blink / reverse / dim / hidden toggles and SGR underline styles 4:0–4:5 (single / double / curly / dotted / dashed); the renderer paints the five cell-attribute bits — bold, italic, underline (every style collapsed onto one bit), reverse, strikethrough — while blink, dim and hidden are tracked but not painted. BCE — erase fills inherit the current background color, always on for DEC models (no <code>?12</code> gate).</span></div>
@@ -179,14 +193,14 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
       <div class="feature"><strong>Trust boundary</strong><span>Engineered for hostile byte streams: stored strings cap at 64 KiB, event logs at 1024 entries (drop-oldest rings), the DEC 2026 queue replays past 16384 pending cells. Nothing leaves the grid's <em>text</em> unsanitised — stored side-channels (window titles, OSC 8 hyperlinks, OSC 52 payloads) are kept VERBATIM; consumers sanitise before display (<code>Sanitize::untrusted()</code>). <a href="https://github.com/sugarcraft/sugar-vterm#trust-boundary-and-hostile-input">Full trust contract</a>.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Snapshot tests</strong> — drive any TUI's <code>view()</code> through SugarVterm and assert on cell-grid state instead of raw byte strings.</li>
       <li><strong>Recording &amp; replay</strong> — capture <code>feed()</code> input and replay deterministically.</li>
       <li><strong>Headless SSH sessions</strong> — <code>sugar-ssh-server</code> is pairable: it can route session bytes into <code>feed()</code> to run TUIs without a real PTY, but no integration ships in either package — the wiring is yours to write.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-vterm">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-vterm/blob/master/README.md">Full README</a></li>
@@ -196,7 +210,7 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Terminal</td><td>new(cols, rows, scrollbackSize)</td><td>Create a virtual terminal (the <code>Terminal::create()</code> factory is deprecated: it accepts no <code>scrollbackSize</code>)</td></tr>
@@ -219,18 +233,19 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-vterm/.vhs/snapshot-demo.gif" alt="A scripted ANSI byte stream fed to a virtual terminal; the cell grid prints back showing colours, cursor position, and a hyperlink span" onerror="this.parentElement.style.display='none'">
-                <h3>Feed and screenshot</h3>
+                <h3 id="feed-and-screenshot">Feed and screenshot</h3>
                 <span class="demo-caption">An ANSI byte stream feeds into a Terminal; the cell grid prints back as a screenshot, with window title, cursor position, and hyperlink span.</span>
                 <span class="demo-caption">The GIF autoplays and cannot be paused by reduced-motion CSS — for a still, run <code>php examples/feed-and-screenshot.php</code>.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

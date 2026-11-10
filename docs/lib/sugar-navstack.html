@@ -143,13 +143,27 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-navstack"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-navstack" alt="SugarNavstack code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Push / pop navigation items to build breadcrumbs. Track a stack of visited locations — useful for file explorers, menu trees, and cwd-tracked directory trails. Rendered trails carry click zones (sugar-mouse) and an accessible HTML shape (aria-label nav + aria-current).</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#push-pop-back">Push / pop / back</a></li>
+            <li class="toc-h3"><a href="#basic-crumb-trail">Basic crumb trail</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Push / pop navigation items to build breadcrumbs. Track a stack of visited locations — useful for file explorers, menu trees, and cwd-tracked directory trails. Rendered trails carry click zones (sugar-mouse) and an accessible HTML shape (aria-label nav + aria-current).</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-navstack</code></pre>
     <p>Packagist currently serves this package from <code>dev-master</code> only (no tagged release yet): require it with a root <code>minimum-stability: "dev"</code> plus an exact <code>sugarcraft/sugar-navstack: "dev-master"</code>.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\NavStack\NavStack;
 
 // NavStack is a mutable stack: push() returns the same stack for chaining.
@@ -164,7 +178,7 @@ echo $nav-&gt;view(' / ');     // Home / Settings / Display
 $top = $nav-&gt;pop();         // NavigationItem: title 'Display', data '/settings/display'
 $nav-&gt;depth();              // 2</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>NavStack</strong><span>Push / pop navigation stack (mutable, chainable push) with depth, parent and truncation helpers.</span></div>
             <div class="feature"><strong>Directory stacks (Shell)</strong><span>Explicit cwd-tracked trails — your host detects a directory change and calls pushDirectory(); nothing auto-pushes, and `.`/`..` follow the documented no-downward-walk rule.</span></div>
@@ -174,7 +188,7 @@ $nav-&gt;depth();              // 2</code></pre>
             
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-navstack">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-navstack/blob/master/README.md">Full README</a></li>
@@ -184,7 +198,7 @@ $nav-&gt;depth();              // 2</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>NavStack</td><td>new()</td><td>Create navigation stack</td></tr>
@@ -212,22 +226,23 @@ $nav-&gt;depth();              // 2</code></pre>
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-navstack/.vhs/navigation.gif" alt="Terminal recording: a scripted back-navigation walk — Home, Settings, and Display pushed, then popped one by one while the trail shrinks." onerror="this.parentElement.style.display='none'">
-                <h3>Push / pop / back</h3>
+                <h3 id="push-pop-back">Push / pop / back</h3>
                 <span class="demo-caption">NavStack push / pop / back through nested screens.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-navstack/.vhs/basic.gif" alt="Terminal recording: the Home Settings Display trail rendered plain, with a custom greater-than separator, and elided to a width-20 cap." onerror="this.parentElement.style.display='none'">
-                <h3>Basic crumb trail</h3>
+                <h3 id="basic-crumb-trail">Basic crumb trail</h3>
                 <span class="demo-caption">Render a <code>Home › Settings › Display</code> crumb trail — default and custom separators, and width-capped left-elision.</span>
             </div>
         </div>
     </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">

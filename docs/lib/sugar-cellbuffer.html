@@ -145,12 +145,25 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-cellbuffer"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-cellbuffer" alt="SugarCellBuffer code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Immutable Buffer (2-D cell grid) and Cell (rune, style, link, width) value objects forming the shared data model for terminal rendering across the SugarCraft ecosystem. Wide-char (CJK/emoji) cells declare width=2; the writing API enforces the width-0 continuation pair for you.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#security-trust-boundaries">Security &amp; trust boundaries</a></li>
+            <li class="toc-h3"><a href="#source">Source</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Immutable Buffer (2-D cell grid) and Cell (rune, style, link, width) value objects forming the shared data model for terminal rendering across the SugarCraft ecosystem. Wide-char (CJK/emoji) cells declare width=2; the writing API enforces the width-0 continuation pair for you.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-cellbuffer</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php"><?php
 
 require 'vendor/autoload.php';
@@ -181,7 +194,7 @@ echo $cell->rune(); // 'H'
 echo $buf->width();  // 20
 echo $buf->height(); // 3</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Buffer</strong><span>Immutable 2-D cell grid: the fluent with*() family plus fill(), copy() and applyDiff() (not named with*, equally immutable — every mutation returns a new instance). Bounds-checked cellAt() throws OutOfRangeException.</span></div>
       <div class="feature"><strong>Cell</strong><span>Readonly value object: rune (string), style (?Style), link (?Hyperlink), width (int). Cell::continuation() for wide-char neighbour cells. No with*() — rebuild via new.</span></div>
@@ -192,21 +205,21 @@ echo $buf->height(); // 3</code></pre>
       <div class="feature"><strong>Wide char handling</strong><span>width=2 cells (CJK, many emoji) carry a width-0 continuation partner at col+1; larger widths are single run-length spans that carry no continuation cells. The writing API enforces the pair law automatically; Buffer::fromGrid() is the escape hatch that skips it — it validates the dimensions and requires a flat list of exactly width×height cells, but takes the cells as given, so pair maintenance is the caller's duty.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Shared cell-grid foundation</strong> — consumed by sugar-overlay, sugar-toast, sugar-panels, sugar-table, sugar-forms, sugar-style, sugar-charts, sugar-image, sugar-dashboard, sugar-testing, sugar-video, sugar-datepicker, sugar-flexbox, candy-minesweeper and candy-tetris. Some renderers keep independent engines by design (sugar-core's line-diff Renderer, sugar-vterm's mutable grid) and candy-code does not consume this library; the package's role is the shared <em>data model</em> and its byte encoders.</li>
       <li><strong>Per-cell dirty tracking</strong> — <code>Buffer::diff()</code> emits move / style / set-cell / repeat-run / erase-run / hyperlink ops for only the changed cells, and <code>applyDiff()</code> is its round-trip inverse.</li>
       <li><strong>Terminal rendering</strong> — the data model behind styled-grid output: <code>toAnsi()</code> full repaints and diff-encoded delta frames, hyperlinks surviving intact.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Security &amp; trust boundaries</h3>
+    <h3 id="security-trust-boundaries" style="margin-top: 40px;">Security &amp; trust boundaries</h3>
     <ul>
       <li><strong>Cell runes ride the wire verbatim.</strong> <code>toAnsi()</code> and the diff encoder never strip control characters from cell contents — callers rendering untrusted text must sanitise first (sugar-core <code>Sanitize::untrusted()</code>). <code>text()</code> does not respect styles either: invisible-styled runes still come out, so invisibility is not a redaction boundary.</li>
       <li><strong>Hyperlink fields are hard-gated.</strong> url and id refuse C0 controls, DEL and the C1 escape introducers — lone raw 0x80-0x9F bytes that do not continue a well-formed UTF-8 sequence, and their UTF-8 <code>C2 xx</code> spellings — and ids refuse semicolons, at construction and again on unserialization, so no escape introducer can be forged into the OSC 8 frame. Well-formed multibyte payloads (arrows, emoji, Cyrillic: an IRI) pass even though their continuation bytes sit in the C1 window.</li>
       <li><strong><code>Buffer::fromString()</code> is test-support, not an emulator.</strong> Only SGR sequences are interpreted; every other CSI frame deposits its parameter text into cells as literal runes. Do not feed it untrusted input expecting a parse.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source</h3>
+    <h3 id="source" style="margin-top: 40px;">Source</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-cellbuffer">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-cellbuffer/blob/master/README.md">Full README</a></li>
@@ -215,7 +228,7 @@ echo $buf->height(); // 3</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Buffer</td><td>new(int, int)</td><td>Factory: creates width×height grid of blank cells</td></tr>
@@ -241,6 +254,7 @@ echo $buf->height(); // 3</code></pre>
 </table>
   </div>
 </section>
+    </div>
 </main>
 
 <footer class="footer">
