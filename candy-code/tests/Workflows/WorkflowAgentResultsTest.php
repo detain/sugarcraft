@@ -384,6 +384,163 @@ final class WorkflowAgentResultsTest extends TestCase
         self::assertSame(['c sees {{a.results}}'], $this->prompts);
     }
 
+    public function testASchemaStageStoresATypedRowBesideTheTextRow(): void
+    {
+        $this->script['emit'] = fn (SubAgent $agent): AgentResult => $this->typedResult($agent, '{"summary":"green","items":[{"id":7}]}');
+
+        $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('typed')
+            ->stage('build', Tasks::agent('coder')->prompt('emit json')->outputSchema(['type' => 'object']))
+            ->build());
+
+        self::assertSame(WorkflowStatus::Completed, $result->status);
+        self::assertSame(
+            [
+                'build' => '{"summary":"green","items":[{"id":7}]}',
+                'build.json' => '{"summary":"green","items":[{"id":7}]}',
+            ],
+            $result->context[WorkflowEngine::RESULTS_CONTEXT_KEY],
+            'the text row keeps the raw bytes and the typed row rides beside it',
+        );
+    }
+
+    public function testPointerReferencesReachTypedLeavesAndMissesStayVerbatim(): void
+    {
+        $this->script['emit'] = fn (SubAgent $agent): AgentResult => $this->typedResult(
+            $agent,
+            '{"summary":"green","items":[{"id":7}],"a":{"b":"nested"}}',
+        );
+
+        $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('typed')
+            ->stage('build', Tasks::agent('coder')->prompt('emit json')->outputSchema(['type' => 'object']))
+            ->stage(
+                'next',
+                Tasks::agent('coder')->prompt(
+                    'S={{build.summary}} I={{build.items/0/id}} L={{build./summary}}'
+                    . ' B={{build.bogus}} N={{build.items}} X={{nothere.summary}} D={{build.a.b}}',
+                ),
+            )
+            ->build());
+
+        self::assertSame(
+            'S=green I=7 L=green B={{build.bogus}} N={{build.items}} X={{nothere.summary}} D={{build.a.b}}',
+            end($this->prompts),
+            'a hit resolves, every miss — unknown leaf, interior object, unknown stage, dotted literal — stays loud',
+        );
+    }
+
+    public function testPointerEscapesFollowRfc6901Order(): void
+    {
+        // Keys: "a/b", "c~d", "~1". The last one only survives the ~1-before-~0
+        // unescape order: reversing it would route "~01" to a key named "/".
+        $this->script['encode'] = fn (SubAgent $agent): AgentResult => $this->typedResult(
+            $agent,
+            json_encode(['a/b' => 'slash', 'c~d' => 'tilde', '~1' => 'deep']),
+        );
+
+        $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('escapes')
+            ->stage('coded', Tasks::agent('coder')->prompt('encode keys')->outputSchema(['type' => 'object']))
+            ->stage('next', Tasks::agent('coder')->prompt('{{coded.a~1b}}|{{coded.c~0d}}|{{coded.~01}}'))
+            ->build());
+
+        self::assertSame('slash|tilde|deep', end($this->prompts));
+    }
+
+    public function testScalarLeavesInterpolateAndInteriorOrNullDoNot(): void
+    {
+        $this->script['shape'] = fn (SubAgent $agent): AgentResult => $this->typedResult(
+            $agent,
+            '{"ok":true,"no":false,"count":12,"nothing":null,"obj":{"x":1}}',
+        );
+
+        $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('scalars')
+            ->stage('shaped', Tasks::agent('coder')->prompt('shape out')->outputSchema(['type' => 'object']))
+            ->stage('next', Tasks::agent('coder')->prompt(
+                '{{shaped.ok}}|{{shaped.no}}|{{shaped.count}}|{{shaped.nothing}}|{{shaped.obj}}',
+            ))
+            ->build());
+
+        self::assertSame(
+            'true|false|12|{{shaped.nothing}}|{{shaped.obj}}',
+            end($this->prompts),
+            'bools spell true/false; a null leaf and an interior object miss verbatim',
+        );
+    }
+
+    public function testASchemaStageWhoseOutputIsNotJsonStaysTextOnly(): void
+    {
+        $this->script['babble'] = fn (SubAgent $agent): AgentResult => $this->typedResult($agent, 'not json at all');
+
+        $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('coercion')
+            ->stage('babbler', Tasks::agent('coder')->prompt('babble words')->outputSchema(['type' => 'object']))
+            ->stage('next', Tasks::agent('coder')->prompt('{"n":1} and {{babbler.n}}'))
+            ->build());
+
+        self::assertSame(
+            ['babbler' => 'not json at all', 'next' => 'OUT[{"n":1} and {{babbler.n}}]'],
+            $result->context[WorkflowEngine::RESULTS_CONTEXT_KEY],
+            'no typed row is invented from prose, and the pointer misses loudly',
+        );
+    }
+
+    public function testReservedTailsBelongToTheirOwnPassesWhateverTheTypedDocumentHolds(): void
+    {
+        $document = json_encode(['results' => 'FROM-TYPED', 'output' => 'FROM-TYPED', 'inner' => 'keep']);
+        $this->script['tail'] = fn (SubAgent $agent): AgentResult => $this->typedResult($agent, (string) $document);
+
+        $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('tails')
+            ->stage('tailer', Tasks::agent('coder')->prompt('tail the token')->outputSchema(['type' => 'object']))
+            ->stage('next', Tasks::agent('coder')->prompt('{{tailer.results}}|{{tailer.output}}|{{tailer./output}}'))
+            ->build());
+
+        self::assertSame(
+            $document . '|' . $document . '|FROM-TYPED',
+            end($this->prompts),
+            'the bare results/output tails keep their dedicated rows; only the leading-slash pointer form reaches document members',
+        );
+    }
+
+    public function testThePointerPassRunsBeforeTheOutputPassAndNeverReReadsItsPredecessor(): void
+    {
+        $this->script['weave'] = fn (SubAgent $agent): AgentResult => $this->typedResult(
+            $agent,
+            '{"next":"{{c.output}}","again":"{{b.results}}","plain":"{{a.results}}"}',
+        );
+
+        $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('ordering')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->stage('b', Tasks::agent('coder')->prompt('weave tokens')->outputSchema(['type' => 'object']))
+            ->stage('c', Tasks::agent('coder')->prompt('do c'))
+            ->stage('d', Tasks::agent('coder')->prompt('{{b.next}}|{{b.again}}|{{b.plain}}'))
+            ->build());
+
+        self::assertSame(
+            'OUT[do c]|{{b.results}}|{{a.results}}',
+            end($this->prompts),
+            'an emitted {{stage.output}} is still ahead of its pass and resolves;' .
+            ' emitted .results tokens are behind theirs and stay verbatim',
+        );
+    }
+
+    private function typedResult(SubAgent $agent, string $output): AgentResult
+    {
+        return new AgentResult(
+            agentId: $agent->id,
+            status: AgentStatus::Completed,
+            output: $output,
+            tokensUsed: 3,
+            costUsd: 0.1,
+            startedAt: new \DateTimeImmutable(),
+            completedAt: new \DateTimeImmutable(),
+        );
+    }
+
     private function engine(): WorkflowEngine
     {
         return new WorkflowEngine($this->registry, new AgentWorkerPool(1, $this->executor()));

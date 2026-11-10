@@ -716,6 +716,56 @@ final class WorkflowPauseResumeTest extends TestCase
         $this->assertFileDoesNotExist($this->pauseFile());
     }
 
+    public function testATypedResultRowSurvivesThePauseFileAndInterpolatesAfterResume(): void
+    {
+        $this->registry->register((new WorkflowBuilder())
+            ->name('typed')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->stage('b', Tasks::agent('coder')->prompt('emit json')->outputSchema(['type' => 'object']))
+            ->stage('c', Tasks::agent('coder')->prompt('hold here'))
+            ->stage('d', Tasks::agent('coder')->prompt('use {{b.summary}}'))
+            ->build());
+
+        $this->script['emit'] = fn (SubAgent $subAgent): AgentResult => self::succeeded($subAgent, '{"summary":"green"}');
+        $this->script['hold'] = function (SubAgent $subAgent): ?AgentResult {
+            $this->engine->pause('typed');
+
+            return null;
+        };
+
+        $paused = $this->engine->run('typed');
+        $this->assertSame(WorkflowStatus::Paused, $paused->status);
+
+        $file = $this->tempDir . '/workflows/.running/typed.json';
+        $this->assertFileExists($file);
+        $data = json_decode((string) file_get_contents($file), true);
+        $this->assertIsArray($data);
+        $results = $data['context'][WorkflowEngine::RESULTS_CONTEXT_KEY] ?? null;
+        $this->assertIsArray($results);
+        $this->assertSame(
+            '{"summary":"green"}',
+            $results['b.json'] ?? null,
+            'the typed row rides the pause file as a plain string — no serializer was added',
+        );
+        $this->assertSame(
+            '{"summary":"green"}',
+            $results['b'] ?? null,
+            'the text row still carries the raw bytes beside it',
+        );
+
+        unset($this->script['hold'], $this->script['emit']);
+        $this->prompts = [];
+        $resumed = $this->engine->resume('typed');
+
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status);
+        $this->assertSame(
+            ['use green'],
+            $this->prompts,
+            'a in-flight stage that succeeded settles before the stop; resume runs only d,' .
+            ' and its pointer read resolves from the file-carried typed row',
+        );
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {
