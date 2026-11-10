@@ -1087,6 +1087,7 @@ candy-code/tests/Backend/StepTopRemindersTest.php	0.038	2
 candy-code/tests/Host/BackgroundEventsSchedulesTest.php	0.037	3
 candy-code/tests/Chat/ChatConfigChangeDoorsDocumentationDriftTest.php	0.037	7
 candy-code/tests/Memory/MemoryWriterTest.php	0.037	10
+candy-code/tests/Channels/DiscordBundleWeldTest.php	0.037	3
 candy-code/tests/Cli/HookFileUnattendedAskTest.php	0.036	2
 candy-code/tests/Permissions/ReadOnlyAwkTest.php	0.036	41
 candy-code/tests/Backend/EngineBackendWitherPreservesStateTest.php	0.036	39
