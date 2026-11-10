@@ -36,7 +36,7 @@ final class WorkflowRegistry
      * silently and quietly do less. An arm added here without its refusal
      * update is caught by {@see \SugarCraft\Code\Tests\Workflows\WorkflowYamlKeyRosterTest}.
      */
-    public const YAML_TASK_KEYS = ['agent', 'name', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds', 'timeout', 'reject', 'rejectMinOccurrences', 'stallTimeout', 'restarts'];
+    public const YAML_TASK_KEYS = ['agent', 'name', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds', 'timeout', 'reject', 'rejectMinOccurrences', 'stallTimeout', 'restarts', 'input'];
 
     /**
      * The stage-shape vocabulary (names, flags and the nested containers the
@@ -48,6 +48,29 @@ final class WorkflowRegistry
 
     /** @var array<string, Workflow> */
     private array $registered = [];
+
+    /**
+     * C9: fan-in join specs recorded while parsing the current workflow file,
+     * each with the joining stage's position and the source names it lists.
+     * The order law ("input joins PRIOR stages only") cannot be judged at the
+     * arm site — later stages have not been seen yet — so every `input:`
+     * declaration defers its name check to the end of the stages loop, where
+     * {@see self::parseYamlWorkflow()}'s $seenStageNames map is complete.
+     * Reset (and drained) by every file parse.
+     *
+     * @var list<array{at:string,index:int,from:list<string>}>
+     */
+    private array $pendingJoins = [];
+
+    /**
+     * C9: the stage whose body is parsing right now, or null between files.
+     * applyTaskArms() has no stage context of its own — it is shared by every
+     * task surface (stage bodies, `tasks:` lists, agents, sub-maps) — so the
+     * declaring stage's index rides here instead of through six signatures.
+     *
+     * @var array{name:string,index:int}|null
+     */
+    private ?array $joinStage = null;
 
     /**
      * Why the project tier's directory was refused the last time
@@ -1333,6 +1356,8 @@ final class WorkflowRegistry
             }
 
             $seenStageNames = [];
+            $this->pendingJoins = [];
+            $this->joinStage = null;
 
             foreach ($data['stages'] as $index => $stage) {
                 $stageName = $this->requireStageName($stage, $index, $yamlPath);
@@ -1383,6 +1408,10 @@ final class WorkflowRegistry
                 $seenStageNames[$stageName] = $index;
 
                 $where = "Workflow file {$yamlPath} stage '{$stageName}'";
+                // C9: everything parsed below belongs to this stage, so any
+                // `input:` arm reached through applyTaskArms() joins from
+                // stages before this index.
+                $this->joinStage = ['name' => $stageName, 'index' => $index];
                 // The stage map itself answers to the roster (rider): shape
                 // keys and tail task keys, one merged allowed list. Nested
                 // sub-maps are checked where they are read (readTaskMap).
@@ -1452,6 +1481,17 @@ final class WorkflowRegistry
                     );
                 }
 
+                // C9: same stand-aside for the join arm. `input:` reads the
+                // recorded rows of PRIOR stages in this file; a carried
+                // workflow's stages are not visible to this parser, so v1
+                // refuses the pairing loudly rather than let the join
+                // silently join nothing.
+                if (array_key_exists('uses', $stage) && array_key_exists('input', $stage)) {
+                    throw new WorkflowLoadException(
+                        "{$where} carries \"input\" beside \"uses\"; v1 joins prior stages of the same file, not carried workflows"
+                    );
+                }
+
                 if (array_key_exists('uses', $stage)) {
                     // C11: `uses:` arms the stage with another workflow's body;
                     // the shape stays 'stage' and no task container may ride.
@@ -1513,6 +1553,25 @@ final class WorkflowRegistry
                     $builder = $builder->loop($loop);
                 }
             }
+
+            // C9: the order law, judged once every stage name in this file is
+            // known. A forward reference, the joining stage itself, or a name
+            // this file never declares all refuse HERE, at load — the author
+            // sees the mistake at parse, never a join that silently misses at
+            // run time.
+            foreach ($this->pendingJoins as $join) {
+                foreach ($join['from'] as $name) {
+                    if (!isset($seenStageNames[$name]) || $seenStageNames[$name] >= $join['index']) {
+                        throw new WorkflowLoadException(
+                            "{$join['at']} \"input\" \"from\": \"{$name}\" is not a stage declared before this one;"
+                            . ' input joins prior stages only'
+                        );
+                    }
+                }
+            }
+
+            $this->pendingJoins = [];
+            $this->joinStage = null;
         }
 
         if (array_key_exists('config', $data) && !is_array($data['config'])) {
@@ -2209,6 +2268,28 @@ final class WorkflowRegistry
                 // pattern the author meant, so a bad PCRE is named, not coerced.
                 throw new WorkflowLoadException("{$at} \"reject\": {$error->getMessage()}", 0, $error);
             }
+        }
+
+        // C9: the fan-in join arm. trustedJoin() judges the SHAPE (raw
+        // English, wrapped to a load error naming the declaration site
+        // exactly like the reject pattern above); the declaring stage's
+        // index rides a pending record so the end-of-file pass in
+        // parseYamlWorkflow() can judge ORDER — a join may only name stages
+        // declared before its own. A null joinStage means a task surface was
+        // parsed outside any stage loop; index -1 then fails closed there.
+        if (array_key_exists('input', $map)) {
+            try {
+                $spec = TaskBuilder::trustedJoin($map['input']);
+            } catch (\InvalidArgumentException $error) {
+                throw new WorkflowLoadException("{$at} \"input\": {$error->getMessage()}", 0, $error);
+            }
+
+            $b = $b->input($spec);
+            $this->pendingJoins[] = [
+                'at' => $at,
+                'index' => (int) ($this->joinStage['index'] ?? -1),
+                'from' => $spec['from'],
+            ];
         }
 
         return $b;
