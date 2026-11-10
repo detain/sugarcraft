@@ -203,8 +203,13 @@ final class WorkflowAgentResultsTest extends TestCase
 
         // The pool yields in completion order: the third agent first. And an
         // executor that did not echo the id it was handed still lands in the
-        // first unclaimed slot.
-        $paired = $records->invoke(null, ['id-1' => 'one', 'id-2' => 'two', 'id-3' => 'three'], [
+        // first unclaimed slot. Entries carry the stage's schema flag, which
+        // must ride through to the record.
+        $paired = $records->invoke(null, [
+            'id-1' => ['key' => 'one', 'schema' => false],
+            'id-2' => ['key' => 'two', 'schema' => true],
+            'id-3' => ['key' => 'three', 'schema' => false],
+        ], [
             $finished('id-3', 'third'),
             $finished('foreign', 'unidentified'),
             $finished('id-1', 'first'),
@@ -213,6 +218,10 @@ final class WorkflowAgentResultsTest extends TestCase
         self::assertSame(
             ['one' => 'first', 'two' => 'unidentified', 'three' => 'third'],
             array_column(array_map(static fn (array $r): array => [$r['key'], $r['result']->output], $paired), 1, 0),
+        );
+        self::assertSame(
+            ['one' => false, 'two' => true, 'three' => false],
+            array_column(array_map(static fn (array $r): array => [$r['key'], $r['schema']], $paired), 1, 0),
         );
     }
 

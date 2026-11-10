@@ -136,6 +136,24 @@ final class WorkflowEngine implements WorkflowEngineInterface
      */
     public const RESULTS_CONTEXT_KEY = '@results';
 
+    /**
+     * Suffix spelling a result's typed row inside the
+     * {@see RESULTS_CONTEXT_KEY} map: `name.json` carries the re-encoded
+     * JSON document a schema'd stage produced, beside the `name` text row
+     * the `{{name.results}}` pass reads.
+     *
+     * The row is a JSON STRING, not an array, on purpose. The result-key
+     * grammar ({@see resultKey()}) has no dots, so `name.json` can never
+     * collide with a text row, and neither interpolation regex can capture
+     * a dotted key into the text slots. Staying string-valued means
+     * withSanitizedResults() keeps the row on resume and the pause file's
+     * json_encode carries it — the typed map round-trips with no extra
+     * machinery. An array row would be stripped at resume as junk.
+     *
+     * @see jsonPointerValue() for how the row is addressed.
+     */
+    private const RESULTS_TYPED_SUFFIX = '.json';
+
     /** Scan outcome of {@see scanVerdict()}: the pattern matched — reject. */
     private const VERDICT_REJECTED = 'rejected';
     /** Scan outcome: no match — the verdict stands. */
@@ -2887,6 +2905,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $record = [
                 'key' => self::resultKey($task->name, $multi ? $stageName . '_' . ($i + 1) : $stageName),
                 'result' => $agentResult,
+                'schema' => $task->outputSchema !== null,
             ];
             $dispatched[] = $record;
 
@@ -3042,6 +3061,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $record = [
                 'key' => self::resultKey($task->name, $nestedStage['name'] ?? $stageName . '_' . ($stepIndex + 1)),
                 'result' => $agentResult,
+                'schema' => $task->outputSchema !== null,
             ];
             $dispatched[] = $record;
             $pipelineContext = self::withResults($pipelineContext, [$record]);
@@ -3175,7 +3195,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         );
 
         $taskResult = $this->dispatchOne($taskSubAgent, $taskRequest, $this->stagePool($stageTimeout, $stageClock));
-        $taskRecord = ['key' => self::resultKey($task->name, $stageName), 'result' => $taskResult];
+        $taskRecord = ['key' => self::resultKey($task->name, $stageName), 'result' => $taskResult, 'schema' => $task->outputSchema !== null];
         $dispatched[] = $taskRecord;
 
         // If task itself fails, the whole stage fails immediately
@@ -3255,7 +3275,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $verifierAttempts[] = $verifierResult;
             // Same key per attempt: the last settles into the results context,
             // the documented law for pool retries carried to verdict rounds.
-            $dispatched[] = ['key' => self::resultKey($verifier->name, $stageName . '_verifier'), 'result' => $verifierResult];
+            $dispatched[] = ['key' => self::resultKey($verifier->name, $stageName . '_verifier'), 'result' => $verifierResult, 'schema' => $verifier->outputSchema !== null];
 
             if ($verifierResult->status !== AgentStatus::Completed) {
                 // A dead verifier speaks nothing: no verdict, no question —
@@ -3592,7 +3612,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         );
 
         $subAgents = [];
-        /** @var array<string, string> $resultKeys SubAgent id => result name, in declaration order */
+        /** @var array<string, array{key: string, schema: bool}> $resultKeys SubAgent id => result name + schema flag, in declaration order */
         $resultKeys = [];
         $agentIndex = 0;
         foreach ($tasks as $task) {
@@ -3653,7 +3673,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 permissionGate: $this->permissionGate,
             );
             $subAgents[] = $subAgent;
-            $resultKeys[$subAgent->id] = self::resultKey($task->name, $stageName . '_' . $agentIndex);
+            $resultKeys[$subAgent->id] = [
+                'key' => self::resultKey($task->name, $stageName . '_' . $agentIndex),
+                'schema' => $task->outputSchema !== null,
+            ];
         }
 
         // Create a fresh pool scoped to this parallel stage so that workflow-level
@@ -4282,8 +4305,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * {@see RESULTS_CONTEXT_KEY} map, in record order — a later record with
      * the same name overwrites an earlier one, as a later stage's does.
      *
+     * A record from a schema'd stage additionally stores its decoded
+     * payload, re-encoded as a JSON string under `name.json`, so
+     * `{{name.<pointer>}}` can address leaves of the document. The text row
+     * is written first and byte-identical either way: a stage whose output
+     * the schema could not constrain (no schema, or never valid JSON)
+     * simply gains no typed row, and pointer references to it stay
+     * verbatim.
+     *
      * @param array<array-key, mixed> $context
-     * @param list<array{key: string, result: AgentResult}> $records
+     * @param list<array{key: string, result: AgentResult, schema: bool}> $records
      * @return array<array-key, mixed>
      */
     private static function withResults(array $context, array $records): array
@@ -4295,11 +4326,67 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $results = $context[self::RESULTS_CONTEXT_KEY] ?? [];
         $results = is_array($results) ? $results : [];
         foreach ($records as $record) {
-            $results[$record['key']] = $record['result']->output ?? '';
+            $text = $record['result']->output ?? '';
+            $results[$record['key']] = $text;
+            if (!$record['schema']) {
+                continue;
+            }
+            $decoded = json_decode($text, true);
+            if (!is_array($decoded)) {
+                continue;
+            }
+            $encoded = json_encode($decoded);
+            if (is_string($encoded)) {
+                $results[$record['key'] . self::RESULTS_TYPED_SUFFIX] = $encoded;
+            }
         }
         $context[self::RESULTS_CONTEXT_KEY] = $results;
 
         return $context;
+    }
+
+    /**
+     * RFC 6901 JSON pointer lookup into a {@see RESULTS_TYPED_SUFFIX} row.
+     *
+     * The pointer is split on `/` BEFORE unescaping, so `~1` protects an
+     * embedded slash as the spec requires; each reference token then
+     * unescapes `~1` to `/` first and `~0` to `~` second, in that order —
+     * reversed, `~01` would wrongly reach a key named `/`. A leading `/`
+     * is the from-root spelling and addresses the same document as the
+     * bare form. Dots carry no meaning here: `a.b` names ONE key with a
+     * dot in it, as the spec says. Returns null for any miss — a missing
+     * member, an interior object or array (only scalars interpolate), a
+     * null leaf, or a row that is not decodable JSON — so the caller
+     * leaves the `{{name.pointer}}` reference verbatim and the typo shows.
+     *
+     * @return string|int|float|bool|null the interpolatable leaf, or null on miss
+     */
+    private static function jsonPointerValue(string $typedRow, string $pointer): string|int|float|bool|null
+    {
+        $document = json_decode($typedRow, true);
+        if (!is_array($document)) {
+            return null;
+        }
+
+        $segments = explode('/', $pointer);
+        if (($segments[0] ?? '') === '') {
+            array_shift($segments);
+        }
+
+        $node = $document;
+        foreach ($segments as $segment) {
+            $name = str_replace(['~1', '~0'], ['/', '~'], $segment);
+            if (!is_array($node) || !array_key_exists($name, $node)) {
+                return null;
+            }
+            $node = $node[$name];
+        }
+
+        if (is_bool($node) || is_int($node) || is_float($node) || is_string($node)) {
+            return $node;
+        }
+
+        return null;
     }
 
     /**
@@ -4312,9 +4399,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * whose id names no agent of this stage — an executor that did not echo
      * the id it was handed — takes the first name no result has claimed.
      *
-     * @param array<string, string> $resultKeys   SubAgent id => result name, in declaration order
-     * @param list<AgentResult>     $agentResults
-     * @return list<array{key: string, result: AgentResult}>
+     * @param array<string, array{key: string, schema: bool}> $resultKeys   SubAgent id => result name + schema flag, in declaration order
+     * @param list<AgentResult> $agentResults
+     * @return list<array{key: string, result: AgentResult, schema: bool}>
      */
     private static function recordsInDeclarationOrder(array $resultKeys, array $agentResults): array
     {
@@ -4329,10 +4416,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         $records = [];
-        foreach ($resultKeys as $id => $key) {
+        foreach ($resultKeys as $id => $entry) {
             $agentResult = $byId[$id] ?? array_shift($unmatched);
             if ($agentResult !== null) {
-                $records[] = ['key' => $key, 'result' => $agentResult];
+                $records[] = ['key' => $entry['key'], 'result' => $agentResult, 'schema' => $entry['schema']];
             }
         }
 
