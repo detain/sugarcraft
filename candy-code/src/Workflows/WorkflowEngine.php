@@ -2805,6 +2805,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 task: $interpolatedPrompt,
                 timeout: $task->timeout ?? $stageTimeout,
                 maxRetries: $task->retries ?? 0,
+                stallTimeout: $task->stallTimeout ?? 0,
+                stallRestarts: $task->restarts ?? 0,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $task->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
@@ -2960,6 +2962,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 task: $interpolatedPrompt,
                 timeout: $task->timeout ?? $stageTimeout,
                 maxRetries: $task->retries ?? 0,
+                stallTimeout: $task->stallTimeout ?? 0,
+                stallRestarts: $task->restarts ?? 0,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $task->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
@@ -3096,6 +3100,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
             task: $taskPrompt,
             timeout: $task->timeout ?? $stageTimeout,
             maxRetries: $task->retries ?? 0,
+            stallTimeout: $task->stallTimeout ?? 0,
+            stallRestarts: $task->restarts ?? 0,
             isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
             outputSchema: $task->outputSchema,
             // S2: the per-stage model ask; null keeps today's session-default dial.
@@ -3176,6 +3182,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 task: $verifierPrompt,
                 timeout: $verifier->timeout ?? $stageTimeout,
                 maxRetries: $maxRetriesForAttempt,
+                stallTimeout: $verifier->stallTimeout ?? 0,
+                stallRestarts: $verifier->restarts ?? 0,
                 isolation: $verifier->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $verifier->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
@@ -3578,6 +3586,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 task: $interpolatedPrompt,
                 timeout: $task->timeout ?? $workflow->timeout,
                 maxRetries: $task->retries ?? 0,
+                stallTimeout: $task->stallTimeout ?? 0,
+                stallRestarts: $task->restarts ?? 0,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $task->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
