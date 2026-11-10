@@ -98,8 +98,10 @@ final class WorkflowLinter
                 continue;
             }
 
-            self::collectProducers($type, $stageName, is_array($stage) ? $stage : [], $ordinal, $producers, $outputs, $findings);
-            self::notePlanRow($type, $stageName, is_array($stage) ? $stage : [], $workflow->timeout, $planRows);
+            // Past the type guard, $stage is necessarily an array: a non-array
+            // yields '' here, which SUPPORTED_TYPES rejects with a continue.
+            self::collectProducers($type, $stageName, $stage, $ordinal, $producers, $outputs, $findings);
+            self::notePlanRow($type, $stageName, $stage, $workflow->timeout, $planRows);
         }
 
         $ordinal = 0;
@@ -110,8 +112,8 @@ final class WorkflowLinter
                 continue;
             }
             $stageName = is_array($stage) && is_string($stage['name'] ?? null) && $stage['name'] !== '' ? $stage['name'] : 'unknown';
-            self::checkIsolationSanity($type, $stageName, is_array($stage) ? $stage : [], $findings);
-            foreach (self::tasksOf($type, is_array($stage) ? $stage : []) as [$slot, $task]) {
+            self::checkIsolationSanity($type, $stageName, $stage, $findings);
+            foreach (self::tasksOf($type, $stage) as [$slot, $task]) {
                 self::checkTask($stageName, $slot, $task, $ordinal, $producers, $outputs, $seedContext, $toolNames, $findings);
             }
         }
@@ -597,11 +599,13 @@ final class WorkflowLinter
     }
 
     /**
-     * The tasks a stage dispatches, as [slot label, raw task array] pairs —
-     * mirroring the engine walker's slots per type.
+     * The tasks a stage dispatches, as [slot label, task] pairs — mirroring
+     * the engine walker's slots per type. Every arm yields WorkflowTask in
+     * offset 1: taskList() filters for it, and the verification slot is
+     * instanceof-guarded before being pushed.
      *
      * @param array<array-key, mixed> $stage
-     * @return list<array{0: string, 1: array<array-key, mixed>}>
+     * @return list<array{0: string, 1: WorkflowTask}>
      */
     private static function tasksOf(string $type, array $stage): array
     {
