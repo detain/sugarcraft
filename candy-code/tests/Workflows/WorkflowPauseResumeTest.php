@@ -1068,10 +1068,14 @@ final class WorkflowPauseResumeTest extends TestCase
      * hash and join ledgers flow ONLY through those seed writes — deleting
      * either seed line drops the prior rows from the second file, and a
      * mid-pause YAML edit would then slip past the read-side guard this
-     * family defends. The wave list additionally survives through the C8
-     * recorded-replay refill (pinned behaviorally by
-     * testAResumedFanOutReplaysTheRecordedListInsteadOfReGlobbing), so its
-     * seed line is a defensive mirror rather than the sole carrier.
+     * family defends. The wave seed is no mirror either: it is the SOLE
+     * carrier of the liveRuns wave slot across resume (:1919 seeds it,
+     * :2033 hands it to the recorded-replay consumer, :1571-1573 persist
+     * it at re-pause), and deleting it reddens
+     * testAResumedFanOutReplaysTheRecordedListInsteadOfReGlobbing and
+     * testACorruptWaveRecordIsRefusedLoudlyWithoutAnyExpansion even in
+     * isolation (NITS-r1 MAJOR-1, three measured runs). The redundancy
+     * holds only for this lineage test's own waves, which re-record.
      */
     public function testTheRePauseCarriesEveryLedgerFromThePriorIncarnation(): void
     {
