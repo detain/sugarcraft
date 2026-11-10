@@ -288,7 +288,9 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 53 is that sum — 52 after the §7-closeout user-tool skip aggregate
+     * 54 is that sum — 53 after the FIX-3 trusted-bundle hooks aggregate
+     * (registerTrustedBundleHooks, one row whatever the fan-out) joined the
+     * roster on top of the §7-closeout user-tool skip aggregate
      * (userScriptTools, one row whatever the directory) joined the roster
      * on top of the C-SEC-7.b launch-switch pair
      * (useRestricted, useSafeMode) joined the roster on top of the C-SEC-6.b
@@ -306,7 +308,7 @@ final class Bootstrap
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 53;
+    public const LAUNCH_NOTICE_LIMIT = 54;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -402,6 +404,11 @@ final class Bootstrap
         // directory listing; the emit now aggregates them into ONE row with
         // the tail folded into an honest count (the foreign-agent polity).
         'userScriptTools' => 1,
+        // FIX-3 (code-chat P1, owner ruling ii): the trusted-bundle hooks arm
+        // fans out over third-party manifests; the emit is ONE aggregate row
+        // whatever the count, clipped inside the sentence (the userScriptTools
+        // polity), so a hostile bundle cannot multiply the launch surface.
+        'registerTrustedBundleHooks' => 1,
         // v1:m-1: one row, message-identity de-duped, whatever how many reads
         // took the stand-in.
         'reportHomeDirectoryStandIn' => 1,

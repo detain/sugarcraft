@@ -783,7 +783,7 @@ final class StderrEmitterCensusTest extends TestCase
         // the size ratchet's M6 path. The credit follows the bytes, the same
         // way CarriesSessionLaunchPreset's collision rows above did; the
         // Bootstrap row above is its pre-extraction figure again.
-        'src/Cli/TrustedBundleHooks.php' => 3,
+        'src/Cli/TrustedBundleHooks.php' => 1,
     ];
 
     /**

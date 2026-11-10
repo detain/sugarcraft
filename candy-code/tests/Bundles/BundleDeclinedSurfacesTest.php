@@ -387,6 +387,58 @@ final class BundleDeclinedSurfacesTest extends TestCase
         self::assertNotSame([], $this->noticesCarrying(['outside the bundle directory', $name]), 'the uncontained refusal is announced');
     }
 
+    /**
+     * FIX-3 (owner ruling, option ii): a hostile manifest's fan-out can never
+     * multiply the capped launch-notice surface — every decline across every
+     * trusted bundle folds into ONE clipped aggregate notice per run.
+     */
+    public function testFanoutDeclinesAcrossTrustedBundlesFoldIntoASingleAggregateNotice(): void
+    {
+        $root = $this->tempDir . '/fanout-hooks-root';
+        mkdir($root, 0777, true);
+        $alpha = 'fan-alpha-' . getmypid();
+        $beta = 'fan-beta-' . getmypid();
+        file_put_contents($this->configDir . '/config.json', (string) json_encode([
+            'trustedBundleChannels' => [$alpha, $beta],
+        ]));
+        chmod($this->configDir . '/config.json', 0o600);
+
+        $strays = [];
+        foreach (['one', 'two'] as $slot) {
+            $strays[] = $root . '/stray-' . $slot . '-' . getmypid() . '.json';
+        }
+        foreach ($strays as $stray) {
+            file_put_contents($stray, (string) json_encode([
+                'hooks' => ['PreToolUse' => [['name' => 'fanoutHook' . getmypid(), 'command' => 'true']]],
+            ]));
+        }
+
+        foreach ([$alpha, $beta] as $name) {
+            $this->plantProjectBundle($root, $name, [
+                Bundle::MANIFEST_RELATIVE_PATH => (string) json_encode(['name' => $name, 'hooks' => $strays]),
+            ]);
+        }
+
+        $dumped = var_export(Bootstrap::hooks(null, $root)->inspect()['hooks'], true);
+        self::assertStringNotContainsString(
+            'fanoutHook' . getmypid(),
+            $dumped,
+            'four declines across two trusted bundles register nothing',
+        );
+
+        // LaunchNotices is process-global static and record() CLIPS long
+        // messages mid-way, so every needle below is clip-stable: the count
+        // head, the first named stray, and the tail clip marker. The '4 hook
+        // files' count is unique to this run's fixture against anything the
+        // earlier tests in this file can accumulate in the shared buffer.
+        $mine = $this->noticesCarrying(['4 hook files from trusted plugin bundles declined this launch']);
+        self::assertCount(1, $mine, 'the fan-out folds into ONE aggregate notice, not four');
+        self::assertStringContainsString($alpha, $mine[0], 'the named head survives the clip');
+        self::assertStringContainsString('stray-one-', $mine[0], 'the first declined file is named');
+        self::assertStringContainsString('outside the bundle directory', $mine[0], 'the per-file Lang::t detail rides it unchanged');
+        self::assertStringContainsString('(and 1 more)', $mine[0], 'three details are named, the rest is counted even at the clipped tail');
+    }
+
     /** The P1 trust list is a user-tier setting typed into the launch's own config. */
     private function trustBundleNamed(string $name): void
     {

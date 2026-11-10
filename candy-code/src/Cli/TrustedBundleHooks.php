@@ -19,8 +19,9 @@ use SugarCraft\Code\Support\ContainedPath;
  * Extracted from `Bootstrap` under the size ratchet's M6 ruling path when the
  * P1 plugin-core lane pushed the file past its ceiling — the behavior is
  * byte-for-byte what that lane shipped, relocated here so `Bootstrap.php`
- * sits under the ratchet again (the arm's three transcript-seam notices'
- * StderrEmitterCensus prefixed-writer credit moved with the bytes). The
+ * sits under the ratchet again (the arm's single aggregate seam notice'
+ * StderrEmitterCensus prefixed-writer credit moved with the bytes; the
+ * FIX-3 ruling turned the per-file fan-out into that one row). The
  * methods flatten into `Bootstrap`, which stays their only consumer and keeps
  * answering `Bootstrap::trustedBundleChannelNames()` for the serve startup,
  * the permission-settings reader symbol and the safe-mode flags tests.
@@ -40,6 +41,9 @@ trait TrustedBundleHooks
      * re-asserts containment at the read.
      */
     private const TRUSTED_BUNDLE_CHANNELS_CONFIG_KEY = 'trustedBundleChannels';
+
+    /** How many decline details the aggregate notice names before clipping. */
+    private const BUNDLE_HOOKS_DECLINED_SHOWN = 3;
 
     /**
      * The bundle NAMES allowed to load their declared channel entrypoints
@@ -84,6 +88,7 @@ trait TrustedBundleHooks
     private static function registerTrustedBundleHooks(HookManager $hooks, ?string $root, bool $quarantine): void
     {
         $trustedBundleNames = self::trustedBundleChannelNames();
+        $declined = [];
 
         // D1 reversal (owner ruling, code-chat §10 P1): a bundle the user
         // trusted BY NAME in `trustedBundleChannels` registers its declared
@@ -106,8 +111,10 @@ trait TrustedBundleHooks
         // A broken bundle file REFUSES ITSELF, not the launch: unlike the
         // project files above, these bytes come from third-party install
         // directories, and PermissionConfigException exists to protect the
-        // launch's own gating policy from silent degradation — a loud notice
-        // naming the skipped file is the matching honesty here.
+        // launch's own gating policy from silent degradation. The FIX-3 ruling
+        // (owner, option ii) folds every such decline into ONE aggregate
+        // notice naming the refused files — a loud honesty that cannot be
+        // multiplied by a hostile manifest.
         foreach (self::bundles($root) as $bundle) {
             if (!\in_array($bundle->name, $trustedBundleNames, true)) {
                 continue;
@@ -123,10 +130,10 @@ trait TrustedBundleHooks
                 }
 
                 if (!ContainedPath::below($path, $bundle->dir)) {
-                    self::warnPermissionConfigInTranscript(Lang::t('bundles.hooks.uncontained', [
+                    $declined[] = Lang::t('bundles.hooks.uncontained', [
                         'bundle' => $bundle->name,
                         'file' => $path,
-                    ]));
+                    ]);
 
                     continue;
                 }
@@ -134,11 +141,11 @@ trait TrustedBundleHooks
                 $loose = BundleChannelLoader::refuseLooseBytes($path);
 
                 if ($loose !== null) {
-                    self::warnPermissionConfigInTranscript(Lang::t('bundles.hooks.loose_bytes', [
+                    $declined[] = Lang::t('bundles.hooks.loose_bytes', [
                         'bundle' => $bundle->name,
                         'file' => $path,
                         'reason' => $loose,
-                    ]));
+                    ]);
 
                     continue;
                 }
@@ -162,13 +169,31 @@ trait TrustedBundleHooks
                         }
                     }
                 } catch (\InvalidArgumentException | \RuntimeException $e) {
-                    self::warnPermissionConfigInTranscript(Lang::t('bundles.hooks.refused', [
+                    $declined[] = Lang::t('bundles.hooks.refused', [
                         'bundle' => $bundle->name,
                         'file' => $path,
                         'error' => $e->getMessage(),
-                    ]));
+                    ]);
                 }
             }
+        }
+
+        // FIX-3 (owner ruling, option ii): the fan-out over third-party
+        // manifests must never multiply the capped launch-notice surface, so
+        // every decline collected above folds into ONE aggregate notice per
+        // run, clipped in the house (and N more) shape — concatenation, not a
+        // new sprintf site, so the launch-format census stays byte-untouched.
+        // The unchanged per-file Lang::t texts are the details it names.
+        if ($declined !== []) {
+            $shown = \array_slice($declined, 0, self::BUNDLE_HOOKS_DECLINED_SHOWN);
+            $rest = \count($declined) - \count($shown);
+
+            self::warnPermissionConfigInTranscript(
+                \count($declined) . ' hook file' . (\count($declined) === 1 ? '' : 's')
+                . ' from trusted plugin bundles declined this launch: '
+                . \implode('; ', $shown)
+                . ($rest > 0 ? ' (and ' . $rest . ' more)' : '')
+            );
         }
     }
 
