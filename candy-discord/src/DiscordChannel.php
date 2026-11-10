@@ -104,7 +104,7 @@ final class DiscordChannel implements ChannelInterface
             ($context->log)($line);
         });
 
-        $store = new CredentialStore();
+        $store = new CredentialStore(CredentialStore::defaultPath());
         $accounts = $this->accountNames($cfg, $store);
         if ($accounts === []) {
             $this->log->warn('channels.discord.no_accounts', ['why' => 'no token in the channels store and no DISCORD_BOT_TOKEN']);

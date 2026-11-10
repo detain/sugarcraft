@@ -202,7 +202,7 @@ final class DiscordAccountTest extends TestCase
         $gather = new \ReflectionMethod(DiscordAccount::class, 'collectMediaAndDispatch');
         $gather->setAccessible(true);
         $gather->invoke($this->face,
-            [['id' => 'a1', 'filename' => 'big.bin', 'content_type' => 'image/png', 'size' => 999999999]],
+            [['id' => 'a1', 'filename' => 'big.bin', 'content_type' => 'image/png', 'url' => 'https://media.discordapp.net/attachments/1/2/big.bin', 'size' => 999999999]],
             'discord:default:dm:u1', ['channelId' => 'c1', 'messageId' => 'm1'], 'look', false, 'm1');
         $this->settle(600);
         $notice = null;
