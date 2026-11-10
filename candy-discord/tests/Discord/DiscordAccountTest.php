@@ -118,14 +118,16 @@ final class DiscordAccountTest extends TestCase
     public function testOutboundCarriesReplyReferenceMuteAndEmbedSuppression(): void
     {
         $this->buildFace(['suppressEmbeds' => true]);
-        $this->resolve($this->face->deliver(['channelId' => 'c1', 'messageId' => 'm1'], 'hi'));
+        $this->face->deliver(['channelId' => 'c1', 'messageId' => 'm1'], 'hi');
+        $this->settle();
         $call = $this->api->lastCallFor('/messages');
         self::assertNotNull($call);
         self::assertSame('hi', $call['body']['content']);
         self::assertSame([], $call['body']['allowed_mentions']['parse']);
         self::assertSame(4, (int) $call['body']['flags'] & 4);
         self::assertSame(['message_id' => 'm1', 'fail_if_not_exists' => false], $call['body']['message_reference']);
-        $this->resolve($this->face->deliver(['channelId' => 'c1', 'messageId' => ''], 'again'));
+        $this->face->deliver(['channelId' => 'c1', 'messageId' => ''], 'again');
+        $this->settle();
         $second = $this->api->lastCallFor('/messages');
         self::assertArrayNotHasKey('message_reference', $second['body']);
     }
@@ -199,9 +201,9 @@ final class DiscordAccountTest extends TestCase
         $this->buildFace(['media' => ['maxMb' => 1, 'images' => 4, 'documents' => 2]]);
         $gather = new \ReflectionMethod(DiscordAccount::class, 'collectMediaAndDispatch');
         $gather->setAccessible(true);
-        $gather->invoke($this->face, 'discord:default:dm:u1', ['channelId' => 'c1', 'messageId' => 'm1'],
-            'look', [['id' => 'a1', 'filename' => 'big.bin', 'content_type' => 'image/png', 'size' => 999999999]],
-            'look', false, 'm1');
+        $gather->invoke($this->face,
+            [['id' => 'a1', 'filename' => 'big.bin', 'content_type' => 'image/png', 'size' => 999999999]],
+            'discord:default:dm:u1', ['channelId' => 'c1', 'messageId' => 'm1'], 'look', false, 'm1');
         $this->settle(600);
         $notice = null;
         foreach ($this->api->calls as $call) {
@@ -226,6 +228,7 @@ final class DiscordAccountTest extends TestCase
         );
         $this->face = new DiscordAccount('default', $rest, $gateway, $router, $cfg, Log::silent(),
             $this->pairing, new TextSafety(), $this->loop);
+        $router->addChannel($this->face, 'default');
         $own = new \ReflectionProperty(DiscordAccount::class, 'ownUserId');
         $own->setAccessible(true);
         $own->setValue($this->face, 'bot-9');
@@ -251,14 +254,6 @@ final class DiscordAccountTest extends TestCase
     {
         return ['id' => 'm' . \substr(\md5($authorId . $content), 0, 6), 'channel_id' => 'c1',
             'author' => ['id' => $authorId], 'content' => $content, 'mentions' => []];
-    }
-
-    private function resolve(mixed $promise): void
-    {
-        $settled = false;
-        \React\Promise\unwrap($promise instanceof \React\Promise\PromiseInterface ? $promise : \React\Promise\resolve(), 1);
-        $settled = true;
-        self::assertTrue($settled);
     }
 
     private function settle(int $ms = 300): void

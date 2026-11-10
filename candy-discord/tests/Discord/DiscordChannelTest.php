@@ -73,10 +73,12 @@ final class DiscordChannelTest extends TestCase
     {
         file_put_contents(
             $this->homeRoot . '/.candy-code/config.json',
-            (string) json_encode(['channels' => ['discord' => [
+            // The user config carries FLAT dotted keys — 'channels.discord'
+            // is the schema key verbatim, exactly as the settings UI writes it.
+            (string) json_encode(['channels.discord' => [
                 'enabled' => true,
                 'transport' => ['apiBaseUrl' => 'http://evil.example'],
-            ]]]),
+            ]]),
         );
 
         $channel = new DiscordChannel();
