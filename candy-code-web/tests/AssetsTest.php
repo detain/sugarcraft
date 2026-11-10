@@ -244,7 +244,13 @@ final class AssetsTest extends TestCase
         // restore the throwing call that crashes serve at startup, the exact
         // defect this test exists to prevent. The `is_string && is_dir` branch
         // in installedWebRoot only does work against a non-throwing probe.
-        $servePath = \dirname(__DIR__, 2) . '/candy-code/src/Cli/Serve.php';
+        // The seam lives in the serve subsystem, not in one file: the G4-H
+        // extraction moved Serve::installedWebRoot() (and with it the probe)
+        // from Serve.php into Serve/ServeStartup.php. Scan the shell plus the
+        // whole Serve/ directory so a future internal split of candy-code's
+        // serve code cannot silently blind this tripwire.
+        $serveDir = \dirname(__DIR__, 2) . '/candy-code/src/Cli';
+        $servePath = $serveDir . '/Serve.php';
         if (!\is_file($servePath)) {
             // Split-repo checkout of the web package alone: the sibling
             // server is not in this tree (carve-out mirrors candy-code's
@@ -253,9 +259,12 @@ final class AssetsTest extends TestCase
         }
 
         self::assertSame('SugarCraft\CodeWeb\Assets', Assets::class);
-        self::assertTrue(\method_exists(Assets::class, 'tryDistPath'), 'Serve.php probes tryDistPath() by name');
+        self::assertTrue(\method_exists(Assets::class, 'tryDistPath'), 'Serve probes tryDistPath() by name');
 
         $serve = (string) \file_get_contents($servePath);
+        foreach (glob($serveDir . '/Serve/*.php') ?: [] as $part) {
+            $serve .= (string) \file_get_contents($part);
+        }
         self::assertStringContainsString("'SugarCraft\\\\CodeWeb\\\\Assets'", $serve, 'Serve probes this exact FQCN string');
         self::assertStringContainsString("method_exists(\$assets, 'tryDistPath')", $serve, 'the probed method keeps its name');
         self::assertStringContainsString('$assets::tryDistPath()', $serve, 'the serve path calls the soft probe');
