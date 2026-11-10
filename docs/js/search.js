@@ -40,6 +40,14 @@
     return onLibPage() && isRootAnchored ? '../' + url : url;
   }
 
+  /* Dangerous-scheme refusal — the single source of truth consulted by BOTH
+     the href assignment and the click handler, so javascript:/data:/vbscript:
+     URLs never land in the DOM at all (middle-click / copy-link included).
+     Tested on the trimmed form because browsers trim before scheme detection. */
+  function unsafeResultHref(url) {
+    return typeof url === 'string' && /^(javascript|data|vbscript):/i.test(url.trim());
+  }
+
   /* ── Fetch index once ───────────────────────────────────────────── */
   function fetchIndex() {
     if (indexData.length > 0) {
@@ -132,7 +140,10 @@
       link.className = 'search-result-item';
       link.setAttribute('role', 'option');
       link.setAttribute('aria-selected', 'false');
-      link.href = resolveResultHref(item.url);
+      var resultHref = resolveResultHref(item.url);
+      /* Scheme-ful danger urls never reach href; the anchor degrades to '#'
+         and the click handler's refusal keeps it inert. */
+      link.href = unsafeResultHref(resultHref) ? '#' : resultHref;
 
       var contentDiv = document.createElement('div');
       contentDiv.className = 'search-result-content';
@@ -164,11 +175,11 @@
         // Navigate via the depth-resolved href (see resolveResultHref): the
         // old arm demanded a scheme before navigating at all, which deadened
         // every root-relative result (i.e. all of them). The XSS refusal
-        // stays — scheme-ful URLs must never be javascript:/data:/vbscript:
-        // (tested on the trimmed form, because browsers trim before scheme
-        // detection). Relative and absolute-path URLs are inherently safe.
+        // lives in unsafeResultHref (shared with the href assignment above)
+        // — scheme-ful URLs must never be javascript:/data:/vbscript:.
+        // Relative and absolute-path URLs are inherently safe.
         var url = resolveResultHref(item.url);
-        if (typeof url === 'string' && !/^(javascript|data|vbscript):/i.test(url.trim())) {
+        if (typeof url === 'string' && !unsafeResultHref(url)) {
           window.location.href = url;
         }
       });
