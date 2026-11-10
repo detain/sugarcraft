@@ -176,7 +176,7 @@ final class StreamJsonEmitterTest extends TestCase
         $this->assertSame(
             ['schema' => NonInteractive::SCHEMA, 'result' => 'partial answer'],
             $rows[1],
-            'the terminal line IS the json-format success document, byte for byte',
+            'the terminal line is the document passed to emitLine() verbatim — a hand-built 2-key fixture, not format()\'s 3-key post-ruling success envelope (whose stable refusals key this line does not carry)',
         );
     }
 
