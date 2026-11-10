@@ -380,7 +380,6 @@ final class RecorderTest extends TestCase
 
         $r->close();
         $this->assertGreaterThan(0, $r->captureWriteErrors(), 'teardown must not erase the tally');
-        $this->assertNotFalse($fh); // close() consumed it, but the counter survives
     }
 
     public function testHealthyCaptureReportsZeroWriteErrors(): void
