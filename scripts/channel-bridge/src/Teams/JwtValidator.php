@@ -71,15 +71,21 @@ final class JwtValidator
         }
         $alg = (string) ($header['alg'] ?? '');
         $kid = isset($header['kid']) ? (string) $header['kid'] : '';
+
+        // The emulator sends unsigned tokens (empty signature segment); that
+        // door is opt-in per the config and NEVER implicit (§8.2). It is
+        // checked BEFORE the signature gate because a `none` token has no
+        // signature to fail on — the claims are the only thing left to judge.
+        if ($alg === 'none') {
+            if (!$this->allowUnsignedEmulator) {
+                return null;
+            }
+
+            return self::claimsOk($payload, $this->appId) ? $payload : null;
+        }
         $signature = self::base64UrlDecode($signatureB64);
         if ($signature === null || $signature === '') {
             return null;
-        }
-
-        // The emulator sends unsigned tokens; that door is opt-in per the
-        // config and NEVER implicit (§8.2).
-        if ($alg === 'none') {
-            return $this->allowUnsignedEmulator ? (self::claimsOk($payload, $this->appId) ? $payload : null) : null;
         }
         if ($alg !== 'RS256' || $kid === '') {
             return null;
