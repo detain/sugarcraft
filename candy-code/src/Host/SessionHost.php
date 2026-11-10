@@ -1928,13 +1928,14 @@ final class SessionHost
 
     /**
      * The code-chat D6 admission door: when the workspace carries a
-     * {@see ChannelToolPolicyService} (only a serve boot does), the session's
-     * name is parsed for the §2.3 channel grammar and the live channel tool
-     * policy is attached to the gate about to run — RESOLVED AT ADMISSION,
-     * fresh every dispatch, exactly the way the memo grants ride
-     * {@see TurnRunner::backendForTurn()}. An unscoped session, a local TUI
-     * host without the service, or an unnamed session returns the gate
-     * untouched, object for object, so every other surface is byte-identical.
+     * {@see ChannelToolPolicyService} — every Bootstrap workspace build does,
+     * the local chat launch included — the session's name is parsed for the
+     * §2.3 channel grammar and the live channel tool policy is attached to
+     * the gate about to run — RESOLVED AT ADMISSION, fresh every dispatch,
+     * exactly the way the memo grants ride {@see TurnRunner::backendForTurn()}.
+     * An unscoped session, a workspace hand-built without the service, or an
+     * unnamed session returns the gate untouched, object for object, so every
+     * other surface is byte-identical.
      */
     private function channelScoped(?PermissionGate $gate): ?PermissionGate
     {
