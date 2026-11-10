@@ -802,6 +802,21 @@ if (!stream_isatty(\STDIN)) {
 TuiRenderer::setSize(200, 60);
 
 /*
+ * ...and the width COLUMNS advertises gets the same clearing the colour tier
+ * above already had.
+ *
+ * Help::screen() re-wraps the help page when the probed terminal width
+ * exceeds the 80-column authored budget, so a shell that exports COLUMNS
+ * would run a DIFFERENT --help than CI's pipe does — every byte-identity pin
+ * on the screen (HelpTest, CliLangCatalogueTest, the spawned-binary pins)
+ * leans on the fallback shape, exactly like the colour pins above. The wide
+ * render is not left untested for it: HelpTest drives it ON PURPOSE, arming
+ * and clearing COLUMNS itself around each pin.
+ */
+putenv('COLUMNS');
+unset($_ENV['COLUMNS'], $_SERVER['COLUMNS']);
+
+/*
  * No test may reach the developer's real clipboard. A mouse selection's
  * release returns a Cmd that, once evaluated, hands the text to the host's
  * clipboard tool ({@see \SugarCraft\Code\Support\SystemClipboard}) — and on a

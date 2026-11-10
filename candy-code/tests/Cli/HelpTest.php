@@ -924,4 +924,119 @@ final class HelpTest extends TestCase
             self::discardStampedPhar($named);
         }
     }
+
+    // =========================================================================
+    // Render width resolution (wf/help)
+    // =========================================================================
+
+    /**
+     * Drive {@see Help}'s private width resolver under an armed COLUMNS,
+     * in whichever spelling the case names, and always return the process to
+     * the cleared shape tests/bootstrap.php installed — the resolver reads
+     * getenv first and the superglobals only as fallbacks, so a case that
+     * arms two spellings is testing the precedence, not the parse.
+     */
+    private static function probeHelpWidth(?string $getenv, ?string $env = null, ?string $server = null): int
+    {
+        self::clearHelpColumnsEnv();
+        if ($getenv !== null) {
+            putenv('COLUMNS=' . $getenv);
+        }
+        if ($env !== null) {
+            $_ENV['COLUMNS'] = $env;
+        }
+        if ($server !== null) {
+            $_SERVER['COLUMNS'] = $server;
+        }
+
+        try {
+            return (int) (new \ReflectionMethod(Help::class, 'helpRenderWidth'))->invoke(null);
+        } finally {
+            self::clearHelpColumnsEnv();
+        }
+    }
+
+    private static function clearHelpColumnsEnv(): void
+    {
+        putenv('COLUMNS');
+        unset($_ENV['COLUMNS'], $_SERVER['COLUMNS']);
+    }
+
+    public function testTheRenderWidthFallsBackToTheAuthoredBudgetWhenNothingIsProbed(): void
+    {
+        // The CI / piped shape: with COLUMNS cleared by the bootstrap, the
+        // resolver answers the 80-column budget the page was authored to,
+        // which is what keeps every byte-identity pin below a statement
+        // about today's screen and not about the runner's terminal.
+        $this->assertSame(80, self::probeHelpWidth(null));
+    }
+
+    /** @return array<string, array{0: string, 1: int}> */
+    public static function probedColumnValues(): array
+    {
+        return [
+            'narrower than the budget'            => ['20', 80],
+            'one under the budget'                => ['79', 80],
+            'exactly the budget'                  => ['80', 80],
+            'one over the budget'                 => ['81', 81],
+            'a common wide terminal'              => ['160', 160],
+            'exactly the ceiling'                 => ['200', 200],
+            'one over the ceiling'                => ['201', 200],
+            'absurdly wide stays clamped'         => ['5000', 200],
+            'last credible value clamps'          => ['10000', 200],
+            'beyond the credible range'           => ['10001', 80],
+            'zero is not a width'                 => ['0', 80],
+            'negative is not a width'             => ['-5', 80],
+            'a word is not a width'               => ['banana', 80],
+            'the empty form means unset'          => ['', 80],
+        ];
+    }
+
+    /**
+     * The clamp table, one arm at a time: below the authored budget the
+     * floor wins, above the layout ceiling the cap wins, and values the
+     * house probe does not trust at all (non-numeric, zero, negative,
+     * beyond 10_000) resolve to the budget exactly like an absent probe —
+     * WidthProbe parity, recorded rather than guessed.
+     *
+     * @dataProvider probedColumnValues
+     */
+    public function testTheRenderWidthClampsProbedValuesIntoTheLayoutBudget(string $probed, int $expected): void
+    {
+        $this->assertSame($expected, self::probeHelpWidth($probed), "COLUMNS={$probed} must resolve to {$expected}");
+    }
+
+    public function testTheRenderWidthReadsTheSuperglobalSpellingsOfColumns(): void
+    {
+        // getenv cleared: the resolver must still honour $_ENV, and then
+        // $_SERVER — the same two fallbacks the house probe consults, so a
+        // runner that exports through only one superglobal is not ignored.
+        $this->assertSame(140, self::probeHelpWidth(null, '140'));
+        $this->assertSame(120, self::probeHelpWidth(null, null, '120'));
+    }
+
+    public function testTheEnvironmentSpellingOutranksTheSuperglobals(): void
+    {
+        $this->assertSame(160, self::probeHelpWidth('160', '90', '90'));
+        $this->assertSame(90, self::probeHelpWidth(null, '90', '160'));
+    }
+
+    public function testTheScreenStaysTheAuthoredPageUnderANarrowerProbedWidth(): void
+    {
+        // The byte-identity law at the resolver's output, not just its
+        // arithmetic: an armed 20 columns (and an armed nonsense value —
+        // both resolve to the budget) leave --help byte-for-byte the page.
+        $en   = require self::LANG_DIR . '/en.php';
+        $page = (string) $en['cli.help.screen'];
+
+        foreach (['20', 'banana'] as $probed) {
+            putenv('COLUMNS=' . $probed);
+
+            try {
+                $this->assertSame($page, Help::screen(), "COLUMNS={$probed} must not move a single byte");
+            } finally {
+                self::clearHelpColumnsEnv();
+            }
+        }
+    }
 }

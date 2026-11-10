@@ -30,6 +30,56 @@ final class Help
      * The Composer package whose installed version IS candy-code's version.
      */
     private const PACKAGE = 'sugarcraft/candy-code';
+
+    /**
+     * The authored budget of the help page: translators align its columns to
+     * 80 cells, so a terminal at or below that width must see the page
+     * verbatim — and a probed value that is absent or not credible resolves
+     * here rather than guessing. Mirrors sugar-cli's internal WidthProbe
+     * fallback (its class is `@internal`, so the read pattern is replicated
+     * rather than imported).
+     */
+    private const HELP_MIN_WIDTH = 80;
+
+    /**
+     * Upper clamp of the render width: past 200 columns the key and
+     * description columns of a table row drift so far apart the block stops
+     * reading as a table, so the probed width is honoured up to here and
+     * capped at it above.
+     */
+    private const HELP_MAX_WIDTH = 200;
+
+    /**
+     * Resolve the width the help screen renders at, probing the terminal the
+     * way the house probes columns: COLUMNS through getenv first, then the
+     * superglobal spellings, accepting only a credible integer in
+     * 1..10_000 — the parity range of sugar-cli's internal WidthProbe, whose
+     * read this replicates because that class is `@internal` and candy-code
+     * must not depend on it. Absent or junk resolves to the authored budget;
+     * a credible probe is clamped into [HELP_MIN_WIDTH, HELP_MAX_WIDTH].
+     */
+    private static function helpRenderWidth(): int
+    {
+        $raw = getenv('COLUMNS');
+        if ($raw === false || $raw === '') {
+            $raw = $_ENV['COLUMNS'] ?? $_SERVER['COLUMNS'] ?? false;
+        }
+        if (!is_string($raw) && !is_int($raw)) {
+            $raw = false;
+        }
+
+        $columns = filter_var(
+            $raw,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1, 'max_range' => 10_000]],
+        );
+        if ($columns === false) {
+            return self::HELP_MIN_WIDTH;
+        }
+
+        return max(self::HELP_MIN_WIDTH, min(self::HELP_MAX_WIDTH, $columns));
+    }
+
     /**
      * Return the --help text for the candy-code binary.
      *
