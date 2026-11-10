@@ -21,6 +21,7 @@ use SugarCraft\Code\Bundles\Bundle;
 use SugarCraft\Code\Bundles\BundleDiscovery;
 use SugarCraft\Code\Bundles\BundleRecommender;
 use SugarCraft\Code\Bundles\MarketplaceRegistry;
+use SugarCraft\Code\Channels\BundleChannelLoader;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Commands\CommandLoader;
 use SugarCraft\Code\Commands\KeyBindingRegistry;
@@ -2724,15 +2725,16 @@ final class Bootstrap
      *  - {@see foreignAgentPresets()} passes it to the preset registry's
      *    `discover()`.
      *
-     * Two of the format's five surfaces are DECLINED AT THE WIRE and this is
-     * where the decline is said, once per launch: bundle HOOKS are never
-     * registered (hook surfaces stay candy-code-owned, the same ruling that
-     * keeps `hooks.json` out of cloned `.claude/` trees), and a bundle's
-     * `.mcp.json` is never AUTO-STARTED — the operator reviews it and imports
-     * it deliberately through `candy-code mcp import`. Both get a launch
-     * notice naming the affected bundles, because a bundle that loads its
-     * skills but silently runs no hooks looks exactly like a bundle whose
-     * hooks the user never wanted.
+     * Of the format's five surfaces, one is DECLINED AT THE WIRE and this is
+     * where the decline is said, once per launch: a bundle's `.mcp.json` is
+     * never AUTO-STARTED — the operator reviews it and imports it deliberately
+     * through `candy-code mcp import`. Hooks used to share that decline; under
+     * the P1 ruling (code-chat §10, owner reversal D1) a bundle the user
+     * trusted BY NAME in `trustedBundleChannels` has its hook files registered
+     * through the same trust gate {@see hooks()} applies to channel classes,
+     * while every UNTRUSTED bundle's hooks still decline here with a notice
+     * naming it, because a bundle that loads its skills but silently runs no
+     * hooks looks exactly like a bundle whose hooks the user never wanted.
      *
      * Refused bundle directories feed {@see $projectTierRefusals} like every
      * other containment answer; per-bundle parse problems rise as warnings.
@@ -2775,8 +2777,15 @@ final class Bootstrap
         $hooked = [];
         $mcped = [];
 
+        // D1 reversal (owner ruling, code-chat §10): a trusted bundle's hooks
+        // register through the P1 trust gate, so the declined notice survives
+        // ONLY for bundles the user has not trusted by name. The vocabulary is
+        // deliberately the same NON-LAYERED user-tier list that gates channel
+        // classes — one allow-list consents both surfaces of a bundle.
+        $trustedNames = self::trustedBundleChannelNames();
+
         foreach ($bundles as $bundle) {
-            if ($bundle->hooksPaths() !== []) {
+            if ($bundle->hooksPaths() !== [] && !\in_array($bundle->name, $trustedNames, true)) {
                 $hooked[] = $bundle->name;
             }
 
@@ -6592,6 +6601,94 @@ public static function useMaxCost(?string $maxCost): void
                     0,
                     $e,
                 );
+            }
+        }
+
+        $trustedBundleNames = self::trustedBundleChannelNames();
+
+        // D1 reversal (owner ruling, code-chat §10 P1): a bundle the user
+        // trusted BY NAME in `trustedBundleChannels` registers its declared
+        // hook files here — the same user-tier allow-list that gates the
+        // channel classes BundleChannelLoader loads, one consent covering
+        // both surfaces. An untrusted bundle never reaches this loop; its
+        // decline is the `bundles.hooks_declined` notice in {@see bundles()}.
+        //
+        // The bytes gate is the loader's own (refuseLooseBytes): name-trust
+        // does not extend to a file another account can rewrite. Entry-level
+        // quarantine is CALLED with the bundle path as its own exempt file:
+        // the project ledger recorded by checkPolicyFreshness() keys by
+        // launch root and is structurally blind to bundle scan-roots, so
+        // filtering bundle entries against it would silently drop every one
+        // of them. The name-allow-list is the P1 consent; extending the
+        // first-launch ledger to bundle roots is recorded as P4 hardening in
+        // the program report, and keeping this call in place means that
+        // widening is a recorder change, not a call-site hunt.
+        //
+        // A broken bundle file REFUSES ITSELF, not the launch: unlike the
+        // project files above, these bytes come from third-party install
+        // directories, and PermissionConfigException exists to protect the
+        // launch's own gating policy from silent degradation — a loud notice
+        // naming the skipped file is the matching honesty here.
+        foreach (self::bundles($root) as $bundle) {
+            if (!\in_array($bundle->name, $trustedBundleNames, true)) {
+                continue;
+            }
+
+            foreach ($bundle->hooksPaths() as $path) {
+                if (!\is_file($path)) {
+                    // The bare `/hooks` directory candidate is not a loadable
+                    // surface; hooksPaths() lists its conventional
+                    // `hooks/hooks.json` alongside it, so skipping the
+                    // directory here loses no declared hooks.
+                    continue;
+                }
+
+                if (!ContainedPath::below($path, $bundle->dir)) {
+                    self::warnPermissionConfigInTranscript(Lang::t('bundles.hooks.uncontained', [
+                        'bundle' => $bundle->name,
+                        'file' => $path,
+                    ]));
+
+                    continue;
+                }
+
+                $loose = BundleChannelLoader::refuseLooseBytes($path);
+
+                if ($loose !== null) {
+                    self::warnPermissionConfigInTranscript(Lang::t('bundles.hooks.loose_bytes', [
+                        'bundle' => $bundle->name,
+                        'file' => $path,
+                        'reason' => $loose,
+                    ]));
+
+                    continue;
+                }
+
+                try {
+                    $entries = self::quarantineNewHookEntries(
+                        $path,
+                        self::hookFileEntries($path),
+                        $quarantine,
+                        [$path],
+                    );
+
+                    $hooks->loadEntries($entries, $path);
+
+                    foreach ($entries as $entry) {
+                        if (
+                            ($entry['unattendedAsk'] ?? false) === true
+                            && ($entry['disabled'] ?? false) !== true
+                        ) {
+                            HeadlessPermissionPrompt::requireUnattendedAnswer($entry['name']);
+                        }
+                    }
+                } catch (\InvalidArgumentException | \RuntimeException $e) {
+                    self::warnPermissionConfigInTranscript(Lang::t('bundles.hooks.refused', [
+                        'bundle' => $bundle->name,
+                        'file' => $path,
+                        'error' => $e->getMessage(),
+                    ]));
+                }
             }
         }
 

@@ -22,11 +22,12 @@ use SugarCraft\Code\Support\ContainedPath;
  * `Cli\Bootstrap`. `entrypoints()` keeps that discipline for the one surface
  * whose payload is CODE: the declaration is parsed here, and whether a named
  * file is ever required lives behind the trust gate in the bundle channel
- * loader — an untrusted bundle's entrypoint file is never touched. Two
- * surfaces are refused by construction and
- * this class is where their SHAPE is pinned so the refusal can be asserted:
- * `hooksPaths()` (bundle hooks are never registered — a launch notice names
- * the decline) and `mcpFile()` (a bundle's MCP declaration is never
+ * loader — an untrusted bundle's entrypoint file is never touched. `hooksPaths()`
+ * rides the same user-tier name allow-list: a trusted bundle's hook files
+ * register through `Bootstrap::hooks()`, and an untrusted one still declines
+ * with a launch notice. One surface is refused by construction and
+ * this class is where its SHAPE is pinned so the refusal can be asserted:
+ * `mcpFile()` (a bundle's MCP declaration is never
  * auto-started — it is offered to the operator through the existing
  * `mcp import` verb).
  *
@@ -209,11 +210,18 @@ final class Bundle
     /**
      * Every path in the bundle that would register hooks — a `hooks` manifest
      * entry, an INLINE `hooks` object, or the conventional `hooks/` directory.
-     * DECLINED AT THE WIRE: bundle hooks are never registered with the hook
-     * manager; a launch notice names the decline so the operator learns the
-     * bundle is not running whole rather than wondering why its statusline
-     * vanished. An inline declaration answers the manifest path, because the
-     * hooks ride inside plugin.json itself (C-EXT-7).
+     * TRUST-GATED (code-chat §10 P1, owner reversal D1): {@see
+     * \SugarCraft\Code\Cli\Bootstrap::hooks()} registers these files for a
+     * bundle the user trusted by name, and only there — the entries are raw
+     * manifest bytes, so the consumer re-asserts containment, the
+     * private-bytes gate and loadability before anything is registered. An
+     * untrusted bundle's hooks still decline with a launch notice naming it,
+     * so the operator learns the bundle is not running whole rather than
+     * wondering why its statusline vanished. An inline declaration answers
+     * the manifest path, because the hooks ride inside plugin.json itself
+     * (C-EXT-7); that path currently refuses itself at parse — the plugin.json
+     * shape is not the hooks-file shape — and the notice says so (recorded
+     * seam: an inline-hooks reader is deferred).
      *
      * @return list<string>
      */

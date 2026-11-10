@@ -209,6 +209,12 @@ final class ContainedPathInventoryTest extends TestCase
         // manifest-named entrypoint file with its own containment compare.
         'Channels/BundleChannelLoader.php' => 1,
         'Chat.php' => 1,
+        // PLG-1 P1 step 6 (code-chat §10, owner ruling D1 reversal): the
+        // trusted-bundle hooks loop in Bootstrap::hooks() re-asserts bundle
+        // containment over every raw manifest-declared hook path before the
+        // entry is loaded — the loader's own compare guards classes, this one
+        // guards hook data files.
+        'Cli/Bootstrap.php' => 1,
         'Cli/McpDecision.php' => 1,
         'Commands/CommandLoader.php' => 2,
         'Commands/CommandSpec.php' => 1,
@@ -413,7 +419,7 @@ final class ContainedPathInventoryTest extends TestCase
             'FORTY' => 40, 'FORTY-ONE' => 41, 'FORTY-TWO' => 42, 'FORTY-THREE' => 43,
             'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53, 'FIFTY-FOUR' => 54, 'FIFTY-FIVE' => 55, 'FIFTY-SIX' => 56,
             'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64, 'SIXTY-FIVE' => 65, 'SIXTY-SEVEN' => 67, 'SIXTY-NINE' => 69,
-        'SEVENTY' => 70,
+        'SEVENTY' => 70, 'SEVENTY-ONE' => 71, 'SEVENTY-TWO' => 72,
             'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24, 'TWENTY-FIVE' => 25,
         ];
 

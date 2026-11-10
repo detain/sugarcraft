@@ -101,7 +101,7 @@ final class BundleChannelLoader
                         continue;
                     }
 
-                    $private = self::privateEntrypointRefusal($entry['path']);
+                    $private = self::refuseLooseBytes($entry['path']);
                     if ($private !== null) {
                         $refusals[] = $where + ['reason' => $private];
                         continue;
@@ -140,10 +140,14 @@ final class BundleChannelLoader
     }
 
     /**
-     * The private-bytes gate: entrypoint file and its directory must be
-     * ours and not world-open. Returns a reason word or null when private.
+     * The private-bytes gate: the file and its directory must be ours and not
+     * world-open. Returns a reason word or null when private. It guards class
+     * entrypoints AND trusted-bundle hook data files — name-trust on the
+     * manifest does not extend to bytes another account can rewrite, which is
+     * why the channel trust gate alone is never the whole check (ruling D1's
+     * reversal rides this gate for both surfaces, code-chat §10).
      */
-    private static function privateEntrypointRefusal(string $path): ?string
+    public static function refuseLooseBytes(string $path): ?string
     {
         foreach ([$path, \dirname($path)] as $target) {
             if (!\file_exists($target)) {

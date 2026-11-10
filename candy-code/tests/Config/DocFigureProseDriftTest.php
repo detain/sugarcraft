@@ -2292,7 +2292,10 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertTrue(method_exists(Bootstrap::class, $gateRow[2]), "Bootstrap::{$gateRow[2]}() no longer exists — the bullet names the wrong seam");
         // C-TOOL-5.b widened 9000 -> 12000: the formatAuto arm added ~14 lines
         // to hooks(), and the gate-hook needle sits at the tail of the body.
-        $hooksBody = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $gateRow[2], 12000);
+        // PLG-1 P1 step 6 widened 12000 -> 16000: the trusted-bundle hooks loop
+        // (D1 reversal) added ~45 lines ahead of the same tail needle; the body is
+        // now 15898 bytes with the gate-hook call at 15253.
+        $hooksBody = self::bodyExcerpt(self::sourceOf('Cli/Bootstrap.php'), $gateRow[2], 16000);
         foreach (['registerBuiltIns()', 'loadEntries(', 'new ' . $gateRow[1] . '('] as $needle) {
             self::assertStringContainsString($needle, $hooksBody, "Bootstrap::{$gateRow[2]}() no longer contains {$needle} — the ordering and gate claims lost their referent");
         }

@@ -11,17 +11,18 @@ use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
- * PLG-1's loud half: the two bundle surfaces candy-code REFUSES — a shipped
- * `.mcp.json` is never auto-started, bundle hooks are never registered — and
- * the decline is proven at the wire, not just promised in a docblock.
- *
- * Each test smuggles the real thing: a genuine bundle directory carrying a
- * genuine `.mcp.json`/`hooks/` payload, discovered through the genuine
- * `Bootstrap::bundles()` feed, and the assertion is about what does NOT
- * happen afterwards (no decision on the bundle's file, no hook in the
- * registry) plus what the operator IS told (a launch notice naming the
- * decline once per root — memoized, so a re-read of the same bundle set
- * never repeats the sermon).
+ * PLG-1's loud half, P1-revised: the `.mcp.json` surface stays REFUSED — a
+ * shipped file is never auto-started — while the hooks surface now rides the
+ * owner ruling D1 trust gate: hooks of a bundle the user named in
+ * trustedBundleChannels register through the same file loop as the launch's
+ * own hook files, and untrusted bundles still decline with a notice naming
+ * them. Each test smuggles the real thing: a genuine bundle directory
+ * carrying a genuine `.mcp.json`/`hooks/` payload, discovered through the
+ * genuine `Bootstrap::bundles()` feed, and the assertion is about what does
+ * (or does not) happen afterwards (no decision on the bundle's file, the
+ * hook present only behind the trust door) plus what the operator IS told (a
+ * launch notice once per root — memoized, so a re-read of the same bundle
+ * set never repeats the sermon).
  */
 final class BundleDeclinedSurfacesTest extends TestCase
 {
@@ -148,7 +149,7 @@ final class BundleDeclinedSurfacesTest extends TestCase
         self::assertFileDoesNotExist($marker, 'nothing ran, so the smuggled server command never executed');
     }
 
-    public function testBundleHooksNeverReachTheHookRegistry(): void
+    public function testUntrustedBundleHooksNeverReachTheHookRegistry(): void
     {
         $hookName = 'smuggled-hook-' . getmypid();
         $this->plantProjectBundle($this->project, 'hooks-smuggler-' . getmypid(), [
@@ -166,7 +167,8 @@ final class BundleDeclinedSurfacesTest extends TestCase
         self::assertStringNotContainsString(
             $hookName,
             var_export($inspect['hooks'], true),
-            'a bundle hooks file is DECLINED AT THE WIRE: hookFiles() reads the trusted dir, the user tier and the trees under the checkout itself — never a bundle interior',
+            'an untrusted bundle\'s hooks file stays dark: the trust door in hooks() registers bundle files ONLY for names'
+            . ' in trustedBundleChannels, and hookFiles() itself never grows a bundle scan-root',
         );
     }
 
@@ -186,7 +188,7 @@ final class BundleDeclinedSurfacesTest extends TestCase
         self::assertNotEmpty($this->projectBundles($root));
         Bootstrap::bundles($root); // SECOND read — memoized, must not repeat the sermon
 
-        $hookNotices = $this->noticesCarrying(['declined by design', $hooked]);
+        $hookNotices = $this->noticesCarrying(['not trusted them by name', $hooked]);
         self::assertCount(1, $hookNotices, 'the hooks decline is one launch notice per (root, paths), not per call');
         self::assertStringContainsString($hooked, $hookNotices[0]);
 
@@ -261,7 +263,7 @@ final class BundleDeclinedSurfacesTest extends TestCase
             'an inline hooks object lives IN the manifest — the decline must name where the hooks actually are',
         );
 
-        $notices = $this->noticesCarrying(['declined by design', $name]);
+        $notices = $this->noticesCarrying(['not trusted them by name', $name]);
         self::assertCount(1, $notices, 'the inline shape still fires the one-per-root hooks decline');
     }
 
@@ -316,5 +318,79 @@ final class BundleDeclinedSurfacesTest extends TestCase
             'an inline mcpServers object lives IN the manifest — the decline names plugin.json',
         );
         self::assertCount(1, $this->noticesCarrying(['did NOT start', $name]), 'the inline shape still fires the MCP decline');
+    }
+
+    /** PLG-1 P1 bright half: naming the bundle is what opens the trust door. */
+    public function testTrustedBundleHooksRegisterThroughTheHookRegistry(): void
+    {
+        $root = $this->tempDir . '/bright-hooks-root';
+        mkdir($root, 0777, true);
+        $name = 'bright-hooks-' . getmypid();
+        $this->trustBundleNamed($name);
+        $this->plantProjectBundle($root, $name, [
+            'hooks/hooks.json' => (string) json_encode([
+                'hooks' => ['PreToolUse' => [['name' => 'bundleBrightHook' . getmypid(), 'command' => 'true']]],
+            ]),
+        ]);
+
+        $dumped = var_export(Bootstrap::hooks(null, $root)->inspect()['hooks'], true);
+        self::assertStringContainsString(
+            'bundleBrightHook' . getmypid(),
+            $dumped,
+            'a trusted bundle\'s hook file registers through the same loader loop',
+        );
+        self::assertSame([], $this->noticesCarrying(['not trusted them by name', $name]), 'no decline sermon for a bundle the user named');
+    }
+
+    public function testTrustedBundleHooksWithWorldWritableBytesRefuseThemselves(): void
+    {
+        $root = $this->tempDir . '/loose-hooks-root';
+        mkdir($root, 0777, true);
+        $name = 'loose-hooks-' . getmypid();
+        $this->trustBundleNamed($name);
+        $this->plantProjectBundle($root, $name, [
+            'hooks/hooks.json' => (string) json_encode([
+                'hooks' => ['PreToolUse' => [['name' => 'bundleLooseHook' . getmypid(), 'command' => 'true']]],
+            ]),
+        ]);
+        chmod($root . '/' . Bundle::INSTALLED_RELATIVE_PATH . '/' . $name . '/hooks/hooks.json', 0o666);
+
+        $dumped = var_export(Bootstrap::hooks(null, $root)->inspect()['hooks'], true);
+        self::assertStringNotContainsString(
+            'bundleLooseHook' . getmypid(),
+            $dumped,
+            'name-trust does not extend to bytes another account can rewrite',
+        );
+        self::assertNotSame([], $this->noticesCarrying(['another account can rewrite', $name]), 'the loose-bytes refusal is announced');
+    }
+
+    public function testTrustedBundleHooksPointingOutsideTheBundleDirRefuse(): void
+    {
+        $root = $this->tempDir . '/escape-hooks-root';
+        mkdir($root, 0777, true);
+        $name = 'escape-hooks-' . getmypid();
+        $this->trustBundleNamed($name);
+        $stray = $root . '/stray-' . getmypid() . '.json';
+        file_put_contents($stray, (string) json_encode([
+            'hooks' => ['PreToolUse' => [['name' => 'bundleEscapeHook' . getmypid(), 'command' => 'true']]],
+        ]));
+        $this->plantProjectBundle($root, $name, [
+            Bundle::MANIFEST_RELATIVE_PATH => (string) json_encode(['name' => $name, 'hooks' => [$stray]]),
+        ]);
+
+        $dumped = var_export(Bootstrap::hooks(null, $root)->inspect()['hooks'], true);
+        self::assertStringNotContainsString(
+            'bundleEscapeHook' . getmypid(),
+            $dumped,
+            'a stray file INSIDE the project but OUTSIDE the bundle dir fails the bundle\'s own containment',
+        );
+        self::assertNotSame([], $this->noticesCarrying(['outside the bundle directory', $name]), 'the uncontained refusal is announced');
+    }
+
+    /** The P1 trust list is a user-tier setting typed into the launch's own config. */
+    private function trustBundleNamed(string $name): void
+    {
+        file_put_contents($this->configDir . '/config.json', (string) json_encode(['trustedBundleChannels' => [$name]]));
+        chmod($this->configDir . '/config.json', 0o600);
     }
 }
