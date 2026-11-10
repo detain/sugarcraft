@@ -12,6 +12,7 @@ use SugarCraft\Code\Channels\ChannelContext;
 use SugarCraft\Code\Channels\ChannelInterface;
 use SugarCraft\Code\Channels\ChannelsStore;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
+use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 
 /**
  * Consumer window for the `@candy/discord` bundle (code-chat P2).
@@ -28,6 +29,7 @@ use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 final class DiscordBundleWeldTest extends TestCase
 {
     use TemporaryDirectoryTrait;
+    use HomeSandboxTrait;
 
     private string $tempDir = '';
 
@@ -35,10 +37,20 @@ final class DiscordBundleWeldTest extends TestCase
     {
         $this->tempDir = sys_get_temp_dir() . '/candy-code-discord-weld-' . uniqid((string) getmypid(), true);
         mkdir($this->tempDir, 0777, true);
+        // Hermeticity, per the house sandbox law: every HOME-rooted reader
+        // (trustedConfigDirPath, the raw user config behind
+        // channelsDiscordSettings, the CredentialStore default path) must
+        // resolve into the temp tree, so a developer whose real ~/.candy-code
+        // happens to enable channels.discord cannot turn this window red or
+        // have it write discord state into their home. The trait snapshots
+        // the real HOME on first call, before touching it — the lane-cf
+        // ordering law lives inside the trait now.
+        $this->useHomeSandbox($this->tempDir . '/home');
     }
 
     protected function tearDown(): void
     {
+        $this->restoreHomeSandbox();
         $this->removeDirectory($this->tempDir);
     }
 
@@ -110,7 +122,7 @@ final class DiscordBundleWeldTest extends TestCase
         self::assertSame([], $channel->faceNames(), 'no account face was built from a dark tree');
         self::assertDirectoryDoesNotExist(
             \SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath() . '/discord',
-            'a dark channel must not create state directories under the real home',
+            'a dark channel must not create state directories under the (sandboxed) home',
         );
         $channel->dispose();
         $channel->dispose(); // idempotent by contract — a double dispose must not throw
