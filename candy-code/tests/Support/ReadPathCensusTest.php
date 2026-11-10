@@ -839,6 +839,16 @@ final class ReadPathCensusTest extends TestCase
             'SELF_LOCATED — `bundlesGitSha()`\'s packed-refs scan when the loose ref file is '
                 . 'unreadable, the same checkout\'s own `.git/packed-refs` index',
         ],
+        'Cli/DoctorChannelsChecks.php|file_get_contents' => [
+            'CALLER_SUPPLIED — the `channels store` doctor row reads the channels.json bytes '
+                . 'for the LOUD corruption diagnosis ChannelsStore::read() swallows silently; '
+                . 'production hands Bootstrap::trustedConfigDirPath(), tests hand a temp fixture '
+                . 'dir, and the row never echoes the bytes it read (secrets ride this file)',
+        ],
+        'Cli/DoctorChannelsChecks.php|scandir' => [
+            'NAMES_ONLY — the `inbound log` doctor row counts corral-prefixed siblings by name '
+                . 'beside the durable inbound ledger to report quarantine posture; it opens no content',
+        ],
         'Cli/DoctorChecks.php|file_get_contents' => [
             'CALLER_SUPPLIED — the `doctor` config-file check (the CLI verb and the in-session '
                 . '`/doctor` alike — one roster): Bootstrap::userConfigPath(), the operator\'s '
