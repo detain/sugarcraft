@@ -19,6 +19,8 @@
 </head>
 <body>
 
+<a class="skip-link" href="#main">Skip to main content</a>
+
 <!--nav:start-->
 <nav class="nav" aria-label="Main navigation"><div class="nav-inner">
     <a class="brand" href="/"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
@@ -121,6 +123,8 @@
     </div>
 </div></nav>
 <!--nav:end-->
+
+<main id="main">
 
 <section class="section">
   <div class="container">
@@ -278,6 +282,7 @@ while (!$driver->isEof()) {
     <p>Two structural laws to design against. <strong>Bracketed paste fences are forgeable</strong>: <code>CSI 200~</code>/<code>CSI 201~</code> are just bytes — use framing for convenience (bulk text without keymap side effects), never as an authenticity boundary between typed and pasted. <strong>Caps never reinterpret</strong>: when a sequence or paste overflows its cap the excess is discarded and counted (<code>discardedPasteBytes()</code>), never pushed back into the stream for a second parse. The fleet's private-use-area arena (zone sentinels U+E000/U+E001, image markers from U+E002) passes through decoding byte-identical — the consumer that renders owns the sweep, with <code>Sanitize::untrustedForMarkedFrames()</code>; sugar-core's <code>InputReader</code> is a consumer that strips. The decoder's own caps contain parser resource use; they do not make the content trustworthy. The fleet-wide contract lives in <a href="https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md">docs/TRUST-BOUNDARY.md</a>.</p>
   </div>
 </section>
+</main>
 
 <footer class="footer">
     <div class="container">

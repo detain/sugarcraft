@@ -529,9 +529,19 @@ function extract_one(string $slug, string $html): array
     // Body content: from the lede paragraph through the close of the Demos section.
     $ledePos = strpos($html, '<p class="lede" style="margin-top: 28px;">');
     $footPos = strpos($html, '<footer class="footer">');
-    $body = ($ledePos !== false && $footPos !== false)
-        ? rtrim(substr($html, $ledePos, $footPos - $ledePos)) . "\n"
-        : '';
+    $body = '';
+    if ($ledePos !== false && $footPos !== false) {
+        $bodyText = rtrim(substr($html, $ledePos, $footPos - $ledePos));
+        // The skip-link and <main> wrapper are template-owned since L2b I8: the
+        // page-close </main> rides the assembly glue in generate_one(), so the
+        // extractor strips it back off here. Without this the tag would be
+        // stored in the body AND re-added by the glue, double-nesting <main>
+        // on the next regen and breaking the extract/generate fixed point.
+        if (str_ends_with($bodyText, '</main>')) {
+            $bodyText = rtrim(substr($bodyText, 0, -\strlen('</main>')));
+        }
+        $body = $bodyText . "\n";
+    }
 
     $meta = [
         'title'          => $title,
@@ -622,7 +632,7 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
         . "      </div>\n"
         . "    </div>\n"
         . '    ' . $codecov . "\n\n"
-        . '    ' . $content . "\n\n"
+        . '    ' . $content . "\n</main>\n\n"
         . $footer . "\n\n"
         . search_tail() . "\n";
 
@@ -656,6 +666,8 @@ function build_prefix(string $slug, string $title, string $desc, string $ogTitle
             <link rel="stylesheet" href="../css/search.css">
         </head>
         <body>
+
+        <a class="skip-link" href="#main">Skip to main content</a>
 
         <!--nav:start-->
         <nav class="nav" aria-label="Main navigation"><div class="nav-inner">
@@ -759,6 +771,8 @@ function build_prefix(string $slug, string $title, string $desc, string $ogTitle
             </div>
         </div></nav>
         <!--nav:end-->
+
+        <main id="main">
         HTML;
 }
 
