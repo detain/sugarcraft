@@ -1,0 +1,99 @@
+<?php
+
+declare(strict_types=1);
+
+namespace CandyCode\Bundles\Discord\Support;
+
+use RuntimeException;
+
+/**
+ * Resolves the Discord API root and gateway websocket URL (§7.1).
+ *
+ * The override settings exist so a self-hosted mirror or a local test
+ * proxy can front Discord. That same knob is a token-leak shape: a bot
+ * token rides every request, so a plain-HTTP override must never silently
+ * point at a remote host. https/wss always pass; http/ws pass ONLY for a
+ * loopback host AND only when the operator explicitly opted in via
+ * channels.discord.transport.insecureLoopbackProxy (the proxy-on-localhost
+ * case, where the operator controls the last hop).
+ *
+ * Fail loud at start, not quiet at first send: a refused override throws
+ * with the exact setting name that would authorize it.
+ */
+final class Endpoint
+{
+    public const DEFAULT_API = 'https://discord.com/api/v10';
+    public const DEFAULT_GATEWAY = 'wss://gateway.discord.gg/?v=10&encoding=json';
+
+    /**
+     * The versioned REST root (§7.1): override wins, empty means default.
+     *
+     * @throws RuntimeException when the override is not an allowed endpoint
+     */
+    public static function apiBase(string $override, bool $insecureLoopbackProxy = false): string
+    {
+        return self::resolve($override, $insecureLoopbackProxy, self::DEFAULT_API);
+    }
+
+    /**
+     * The gateway websocket URL; same transport discipline as apiBase().
+     *
+     * @throws RuntimeException when the override is not an allowed endpoint
+     */
+    public static function gatewayUrl(string $override, bool $insecureLoopbackProxy = false): string
+    {
+        return self::resolve($override, $insecureLoopbackProxy, self::DEFAULT_GATEWAY);
+    }
+
+    /**
+     * True for localhost, ::1 and any 127.x.y.z address (IPv6 brackets stripped).
+     */
+    public static function isLoopback(string $host): bool
+    {
+        $host = strtolower(trim($host, " \t\n\r\0\x0B[]"));
+        if ($host === 'localhost' || $host === '::1') {
+            return true;
+        }
+
+        return preg_match('/^127\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$/', $host) === 1;
+    }
+
+    private static function resolve(string $override, bool $insecureLoopbackProxy, string $default): string
+    {
+        $override = trim($override);
+        if ($override === '') {
+            return $default;
+        }
+
+        $parts = parse_url($override);
+        $scheme = $parts['scheme'] ?? '';
+        $host = $parts['host'] ?? '';
+        if ($scheme === '' || $host === '') {
+            throw new RuntimeException(
+                'discord-bundle: endpoint override "' . $override . '" is not an absolute https/wss URL.'
+            );
+        }
+
+        $scheme = strtolower($scheme);
+        if ($scheme === 'https' || $scheme === 'wss') {
+            return $override;
+        }
+
+        if (($scheme === 'http' || $scheme === 'ws') && self::isLoopback($host) && $insecureLoopbackProxy) {
+            return $override;
+        }
+
+        if (($scheme === 'http' || $scheme === 'ws') && self::isLoopback($host)) {
+            throw new RuntimeException(
+                'discord-bundle: plain-' . $scheme . ' loopback override "' . $override . '" needs '
+                . 'channels.discord.transport.insecureLoopbackProxy = true (a local proxy you control).'
+            );
+        }
+
+        throw new RuntimeException(
+            'discord-bundle: endpoint override "' . $override . '" must be https or wss'
+            . ($scheme === 'http' || $scheme === 'ws' ? '; plain ' . $scheme . ' is only ever accepted for a loopback proxy' : '')
+            . '.'
+        );
+    }
+}
