@@ -54,7 +54,7 @@ final readonly class Agent
      *
      * @param list<string>          $disallowedTools Preset tool denylist; see the note above.
      * @param ?int                  $maxTurns        Preset turn cap, null for uncapped.
-     * @param array<string, mixed>  $mcpServers      Preset MCP server declarations.
+     * @param list<string>          $mcpServers      Preset MCP server declarations.
      * @param ?string               $environmentRoot The directory
      *        {@see systemPrompt()}'s last-resort capture is anchored at — the
      *        session's resolved project root (`--root`'s value), or null to
