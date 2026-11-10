@@ -469,6 +469,18 @@ final readonly class Bubblewrap implements SandboxBackend
         foreach (array_values($readOnlyBinds) as $path) {
             array_push($argv, '--ro-bind-try', JailPaths::normalise($path), JailPaths::normalise($path));
         }
+        // A $chdir under /tmp sits INSIDE the private tmpfs: unless something
+        // re-binds it, `--chdir` names a directory that does not exist in the
+        // jail and bwrap hard-fails before the command starts — the shape that
+        // reddened the jailed ScriptRunner smoke on runners whose project dirs
+        // live under /tmp. Bind it READ-ONLY: the run must still see its own
+        // working directory without gaining a write door into the tree.
+        $work = $chdir === null ? '' : JailPaths::normalise($chdir);
+        if ($work !== '' && $work !== '/' && $work !== $root
+            && ($root === '/' || !str_starts_with($work, $root . '/'))
+            && str_starts_with($work, '/tmp/') && is_dir($work)) {
+            array_push($argv, '--ro-bind-try', $work, $work);
+        }
         // bwrap defaults to the caller's directory; the jail has always
         // pinned it to the root, and $chdir lets a later caller pin elsewhere.
         array_push($argv, '--chdir', $chdir === null ? $root : JailPaths::normalise($chdir), '--');
