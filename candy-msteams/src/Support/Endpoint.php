@@ -40,12 +40,24 @@ final class Endpoint
     }
 
     /**
-     * The signing-key roster URL; same transport discipline as authBase().
+     * The signing-key roster URL; same transport discipline as authBase(),
+     * plus ONE extra door: an absolute `file:///` path. The roster is the
+     * only endpoint with a legitimate offline shape — air-gapped mirrors,
+     * and the test/dev posture where a blocking roster GET inside the
+     * synchronous webhook door could otherwise stall on a loop that is, by
+     * construction, not running. The file never leaves the operator's own
+     * tier (transport settings are USER-tier), and the auth base — which
+     * carries the app password on the wire — accepts no such scheme.
      *
      * @throws RuntimeException when the override is not an allowed endpoint
      */
     public static function jwksUrl(string $override, bool $insecureLoopbackProxy = false): string
     {
+        $trimmed = trim($override);
+        if (str_starts_with($trimmed, 'file:///')) {
+            return $trimmed;
+        }
+
         return self::resolve($override, $insecureLoopbackProxy, self::DEFAULT_JWKS);
     }
 

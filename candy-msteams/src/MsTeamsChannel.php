@@ -33,6 +33,14 @@ use SugarCraft\Code\Server\Auth\TokenStore;
 use SugarCraft\Code\Server\DiscoveryFile;
 use SugarCraft\Code\Server\StateDir;
 
+// Entrypoint self-bootstrap: the P1 loader require_once's THIS file and
+// nothing else, so the bundle's sibling classes need their autoloader
+// registered from inside the entrypoint (the candy-code loader deliberately
+// knows nothing about bundle layouts — trust lives at the file door, not in
+// a resolver). The defined-guard keeps double registration impossible, and
+// __DIR__ is the INSTALL tree, so a marketplace copy resolves its own bytes.
+require_once __DIR__ . '/autoload.php';
+
 /**
  * The `@candy/msteams` channel root (§8): Microsoft Teams dialogs, over
  * the INVERSE transport.
@@ -77,6 +85,8 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
 
     /** @var list<MsTeamsAccount> */
     private array $faces = [];
+
+    private ?ConversationRouter $placeholderRouter = null;
 
     /** @var array<string, array{account: string, jwt: Jwt}> appId => validator */
     private array $validators = [];
@@ -205,6 +215,15 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             );
         }
 
+        // Faces exist before any dial: register them on the placeholder so
+        // pre-serve inbound reaches the failWith door (loudly) instead of
+        // dropping silently. rebuildRouter() swaps in the live router and
+        // re-adds them there when serve appears.
+        $placeholder = $this->pendingRouter();
+        foreach ($this->faces as $face) {
+            $placeholder->addChannel($face, $face->accountName());
+        }
+
         $this->pollTimer = $this->loop->addPeriodicTimer(5.0, function (): void {
             $this->pollServe();
         });
@@ -322,6 +341,7 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
         // Faces hold a reference to the (possibly placeholder) router; the
         // placeholder refuses everything once disposed.
         $this->faces = [];
+        $this->placeholderRouter = null;
         $this->validators = [];
     }
 
@@ -566,17 +586,20 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
     /**
      * Faces take a router at construction; the real one arrives with the
      * first serve dial. The placeholder's bridge never starts, so every
-     * call on it refuses 'not connected' — the pre-dial posture is loud by
-     * construction, exactly like the discord bundle's.
+     * call on it refuses 'not connected' — and the refusal still reaches
+     * the channel, because start() registers the faces on this very router
+     * (pre-dial inbound is LOUD, never a silent drop).
      */
     private function pendingRouter(): ConversationRouter
     {
-        if ($this->router !== null) {
-            return $this->router;
+        if ($this->placeholderRouter !== null) {
+            return $this->placeholderRouter;
         }
         $serve = new ServeBridge('ws://127.0.0.1:1/never', '', 'subprotocol', $this->log, $this->loop);
         // Never started, never dials: start() is only called on the
         // rebuilt instance; this one exists to satisfy the constructor.
-        return new ConversationRouter($serve, $this->map, $this->log, $this->safety, $this->loop, []);
+        $this->placeholderRouter = new ConversationRouter($serve, $this->map, $this->log, $this->safety, $this->loop, []);
+
+        return $this->placeholderRouter;
     }
 }

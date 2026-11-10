@@ -54,6 +54,21 @@ final class EndpointTest extends TestCase
         );
     }
 
+    public function testJwksAcceptsAnAbsolutePathFileRosterAndAuthBaseNeverDoes(): void
+    {
+        self::assertSame(
+            'file:///etc/mirrors/botframework-keys.json',
+            Endpoint::jwksUrl('file:///etc/mirrors/botframework-keys.json'),
+        );
+        try {
+            Endpoint::authBase('file:///etc/passwd');
+            self::fail('the auth door must never speak file://');
+        } catch (RuntimeException $error) {
+            self::assertStringContainsString('absolute https URL', $error->getMessage());
+        }
+        $this->expectRefusal('file://relative', 'must be https');
+    }
+
     public function testGarbageOverridesAreRefusedLoudly(): void
     {
         $this->expectRefusal('not a url', 'not an absolute https URL');

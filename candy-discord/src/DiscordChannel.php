@@ -26,6 +26,14 @@ use SugarCraft\Code\Server\Auth\TokenStore;
 use SugarCraft\Code\Server\DiscoveryFile;
 use SugarCraft\Code\Server\StateDir;
 
+// Entrypoint self-bootstrap: the P1 loader require_once's THIS file and
+// nothing else, so the bundle's sibling classes need their autoloader
+// registered from inside the entrypoint (the candy-code loader deliberately
+// knows nothing about bundle layouts — trust lives at the file door, not in
+// a resolver). The defined-guard keeps double registration impossible, and
+// __DIR__ is the INSTALL tree, so a marketplace copy resolves its own bytes.
+require_once __DIR__ . '/autoload.php';
+
 /**
  * The @candy/discord bundle's channel (§11 P2, spec §7): Discord accounts
  * in, served candy-code sessions out, all inside the candy-code process.

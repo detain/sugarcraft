@@ -39,7 +39,8 @@ final class Jwk
     /**
      * Build a JWKS-shaped array from a locally generated key (test fixture
      * material: an openssl key becomes the roster entry the validator will
-     * be told to trust).
+     * be told to trust). Accepts a key object or a PEM string, because
+     * openssl_pkey_get_details hands back the latter on PHP 8.
      *
      * @param \OpenSSLAsymmetricKey|string $publicKey
      *
@@ -47,7 +48,8 @@ final class Jwk
      */
     public static function fromPublicKey($publicKey, string $kid): array
     {
-        $details = \openssl_pkey_get_details($publicKey);
+        $key = \is_string($publicKey) ? \openssl_pkey_get_public($publicKey) : $publicKey;
+        $details = $key === false ? false : \openssl_pkey_get_details($key);
         if ($details === false || ($details['type'] ?? -1) !== OPENSSL_KEYTYPE_RSA) {
             throw new JwtException('fixture key is not RSA');
         }
