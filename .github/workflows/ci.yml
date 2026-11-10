@@ -900,9 +900,10 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          # Full history: the split-repo Codacy upload below runs
-          # splitsh-lite, which needs every commit to compute the subtree
-          # split SHA. Same "simple, robust" trade-off as build-matrix.
+          # Full history: the same "simple, robust" trade-off as
+          # build-matrix. (Originally also required by the split-repo
+          # Codacy mirror's splitsh-lite, removed by owner ruling
+          # 2026-11-11.)
           fetch-depth: 0
 
       # Same extension-cache pattern as the test job (see comment there).
@@ -990,8 +991,7 @@ jobs:
       # shipping a coverage report for an unproven subset). Then
       # scripts/merge-clover.php unions the per-shard clovers into
       # candy-code/coverage.xml — THE SAME PATH the serial job wrote — so the
-      # Codecov upload, the detain/sugarcraft Codacy upload and the split-repo
-      # Codacy mirror downstream are untouched and cannot tell merged from
+      # Codecov upload downstream is untouched and cannot tell merged from
       # serial. test-merge-clover.php runs FIRST: a merger regression must fail
       # in seconds, not after a full-suite wall. --timeout 1800 per shard: the
       # K=4 buckets are ~443s and pcov overhead is up to ~2x on a slow runner —
@@ -1052,164 +1052,29 @@ jobs:
           fail_ci_if_error: false
           verbose: true
 
-      - name: Upload coverage to Codacy (with retries)
-        run: |
-          set -e
-          CODACY_VERSION="14.1.3"
-          CODACY_DIR="$RUNNER_TEMP/codacy-coverage"
-          COVERAGE_FILE="${{ matrix.lib }}/coverage.xml"
-          
-          # Download if not cached
-          if [ ! -f "$CODACY_DIR/codacy-coverage-reporter" ]; then
-            mkdir -p "$CODACY_DIR"
-            curl -Ls "https://github.com/codacy/codacy-coverage-reporter/releases/download/$CODACY_VERSION/codacy-coverage-reporter-linux" \
-              -o "$CODACY_DIR/codacy-coverage-reporter"
-            chmod +x "$CODACY_DIR/codacy-coverage-reporter"
-          fi
-          
-          # Step 1: upload the coverage report. --partial is REQUIRED here:
-          # every matrix cell sends a same-language (PHP) report for the same
-          # commit, and without the flag Codacy treats each upload as the
-          # complete report — they clobber instead of merging. The matching
-          # `final` lives in the coverage-final job.
-          if "$CODACY_DIR/codacy-coverage-reporter" report \
-            --api-token "$CODACY_API_TOKEN" \
-            --organization-provider "gh" \
-            --username "detain" \
-            --project-name "sugarcraft" \
-            -r "$COVERAGE_FILE" \
-            --partial \
-            --commit-uuid "$GITHUB_SHA"; then
-            echo "Codacy report upload succeeded"
-          else
-            echo "Codacy report upload failed, retrying in 30s..."
-            sleep 30
-            "$CODACY_DIR/codacy-coverage-reporter" report \
-              --api-token "$CODACY_API_TOKEN" \
-              --organization-provider "gh" \
-              --username "detain" \
-              --project-name "sugarcraft" \
-              -r "$COVERAGE_FILE" \
-              --partial \
-              --commit-uuid "$GITHUB_SHA" || exit 1
-          fi
+      # Codacy coverage uploads removed by owner ruling 2026-11-11 (CI
+      # all-green program, LANE-GB): the Codacy project write permission is
+      # revoked/broken account-side. Every master run since at least Nov 7
+      # fails this step with "API Error: Failed to create coverage: No Write
+      # permission on Project" (the retry loop just exhausts retries against
+      # a permanent account-side error). At d318017df, 50 of 63
+      # Coverage-family jobs died on this step ALONE with the test suite and
+      # the Codecov upload green (CI-WATCH2B §F: ~60 failed uploads). The
+      # clover/coverage artifacts produced above still ship to Codecov
+      # unchanged. RESTORE PATH (owner-side): re-grant CODACY_API_TOKEN
+      # write access on the Codacy project, then re-add this step together
+      # with the split-repo mirror and the coverage-final job — their exact
+      # pre-ruling bytes are in this file at f7c517b0c.
 
-        env:
-          CODACY_API_TOKEN: ${{ secrets.CODACY_API_TOKEN }}
-          GITHUB_SHA: ${{ github.sha }}
+      # (The split-repo Codacy mirror — sugarcraft/<lib> via splitsh-lite —
+      # lived here; removed by the same owner ruling 2026-11-11, dead for
+      # the same account-side "No Write permission on Project" reason. See
+      # the Codacy note above; exact bytes at f7c517b0c.)
 
-      # Mirror the same clover report to the lib's split repo on Codacy
-      # (sugarcraft/<lib>). Codacy keys coverage to a commit UUID that must
-      # exist in the TARGET repo, and the split repos carry splitsh-rewritten
-      # history — so the monorepo SHA is useless there. splitsh-lite is
-      # deterministic (same pinned build as sync-sugarcraft.yml), so the SHA
-      # computed here is byte-identical to the one sync-sugarcraft.yml pushes
-      # for this same monorepo commit; Codacy attaches the coverage once it
-      # sees that commit, regardless of which workflow finishes first.
-      #
-      # Master-push only: PR merge refs are never split-pushed, so their
-      # split SHAs exist in no repo. Single report per project per commit,
-      # so `final` fires right here — no cross-job coordination needed.
-      - name: Upload coverage to Codacy split repo (sugarcraft/<lib>)
-        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-        run: |
-          set -euo pipefail
-          url="https://github.com/splitsh/lite/releases/download/v1.0.1/lite_linux_amd64.tar.gz"
-          expected="ec46c5a409422bf55b26f7de1faab67c2320362934947f984872b3aedc4a9d99"
-          curl -fsSL "$url" -o /tmp/splitsh.tar.gz
-          tar -xzf /tmp/splitsh.tar.gz -C /tmp ./splitsh-lite
-          echo "$expected  /tmp/splitsh-lite" | sha256sum -c -
-          chmod +x /tmp/splitsh-lite
-
-          split_sha=$(/tmp/splitsh-lite --prefix="$LIB")
-          echo "split SHA for $LIB: $split_sha"
-
-          CODACY_VERSION="14.1.3"
-          CODACY_DIR="$RUNNER_TEMP/codacy-coverage"
-          if [ ! -f "$CODACY_DIR/codacy-coverage-reporter" ]; then
-            mkdir -p "$CODACY_DIR"
-            curl -Ls "https://github.com/codacy/codacy-coverage-reporter/releases/download/$CODACY_VERSION/codacy-coverage-reporter-linux" \
-              -o "$CODACY_DIR/codacy-coverage-reporter"
-            chmod +x "$CODACY_DIR/codacy-coverage-reporter"
-          fi
-
-          # Run from inside the lib dir: the reporter relativizes the clover
-          # file paths against CWD, so <lib>/src/… becomes src/… — matching
-          # the split repo's layout.
-          cd "$LIB"
-          upload() {
-            "$CODACY_DIR/codacy-coverage-reporter" report \
-              --api-token "$CODACY_API_TOKEN" \
-              --organization-provider "gh" \
-              --username "sugarcraft" \
-              --project-name "$LIB" \
-              -r coverage.xml \
-              --commit-uuid "$split_sha" \
-            && "$CODACY_DIR/codacy-coverage-reporter" final \
-              --api-token "$CODACY_API_TOKEN" \
-              --organization-provider "gh" \
-              --username "sugarcraft" \
-              --project-name "$LIB" \
-              --commit-uuid "$split_sha"
-          }
-          if upload; then
-            echo "Codacy split-repo upload succeeded"
-          else
-            echo "Codacy split-repo upload failed, retrying in 30s..."
-            sleep 30
-            # Non-fatal on persistent failure: a lib not yet added to Codacy
-            # under the sugarcraft org would otherwise go red on every master
-            # push. The detain/sugarcraft upload above stays authoritative.
-            upload || echo "::warning::Codacy upload to sugarcraft/$LIB failed (is the repo added to Codacy?)"
-          fi
-        env:
-          CODACY_API_TOKEN: ${{ secrets.CODACY_API_TOKEN }}
-          LIB: ${{ matrix.lib }}
-
-  coverage-final:
-    name: 'Coverage Final'
-    runs-on: ubuntu-latest
-    # build-matrix must be in `needs` for its outputs to be readable here —
-    # the needs context only exposes DIRECT dependencies, so the previous
-    # `needs: [coverage]` made the count guard compare '' != '0' (always
-    # true). `always()` is the real fix though: back-to-back master pushes
-    # cancel superseded per-lib coverage cells (see the job's concurrency
-    # group), which marks the aggregate coverage job failed and used to
-    # SKIP this job — so `final` never fired and Codacy left the commit's
-    # coverage unprocessed. Finalizing whatever partial reports made it is
-    # always the right move.
-    needs: [build-matrix, coverage]
-    if: always() && needs.build-matrix.outputs.coverage_count != '0'
-    steps:
-      - name: Download codacy coverage reporter
-        env:
-          CODACY_VERSION: "14.1.3"
-        run: |
-          CODACY_DIR="$RUNNER_TEMP/codacy-coverage"
-          mkdir -p "$CODACY_DIR"
-          curl -Ls "https://github.com/codacy/codacy-coverage-reporter/releases/download/$CODACY_VERSION/codacy-coverage-reporter-linux" \
-            -o "$CODACY_DIR/codacy-coverage-reporter"
-          chmod +x "$CODACY_DIR/codacy-coverage-reporter"
-          test -x "$CODACY_DIR/codacy-coverage-reporter" || { echo "::error::Codacy reporter binary not found or not executable"; exit 1; }
-          # A step's own shell variables don't propagate to LATER steps in
-          # the same job - only $GITHUB_ENV does. The job-level env: block
-          # this used to rely on instead ($RUNNER_TEMP/codacy-coverage as a
-          # literal, unexpanded string - YAML env: values aren't shell-
-          # interpolated) resolved to a path that never existed, so the next
-          # step always failed with "No such file or directory".
-          echo "CODACY_DIR=$CODACY_DIR" >> "$GITHUB_ENV"
-
-      - name: Mark coverage as complete
-        run: |
-          "$CODACY_DIR/codacy-coverage-reporter" final \
-            --api-token "$CODACY_API_TOKEN" \
-            --organization-provider "gh" \
-            --username "detain" \
-            --project-name "sugarcraft" \
-            --commit-uuid "$GITHUB_SHA"
-        env:
-          CODACY_API_TOKEN: ${{ secrets.CODACY_API_TOKEN }}
-          GITHUB_SHA: ${{ github.sha }}
+  # The `coverage-final` job lived here; removed by the same owner ruling
+  # 2026-11-11 — it existed solely to send Codacy the matching `final` for
+  # the partial uploads in the coverage job (see the Codacy note there;
+  # exact bytes at f7c517b0c). Nothing in any workflow ever `needs`d it.
 
   # PHPStan static analysis — runs on all PHP versions after tests pass,
   # verifying type safety and catching type errors before they reach CI.
