@@ -6543,7 +6543,8 @@
                             "resuming",
                             "completed",
                             "failed",
-                            "cancelled"
+                            "cancelled",
+                            "skipped"
                         ]
                     }
                 },
@@ -6780,7 +6781,8 @@
                             "resuming",
                             "completed",
                             "failed",
-                            "cancelled"
+                            "cancelled",
+                            "skipped"
                         ]
                     }
                 },

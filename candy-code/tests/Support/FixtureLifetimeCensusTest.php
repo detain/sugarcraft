@@ -86,6 +86,25 @@ final class FixtureLifetimeCensusTest extends TestCase
                 . 'adoption guard ({@see ForkedChildReaperAdoptionTest}) is what keeps those '
                 . 'callers holding a reaper.',
         ],
+        'Cli/WorkflowSubcommandTest.php::MAX_DRAIN_SECONDS' => [
+            'value' => 120.0,
+            'reason' =>
+                'A drain CEILING, not a sleep: the shared child-exec helper polls '
+                . 'the stdout/stderr pipes until this monotonic deadline, and at '
+                . 'the deadline it proc_terminate(9)s and proc_close()s the child '
+                . 'in the same iteration — a wedged `workflow run|status|resume` '
+                . 'child is killed, never awaited. Healthy legs finish well under '
+                . 'a second; the number is slowest-box margin.',
+        ],
+        'Cli/WorkflowSubcommandTest.php::STUB_SLOW_REQUEST_SECONDS' => [
+            'value' => 60.0,
+            'reason' =>
+                'awaitWorkflowVerbStubFile waits for the stub server to finish '
+                . 'serving its one slow request before the resume dispatch; past '
+                . 'the deadline it self::fail()s immediately, and the stub child '
+                . 'is proc_terminate(9)ed by the file\'s teardown — a fail-fast '
+                . 'bound, never an expected lifetime.',
+        ],
         'LSP/LspConnectionStdinWedgeTest.php::longLivedDeafServerScript' => [
             'value' => 120.0,
             'reason' =>

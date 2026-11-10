@@ -216,6 +216,7 @@ return [
     'cli.completion.verb.serve' => '執行 Web UI 的 WebSocket 伺服器',
     'cli.completion.verb.session' => '管理已儲存的工作階段',
     'cli.completion.verb.usage' => '依日期與模型匯總持久支出帳本',
+    'cli.completion.verb.workflow' => '以無頭方式執行已儲存的工作流，報告其狀態，或恢復已暫停的執行',
     'cli.completion.verb_argument' => '{verb} 引數',
     'cli.doctor.absent' => '未設定',
     'cli.doctor.cap' => '每工作階段支出上限 ${amount}',

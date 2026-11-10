@@ -2844,10 +2844,17 @@ final class WorkflowRegistry
             if ($id === \T_NAMESPACE) {
                 return true;
             }
-            // Braces lex as plain text tokens (PHP publishes no
-            // T_OPEN_CURLY_BRACE constant), so depth rides the characters.
+            // Depth arms name every brace-opening token the scanner can meet:
+            // T_CURLY_OPEN is the "{$" opener (its text is "{", so it also
+            // rides the character arm, which covers plain literal braces —
+            // PHP publishes no T_OPEN_CURLY_BRACE constant);
+            // T_DOLLAR_OPEN_CURLY_BRACES is the "${" opener, a single token
+            // whose text is "${" and therefore invisible to the character
+            // arm. InterpolationOpenerTokenTest demands each opener be named
+            // as code: a silently-missed one loses a level and the walk then
+            // mis-reads everything after the first interpolated string.
             $text = $tokens[$i]->text;
-            if ($text === '{') {
+            if ($id === \T_CURLY_OPEN || $text === '{' || $id === \T_DOLLAR_OPEN_CURLY_BRACES) {
                 ++$depth;
                 $previous = -1;
                 continue;

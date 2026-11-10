@@ -216,6 +216,7 @@ return [
     'cli.completion.verb.serve' => 'Exécuter le serveur WebSocket pour l\'interface web',
     'cli.completion.verb.session' => 'Gérer les sessions stockées',
     'cli.completion.verb.usage' => 'Agréger le registre de dépenses persistant par jour et par modèle',
+    'cli.completion.verb.workflow' => 'Exécute un flux enregistré sans interface, signale son état ou reprend une exécution suspendue',
     'cli.completion.verb_argument' => 'Argument {verb}',
     'cli.doctor.absent' => 'absent',
     'cli.doctor.cap' => 'plafond de dépenses ${amount} par session',

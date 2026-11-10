@@ -416,16 +416,19 @@ final class WorktreeRemovalReportingTest extends TestCase
     }
 
     /**
-     * EXACTLY FOUR PLACES IN `src/` OR `bin/` BUILD A `WorktreeManager`, BY
+     * EXACTLY SIX PLACES IN `src/` OR `bin/` BUILD A `WorktreeManager`, BY
      * ANY SHAPE (roadmap 4.9): `LaunchContext::tools()` (the body moved out of
      * `Bootstrap::tools()` at v4:S1b W7-E C1, 2026-10-21; the door delegates),
      * for `Task`'s isolated
      * runs, `BackgroundCommand::spawnThunk()`, for a `/bg` session run as an
      * `isolation: worktree` agent, `BackgroundSessionRunner`'s delegation
      * arm, for a background `Task` of such a preset (over the same root the
-     * launch's manager uses, so both share one registry and sweep), and
+     * launch's manager uses, so both share one registry and sweep),
      * `MainWorktree::enter()`, the C-AGT-6.c `--worktree` door that seats the
-     * MAIN session itself in one.
+     * MAIN session itself in one, and `WorktreeHandoff`'s per-call
+     * construction (a5, cc-eval hand-off bank — a hand-off report is a
+     * question about NOW, so it reads the registry fresh from disk instead of
+     * reusing the launch's manager).
      *
      * This test pinned ZERO while the class was dormant, and said that the day
      * it redded would be good news — someone wired the class. Roadmap 4.9 did;
@@ -434,7 +437,7 @@ final class WorktreeRemovalReportingTest extends TestCase
      * scored a false zero that way), so a further builder — or a lost one — is
      * a red that sends the reader to the doc-blocks describing who builds it.
      */
-    public function testExactlyTheFourWiredBuildersConstructAWorktreeManager(): void
+    public function testExactlyTheSixWiredBuildersConstructAWorktreeManager(): void
     {
         $root = \dirname(__DIR__, 2);
         $files = self::phpSources($root);
@@ -458,6 +461,11 @@ final class WorktreeRemovalReportingTest extends TestCase
                 // stage's own environment root. The roster's walk order lands
                 // src/Agents/ first.
                 'src/Agents/EngineExecutor.php: new',
+                // a5 (cc-eval hand-off bank): the sixth builder. WorktreeHandoff
+                // constructs one PER CALL so a hand-off report reads the registry
+                // fresh from disk — StderrEmitterCensusTest already names it as
+                // this class's sixth census site.
+                'src/Agents/WorktreeHandoff.php: new',
                 'src/Background/BackgroundSessionRunner.php: new',
                 // W7-E C1 (v4:S1b, 2026-10-21): tools() construction moved with
                 // the body onto Cli/LaunchContext.php — same builder, new file.

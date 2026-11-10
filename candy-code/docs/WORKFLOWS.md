@@ -1216,16 +1216,22 @@ instruction. Your `~/.candy-code/agents/reviewer.md` preset and a stage saying
 `agent: reviewer` are unrelated objects that happen to share a string. If you
 want a preset's prompt in a stage, paste it into the stage's `prompt:`.
 
-**3. `pipeline` and verification stages are PHP-only.** `WorkflowBuilder` offers
-`pipeline()` and `withVerification()`, and the engine implements
-`executePipelineStage()` and `executeVerificationStage()` — but
-`parseYamlStage()` recognises only three stage shapes: one task, a `tasks:`
-list, and `parallel: true`. There is no YAML spelling for either. They are reachable from
-a user-tier `.php` workflow and from an embedder, not from a `.yaml` file.
-For the same reason `reject()` ([below](#reject-fails-a-stage-on-the-verifier-verdict))
-has no YAML spelling either: an unknown key in a `.yaml` task is silently
-ignored, so a stray `reject:` line there buys nothing — a `.php` workflow is
-the only place a verdict-gated verification stage can live.
+**3. `reject:` only takes effect on a verification stage's verifier.** This
+claim used to read "pipeline and verification stages are PHP-only" — that
+became false-to-disk when `d39afd83c` (C1) gave `.yaml` the same reach as the
+builder: a `type:` key spells `verification` (a `task:` sub-map and a
+`verifier:` sub-map) and `pipeline` (a `stages:` list), beside the plain task,
+`tasks:` list and `parallel:` shapes. The verdict arms `timeout`, `reject` and
+`rejectMinOccurrences` are in `WorkflowRegistry::YAML_TASK_KEYS` and parse on
+every task surface on purpose; placement is the engine's policy, not the
+parser's — the reject-misuse pre-flight refuses a `reject:` sitting anywhere
+but the verifier's own task, and a lone `rejectMinOccurrences:` (no `reject:`
+to count) is refused at parse. So the verdict-gated stage behind
+`reject()` ([below](#reject-fails-a-stage-on-the-verifier-verdict)) lives in
+`.yaml` as a `type: verification` stage whose `verifier:` task carries
+`reject:` — the same shape `WorkflowBuilder::withVerification()` builds.
+Unknown keys are never silently ignored: every parsed key answers to one
+fail-closed roster (`ae04d808c`).
 
 ---
 

@@ -216,6 +216,7 @@ return [
     'cli.completion.verb.serve' => 'Web UI用のWebSocketサーバーを実行',
     'cli.completion.verb.session' => '保存済みセッションを管理',
     'cli.completion.verb.usage' => '永続的な支出台帳を日別・モデル別に集計',
+    'cli.completion.verb.workflow' => '保存済みワークフローをヘッドレスで実行し、状態を報告し、一時停止した実行を再開します',
     'cli.completion.verb_argument' => '{verb} 引数',
     'cli.doctor.absent' => '未設定',
     'cli.doctor.cap' => 'セッションあたり支出上限 ${amount}',

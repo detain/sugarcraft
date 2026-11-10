@@ -216,6 +216,7 @@ return [
     'cli.completion.verb.serve' => '为 Web UI 运行 WebSocket 服务器',
     'cli.completion.verb.session' => '管理已存储的会话',
     'cli.completion.verb.usage' => '按日期和模型汇总持久消费账本',
+    'cli.completion.verb.workflow' => '以无头方式运行已保存的工作流，报告其状态，或恢复已暂停的运行',
     'cli.completion.verb_argument' => '{verb} 参数',
     'cli.doctor.absent' => '缺失',
     'cli.doctor.cap' => '每会话消费上限 ${amount}',

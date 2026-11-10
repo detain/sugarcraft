@@ -216,6 +216,7 @@ return [
     'cli.completion.verb.serve' => '웹 UI용 WebSocket 서버 실행',
     'cli.completion.verb.session' => '저장된 세션 관리',
     'cli.completion.verb.usage' => '영구 지출 대장을 일별·모델별로 집계',
+    'cli.completion.verb.workflow' => '저장된 워크플로를 헤드리스로 실행하고 상태를 보고하거나 일시 중지된 실행을 재개합니다',
     'cli.completion.verb_argument' => '{verb} 인자',
     'cli.doctor.absent' => '없음',
     'cli.doctor.cap' => '세션당 지출 상한 ${amount}',

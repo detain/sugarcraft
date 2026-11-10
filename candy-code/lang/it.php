@@ -216,6 +216,7 @@ return [
     'cli.completion.verb.serve' => 'Avvia il server WebSocket per l\'interfaccia web',
     'cli.completion.verb.session' => 'Gestisci le sessioni archiviate',
     'cli.completion.verb.usage' => 'Riepiloga il registro di spesa persistente per giorno e modello',
+    'cli.completion.verb.workflow' => "Esegue un flusso salvato senza interfaccia, segnala il suo stato o riprende un'esecuzione sospesa",
     'cli.completion.verb_argument' => 'argomento {verb}',
     'cli.doctor.absent' => 'assente',
     'cli.doctor.cap' => 'limite di spesa ${amount} per sessione',

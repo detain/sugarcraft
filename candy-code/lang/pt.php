@@ -216,6 +216,7 @@ return [
     'cli.completion.verb.serve' => 'Executar o servidor WebSocket para a interface web',
     'cli.completion.verb.session' => 'Gerir sessões armazenadas',
     'cli.completion.verb.usage' => 'Agrupar o registo de despesas por dia e modelo',
+    'cli.completion.verb.workflow' => 'Execute um fluxo guardado sem interface, informe o seu estado ou retome uma execução pausada',
     'cli.completion.verb_argument' => 'argumento {verb}',
     'cli.doctor.absent' => 'ausente',
     'cli.doctor.cap' => 'limite de despesas ${amount} por sessão',

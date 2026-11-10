@@ -173,6 +173,10 @@ final class ContainedPathInventoryTest extends TestCase
      */
     public const ROUTED_CALL_SITES = [
         'Agents/AgentPresetRegistry.php' => 3,
+        // a5 (cc-eval capability bank): a stored card is read back only
+        // through the jail — the is_link()/below() refusal at the store's
+        // read leg is one routed compare, and it answers refusal with null.
+        'Agents/CapabilityCardStore.php' => 1,
         'Agents/ForeignAgentPresetRegistry.php' => 2,
         'Agents/WorktreeConfig.php' => 2,
         'Agents/WorktreeManager.php' => 2,
@@ -402,8 +406,8 @@ final class ContainedPathInventoryTest extends TestCase
             'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38, 'THIRTY-NINE' => 39,
             'FORTY' => 40, 'FORTY-ONE' => 41, 'FORTY-TWO' => 42, 'FORTY-THREE' => 43,
             'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53, 'FIFTY-FOUR' => 54, 'FIFTY-FIVE' => 55, 'FIFTY-SIX' => 56,
-            'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64, 'SIXTY-FIVE' => 65, 'SIXTY-SEVEN' => 67,
-            'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24, 'TWENTY-FIVE' => 25,
+            'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64, 'SIXTY-FIVE' => 65, 'SIXTY-SEVEN' => 67, 'SIXTY-EIGHT' => 68,
+            'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24, 'TWENTY-FIVE' => 25, 'THIRTY-FIVE' => 35,
         ];
 
         $source = (string) file_get_contents($this->srcDir . '/Support/ContainedPath.php');
@@ -573,13 +577,18 @@ final class ContainedPathInventoryTest extends TestCase
                 // undo the jail, so the compare is the refusal.
                 'Tools/Sandbox/Bubblewrap.php' => 1,
                 'Tui/SessionPicker.php' => 1,
+                // C4 (cc-eval workflow include/output walk): the glob
+                // fan-out re-contains every found name against the workflow
+                // root's realpath before reading it — a planted link out of
+                // the root is refused, not read. One boundary compare.
+                'Workflows/WorkflowEngine.php' => 1,
             ],
             $counts,
         );
 
         unset($counts['Agents/AgentPresetRegistry.php'], $counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Server/Http/Router.php'], $counts['Server/Http/SharePageController.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php'], $counts['Tools/Concerns/BuildsUnifiedDiff.php'], $counts['Support/StartupSummary.php']);
-        $this->assertSame(21, array_sum($counts), 'containment spellings still by hand');
-        $this->assertCount(15, $counts, 'files still holding one');
+        $this->assertSame(22, array_sum($counts), 'containment spellings still by hand');
+        $this->assertCount(16, $counts, 'files still holding one');
     }
 
     /**
