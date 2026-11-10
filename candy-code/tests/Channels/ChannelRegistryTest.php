@@ -257,17 +257,17 @@ final class ChannelRegistryTest extends TestCase
         $registry = ChannelRegistry::new();
         $registry->boot([$bundleA, $bundleB], $trusted, $this->seenLedger($bundleA, $bundleB), $this->scratch, Loop::get(), $this->collector());
         $router = $registry->httpRouter();
-        $answered = $router($this->request('/channels/web-chan/inbound'));
+        $answered = $router($this->channelRequest('/channels/web-chan/inbound'));
         self::assertNotNull($answered, 'the channel that owns the route answers its own webhooks (HookWebhooks doctrine)');
         self::assertSame(200, $answered->getStatusCode());
         self::assertSame('channel-answered', (string) $answered->getBody());
-        $notFound = $router($this->request('/channels/nobody-home'));
+        $notFound = $router($this->channelRequest('/channels/nobody-home'));
         self::assertSame(404, $notFound->getStatusCode());
         self::assertStringContainsString('channel_not_found', (string) $notFound->getBody(), 'unknown names 404 HERE — the SPA must never mask the route');
-        $plainChannelUnderPrefix = $router($this->request('/channels/quiet-chan'));
+        $plainChannelUnderPrefix = $router($this->channelRequest('/channels/quiet-chan'));
         self::assertSame(404, $plainChannelUnderPrefix->getStatusCode(), 'a journal-only channel has no HTTP face either');
         $registry->disposeAll($this->collector());
-        $stopped = $router($this->request('/channels/web-chan/inbound'));
+        $stopped = $router($this->channelRequest('/channels/web-chan/inbound'));
         self::assertSame(503, $stopped->getStatusCode());
         self::assertStringContainsString('channels_stopped', (string) $stopped->getBody());
     }
@@ -465,7 +465,7 @@ final class ChannelRegistryTest extends TestCase
         };
     }
 
-    private function request(string $path): ServerRequest
+    private function channelRequest(string $path): ServerRequest
     {
         return new ServerRequest('POST', 'http://127.0.0.1:7420' . $path);
     }
