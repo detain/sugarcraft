@@ -1039,6 +1039,93 @@ final class WorkflowPauseResumeTest extends TestCase
         );
     }
 
+    /**
+     * C9L lineage law, pinned at the WRITE side: the resume seeds the live
+     * slot's ledgers from the pause record it consumed, so a RE-pause of the
+     * resumed run must carry every row the first incarnation decided. The
+     * hash and join ledgers flow ONLY through those seed writes — deleting
+     * either seed line drops the prior rows from the second file, and a
+     * mid-pause YAML edit would then slip past the read-side guard this
+     * family defends. The wave list additionally survives through the C8
+     * recorded-replay refill (pinned behaviorally by
+     * testAResumedFanOutReplaysTheRecordedListInsteadOfReGlobbing), so its
+     * seed line is a defensive mirror rather than the sole carrier.
+     */
+    public function testTheRePauseCarriesEveryLedgerFromThePriorIncarnation(): void
+    {
+        $star = chr(42);
+        $envRoot = $this->tempDir . '/lineageenv';
+        mkdir($envRoot, 0755, true);
+        file_put_contents($envRoot . '/a.txt', 'one');
+        file_put_contents($envRoot . '/b.txt', 'two');
+
+        $this->registry->register((new WorkflowBuilder())
+            ->name('lineage')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->parallel('sweep', [Tasks::agent('coder')->prompt('fix {{path}}')], from: ['glob' => $star . '.txt', 'chunk' => 2])
+            ->stage('m', Tasks::agent('coder')->prompt('merge {{input}}')->input(['from' => ['a'], 'as' => 'all']))
+            ->stage('q', Tasks::agent('coder')->prompt('queue on'))
+            ->stage('z', Tasks::agent('coder')->prompt('ship using {{m.output}}'))
+            ->build());
+
+        $engine = $this->fanOutEngine($envRoot);
+        $this->script['merge'] = static function () use ($engine): ?AgentResult {
+            $engine->pause('lineage');
+
+            return null;
+        };
+
+        $first = $engine->run('lineage');
+        $this->assertSame(WorkflowStatus::Paused, $first->status);
+        $id = $first->workflowId;
+
+        $file = $this->tempDir . '/workflows/.running/lineage.json';
+        $this->assertFileExists($file);
+        $one = json_decode((string) file_get_contents($file), true);
+        $this->assertSame(
+            ['m' => [['from' => ['a'], 'as' => 'all']]],
+            $one['inputJoins'] ?? null,
+            'incarnation one settles a, the sweep and the joined m before the boundary pause',
+        );
+
+        // The second leg runs ONLY q — a plain stage. So every ledger row in
+        // the re-pause file is pure seed carried across the resume boundary.
+        unset($this->script['merge']);
+        $this->script['queue'] = static function () use ($engine, $id): ?AgentResult {
+            $engine->pause($id);
+
+            return null;
+        };
+        $second = $engine->resume($id);
+        $this->assertSame(WorkflowStatus::Paused, $second->status, (string) $second->firstFailure()?->error);
+
+        $two = json_decode((string) file_get_contents($file), true);
+        $this->assertSame(
+            $one['inputJoins'],
+            $two['inputJoins'] ?? null,
+            'the join ledger survives the re-pause — seeded, not re-decided',
+        );
+        $this->assertSame(
+            $one['dynamicWaves'] ?? null,
+            $two['dynamicWaves'] ?? null,
+            'the materialised wave list survives the re-pause',
+        );
+        $this->assertSame(
+            ['a', 'sweep', 'm', 'q'],
+            array_keys($two['stageInputHashes'] ?? []),
+            'the hash ledger carries the prior settled stages and gains only the new one',
+        );
+
+        unset($this->script['queue']);
+        $this->prompts = [];
+        $third = $engine->resume($id);
+
+        $this->assertSame(WorkflowStatus::Completed, $third->status, (string) $third->firstFailure()?->error);
+        $this->assertCount(1, $this->prompts, 'the third incarnation runs ONLY z — every ledger row honoured');
+        $this->assertStringStartsWith('ship using OUT[merge', $this->prompts[0]);
+        $this->assertFileDoesNotExist($file);
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {
