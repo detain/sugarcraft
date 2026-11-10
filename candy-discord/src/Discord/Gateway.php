@@ -293,7 +293,7 @@ final class Gateway
         $this->send(self::OP_IDENTIFY, [
             'token' => $this->token,
             'intents' => $intents,
-            'properties' => ['os' => \PHP_OS_FAMILY, 'browser' => 'candy-code-channel-bridge', 'device' => 'candy-code-channel-bridge'],
+            'properties' => ['os' => \PHP_OS_FAMILY, 'browser' => 'candy-code-discord-bundle', 'device' => 'candy-code-discord-bundle'],
         ]);
         $this->log->info('discord_identify', ['intents' => $intents, 'content' => $this->contentIntent ? 1 : 0]);
     }
