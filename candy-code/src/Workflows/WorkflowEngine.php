@@ -156,7 +156,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * exactly as {@see self::scanVerdict()} builds it. The CLI surface
      * (`candy-code workflow`) keys its exit-3 mapping on this constant rather
      * than re-spelling the sentence: a verifier escalation is a stop FOR A
-     PERSON, not a plain stage failure, and the two must stay tellable apart from
+     * PERSON, not a plain stage failure, and the two must stay tellable apart from
      * outside the engine without parsing prose.
      */
     public const ESCALATION_MARKER = 'escalated: ';
