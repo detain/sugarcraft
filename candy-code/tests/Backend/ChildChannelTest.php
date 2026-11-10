@@ -47,6 +47,13 @@ final class ChildChannelTest extends TestCase
 
         self::assertTrue($resolution->permits());
         self::assertCount(1, $written);
+        // The D1 frame now carries the consume-time expiry stamp: present,
+        // an int, minted now (testTheStampInAnUnframedFrameAgesClosed pins
+        // the missing-stamp side from the other direction).
+        self::assertIsInt($written[0]['askedAt'] ?? null);
+        self::assertGreaterThanOrEqual(\time() - 5, $written[0]['askedAt']);
+        $frame = $written[0];
+        unset($frame['askedAt']);
         self::assertSame([
             'kind' => 'ask',
             'askId' => $askId,
@@ -58,7 +65,7 @@ final class ChildChannelTest extends TestCase
             'mode' => 'accept-edits',
             'suggestions' => ['once', 'always', 'reject'],
             'alwaysScope' => ['tool' => 'Edit'],
-        ], $written[0]);
+        ], $frame);
         self::assertMatchesRegularExpression('/\A[0-9a-f]{16}\z/', $askId);
     }
 

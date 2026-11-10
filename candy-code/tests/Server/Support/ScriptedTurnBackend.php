@@ -101,7 +101,7 @@ final class ScriptedTurnBackend implements InteractiveTurn
      *
      * @param array<string, mixed> $arguments
      */
-    public function ask(string $toolCallId, string $tool, array $arguments, bool $offersAlways = true): PendingAsk
+    public function ask(string $toolCallId, string $tool, array $arguments, bool $offersAlways = true, ?int $askedAt = null): PendingAsk
     {
         $pending = PendingAsk::fromFrame([
             'askId' => PendingAsk::askId($toolCallId, $tool, $arguments),
@@ -113,6 +113,9 @@ final class ScriptedTurnBackend implements InteractiveTurn
             'mode' => 'default',
             'suggestions' => $offersAlways ? ['once', 'always', 'reject'] : ['once', 'reject'],
             'alwaysScope' => $offersAlways ? ['tool' => $tool] : [],
+            // Fresh by default — matches what describe() mints; callers
+            // testing the aged path pass an explicit past stamp.
+            'askedAt' => $askedAt ?? \time(),
         ], function (PermissionResolved $resolution): void {
             $this->settled[] = $resolution;
             $this->emit($resolution);

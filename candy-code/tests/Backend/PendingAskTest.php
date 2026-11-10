@@ -42,6 +42,42 @@ final class PendingAskTest extends TestCase
         self::assertSame(['path' => 'x'], $ask->arguments);
         self::assertSame(['once', 'always', 'reject'], $ask->suggestions);
         self::assertTrue($ask->offers(PermissionReply::Always));
+        // The expiry stamp is part of the round trip: serialize preserves
+        // the int, fromFrame keeps a positive one, and the handle still
+        // reads fresh.
+        self::assertSame($frame['askedAt'], $ask->askedAt());
+        self::assertFalse($ask->hasExpired());
+    }
+
+    public function testExpiryLandsAtEqualityAndAnUnframedHandleAgesClosed(): void
+    {
+        $ask = PendingAsk::fromFrame(
+            ['askId' => '0123456789abcdef', 'toolCallId' => 'c', 'tool' => 'Edit', 'arguments' => [], 'askedAt' => 1_000_000],
+            static function (): void {},
+        );
+        self::assertInstanceOf(PendingAsk::class, $ask);
+        $horizon = 1_000_000 + PendingAsk::EXPIRY_SECONDS;
+
+        self::assertFalse($ask->hasExpired($horizon - 1), 'one second short of the horizon is still answerable');
+        self::assertTrue($ask->hasExpired($horizon), 'expiry lands AT equality, the PairingCodes law');
+        self::assertTrue($ask->hasExpired($horizon + 1));
+
+        // A forged or absent stamp is never trusted as fresh: the handle
+        // reads aged (fail-closed toward refusal), and a non-int stamp
+        // falls to null at parse.
+        $unframed = PendingAsk::fromFrame(
+            ['askId' => '0123456789abcdef', 'toolCallId' => 'c', 'tool' => 'Edit', 'arguments' => []],
+            static function (): void {},
+        );
+        self::assertInstanceOf(PendingAsk::class, $unframed);
+        self::assertNull($unframed->askedAt());
+        self::assertTrue($unframed->hasExpired());
+
+        $forged = PendingAsk::fromFrame(
+            ['askId' => '0123456789abcdef', 'toolCallId' => 'c', 'tool' => 'Edit', 'arguments' => [], 'askedAt' => 'soon'],
+            static function (): void {},
+        );
+        self::assertTrue($forged?->hasExpired(), 'a non-int stamp parses to aged, never to fresh');
     }
 
     /**

@@ -41,6 +41,26 @@ final class PendingAsk
     /** The tools whose call IS a question to the user (roadmap 5.7-2). */
     public const QUESTION_TOOLS = [AskUserTool::NAME, PlanExitTool::NAME];
 
+    /**
+     * How long a question stays answerable, in seconds, measured at CONSUME
+     * time by {@see hasExpired()} — no timer watches the clock. This is the
+     * authoritative floor code-chat §11.6 and §2.5 promise ("expires at 30
+     * min; a late approval cannot restart the cancelled turn"); the serve
+     * feed's `askTimeoutSeconds` ceiling is the best-effort surface of the
+     * same posture (loop-bound, default 0 = never, gone on restart), while
+     * this stamp travels with the ask and survives every restart. The
+     * candy-discord bridge's `approvals.ttlMinutes` default (30) is the
+     * co-TTL on the card side: the card retires its UI at the same horizon
+     * this refuses the answer; change one and the other must move with it
+     * (they sit across a package boundary, so no test can pin the pair —
+     * this sentence is the pin). The shape mirrors candy-discord's
+     * PairingCodes: lazy stamp-compare, expiry AT equality, and a row with
+     * no stamp ages closed ({@see hasExpired()}). An aged question is never
+     * honored silently: {@see \SugarCraft\Code\Protocol\Methods\PermissionMethods::respond()}
+     * refuses it loudly, and `permission.pending` never presents it.
+     */
+    public const EXPIRY_SECONDS = 1800;
+
     private ?PermissionResolved $resolution = null;
 
     /**
@@ -84,6 +104,14 @@ final class PendingAsk
          * line numbers. Display only — replying never consults it.
          */
         public readonly ?string $diff = null,
+        /**
+         * Second-resolution mint stamp written by {@see describe()} and
+         * carried through {@see fromFrame()}; null only on a hand-built
+         * handle (test twins) or a frame with no valid stamp — and a
+         * missing stamp is treated as ALREADY AGED (fail-closed toward
+         * refusal, the PairingCodes `expiresAt ?? 0` law), never as fresh.
+         */
+        public readonly ?int $askedAt = null,
     ) {
     }
 
@@ -145,6 +173,10 @@ final class PendingAsk
                 ? [PermissionReply::Once->value, PermissionReply::Always->value, PermissionReply::Reject->value]
                 : [PermissionReply::Once->value, PermissionReply::Reject->value],
             'alwaysScope' => $scope,
+            // P1 core: the consume-time expiry stamp (EXPIRY_SECONDS),
+            // minted where the question is born so it travels every path
+            // the frame takes — parent, relayed child, serialized log.
+            'askedAt' => \time(),
             // P-E2: which delegated run asked, when this process was told
             // (a relayed member's question); absent for the turn's own.
         ] + ($alwaysAsks === '' ? [] : ['alwaysAsks' => $alwaysAsks])
@@ -278,6 +310,14 @@ final class PendingAsk
             $diff = null;
         }
 
+        // The expiry stamp is trusted only as a positive int; a forged or
+        // malformed value falls to null, which {@see hasExpired()} reads as
+        // already aged — a peer cannot mint a question that never expires.
+        $askedAt = $frame['askedAt'] ?? null;
+        if (!is_int($askedAt) || $askedAt < 1) {
+            $askedAt = null;
+        }
+
         return new self(
             $askId,
             $toolCallId,
@@ -292,6 +332,7 @@ final class PendingAsk
             \SugarCraft\Code\Permissions\AskOrigin::fromArray($frame['origin'] ?? null),
             mb_strcut($string($frame['alwaysAsks'] ?? null), 0, 512, 'UTF-8'),
             $diff,
+            $askedAt,
         );
     }
 
@@ -346,6 +387,28 @@ final class PendingAsk
     public function resolution(): ?PermissionResolved
     {
         return $this->resolution;
+    }
+
+    /**
+     * The mint stamp, or null when the handle never got one (which
+     * {@see hasExpired()} treats as aged).
+     */
+    public function askedAt(): ?int
+    {
+        return $this->askedAt;
+    }
+
+    /**
+     * Whether the question has aged out of {@see EXPIRY_SECONDS}, decided
+     * here at consume time against an injected clock — no timer anywhere
+     * (E646). Expiry lands AT equality (the PairingCodes law), and an
+     * un-stamped handle is already aged: fail-closed toward refusal.
+     */
+    public function hasExpired(?int $now = null): bool
+    {
+        $now ??= \time();
+
+        return $this->askedAt === null || $this->askedAt + self::EXPIRY_SECONDS <= $now;
     }
 
     private function settleWith(PermissionResolved $resolution): bool
