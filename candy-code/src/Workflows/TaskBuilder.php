@@ -32,6 +32,8 @@ final class TaskBuilder
     private int $rejectAtLeast = 1;
     private ?string $resource = null;
     private ?int $lockWaitSeconds = null;
+    private ?int $stallTimeout = null;
+    private ?int $restarts = null;
 
     /**
      * Set the agent type (e.g. 'architect', 'coder', 'reviewer').
@@ -203,6 +205,40 @@ final class TaskBuilder
         return $this;
     }
 
+    /**
+     * Set the idle-stall window in seconds (C7). Values below 1 are refused
+     * at set time — an instant-expiry window is never what an author meant;
+     * omit the key to stay on wall-clock bounds alone.
+     */
+    public function stallTimeout(int $seconds): self
+    {
+        if ($seconds < 1) {
+            throw new \InvalidArgumentException(
+                "stallTimeout must be at least 1 second, got {$seconds}",
+            );
+        }
+
+        $this->stallTimeout = $seconds;
+        return $this;
+    }
+
+    /**
+     * Set the stall-restart budget (C7): re-dispatches allowed when a worker
+     * EXPIRES SILENT, counted apart from retries(). Negative caps are
+     * refused at set time; 0 is the legitimate "never restart a stall".
+     */
+    public function restarts(int $restarts): self
+    {
+        if ($restarts < 0) {
+            throw new \InvalidArgumentException(
+                "restarts cannot be negative, got {$restarts}",
+            );
+        }
+
+        $this->restarts = $restarts;
+        return $this;
+    }
+
     /** Last PCRE compile failure as readable text (shared with the engine's fail-closed scan). */
     public static function pcreErrorText(): string
     {
@@ -236,6 +272,8 @@ final class TaskBuilder
             rejectMinOccurrences: $this->rejectAtLeast,
             resource: $this->resource,
             lockWaitSeconds: $this->lockWaitSeconds,
+            stallTimeout: $this->stallTimeout,
+            restarts: $this->restarts ?? 0,
         );
     }
 

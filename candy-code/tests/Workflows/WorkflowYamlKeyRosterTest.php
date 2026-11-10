@@ -190,6 +190,8 @@ final class WorkflowYamlKeyRosterTest extends TestCase
             . "        resource: host\n"
             . "        lockWaitSeconds: 2\n"
             . "        timeout: 6\n"
+            . "        stallTimeout: 90\n"
+            . "        restarts: 1\n"
             . "  - name: c\n"
             . "    type: verification\n"
             . "    task:\n"
@@ -227,6 +229,12 @@ final class WorkflowYamlKeyRosterTest extends TestCase
         self::assertInstanceOf(\SugarCraft\Code\Workflows\WorkflowTask::class, $verifier);
         self::assertSame('/\bREJECT\b/', $verifier->reject);
         self::assertSame(2, $verifier->rejectMinOccurrences);
+
+        // C7: the stall pair survives the roster and lands typed on the DTO.
+        $taskB = $workflow->stages[1]['tasks'][0];
+        self::assertInstanceOf(WorkflowTask::class, $taskB);
+        self::assertSame(90, $taskB->stallTimeout);
+        self::assertSame(1, $taskB->restarts);
 
         // The C11 arm's keys survive the roster the same way the compound
         // sections do: a uses stage arrives typed 'stage', carrying its
@@ -432,7 +440,8 @@ final class WorkflowYamlKeyRosterTest extends TestCase
         self::assertSame(
             ['agent', 'name', 'prompt', 'tools', 'retries', 'outputSchema',
                 'isolation', 'model', 'resource', 'lockWaitSeconds',
-                'timeout', 'reject', 'rejectMinOccurrences'],
+                'timeout', 'reject', 'rejectMinOccurrences',
+                'stallTimeout', 'restarts'],
             $registry->getConstant('YAML_TASK_KEYS'),
             'the parsed task-key roster is one pinned list'
         );

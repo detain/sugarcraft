@@ -36,7 +36,7 @@ final class WorkflowRegistry
      * silently and quietly do less. An arm added here without its refusal
      * update is caught by {@see \SugarCraft\Code\Tests\Workflows\WorkflowYamlKeyRosterTest}.
      */
-    public const YAML_TASK_KEYS = ['agent', 'name', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds', 'timeout', 'reject', 'rejectMinOccurrences'];
+    public const YAML_TASK_KEYS = ['agent', 'name', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds', 'timeout', 'reject', 'rejectMinOccurrences', 'stallTimeout', 'restarts'];
 
     /**
      * The stage-shape vocabulary (names, flags and the nested containers the
@@ -2178,6 +2178,18 @@ final class WorkflowRegistry
             $b = $b->timeout($this->requireTaskPositiveInt($map['timeout'], 'timeout', $at));
         }
 
+        // C7 (Option A): the idle-stall window rides the same whole-number
+        // law as `timeout` (>=1 — a window of 0 means "omit the key", never
+        // "expire instantly"), and its restart budget shares the >=0 parser
+        // family with `retries`. Both are inert when absent.
+        if (array_key_exists('stallTimeout', $map)) {
+            $b = $b->stallTimeout($this->requireTaskPositiveInt($map['stallTimeout'], 'stallTimeout', $at));
+        }
+
+        if (array_key_exists('restarts', $map)) {
+            $b = $b->restarts($this->requireTaskCount($map['restarts'], 'restarts', $at));
+        }
+
         if (array_key_exists('rejectMinOccurrences', $map) && !array_key_exists('reject', $map)) {
             throw new WorkflowLoadException(
                 "{$at} sets \"rejectMinOccurrences\" without \"reject\"; the threshold counts"
@@ -2405,6 +2417,18 @@ final class WorkflowRegistry
      */
     private function requireRetryCount(mixed $value, string $where): int
     {
+        return $this->requireTaskCount($value, 'retries', $where);
+    }
+
+    /**
+     * The whole-number-at-least-0 parse, key-parameterized — ONE parser
+     * family for `retries` and `restarts` (C7): the two budgets must never
+     * disagree about what "2" or "two" means.
+     *
+     * @throws WorkflowLoadException When the value is not a whole number >= 0.
+     */
+    private function requireTaskCount(mixed $value, string $key, string $where): int
+    {
         $int = null;
         if (is_int($value)) {
             $int = $value;
@@ -2413,11 +2437,11 @@ final class WorkflowRegistry
         }
 
         if ($int === null) {
-            throw new WorkflowLoadException("{$where} \"retries\" must be a whole number, got " . get_debug_type($value));
+            throw new WorkflowLoadException("{$where} \"{$key}\" must be a whole number, got " . get_debug_type($value));
         }
 
         if ($int < 0) {
-            throw new WorkflowLoadException("{$where} \"retries\" must be at least 0, got {$int}");
+            throw new WorkflowLoadException("{$where} \"{$key}\" must be at least 0, got {$int}");
         }
 
         return $int;
