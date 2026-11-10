@@ -216,6 +216,7 @@ return [
     'cli.completion.verb.serve' => 'WebSocket-Server für die Web-UI starten',
     'cli.completion.verb.session' => 'Gespeicherte Sitzungen verwalten',
     'cli.completion.verb.usage' => 'Dauerhaftes Ausgabenkonto nach Tag und Modell zusammenfassen',
+    'cli.completion.verb.workflow' => 'Einen gespeicherten Workflow headlos ausführen, seinen Status berichten oder einen pausierten Lauf fortsetzen',
     'cli.completion.verb_argument' => '{verb}-Argument',
     'cli.doctor.absent' => 'nicht vorhanden',
     'cli.doctor.cap' => 'Ausgabenlimit ${amount} pro Sitzung',

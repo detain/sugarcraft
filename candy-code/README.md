@@ -2591,6 +2591,11 @@ candy-code usage [7|30|all]          # the durable spend ledger folded by day an
                                      #   the same page `/usage` prints; --session <target>
                                      #   narrows to one session, --output-format json
                                      #   emits the facts map behind the page
+candy-code workflow run <name> [--param k=v]...   # run a saved workflow to completion headlessly;
+                                     #   a paused run prints its resume id and exits 3
+candy-code workflow status <name>    # live, remembered, or paused — the engine's own answer
+candy-code workflow resume <id>      # replay the recorded pause file; refuses records that
+                                     #   are live in another process
 ```
 
 Every one of these is dispatched in the same pre-flight place `--help` and
@@ -3071,7 +3076,7 @@ API and stay as-is. Boolean `is*()`/`has*()` predicates are convention-compliant
 cd candy-code && composer install && vendor/bin/phpunit
 ```
 
-**31,035 tests / 765,018 assertions, 0 failures, 8 skipped** — the whole of
+**31,461 tests / 774,070 assertions, 0 failures, 8 skipped** — the whole of
 `candy-code/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6.
 The 22m51s serial timing was taken on the earlier 24,863-test tree (2026-10-18);

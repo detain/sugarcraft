@@ -216,6 +216,7 @@ return [
     'cli.completion.verb.serve' => 'Запустить WebSocket-сервер для веб-интерфейса',
     'cli.completion.verb.session' => 'Управление сохранёнными сессиями',
     'cli.completion.verb.usage' => 'Свести журнал расходов по дням и моделям',
+    'cli.completion.verb.workflow' => 'Запустить сохранённый рабочий процесс без интерфейса, сообщить его состояние или возобновить приостановленный запуск',
     'cli.completion.verb_argument' => 'аргумент {verb}',
     'cli.doctor.absent' => 'отсутствует',
     'cli.doctor.cap' => 'лимит расходов ${amount} на сессию',

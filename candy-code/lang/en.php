@@ -254,6 +254,7 @@ return [
     'cli.completion.verb.serve' => 'Run the WebSocket server for the web UI',
     'cli.completion.verb.session' => 'Manage stored sessions',
     'cli.completion.verb.usage' => 'Roll up the durable spend ledger by day and model',
+    'cli.completion.verb.workflow' => 'Run a saved workflow headlessly, report its status, or resume a paused run',
     'cli.completion.verb_argument' => '{verb} argument',
     'cli.doctor.absent' => 'absent',
     'cli.doctor.cap' => 'spend cap ${amount} per session',

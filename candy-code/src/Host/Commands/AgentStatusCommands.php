@@ -265,7 +265,7 @@ final class AgentStatusCommands
             $lines[] = $outcome['ok']
                 ? '  · APPLIED: merged into new branch "' . PermissionsCommand::reportField((string) $outcome['ref'])
                     . '"; master, HEAD and the agent worktree were not touched.'
-                : '  · APPLY REFUSED: ' . PermissionsCommand::reportField($outcome['reason']);
+                : '  · APPLY REFUSED — ' . PermissionsCommand::reportField($outcome['reason']);
         }
 
         return implode("\n", $lines);

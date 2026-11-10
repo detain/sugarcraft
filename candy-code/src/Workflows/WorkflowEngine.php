@@ -1001,6 +1001,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $workflow = $this->registry->load($workflowPath);
         $context = self::withSanitizedResults(is_array($data['context'] ?? null) ? $data['context'] : []);
         [$stagesCompleted, $prior] = $this->priorProgress($data, $workflow, $context);
+        // C9L: a settled join is a decision already paid for. If the workflow
+        // file was edited mid-pause so any recorded join stage's declaration
+        // no longer matches the ledger the pause wrote, resuming would
+        // re-decide it against the new shape — refuse the resume, loudly.
+        $this->refuseEditedInputJoins($workflowId, $workflow, $prior);
 
         // The pause file's OWN name is the pause identity, not the string the
         // user typed: a second interrupt during this resumed run must land on the
@@ -1051,7 +1056,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param array<string, mixed> $data    the decoded pause file
      * @param array<string, mixed> $context the pause file's context
-     * @return array{0: int, 1: array{stageResults: list<StageResult>, totalTokens: int, totalCost: float, startedAt: \DateTimeImmutable, stageInputHashes: array<string, string>, dynamicWaves: array<string, mixed>, recordedResults: array<string, StageResult>, totalsCountRecordedRows: bool}}
+     * @return array{0: int, 1: array{stageResults: list<StageResult>, totalTokens: int, totalCost: float, startedAt: \DateTimeImmutable, stageInputHashes: array<string, string>, dynamicWaves: array<string, mixed>, inputJoins: array<string, list<array{from: list<string>, as: string}>>, recordedResults: array<string, StageResult>, totalsCountRecordedRows: bool}}
      */
     private function priorProgress(array $data, Workflow $workflow, array $context): array
     {
@@ -1120,6 +1125,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // NEVER re-globs; a pre-C8 record carries none, which is exactly
             // the state where a fresh (unstarted) dynamic stage may expand.
             'dynamicWaves' => is_array($data['dynamicWaves'] ?? null) ? $data['dynamicWaves'] : [],
+            // C9L substrate, same law: the recorded join declarations verbatim.
+            // A pre-C9L record carries none — absence makes the resume-side
+            // guard proceed (a missing ledger is "no claim made", not a broken
+            // one; the join hazard predates the record, refusing old pauses
+            // would buy zero safety for zero cost paid).
+            'inputJoins' => is_array($data['inputJoins'] ?? null) ? $data['inputJoins'] : [],
             'recordedResults' => $recordedByName,
             // Whether the seed totals are the file's cumulative spend (which
             // was written in the same snapshot as the rows above, so it ALREADY
@@ -1546,6 +1557,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($waves !== []) {
             $data['dynamicWaves'] = $waves;
         }
+        // C9L substrate, same law: the join DECLARATIONS (never payloads) of
+        // every settled stage that joins. A resume whose edited YAML no longer
+        // matches this ledger refuses (refuseEditedInputJoins); a run with no
+        // joined stage omits the key entirely.
+        $joins = $slotToken === null ? [] : ($this->liveRuns[$slotToken]['inputJoins'] ?? []);
+        if ($joins !== []) {
+            $data['inputJoins'] = $joins;
+        }
 
         // Audit M4: the pre-fix write ignored file_put_contents' return (a
         // failed pause silently lost the run) and wrote the live path
@@ -1883,6 +1902,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // record has neither and absence downstream is a cache miss.
                 'inputHashes' => $prior['stageInputHashes'] ?? [],
                 'dynamicWaves' => $prior['dynamicWaves'] ?? [],
+                // C9L: seed so a RE-pause of this resumed run preserves the
+                // first incarnation's join rows (lineage law, see refuse()).
+                'inputJoins' => $prior['inputJoins'] ?? [],
             ];
 
             foreach ($workflow->stages as $stageIndex => $stage) {
@@ -2079,6 +2101,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // (incremental, explicit, signal) carries the same map.
                 if ($stageResult->isSuccess()) {
                     $this->liveRuns[$liveToken]['inputHashes'][$stageResult->stageName] = self::stageInputHash($stage, $stageType);
+                    $joinRows = $this->stageJoinDeclarations($stage, $stageType);
+                    if ($joinRows !== []) {
+                        $this->liveRuns[$liveToken]['inputJoins'][$stageResult->stageName] = $joinRows;
+                    }
                 }
 
                 // O1: refresh the resilience record with this stage counted.
@@ -2168,10 +2194,15 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * The join never persists into the running context: pause files carry no
      * `input` row, and a resumed run re-derives the same bytes from the same
-     * recorded rows — the whole byte-stability story across pause/resume (the
-     * same discipline {@see withSanitizedResults()} gives the typed map by
-     * neutralizing hand-edited junk AT READ TIME; here even the hand-edit
-     * surface is absent, because nothing is stored). The fixed name `input`
+     * recorded rows — the whole byte-stability story across pause/resume.
+     * What the pause record DOES carry since C9L is the `inputJoins` ledger
+     * ({@see refuseEditedInputJoins()}): the join DECLARATIONS of every
+     * settled joined stage, so an edit to a declaration mid-pause REFUSES the
+     * resume instead of silently re-deciding it. The payload itself is still
+     * nothing-is-stored — always re-derived, never replayed. (The same
+     * discipline {@see withSanitizedResults()} gives the typed map by
+     * neutralizing hand-edited junk AT READ TIME; here a hand-edited
+     * declaration cannot even reach read time.) The fixed name `input`
      * shadows a prior stage named `input` inside the joining stage's own
      * prompt only; downstream stages and the results map that survives the
      * stage keep the legacy meaning.
@@ -2898,6 +2929,139 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         return hash('sha256', json_encode($material, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * C9L: the join DECLARATIONS of one stage — one row per task that carries
+     * an `input:` spec, in task declaration order, each row the exact shape
+     * {@see resolveStageInput()} consumes ({from: list<string>, as: string}).
+     * A join-free stage yields the empty list, so it earns no ledger row.
+     *
+     * Only the declarations are ever stored: the JOIN PAYLOADS stay derived
+     * at run time (the byte-stability law of resolveStageInput's doc-block —
+     * pause files still carry no `input` row, and this ledger changes that
+     * claim not at all: it says WHICH joins were decided, never WHAT they
+     * joined to).
+     *
+     * @param array<string, mixed> $stage
+     * @return list<array{from: list<string>, as: string}>
+     */
+    private function stageJoinDeclarations(array $stage, string $stageType): array
+    {
+        $rows = [];
+        foreach ($this->collectStageTasks($stage, $stageType) as $task) {
+            if ($task->input === null) {
+                continue;
+            }
+            $rows[] = [
+                'from' => array_values($task->input['from']),
+                'as' => $task->input['as'],
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * C9L: refuse a resume whose workflow file was EDITED mid-pause in a way
+     * that changes a recorded join stage's `input:` declaration.
+     *
+     * The hazard (C9-FIX, of record): the C13 replay hash covers task/model/
+     * schema material but NOT the join list, so a stage whose settled bytes
+     * were joined from [a, b] could resume against an edited declaration
+     * joining [a, c] — silently re-deciding a decision already paid for.
+     * The pause record therefore carries an `inputJoins` ledger of every
+     * settled join stage's declarations, and this guard compares the CURRENT
+     * definition against it for every successful recorded stage.
+     *
+     * Rulings (all pinned by WorkflowPauseResumeTest):
+     * - ABSENT ledger = pre-C9L record or join-free run: PROCEED. Absence is
+     *   "no claim made", not a broken one; refusing old pauses would break
+     *   live users' runs for zero safety gain (the hazard predates the ledger;
+     *   protection begins at the first write).
+     * - REORDER refuses: from-order is byte-significant in all four shapes
+     *   (file-list joins in list order, `first` takes the first present,
+     *   `all` banners in declaration order, `results` keys in list order).
+     * - A removed join, an added join, an `as` spelling change, and a
+     *   recorded stage VANISHING from the definition all refuse (the current
+     *   declaration is the empty list, which mismatches a join-bearing row).
+     * - Ledger rows for stages that are NOT recorded (pruned from the file)
+     *   are tolerated: only recorded decisions are defended.
+     * - The refusal is the resume-level WorkflowNotRunningException — loud,
+     *   raw English, before any stage re-decides — mirroring the C8
+     *   cannot-replay law for dynamic waves. A hand-edited ledger row cannot
+     *   forge consent: any attacker who can rewrite the pause file can as
+     *   well delete the key, which is the documented legacy pass; the guard
+     *   defends YAML edits, not a compromised record.
+     *
+     * @param array{inputJoins: array<string, mixed>, recordedResults: array<string, StageResult>} $prior
+     */
+    private function refuseEditedInputJoins(string $workflowId, Workflow $workflow, array $prior): void
+    {
+        $ledger = $prior['inputJoins'];
+        if ($ledger === []) {
+            return;
+        }
+
+        $current = [];
+        foreach ($workflow->stages as $stage) {
+            $name = (string) ($stage['name'] ?? 'unknown');
+            $rows = $this->stageJoinDeclarations($stage, (string) ($stage['type'] ?? ''));
+            if ($rows !== []) {
+                $current[$name] = $rows;
+            }
+        }
+
+        foreach ($prior['recordedResults'] as $name => $row) {
+            if (!$row->isSuccess()) {
+                continue;
+            }
+            $expected = self::canonicalJoinLedgerRow($ledger[$name] ?? null);
+            $declared = $current[$name] ?? [];
+            if ($expected === [] && $declared === []) {
+                continue;
+            }
+            if ($expected !== $declared) {
+                throw new WorkflowNotRunningException(
+                    "Workflow '{$workflowId}' cannot be resumed: stage '{$name}' has a recorded"
+                    . " input join whose declaration no longer matches the pause record's ledger"
+                    . ' — refusing to re-decide a recorded join stage against an edited workflow'
+                );
+            }
+        }
+    }
+
+    /**
+     * C9L: re-shape one ledger row (from the JSON-decoded file) into exactly
+     * what stageJoinDeclarations() produces, so a strict !== comparison is
+     * fair. Anything malformed canonicalises to the empty list — which
+     * mismatches any join-bearing current declaration (fail-closed toward
+     * refusal) and matches a stage that has no joins left (nothing to
+     * re-decide).
+     *
+     * @return list<array{from: list<string>, as: string}>
+     */
+    private static function canonicalJoinLedgerRow(mixed $raw): array
+    {
+        if (!is_array($raw)) {
+            return [];
+        }
+        $rows = [];
+        foreach ($raw as $entry) {
+            if (!is_array($entry) || !is_array($entry['from'] ?? null) || !is_string($entry['as'] ?? null)) {
+                return [];
+            }
+            $from = [];
+            foreach ($entry['from'] as $source) {
+                if (!is_string($source)) {
+                    return [];
+                }
+                $from[] = $source;
+            }
+            $rows[] = ['from' => $from, 'as' => $entry['as']];
+        }
+
+        return $rows;
     }
 
     /**

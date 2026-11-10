@@ -768,6 +768,277 @@ final class WorkflowPauseResumeTest extends TestCase
         );
     }
 
+    // -------------------------------------------------------------------------
+    // C9L: the inputJoins ledger — declarations ride the pause file, and a
+    // mid-pause edit to a RECORDED join refuses the resume.
+    // -------------------------------------------------------------------------
+
+    /** @param array{from: list<string>, as: string}|null $mInput the join spec of stage m (null = no join) */
+    private function registerFanIn(string $name, ?array $mInput = null, bool $withM = true): void
+    {
+        $builder = (new WorkflowBuilder())
+            ->name($name)
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->stage('b', Tasks::agent('coder')->prompt('do b'));
+        if ($withM) {
+            $task = Tasks::agent('coder')->prompt($mInput === null ? 'merge plain' : 'merge {{input}}');
+            if ($mInput !== null) {
+                $task = $task->input($mInput);
+            }
+            $builder = $builder->stage('m', $task);
+        }
+        $this->registry->register(
+            $builder->stage('z', Tasks::agent('coder')->prompt('ship using {{m.output}}'))->build(),
+        );
+    }
+
+    /**
+     * Hand-craft the pause record a first incarnation left: a, b and m settled
+     * (m as a join stage), z never started. A null ledger writes NO inputJoins
+     * key — the pre-C9L shape; a map rides the file verbatim.
+     *
+     * @param array<string, list<array{from: list<string>, as: string}>>|null $ledger
+     */
+    private function writeJoinRecord(string $name, ?array $ledger): string
+    {
+        $at = (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM);
+        $row = static fn (string $n, string $o): array => [
+            'stageName' => $n,
+            'status' => 'completed',
+            'output' => $o,
+            'error' => null,
+            'agents' => [],
+            'startedAt' => $at,
+            'completedAt' => $at,
+        ];
+        $data = [
+            'workflowId' => $name,
+            'workflowPath' => $name,
+            'status' => 'paused',
+            'stagesCompleted' => 3,
+            'context' => [
+                'a.output' => 'OUT[do a]',
+                'b.output' => 'OUT[do b]',
+                'm.output' => 'OUT[merge recorded]',
+            ],
+            'stageResults' => [
+                $row('a', 'OUT[do a]'),
+                $row('b', 'OUT[do b]'),
+                $row('m', 'OUT[merge recorded]'),
+            ],
+            'totalTokens' => 30,
+            'totalCost' => 1.5,
+            'startedAt' => $at,
+        ];
+        if ($ledger !== null) {
+            $data['inputJoins'] = $ledger;
+        }
+        $file = $this->tempDir . '/workflows/.running/' . $name . '.json';
+        if (!is_dir(dirname($file))) {
+            mkdir(dirname($file), 0700, true);
+        }
+        file_put_contents($file, (string) json_encode($data));
+
+        return $file;
+    }
+
+    public function testTheJoinDeclarationsRideThePauseFileAndAnUneditedResumePassesTheGuard(): void
+    {
+        $this->registerFanIn('joinfan', ['from' => ['a', 'b'], 'as' => 'all']);
+        // Arm during m, not z: a pause that lands during the LAST stage never
+        // meets a boundary, the run simply completes and withdraws its record.
+        $this->pauseDuring('merge', 'joinfan');
+
+        $run = $this->engine->run('joinfan');
+        $this->assertSame(WorkflowStatus::Paused, $run->status);
+
+        $file = $this->tempDir . '/workflows/.running/joinfan.json';
+        $this->assertFileExists($file);
+        $data = json_decode((string) file_get_contents($file), true);
+        $this->assertSame(
+            ['m' => [['from' => ['a', 'b'], 'as' => 'all']]],
+            $data['inputJoins'] ?? null,
+            'the settled join stage contributes exactly its declarations, in task order',
+        );
+        $this->assertArrayNotHasKey('input', $data['context'], 'the join PAYLOAD still never rides the file');
+
+        unset($this->script['merge']);
+        $this->prompts = [];
+        $merged = '';
+        foreach ($run->stageResults as $settled) {
+            if ($settled->stageName === 'm') {
+                $merged = (string) $settled->output;
+            }
+        }
+        $resumed = $this->engine->resume('joinfan');
+
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status);
+        $this->assertSame(
+            ['ship using ' . $merged],
+            $this->prompts,
+            'the guard passes an unedited resume, which re-runs ONLY z — m is never re-decided',
+        );
+        $this->assertFileDoesNotExist($file);
+    }
+
+    public function testAJoinFreePauseFileCarriesNoLedgerKey(): void
+    {
+        $this->registry->register((new WorkflowBuilder())
+            ->name('nofan')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->stage('b', Tasks::agent('coder')->prompt('do b'))
+            ->stage('c', Tasks::agent('coder')->prompt('hold c'))
+            ->build());
+        $this->pauseDuring('do b', 'nofan');
+
+        $run = $this->engine->run('nofan');
+        $this->assertSame(WorkflowStatus::Paused, $run->status, 'the pause lands with c still pending, so the record survives');
+
+        $data = json_decode(
+            (string) file_get_contents($this->tempDir . '/workflows/.running/nofan.json'),
+            true,
+        );
+        $this->assertIsArray($data);
+        $this->assertArrayNotHasKey('inputJoins', $data, 'no settled join means NO key — never a spurious empty map');
+    }
+
+    public function testAPreLedgerPauseFileWithRecordedJoinStagesResumesAnyway(): void
+    {
+        $this->registerFanIn('legacy', ['from' => ['a', 'b'], 'as' => 'all']);
+        $this->writeJoinRecord('legacy', null);
+
+        $resumed = $this->engine->resume('legacy');
+
+        $this->assertSame(
+            WorkflowStatus::Completed,
+            $resumed->status,
+            'absence is "no claim made", not a broken one — a pre-C9L record resumes as it always did',
+        );
+        $this->assertSame(['ship using OUT[merge recorded]'], $this->prompts);
+    }
+
+    public function testEveryMidPauseJoinEditRefusesTheResumeWithThePinnedWording(): void
+    {
+        $ledger = ['m' => [['from' => ['a', 'b'], 'as' => 'all']]];
+        $wording = "Workflow '%s' cannot be resumed: stage 'm' has a recorded input join whose"
+            . " declaration no longer matches the pause record's ledger"
+            . ' — refusing to re-decide a recorded join stage against an edited workflow';
+
+        $edits = [
+            'refuse-add' => ['from' => ['a', 'b', 'q'], 'as' => 'all'],
+            'refuse-del' => ['from' => ['a'], 'as' => 'all'],
+            // ruling: from-ORDER is byte-significant in all four shapes, so a
+            // reorder of the same set re-decides different bytes and refuses.
+            'refuse-order' => ['from' => ['b', 'a'], 'as' => 'all'],
+            'refuse-as' => ['from' => ['a', 'b'], 'as' => 'first'],
+            // the join itself stripped from the definition: a removed decision
+            // is still a changed decision.
+            'refuse-none' => null,
+        ];
+        foreach ($edits as $name => $spec) {
+            $this->registerFanIn($name, $spec);
+            $file = $this->writeJoinRecord($name, $ledger);
+            try {
+                $this->engine->resume($name);
+                $this->fail("an edited join declaration must refuse the resume ({$name})");
+            } catch (\SugarCraft\Code\Workflows\WorkflowNotRunningException $e) {
+                $this->assertSame(sprintf($wording, $name), $e->getMessage(), 'pinned refusal wording');
+            }
+            $this->assertSame([], $this->prompts, "a refused resume dispatches nothing ({$name})");
+            $this->assertFileExists($file, "a refused resume must not consume the record ({$name})");
+        }
+
+        // the identical declaration spelled through the same shapes resumes.
+        $this->registerFanIn('refuse-ok', ['from' => ['a', 'b'], 'as' => 'all']);
+        $this->writeJoinRecord('refuse-ok', $ledger);
+        $resumed = $this->engine->resume('refuse-ok');
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status, 'the guard must not become a blanket refusal');
+    }
+
+    public function testARecordedJoinStageThatVanishedFromTheDefinitionRefusesTheResume(): void
+    {
+        $this->registerFanIn('gonefan', null, withM: false);
+        $this->writeJoinRecord('gonefan', ['m' => [['from' => ['a', 'b'], 'as' => 'all']]]);
+
+        $this->expectException(\SugarCraft\Code\Workflows\WorkflowNotRunningException::class);
+        $this->engine->resume('gonefan');
+    }
+
+    public function testALedgerRowForAnUnrecordedStageIsToleratedAndThatStageMayReDecide(): void
+    {
+        $this->registerFanIn('prunetol', ['from' => ['a'], 'as' => 'first']);
+        $at = (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM);
+        $row = static fn (string $n): array => [
+            'stageName' => $n,
+            'status' => 'completed',
+            'output' => "OUT[do {$n}]",
+            'error' => null,
+            'agents' => [],
+            'startedAt' => $at,
+            'completedAt' => $at,
+        ];
+        $file = $this->tempDir . '/workflows/.running/prunetol.json';
+        if (!is_dir(dirname($file))) {
+            mkdir(dirname($file), 0700, true);
+        }
+        file_put_contents($file, (string) json_encode([
+            'workflowId' => 'prunetol',
+            'workflowPath' => 'prunetol',
+            'status' => 'paused',
+            'stagesCompleted' => 2,
+            'context' => ['a.output' => 'OUT[do a]', 'b.output' => 'OUT[do b]'],
+            'stageResults' => [$row('a'), $row('b')],
+            // m's row claims the OLD join — but m is not among the recorded
+            // settlements, so the claim defends nothing: prune-tolerance.
+            'inputJoins' => ['m' => [['from' => ['a', 'b'], 'as' => 'all']]],
+            'totalTokens' => 20,
+            'totalCost' => 1.0,
+            'startedAt' => $at,
+        ]));
+
+        $resumed = $this->engine->resume('prunetol');
+
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status);
+        $this->assertSame('merge OUT[do a]', $this->prompts[0], 'm re-decides under the new declaration — it was never settled');
+        $this->assertStringStartsWith('ship using OUT[merge', $this->prompts[1]);
+    }
+
+    public function testTheLedgerCapturesJoinRowsForEveryStageShapeInDeclarationOrder(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('shapes')
+            ->withVerification(
+                'v',
+                Tasks::agent('coder')->prompt('V1 {{input}}')->input(['from' => ['a'], 'as' => 'first']),
+                Tasks::agent('coder')->prompt('V2 {{input}}')->input(['from' => ['b', 'a'], 'as' => 'file-list']),
+            )
+            ->pipeline('p', [
+                Tasks::agent('coder')->prompt('P1 {{input}}')->input(['from' => ['a'], 'as' => 'all']),
+                Tasks::agent('coder')->prompt('P2 plain'),
+            ])
+            ->build();
+
+        $engine = (new \ReflectionClass(WorkflowEngine::class))->newInstanceWithoutConstructor();
+        $read = new \ReflectionMethod(WorkflowEngine::class, 'stageJoinDeclarations');
+
+        $verification = $read->invoke($engine, $workflow->stages[0], 'verification');
+        $this->assertSame(
+            [
+                ['from' => ['a'], 'as' => 'first'],
+                ['from' => ['b', 'a'], 'as' => 'file-list'],
+            ],
+            $verification,
+            'task then verifier, in declaration order — the same collection the resolver consumes',
+        );
+
+        $pipeline = $read->invoke($engine, $workflow->stages[1], 'pipeline');
+        $this->assertSame(
+            [['from' => ['a'], 'as' => 'all']],
+            $pipeline,
+            'nested join tasks contribute in walk order; the join-free nested one earns no row',
+        );
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {

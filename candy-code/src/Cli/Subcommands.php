@@ -6717,6 +6717,7 @@ final class Subcommands
         'serve' => 'cli.completion.verb.serve',
         'session' => 'cli.completion.verb.session',
         'usage' => 'cli.completion.verb.usage',
+        'workflow' => 'cli.completion.verb.workflow',
     ];
 
     /**
@@ -6738,6 +6739,8 @@ final class Subcommands
         'import' => ['claude'],
         'serve' => Serve::ACTIONS,
         'completion' => self::SHELLS,
+        // cc-eval w1b: the headless workflow verbs, in dispatch-arm order.
+        'workflow' => ['run', 'status', 'resume'],
     ];
 
     /**

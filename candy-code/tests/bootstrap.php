@@ -812,9 +812,18 @@ TuiRenderer::setSize(200, 60);
  * leans on the fallback shape, exactly like the colour pins above. The wide
  * render is not left untested for it: HelpTest drives it ON PURPOSE, arming
  * and clearing COLUMNS itself around each pin.
+ *
+ * The live arm matters the same way: since the width-defect fix Help also
+ * probes the terminal window (TIOCGWINSZ through sugar-core's Tty) when no
+ * credible COLUMNS is exported, so on a TTY runner an unpinned probe would
+ * hand every default-shape pin the width of whatever terminal launched
+ * phpunit. Pin the arm to its "cannot answer" verdict — the same neutrality
+ * the env clearing above buys on a pipe — and let HelpTest arm a pretend
+ * window per pin, exactly as it arms COLUMNS.
  */
 putenv('COLUMNS');
 unset($_ENV['COLUMNS'], $_SERVER['COLUMNS']);
+\SugarCraft\Code\Cli\Help::pretendTerminalColumnsForTesting(false);
 
 /*
  * No test may reach the developer's real clipboard. A mouse selection's

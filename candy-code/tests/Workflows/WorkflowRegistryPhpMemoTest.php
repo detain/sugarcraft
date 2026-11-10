@@ -77,12 +77,14 @@ final class WorkflowRegistryPhpMemoTest extends TestCase
         \file_put_contents($path, "<?php\n\$GLOBALS['c16_requires']['heal'][] = 1;\nthrow new \\RuntimeException('v1 boom');\n");
 
         $registry = new WorkflowRegistry($this->workflowsDir());
+        $refused = null;
         try {
             $registry->load('memo-heal');
-            self::fail('the throwing file must refuse the first load');
         } catch (\RuntimeException $error) {
-            self::assertSame('v1 boom', $error->getMessage());
+            $refused = $error;
         }
+        self::assertNotNull($refused, 'the throwing file must refuse the first load');
+        self::assertSame('v1 boom', $refused->getMessage());
 
         \file_put_contents($path, $this->returner('memo-healed', 'heal'));
 
@@ -98,12 +100,14 @@ final class WorkflowRegistryPhpMemoTest extends TestCase
         \file_put_contents($path, "<?php\nfunction {$canary}() { return 1; }\n\$GLOBALS['c16_requires']['decl'][] = 1;\nthrow new \\RuntimeException('v1 boom');\n");
 
         $registry = new WorkflowRegistry($this->workflowsDir());
+        $refused = null;
         try {
             $registry->load('memo-decl');
-            self::fail('the throwing file must refuse the first load');
         } catch (\RuntimeException $error) {
-            self::assertSame('v1 boom', $error->getMessage());
+            $refused = $error;
         }
+        self::assertNotNull($refused, 'the throwing file must refuse the first load');
+        self::assertSame('v1 boom', $refused->getMessage());
 
         \file_put_contents($path, "<?php\nfunction {$canary}() { return 2; }\n\$GLOBALS['c16_requires']['decl'][] = 1;\nthrow new \\RuntimeException('v2 boom');\n");
 
@@ -125,19 +129,23 @@ final class WorkflowRegistryPhpMemoTest extends TestCase
         \file_put_contents($path, "<?php\n\$GLOBALS['c16_requires']['poison'][] = 1;\nthrow new \\RuntimeException('same bytes');\n");
 
         $registry = new WorkflowRegistry($this->workflowsDir());
+        $first = null;
         try {
             $registry->load('memo-poison');
-            self::fail('the throwing file must refuse');
-        } catch (\RuntimeException $first) {
-            self::assertSame('same bytes', $first->getMessage());
+        } catch (\RuntimeException $error) {
+            $first = $error;
         }
+        self::assertNotNull($first, 'the throwing file must refuse');
+        self::assertSame('same bytes', $first->getMessage());
 
+        $second = null;
         try {
             $registry->load('memo-poison');
-            self::fail('the unchanged bytes must stay poisoned');
-        } catch (\RuntimeException $second) {
-            self::assertSame($first, $second, 'the very same Throwable must answer, not a re-require');
+        } catch (\RuntimeException $error) {
+            $second = $error;
         }
+        self::assertNotNull($second, 'the unchanged bytes must stay poisoned');
+        self::assertSame($first, $second, 'the very same Throwable must answer, not a re-require');
 
         self::assertCount(1, $GLOBALS['c16_requires']['poison'] ?? []);
     }
