@@ -1643,6 +1643,19 @@ final class ReadPathCensusTest extends TestCase
         'Workflows/WorkflowRegistry.php|Yaml::parseFile' => [
             'CONTAINED — a `.yaml` workflow, confined to the tier directory it was found in',
         ],
+        // Plugin-support P1 step 3: the trust-gated channel loader and its 0600 ledger.
+        'Channels/BundleChannelLoader.php|require_once' => [
+            'CONTAINED — THE ELEVENTH EXECUTE PATH: a trusted name opts a bundle in, and the '
+                . 'loader re-asserts `ContainedPath::below()` on the manifest entry, refuses '
+                . 'world-writable or foreign-owned bytes, and quarantines a first-sighted file '
+                . 'out of this launch.',
+        ],
+        'Channels/ChannelsStore.php|file_get_contents' => [
+            'CALLER_SUPPLIED — `read()` resolves the store path through the caller\'s $configDir '
+                . 'callable; production hands it Bootstrap\'s trusted config dir (the home-OWNED '
+                . '~/.candy-code), and a missing or malformed record degrades to the empty ledger '
+                . '— never a crash path.',
+        ],
         // Step 3.G: the session's auto-commit record, `<git dir>/candy-code/auto-commits.jsonl`,
         // located by `git rev-parse --git-path` and written by this class alone.
         'Workspace/AutoCommitter.php|file' => [
@@ -1827,6 +1840,7 @@ final class ReadPathCensusTest extends TestCase
                 'Tools/Sandbox/EgressProxyProcess.php|require',
                 'Tools/Script/ScriptPrelude.php|require',
                 'Workflows/WorkflowRegistry.php|require',
+            'Channels/BundleChannelLoader.php|require_once',
             ],
             array_keys($execute),
             'the execute paths in src/, named — a new one is a change worth reading twice',

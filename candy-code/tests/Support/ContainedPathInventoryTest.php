@@ -205,6 +205,9 @@ final class ContainedPathInventoryTest extends TestCase
         // inside the owned home after the mkdir (the post-check quick-add
         // spells by hand at Chat.php's count of two; this arm reaches the
         // routed class instead, so no by-hand spelling grows here).
+        // Channels/BundleChannelLoader.php: the trust-gated loader bounds every
+        // manifest-named entrypoint file with its own containment compare.
+        'Channels/BundleChannelLoader.php' => 1,
         'Chat.php' => 1,
         'Cli/McpDecision.php' => 1,
         'Commands/CommandLoader.php' => 2,
@@ -312,7 +315,7 @@ final class ContainedPathInventoryTest extends TestCase
      * be confined to itself. `within()` and not `below()`, because a prefix
      * mapped to `""` means the package root itself.
      *
-     * "SIXTY-NINE call sites in THIRTY-SIX files", per file — the sum and the key
+     * "SEVENTY call sites in THIRTY-SEVEN files", per file — the sum and the key
      * count of {@see ROUTED_CALL_SITES} as it stands below, which is what
      * {@see testTheRoutedCallSiteInventory()} checks against the derivation over
      * `src/`. (It read "twenty-seven in eleven", then "twenty-eight in twelve",
@@ -410,6 +413,7 @@ final class ContainedPathInventoryTest extends TestCase
             'FORTY' => 40, 'FORTY-ONE' => 41, 'FORTY-TWO' => 42, 'FORTY-THREE' => 43,
             'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53, 'FIFTY-FOUR' => 54, 'FIFTY-FIVE' => 55, 'FIFTY-SIX' => 56,
             'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64, 'SIXTY-FIVE' => 65, 'SIXTY-SEVEN' => 67, 'SIXTY-NINE' => 69,
+        'SEVENTY' => 70,
             'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24, 'TWENTY-FIVE' => 25,
         ];
 
