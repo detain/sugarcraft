@@ -35,19 +35,18 @@ final class Help
      * The authored budget of the help page: translators align its columns to
      * 80 cells, so a terminal at or below that width must see the page
      * verbatim — and a probed value that is absent or not credible resolves
-     * here rather than guessing. Mirrors sugar-cli's internal WidthProbe
-     * fallback (its class is `@internal`, so the read pattern is replicated
-     * rather than imported).
+     * here rather than guessing. One source with the reflow engine's own
+     * guard: {@see HelpPageReflow::MIN_WIDTH}.
      */
-    private const HELP_MIN_WIDTH = 80;
+    private const HELP_MIN_WIDTH = HelpPageReflow::MIN_WIDTH;
 
     /**
-     * Upper clamp of the render width: past 200 columns the key and
-     * description columns of a table row drift so far apart the block stops
-     * reading as a table, so the probed width is honoured up to here and
-     * capped at it above.
+     * Upper clamp of the render width: past it the key and description
+     * columns of a table row drift so far apart the block stops reading as
+     * a table, so the probed width is honoured up to here and capped at it
+     * above. {@see HelpPageReflow::MAX_WIDTH}.
      */
-    private const HELP_MAX_WIDTH = 200;
+    private const HELP_MAX_WIDTH = HelpPageReflow::MAX_WIDTH;
 
     /**
      * Resolve the width the help screen renders at, probing the terminal the
@@ -99,14 +98,21 @@ final class Help
      * reaches a terminal — while renderPage's page variant keeps the
      * embedded newlines that ARE the layout above (the single-line
      * flattening in render() would collapse the whole screen onto one row).
-     * Width is left null deliberately: the page ships already aligned by
-     * its translators, so no probed terminal width may re-flow it. For the
-     * clean English page — and any locale that keeps its layout — the call
-     * is byte-identity, verified by HelpTest.
+     *
+     * The width is then probed ({@see helpRenderWidth()}): at or below the
+     * 80-column authored budget — CI, pipes, plain terminals, no COLUMNS —
+     * the screen is the page BYTE-IDENTICAL, verified by HelpTest. Above
+     * the budget, {@see HelpPageReflow::reflow()} re-wraps the aligned
+     * columns into the wider window without moving a word: the translators'
+     * layout is the budget's layout, and honoring a bigger terminal means
+     * giving that layout more room, not a different document.
      */
     public static function screen(): string
     {
-        return HelpText::renderPage(Lang::t('cli.help.screen'));
+        return HelpPageReflow::reflow(
+            HelpText::renderPage(Lang::t('cli.help.screen')),
+            self::helpRenderWidth(),
+        );
     }
 
     /**

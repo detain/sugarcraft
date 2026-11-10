@@ -16,6 +16,7 @@ use SugarCraft\Code\Tests\Support\FlushesLocaleMemoisedCataloguesTrait;
 use SugarCraft\Code\Tests\Support\MintsStampedPharTrait;
 use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
 use SugarCraft\Code\Workspace\GitRunner;
+use SugarCraft\Core\Util\Width;
 
 final class HelpTest extends TestCase
 {
@@ -1038,5 +1039,172 @@ final class HelpTest extends TestCase
                 self::clearHelpColumnsEnv();
             }
         }
+    }
+
+    public function testTheBudgetWidthItselfStaysByteIdentical(): void
+    {
+        // The boundary the guard clause stands on: a terminal EXACTLY at
+        // the authored budget is the verbatim page, not a re-wrap that
+        // happens to fit. COLUMNS=80 is the widest byte-identity shape.
+        $en   = require self::LANG_DIR . '/en.php';
+        $page = (string) $en['cli.help.screen'];
+
+        putenv('COLUMNS=80');
+
+        try {
+            $this->assertSame($page, Help::screen());
+        } finally {
+            self::clearHelpColumnsEnv();
+        }
+    }
+
+    /**
+     * Render the live screen with COLUMNS armed for one call, returning the
+     * process to the bootstrap's cleared shape afterwards.
+     */
+    private static function renderScreenWithColumns(string $probed): string
+    {
+        putenv('COLUMNS=' . $probed);
+
+        try {
+            return Help::screen();
+        } finally {
+            self::clearHelpColumnsEnv();
+        }
+    }
+
+    /**
+     * The Examples block's bytes, from its heading to the footer heading —
+     * the region the reflow must treat as an opaque passthrough.
+     */
+    private static function screenExamplesSliceOf(string $screen): string
+    {
+        $start = strpos($screen, "Examples:\n");
+        self::assertNotFalse($start, 'the screen has no Examples: block');
+        $end = strpos($screen, "\nFor more information", $start);
+        self::assertNotFalse($end, 'the screen has no footer heading after Examples');
+
+        return substr($screen, $start, $end - $start);
+    }
+
+    public function testAWideTerminalRendersTheAuthoredScreenInFarFewerRows(): void
+    {
+        $en     = require self::LANG_DIR . '/en.php';
+        $page   = (string) $en['cli.help.screen'];
+        $screen = self::renderScreenWithColumns('160');
+
+        $this->assertLessThan(
+            substr_count($page, "\n"),
+            substr_count($screen, "\n"),
+            'a 160-column terminal must read the screen in fewer rows than the 80-column budget',
+        );
+
+        foreach (explode("\n", $screen) as $row) {
+            if (Width::of($row) > 160) {
+                $this->fail("row exceeds the probed width: {$row}");
+            }
+        }
+
+        // Nothing was lost or invented: whitespace aside, the wide screen is
+        // the authored page byte-for-byte — no word mid-wrap breakage, no
+        // dropped row, no rewritten token.
+        $this->assertSame(
+            preg_replace('/\s+/u', '', $page),
+            preg_replace('/\s+/u', '', $screen),
+            'the reflow moved or changed words — only whitespace may differ',
+        );
+    }
+
+    /** @return array<string, array{0: string}> */
+    public static function wideTerminalWidths(): array
+    {
+        return [
+            'just over budget' => ['81'],
+            'a laptop window'  => ['120'],
+            'a wide window'    => ['160'],
+            'the ceiling'      => ['200'],
+        ];
+    }
+
+    /**
+     * At every wide shape the document keeps its skeleton: no row wider
+     * than the probed terminal, whitespace-only difference from the
+     * authored page, and every section heading still rising in the authored
+     * order.
+     *
+     * @dataProvider wideTerminalWidths
+     */
+    public function testEveryWideShapeKeepsStructureOrderAndWords(string $probed): void
+    {
+        $en     = require self::LANG_DIR . '/en.php';
+        $page   = (string) $en['cli.help.screen'];
+        $screen = self::renderScreenWithColumns($probed);
+        $width  = (int) $probed;
+
+        foreach (explode("\n", $screen) as $row) {
+            $this->assertLessThanOrEqual($width, Width::of($row), "row over {$probed} columns: {$row}");
+        }
+
+        $this->assertSame(
+            preg_replace('/\s+/u', '', $page),
+            preg_replace('/\s+/u', '', $screen),
+            "the reflow at {$probed} columns changed more than whitespace",
+        );
+
+        $previous = -1;
+        foreach ([
+            'Usage:',
+            'Subcommands (',
+            'Options:',
+            'Environment variables:',
+            'Exit codes (',
+            'Examples:',
+            'For more information',
+        ] as $heading) {
+            $at = strpos($screen, $heading);
+            $this->assertNotFalse($at, "the wide screen lost the {$heading} section");
+            $this->assertGreaterThan($previous, $at, "the {$heading} section drifted out of order");
+            $previous = $at;
+        }
+    }
+
+    public function testTheWideScreenStillPresentsKeyRostersAndOpaqueBlocks(): void
+    {
+        $en     = require self::LANG_DIR . '/en.php';
+        $page   = (string) $en['cli.help.screen'];
+        $screen = self::renderScreenWithColumns('160');
+
+        // Environment entries still ENTER at their three-space column: the
+        // roster guards read that column, and so does a user.
+        $this->assertMatchesRegularExpression('/^ {3}CANDY_CODE_PROVIDER(?![A-Z0-9_])/m', $screen);
+
+        // Flag rows still start as option lines under the same anchor shape
+        // the fallback guards use.
+        $this->assertMatchesRegularExpression('/^ +(?:-[a-z], )?--prompt(?:[ =,]|$)/m', $screen);
+
+        // The exact-spaced usage alias row is raw prefix + raw gap emission:
+        // it survives a wide render byte-exact, eight spaces and all.
+        $this->assertStringContainsString(
+            'candy-code run "<prompt>"        Alias for -p "<prompt>" (one-shot mode)',
+            $screen,
+        );
+
+        // The Examples block is an opaque passthrough: every byte of it is
+        // the authored page at a wide width too — commands and shell
+        // continuations never re-flow.
+        $this->assertSame(
+            self::screenExamplesSliceOf($page),
+            self::screenExamplesSliceOf($screen),
+            'the Examples block was re-wrapped — it must stay verbatim',
+        );
+    }
+
+    public function testAnAbsurdWidthIsClampedToTheLayoutCeiling(): void
+    {
+        $this->assertSame(
+            self::renderScreenWithColumns('200'),
+            self::renderScreenWithColumns('5000'),
+            'COLUMNS beyond the ceiling must render exactly the ceiling shape, not shred the layout',
+        );
     }
 }
