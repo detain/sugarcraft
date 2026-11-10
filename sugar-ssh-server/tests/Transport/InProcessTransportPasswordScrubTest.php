@@ -164,8 +164,8 @@ final class ScrubRecordingSlavePty implements SlavePty
     public function spawn(
         array $cmd,
         ?array $env = null,
-        int $cols = 80,
-        int $rows = 24,
+        ?int $cols = null,
+        ?int $rows = null,
         bool $controllingTerminal = false,
     ): Child {
         $this->spawnCalled = true;
