@@ -316,6 +316,11 @@ final class ChannelInboundLog
             return;
         }
 
+        // Rows that fail the shape check are dropped silently ON PURPOSE: a
+        // whole-file failure quarantines loudly above, but a row with no
+        // string channel/key is not addressable — there is no id to name in a
+        // loud refusal — and its absence from the replay set is where the
+        // drop stays visible to the consumer (the EventLog precedent).
         foreach ($records as $id => $row) {
             if (\is_string($id) && \is_array($row) && \is_string($row['channel'] ?? null) && \is_string($row['key'] ?? null)) {
                 $this->records[$id] = $row;
