@@ -1859,22 +1859,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     );
                 }
 
-                // C2: a `when:` clause that answers unsatisfied settles the
-                // stage as Skipped WITHOUT dispatch — the row is a recorded
-                // fact, neither success nor failure. Nothing is billed, no
-                // output key is written (downstream reads see the stage as
-                // absent, which is the truth), no input hash is recorded (a
-                // skip re-decides nothing), and the clause gate stands ahead
-                // of the cache door: an unrun stage has nothing to replay.
-                $when = $stage['when'] ?? null;
-                if (is_array($when) && !StageCondition::evaluate($when, $context)) {
-                    $stageResults[] = new StageResult(
-                        stageName: (string) ($stage['name'] ?? ''),
-                        status: WorkflowStatus::Skipped,
-                        startedAt: $stageStartedAt,
-                        completedAt: $stageStartedAt,
-                    );
-
+                // C2's when-guard, extracted verbatim by C4 to fund the loop's
+                // do-head inside the DocFigure window (see skippedWhenRow).
+                $skipped = $this->skippedWhenRow($stage, $context, $stageStartedAt);
+                if ($skipped !== null) {
+                    $stageResults[] = $skipped;
                     continue;
                 }
 
@@ -1893,62 +1882,85 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     continue;
                 }
 
-                // Every agent the stage ran is recorded by the executor as each
-                // settles — an executor that throws AFTER one ran still bills it.
-                $dispatched = [];
-                $heldLocks = [];
-
-                try {
-                    // O3: exclusive, sorted, bounded flocks on every declared
-                    // resource BEFORE dispatch — full law: acquireStageResources().
-                    $heldLocks = $this->acquireStageResources($stage, $stageType);
-
-                    // C11: an include-compose stage runs a named workflow as
-                    // its body; the registry already refused body+uses.
-                    if (array_key_exists('uses', $stage)) {
-                        $stageResult = $this->executeIncludedWorkflow($stage, $context, $workflow, $stageStartedAt);
-                    } elseif ($stageType === 'parallel') {
-                        $stageResult = $this->executeParallelStage($stage, $context, $workflow, $dispatched, $this->liveRuns[$liveToken]['dynamicWaves']);
-                    } elseif ($stageType === 'stage') {
-                        $stageResult = $this->executeStage($stage, $context, $dispatched, $workflow->timeout);
-                    } elseif ($stageType === 'pipeline') {
-                        $stageResult = $this->executePipelineStage($stage, $context, $dispatched, $workflow->maxConcurrent, $workflow->timeout);
-                    } else {
-                        $stageResult = $this->executeVerificationStage($stage, $context, $dispatched, $workflow->timeout);
+                // C4: a `loop:` map (parse-normalized, so is_array is the
+                // whole door) re-dispatches this stage until the clause holds
+                // or max rounds ran. Non-looped stages never enter the do —
+                // their body bytes and behavior are the pre-C4 ones.
+                $loop = is_array($stage['loop'] ?? null) ? $stage['loop'] : null;
+                $round = 1;
+                do {
+                    if ($loop !== null) {
+                        $context['round'] = $round;
                     }
-                } catch (\Throwable $e) {
-                    $stageResult = new StageResult(
-                        stageName: $stage['name'] ?? 'unknown',
-                        status: WorkflowStatus::Failed,
-                        error: $e->getMessage(),
-                        agents: array_column($dispatched, 'result'),
-                        startedAt: $stageStartedAt,
-                        completedAt: new \DateTimeImmutable(),
-                    );
-                } finally {
-                    // O3: every lock this stage took goes back on every exit
-                    // path — success, failure, throw, pause-request return.
-                    $this->releaseStageResources($heldLocks);
+
+                    // Every agent the stage ran is recorded by the executor as each
+                    // settles — an executor that throws AFTER one ran still bills it.
+                    $dispatched = [];
+                    $heldLocks = [];
+
+                    try {
+                        // O3: exclusive, sorted, bounded flocks on every declared
+                        // resource BEFORE dispatch — full law: acquireStageResources().
+                        $heldLocks = $this->acquireStageResources($stage, $stageType);
+
+                        // C11: an include-compose stage runs a named workflow as
+                        // its body; the registry already refused body+uses.
+                        // C4: inside the do-body on purpose — a looped uses
+                        // stage re-dispatches the included workflow per round.
+                        if (array_key_exists('uses', $stage)) {
+                            $stageResult = $this->executeIncludedWorkflow($stage, $context, $workflow, $stageStartedAt);
+                        } elseif ($stageType === 'parallel') {
+                            $stageResult = $this->executeParallelStage($stage, $context, $workflow, $dispatched, $this->liveRuns[$liveToken]['dynamicWaves']);
+                        } elseif ($stageType === 'stage') {
+                            $stageResult = $this->executeStage($stage, $context, $dispatched, $workflow->timeout);
+                        } elseif ($stageType === 'pipeline') {
+                            $stageResult = $this->executePipelineStage($stage, $context, $dispatched, $workflow->maxConcurrent, $workflow->timeout);
+                        } else {
+                            $stageResult = $this->executeVerificationStage($stage, $context, $dispatched, $workflow->timeout);
+                        }
+                    } catch (\Throwable $e) {
+                        $stageResult = new StageResult(
+                            stageName: $stage['name'] ?? 'unknown',
+                            status: WorkflowStatus::Failed,
+                            error: $e->getMessage(),
+                            agents: array_column($dispatched, 'result'),
+                            startedAt: $stageStartedAt,
+                            completedAt: new \DateTimeImmutable(),
+                        );
+                    } finally {
+                        // O3: every lock this stage took goes back on every exit
+                        // path — success, failure, throw, pause-request return.
+                        $this->releaseStageResources($heldLocks);
+                    }
+
+                    // This stage's output and its agents' results, for downstream
+                    // interpolation — written here, once the stage has settled, so
+                    // a live pause's snapshot never holds half a stage.
+                    //
+                    // S3: a captured stage hands downstream the capture file's
+                    // PATH plus a bounded preview, not the whole dump — the file
+                    // holds every byte for whoever needs detail, the prompt
+                    // envelope stays cache-stable, and no reader inherits a
+                    // length-truncation hazard. Uncaptured runs take the right
+                    // side of the ternary: byte-identical to before S3.
+                    $context[$stageResult->stageName . '.output'] = ($stage['capture'] ?? false) === true && !$stageResult->isFailure()
+                        ? $this->captureStageOutput($interruptId, $stageIndex, $stageResult)
+                        : $stageResult->output ?? '';
+                    $context = self::withResults($context, $dispatched);
+
+                    $totalTokens += $this->sumTokens($stageResult);
+                    $totalCost += $this->sumCost($stageResult);
+                    $round++;
+                } while ($loop !== null
+                    && $round <= $loop['max']
+                    && $this->runCancellation?->isCancelled() !== true
+                    && !StageCondition::evaluate($loop['until'], $context));
+
+                if ($loop !== null) {
+                    unset($context['round']);
                 }
 
-                // This stage's output and its agents' results, for downstream
-                // interpolation — written here, once the stage has settled, so
-                // a live pause's snapshot never holds half a stage.
-                //
-                // S3: a captured stage hands downstream the capture file's
-                // PATH plus a bounded preview, not the whole dump — the file
-                // holds every byte for whoever needs detail, the prompt
-                // envelope stays cache-stable, and no reader inherits a
-                // length-truncation hazard. Uncaptured runs take the right
-                // side of the ternary: byte-identical to before S3.
-                $context[$stageResult->stageName . '.output'] = ($stage['capture'] ?? false) === true && !$stageResult->isFailure()
-                    ? $this->captureStageOutput($interruptId, $stageIndex, $stageResult)
-                    : $stageResult->output ?? '';
-                $context = self::withResults($context, $dispatched);
-
                 $stageResults[] = $stageResult;
-                $totalTokens += $this->sumTokens($stageResult);
-                $totalCost += $this->sumCost($stageResult);
 
                 // C13 substrate: record WHAT THIS STAGE WAS ASKED to run —
                 // the pre-interpolation prompt template plus model and
@@ -2042,6 +2054,35 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $this->restoreInterruptHandlers($previousAsyncSignals);
             }
         }
+    }
+
+    /**
+     * C2: a `when:` clause that answers unsatisfied settles the stage as
+     * Skipped WITHOUT dispatch — the row is a recorded fact, neither success
+     * nor failure. Nothing is billed, no output key is written (downstream
+     * reads see the stage as absent, which is the truth), no input hash is
+     * recorded (a skip re-decides nothing), and the clause gate stands ahead
+     * of the cache door: an unrun stage has nothing to replay.
+     *
+     * Extracted verbatim from {@see runGuardedFromWorkflow()} by C4, whose
+     * loop do-head needs the window bytes; behavior is the moved code's.
+     *
+     * @param array<string, mixed> $stage
+     * @param array<string, mixed> $context
+     */
+    private function skippedWhenRow(array $stage, array $context, \DateTimeImmutable $stageStartedAt): ?StageResult
+    {
+        $when = $stage['when'] ?? null;
+        if (is_array($when) && !StageCondition::evaluate($when, $context)) {
+            return new StageResult(
+                stageName: (string) ($stage['name'] ?? ''),
+                status: WorkflowStatus::Skipped,
+                startedAt: $stageStartedAt,
+                completedAt: $stageStartedAt,
+            );
+        }
+
+        return null;
     }
 
     /**
