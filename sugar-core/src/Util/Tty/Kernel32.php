@@ -101,7 +101,13 @@ UINT GetConsoleOutputCP(void);
 
 BOOL SetConsoleCtrlHandler(void *HandlerRoutine, BOOL Add);
 
-HANDLE CreateFileW(const wchar_t *lpFileName, DWORD dwDesiredAccess,
+/* WHY `unsigned short` instead of `wchar_t`: the FFI parser on Windows
+   PHP builds does not predefine the wchar_t typedef — CI on PHP 8.3.36
+   threw 'Undefined C type "wchar_t"' at this line before a single
+   kernel32 symbol was reached. `unsigned short` is grammar-level, and
+   Windows wchar_t is exactly 16 bits, so the parameter type agrees with
+   the "unsigned short[]" buffer toWideString() allocates by construction. */
+HANDLE CreateFileW(const unsigned short *lpFileName, DWORD dwDesiredAccess,
                    DWORD dwShareMode, void *lpSecurityAttributes,
                    DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes,
                    HANDLE hTemplateFile);
@@ -447,7 +453,9 @@ CPROTO
     // ─── Wide-string helper ──────────────────────────────────────────────────
 
     /**
-     * Convert a PHP string to a null-terminated UTF-16LE wchar_t array.
+     * Convert a PHP string to a null-terminated UTF-16LE array of 16-bit
+     * code units (unsigned short[] — the cdef spells CreateFileW's
+     * parameter that way because the Windows FFI parser has no wchar_t).
      *
      * WHAT THIS DOCBLOCK USED TO SAY: that the caller MUST free the
      * returned pointer via FFI::free(). WHAT IS TRUE: the opposite. The
