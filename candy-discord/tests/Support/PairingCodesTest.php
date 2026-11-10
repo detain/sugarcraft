@@ -103,7 +103,9 @@ final class PairingCodesTest extends TestCase
             'EXPIRED1' => ['userId' => 'peer-9', 'createdAt' => 100, 'expiresAt' => 4600, 'lastReminderAt' => 100],
         ], []);
         self::assertSame('new', $this->codes->request('default', 'peer-1')['kind'], 'expired rows must not hold the cap');
-        self::assertSame([], $this->codes->pending('default'), 'only the fresh code stays live');
+        $live = $this->codes->pending('default');
+        self::assertCount(1, $live, 'only the fresh code stays live');
+        self::assertNotSame('EXPIRED1', $live[0]['code'], 'the dead row is gone from disk');
     }
 
     public function testAMintedCodeNeverLeavesThroughTheOutboundFilter(): void

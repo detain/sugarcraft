@@ -19,7 +19,7 @@ final class TextSafetyTest extends TestCase
     {
         $safety = (new TextSafety())->withSecrets(['abcd', 'shhhhh-secret', 123456, null]);
 
-        self::assertStringContainsString('shhhhh-secret', $safety->outbound('keeps abcd visible: abcd'));
+        self::assertStringContainsString('abcd', $safety->outbound('keeps abcd visible: abcd'));
         self::assertStringNotContainsString('shhhhh-secret', $safety->outbound('leak shhhhh-secret here'));
     }
 

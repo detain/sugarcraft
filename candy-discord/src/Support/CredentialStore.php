@@ -80,6 +80,9 @@ final class CredentialStore
         if (($next['version'] ?? self::CURRENT_VERSION) !== self::CURRENT_VERSION) {
             throw new \RuntimeException('channels store mutation must keep version ' . self::CURRENT_VERSION);
         }
+        // Stamp on the way out, not just assume on the way in: a store written
+        // from absent must self-describe its schema for the read guard's sake.
+        $next['version'] = self::CURRENT_VERSION;
         $this->write($next);
 
         return $next;
@@ -90,8 +93,14 @@ final class CredentialStore
     {
         $row = $this->account($this->read(), 'discord', $account);
         $token = $row['token'] ?? null;
+        if (!\is_string($token)) {
+            return null;
+        }
+        // Trim at the boundary: a stray space around a pasted token would
+        // otherwise fail Discord auth with a message that names nothing here.
+        $token = \trim($token);
 
-        return \is_string($token) && $token !== '' ? $token : null;
+        return $token !== '' ? $token : null;
     }
 
     /**

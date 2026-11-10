@@ -58,13 +58,13 @@ final class EndpointTest extends TestCase
     {
         $this->expectRefusal('not a url', 'not an absolute https/wss URL');
         $this->expectRefusal('localhost:8080', 'not an absolute https/wss URL');
-        $this->expectRefusal('ftp://discord.example/', 'not an absolute https/wss URL');
+        $this->expectRefusal('ftp://discord.example/', 'must be https or wss');
     }
 
-    private function expectRefusal(string $override, string $needle): void
+    private function expectRefusal(string $override, string $needle, bool $optIn = false): void
     {
         try {
-            Endpoint::apiBase($override, true);
+            Endpoint::apiBase($override, $optIn);
             self::fail('expected a refusal for ' . $override);
         } catch (RuntimeException $error) {
             self::assertStringContainsString($needle, $error->getMessage());

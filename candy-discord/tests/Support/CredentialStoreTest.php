@@ -106,6 +106,9 @@ final class CredentialStoreTest extends TestCase
     public function testThePairingWriteReplacesTheLedgerAndKeepsForeignKeys(): void
     {
         $store = new CredentialStore($this->path);
+        // Simulate P1 having already written its ledger: the pairing write
+        // must leave that unknown key standing.
+        $store->write(['seenEntrypoints' => ['x' => true], 'platforms' => []]);
         $store->writeDiscordPairing(
             'work',
             ['CODE1001' => ['userId' => 'p1', 'createdAt' => 1, 'expiresAt' => 999, 'lastReminderAt' => 1]],

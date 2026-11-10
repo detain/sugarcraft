@@ -58,12 +58,14 @@ final class OutboundChunkerTest extends TestCase
         $chunks = OutboundChunker::split($text, 500, 8);
         self::assertGreaterThanOrEqual(2, $chunks);
         foreach ($chunks as $chunk) {
-            $fences = preg_match_all('/^```/', $chunk, $unused);
+            $fences = preg_match_all('/^```/m', $chunk, $unused);
             self::assertSame(0, $fences % 2, 'a chunk carried an unbalanced fence');
         }
         self::assertStringStartsWith('intro line', $chunks[0]);
         self::assertStringContainsString('outro line', $chunks[count($chunks) - 1]);
-        self::assertStringNotContainsString('```php', $chunks[count($chunks) - 1], 'the opener rides its own chunk');
+        // The chunk that carries only the real closer reopens synthetically
+        // first (bridge-faithful law): balanced counts, never a bare fence.
+        self::assertStringStartsWith('```php', $chunks[count($chunks) - 1]);
     }
 
     public function testPureFenceNoiseIsDroppedRatherThanSent(): void
