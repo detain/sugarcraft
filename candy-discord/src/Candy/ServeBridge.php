@@ -213,8 +213,11 @@ final class ServeBridge
     /**
      * Follow $session. With $afterSeq the server REPLAYS what that cursor
      * missed (replay-on-gap); when the log can no longer reach it the answer
-     * comes back `reset` with a snapshot and we re-pin the cursor to
-     * throughSeq. A null $afterSeq opens from a bounded snapshot.
+     * comes back `reset` with a snapshot. NOTHING here re-pins a cursor to
+     * throughSeq: the field re-feeds the snapshot window as durable seq'd
+     * frames and the router's largest-wins cursor absorbs them monotonically.
+     * Field law: never cursor-skip on RESET. A null $afterSeq opens from a
+     * bounded snapshot.
      *
      * @param ?\Closure(): ?int $cursor re-reads the persisted cursor before a
      *        reconnect re-subscribe, so a seq learned between the drop and
