@@ -97,7 +97,7 @@ $serveToken = (string) ($config->section('serve')['token'] ?? '');
 if ($serveToken === '') {
     $serveToken = (string) (\getenv('CANDY_CODE_SERVER_TOKEN') ?: '');
 }
-if ($serveToken === '' && $dir !== null) {
+if ($serveToken === '') {
     // Never-mints posture (see README): only READ a token that an authorized
     // `candy-code serve` already minted; never mint one from here.
     $tokenFile = $dir->path . '/' . \SugarCraft\Code\Server\Auth\TokenStore::FILE;
@@ -182,7 +182,7 @@ $serve->start(
 )->then(null, fn (\Throwable $e) => $log->error('serve_failed', ['error' => $e->getMessage()]));
 
 $GLOBALS['bridge_shutting_down'] = false;
-$shutdown = function (int $signal) use ($log, $serve, $bridge, $map): void {
+$shutdown = function (int $signal) use ($log, $serve, $bridge): void {
     if ($GLOBALS['bridge_shutting_down']) {
         return;
     }
