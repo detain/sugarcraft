@@ -365,6 +365,36 @@ final class MultiTaskStageTest extends TestCase
         self::assertSame(['a.txt'], array_keys($results));
     }
 
+    public function testAFanOutThatMatchesNoFilesFailsLoudly(): void
+    {
+        // The empty-expansion door is the loud half of "never a silently
+        // empty fan-out": a pattern that matches nothing fails the stage
+        // naming the pattern, and dispatches nothing on the way out.
+        $envRoot = $this->tempDir . '/fanenv';
+        mkdir($envRoot, 0755, true);
+        file_put_contents($envRoot . '/keep.md', 'not a match');
+
+        $star = chr(42);
+        $this->yaml('fanout', "name: fanout\n"
+            . "stages:\n"
+            . "  - name: sweep\n"
+            . "    parallel: true\n"
+            . "    from:\n"
+            . "      glob: '" . $star . ".txt'\n"
+            . "    agent: coder\n"
+            . "    prompt: \"fix {{path}}\"\n");
+
+        $result = (new WorkflowEngine(
+            $this->registry(),
+            new AgentWorkerPool(1, $this->executor()),
+            environmentRoot: $envRoot,
+        ))->run('fanout');
+
+        self::assertSame(WorkflowStatus::Failed, $result->status);
+        self::assertStringContainsString('expanded no files', (string) $result->firstFailure()?->error);
+        self::assertSame([], $this->prompts, 'an empty sweep dispatches no work');
+    }
+
     // -------------------------------------------------------------------------
     // YAML: `tasks:`
     // -------------------------------------------------------------------------
