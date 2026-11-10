@@ -34,7 +34,7 @@ final class PermissionGateChannelScopeTest extends TestCase
      */
     private static function star(): string
     {
-        return \chr(42);
+        return chr(42);
     }
 
     private static function scope(array $allow = [], array $alsoAllow = [], array $deny = []): ChannelToolScope

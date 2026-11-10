@@ -22,7 +22,7 @@ final class ChannelToolScopeTest extends TestCase
     /** A wildcard spelled through chr(42) — a bare glob literal would drift the PathGlob corpus (GlobDialect law). */
     private static function star(): string
     {
-        return \chr(42);
+        return chr(42);
     }
 
     public function testADenyEntryRefusesItsNameWithTheScopeLabel(): void

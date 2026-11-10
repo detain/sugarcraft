@@ -25,7 +25,7 @@ final class ChannelToolPolicyServiceTest extends TestCase
     /** The GlobDialect law: wildcards never appear inside a literal. */
     private static function star(): string
     {
-        return \chr(42);
+        return chr(42);
     }
 
     public function testNamesThatAreNotChannelGrammarGetNoScopeAtAll(): void
