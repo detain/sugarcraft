@@ -4240,12 +4240,25 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
-     * Interpolate {{variable}}, {{stageName.output}}, and {{name.results}} tokens in a string.
+     * Interpolate {{variable}}, {{name.results}}, {{name.<pointer>}}, and
+     * {{stageName.output}} tokens in a string.
      *
      * - `{{name.results}}` is replaced with one agent's output, from the
      *   {@see RESULTS_CONTEXT_KEY} map ({@see resultKey()} names its entries).
+     * - `{{name.<pointer>}}` addresses the agent's typed JSON row
+     *   ({@see RESULTS_TYPED_SUFFIX}) with an RFC 6901 pointer, so
+     *   `{{build.summary}}` and `{{build.items/0/id}}` reach document
+     *   leaves. The reserved tails `results` and `output` are not
+     *   pointers — they belong to the dedicated forms below and are left
+     *   for them, whichever way the run() ordering resolves.
      * - `{{stageName.output}}` is replaced with the output of a prior stage result.
      * - `{{variable}}` is replaced with $context['variable'].
+     *
+     * Substitution runs in that order, and every pass re-scans what the
+     * pass before it emitted: a typed leaf containing `{{stage.output}}`
+     * is therefore resolved by the stage pass that follows, while an
+     * emitted `{{name.results}}` (which had its pass already) survives
+     * verbatim.
      *
      * An unresolved token is left as written. So is one whose value is not a
      * string or a number: a `runFromPhp()` caller can put anything in the
@@ -4264,6 +4277,26 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $text = preg_replace_callback(
             '/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\.results\}\}/',
             static fn (array $matches): string => self::interpolatable($results[$matches[1]] ?? null) ?? $matches[0],
+            $text
+        );
+
+        $text = preg_replace_callback(
+            '/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\.([A-Za-z0-9_~\/.\-]+)\}\}/',
+            static function (array $matches) use ($results): string {
+                if ($matches[2] === 'results' || $matches[2] === 'output') {
+                    return $matches[0];
+                }
+                $typed = $results[$matches[1] . self::RESULTS_TYPED_SUFFIX] ?? null;
+                if (!is_string($typed)) {
+                    return $matches[0];
+                }
+                $leaf = self::jsonPointerValue($typed, $matches[2]);
+                if (is_bool($leaf)) {
+                    return $leaf ? 'true' : 'false';
+                }
+
+                return self::interpolatable($leaf) ?? $matches[0];
+            },
             $text
         );
 
