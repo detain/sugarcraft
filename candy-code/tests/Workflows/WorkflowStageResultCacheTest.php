@@ -188,6 +188,67 @@ final class WorkflowStageResultCacheTest extends TestCase
         );
     }
 
+    public function testACarriedRowShortCircuitsEveryRoundOfALoop(): void
+    {
+        // C4 x C13: the cache door sits AHEAD of the loop, so a match on a
+        // looped stage carries its recorded final-round row and never enters
+        // a first round. The loop key is deliberately NOT hash material —
+        // a stage's identity is what it asks, not how often it may re-ask —
+        // so the plain recipe hash still matches after loop: was added.
+        $this->registerThreeLooping(cached: true);
+        $this->writeRecord(stageInputHashes: ['c' => $this->recipeHash('do c using {{b.output}}')]);
+
+        $resumed = $this->engine->resume('three');
+
+        $this->assertSame(
+            ['do b using OUT[do a]'],
+            $this->prompts,
+            'zero rounds of the looped stage ran — the recorded row answered them all',
+        );
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status);
+        $this->assertCount(3, $resumed->stageResults);
+        $this->assertSame('CACHED[c]', $resumed->stageResults[2]->output);
+    }
+
+    public function testTheSameLoopWithoutTheOptInRunsEveryRound(): void
+    {
+        // The pairing half: with cache: false every other byte identical, the
+        // loop re-dispatches its rounds normally — the door defaults closed
+        // and the loop never inherits a carry it did not earn.
+        $this->registerThreeLooping(cached: false);
+        $this->writeRecord(stageInputHashes: ['c' => $this->recipeHash('do c using {{b.output}}')]);
+
+        $resumed = $this->engine->resume('three');
+
+        $this->assertSame(
+            [
+                'do b using OUT[do a]',
+                'do c using FRESH[do b using OUT[do a]]',
+                'do c using FRESH[do b using OUT[do a]]',
+            ],
+            $this->prompts,
+            'two rounds ran; b settled once, so both rounds ask the same thing',
+        );
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status);
+        $this->assertCount(3, $resumed->stageResults);
+    }
+
+    private function registerThreeLooping(bool $cached): void
+    {
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('three')
+                ->description('a then b then c')
+                ->stage('a', Tasks::agent('coder')->prompt('do a'))
+                ->stage('b', Tasks::agent('coder')->prompt('do b using {{a.output}}'))
+                ->stage('c', Tasks::agent('coder')->prompt('do c using {{b.output}}'), cache: $cached)
+                // Never holds: 'CACHED[c]' and 'FRESH[...]' both lack the
+                // needle, so the loop runs its full max in the control arm.
+                ->loop(['max' => 2, 'until' => ['stage' => 'c', 'contains' => 'DONE']])
+                ->build(),
+        );
+    }
+
     /**
      * The C13 recipe, byte-pinned by the engine's substrate tests: a stage's
      * identity is its type plus each task's (prompt, model, schema).

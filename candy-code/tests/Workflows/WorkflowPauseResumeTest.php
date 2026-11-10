@@ -673,6 +673,49 @@ final class WorkflowPauseResumeTest extends TestCase
         return $data;
     }
 
+    public function testALoopedStageFinishesItsRoundsBeforeALivePauseIsObserved(): void
+    {
+        // C4 disclosure: the pause check sits at the stage boundary, so a
+        // live pause requested mid-loop is honoured only once the looped
+        // stage has settled its final round — rounds are not checkpointed
+        // individually, and the pause record sees the stage as one row.
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('three')
+                ->description('a, then a looping fix, then z')
+                ->stage('a', Tasks::agent('coder')->prompt('do a'))
+                ->stage('fix', Tasks::agent('coder')->prompt('do fix round {{round}}'))
+                ->loop(['max' => 2, 'until' => ['stage' => 'fix', 'contains' => 'ALL DONE']])
+                ->stage('z', Tasks::agent('coder')->prompt('do z using {{fix.output}}'))
+                ->build(),
+        );
+        $this->pauseDuring('do fix', 'three');
+
+        $run = $this->engine->run('three');
+
+        $this->assertSame(WorkflowStatus::Paused, $run->status);
+        $this->assertSame(
+            ['do a', 'do fix round 1', 'do fix round 2'],
+            $this->prompts,
+            'the loop ran out both rounds; the pause was observed at the next stage boundary',
+        );
+        $this->assertSame(['a', 'fix'], self::stageNames($run));
+
+        $data = $this->pauseData();
+        $this->assertSame(2, $data['stagesCompleted'], 'the looped stage is recorded whole, as one row');
+
+        $this->prompts = [];
+        $resumed = $this->engine->resume($run->workflowId);
+
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status);
+        $this->assertSame(
+            ['do z using OUT[do fix round 2]'],
+            $this->prompts,
+            'resume never re-runs a settled looped stage: whole-stage granularity, no round replay',
+        );
+        $this->assertFileDoesNotExist($this->pauseFile());
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {
