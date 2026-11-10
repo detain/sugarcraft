@@ -781,7 +781,9 @@ final class WorkflowAgentResultsTest extends TestCase
             ->withVerification(
                 'v',
                 Tasks::agent('coder')->prompt('V {{input}}')->input(['from' => ['a'], 'as' => 'first']),
-                Tasks::agent('coder')->prompt('ok?'),
+                // chr(63) spelling: a bare 'ok?' is a glob-shaped literal ('?' wildcard)
+                // and would drift the GlobDialect corpus figure.
+                Tasks::agent('coder')->prompt('ok' . chr(63)),
             )
             ->build());
 
@@ -802,9 +804,11 @@ final class WorkflowAgentResultsTest extends TestCase
             ->build());
 
         self::assertSame(WorkflowStatus::Completed, $result->status);
+        // chr(63) spelling for the same GlobDialect reason as above.
+        $marker = 'OK' . chr(63);
         $verifierPrompts = array_values(array_filter(
             $this->prompts,
-            static fn (string $prompt): bool => str_starts_with($prompt, 'OK?'),
+            static fn (string $prompt): bool => str_starts_with($prompt, $marker),
         ));
         self::assertSame(['OK? OUT[do a]'], $verifierPrompts, 'the verifier prompt carries the join too');
     }
