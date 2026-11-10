@@ -493,7 +493,7 @@ final class ConversationRouter
             return \React\Promise\resolve($existing);
         }
 
-        return $this->serve->createSession()->then(function (array $created) use ($key, $ref): string {
+        return $this->serve->createSession(self::grammarName($key))->then(function (array $created) use ($key, $ref): string {
             $sessionId = (string) ($created['id'] ?? '');
             if ($sessionId === '') {
                 throw new \RuntimeException('session.create returned no id');
@@ -504,6 +504,34 @@ final class ConversationRouter
 
             return $sessionId;
         });
+    }
+
+    /**
+     * Stamp the §2.3 session grammar onto the existing `session.create` name
+     * field (zero protocol change) so the core's ChannelToolPolicyService can
+     * resolve this conversation's tool policy AT ADMISSION, openclaw grade.
+     * The local key already knows everything the grammar names: a guild (or
+     * thread) conversation is a GROUP session, a per-peer DM ladder entry is
+     * a DM session whose tail IS the sender, and the `dm:main` aggregate —
+     * many humans folded into one session — is honestly named a CHANNEL
+     * session because no per-message sender identity exists to bind a
+     * sender-level policy to. The agentId segment is a placeholder: policy is
+     * keyed on channel + kind + id, never on who runs the session.
+     */
+    private static function grammarName(string $key): string
+    {
+        $rest = Keys::parse($key)['rest'];
+        if (\str_starts_with($rest, 'dm:')) {
+            if ($rest === 'dm:main') {
+                return 'agent:main:discord:channel:main';
+            }
+            // Every per-peer DM shape ends with the peer id.
+            $segments = \explode(':', $rest);
+
+            return 'agent:main:discord:dm:' . $segments[\count($segments) - 1];
+        }
+
+        return 'agent:main:discord:group:' . $rest;
     }
 
     private function followNow(string $sessionId, string $key): void

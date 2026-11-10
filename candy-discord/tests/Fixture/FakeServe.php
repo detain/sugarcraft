@@ -58,6 +58,8 @@ final class FakeServe
 
     public int $createSeen = 0;
 
+    public ?string $createName = null;
+
     public ?int $lastAfterSeq = null;
 
     public ?string $lastIdempotencyKey = null;
@@ -257,6 +259,7 @@ final class FakeServe
                 break;
             case 'session.create':
                 $this->createSeen++;
+                $this->createName = isset($params['name']) ? (string) $params['name'] : null;
                 $this->emit($id, [
                     'jsonrpc' => '2.0', 'id' => $rpcId,
                     'result' => (object) ['id' => 'sess_fixture_1', 'name' => $params['name'] ?? null, 'status' => 'idle'],

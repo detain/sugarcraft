@@ -286,6 +286,39 @@ final class ConversationRouterTest extends TestCase
         }
     }
 
+    public function testAGuildConversationIsCreatedUnderTheGroupGrammar(): void
+    {
+        $this->boot();
+        $this->inboundOn('discord:default:chan-42', 'hello guild');
+
+        self::assertSame(1, $this->serve->createSeen);
+        self::assertSame('agent:main:discord:group:chan-42', $this->serve->createName, 'D6: the policy resolver reads identity off the name field');
+    }
+
+    public function testAPerPeerDmIsCreatedUnderTheDmGrammarWithThePeerTail(): void
+    {
+        $this->boot();
+        $this->inboundOn(self::DM_KEY, 'hello dms');
+
+        self::assertSame('agent:main:discord:dm:peer-1', $this->serve->createName);
+    }
+
+    public function testTheAccountChannelPeerShapeStillEndsInItsPeer(): void
+    {
+        $this->boot();
+        $this->inboundOn('discord:default:dm:acc:chan-9:peer-7', 'wide dm');
+
+        self::assertSame('agent:main:discord:dm:peer-7', $this->serve->createName, 'the widest DM ladder shape resolves to the human it addresses');
+    }
+
+    public function testTheAggregateDmIsHonestlyCreatedAsAChannelSession(): void
+    {
+        $this->boot();
+        $this->inboundOn('discord:default:dm:main', 'aggregate hello');
+
+        self::assertSame('agent:main:discord:channel:main', $this->serve->createName, 'a folded multi-sender session names no sender — policy falls to the channel level');
+    }
+
     /** @param array<string,mixed> $policy */
     private function boot(array $policy = []): void
     {
@@ -327,6 +360,15 @@ final class ConversationRouterTest extends TestCase
     private function inboundDm(string $text, bool $isMention, string $inboundId): void
     {
         $this->router->inbound('discord', self::DM_KEY, ['channelId' => 'chan-9', 'messageId' => $inboundId], $text, $isMention, $inboundId);
+        self::runFor($this->loop, 300);
+    }
+
+    /** Drive one inbound message on an arbitrary conversation key. */
+    private function inboundOn(string $key, string $text, bool $isMention = false): void
+    {
+        $rest = \implode(':', \array_slice(\explode(':', $key), 2));
+        $channel = \str_starts_with($rest, 'dm') ? 'chan-9' : $rest;
+        $this->router->inbound('discord', $key, ['channelId' => $channel, 'messageId' => 'm-' . \substr(\md5($key . $text), 0, 8)], $text, $isMention, 'mb-' . \substr(\md5($text), 0, 8));
         self::runFor($this->loop, 300);
     }
 
