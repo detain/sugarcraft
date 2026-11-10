@@ -112,13 +112,14 @@ final class StageCondition
             return false;
         }
 
+        // The OPS guard above admits exactly three spellings, so past the
+        // equals and contains arms only 'matches' can remain: it answers
+        // through the pattern probe, which fails closed exactly like the
+        // verdict scan (a PCRE error at match time reads unsatisfied).
         return match ($op) {
             'equals' => $text === $value,
             'contains' => str_contains($text, $value),
-            // Fail closed exactly like the verdict scan: a pattern that
-            // cannot run (PCRE error at match time) answers unsatisfied.
-            'matches' => @preg_match($value, $text) === 1,
-            default => false,
+            default => @preg_match($value, $text) === 1,
         };
     }
 
