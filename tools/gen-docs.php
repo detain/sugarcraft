@@ -759,10 +759,10 @@ function build_prefix(string $slug, string $title, string $desc, string $ogTitle
                             <a href="/#architecture">Architecture</a>
                             <a href="/#quickstart">Quickstart</a>
                             <a href="/compare.html">Compare</a>
-                            <a href="/GETTING-STARTED.md">Getting Started</a>
-                            <a href="/GLOSSARY.md">Glossary</a>
-                            <a href="/KEYMAPS.md">Keymaps</a>
-                            <a href="/cookbook/README.md">Cookbook</a>
+                            <a href="/GETTING-STARTED.html">Getting Started</a>
+                            <a href="/GLOSSARY.html">Glossary</a>
+                            <a href="/KEYMAPS.html">Keymaps</a>
+                            <a href="/cookbook/index.html">Cookbook</a>
                         </div>
                     </li>
                     <li class="nav-item"><a href="/#demos">Demos</a></li>
