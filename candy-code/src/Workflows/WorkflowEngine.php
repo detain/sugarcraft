@@ -137,22 +137,25 @@ final class WorkflowEngine implements WorkflowEngineInterface
     public const RESULTS_CONTEXT_KEY = '@results';
 
     /**
-     * Suffix spelling a result's typed row inside the
-     * {@see RESULTS_CONTEXT_KEY} map: `name.json` carries the re-encoded
-     * JSON document a schema'd stage produced, beside the `name` text row
-     * the `{{name.results}}` pass reads.
+     * The context entry holding the re-encoded JSON document of each
+     * schema'd stage's output, keyed by result name, for the
+     * `{{name.<pointer>}}` interpolation form (RFC 6901).
      *
-     * The row is a JSON STRING, not an array, on purpose. The result-key
-     * grammar ({@see resultKey()}) has no dots, so `name.json` can never
-     * collide with a text row, and neither interpolation regex can capture
-     * a dotted key into the text slots. Staying string-valued means
-     * withSanitizedResults() keeps the row on resume and the pause file's
-     * json_encode carries it — the typed map round-trips with no extra
-     * machinery. An array row would be stripped at resume as junk.
+     * Typed rows live in a map of their OWN — never in a suffixed slot of
+     * the {@see RESULTS_CONTEXT_KEY} map — because result names are
+     * arbitrary strings: a `from:`-template fan-out names its tasks by
+     * file relative path, so a task named `a.json` exists, and one shared
+     * map would let that task's text row impersonate or clobber task `a`'s
+     * typed row. Separate namespaces make that collision unrepresentable.
      *
-     * @see jsonPointerValue() for how the row is addressed.
+     * Values are JSON STRINGS like the text rows, not arrays: a string
+     * survives the resume path's row filtering and the pause file's
+     * json_encode carries it, so the typed map round-trips with no extra
+     * machinery.
+     *
+     * @see jsonPointerValue() for how the rows are addressed.
      */
-    private const RESULTS_TYPED_SUFFIX = '.json';
+    public const TYPED_RESULTS_CONTEXT_KEY = '@typedResults';
 
     /** Scan outcome of {@see scanVerdict()}: the pattern matched — reject. */
     private const VERDICT_REJECTED = 'rejected';
@@ -4245,8 +4248,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * - `{{name.results}}` is replaced with one agent's output, from the
      *   {@see RESULTS_CONTEXT_KEY} map ({@see resultKey()} names its entries).
-     * - `{{name.<pointer>}}` addresses the agent's typed JSON row
-     *   ({@see RESULTS_TYPED_SUFFIX}) with an RFC 6901 pointer, so
+     * - `{{name.<pointer>}}` addresses the agent's typed JSON row (the
+     *   {@see TYPED_RESULTS_CONTEXT_KEY} map) with an RFC 6901 pointer, so
      *   `{{build.summary}}` and `{{build.items/0/id}}` reach document
      *   leaves. The reserved tails `results` and `output` are not
      *   pointers — they belong to the dedicated forms below and are left
@@ -4274,6 +4277,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $results = $context[self::RESULTS_CONTEXT_KEY] ?? [];
         $results = is_array($results) ? $results : [];
 
+        $typedRows = $context[self::TYPED_RESULTS_CONTEXT_KEY] ?? [];
+        $typedRows = is_array($typedRows) ? $typedRows : [];
+
         $text = preg_replace_callback(
             '/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\.results\}\}/',
             static fn (array $matches): string => self::interpolatable($results[$matches[1]] ?? null) ?? $matches[0],
@@ -4282,11 +4288,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $text = preg_replace_callback(
             '/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\.([A-Za-z0-9_~\/.\-]+)\}\}/',
-            static function (array $matches) use ($results): string {
+            static function (array $matches) use ($typedRows): string {
                 if ($matches[2] === 'results' || $matches[2] === 'output') {
                     return $matches[0];
                 }
-                $typed = $results[$matches[1] . self::RESULTS_TYPED_SUFFIX] ?? null;
+                $typed = $typedRows[$matches[1]] ?? null;
                 if (!is_string($typed)) {
                     return $matches[0];
                 }
@@ -4339,12 +4345,15 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * the same name overwrites an earlier one, as a later stage's does.
      *
      * A record from a schema'd stage additionally stores its decoded
-     * payload, re-encoded as a JSON string under `name.json`, so
-     * `{{name.<pointer>}}` can address leaves of the document. The text row
-     * is written first and byte-identical either way: a stage whose output
-     * the schema could not constrain (no schema, or never valid JSON)
-     * simply gains no typed row, and pointer references to it stay
-     * verbatim.
+     * payload, re-encoded as a JSON string in the separate
+     * {@see TYPED_RESULTS_CONTEXT_KEY} map keyed by the same result name,
+     * so `{{name.<pointer>}}` can address leaves of the document. The text
+     * row is written first and byte-identical either way, and the two maps
+     * never share a slot: a dotted result name (fan-out tasks are named by
+     * relative path) cannot impersonate or clobber another task's typed
+     * row. A stage whose output the schema could not constrain (no schema,
+     * or never valid JSON) simply gains no typed row, and pointer
+     * references to it stay verbatim.
      *
      * @param array<array-key, mixed> $context
      * @param list<array{key: string, result: AgentResult, schema: bool}> $records
@@ -4358,6 +4367,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $results = $context[self::RESULTS_CONTEXT_KEY] ?? [];
         $results = is_array($results) ? $results : [];
+        $typed = $context[self::TYPED_RESULTS_CONTEXT_KEY] ?? [];
+        $typed = is_array($typed) ? $typed : [];
         foreach ($records as $record) {
             $text = $record['result']->output ?? '';
             $results[$record['key']] = $text;
@@ -4370,16 +4381,19 @@ final class WorkflowEngine implements WorkflowEngineInterface
             }
             $encoded = json_encode($decoded);
             if (is_string($encoded)) {
-                $results[$record['key'] . self::RESULTS_TYPED_SUFFIX] = $encoded;
+                $typed[$record['key']] = $encoded;
             }
         }
         $context[self::RESULTS_CONTEXT_KEY] = $results;
+        if ($typed !== []) {
+            $context[self::TYPED_RESULTS_CONTEXT_KEY] = $typed;
+        }
 
         return $context;
     }
 
     /**
-     * RFC 6901 JSON pointer lookup into a {@see RESULTS_TYPED_SUFFIX} row.
+     * RFC 6901 JSON pointer lookup into a {@see TYPED_RESULTS_CONTEXT_KEY} row.
      *
      * The pointer is split on `/` BEFORE unescaping, so `~1` protects an
      * embedded slash as the spec requires; each reference token then

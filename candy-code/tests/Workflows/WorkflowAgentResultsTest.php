@@ -393,14 +393,18 @@ final class WorkflowAgentResultsTest extends TestCase
             ->stage('build', Tasks::agent('coder')->prompt('emit json')->outputSchema(['type' => 'object']))
             ->build());
 
+        $document = '{"summary":"green","items":[{"id":7}]}';
+
         self::assertSame(WorkflowStatus::Completed, $result->status);
         self::assertSame(
-            [
-                'build' => '{"summary":"green","items":[{"id":7}]}',
-                'build.json' => '{"summary":"green","items":[{"id":7}]}',
-            ],
+            ['build' => $document],
             $result->context[WorkflowEngine::RESULTS_CONTEXT_KEY],
-            'the text row keeps the raw bytes and the typed row rides beside it',
+            'the text row keeps the raw bytes and nothing else joins its map',
+        );
+        self::assertSame(
+            ['build' => $document],
+            $result->context[WorkflowEngine::TYPED_RESULTS_CONTEXT_KEY] ?? null,
+            'the typed row rides in its own map, keyed by the raw result name',
         );
     }
 
@@ -485,6 +489,11 @@ final class WorkflowAgentResultsTest extends TestCase
             $result->context[WorkflowEngine::RESULTS_CONTEXT_KEY],
             'no typed row is invented from prose, and the pointer misses loudly',
         );
+        self::assertArrayNotHasKey(
+            WorkflowEngine::TYPED_RESULTS_CONTEXT_KEY,
+            $result->context,
+            'a stage with a schema whose output never parses leaves the typed map unset — no half-typed state',
+        );
     }
 
     public function testReservedTailsBelongToTheirOwnPassesWhateverTheTypedDocumentHolds(): void
@@ -526,6 +535,47 @@ final class WorkflowAgentResultsTest extends TestCase
             'an emitted {{stage.output}} is still ahead of its pass and resolves;' .
             ' emitted .results tokens are behind theirs and stay verbatim',
         );
+    }
+
+    public function testDottedTaskNamesNeverShareASlotWithTypedRows(): void
+    {
+        // Fan-out names tasks by relative path, so a result key may itself end
+        // in ".json" or contain dots. Text rows and typed rows live in separate
+        // maps, which makes both collision directions structurally impossible:
+        // a dotted text row impersonating a typed leaf, and a typed row
+        // clobbering a dotted text row. Both orders are pinned.
+        $green = '{"summary":"green"}';
+        $impostor = '{"summary":"IMPOSTOR"}';
+        $this->script['emit two'] = fn (SubAgent $agent): AgentResult => $this->typedResult($agent, $green);
+        $this->script['raw one'] = fn (SubAgent $agent): AgentResult => $this->typedResult($agent, $impostor);
+
+        $schemaFirst = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('both-orders')
+            ->stage('real', Tasks::agent('coder')->name('a')->prompt('emit two')->outputSchema(['type' => 'object']))
+            ->stage('dot', Tasks::agent('coder')->name('a.json')->prompt('raw one'))
+            ->stage('read', Tasks::agent('coder')->prompt('x={{a.summary}}'))
+            ->build());
+        self::assertSame(WorkflowStatus::Completed, $schemaFirst->status);
+        self::assertSame('x=green', end($this->prompts), 'the dotted text row cannot impersonate the typed leaf');
+        self::assertSame($impostor, $schemaFirst->context[WorkflowEngine::RESULTS_CONTEXT_KEY]['a.json'] ?? null);
+        self::assertSame(['a' => $green], $schemaFirst->context[WorkflowEngine::TYPED_RESULTS_CONTEXT_KEY] ?? null);
+
+        $this->prompts = [];
+        $dotFirst = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('both-orders')
+            ->stage('dot', Tasks::agent('coder')->name('a.json')->prompt('raw one'))
+            ->stage('real', Tasks::agent('coder')->name('a')->prompt('emit two')->outputSchema(['type' => 'object']))
+            ->stage('read', Tasks::agent('coder')->prompt('x={{a.summary}} y={{a.results}}'))
+            ->build());
+        self::assertSame(WorkflowStatus::Completed, $dotFirst->status);
+        self::assertSame(
+            'x=green y=' . $green,
+            end($this->prompts),
+            'the later typed store cannot clobber the dotted text row either',
+        );
+        self::assertSame($impostor, $dotFirst->context[WorkflowEngine::RESULTS_CONTEXT_KEY]['a.json'] ?? null);
+        self::assertSame($green, $dotFirst->context[WorkflowEngine::RESULTS_CONTEXT_KEY]['a'] ?? null);
+        self::assertSame(['a' => $green], $dotFirst->context[WorkflowEngine::TYPED_RESULTS_CONTEXT_KEY] ?? null);
     }
 
     private function typedResult(SubAgent $agent, string $output): AgentResult

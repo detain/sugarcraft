@@ -744,13 +744,15 @@ final class WorkflowPauseResumeTest extends TestCase
         $this->assertIsArray($results);
         $this->assertSame(
             '{"summary":"green"}',
-            $results['b.json'] ?? null,
-            'the typed row rides the pause file as a plain string — no serializer was added',
+            $results['b'] ?? null,
+            'the text row still carries the raw bytes in its own map',
         );
+        $typed = $data['context'][WorkflowEngine::TYPED_RESULTS_CONTEXT_KEY] ?? null;
+        $this->assertIsArray($typed);
         $this->assertSame(
             '{"summary":"green"}',
-            $results['b'] ?? null,
-            'the text row still carries the raw bytes beside it',
+            $typed['b'] ?? null,
+            'the typed row rides the pause file as a plain string under its raw name — no serializer was added',
         );
 
         unset($this->script['hold'], $this->script['emit']);
