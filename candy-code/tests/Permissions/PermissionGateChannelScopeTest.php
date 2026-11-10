@@ -165,17 +165,22 @@ final class PermissionGateChannelScopeTest extends TestCase
 
     public function testTheDeclarationPathHonoursTheScopeAndLeavesItsReasonAlone(): void
     {
-        $scope = self::scope(allow: ['Read']);
+        // The two denials must carry DIFFERENT reasons: a declaration that
+        // overwrote the carrier with its own verdict would otherwise stay
+        // invisible whenever the two strings happen to match.
+        $scope = self::scope(allow: ['Read'], deny: ['Bash']);
         $gate = (new PermissionGate(PermissionMode::Default))->withChannelScope($scope);
 
         $this->assertSame(PermissionDecision::Deny, $gate->evaluate(new ToolCall('Write', ['path' => 'a.php'])));
         $reason = $gate->lastChannelReason();
         $this->assertNotNull($reason);
 
-        // A declaration for a name the scope denies answers true — and for a
-        // name it would also deny — while leaving the REAL call's reason.
+        // A declaration for a name the scope denies answers true — for the
+        // allowlist-missing name and for the deny-listed one — while leaving
+        // the REAL call's reason in place.
         $this->assertTrue($gate->refuses(new ToolDeclaration('Write')));
         $this->assertTrue($gate->refuses(new ToolDeclaration('Bash')));
+        $this->assertStringContainsString('allowlist', $reason, 'the real call was an allowlist absence');
         $this->assertSame($reason, $gate->lastChannelReason(), 'a declaration must leave what the last real call wrote');
         $this->assertNull($gate->lastAutoReason(), 'the scope arm authors only its own carrier');
     }
