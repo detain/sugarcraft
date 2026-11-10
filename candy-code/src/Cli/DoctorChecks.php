@@ -40,6 +40,14 @@ use SugarCraft\Code\Tools\Sandbox\Seatbelt;
  * the checks that say the program itself cannot run; a WARN is "configured in
  * a way that will surprise you", which is why a warning never fails either
  * surface.
+ *
+ * The three channel rows (`channels store`, `channel bundles`, `inbound log`)
+ * delegate every read to {@see DoctorChannelsChecks} — thin seats, so this
+ * file keeps its single sanctioned content read. The delegate answers loudly
+ * what {@see \SugarCraft\Code\Channels\ChannelsStore::read()} swallows
+ * silently, previews the next launch's bundle refusals without requiring or
+ * writing anything, and reports the durable inbound ledger's posture by name
+ * and mode only.
  */
 final class DoctorChecks
 {
@@ -549,6 +557,14 @@ final class DoctorChecks
                         ])],
                 };
             },
+
+            'channels store' => static fn (): array => DoctorChannelsChecks::channelsStoreRow(),
+
+            'channel bundles' => static function () use ($root): array {
+                return DoctorChannelsChecks::channelBundlesRow($root);
+            },
+
+            'inbound log' => static fn (): array => DoctorChannelsChecks::inboundLogRow(),
         ];
     }
 

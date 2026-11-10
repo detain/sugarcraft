@@ -45,9 +45,12 @@ final class DoctorChecksTest extends TestCase
         'provider',
         'session store',
         'mcp config',
+        'channels store',
+        'channel bundles',
+        'inbound log',
     ];
 
-    public function testTheRosterIsTheseSeventeenRowsInThisOrder(): void
+    public function testTheRosterIsTheseTwentyRowsInThisOrder(): void
     {
         self::assertSame(self::ROSTER, array_keys(self::probes()), 'the doctor roster changed shape — the pages, the check-count headline and this list move together');
     }

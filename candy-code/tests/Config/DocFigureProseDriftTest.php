@@ -3754,6 +3754,7 @@ final class DocFigureProseDriftTest extends TestCase
         $doctorWords = [
             'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14,
             'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17,
+            'eighteen' => 18, 'nineteen' => 19, 'twenty' => 20,
         ];
         self::assertGreaterThan(0, \count($probeLabels[1]), 'the probe-label scrape sees none of DoctorChecks::probes()\'s rows — the pin below measures nothing');
         $doctorWord = array_search(\count($probeLabels[1]), $doctorWords, true);
