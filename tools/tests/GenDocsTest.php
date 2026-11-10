@@ -355,12 +355,18 @@ final class GenDocsTest extends TestCase
         $this->assertStringContainsString('<span class="tag-chip accent">pioneering</span>', $html);
     }
 
-    /** The h2 splits a leading non-ASCII run off as the emoji. */
+    /**
+     * The h2 splits a leading non-ASCII run off as the emoji and recombines it
+     * with the display name — since MD-9 (site a11y wave) inside a decorative
+     * aria-hidden span, so assistive tech reads the package name alone. Pinning
+     * the span form keeps BOTH contracts: the split still happens and the emoji
+     * is still recombined with the name in the heading.
+     */
     public function testTheEmojiAndDisplayNameAreRecombinedInTheHeading(): void
     {
         $root = $this->makeFixtureRoot();
         $this->runScript($root);
-        $this->assertStringContainsString('<h2>🍬 FixtureName</h2>', $this->page($root, 'fixture-alpha'));
+        $this->assertStringContainsString('<h2><span aria-hidden="true">🍬</span> FixtureName</h2>', $this->page($root, 'fixture-alpha'));
     }
 
     // -----------------------------------------------------------------
