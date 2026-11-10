@@ -209,6 +209,12 @@ final class ContainedPathInventoryTest extends TestCase
         // manifest-named entrypoint file with its own containment compare.
         'Channels/BundleChannelLoader.php' => 1,
         'Chat.php' => 1,
+        // P4PRODUCT: the doctor's channel-status rows bound each manifest-named
+        // entrypoint below its bundle directory before reporting it — one
+        // compare at src/Cli/DoctorChannelsChecks.php:129, names only, never
+        // rows(): the doctor answers what a trusted bundle declares and reads
+        // none of the inbound content sitting behind that gate.
+        'Cli/DoctorChannelsChecks.php' => 1,
         'Cli/McpDecision.php' => 1,
         // PLG-1 P1 step 6 (code-chat §10, owner ruling D1 reversal; FIX-2: the
         // loop moved out of Bootstrap::hooks() with the ratchet extraction, so
@@ -323,7 +329,7 @@ final class ContainedPathInventoryTest extends TestCase
      * be confined to itself. `within()` and not `below()`, because a prefix
      * mapped to `""` means the package root itself.
      *
-     * "SEVENTY call sites in THIRTY-SEVEN files", per file — the sum and the key
+     * "SEVENTY-TWO call sites in THIRTY-NINE files", per file — the sum and the key
      * count of {@see ROUTED_CALL_SITES} as it stands below, which is what
      * {@see testTheRoutedCallSiteInventory()} checks against the derivation over
      * `src/`. (It read "twenty-seven in eleven", then "twenty-eight in twelve",
