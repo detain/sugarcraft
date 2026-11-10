@@ -644,6 +644,7 @@ function build_prefix(string $slug, string $title, string $desc, string $ogTitle
         <meta property="og:type" content="website">
         <meta property="og:url" content="https://sugarcraft.github.io/lib/{$slug}.html">
         <meta name="twitter:card" content="summary_large_image">
+        <link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
         <link rel="icon" type="image/png" href="../img/icons/{$slug}.png">
         <link rel="stylesheet" href="../css/style.css">
             <link rel="stylesheet" href="../css/search.css">
