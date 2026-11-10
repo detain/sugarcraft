@@ -902,6 +902,66 @@ the agent as denied calls it can work around. A stage with no `tools:` is not
 policed by the grant, and a malformed entry (`Bash(git *`) fails the stage
 naming why.
 
+## Running from the CLI (headless)
+
+The `workflow` subcommand executes a saved workflow through the engine
+directly — no model in the loop, no TUI, no turn machinery:
+
+```
+candy-code workflow run <name-or-path> [--param k=v]... [--format json]
+candy-code workflow status <id-or-name> [--format json]
+candy-code workflow resume <id-or-name> [--format json]
+```
+
+`run` resolves `<name-or-path>` through the same tiers `WorkflowEngine::run()`
+uses, seeds the run context with the `--param` pairs, and prints one terminal
+verdict per stage. `status` reads the engine's liveness view
+(`WorkflowEngine::status()`); `resume` continues a paused run
+(`WorkflowEngine::resume()`).
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | The run completed; every stage's verification passed. |
+| 1 | The run failed, or the request was refused (unknown name, unreadable file, a live pause elsewhere). |
+| 2 | Usage error — bad action, misplaced flag, missing operand. |
+| 3 | Stopped for a person: a verification stage answered `ESCALATE:` (its failure carries the engine's escalation marker), or a `SIGINT`/`SIGTERM` produced a cooperative pause. |
+
+Exit 3 is the W-1/D4 row: `escalated: ` in the first failed stage's error, or
+a signal pause. On a signal pause the engine writes the pause record first
+(the same serializer a cooperative pause uses), and under `--format json` the
+verb emits one final document — `status` `paused` plus the `pause_file` path —
+before exiting 3. `candy-code workflow resume <id>` picks it up. The TUI
+`/workflow` path and the model-mediated tool path keep the historical raw
+130/143 signal exits; nothing about them changes here.
+
+### `--param` quoting
+
+Repeated `--param` flags are comma-joined at parse time (`ParsedArgs::REPEATABLE_SUBCOMMAND_FLAGS`),
+so a value containing a comma must be quoted *inside* the payload —
+`--param 'k="a,b"'` — and the verb's splitter honours `"` and `'` spans when
+breaking the joined string back into pairs. Keys are validated the same way
+the TUI slash command validates them; `@`-prefixed keys are refused because
+they collide with the engine-reserved context namespace.
+
+### Machine document
+
+With `--format json` (or the global `--output-format json`) the verb emits one
+schema-versioned document: `verb` `workflow`, the `action`, and a `result` of
+`{workflow, status, stages: [{name, status, output, error, attempts}], totals:
+{tokens, cost, duration_ms}, session_id}`. `session_id` is honestly `null`:
+this verb mints no chat session.
+
+### What the verb deliberately does not add
+
+`cache:` keeps its opt-in-only semantics with **no CLI kill-switch** — the
+`--no-cache` override is a documented owed seam (NIT-1), not silently widened
+here. The verb adds no wall-clock timeout to any path; stage and workflow
+budgets ride the existing engine families unchanged.
+
+---
+
 ---
 
 ## Model-authored plans: the `Workflow` tool
