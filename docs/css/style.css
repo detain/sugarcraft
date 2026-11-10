@@ -63,8 +63,14 @@ code, pre, .mono {
 }
 
 /* ── Layout primitives ─────────────────────────────────────────── */
+/* Fluid cap (L2a1): the layout now extends to use the window width up to
+   1560px instead of parking at 1080px with empty side padding. 100% rather
+   than a vw fraction on purpose: any vw<100vw cap would make the content
+   NARROWER than today's 1080-1560px window range (mid-widths would lose a
+   grid column), defeating the point. The fixed 24px gutter is the edge
+   breathing room; above 1560px the container simply centers. */
 .container {
-    max-width: 1080px;
+    max-width: min(1560px, 100%);
     margin: 0 auto;
     padding: 0 24px;
 }
@@ -96,6 +102,11 @@ code, pre, .mono {
     border-bottom: 1px solid var(--line);
 }
 
+/* Nav stays capped at 1080px (L2a1): the 12-item no-wrap chip bar is already
+   over-constrained inside today's cap, so widening it would change nothing
+   above 1080px while a vw-based cap would squeeze it at 641-1149px (a strict
+   no-break regression). The nav redesign owns this line; layout fluidity
+   lives on .container. */
 .nav-inner {
     display: flex;
     align-items: center;
