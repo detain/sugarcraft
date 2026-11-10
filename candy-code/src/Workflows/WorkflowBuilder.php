@@ -314,9 +314,9 @@ final class WorkflowBuilder
 
         $lastKey = array_key_last($this->stages);
         $last = $this->stages[$lastKey];
-        if (($last['type'] ?? '') !== 'stage') {
+        if ($last['type'] !== 'stage') {
             throw new \InvalidArgumentException(
-                "loop() is stage-only in v1; the last stage '" . $last['name'] . "' is a '" . ($last['type'] ?? '') . "' stage"
+                "loop() is stage-only in v1; the last stage '" . $last['name'] . "' is a '" . $last['type'] . "' stage"
             );
         }
 
