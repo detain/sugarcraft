@@ -90,6 +90,53 @@ final class Rest
     }
 
     /**
+     * Fetch an attachment's raw bytes (§7.8 media intake). Attachment URLs
+     * arrive from the GATEWAY message, carry a pre-signed query, and need
+     * no bot header — but they must live on a Discord media host: a
+     * non-Discord host here would mean a doctored payload, and dialing it
+     * would hand our User-Agent to a stranger. https only; the size cap is
+     * the caller's (§7.8 mediaMaxMb) — this method never loops or retries.
+     *
+     * @return \React\Promise\PromiseInterface<string> raw bytes
+     */
+    public function fetchBinary(string $url): \React\Promise\PromiseInterface
+    {
+        $host = \strtolower((string) (\parse_url($url, \PHP_URL_HOST) ?: ''));
+        if (\strtolower((string) (\parse_url($url, \PHP_URL_SCHEME) ?: '')) !== 'https'
+            || !self::hostIsDiscordMedia($host)) {
+            return \React\Promise\reject(new RestException(
+                'discord media url refused (https + Discord media host required): ' . $host));
+        }
+        // Error prose carries the PATH only — the signed query is a bearer secret.
+        $safeLabel = (string) (\parse_url($url, \PHP_URL_PATH) ?: '/');
+
+        return $this->http->get($url)->then(
+            function (ResponseInterface $response) use ($safeLabel): string {
+                $status = $response->getStatusCode();
+                if ($status >= 400) {
+                    throw new RestException("discord media fetch {$status} for {$safeLabel}", $status);
+                }
+
+                return (string) $response->getBody();
+            },
+            function (\Throwable $e) use ($safeLabel): never {
+                throw new RestException("discord media fetch failed for {$safeLabel}: {$e->getMessage()}", 0, 0, $e);
+            },
+        );
+    }
+
+    private static function hostIsDiscordMedia(string $host): bool
+    {
+        foreach (['discord.com', 'discord.net', 'discordapp.com', 'discordapp.net'] as $domain) {
+            if ($host === $domain || \str_ends_with($host, '.' . $domain)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * An interaction answer. Type 4 = CHANNEL_MESSAGE_WITH_SOURCE, type 7 =
      * deferred update; flags 64 = ephemeral (§7.5: approvals are single-use
      * and answered in the channel that asked).
@@ -132,7 +179,7 @@ final class Rest
         $headers = [
             'Authorization' => 'Bot ' . $this->token,
             'Content-Type' => 'application/json',
-            'User-Agent' => 'candy-code-channel-bridge (https://github.com/detain/sugarcraft, 0.1)',
+            'User-Agent' => 'candy-code-discord-bundle (https://github.com/detain/sugarcraft, 0.1)',
         ];
 
         $pending = $body === []

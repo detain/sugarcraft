@@ -78,7 +78,12 @@ final class Gateway
         private readonly Log $log,
         private readonly LoopInterface $loop,
         private readonly ?string $gatewayUrl = null,
+        // §7.1: `intents.messageContent` false starts in the mention-only
+        // degraded posture directly; the 4013/4014 ladder below is the
+        // SAME degrade, just discovered by Discord instead of declared.
+        bool $wantMessageContent = true,
     ) {
+        $this->contentIntent = $wantMessageContent;
     }
 
     /** @param \Closure(string, array<string,mixed>): void $listener */

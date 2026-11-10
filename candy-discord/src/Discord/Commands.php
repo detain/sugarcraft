@@ -68,6 +68,31 @@ final class Commands
                     'required' => true,
                 ]],
             ],
+            [
+                // §7.10: the /model leg of the §2.3 surface rides command.exec.
+                'name' => 'model',
+                'description' => 'Show or set the model for this session',
+                'type' => 1,
+                'options' => [[
+                    'name' => 'name',
+                    'description' => 'Model id (leave empty to list)',
+                    'type' => 3,
+                    'required' => false,
+                ]],
+            ],
+            [
+                // §7.3: pairing approval is a command on the approver roster.
+                'name' => 'pair',
+                'description' => 'Approve a DM pairing code, or list pending codes',
+                'type' => 1,
+                'options' => [
+                    ['name' => 'action', 'description' => 'approve or list', 'type' => 3, 'required' => true, 'choices' => [
+                        ['name' => 'approve', 'value' => 'approve'],
+                        ['name' => 'list', 'value' => 'list'],
+                    ]],
+                    ['name' => 'code', 'description' => 'The 8-character pairing code', 'type' => 3, 'required' => false],
+                ],
+            ],
         ];
     }
 
@@ -91,7 +116,7 @@ final class Commands
             return null;
         }
         $name = \strtolower(\array_shift($words));
-        if (!\in_array($name, ['new', 'stop', 'approve', 'queue'], true)) {
+        if (!\in_array($name, ['new', 'stop', 'approve', 'queue', 'model', 'pair'], true)) {
             return null;
         }
 

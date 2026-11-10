@@ -45,6 +45,7 @@ final class Buttons
 
     public const FLAG_EPHEMERAL = 64;
     public const FLAG_COMPONENTS_V2 = 32768;
+    public const FLAG_SUPPRESS_EMBEDS = 4;
 
     public const PREFIX = 'ap';
 
@@ -58,11 +59,20 @@ final class Buttons
     /**
      * The message payload that asks for an approval.
      *
-     * @param array<string,mixed> $ask a `permission.requested` data object
+     * §7.9 posture: when an approver roster is configured, each button
+     * carries a components-v2 `allowed_users` list so Discord itself
+     * greys the buttons for everyone else (the bridge-side roster check in
+     * {@see ConversationRouter::answerApproval()} still answers the wire —
+     * defense in depth, the platform filter is a courtesy, not the wall).
+     * The per-button field spelling joins the offline-unverifiable family
+     * disclosed at the top of this class; P4 live-check covers it.
+     *
+     * @param array<string,mixed> $ask        a `permission.requested` data object
+     * @param list<string>        $allowedUsers Discord user ids, empty = everyone
      *
      * @return array<string,mixed>
      */
-    public static function approvalPayload(array $ask, string $summary): array
+    public static function approvalPayload(array $ask, string $summary, array $allowedUsers = []): array
     {
         $askId = (string) ($ask['askId'] ?? '');
         $tool = (string) ($ask['tool'] ?? 'tool');
@@ -76,6 +86,12 @@ final class Buttons
                 'label' => $label,
                 'custom_id' => self::PREFIX . ':' . $askId . ':' . $verdict,
             ];
+            if ($allowedUsers !== []) {
+                $button['allowed_users'] = \array_map(
+                    static fn (string $id): array => ['type' => 1, 'id' => $id],
+                    \array_values($allowedUsers),
+                );
+            }
             $buttons[] = $button;
         }
 

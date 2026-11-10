@@ -43,6 +43,22 @@ final class TextSafety
         return $this->redact(PromptFence::escape($untrusted));
     }
 
+    /**
+     * Runtime-issued secrets (pairing codes, §7.3) join the roster as they
+     * are minted. This is the ONE deliberate mutation on this value object
+     * — a pairing code cannot be pre-registered at boot, and the additive
+     * rule keeps the floor monotonic: secrets only ever enter, never leave,
+     * for the lifetime of the channel.
+     */
+    public function addSecret(string $secret): void
+    {
+        $secret = \trim($secret);
+        if (\strlen($secret) < 6 || \in_array($secret, $this->secrets, true)) {
+            return;
+        }
+        $this->secrets[] = $secret;
+    }
+
     /** Model/server output about to echo into a channel: redact, do NOT fence. */
     public function outbound(string $text): string
     {

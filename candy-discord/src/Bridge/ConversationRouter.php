@@ -39,7 +39,7 @@ use React\Promise\PromiseInterface;
  */
 final class ConversationRouter
 {
-    /** @var array<string, ChannelInterface> */
+    /** @var array<string, PlatformFace> */
     private array $channels = [];
 
     /** @var array<string, string> sessionId → serve status word */
@@ -69,17 +69,17 @@ final class ConversationRouter
         });
     }
 
-    public function addChannel(ChannelInterface $channel): void
+    public function addChannel(PlatformFace $channel): void
     {
         $this->channels[$channel->name()] = $channel;
     }
 
-    public function channel(string $name): ?ChannelInterface
+    public function channel(string $name): ?PlatformFace
     {
         return $this->channels[$name] ?? null;
     }
 
-    /** @return list<ChannelInterface> */
+    /** @return list<PlatformFace> */
     public function allChannels(): array
     {
         return \array_values($this->channels);
@@ -388,14 +388,14 @@ final class ConversationRouter
             }, fn (\Throwable $e) => $this->log->warn('follow_failed', ['session' => $sessionId, 'error' => $e->getMessage()]));
     }
 
-    private function deliver(ChannelInterface $channel, array $ref, string $text): void
+    private function deliver(PlatformFace $channel, array $ref, string $text): void
     {
         foreach (OutboundChunker::split($this->safety->outbound($text), $channel->textChunkLimit(), $channel->maxLinesPerMessage()) as $chunk) {
             $channel->deliver($ref, $chunk)->then(null, fn (\Throwable $e) => $this->log->warn('deliver_failed', ['error' => $e->getMessage()]));
         }
     }
 
-    private function failWith(ChannelInterface $channel, array $ref, string $message): void
+    private function failWith(PlatformFace $channel, array $ref, string $message): void
     {
         $this->log->error('bridge_failure', ['channel' => $channel->name(), 'error' => $message]);
         $this->deliver($channel, $ref, $message);
