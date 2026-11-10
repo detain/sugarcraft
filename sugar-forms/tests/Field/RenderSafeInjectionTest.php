@@ -187,7 +187,15 @@ final class RenderSafeInjectionTest extends TestCase
         $root = sys_get_temp_dir() . '/sugar-forms-fp-inj-' . bin2hex(random_bytes(4));
         mkdir($root);
         $evilName = "evil\x1b[2Jname.txt";
-        file_put_contents($root . '/' . $evilName, 'x');
+        if (@file_put_contents($root . '/' . $evilName, 'x') === false) {
+            // NTFS forbids ASCII control bytes (0x00-0x1F) in filenames, so
+            // the crafted name simply cannot exist on Windows. The guard is
+            // the display channel, which sibling arms exercise with names
+            // that DO round-trip; skip the OS-impossible fixture rather
+            // than fail on a fact about the filesystem.
+            @rmdir($root);
+            $this->markTestSkipped('control-byte filenames are impossible on this filesystem (NTFS)');
+        }
 
         try {
             [$f, ] = FilePicker::new('file', $root)->focus();

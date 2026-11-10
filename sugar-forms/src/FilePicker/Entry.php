@@ -19,7 +19,22 @@ final class Entry
 
     public function path(string $cwd): string
     {
-        return rtrim($cwd, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $this->name;
+        return self::join($cwd, $this->name);
+    }
+
+    /**
+     * Join a directory and entry name using the separator the caller's path
+     * already speaks. On Windows DIRECTORY_SEPARATOR is '\' yet callers may
+     * hold slash-shaped paths (forwarded dial strings, '/'-typed cwds, test
+     * fixtures); gluing those with '\' produces mixed paths that is_dir()
+     * and string comparisons then miss. A path with any '/' in it is treated
+     * as slash-shaped; otherwise the platform separator rules.
+     */
+    public static function join(string $cwd, string $name): string
+    {
+        $separator = str_contains($cwd, '/') ? '/' : DIRECTORY_SEPARATOR;
+
+        return rtrim($cwd, $separator) . $separator . $name;
     }
 
     public function display(): string
