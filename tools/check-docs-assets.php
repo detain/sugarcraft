@@ -40,6 +40,13 @@ declare(strict_types=1);
  *     authored copies — index/libraries/apps/compare/404/gen-docs template/the two
  *     prefixOverride pages — are maintained in lockstep; the guard is the trip
  *     wire that keeps them there).
+ *  h) sitemap set-equality: `docs/sitemap.xml` is hand-maintained, so a page
+ *     can be published with chrome and never advertised, or a row can outlive
+ *     its page. The leg derives the published universe — every `.html` under
+ *     `docs/` that carries the nav container, except generator fragments under
+ *     `docs/_data/` and the documented non-advertised roster — and demands
+ *     exact two-way equality with the `<loc>` rows, printing both directions
+ *     of the diff on failure.
  *
  * Existence for (b)/(d) is measured on the filesystem: the CI job runs on a
  * fresh checkout, so a tracked file IS a file on disk, and this avoids
@@ -57,6 +64,21 @@ final class CheckDocsAssets
 {
     private const RAW_GIF = 'https://raw.githubusercontent.com/detain/sugarcraft/master/';
 
+    /** The published site origin every sitemap `<loc>` row must sit under. */
+    private const SITE_BASE = 'https://sugarcraft.github.io/';
+
+    /**
+     * Chrome-bearing pages deliberately OUT of the advertised universe:
+     * the key is the docs/-relative path, the value why it is not advertised.
+     * A roster entry whose file exists but no longer carries nav chrome is
+     * itself a finding — the roster must not lie about what it exempts.
+     */
+    private const SITEMAP_EXCLUSIONS = [
+        '404.html' => 'the error surface is not advertised',
+        'admin/sugar-pty.html' => 'off-nav auxiliary deep-link page, deliberately unsitemapped',
+        'dev/sugar-pty.html' => 'off-nav auxiliary deep-link page, deliberately unsitemapped',
+    ];
+
     /**
      * @return list<string> human-readable findings, empty when the tree is clean
      */
@@ -70,6 +92,7 @@ final class CheckDocsAssets
             self::demoGifCrutches($root),
             self::searchAffordance($root),
             self::navBlockIdentity($root),
+            self::sitemapCoverage($root),
         );
     }
 
@@ -218,6 +241,101 @@ final class CheckDocsAssets
         }
 
         return $findings;
+    }
+
+    /**
+     * (h) sitemap set-equality: `docs/sitemap.xml` is hand-maintained while the
+     * page universe it describes is generated and grown by hand, so both drift
+     * directions are silent — an unadvertised chrome page costs discoverability,
+     * a stale row publishes a 404. The universe is every HTML file under docs/
+     * that carries the shared nav container (the same discriminator the chrome
+     * legs key on, so the redirect stubs and the `_data` fragments fall out
+     * without name-based special cases), minus the documented exclusion roster.
+     * Site paths compare exactly: docs/index.html is advertised as the bare
+     * base URL (the root row), every other page as its docs/-relative path —
+     * including the explicit `cookbook/index.html` spelling the sitemap uses.
+     * Both halves of the diff print, naming each offender by file and by row.
+     *
+     * @return list<string>
+     */
+    public static function sitemapCoverage(string $root): array
+    {
+        $sitemap = "$root/docs/sitemap.xml";
+        if (!is_file($sitemap)) {
+            return ['sitemap: docs/sitemap.xml is missing'];
+        }
+
+        $findings = [];
+        $rows = [];
+        preg_match_all('~<loc>([^<]*)</loc>~', (string) file_get_contents($sitemap), $m);
+        foreach ($m[1] as $loc) {
+            if (!str_starts_with($loc, self::SITE_BASE)) {
+                $findings[] = 'sitemap: <loc>' . $loc . '</loc> is outside the site base ' . self::SITE_BASE;
+                continue;
+            }
+            $sitePath = substr($loc, strlen(self::SITE_BASE));
+            if (isset($rows[$sitePath])) {
+                $findings[] = 'sitemap: <loc>' . $loc . '</loc> duplicates an earlier row';
+                continue;
+            }
+            $rows[$sitePath] = $loc;
+        }
+
+        $universe = self::sitemapUniverse($root, $findings);
+
+        $missing = array_diff_key($universe, $rows);
+        ksort($missing);
+        foreach ($missing as $sitePath => $display) {
+            $findings[] = 'sitemap: ' . $display . ' carries nav chrome but no <loc> row (expected '
+                . self::SITE_BASE . $sitePath . ')';
+        }
+
+        $extra = array_diff_key($rows, $universe);
+        foreach ($extra as $loc) {
+            $findings[] = 'sitemap: row <loc>' . $loc . '</loc> matches no chrome page in the universe';
+        }
+
+        return $findings;
+    }
+
+    /**
+     * The advertised page universe: site path => docs/-relative display path.
+     * Roster entries that exist on disk but no longer carry nav chrome are
+     * stale exemptions and append a finding through $findings.
+     *
+     * @param list<string> $findings
+     * @return array<string,string>
+     */
+    private static function sitemapUniverse(string $root, array &$findings): array
+    {
+        $universe = [];
+        $walk = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator("$root/docs", \FilesystemIterator::SKIP_DOTS),
+        );
+        foreach ($walk as $file) {
+            /** @var \SplFileInfo $file */
+            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.html')) {
+                continue;
+            }
+            $display = self::relative($root, $file->getPathname());
+            $sitePath = substr($display, strlen('docs/'));
+            if (!str_contains((string) file_get_contents($file->getPathname()), '<div class="nav-links">')) {
+                continue;
+            }
+            if (isset(self::SITEMAP_EXCLUSIONS[$sitePath])) {
+                continue;
+            }
+            $universe[$sitePath === 'index.html' ? '' : $sitePath] = $display;
+        }
+
+        foreach (self::SITEMAP_EXCLUSIONS as $sitePath => $why) {
+            $file = "$root/docs/$sitePath";
+            if (is_file($file) && !str_contains((string) file_get_contents($file), '<div class="nav-links">')) {
+                $findings[] = "sitemap: exclusion roster entry docs/$sitePath ($why) no longer carries nav chrome — the roster is stale";
+            }
+        }
+
+        return $universe;
     }
 
     /**
@@ -429,6 +547,6 @@ if (PHP_SAPI === 'cli' && realpath((string) ($argv[0] ?? '')) === realpath(__FIL
         exit(1);
     }
 
-    fwrite(STDOUT, "ok: icons, demo GIFs, local links, the VHS stat and page chrome are all in sync\n");
+    fwrite(STDOUT, "ok: icons, demo GIFs, local links, the VHS stat, page chrome and the sitemap are all in sync\n");
     exit(0);
 }

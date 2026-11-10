@@ -318,6 +318,124 @@ final class CheckDocsAssetsTest extends TestCase
         $this->assertSame([], \CheckDocsAssets::derive($root));
     }
 
+    /**
+     * (h) sitemap set-equality legs. The polarity that matters: a chrome page
+     * with no row, and a row with no page, each redden and NAME the offender —
+     * the two silent drift directions of a hand-maintained sitemap. The green
+     * arms ride testACoherentFixtureCarriesNoFindings.
+     */
+    public function testAChromePageWithNoSitemapRowIsNamed(): void
+    {
+        $root = $this->makeCleanFixture();
+        $sitemap = "$root/docs/sitemap.xml";
+        $this->put($sitemap, str_replace(
+            "<url><loc>https://sugarcraft.github.io/lib/alpha.html</loc></url>\n",
+            '',
+            (string) file_get_contents($sitemap),
+        ));
+
+        $findings = \CheckDocsAssets::derive($root);
+        $this->assertCount(1, $findings);
+        $this->assertStringContainsString('sitemap: docs/lib/alpha.html carries nav chrome but no <loc> row', $findings[0]);
+        $this->assertStringContainsString('https://sugarcraft.github.io/lib/alpha.html', $findings[0]);
+    }
+
+    public function testAStaleSitemapRowWithNoPageIsNamed(): void
+    {
+        $root = $this->makeCleanFixture();
+        $sitemap = "$root/docs/sitemap.xml";
+        $this->put($sitemap, str_replace(
+            '</urlset>',
+            "    <url><loc>https://sugarcraft.github.io/lib/ghost.html</loc></url>\n</urlset>",
+            (string) file_get_contents($sitemap),
+        ));
+
+        $findings = \CheckDocsAssets::derive($root);
+        $this->assertCount(1, $findings);
+        $this->assertStringContainsString('sitemap: row <loc>https://sugarcraft.github.io/lib/ghost.html</loc> matches no chrome page', $findings[0]);
+    }
+
+    public function testAPlantedChromePageMustJoinTheSitemap(): void
+    {
+        $root = $this->makeCleanFixture();
+        // Byte-copy of alpha: every other leg stays green on the new page by
+        // construction, so the ONLY finding left is the missing sitemap row.
+        $this->put(
+            "$root/docs/lib/delta.html",
+            (string) file_get_contents("$root/docs/lib/alpha.html"),
+        );
+
+        $findings = \CheckDocsAssets::derive($root);
+        $this->assertCount(1, $findings);
+        $this->assertStringContainsString('sitemap: docs/lib/delta.html carries nav chrome but no <loc> row', $findings[0]);
+    }
+
+    public function testARowOutsideTheSiteBaseIsNamed(): void
+    {
+        $root = $this->makeCleanFixture();
+        $sitemap = "$root/docs/sitemap.xml";
+        $this->put($sitemap, str_replace(
+            'https://sugarcraft.github.io/lib/alpha.html',
+            'https://example.com/lib/alpha.html',
+            (string) file_get_contents($sitemap),
+        ));
+
+        $findings = \CheckDocsAssets::derive($root);
+        $this->assertCount(2, $findings, 'the off-base row is named, and the universe side then misses its row');
+        $this->assertStringContainsString('is outside the site base', $findings[0]);
+    }
+
+    public function testADuplicateSitemapRowIsNamed(): void
+    {
+        $root = $this->makeCleanFixture();
+        $sitemap = "$root/docs/sitemap.xml";
+        $this->put($sitemap, str_replace(
+            '</urlset>',
+            "    <url><loc>https://sugarcraft.github.io/lib/alpha.html</loc></url>\n</urlset>",
+            (string) file_get_contents($sitemap),
+        ));
+
+        $findings = $this->filter($root, 'duplicates an earlier row');
+        $this->assertCount(1, $findings);
+    }
+
+    public function testAMissingSitemapFileIsNamed(): void
+    {
+        $root = $this->makeCleanFixture();
+        unlink("$root/docs/sitemap.xml");
+
+        $findings = \CheckDocsAssets::derive($root);
+        $this->assertCount(1, $findings);
+        $this->assertStringContainsString('sitemap: docs/sitemap.xml is missing', $findings[0]);
+    }
+
+    /**
+     * The exclusion roster is load-bearing both ways: a chrome page on the
+     * roster (docs/404.html) stays OUT of the universe without a row, but a
+     * roster entry that no longer carries chrome is a stale exemption and the
+     * roster itself is named.
+     */
+    public function testTheExclusionRosterSkipsChromeButGoesStaleWithoutIt(): void
+    {
+        $root = $this->makeCleanFixture();
+        $this->put(
+            "$root/docs/404.html",
+            (string) file_get_contents("$root/docs/lib/alpha.html"),
+        );
+
+        // The copied nav markup points one level up (lib/ depth), so the links
+        // leg legitimately accuses it — the roster arm is judged on the
+        // sitemap leg's own findings: a chrome page on the roster with no row
+        // must produce zero sitemap findings.
+        $this->assertSame([], $this->filter($root, 'sitemap:'), 'docs/404.html is on the non-advertised roster');
+
+        $this->put("$root/docs/404.html", '<html><body><p>not found</p></body></html>');
+        $findings = \CheckDocsAssets::derive($root);
+        $this->assertCount(1, $findings);
+        $this->assertStringContainsString('exclusion roster entry docs/404.html', $findings[0]);
+        $this->assertStringContainsString('the roster is stale', $findings[0]);
+    }
+
     private static function png(): string
     {
         $bytes = base64_decode(self::PNG_B64, true);
@@ -369,6 +487,14 @@ final class CheckDocsAssetsTest extends TestCase
         $this->put("$root/docs/js/search.js", '/* fixture */');
         $this->put("$root/docs/js/nav.js", '/* fixture */');
         $this->put("$root/docs/js/search-index.json", '[]');
+        // The advertised universe here is exactly one page: alpha is the only
+        // file under docs/ carrying the nav container (index.html is chromeless),
+        // so the sitemap leg's clean arm is one row — matching the real tree's
+        // shape where stubs and fragments are skipped by the same discriminator.
+        $this->put("$root/docs/sitemap.xml", '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
+            . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n"
+            . '    <url><loc>https://sugarcraft.github.io/lib/alpha.html</loc></url>' . "\n"
+            . '</urlset>' . "\n");
         $this->put("$root/docs/lib/alpha.html", '<html><body>'
             . '<nav class="nav" aria-label="Main navigation"><!--nav:start--><div class="nav-links">'
             . '<button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">Search</button>'
