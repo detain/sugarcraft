@@ -2767,12 +2767,6 @@ parameters:
 			path: src/Workflows/WorkflowBuilder.php
 
 		-
-			message: '#^If condition is always false\.$#'
-			identifier: if.alwaysFalse
-			count: 2
-			path: src/Workflows/WorkflowEngine.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>completedAt" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1

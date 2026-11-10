@@ -296,7 +296,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * nothing else in-tree sets it. Mutable-service precedent: same shape as
      * {@see setAgentManager()} — the engine is a service the caller wires.
      *
-     * @var (callable(WorkflowResult, ?string): int)|null
+     * @var (\Closure(WorkflowResult, ?string): int)|null
      */
     private ?\Closure $signalPauseHandler = null;
 
@@ -375,7 +375,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * Interleaving is still refused by {@see $liveRunOwners}, so at most one
      * chain of NESTED runs is ever in here.
      *
-     * @var array<int, array{key: string, workflowId: string, loadPath: ?string, snapshot: \Closure(WorkflowStatus): WorkflowResult, pauseRequested: bool}>
+     * @var array<int, array{key: string, workflowId: string, loadPath: ?string, snapshot: \Closure(WorkflowStatus): WorkflowResult, pauseRequested: bool, inputHashes: array<string, string>, dynamicWaves: array<array-key, mixed>, inputJoins: array<string, list<array{from: list<string>, as: string}>>}>
      */
     private array $liveRuns = [];
 
@@ -1056,7 +1056,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param array<string, mixed> $data    the decoded pause file
      * @param array<string, mixed> $context the pause file's context
-     * @return array{0: int, 1: array{stageResults: list<StageResult>, totalTokens: int, totalCost: float, startedAt: \DateTimeImmutable, stageInputHashes: array<string, string>, dynamicWaves: array<string, mixed>, inputJoins: array<string, list<array{from: list<string>, as: string}>>, recordedResults: array<string, StageResult>, totalsCountRecordedRows: bool}}
+     * @return array{0: int, 1: array{stageResults: list<StageResult>, totalTokens: int, totalCost: float, startedAt: \DateTimeImmutable, stageInputHashes: array<string, string>, dynamicWaves: array<array-key, mixed>, inputJoins: array<string, list<array{from: list<string>, as: string}>>, recordedResults: array<string, StageResult>, totalsCountRecordedRows: bool}}
      */
     private function priorProgress(array $data, Workflow $workflow, array $context): array
     {
@@ -3090,7 +3090,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param array $stage        Stage array from Workflow::$stages.
      * @param array $context      Current workflow context for interpolation.
-     * @param list<array{key: string, result: AgentResult}> $dispatched Out: each agent this stage ran, as it settles.
+     * @param list<array{key: string, result: AgentResult, schema: bool}> $dispatched Out: each agent this stage ran, as it settles.
      * @param int   $stageTimeout Workflow::$timeout — this stage's wall-clock budget, in seconds.
      * @return StageResult
      */
@@ -3167,7 +3167,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 timeout: $task->timeout ?? $stageTimeout,
                 maxRetries: $task->retries ?? 0,
                 stallTimeout: $task->stallTimeout ?? 0,
-                stallRestarts: $task->restarts ?? 0,
+                stallRestarts: $task->restarts,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $task->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
@@ -3236,7 +3236,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param array $stage          Stage array from Workflow::$stages.
      * @param array $context        Current workflow context for interpolation.
-     * @param list<array{key: string, result: AgentResult}> $dispatched Out: each step's agent, as it settles.
+     * @param list<array{key: string, result: AgentResult, schema: bool}> $dispatched Out: each step's agent, as it settles.
      * @param ?int  $maxConcurrent The workflow's concurrency width, carried for
      *                             call-site symmetry: a pipeline's steps run one
      *                             at a time by definition, so nothing here reads
@@ -3325,7 +3325,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 timeout: $task->timeout ?? $stageTimeout,
                 maxRetries: $task->retries ?? 0,
                 stallTimeout: $task->stallTimeout ?? 0,
-                stallRestarts: $task->restarts ?? 0,
+                stallRestarts: $task->restarts,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $task->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
@@ -3399,7 +3399,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param array $stage        Stage array from Workflow::$stages.
      * @param array $context      Current workflow context for interpolation.
-     * @param list<array{key: string, result: AgentResult}> $dispatched Out: the task's and the verifier's agents, as each settles.
+     * @param list<array{key: string, result: AgentResult, schema: bool}> $dispatched Out: the task's and the verifier's agents, as each settles.
      * @param int   $stageTimeout Workflow::$timeout — one budget shared by the
      *                            task and its verifier.
      * @return StageResult
@@ -3466,7 +3466,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             timeout: $task->timeout ?? $stageTimeout,
             maxRetries: $task->retries ?? 0,
             stallTimeout: $task->stallTimeout ?? 0,
-            stallRestarts: $task->restarts ?? 0,
+            stallRestarts: $task->restarts,
             isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
             outputSchema: $task->outputSchema,
             // S2: the per-stage model ask; null keeps today's session-default dial.
@@ -3548,7 +3548,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 timeout: $verifier->timeout ?? $stageTimeout,
                 maxRetries: $maxRetriesForAttempt,
                 stallTimeout: $verifier->stallTimeout ?? 0,
-                stallRestarts: $verifier->restarts ?? 0,
+                stallRestarts: $verifier->restarts,
                 isolation: $verifier->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $verifier->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
@@ -3734,9 +3734,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @param array    $stage   Stage array from Workflow::$stages.
      * @param array    $context Current workflow context for interpolation.
      * @param Workflow $workflow The workflow definition (provides maxConcurrent, stopOnFirstFailure).
-     * @param list<array{key: string, result: AgentResult}> $dispatched Out: one entry per agent that settled.
-     * @param ?array<string, mixed> $waveLedger C8 in/out: the live run's
-     *     dynamic-wave record, keyed by stage name. A first expansion writes
+     * @param list<array{key: string, result: AgentResult, schema: bool}> $dispatched Out: one entry per agent that settled.
+     * @param ?array<array-key, mixed> $waveLedger C8 in/out: the live run's
+     *     dynamic-wave record, keyed by stage name (a numeric-string stage name
+     *     takes its native int key — PHP casts array keys, so the map is
+     *     array-key-keyed by construction). A first expansion writes
      *     its MATERIALIZED list here (so pause writers persist it); a resume
      *     reads the recorded list back. Null means the caller keeps no
      *     ledger — expansion then happens fresh on every call.
@@ -3952,7 +3954,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 timeout: $task->timeout ?? $workflow->timeout,
                 maxRetries: $task->retries ?? 0,
                 stallTimeout: $task->stallTimeout ?? 0,
-                stallRestarts: $task->restarts ?? 0,
+                stallRestarts: $task->restarts,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $task->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
@@ -4454,7 +4456,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $text = $output ?? '';
 
         if (preg_match(self::ESCALATION_PATTERN, $text, $asked, PREG_OFFSET_CAPTURE) === 1) {
-            $line = self::matchedLine($text, (int) ($asked[0][1] ?? 0));
+            $line = self::matchedLine($text, (int) $asked[0][1]);
             $after = $attemptsUsed > 1 ? " [after {$attemptsUsed} attempts]" : '';
 
             return [
@@ -5093,7 +5095,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * Call BEFORE the run that may be signalled; the handler reads the
      * property at signal time.
      *
-     * @param (callable(WorkflowResult, ?string): int)|null $observer
+     * @param (\Closure(WorkflowResult, ?string): int)|null $observer
      */
     public function setSignalPauseHandler(?\Closure $observer): void
     {
