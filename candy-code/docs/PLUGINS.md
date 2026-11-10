@@ -163,6 +163,45 @@ declares one `channel` entrypoint. Installing it exercises every rule above:
    button cannot render) the ask falls back to a same-chat `/approve <id>
    once|always|deny` line — never a silent bypass.
 
+### Worked example: the `@candy/msteams` bundle
+
+`candy-msteams/` ships beside it with the same single `channel` entrypoint —
+but Teams is the INVERSE transport: Microsoft POSTs at the daemon instead of
+the bot dialing out. Everything above still rules the install (first launch
+lists, second loads, dark until enabled); what differs is trust and plumbing:
+
+1. Inbound is the Bot Framework webhook, mounted at
+   `/channels/msteams/api/messages` (`transport.webhookPath` renames the
+   tail). Bot Framework JWT validation TERMINATES inside the bundle — the
+   daemon router never speaks Bot Framework — and a refused bearer costs a
+   401 that names nothing beyond `unauthorized`.
+2. The Azure Bot triple (`appId`, `appPassword`, `tenantId`) rides the same
+   0600 `channels.json` store; `MSTEAMS_APP_ID`, `MSTEAMS_APP_PASSWORD` and
+   `MSTEAMS_TENANT_ID` are honored for the default account only.
+3. Outbound posts activities to the stored `serviceUrl` conversation
+   reference over https-only plumbing (the loopback opt-in included), and
+   replies expire — the bridge's durable state is keyed by the session
+   grammar in its own sidecar, never by the live request.
+4. DM pairing re-states the shared law — 8 glyphs, one hour, at most three
+   pending, codes redacted everywhere but their one notice. Group chats and
+   channel posts are BLOCKED by default: nothing in a group is served until
+   a `groups` policy row names that conversation.
+5. Approvals are adaptive cards with the same universal `/approve <id>
+   once|always|deny` fallback; the approver roster is enforced server-side
+   on both the card-invoke path and the text path — the in-card list is
+   display only.
+6. Graph-hosted media and file consent are a deferred phase (P3.5): v1
+   reads platform-hosted attachment bytes only and refuses a Graph url
+   loudly rather than silently. `teams-meetings` is a separate plugin, not
+   part of this bundle.
+
+For development, Teams cannot reach a laptop: expose the webhook with
+`devtunnel service http --port <port>`, an `ngrok http <port>`, or a
+Tailscale Funnel URL, and point the Azure Bot's messaging endpoint at the
+public https address plus the `/channels/msteams/api/messages` path. The
+channel answers inside Microsoft's webhook timeout because the model's
+answer never rides the request — the fast 200 is the whole contract.
+
 ## The declined surfaces
 
 A bundle may ship things candy-code will not run. The first two declines fire

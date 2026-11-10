@@ -353,6 +353,13 @@ A push payload past the 64 KiB body cap arrives loud: the signed route answers
 never false-strike a legitimate large sender into the lockout (raising the
 per-route cap is a separate change).
 
+Channel bundles mount their own inbound routes under `/channels/<bundle>/`
+— the router forwards the whole request and never learns a platform's
+protocol; each bundle terminates its own trust door (see
+[PLUGINS.md](PLUGINS.md), whose `@candy/msteams` example also covers the
+developer tunnel — devtunnel, ngrok, or a Tailscale Funnel URL — because
+Teams cannot reach a laptop's localhost).
+
 Outbound webhooks are wired: the `webhooksOut` user-tier map
 (see [SETTINGS.md](SETTINGS.md)) posts signed event deliveries to endpoints the
 operator names. The setting is read once at launch — a malformed endpoint is an

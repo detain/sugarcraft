@@ -2373,30 +2373,25 @@ final class Bootstrap
     }
 
     /**
-     * The `channels.discord` policy tree, read from the USER tier only.
-     *
-     * The code-chat §10 ruling puts channel policy in settings and credentials
-     * in the 0600 channels store, so this reader hands the definition to the
-     * `@candy/discord` bundle and nothing else: a project checkout can never
-     * widen a channel's reach, because the same D6 law that gates
-     * {@see TrustedBundleHooks::trustedBundleChannelNames()} strips the
-     * project tier here.
-     *
-     * Unlike the webhook readers this one NEVER validates and NEVER throws.
-     * It is consulted at channel start inside the bundle, where a malformed
-     * field has a louder landing than a refused launch: the bundle announces
-     * every fallback it takes on its own log line, and a genuinely unusable
-     * transport (a plain-HTTP endpoint, say) still arrives at the registry's
-     * start-failed refusal. Returning `[]` when the key is absent keeps the
-     * whole feature dark on an untouched install.
+     * The `channels.discord` policy tree, user tier only; the full D6
+     * rationale rides {@see ChannelsSettings::userTierMap()}. Never throws.
      *
      * @return array<string,mixed>
      */
     public static function channelsDiscordSettings(): array
     {
-        $tree = self::readUserConfigWithoutProjectTier()['channels.discord'] ?? null;
+        return ChannelsSettings::userTierMap('channels.discord');
+    }
 
-        return is_array($tree) ? $tree : [];
+    /**
+     * The `channels.msteams` policy tree, user tier only; rationale rides
+     * the same door. Never throws.
+     *
+     * @return array<string,mixed>
+     */
+    public static function channelsMsteamsSettings(): array
+    {
+        return ChannelsSettings::userTierMap('channels.msteams');
     }
 
     /**

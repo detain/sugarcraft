@@ -206,6 +206,30 @@ final class ServerSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.channels.discord.help'))
                 ->withReaderSymbol(Bootstrap::class . '::channelsDiscordSettings')
                 ->withReadBy('the `@candy/discord` bundle → `DiscordChannel::start()`'),
+            // code-chat §8 (P3): the ONE settings row the `@candy/msteams`
+            // bundle needs — the same single-Map posture as its discord
+            // sibling, because Teams is the INVERSE transport but the same
+            // policy anatomy: enablement, DM pairing gates, the group
+            // allowlist that BLOCKS by default (§8.3), queue mode, chunk
+            // limits, media caps, approval posture, per-account overrides.
+            // The Azure Bot triple deliberately does NOT live here (ruling
+            // D4 again): appId, appPassword and tenantId ride only the 0600
+            // `channels.json` store through the bundle's own reader. Not a
+            // layered key: the reader consults the user tier alone, so a
+            // cloned repository can never widen a channel's reach. The
+            // reader never throws — malformed fields fall back to dark
+            // defaults the bundle announces, and a truly unusable transport
+            // lands as a loud channel start-failed refusal in the registry
+            // report. JWT trust lives in the bundle, not here: the router
+            // mounts `/channels/` and never speaks Bot Framework (§8.1).
+            SettingDefinition::new('channels.msteams', SettingType::Map, [])
+                ->withCategory(SettingCategory::Server)
+                ->withRiskClass(RiskClass::Security)
+                ->withUi(UiEditability::Complex)
+                ->withLabel(Lang::t('settings.channels.msteams.label'))
+                ->withHelp(Lang::t('settings.channels.msteams.help'))
+                ->withReaderSymbol(Bootstrap::class . '::channelsMsteamsSettings')
+                ->withReadBy('the `@candy/msteams` bundle → `MsTeamsChannel::start()`'),
         ];
     }
 }
