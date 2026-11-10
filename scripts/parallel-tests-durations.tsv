@@ -136,6 +136,7 @@ candy-code/tests/Tools/BuiltIn/BashTimeoutTest.php	4.084	18
 candy-code/tests/Session/DebouncedTranscriptPersistenceTest.php	4.070	8
 candy-code/tests/Context/EnvironmentBlockGitTimeoutTest.php	4.048	3
 candy-code/tests/Config/DocumentParagraphsTest.php	4.041	18
+candy-code/tests/Channels/ChannelInboundLogTest.php	3.991	32
 candy-code/tests/Chat/ExecuteAgentsTimeoutTest.php	3.989	2
 candy-code/tests/Server/RequestIngressTest.php	3.986	4
 candy-code/tests/Backend/EngineBackendTeardownKillsToolTreeTest.php	3.963	2
@@ -842,6 +843,7 @@ candy-code/tests/Chat/FastCommandTest.php	0.126	18
 candy-code/tests/Agents/SuspendedDelegationsTest.php	0.126	9
 candy-code/tests/Tui/FirstRunWizard/FirstRunWizardTest.php	0.125	21
 candy-code/tests/Cli/SessionEndHookTest.php	0.125	4
+candy-code/tests/Channels/ChannelInboundReplayTest.php	0.124	8
 candy-code/tests/App/AgentShellCommandsTest.php	0.124	15
 candy-code/tests/Media/PerfBudgetTest.php	0.123	9
 candy-code/tests/Agents/Live/AgentLiveSessionScopeTest.php	0.123	7
