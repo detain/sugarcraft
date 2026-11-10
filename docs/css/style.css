@@ -945,6 +945,31 @@ pre.code .num  { color: #fcd5b4; }
     .layer { grid-template-columns: 1fr; }
 }
 
+/* Wide-screen vertical rhythm (L2a1): as the fluid container grows past the old
+   1080px cap, section/hero/card paddings and stack gaps tighten toward their
+   floors so page height condenses along with the width gain. Floors equal the
+   <=640px mobile values and ceilings equal the desktop defaults, so nothing is
+   ever looser than before; the 641px gate keeps phone rendering byte-identical. */
+@media (min-width: 641px) {
+    .section { padding: clamp(64px, calc(96px - 1.5vw), 96px) 0; }
+    .hero { padding: clamp(64px, calc(120px - 2vw), 120px) 0 clamp(48px, calc(96px - 1.6vw), 96px) 0; }
+    .section .lede { margin: 0 0 clamp(24px, calc(48px - 1.2vw), 48px) 0; }
+    .hero .tag { margin: 0 auto clamp(16px, calc(32px - 0.9vw), 32px) auto; }
+    .cta-row { margin-bottom: clamp(16px, calc(32px - 0.9vw), 32px); }
+    .glyph-row { margin-top: clamp(24px, calc(48px - 1.4vw), 48px); }
+    .quickstart { padding: clamp(22px, calc(32px - 0.5vw), 32px); }
+    .footer { padding: clamp(32px, calc(48px - 1vw), 48px) 0; }
+    .stats { margin: clamp(20px, calc(32px - 0.8vw), 32px) 0 0 0; }
+    .pillars { margin-top: clamp(20px, calc(32px - 0.8vw), 32px); }
+    .pillar { padding: clamp(16px, calc(24px - 0.5vw), 24px); }
+    .layers { margin-top: clamp(18px, calc(28px - 0.7vw), 28px); }
+    .logo-strip { margin-top: clamp(20px, calc(32px - 0.8vw), 32px); }
+    .callout { padding: clamp(24px, calc(36px - 0.9vw), 36px) clamp(28px, calc(40px - 1vw), 40px); margin-top: clamp(20px, calc(32px - 0.8vw), 32px); }
+    .compare th, .compare td { padding: clamp(10px, calc(14px - 0.35vw), 14px) 18px; }
+    .lib-grid { gap: clamp(18px, calc(24px - 0.4vw), 24px); }
+    .demo-grid { gap: clamp(18px, calc(24px - 0.4vw), 24px); }
+}
+
 /* ── Lightbox ──────────────────────────────────────────────────── */
 .lightbox {
     position: fixed;
