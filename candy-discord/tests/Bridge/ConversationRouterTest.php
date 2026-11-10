@@ -152,8 +152,11 @@ final class ConversationRouterTest extends TestCase
         $this->inboundDm('bind me', false, 'm-0');
         self::assertSame(1, $this->serve->sendSeen);
 
-        $this->inboundDm('one', false, 'm-1');
-        $this->inboundDm('two', false, 'm-2');
+        // Direct calls, NO settle in between: settling after the first push
+        // would let the 40 ms gate flush 'one' alone — the coalescing law
+        // needs both items in the window.
+        $this->router->inbound('discord', self::DM_KEY, ['channelId' => 'chan-9', 'messageId' => 'm-1'], 'one', false, 'm-1');
+        $this->router->inbound('discord', self::DM_KEY, ['channelId' => 'chan-9', 'messageId' => 'm-2'], 'two', false, 'm-2');
         self::runFor($this->loop, 500);
 
         self::assertSame(2, $this->serve->sendSeen, 'collect must flush both prompts as ONE send');
@@ -212,6 +215,7 @@ final class ConversationRouterTest extends TestCase
         $this->inboundDm('bind me', false, 'm-1');
 
         $this->router->answerApproval('sess_fixture_1', 'ask_9', 'once', ['userId' => 'rando', 'name' => 'R']);
+        self::runFor($this->loop, 300);
 
         self::assertSame(1, $this->serve->respondSeen);
         self::assertSame('reject', $this->serve->lastReply);
@@ -224,6 +228,7 @@ final class ConversationRouterTest extends TestCase
         $this->inboundDm('bind me', false, 'm-1');
 
         $this->router->runCommand('discord', self::DM_KEY, ['channelId' => 'chan-9'], ['name' => 'model', 'args' => ['sonnet']]);
+        self::runFor($this->loop, 300);
 
         self::assertSame(1, $this->serve->execSeen);
         self::assertSame('switched', $this->face->delivered[count($this->face->delivered) - 1]);
