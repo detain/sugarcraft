@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Channels;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Channels\ChannelInboundLog;
+use SugarCraft\Code\Memory\SecretRedactor;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 
 /**
@@ -267,7 +268,7 @@ final class ChannelInboundLogTest extends TestCase
         $raw = (string) \file_get_contents($ledger->path());
         self::assertStringNotContainsString('9876543', $raw);
         self::assertStringNotContainsString('abc123xyz', $raw);
-        self::assertStringContainsString('?code=[REDACTED]', $raw);
+        self::assertStringContainsString(\chr(63) . 'code=[REDACTED]', $raw);
         self::assertStringContainsString('&token=[REDACTED]', $raw);
     }
 
