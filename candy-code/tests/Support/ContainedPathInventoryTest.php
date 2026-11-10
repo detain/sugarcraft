@@ -209,13 +209,15 @@ final class ContainedPathInventoryTest extends TestCase
         // manifest-named entrypoint file with its own containment compare.
         'Channels/BundleChannelLoader.php' => 1,
         'Chat.php' => 1,
-        // PLG-1 P1 step 6 (code-chat §10, owner ruling D1 reversal): the
-        // trusted-bundle hooks loop in Bootstrap::hooks() re-asserts bundle
-        // containment over every raw manifest-declared hook path before the
-        // entry is loaded — the loader's own compare guards classes, this one
-        // guards hook data files.
-        'Cli/Bootstrap.php' => 1,
         'Cli/McpDecision.php' => 1,
+        // PLG-1 P1 step 6 (code-chat §10, owner ruling D1 reversal; FIX-2: the
+        // loop moved out of Bootstrap::hooks() with the ratchet extraction, so
+        // the credit follows the bytes): the trusted-bundle hooks loop in
+        // Bootstrap::registerTrustedBundleHooks() (trait TrustedBundleHooks)
+        // re-asserts bundle containment over every raw manifest-declared hook
+        // path before the entry is loaded — the loader's own compare guards
+        // classes, this one guards hook data files.
+        'Cli/TrustedBundleHooks.php' => 1,
         'Commands/CommandLoader.php' => 2,
         'Commands/CommandSpec.php' => 1,
         'Config/LayeredSettings.php' => 2,
