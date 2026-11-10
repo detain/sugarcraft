@@ -152,7 +152,7 @@ declares one `channel` entrypoint. Installing it exercises every rule above:
    no new server surface, and `gen-protocol-schema --check` stays clean by
    construction. Chunking, redaction, and prompt-fencing happen in the
    bundle, never in a model loop.
-4. Unpaired DM senders receive an expiring pairing code (8 characters, one
+4. Unpaired DM senders receive an expiring pairing code (8 glyphs, one
    hour, at most three pending); an approver answers `/pair approve <code>`
    (or the text spelling), which writes the allowlist into the same 0600
    store. Codes are registered as redaction secrets, so they never echo into
