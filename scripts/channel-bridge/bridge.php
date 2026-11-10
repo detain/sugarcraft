@@ -98,7 +98,14 @@ if ($serveToken === '') {
     $serveToken = (string) (\getenv('CANDY_CODE_SERVER_TOKEN') ?: '');
 }
 if ($serveToken === '' && $dir !== null) {
-    $serveToken = \SugarCraft\Code\Server\Auth\TokenStore::new($stateDirPath)->token();
+    // Never-mints posture (see README): only READ a token that an authorized
+    // `candy-code serve` already minted; never mint one from here.
+    $tokenFile = $dir->path . '/' . \SugarCraft\Code\Server\Auth\TokenStore::FILE;
+    $tokenStat = @\lstat($tokenFile);
+    $tokenRaw = $tokenStat !== false && (($tokenStat['mode'] & 0170000) === 0100000)
+        ? @\file_get_contents($tokenFile)
+        : false;
+    $serveToken = \is_string($tokenRaw) ? \trim($tokenRaw) : '';
 }
 if ($serveToken === '') {
     \fwrite(\STDERR, "no serve token: set CANDY_CODE_SERVER_TOKEN or serve.stateDir with its token file\n");

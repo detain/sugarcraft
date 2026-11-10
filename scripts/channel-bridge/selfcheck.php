@@ -619,6 +619,10 @@ try {
     check('M5 READY stores a string session_id on the Gateway', false, $m5e::class . ': ' . $m5e->getMessage());
 }
 
+// minor m1: the daemon must NEVER mint a serve token — strict read of the
+// state-dir token file only, matching Attach and the README posture.
+check('minor m1 daemon never mints the serve token', !str_contains($bridgeSrc, 'TokenStore::new(') && str_contains($bridgeSrc, 'TokenStore::FILE'), 'bridge.php still routes the token fallback through the minting TokenStore::new()->token()');
+
 echo "\n";
 // -- 4. summary -----------------------------------------------------------
 
