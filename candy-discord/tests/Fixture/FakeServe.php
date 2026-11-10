@@ -66,6 +66,20 @@ final class FakeServe
 
     public int $connectionCount = 0;
 
+    public string $lastDelivery = '';
+
+    public bool $lastHasMedia = false;
+
+    public bool $refuseMediaOnce = false;
+
+    public int $cancelSeen = 0;
+
+    public int $execSeen = 0;
+
+    public ?string $lastReply = null;
+
+    public ?string $lastNote = null;
+
     private ?SocketServer $server = null;
 
     public function __construct(
@@ -283,13 +297,36 @@ final class FakeServe
                 $this->sendSeen++;
                 $this->seenText = (string) ($params['text'] ?? '');
                 $this->lastIdempotencyKey = isset($params['idempotencyKey']) ? (string) $params['idempotencyKey'] : null;
+                $this->lastDelivery = (string) ($params['delivery'] ?? '');
+                $this->lastHasMedia = isset($params['images']) || isset($params['documents']);
+                if ($this->lastHasMedia && $this->refuseMediaOnce) {
+                    $this->refuseMediaOnce = false;
+                    $this->emit($id, [
+                        'jsonrpc' => '2.0', 'id' => $rpcId,
+                        'error' => ['code' => -32602, 'message' => 'invalid params', 'data' => (object) ['kind' => 'image_mime_mismatch']],
+                    ]);
+                    break;
+                }
                 $this->emit($id, [
                     'jsonrpc' => '2.0', 'id' => $rpcId,
                     'result' => (object) ['admitted' => 'started', 'turnId' => 'turn_fixture_1'],
                 ]);
                 break;
+            case 'session.cancel':
+                $this->cancelSeen++;
+                $this->emit($id, ['jsonrpc' => '2.0', 'id' => $rpcId, 'result' => (object) ['cancelled' => true]]);
+                break;
+            case 'command.exec':
+                $this->execSeen++;
+                $this->emit($id, [
+                    'jsonrpc' => '2.0', 'id' => $rpcId,
+                    'result' => (object) ['rows' => [['role' => 'system', 'content' => 'switched', 'uiOnly' => false]], 'effects' => []],
+                ]);
+                break;
             case 'permission.respond':
                 $this->respondSeen++;
+                $this->lastReply = isset($params['reply']) ? (string) $params['reply'] : null;
+                $this->lastNote = isset($params['note']) ? (string) $params['note'] : null;
                 $this->emit($id, [
                     'jsonrpc' => '2.0', 'id' => $rpcId,
                     'result' => (object) ['answered' => true, 'askId' => $params['askId'] ?? null, 'reply' => $params['reply'] ?? null],
