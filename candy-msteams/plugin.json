@@ -1,0 +1,13 @@
+{
+  "name": "candy-msteams",
+  "version": "0.1.0",
+  "description": "Microsoft Teams channel bundle for candy-code serve: dialogs from Teams personal chats, group chats, and channel posts into a served session - webhook inbound with in-bundle Bot Framework JWT validation, activity-referenced REST outbound, pairing gates, group allowlists, queue modes, chunked redacted replies, adaptive-card approvals with a same-chat text fallback. Policy in the user-tier channels.msteams settings; credentials only in the 0600 channels store. Graph/RSC media and file consent are deferred to P3.5.",
+  "entrypoints": {
+    "channel": [
+      {
+        "file": "src/MsTeamsChannel.php",
+        "class": "CandyCode\\Bundles\\MsTeams\\MsTeamsChannel"
+      }
+    ]
+  }
+}
