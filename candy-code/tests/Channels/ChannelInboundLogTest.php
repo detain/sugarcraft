@@ -186,6 +186,23 @@ final class ChannelInboundLogTest extends TestCase
         self::assertSame($poison, $corralled, 'the bytes stay available for an operator');
     }
 
+    public function testTwoQuarantinesAtOneStampPreserveBothCorruptOriginals(): void
+    {
+        $probe = $this->inboxLedger();
+        \file_put_contents($probe->path(), 'first corrupt {{{');
+        self::assertNotNull($this->inboxLedger()->quarantinedAt(), 'the first boot quarantines under the bare stamp');
+
+        // A second unreadable ledger inside the SAME stamp second must not
+        // rename on top of the first forensic copy — both byte sets survive.
+        \file_put_contents($this->inboxConfig . '/' . ChannelInboundLog::FILE_NAME, 'second corrupt }}}');
+        $second = $this->inboxLedger();
+        self::assertSame(ChannelInboundLog::SHAPE_RESET, $second->pending()['shape'], 'the announce shape is unchanged by the suffix walk');
+
+        $corral = $this->inboxConfig . '/' . ChannelInboundLog::FILE_NAME . '.corral-';
+        self::assertSame('first corrupt {{{', \file_get_contents($corral . $this->now), 'the first corrupt original survives intact');
+        self::assertSame('second corrupt }}}', \file_get_contents($corral . $this->now . '.2'), 'the collision takes a suffixed name, never an overwrite');
+    }
+
     public function testResetShapeIsStickyForTheProcessLife(): void
     {
         $probe = $this->inboxLedger();

@@ -326,7 +326,10 @@ final class ChannelInboundLog
     /**
      * Move a corrupt ledger aside under a stamped name. The bytes stay
      * available for an operator; this process starts from an honest empty
-     * set and answers RESET forever after.
+     * set and answers RESET forever after. A pre-existing corral at the same
+     * stamp is never overwritten — the corrupt bytes are preserved with a
+     * distinct suffix, because renaming onto an existing file would destroy
+     * the forensic copy an earlier quarantine (or a clock collision) left.
      */
     private function quarantine(): void
     {
@@ -334,6 +337,11 @@ final class ChannelInboundLog
         $this->quarantinedAt = $this->stamp();
         $path = $this->path();
         $corral = \dirname($path) . '/' . self::FILE_NAME . '.corral-' . $this->quarantinedAt;
+        $suffix = 1;
+        while (\file_exists($corral)) {
+            ++$suffix;
+            $corral = \dirname($path) . '/' . self::FILE_NAME . '.corral-' . $this->quarantinedAt . '.' . $suffix;
+        }
         @rename($path, $corral);
     }
 
