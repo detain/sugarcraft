@@ -335,7 +335,10 @@ jobs:
           git clone --quiet \
             "https://x-access-token:$TOKEN@github.com/sugarcraft/sugarcraft.github.io.git" \
             "$tmp/site"
-          rsync -a --delete --exclude=.git ./docs/ "$tmp/site/"
+          # docs/old and docs/research are repo working documents, not site content:
+          # drop any copy already published so --delete removes them from the site.
+          rm -rf "$tmp/site/old" "$tmp/site/research"
+          rsync -a --delete --exclude=.git --exclude=/old/ --exclude=/research/ ./docs/ "$tmp/site/"
           cd "$tmp/site"
           git config user.name  'Joe Huss'
           git config user.email 'detain@interserver.net'
