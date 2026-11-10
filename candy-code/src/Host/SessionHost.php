@@ -26,6 +26,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\CommandParser;
 use SugarCraft\Code\Commands\BangShell;
 use SugarCraft\Code\Commands\CommandSpec;
+use SugarCraft\Code\Channels\ChannelToolPolicyService;
 use SugarCraft\Code\Commands\McpPromptCommands;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Commands\Specs\BuiltInCommand;
@@ -1914,15 +1915,47 @@ final class SessionHost
             $mode = $mode->stricterOf($ceiling);
         }
         if ($mode === null || $base?->mode() === $mode) {
-            return $base;
+            return $this->channelScoped($base);
         }
 
-        return new PermissionGate(
+        return $this->channelScoped(new PermissionGate(
             $mode,
             $base?->rules() ?? [],
             new SafetyClassifier(),
             'session',
-        );
+        ));
+    }
+
+    /**
+     * The code-chat D6 admission door: when the workspace carries a
+     * {@see ChannelToolPolicyService} (only a serve boot does), the session's
+     * name is parsed for the §2.3 channel grammar and the live channel tool
+     * policy is attached to the gate about to run — RESOLVED AT ADMISSION,
+     * fresh every dispatch, exactly the way the memo grants ride
+     * {@see TurnRunner::backendForTurn()}. An unscoped session, a local TUI
+     * host without the service, or an unnamed session returns the gate
+     * untouched, object for object, so every other surface is byte-identical.
+     */
+    private function channelScoped(?PermissionGate $gate): ?PermissionGate
+    {
+        if ($gate === null) {
+            // The ceiling law stands: a scope never manufactures a gate
+            // where none is wired.
+            return null;
+        }
+
+        $service = $this->workspace->service(ChannelToolPolicyService::class);
+        if (!$service instanceof ChannelToolPolicyService) {
+            return $gate;
+        }
+
+        $name = $this->ephemeralName;
+        if ($name === null && !$this->ephemeral) {
+            $row = $this->workspace->sessionStore?->session($this->sessionId);
+            $name = \is_array($row) ? ($row['name'] ?? null) : null;
+        }
+
+        return $gate->withChannelScope($service->scopeFor($name));
     }
 
     private function root(): string
