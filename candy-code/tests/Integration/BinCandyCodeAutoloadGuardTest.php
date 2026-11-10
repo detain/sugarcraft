@@ -32,7 +32,7 @@ use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
  * was re-examined against `Bootstrap::warnPermissionConfigInTranscript()`".
  * WHAT IS TRUE NOW, and what round 42's review measured: that was false. Only
  * `Bootstrap`'s writes and this one had been looked at. The real census of raw
- * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is FIFTY-SEVEN:
+ * `fwrite(STDERR, …)` call sites across `src/` and `bin/` is FIFTY-NINE (W-1 cc-eval-1106 wf/w1 2026-11-09: +2 in the `candy-code workflow` refusal funnel and signal-pause mirror):
  *
  *  - {@see \SugarCraft\Code\Cli\NonInteractive}, twenty — (BM-1 RS-DRIVER 2026-11-07: four of them are the `--batch` continuation loop's per-row mirrors of the single-run failure arms)
  *    `run()` four times (a thrown backend error, an answer that would not encode
