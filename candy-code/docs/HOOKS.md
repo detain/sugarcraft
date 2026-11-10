@@ -531,6 +531,36 @@ background teammate's own session:
   `{"team_name", "teammate_name"}` for `TeammateIdle`. Hooks run in the
   launch's project root.
 
+### The workflow events
+
+The workflow engine (the `/workflow` command and the `Workflow` tool, see
+[`WORKFLOWS.md`](WORKFLOWS.md)) raises its stage-lifecycle events into the same
+chain while a run is live. All of them are observe-only: the verdict a hook
+returns on these events is discarded, so a hook can watch a run but cannot
+block or reshape one — and an engine built without a hook chain raises nothing
+at all.
+
+- **`StageStarted`** fires before each round of a stage is dispatched — round
+  one for a plain stage, the round number for each round of a `loop:`. A stage
+  skipped by its `when:` clause never raises it.
+- **`StageComplete`** fires when a stage settles without failing. It is the
+  only announcement a skipped stage gets, and on a skip the `round` reads zero:
+  no round ever ran. On a loop it fires once, after the last round settled.
+- **`StageFail`** fires exactly once when a stage settles as a failure, with
+  the reason carried in `error`.
+- **`WorkflowComplete`** fires once per run at a natural terminal: completed or
+  failed, a pre-flight refusal included. A run that pauses or cancels raises
+  nothing — the resumed run announces its own terminal when it finishes. A
+  `cache:` stage carried from a record raises nothing either: no dispatch
+  happened.
+- **Context.** `toolName` is `Workflow` (write the `matcher:` against it), the
+  session id is the run's stamped identity (the workflow's name plus the mint's
+  suffix), and `toolInput` is JSON: `{"workflow", "stage", "round"}` for
+  `StageStarted`; `StageComplete` adds `"status"` and `StageFail` adds
+  `"status"` and `"error"`; the terminal carries `{"workflow", "status",
+  "stages", "totalTokens", "totalCost"}`. Hooks run in the launch's project
+  root.
+
 ---
 
 ## The exit-code contract

@@ -1005,6 +1005,49 @@ budgets ride the existing engine families unchanged.
 
 ---
 
+## Stage lifecycle events
+
+While a run is live, the engine raises events into the hook chain (see
+[`HOOKS.md`](HOOKS.md), *The workflow events*): `StageStarted` before each
+dispatched round of a stage, `StageComplete` when a stage settles without
+failing, `StageFail` when it settles failed, and `WorkflowComplete` once when
+the run reaches a natural terminal. A stage skipped by its `when:` clause
+announces only the complete, at round zero; a `loop:` announces one
+`StageStarted` per round but settles exactly once; a `cache:` stage carried
+from a record announces nothing at all. A run that pauses or cancels raises no
+terminal — the resumed run announces its own when it finishes. These events are
+observe-only: whatever a hook answers, the engine discards, so a hook can watch
+a run but cannot steer it. An engine built without a hook chain raises nothing.
+
+**Checkpoint commits.** `autoCommit: edit` (see [`HOOKS.md`](HOOKS.md),
+*Auto-commit*) commits every file-changing tool call as it lands, but it knows
+nothing about stages. Pairing `StageComplete` with a command hook turns every
+settled stage into a commit of the whole working tree — a checkpoint a later
+stage's work can be diffed against and rolled back to, including work agents
+landed through tools the built-in never watches:
+
+```yaml
+hooks:
+  StageComplete:
+    - name: stage-checkpoint
+      command: ./hooks/stage-checkpoint.sh
+```
+
+The script reads the stage name out of `CRUSH_TOOL_INPUT` and commits in the
+launch's project root, where hooks run:
+
+```sh
+#!/bin/sh
+stage=$(sed -n 's/.*"stage":"\([^"]*\)".*/\1/p' "$CRUSH_TOOL_INPUT" | head -n1)
+git add -A && git commit -qm "workflow checkpoint: ${stage:-stage}"
+```
+
+Because the verdict on a stage event is discarded, the commit cannot block the
+run: a failing checkpoint — a dirty-tree conflict, a rejected hook of its own —
+just leaves the working tree uncommitted while the workflow marches on.
+
+---
+
 ## Model-authored plans: the `Workflow` tool
 
 The model can run a workflow of its own: the built-in `Workflow` tool takes the
