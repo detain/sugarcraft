@@ -78,5 +78,17 @@ final readonly class WorkflowTask
          * stall then settles in exactly today's plain-timeout shape.
          */
         public int $restarts = 0,
+        /**
+         * C9 fan-in join: a normalized `array{from: list<string>, as: string}`
+         * naming PRIOR stages whose recorded rows this task's prompt receives
+         * under the fixed `input` handle. {@see TaskBuilder::trustedJoin()}
+         * validates the shape at parse time — by the time a DTO exists the
+         * spec is trusted, and null means no join at all (behavior
+         * byte-identical to every pre-C9 workflow). The engine builds the
+         * payload from the recorded rows immediately before prompt
+         * interpolation, into a task-local copy of the context that is never
+         * persisted, so a resume re-derives byte-identical bytes.
+         */
+        public ?array $input = null,
     ) {}
 }
