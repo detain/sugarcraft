@@ -129,4 +129,33 @@ final class PairingCodesTest extends TestCase
         clearstatcache();
         self::assertSame(0o600, fileperms($this->path) & 0o777);
     }
+
+    public function testTheAlphabetCarriesNoAmbiguousGlyphs(): void
+    {
+        self::assertSame(
+            'ABCDEFGHJKLMNPQRSTUVWXYZ23456789',
+            PairingCodes::ALPHABET,
+            'codes are read aloud and typed by hand: 0/O and 1/I must never be mintable',
+        );
+        foreach (['0', 'O', '1', 'I'] as $banned) {
+            self::assertStringNotContainsString($banned, PairingCodes::ALPHABET);
+        }
+        $glyphs = \str_split(PairingCodes::ALPHABET);
+        self::assertSame(\count($glyphs), \count(\array_unique($glyphs)), 'one slot per glyph');
+
+        // Behavioural leg: sample the REAL generator, not the constant — 40
+        // draws from a 36-glyph alphabet hide a reintroduced '0' with
+        // probability (35/36)^320 < 2e-5; the structural leg above is the
+        // deterministic keystone.
+        $mint = new \ReflectionMethod(PairingCodes::class, 'mintCode');
+        $mint->setAccessible(true);
+        for ($i = 0; $i < 40; $i++) {
+            $code = (string) $mint->invoke($this->codes, []);
+            self::assertSame(
+                1,
+                \preg_match('/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/', $code),
+                'sample ' . $i . ' left the safe alphabet: ' . $code,
+            );
+        }
+    }
 }
