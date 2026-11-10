@@ -524,8 +524,16 @@ omit it and the workflow's own width applies.
 The expansion is the pause record's, not the disk's: the materialised file
 list rides every pause write, and a resume replays *that recorded list* — it
 never re-globs, because files that changed mid-run would otherwise silently
-fork different work from what was paused. A dynamic stage that resumes against
-a missing or corrupt record fails the stage loudly instead of re-expanding.
+fork different work from what was paused. A stage that paused *before* it ever
+expanded has no record yet, and its resume expands normally — that is entry,
+not replay. Once a record exists it is honoured exactly: the file list stands
+as recorded, a recorded `chunk` wins over the re-read YAML, and a record
+that is malformed — a broken file list, a broken chunk — fails the stage
+loudly instead of silently re-expanding. The single fallback is a recorded
+chunk written as null: that wave expanded without a ceiling, so its replay
+takes the ceiling from the current YAML, and a ceiling can only narrow the
+concurrency, never the work itself.
+
 Static and dynamic spellings feed the same machinery, so `retries:`, the stage
 `timeout:`, and `stopOnFirstFailure` ride a fan-out unchanged.
 
