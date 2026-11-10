@@ -15,7 +15,7 @@ human ⇄ Teams (Bot Framework webhook)  ┼── Bridge ── ServeBridge ─
 
 ```sh
 php candy-code/bin/candy-code serve --detach          # the server, as ever
-php scripts/channel-bridge/bridge.php creds set discord default "<bot token>"
+printf '%s' "<bot token>" | php scripts/channel-bridge/bridge.php creds set discord default
 cp scripts/channel-bridge/config.sample.json scripts/channel-bridge/config.json
 $EDITOR scripts/channel-bridge/config.json            # flip discord.enabled
 php scripts/channel-bridge/bridge.php --config=scripts/channel-bridge/config.json
@@ -35,7 +35,8 @@ unit lanes always; a live-serve lane when a serve is reachable).
 ## Discord bot setup
 
 1. <https://discord.com/developers/applications> → New Application → **Bot**.
-2. Reset token → `bridge.php creds set discord default "<token>"`.
+2. Reset token → `printf '%s' "<token>" | bridge.php creds set discord default`
+   (secret rides stdin, never argv).
 3. **Privileged Gateway Intents**: enable *Message Content Intent*. Without
    it the bridge still runs but guild text is invisible (mentions only);
    it logs `discord_intents_degraded` when the gateway refuses 4013/4014
@@ -58,7 +59,7 @@ unit lanes always; a live-serve lane when a serve is reachable).
 
 1. Azure portal → App registration → note **Application (client) id** and
    **Directory (tenant) id**; create a client secret.
-2. `bridge.php creds set msteams default '{"appId":"…","appPassword":"…","tenantId":"…"}'`
+2. `printf '%s' '{"appId":"…","appPassword":"…","tenantId":"…"}' | bridge.php creds set msteams default`
 3. Bot Framework (or Teams App Studio) → set the **messaging endpoint** to
    your tunnel URL + `/api/messages` (see Tunnel law below).
 4. In Microsoft Teams admin center allow the app; test in a personal DM

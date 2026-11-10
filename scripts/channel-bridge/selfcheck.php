@@ -623,6 +623,31 @@ try {
 // state-dir token file only, matching Attach and the README posture.
 check('minor m1 daemon never mints the serve token', !str_contains($bridgeSrc, 'TokenStore::new(') && str_contains($bridgeSrc, 'TokenStore::FILE'), 'bridge.php still routes the token fallback through the minting TokenStore::new()->token()');
 
+// minor m3: creds set must read the secret from STDIN, never argv (history).
+$m3home = $stateDir . '/creds-home';
+@mkdir($m3home, 0700, true);
+$m3env = ['HOME' => $m3home, 'PATH' => (string) (getenv('PATH') ?: ''), 'PHP_BINARY' => PHP_BINARY];
+$m3cmd = [PHP_BINARY, __DIR__ . '/bridge.php', 'creds', 'set', 'discord', 'default'];
+$m3Proc = proc_open($m3cmd, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'r']], $m3Pipes, __DIR__, $m3env);
+$m3Out = '';
+if (is_resource($m3Proc)) {
+    fwrite($m3Pipes[0], "s3cr3t-m3-token\n");
+    fclose($m3Pipes[0]);
+    $m3Out = (string) stream_get_contents($m3Pipes[1]);
+    fclose($m3Pipes[1]);
+    fclose($m3Pipes[2]);
+    $m3Exit = proc_close($m3Proc);
+} else {
+    $m3Exit = -1;
+}
+$m3storeFile = $m3home . '/.candy-code/channels.json';
+check('minor m3 creds set consumes the secret from stdin (exit 0 + store written)', $m3Exit === 0 && is_file($m3storeFile), 'exit=' . $m3Exit . ' out=' . trim($m3Out));
+$m3stat = is_file($m3storeFile) ? stat($m3storeFile) : false;
+check('minor m3 store lands mode 0600', $m3stat !== false && (($m3stat['mode'] & 0777) === 0600), $m3stat === false ? 'no file' : sprintf('%o', $m3stat['mode'] & 0777));
+$m3json = is_file($m3storeFile) ? json_decode((string) file_get_contents($m3storeFile), true) : null;
+check('minor m3 token round-trips into the store', is_array($m3json) && (string) ($m3json['platforms']['discord']['accounts']['default']['token'] ?? '') === 's3cr3t-m3-token');
+check('minor m3 secret never rode the command line', !in_array('s3cr3t-m3-token', $m3cmd, true));
+
 echo "\n";
 // -- 4. summary -----------------------------------------------------------
 

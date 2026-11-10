@@ -11,7 +11,7 @@ declare(strict_types=1);
  * files change: the bridge is an EXTERNAL CONSUMER of the protocol.
  *
  *   php scripts/channel-bridge/bridge.php [--config=path]
- *   php scripts/channel-bridge/bridge.php creds set discord default <token>
+ *   printf '%s' "$SECRET" | php scripts/channel-bridge/bridge.php creds set discord default
  *
  * Secrets live in ~/.candy-code/channels.json (0600, ruling D4); the
  * config file carries enablement and policy only, never credentials.
@@ -223,8 +223,10 @@ $log->info('bridge_running', [
 $loop->run();
 
 /**
- * `bridge.php creds set <platform> <account> <token-or-json>` — writes the
- * 0600 store through the CredentialStore's own discipline (temp+rename).
+ * `bridge.php creds set <platform> <account>` — the secret is read from
+ * STDIN (input hidden on a TTY), never from an argument: argv is visible in
+ * shell history and /proc. Writes the 0600 store through the CredentialStore's
+ * own discipline (temp+rename).
  */
 function credCommand(array $args): void
 {
@@ -235,11 +237,25 @@ function credCommand(array $args): void
 
         return;
     }
-    if ($action !== 'set' || \count($args) < 4) {
-        \fwrite(\STDERR, "usage: bridge.php creds set <discord|msteams> <account> <token | json>\n");
+    if ($action !== 'set' || \count($args) !== 3) {
+        \fwrite(\STDERR, "usage: printf '%s' \"\$SECRET\" | php scripts/channel-bridge/bridge.php creds set <discord|msteams> <account>\n");
         exit(1);
     }
-    [$platform, $account, $value] = [$args[1], $args[2], $args[3]];
+    [$platform, $account] = [$args[1], $args[2]];
+    if (\stream_isatty(\STDIN)) {
+        \fwrite(\STDOUT, 'secret (input hidden): ');
+        \shell_exec('stty -echo 2>/dev/null');
+        $line = \fgets(\STDIN);
+        \shell_exec('stty echo 2>/dev/null');
+        \fwrite(\STDOUT, "\n");
+    } else {
+        $line = \fgets(\STDIN);
+    }
+    $value = \trim((string) $line);
+    if ($value === '') {
+        \fwrite(\STDERR, "no secret read from stdin\n");
+        exit(1);
+    }
     $decoded = \json_decode($value, true);
     $fields = \is_array($decoded) ? $decoded : ['token' => $value];
     $store = new CredentialStore(CredentialStore::defaultPath());
