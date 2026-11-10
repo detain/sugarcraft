@@ -7,6 +7,7 @@ namespace CandyCode\Bundles\MsTeams\Tests\MsTeams;
 use CandyCode\Bundles\MsTeams\MsTeams\Jwk;
 use CandyCode\Bundles\MsTeams\MsTeamsChannel;
 use CandyCode\Bundles\MsTeams\Support\CredentialStore;
+use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use GuzzleHttp\Psr7\ServerRequest;
 use GuzzleHttp\Psr7\Utils;
 use PHPUnit\Framework\TestCase;
@@ -207,6 +208,43 @@ final class MsTeamsChannelTest extends TestCase
         } finally {
             $channel->dispose();
             @unlink($keysFile);
+        }
+    }
+
+    /**
+     * The tenant id names the OAuth authority URL that react/http
+     * failure prose embeds, and that prose travels through the safety
+     * fence and the outbound deliver path — so it must ride the redaction
+     * roster beside the app password. The pin reads the roster the LIVE
+     * channel built (no hand-constructed TextSafety) and pushes a
+     * token-failure-shaped line through it.
+     */
+    public function testTheTenantIdRidesTheRedactionRosterBesideTheAppPassword(): void
+    {
+        $this->writeUserConfig(['channels.msteams' => ['enabled' => true]]);
+        $store = new CredentialStore(CredentialStore::defaultPath());
+        $store->writeMsteamsPairing('default', [], [], [
+            'appId' => 'app-p4b', 'appPassword' => 'p4b-secret', 'tenantId' => 'tenant-p4b-41',
+        ]);
+
+        $channel = new MsTeamsChannel();
+        $channel->start($this->context(static function (string $line): void {
+        }));
+        try {
+            $safety = new \ReflectionProperty(MsTeamsChannel::class, 'safety');
+            $safety->setAccessible(true);
+            $roster = $safety->getValue($channel);
+            self::assertInstanceOf(TextSafety::class, $roster, 'the started channel owns the live roster');
+
+            $tokenFailure = 'msteams token exchange failed: POST https://login.microsoftonline.com/'
+                . 'tenant-p4b-41/oauth2/v2/token returned 400 Bad Request (client_secret p4b-secret)';
+            $red = $roster->outbound($tokenFailure);
+
+            self::assertStringNotContainsString('tenant-p4b-41', $red, 'the tenant id is a roster secret');
+            self::assertStringNotContainsString('p4b-secret', $red, 'the app password already was');
+            self::assertStringContainsString('[redacted]', $red);
+        } finally {
+            $channel->dispose();
         }
     }
 

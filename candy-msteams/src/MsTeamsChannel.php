@@ -166,6 +166,10 @@ final class MsTeamsChannel implements ChannelInterface, AcceptsHttpRequests
             }
             $credentials[$account] = $triple;
             $secrets[] = $triple['appPassword'];
+            // The tenant id names the OAuth authority URL embedded in
+            // react/http failure prose (TokenBroker/Rest), and that prose
+            // travels through fence()/outbound() — roster it beside the secret.
+            $secrets[] = $triple['tenantId'];
         }
         if ($credentials === []) {
             $this->log->warn('channels.msteams.no_usable_accounts');
