@@ -153,6 +153,9 @@ final class AskUserChoicesWireTest extends TestCase
             'mode' => 'default',
             'suggestions' => ['once', 'always', 'reject'],
             'alwaysScope' => ['tool' => $tool],
+            // Stamped fresh: the lane's unframed-ages law would otherwise drop
+            // this ghost from permission.pending. Choices-on-wire is the subject.
+            'askedAt' => \time(),
         ], static function (PermissionResolved $resolution): void {
             // The answer channel is not this test's subject.
         });
