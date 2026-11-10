@@ -395,7 +395,13 @@ final class Width
         // rode onto a line that had no room for it — `"aaaa bbbb x\ny"` at
         // 10 came back with an 11-cell first line, breaking the renderer's
         // one-row-per-line invariant.
-        $commitWord = static function () use (&$line, &$lineWidth, &$word, &$wordWidth, $max, $flushLine): void {
+        // WHY $word/$wordWidth are PARAMETERS and not by-ref captures: the
+        // analyser knows a captured variable only by the value it holds at
+        // capture time — $word is '' there — so the guard below read as
+        // provably dead code and its body as unreachable. Passing the
+        // pending word in keeps every guard provable from the call site;
+        // the accumulator reset moves to the callers that keep using it.
+        $commitWord = static function (string $word, int $wordWidth) use (&$line, &$lineWidth, $max, $flushLine): void {
             if ($word === '') {
                 return;
             }
@@ -404,8 +410,6 @@ final class Width
             }
             $line .= $word;
             $lineWidth += $wordWidth;
-            $word = '';
-            $wordWidth = 0;
         };
 
         while ($i < $len) {
@@ -450,14 +454,18 @@ final class Width
             // count never reset, so the next row was measured as a
             // continuation of the previous one.
             if ($b === "\n" || ($b === "\r" && ($s[$i + 1] ?? '') === "\n")) {
-                $commitWord();
+                $commitWord($word, $wordWidth);
+                $word = '';
+                $wordWidth = 0;
                 $flushLine();
                 $i += $b === "\r" ? 2 : 1;
                 continue;
             }
 
             if ($b === ' ' || $b === "\t") {
-                $commitWord();
+                $commitWord($word, $wordWidth);
+                $word = '';
+                $wordWidth = 0;
                 // E69: this charged a tab 1 cell — a THIRD tab measure, after
                 // string()'s 0 and Style::render()'s TAB_WIDTH. Route it
                 // through graphemeWidth() so there is only one.
@@ -476,7 +484,9 @@ final class Width
             $cw = self::graphemeWidth($cluster);
             // If even the running word would overflow, hard-break it.
             if ($cw > $max) {
-                $commitWord();
+                $commitWord($word, $wordWidth);
+                $word = '';
+                $wordWidth = 0;
                 if ($line !== '') {
                     $flushLine();
                 }
@@ -497,7 +507,7 @@ final class Width
             }
             $i += strlen($cluster);
         }
-        $commitWord();
+        $commitWord($word, $wordWidth);
         if ($line !== '') {
             $lines[] = rtrim($line);
         }

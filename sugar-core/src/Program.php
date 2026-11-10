@@ -743,14 +743,20 @@ final class Program
         $class = $root::class;
         $route = self::$screenStackRoutes[$class] ?? $this->resolveScreenStackRoute($class);
         $nextStack = $root->screens()->replaceCurrentModel($nextModel);
-        if ($route === 'method') {
+        if ($route === 'method' && \method_exists($root, 'withScreens')) {
+            // WHY re-check the memo: resolveScreenStackRoute proved this
+            // shape once and cached it; re-deriving it at the call site
+            // keeps the type narrowing honest, and a root whose shape
+            // changed under a stale memo falls through to the remedy
+            // LogicException below instead of a fatal call.
             $candidate = $root->withScreens($nextStack);
             if ($candidate instanceof Model) {
                 $this->model = $candidate;
             }
             return;
         }
-        if ($route === 'property') {
+        if ($route === 'property' && \property_exists($root, 'screens')) {
+            // Same re-check discipline as the 'method' route above.
             /** @psalm-suppress MixedPropertyAssignment */
             $root->screens = $nextStack;
             return;
@@ -1339,13 +1345,20 @@ final class Program
      */
     private function addOneShotTimer(float $seconds, \Closure $callback): TimerInterface
     {
-        $id = null;
-        $timer = $this->loop->addTimer($seconds, function () use (&$id, $callback): void {
-            unset($this->oneShotTimers[$id]);
+        // WHY the by-ref capture: addTimer() needs the callback before the
+        // Timer object exists, so the callback cannot close over $timer by
+        // value. By reference, $timer IS bound by the time any real loop
+        // can fire the callback (assignment is synchronous right below).
+        // The fire-time key is derived from the object itself — the exact
+        // expression cancelOneShotTimer() uses — so the registry has one
+        // source of truth for its keys instead of a second id variable.
+        $timer = $this->loop->addTimer($seconds, function () use (&$timer, $callback): void {
+            if ($timer instanceof TimerInterface) {
+                unset($this->oneShotTimers[spl_object_id($timer)]);
+            }
             $callback();
         });
-        $id = spl_object_id($timer);
-        $this->oneShotTimers[$id] = $timer;
+        $this->oneShotTimers[spl_object_id($timer)] = $timer;
         return $timer;
     }
 
