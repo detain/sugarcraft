@@ -68,6 +68,10 @@ jobs:
         env:
           TARGET_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # This job carries no actions/checkout, so gh cannot infer the repo
+          # from a git context and dies with "failed to determine base repo".
+          # GH_REPO gives every gh call here its target explicitly.
+          GH_REPO: detain/sugarcraft
 
   sync-libs:
     name: Split-push affected libs to sugarcraft/<lib>
