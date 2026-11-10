@@ -756,6 +756,14 @@ jobs:
       - name: Install dependencies
         run: cd candy-code && composer install --prefer-dist --no-progress -n
 
+      # GrepEngineDifferentialTest's provider returns an empty data set when
+      # the rg binary is missing — PHPUnit surfaces that as 2 errors on this
+      # leg (macOS runners carry no ripgrep; the apt-get installs in the
+      # Linux jobs' candy-code cells never reach Darwin). Install it so the
+      # differential suite runs honestly instead of erroring on emptiness.
+      - name: Install ripgrep (candy-code)
+        run: brew install ripgrep
+
       # Parse every shipped source file, then the bin itself (no .php suffix,
       # so it is linted explicitly rather than via the find sweep).
       - name: Syntax sweep
