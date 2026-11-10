@@ -65,10 +65,10 @@ code, pre, .mono {
 /* ── Layout primitives ─────────────────────────────────────────── */
 /* Fluid cap (L2a1): the layout now extends to use the window width up to
    1560px instead of parking at 1080px with empty side padding. 100% rather
-   than a vw fraction on purpose: any vw<100vw cap would make the content
-   NARROWER than today's 1080-1560px window range (mid-widths would lose a
-   grid column), defeating the point. The fixed 24px gutter is the edge
-   breathing room; above 1560px the container simply centers. */
+   than a vw fraction on purpose: a vw<100vw cap would dip the content
+   NARROWER than the old fixed 1080px cap across the 641-1149px window band
+   (mid-widths would lose a grid column), defeating the point. The fixed 24px
+   gutter is the edge breathing room; above 1560px the container centers. */
 .container {
     max-width: min(1560px, 100%);
     margin: 0 auto;
@@ -102,10 +102,11 @@ code, pre, .mono {
     border-bottom: 1px solid var(--line);
 }
 
-/* Nav stays capped at 1080px (L2a1): the 12-item no-wrap chip bar is already
-   over-constrained inside today's cap, so widening it would change nothing
-   above 1080px while a vw-based cap would squeeze it at 641-1149px (a strict
-   no-break regression). The nav redesign owns this line; layout fluidity
+/* Nav stays capped at 1080px (L2a1): the dropdown bar (L2a2) is seven
+   compact top-level items — trigger, five chips, GitHub — so it fits the cap
+   with room to spare, while a vw-based cap would still squeeze it at
+   641-1149px (the old 12-item nowrap bar this line first answered for is
+   gone). The nav redesign owns this line; layout fluidity
    lives on .container. */
 .nav-inner {
     display: flex;
@@ -195,6 +196,131 @@ code, pre, .mono {
     width: 15px;
     height: 15px;
     flex: none;
+}
+
+/* ── Dropdown nav (L2a2) ───────────────────────────────────────── */
+/* The top level beside the Search chip is a <ul> of compact items. The
+   Libraries/Apps/Docs triggers are <button>s styled like their neighbouring
+   link-chips so the bar reads as one row; each carries a .nav-drop panel that
+   opens on hover, keyboard focus-within, or .nav-open (nav.js tap toggle).
+   Desktop opening is gated to 641px below — at phone widths panels are
+   full-width sheets under the bar, opened only by tap. */
+.nav-items {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.nav-drop-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ink-2);
+    font: inherit;
+    font-size: 0.95rem;
+    padding: 6px 12px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: transparent;
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+}
+
+.nav-drop-toggle:hover {
+    color: var(--ink);
+    background: var(--line);
+}
+
+.nav-drop-toggle:focus-visible {
+    outline: 3px solid var(--grape);
+    outline-offset: 2px;
+}
+
+.nav-caret {
+    font-size: 0.8em;
+    line-height: 1;
+}
+
+.nav-drop {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 41;
+    min-width: 230px;
+    max-height: 70vh;
+    overflow-y: auto;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, .45);
+    padding: 8px;
+}
+
+.nav-item-drop-right .nav-drop {
+    /* Docs▾ sits near the right edge — open its panel leftwards so it can
+       never hang off the viewport at 641-800px widths. */
+    left: auto;
+    right: 0;
+}
+
+.nav-drop a {
+    display: block;
+    color: var(--ink-2);
+    font-size: 0.9rem;
+    padding: 6px 10px;
+    border-radius: 8px;
+    white-space: nowrap;
+    transition: background .15s ease, color .15s ease;
+}
+
+.nav-drop a:hover {
+    color: var(--ink);
+    background: var(--line);
+}
+
+.nav-drop-all {
+    color: var(--ink);
+    font-weight: 700;
+    border-bottom: 1px solid var(--line);
+    border-radius: 8px 8px 0 0;
+    margin-bottom: 4px;
+}
+
+@media (min-width: 641px) {
+    .nav-item:hover .nav-drop,
+    .nav-item:focus-within .nav-drop,
+    .nav-item.nav-open .nav-drop {
+        display: block;
+    }
+
+    /* The 40-item package list flows into columns so the panel's height
+       stays bounded; overflow-y above catches the remainder. */
+    .nav-drop-wide {
+        columns: 2;
+        column-gap: 24px;
+        width: 440px;
+    }
+
+    .nav-drop-wide a {
+        break-inside: avoid;
+    }
+}
+
+@media (min-width: 1200px) {
+    .nav-drop-wide {
+        columns: 3;
+        width: 660px;
+    }
 }
 
 /* ── Hero ──────────────────────────────────────────────────────── */
@@ -931,11 +1057,18 @@ pre.code .num  { color: #fcd5b4; }
 /* ── Responsive ────────────────────────────────────────────────── */
 @media (max-width: 640px) {
     /* The nav no longer deletes its own links (G8): the brand keeps its row,
-       the chips — starting with the always-visible Search trigger — flow full
-       width underneath. No link is hidden any more at phone widths. */
+       and the Search chip plus a horizontally scrollable dropdown bar flow
+       underneath at full width. Hover/focus never opens a panel at phone
+       widths — a tapped trigger (nav.js sets .nav-open) drops its panel as a
+       full-width sheet directly under the bar; nothing is hidden. */
     .nav-inner { flex-wrap: wrap; gap: 8px 16px; padding: 10px 16px; }
-    .nav-links { flex-basis: 100%; margin-left: 0; flex-wrap: wrap; justify-content: flex-start; row-gap: 6px; column-gap: 8px; }
-    .nav-links a, .search-trigger { font-size: 0.85rem; padding: 5px 10px; }
+    .nav-links { flex-basis: 100%; margin-left: 0; flex-wrap: nowrap; gap: 8px; align-items: center; }
+    .nav-links > .search-trigger { flex: none; }
+    .nav-items { gap: 8px; overflow-x: auto; }
+    .nav-item { position: static; flex: none; }
+    .nav-links a, .search-trigger, .nav-drop-toggle { font-size: 0.85rem; padding: 5px 10px; }
+    .nav-drop, .nav-item-drop-right .nav-drop { left: 0; right: 0; max-height: 60vh; border-radius: 0 0 14px 14px; }
+    .nav-item.nav-open .nav-drop { display: block; }
     .section { padding: 64px 0; }
     .hero { padding: 64px 0 48px 0; }
     .quickstart { padding: 22px; }
@@ -945,9 +1078,11 @@ pre.code .num  { color: #fcd5b4; }
     .layer { grid-template-columns: 1fr; }
 }
 
-/* Wide-screen vertical rhythm (L2a1): as the fluid container grows past the old
-   1080px cap, section/hero/card paddings and stack gaps tighten toward their
-   floors so page height condenses along with the width gain. Floors equal the
+/* Wide-screen vertical rhythm (L2a1): the clamps are vw-driven, so padding
+   tightening engages from the 641px gate upward — not only once the fluid
+   container grows past the old 1080px cap; section/hero/card paddings and
+   stack gaps tighten toward their floors as the width gain accumulates.
+   Floors equal the
    <=640px mobile values and ceilings equal the desktop defaults, so nothing is
    ever looser than before; the 641px gate keeps phone rendering byte-identical. */
 @media (min-width: 641px) {
