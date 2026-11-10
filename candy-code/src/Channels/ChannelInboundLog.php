@@ -482,7 +482,7 @@ final class ChannelInboundLog
         $swept = \preg_replace('#(https?://[^\s"\'<>\#]*)\#[^\s"\'<>]*#', '$1#' . SecretRedactor::MARKER, $leaf);
         $leaf = \is_string($swept) ? $swept : $leaf;
 
-        $swept = \preg_replace('#([?&])(code|token|key|secret|password|passwd|pwd)=[^&#\s]*#i', '$1$2=' . SecretRedactor::MARKER, $leaf);
+        $swept = \preg_replace('~([?&])(code|token|key|secret|password|passwd|pwd)=[^&#\s]*~i', '$1$2=' . SecretRedactor::MARKER, $leaf);
 
         return \is_string($swept) ? $swept : $leaf;
     }
