@@ -309,6 +309,29 @@ final class WorktreeHandoffTest extends TestCase
         self::assertStringNotContainsString("evil\nrm", $printed);
     }
 
+    public function testABranchNameLeadingWithADashNeverReachesGit(): void
+    {
+        $repo = $this->makeRepo('dashlead');
+        // The wf-a5 NIT-1 close: a leading '-' passed the old character class
+        // and rode into `git merge-tree` as an option-lookalike argument. The
+        // gate now mirrors REF_SAFE's leading class and refuses it before any
+        // leg runs, exactly as the control-byte shape above already does.
+        $this->seedRegistry($repo, [
+            'd1' => ['branch' => '-evil', 'createdAt' => '2026-11-09T00:00:00+00:00'],
+        ]);
+
+        $report = WorktreeHandoff::inspect($repo, 'd1');
+
+        self::assertTrue($report['known']);
+        self::assertNull($report['ahead']);
+        self::assertSame([], $report['commits']);
+        self::assertSame('unavailable', $report['mergeVerdict']);
+        self::assertSame(
+            ['the registry names a branch this command will not run as a git argument'],
+            $report['problems'],
+        );
+    }
+
     public function testADeletedWorktreeDirectoryIsReportedRemovedButStillAppliable(): void
     {
         $repo = $this->makeRepo('removed');

@@ -8081,5 +8081,63 @@ final class DocFigureProseDriftTest extends TestCase
             'a docs/ subdirectory is missing from the index (disk: ' . \implode(', ', $diskDirs) . ')'
         );
     }
+
+    /**
+     * WORKFLOWS.md quotes two figures the engine owns: the lock-wait fallback
+     * (the YAML example and the prose sentence both say 60; the preview
+     * sentence says "the first 2 KiB"). Every one of them is derived here from
+     * {@see \SugarCraft\Code\Workflows\WorkflowEngine}'s constants and call
+     * sites, so a retune of the defaults lands as a red instead of a silently
+     * stale page.
+     */
+    public function testLockWaitAndCapturePreviewFiguresAreLive(): void
+    {
+        $engine = self::sourceOf('Workflows/WorkflowEngine.php');
+        $workflows = (string) \file_get_contents(\dirname(__DIR__, 2) . '/docs/WORKFLOWS.md');
+        $lockDefault = (new \ReflectionClass(\SugarCraft\Code\Workflows\WorkflowEngine::class))
+            ->getConstant('DEFAULT_STAGE_LOCK_WAIT_SECONDS');
+        $previewBytes = (new \ReflectionClass(\SugarCraft\Code\Workflows\WorkflowEngine::class))
+            ->getConstant('CAPTURE_PREVIEW_BYTES');
+        self::assertSame(
+            1,
+            \preg_match('/lockWaitSeconds: (\d+)\s+# optional; seconds to wait/', $workflows, $yaml),
+            'WORKFLOWS.md no longer carries the lockWaitSeconds example with its explanatory comment'
+        );
+        self::assertSame(
+            (int) $yaml[1],
+            (int) $lockDefault,
+            'the lockWaitSeconds YAML example drifted from DEFAULT_STAGE_LOCK_WAIT_SECONDS'
+        );
+        self::assertSame(
+            1,
+            \preg_match('/`lockWaitSeconds:` \(default (\d+);/', $workflows, $prose),
+            'WORKFLOWS.md no longer states the (default N; ...) prose for lockWaitSeconds'
+        );
+        self::assertSame(
+            (int) $prose[1],
+            (int) $lockDefault,
+            'the lockWaitSeconds prose default drifted from DEFAULT_STAGE_LOCK_WAIT_SECONDS'
+        );
+        self::assertSame(
+            1,
+            \preg_match('/\$task->lockWaitSeconds \?\? self::DEFAULT_STAGE_LOCK_WAIT_SECONDS/', $engine),
+            'the engine no longer falls back through the named constant (a literal would silently outdate the page)'
+        );
+        self::assertSame(
+            1,
+            \preg_match('/preview \(the first (\d+) KiB\)/', $workflows, $preview),
+            'WORKFLOWS.md no longer states the capture preview size in KiB'
+        );
+        self::assertSame(
+            (int) $preview[1],
+            \intdiv((int) $previewBytes, 1024),
+            'the preview sentence drifted from CAPTURE_PREVIEW_BYTES'
+        );
+        self::assertSame(
+            1,
+            \preg_match('/substr\(\$output, 0, self::CAPTURE_PREVIEW_BYTES\)/', $engine),
+            'the engine no longer slices the preview through the named constant'
+        );
+    }
 }
 

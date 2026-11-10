@@ -8,6 +8,8 @@ use SugarCraft\Code\Backend;
 use SugarCraft\Code\Permissions\ApprovalVerdict;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
+use SugarCraft\Code\Workflows\WorkflowEngine;
+use SugarCraft\Code\Workflows\WorkflowEngineInterface;
 
 /**
  * Manages hook loading and execution.
@@ -302,6 +304,29 @@ final class HookManager
     public function dispatcher(): HookDispatcher
     {
         return new HookDispatcher($this->registry);
+    }
+
+    /**
+     * Hand this launch's session dispatcher to its workflow engine — the TUI
+     * seat wires this right after the workspace closes, so `/workflow run`
+     * announces stage lifecycle through the same built-ins, user script hooks
+     * and permission gate the turn path rides. The dispatcher Shares the
+     * registry ({@see dispatcher()}), so hooks registered later are visible
+     * to the engine too.
+     *
+     * The CLI verb seat deliberately never calls this: a headless run keeps
+     * the engine's null=unarmed contract byte-for-byte. Null and any non-
+     * concrete engine — a test double of {@see WorkflowEngineInterface} —
+     * read the guard and return silently; the guard IS the contract for
+     * those callers, not a courtesy.
+     */
+    public function armWorkflow(?WorkflowEngineInterface $engine): void
+    {
+        if (!$engine instanceof WorkflowEngine) {
+            return;
+        }
+
+        $engine->bindHookDispatcher($this->dispatcher());
     }
 
     /**

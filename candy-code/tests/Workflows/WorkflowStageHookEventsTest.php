@@ -15,10 +15,12 @@ use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookDispatcher;
 use SugarCraft\Code\Hooks\HookEvent;
 use SugarCraft\Code\Hooks\HookInterface;
+use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Hooks\HookResult;
 use SugarCraft\Code\Workflows\WorkflowBuilder;
 use SugarCraft\Code\Workflows\WorkflowEngine;
+use SugarCraft\Code\Workflows\WorkflowEngineInterface;
 use SugarCraft\Code\Workflows\WorkflowRegistry;
 use SugarCraft\Code\Workflows\WorkflowResult;
 use SugarCraft\Code\Workflows\WorkflowStatus;
@@ -382,6 +384,27 @@ final class WorkflowStageHookEventsTest extends TestCase
         self::assertSame('failed', $terminal['status'], 'a Failed run IS a natural terminal');
     }
 
+    public function testARunThatThrowsBeforeDispatchingAnnouncesNothing(): void
+    {
+        $trace = new \ArrayObject();
+        $registry = new WorkflowRegistry();
+        $engine = $this->wf6Engine($registry, $this->wf6RecorderDispatcher($trace));
+
+        try {
+            $engine->run('never-registered-here');
+            self::fail('an unknown workflow must throw out of run() before any stage runs');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('never-registered-here', $e->getMessage());
+        }
+
+        self::assertSame(
+            [],
+            $trace->getArrayCopy(),
+            'C6 polarity: a run that throws before dispatching announces NOTHING — every announce '
+            . 'site rides the run body, never a finally, so an unstarted run cannot mint a terminal',
+        );
+    }
+
     public function testANestedIncludeAnnouncesItsOwnTerminalBeforeTheOuterOne(): void
     {
         $trace = new \ArrayObject();
@@ -429,6 +452,113 @@ final class WorkflowStageHookEventsTest extends TestCase
         self::assertStringStartsWith('wrap-', $outerTerminal['workflow'], 'the outer run announces under its own stamped id');
         self::assertSame(1, $innerTerminal['stages'], 'the inner run carried its own single row');
         self::assertSame(2, $outerTerminal['stages'], 'the outer run folded pre + body into two rows');
+    }
+
+    /**
+     * The TUI seat wires the session hook chain AFTER building the engine
+     * (the workspace closes first), so armWorkflow() must produce exactly
+     * the trace a constructor-armed twin produced.
+     */
+    public function testArmWorkflowBindsTheDispatcherOntoAnEngineBuiltUnarmed(): void
+    {
+        $trace = new \ArrayObject();
+        $hooks = new HookManager($this->wf6RecorderRegistry($trace));
+
+        $registry = new WorkflowRegistry();
+        $registry->register($this->wf6RegisterTwo($registry));
+        $engine = $this->wf6Engine($registry);
+        $hooks->armWorkflow($engine);
+
+        $result = $engine->run('two');
+
+        self::assertSame('completed', $result->status->value);
+        self::assertSame(
+            ['StageStarted', 'StageComplete', 'StageStarted', 'StageComplete', 'WorkflowComplete'],
+            $this->wf6EventNames($trace),
+            'a post-build arm announces exactly what a constructor arm announced',
+        );
+    }
+
+    /**
+     * The CLI verb seat, headless hosts, and every interface double ride the
+     * guard: null and non-concrete engines are refused silently, so no call
+     * ever reaches the double's throwing surface.
+     */
+    public function testArmWorkflowLeavesNullAndForeignEnginesAlone(): void
+    {
+        $hooks = new HookManager(new HookRegistry());
+
+        $hooks->armWorkflow(null);
+
+        $double = new class implements WorkflowEngineInterface {
+            public function run(string $workflowPath, array $context = [], ?CancellationToken $cancellation = null): WorkflowResult
+            {
+                throw new \LogicException('not reached here');
+            }
+
+            public function pause(string $workflowId): void
+            {
+                throw new \LogicException('not reached here');
+            }
+
+            public function resume(string $workflowId, ?CancellationToken $cancellation = null): WorkflowResult
+            {
+                throw new \LogicException('not reached here');
+            }
+
+            public function status(string $workflowId): WorkflowStatus
+            {
+                throw new \LogicException('not reached here');
+            }
+
+            public function listWorkflows(): array
+            {
+                throw new \LogicException('not reached here');
+            }
+        };
+
+        $hooks->armWorkflow($double);
+
+        // Reaching the end IS the assertion — a dropped instanceof guard
+        // fatals on bindHookDispatcher(), the method the double lacks.
+        self::addToAssertionCount(2);
+    }
+
+    /**
+     * Structural wiring pins: the chat() seat carries the session arm line,
+     * and the CLI verb seat never gains one — headless runs stay unarmed by
+     * owner law, so the two build sites must not drift back together.
+     */
+    public function testTheChatSeatArmsTheSessionEngineAndTheCliVerbDoesNot(): void
+    {
+        $bootstrap = \file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Bootstrap.php');
+        self::assertIsString($bootstrap);
+
+        $seatStart = \strpos($bootstrap, '$workspace = \SugarCraft\Code\Host\WorkspaceContext::new(');
+        self::assertIsInt($seatStart, 'the chat() workspace build site must keep its anchor');
+        $chainStart = \strpos($bootstrap, '->withService(', $seatStart);
+        self::assertIsInt($chainStart);
+        self::assertStringContainsString(
+            '$workspace->hooks?->armWorkflow($workspace->workflowEngine);',
+            \substr($bootstrap, $seatStart, $chainStart - $seatStart),
+            'the TUI seat hands the session hook chain to its workflow engine',
+        );
+
+        $subcommands = \file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Subcommands.php');
+        self::assertIsString($subcommands);
+        $verbStart = \strpos($subcommands, 'private static function workflowVerbEngine');
+        self::assertIsInt($verbStart, 'the CLI verb seat must keep its anchor');
+        $verbBody = \substr($subcommands, $verbStart, 900);
+        self::assertStringContainsString(
+            'bindEngineBackend($backend)',
+            $verbBody,
+            'the slice really reached the verb seat body',
+        );
+        self::assertStringNotContainsString(
+            'armWorkflow',
+            $verbBody,
+            'the CLI verb seat stays unarmed — a headless run announces nothing',
+        );
     }
 
     // -------------------------------------------------------------- helpers
@@ -497,6 +627,16 @@ final class WorkflowStageHookEventsTest extends TestCase
      */
     private function wf6RecorderDispatcher(\ArrayObject $trace): HookDispatcher
     {
+        return new HookDispatcher($this->wf6RecorderRegistry($trace));
+    }
+
+    /**
+     * The same four recording hooks over a bare registry — the shape a
+     * session HookManager is built on, so the armWorkflow() tests can wire
+     * the manager without re-spelling the recorders.
+     */
+    private function wf6RecorderRegistry(\ArrayObject $trace): HookRegistry
+    {
         $registry = new HookRegistry();
         foreach (
             [
@@ -539,7 +679,7 @@ final class WorkflowStageHookEventsTest extends TestCase
             });
         }
 
-        return new HookDispatcher($registry);
+        return $registry;
     }
 
     /** @return list<string> */

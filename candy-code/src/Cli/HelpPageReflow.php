@@ -272,12 +272,14 @@ final class HelpPageReflow
     private static function cellToByte(string $line, int $cells): int
     {
         $bytes = 0;
-        $seen = 0;
+        $width = 0;
+        $points = 0;
         $len = strlen($line);
-        while ($bytes < $len && $seen < $cells) {
-            $ch = mb_substr($line, $seen, 1, 'UTF-8');
+        while ($bytes < $len && $width < $cells) {
+            $ch = mb_substr($line, $points, 1, 'UTF-8');
             $bytes += strlen($ch);
-            $seen += Width::of($ch);
+            $points++;
+            $width += Width::of($ch);
         }
 
         return $bytes;

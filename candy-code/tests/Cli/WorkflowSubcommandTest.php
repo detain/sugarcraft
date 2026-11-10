@@ -187,6 +187,18 @@ final class WorkflowSubcommandTest extends TestCase
             (string) ($verifyRow['error'] ?? ''),
             'a plain rejection must not wear the escalation marker the exit-3 predicate keys on',
         );
+        // Shape-coincidence cure (w1b-r1 NIT-3): the four asserts above pass
+        // verbatim under a bind-less refusal (reviewer MUT-A), because a
+        // refusal is also exit 1 / failed / no marker. This one cannot: the
+        // stub answers EVERY reject-mode request with its fixed reply text,
+        // so the token surfaces only if a stage actually dials the router —
+        // an unbound executor never reaches it and the refusal carries no
+        // router payload at all.
+        self::assertStringContainsString(
+            'WRONG',
+            $out . $err,
+            'the reject-mode router reply must be present in the transcript, proving the verifier verdict came from a live call rather than a bind-less refusal',
+        );
     }
 
     public function testUnknownWorkflowNameIsRefusedWithExitOne(): void
