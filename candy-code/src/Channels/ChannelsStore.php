@@ -24,6 +24,11 @@ use SugarCraft\Core\Util\AtomicJsonFile;
  * quarantine ledger `BundleChannelLoader` consults, a set of entrypoint
  * paths already seen by an earlier launch, so a channel file new to this
  * machine is listed and held for one launch before any of its code executes.
+ * The second grown-in shape is the `channels` map addressed by
+ * {@see ChannelToolPolicyService}: per-channel tool policy with per-group and
+ * per-sender overrides, keyed by the registry's own `bundle|name` granularity.
+ * A policy layer reads the record fresh at every admission, so editing the
+ * file lands on the next run without a restart.
  */
 final class ChannelsStore
 {
