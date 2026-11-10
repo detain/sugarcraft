@@ -817,9 +817,12 @@ four `as:` shapes:
 
 - **Prior stages only.** A `from:` name must be a stage declared before the
   joining stage: self-references, forward references and unknown names are
-  refused at parse, because the registry sees the whole file. A `uses:` stage
-  cannot carry a join — v1 joins stages of the same file, not carried
-  workflows.
+  refused at parse, because the registry sees the whole file. That law is a
+  YAML-parse guarantee: a workflow composed in PHP through the builder never
+  passes the registry's name walk, so its joins rely on the shape gate and
+  the skip rules above — a forward or unknown source simply reads as missing.
+  A `uses:` stage cannot carry a join — v1 joins stages of the same file, not
+  carried workflows.
 - A source skipped by an unsatisfied `when:` clause records nothing, so it is
   simply absent: a partial join skips it, an all-skipped `from:` list answers
   per the table. That refusal is deliberately a run-time one — a parse cannot
