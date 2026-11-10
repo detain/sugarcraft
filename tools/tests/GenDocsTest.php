@@ -292,11 +292,11 @@ final class GenDocsTest extends TestCase
         $this->runScript($root);
 
         $this->assertStringContainsString(
-            '<a href="../#libraries">← All ' . $c['lib'] . ' libraries</a>',
+            '<a href="../libraries.html"><span aria-hidden="true">←</span> All ' . $c['lib'] . ' libraries</a>',
             $this->page($root, 'fixture-alpha')
         );
         $this->assertStringContainsString(
-            '<a href="../#apps">← All ' . $c['app'] . ' apps</a>',
+            '<a href="../apps.html"><span aria-hidden="true">←</span> All ' . $c['app'] . ' apps</a>',
             $this->page($root, 'fixture-appy')
         );
     }

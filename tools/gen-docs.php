@@ -579,13 +579,14 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
 
     // Breadcrumb carries the authoritative MATCHUPS split (39 libraries / 19
     // apps). The count is DERIVED from $nLib/$nApp (never hardcoded), and the
-    // same generator run patches index.html's counts to match (see
-    // patch_index_counts below), so the lib pages and the homepage can no longer
-    // drift apart on the number.
+    // same generator run patches the catalogue pages' counts to match (see
+    // patch_index_counts below), so the lib pages and the catalogue pages can
+    // no longer drift apart on the number. Since L2b the target is the full
+    // catalogue page (../libraries.html / ../apps.html), not an index anchor.
     $plural = $type === 'app' ? 'apps' : 'libraries';
     $count  = $type === 'app' ? $nApp : $nLib;
     $breadcrumb = '<p style="color: var(--ink-2); margin: 0 0 16px 0;">'
-        . '<a href="../#' . $plural . '"><span aria-hidden="true">←</span> All ' . $count . ' ' . $plural . '</a></p>';
+        . '<a href="../' . $plural . '.html"><span aria-hidden="true">←</span> All ' . $count . ' ' . $plural . '</a></p>';
 
     // Decorative emoji is hidden from assistive tech — the heading's accessible
     // name is the package name already (MD-9, sugar-docs-reviews-1104 root drain).
