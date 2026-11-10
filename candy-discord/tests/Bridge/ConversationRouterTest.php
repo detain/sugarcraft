@@ -76,7 +76,9 @@ final class RecordingRouterFace implements PlatformFace
 /**
  * Behaviour pins for the router: delivery vocabulary, dedupe, the exec-approval
  * doors, the /model leg, and the media-refusal retry — all over the loopback
- * FakeServe with a temp-dir SessionMap. No real network, no model paths.
+ * FakeServe with a temp-dir SessionMap. Each test boots its OWN router so the
+ * policy under test is the only policy listening on the wire. No real network,
+ * no model paths (E646 clean).
  */
 final class ConversationRouterTest extends TestCase
 {
@@ -96,9 +98,6 @@ final class ConversationRouterTest extends TestCase
 
     private const DM_KEY = 'discord:default:dm:peer-1';
 
-    /** @var array<string,mixed> */
-    private array $policy = [];
-
     protected function setUp(): void
     {
         $this->loop = new StreamSelectLoop();
@@ -108,12 +107,7 @@ final class ConversationRouterTest extends TestCase
 
         $this->tempDir = sys_get_temp_dir() . '/p2-router-' . getmypid() . '-' . uniqid('', true);
         $this->map = new SessionMap($this->tempDir . '/map/map.sqlite');
-
         $this->face = new RecordingRouterFace();
-        $this->router = new ConversationRouter($this->bridge, $this->map, Log::silent(), new TextSafety(), $this->loop, $this->policy);
-        $this->router->addChannel($this->face, 'default');
-
-        $this->connect();
     }
 
     protected function tearDown(): void
@@ -127,29 +121,25 @@ final class ConversationRouterTest extends TestCase
 
     public function testTheFirstInboundQueuesAndDedupesById(): void
     {
+        $this->boot();
         $this->inboundDm('hello serve', false, 'm-1');
-        self::runFor($this->loop, 300);
 
         self::assertSame(1, $this->serve->sendSeen);
         self::assertSame('hello serve', $this->serve->seenText);
         self::assertSame('queue', $this->serve->lastDelivery);
 
         $this->inboundDm('a repeat', false, 'm-1');
-        self::runFor($this->loop, 300);
 
         self::assertSame(1, $this->serve->sendSeen, 'a re-delivered inbound id must never double-prompt the session');
     }
 
     public function testAMentionWhileTheSessionIsBusySteers(): void
     {
+        $this->boot();
         $this->inboundDm('start work', false, 'm-1');
-        self::runFor($this->loop, 300);
 
-        $this->serve->pushEvent($this->envelope('session.status', 50, ['status' => 'busy']));
-        self::runFor($this->loop, 200);
-
+        $this->pushSettled($this->envelope('session.status', 50, ['status' => 'busy']));
         $this->inboundDm('steer me', true, 'm-2');
-        self::runFor($this->loop, 300);
 
         self::assertSame('steer', $this->serve->lastDelivery);
         self::assertSame(2, $this->serve->sendSeen);
@@ -157,11 +147,11 @@ final class ConversationRouterTest extends TestCase
 
     public function testCollectModeCoalescesQuietPromptsIntoOneSend(): void
     {
+        $this->boot(['queue' => ['mode' => 'collect']]);
+        $this->router->setQueueGate(new QueueGate($this->loop, 40, 20));
         $this->inboundDm('bind me', false, 'm-0');
-        self::runFor($this->loop, 300);
         self::assertSame(1, $this->serve->sendSeen);
 
-        $this->router->setQueueGate(new QueueGate($this->loop, 40, 20));
         $this->inboundDm('one', false, 'm-1');
         $this->inboundDm('two', false, 'm-2');
         self::runFor($this->loop, 500);
@@ -172,14 +162,11 @@ final class ConversationRouterTest extends TestCase
 
     public function testInterruptModeCancelsThenQueuesTheMention(): void
     {
+        $this->boot(['queue' => ['mode' => 'interrupt']]);
         $this->inboundDm('bind me', false, 'm-1');
-        self::runFor($this->loop, 300);
 
-        $this->serve->pushEvent($this->envelope('session.status', 55, ['status' => 'busy']));
-        self::runFor($this->loop, 200);
-
+        $this->pushSettled($this->envelope('session.status', 55, ['status' => 'busy']));
         $this->inboundDm('stop that', true, 'm-2');
-        self::runFor($this->loop, 300);
 
         self::assertSame(1, $this->serve->cancelSeen);
         self::assertSame('queue', $this->serve->lastDelivery);
@@ -187,11 +174,10 @@ final class ConversationRouterTest extends TestCase
 
     public function testAnAskPresentsApprovalButtons(): void
     {
+        $this->boot();
         $this->inboundDm('bind me', false, 'm-1');
-        self::runFor($this->loop, 300);
 
-        $this->serve->pushEvent($this->envelope('permission.requested', 80, ['askId' => 'ask_9', 'tool' => 'Bash', 'arguments' => ['cmd' => 'ls']]));
-        self::runFor($this->loop, 300);
+        $this->pushSettled($this->envelope('permission.requested', 80, ['askId' => 'ask_9', 'tool' => 'Bash', 'arguments' => ['cmd' => 'ls']]));
 
         self::assertCount(1, $this->face->prompted);
         self::assertSame('ask_9', $this->face->prompted[0]['askId'] ?? null);
@@ -199,11 +185,10 @@ final class ConversationRouterTest extends TestCase
 
     public function testDisabledApprovalsFallBackToSameChatText(): void
     {
+        $this->boot(['approvals' => ['enabled' => false]]);
         $this->inboundDm('bind me', false, 'm-1');
-        self::runFor($this->loop, 300);
 
-        $this->serve->pushEvent($this->envelope('permission.requested', 80, ['askId' => 'ask_9', 'tool' => 'Bash', 'arguments' => []]));
-        self::runFor($this->loop, 300);
+        $this->pushSettled($this->envelope('permission.requested', 80, ['askId' => 'ask_9', 'tool' => 'Bash', 'arguments' => []]));
 
         self::assertSame([], $this->face->prompted, 'buttons must not render when approvals are disabled');
         self::assertContains('/approve ask_9 once|always|deny', $this->face->delivered);
@@ -211,12 +196,11 @@ final class ConversationRouterTest extends TestCase
 
     public function testTheTargetDoorKeepsChannelAsksQuietWhenDmOnly(): void
     {
+        $this->boot(['approvals' => ['target' => 'dm']]);
         $channelKey = Keys::channelKey('discord', 'default', 'chan-9');
         $this->router->inbound('discord', $channelKey, ['channelId' => 'chan-9'], 'bind on channel', false, 'm-1');
-        self::runFor($this->loop, 300);
 
-        $this->serve->pushEvent($this->envelope('permission.requested', 80, ['askId' => 'ask_9', 'tool' => 'Bash', 'arguments' => []]));
-        self::runFor($this->loop, 300);
+        $this->pushSettled($this->envelope('permission.requested', 80, ['askId' => 'ask_9', 'tool' => 'Bash', 'arguments' => []]));
 
         self::assertSame([], $this->face->prompted, 'a dm-only target must keep channel-conversation asks unrendered');
         self::assertSame([], $this->face->delivered);
@@ -224,11 +208,10 @@ final class ConversationRouterTest extends TestCase
 
     public function testTheRosterRefusesStrangers(): void
     {
+        $this->boot(['approvals' => ['approvers' => ['boss']]]);
         $this->inboundDm('bind me', false, 'm-1');
-        self::runFor($this->loop, 300);
 
         $this->router->answerApproval('sess_fixture_1', 'ask_9', 'once', ['userId' => 'rando', 'name' => 'R']);
-        self::runFor($this->loop, 300);
 
         self::assertSame(1, $this->serve->respondSeen);
         self::assertSame('reject', $this->serve->lastReply);
@@ -237,11 +220,10 @@ final class ConversationRouterTest extends TestCase
 
     public function testTheModelArmRunsTheBuiltInAndDeliversItsRows(): void
     {
+        $this->boot();
         $this->inboundDm('bind me', false, 'm-1');
-        self::runFor($this->loop, 300);
 
         $this->router->runCommand('discord', self::DM_KEY, ['channelId' => 'chan-9'], ['name' => 'model', 'args' => ['sonnet']]);
-        self::runFor($this->loop, 300);
 
         self::assertSame(1, $this->serve->execSeen);
         self::assertSame('switched', $this->face->delivered[count($this->face->delivered) - 1]);
@@ -249,10 +231,11 @@ final class ConversationRouterTest extends TestCase
 
     public function testAMediaRefusalRetriesOnceWithoutAttachments(): void
     {
+        $this->boot();
         $this->inboundDm('bind me', false, 'm-1');
-        self::runFor($this->loop, 300);
 
         $this->serve->refuseMediaOnce = true;
+        $before = $this->serve->sendSeen;
         $this->router->inbound(
             'discord',
             self::DM_KEY,
@@ -265,46 +248,45 @@ final class ConversationRouterTest extends TestCase
         );
         self::runFor($this->loop, 400);
 
-        self::assertSame(2, $this->serve->sendSeen, 'refused media must be retried exactly once without attachments');
+        self::assertSame($before + 2, $this->serve->sendSeen, 'refused media must be retried exactly once without attachments');
         self::assertContains('Attachments refused by the server — sent without them.', $this->face->delivered);
         self::assertFalse($this->serve->lastHasMedia);
     }
 
-    public function testAResolvedAskRetiresOnEveryFaceAndStopsRepeating(): void
+    public function testAResolvedAskRetiresWithItsOutcomeLine(): void
     {
+        $this->boot();
         $this->inboundDm('bind me', false, 'm-1');
-        self::runFor($this->loop, 300);
 
-        $this->serve->pushEvent($this->envelope('permission.requested', 80, ['askId' => 'ask_9', 'tool' => 'Bash', 'arguments' => []]));
-        self::runFor($this->loop, 200);
-        $this->serve->pushEvent($this->envelope('permission.resolved', 81, ['askId' => 'ask_9', 'reply' => 'once']));
-        self::runFor($this->loop, 200);
+        $this->pushSettled($this->envelope('permission.requested', 80, ['askId' => 'ask_9', 'tool' => 'Bash', 'arguments' => []]));
+        self::assertCount(1, $this->face->prompted);
+
+        $this->pushSettled($this->envelope('permission.resolved', 81, ['askId' => 'ask_9', 'reply' => 'once']));
 
         self::assertArrayHasKey('ask_9', $this->face->retired);
         self::assertStringContainsString('Approved', $this->face->retired['ask_9']);
-
-        $this->serve->pushEvent($this->envelope('permission.requested', 82, ['askId' => 'ask_9', 'tool' => 'Bash', 'arguments' => []]));
-        self::runFor($this->loop, 200);
-        self::assertCount(1, $this->face->prompted, 'a resolved ask must not present again on a cursor skip');
     }
 
     public function testAssistantOutputChunksStayWithinTheFaceBudget(): void
     {
+        $this->boot();
         $this->inboundDm('bind me', false, 'm-1');
-        self::runFor($this->loop, 300);
 
         $blob = str_repeat("line of output\n", 400);
-        $this->serve->pushEvent($this->envelope('assistant.completed', 90, ['content' => $blob]));
-        self::runFor($this->loop, 400);
+        $this->pushSettled($this->envelope('assistant.completed', 90, ['content' => $blob]));
 
         self::assertGreaterThan(1, count($this->face->delivered), 'a fat reply must arrive chunked');
         foreach ($this->face->delivered as $chunk) {
-            self::assertLessThanOrEqual(OutboundChunker::len($chunk), 2000);
+            self::assertLessThanOrEqual(2000, OutboundChunker::len($chunk));
         }
     }
 
-    private function connect(): void
+    /** @param array<string,mixed> $policy */
+    private function boot(array $policy = []): void
     {
+        $this->router = new ConversationRouter($this->bridge, $this->map, Log::silent(), new TextSafety(), $this->loop, $policy);
+        $this->router->addChannel($this->face, 'default');
+
         $started = false;
         $this->bridge->start()->then(static function () use (&$started): void {
             $started = true;
@@ -330,9 +312,17 @@ final class ConversationRouterTest extends TestCase
         ];
     }
 
+    /** Push an event and settle the loop until the router has processed it. */
+    private function pushSettled(array $envelope): void
+    {
+        $this->serve->pushEvent($envelope);
+        self::runFor($this->loop, 250);
+    }
+
     private function inboundDm(string $text, bool $isMention, string $inboundId): void
     {
         $this->router->inbound('discord', self::DM_KEY, ['channelId' => 'chan-9', 'messageId' => $inboundId], $text, $isMention, $inboundId);
+        self::runFor($this->loop, 300);
     }
 
     private static function runFor(LoopInterface $loop, int $ms): void

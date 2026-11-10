@@ -6,6 +6,9 @@
  * relative hop from here: candy-discord/tests → repo root → candy-code).
  * The runtime bundle never takes this hop; its autoload.php knows only its
  * own subtree.
+ *
+ * The Tests\ subtree lives beside this file, not under src/, so it gets its
+ * own PSR-4 map here — the runtime autoload deliberately never sees it.
  */
 
 declare(strict_types=1);
@@ -17,3 +20,15 @@ if (!\is_file($host)) {
 }
 require_once $host;
 require_once __DIR__ . '/../src/autoload.php';
+
+\spl_autoload_register(static function (string $class): void {
+    $prefix = 'CandyCode\\Bundles\\Discord\\Tests\\';
+    if (!\str_starts_with($class, $prefix)) {
+        return;
+    }
+    $relative = \substr($class, \strlen($prefix));
+    $file = __DIR__ . '/' . \str_replace('\\', '/', $relative) . '.php';
+    if (\is_file($file)) {
+        require_once $file;
+    }
+});

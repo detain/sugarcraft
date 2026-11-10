@@ -142,7 +142,7 @@ final class ServeBridgeTest extends TestCase
 
         self::assertInstanceOf(\Throwable::class, $error);
         self::assertStringContainsString('discord-bundle:', $error->getMessage());
-        self::assertStringContainsString('not_connected', $error->getMessage());
+        self::assertStringContainsString('not connected', $error->getMessage());
     }
 
     public function testTheSocketDropReconnectsAndReFollowsFromTheCursor(): void
