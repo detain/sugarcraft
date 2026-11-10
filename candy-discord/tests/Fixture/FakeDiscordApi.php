@@ -20,6 +20,14 @@ final class FakeDiscordApi
     /** @var list<array{method:string,path:string,body:array<string,mixed>}> */
     public array $calls = [];
 
+    /**
+     * One-shot failure knob: when set, the NEXT request is answered with a
+     * real status line for that code and the knob resets. The status arms in
+     * Rest must be driven by LIVE statuses, not by transport errors, or a
+     * green test proves nothing about the react/http rejection default.
+     */
+    public ?int $failNextWith = null;
+
     private ?SocketServer $server = null;
 
     public function __construct(private readonly LoopInterface $loop) {}
@@ -83,11 +91,27 @@ final class FakeDiscordApi
                 'body' => \is_array($decoded) ? $decoded : [],
             ];
             $payload = $this->respond($method, $path);
-            $connection->end(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
-                . \strlen($payload) . "\r\nConnection: close\r\n\r\n" . $payload
-            );
+            if ($this->failNextWith !== null) {
+                $status = $this->failNextWith;
+                $this->failNextWith = null;
+                $connection->end($this->frame($status, '{}'));
+
+                return;
+            }
+            $connection->end($this->frame(200, $payload));
         });
+    }
+
+    private function frame(int $status, string $body): string
+    {
+        $reason = match ($status) {
+            201 => 'Created',
+            404 => 'Not Found',
+            default => 'OK',
+        };
+
+        return "HTTP/1.1 {$status} {$reason}\r\nContent-Type: application/json\r\nContent-Length: "
+            . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
     }
 
     private function respond(string $method, string $path): string

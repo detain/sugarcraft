@@ -30,7 +30,14 @@ final class Rest
         $this->http = (new Browser())
             ->withBase(null)
             ->withTimeout(20.0)
-            ->withFollowRedirects(false);
+            ->withFollowRedirects(false)
+            // react/http defaults to REJECTING 4xx/5xx before a handler ever
+            // sees the Response — that would kill the 429 rate-limit signal
+            // (F3: every status arm below arrived as an opaque code-0
+            // transport error) and turn Retry-After into prose in an
+            // exception. Status is OUR decision to make, so the wire stays
+            // honest down here.
+            ->withRejectErrorResponse(false);
     }
 
     /** @return \React\Promise\PromiseInterface<array<string,mixed>> */
