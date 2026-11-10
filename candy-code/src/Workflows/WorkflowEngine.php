@@ -2149,8 +2149,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // with: is the inner run's START context, interpolated in the OUTER
         // scope — {{b.output}} in a `with:` value reads the outer's settled
         // stages. Nothing flows back out: inner stage names never enter the
-        // outer context (v1; the outer reads the inner's answer through
-        // this stage's own capture, like any other stage's output).
+        // outer context (v1; this stage's own capture carries the folded
+        // "name: status" rows only, never the inner agents' answer text).
         $innerContext = [];
 
         foreach (($stage['with'] ?? []) as $key => $value) {
