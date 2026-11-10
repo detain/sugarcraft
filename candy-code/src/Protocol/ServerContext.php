@@ -73,6 +73,16 @@ final class ServerContext
     private bool $outboundWebhooksResolved = false;
 
     /**
+     * code-chat P1 step 5 (GAP-3): the plugin-channel registry, resolved once
+     * from the workspace service table on the first heard session event (the
+     * same laziness as {@see $outboundWebhooks}). Null is dark — no channel
+     * booted, no subscriber delivery.
+     */
+    private ?\SugarCraft\Code\Channels\ChannelRegistry $channelRegistry = null;
+
+    private bool $channelRegistryResolved = false;
+
+    /**
      * C-AGT-5.f: per-session turn bookkeeping for the outbound
      * `turn.completed` delivery — the served event stream does not carry a
      * turn's duration or tool-call total (TURN_STARTED gives the start,
@@ -423,6 +433,12 @@ final class ServerContext
                 // operator may subscribe to — `heard()` began switching on
                 // turn.completed only at C-WEB-5.d, for the push trigger.
                 $this->announceOutbound($sessionId, $event);
+                // code-chat P1 step 5 (GAP-3): the third call of this feed —
+                // the text-carrying in-process seam for plugin subscriber
+                // channels. Zero new protocol methods or events: the envelope
+                // is the one the wire already carries, and the JSON law is
+                // enforced at delivery inside the registry.
+                $this->feedSubscribers($sessionId, $event);
             },
             // CWPD-9: the feed swallows fan-out faults to keep its listener;
             // the cause still reaches the server log through this sink.
@@ -484,6 +500,28 @@ final class ServerContext
                 ));
                 break;
         }
+    }
+
+    /**
+     * code-chat P1 step 5 (GAP-3): deliver one served session event to the
+     * trusted plugin subscriber channels, text-carrying envelopes included.
+     * The registry's handleEvent enforces the JSON round-trip law BEFORE any
+     * delivery and refuses (with a fault line) what cannot serialize; dark
+     * when no registry booted. This seam adds zero new protocol methods or
+     * events — the wire protocol is untouched (gen-protocol-schema --check
+     * stays green by construction).
+     */
+    private function feedSubscribers(string $sessionId, SessionEvent $event): void
+    {
+        if (!$this->channelRegistryResolved) {
+            $this->channelRegistryResolved = true;
+            $service = $this->hub->workspace()
+                ->service(\SugarCraft\Code\Channels\ChannelRegistry::class);
+            $this->channelRegistry = $service instanceof \SugarCraft\Code\Channels\ChannelRegistry
+                ? $service
+                : null;
+        }
+        $this->channelRegistry?->handleEvent($sessionId, $event, $this->log);
     }
 
     /**
