@@ -231,6 +231,58 @@ was written could run a stage its condition once refused.
 `when:` is stage-level in v1; there is no per-task clause inside a `tasks:`
 list. Give each conditional step its own stage.
 
+### `loop:` re-runs a stage until a clause holds
+
+`loop:` on a stage — or `->loop(['max' => N, 'until' => $clause])` on the PHP
+builder — re-dispatches the stage until its `until:` clause holds, at most
+`max:` rounds. Every round sees `{{round}}`, a 1-based number the engine
+injects into the stage's interpolation while the round is running, so a prompt
+can say what has already been tried:
+
+```yaml
+  - name: fix-tests
+    agent: coder
+    prompt: make the suite green, round {{round}}
+    loop:
+      max: 4
+      until:
+        stage: fix-tests
+        contains: PASS
+```
+
+`until:` is exactly the `when:` mini-grammar — same leaves, same combinators,
+validated the same way at load. And it refuses rather than coerces, like every
+other key here: a `loop:` that is not a map, a map with any key besides `max`
+and `until`, a missing half, a `max` that is not a whole number of at least 1,
+or a broken clause each fails the load naming the offender. `max` counts
+rounds, not seconds: it is a bounded iteration and holds no timer.
+
+The clause reads the stage's most recent round — that round's output is what
+`{{stage.output}}` holds while the stage itself is being judged, so the usual
+spelling tests the stage's own result. A round is a full dispatch: every
+`tasks:` entry runs, the hooks fire around it, tokens and cost are billed each
+time. A round that fails mid-way does not stop the loop — the clause is false
+for it — and the next round gets the stage a chance to rescue itself. If the
+final round fails too, the stage settles as its normal failure and the run's
+fail-fast law takes over.
+
+A stage that uses all `max:` rounds with the clause still unsatisfied
+**completes**: the last round's result is the stage's recorded state, nothing
+more. `loop:` means "try up to N times and move on", not "fail if it never
+happens" — the verdict of what was achieved belongs to the output and to the
+stages downstream. Only the final round is recorded: the cache door and the
+pause file see one row per stage, the last round's, and round numbers are
+never persisted. That means a resumed run re-runs a looped stage from round
+1 — whole-stage granularity, honest and disclosed — rather than replaying a
+half-loop. A cancel that lands mid-loop ends the loop immediately and the row
+settles `cancelled` like any in-flight stage's.
+
+`loop:` is stage-only in v1 in the narrow sense too: a `when:` guard can still
+skip the whole thing, a `cache:` hit short-circuits every round (the door sits
+ahead of the loop), and attaching a `loop:` to a `parallel:`, `pipeline:`, or
+verification stage refuses the load. Give each repeating step its own plain
+stage.
+
 ### `outputSchema` gives a stage a structured verdict
 
 `outputSchema:` on a stage (or on one agent of a parallel stage, or on one task
@@ -560,6 +612,11 @@ of these rather than loading a workflow that quietly does less:
   nested past the two-layer ceiling, a list that is not non-empty, a
   non-string value, or a broken `matches:` PCRE — each fails the load naming
   the offender, so a half-meaningless guard never reaches a run.
+- `loop:` outside the closed pair: `loop:` not a map, a map carrying any key
+  besides `max` and `until` or missing either half, a `max:` that is not a
+  whole number of at least 1, an `until:` outside the `when:` grammar, or a
+  `loop:` attached to a `parallel:`, `pipeline:`, or verification stage
+  (stage-only in v1) — each fails the load naming the offender.
 - `outputSchema:` is not a schema-shaped value: a sequence, a bare number,
   malformed inline JSON, or a path that names no readable file (`WorkflowLoadException`
   at load; the same refusals fire at `build()` for `->outputSchema('…')` strings),
