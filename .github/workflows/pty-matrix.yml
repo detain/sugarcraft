@@ -53,7 +53,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:
           php-version: ${{ matrix.php }}
           extensions: ${{ env.PHP_EXTENSIONS }}
@@ -124,7 +124,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:
           php-version: '8.3'
           extensions: ${{ env.PHP_EXTENSIONS }}
