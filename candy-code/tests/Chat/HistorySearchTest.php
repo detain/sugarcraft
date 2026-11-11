@@ -16,6 +16,7 @@ use SugarCraft\Code\Tui\HistorySearch;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\PasteMsg;
+use SugarCraft\Core\Util\Width;
 
 /**
  * plan_comparison TUI-2: the Ctrl+G reverse history search — the widget's
@@ -294,6 +295,23 @@ final class HistorySearchTest extends TestCase
         } finally {
             @\rmdir($root);
         }
+    }
+
+    /**
+     * m18 fold (cc-fix-1111): fit()'s cut is the canonical Width cluster
+     * slice, so a grapheme straddling the budget is dropped WHOLE. The
+     * replaced per-codepoint loop kept a lone regional indicator — half a
+     * flag — dangling before the ellipsis.
+     */
+    public function testFitCutsOnClusterBoundariesNeverLeavingHalfAFlag(): void
+    {
+        $fit = new \ReflectionMethod(HistorySearch::class, 'fit');
+        $fit->setAccessible(true);
+
+        $cut = (string) $fit->invoke(null, "\u{1F1FA}\u{1F1F8} US", 2);
+
+        $this->assertSame('…', $cut, 'the flag pair is one cluster: dropped whole, only the ellipsis remains');
+        $this->assertSame(1, Width::string($cut));
     }
 
     private function ctrlG(): KeyMsg

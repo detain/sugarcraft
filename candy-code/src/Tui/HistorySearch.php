@@ -14,7 +14,6 @@ use SugarCraft\Style\Style;
 
 use function array_reverse;
 use function count;
-use function mb_str_split;
 use function mb_stripos;
 use function mb_strlen;
 use function mb_substr;
@@ -267,14 +266,9 @@ final class HistorySearch
             return '';
         }
         if (Width::string($text) > $width) {
-            $out = '';
-            foreach (mb_str_split($text) as $char) {
-                if (Width::string($out . $char) > $width - 1) {
-                    break;
-                }
-                $out .= $char;
-            }
-            $text = $out . '…';
+            // Canonical cluster walk (m18 fold, cc-fix-1111): replaces an O(n^2)
+            // per-codepoint re-measure loop; see DirectoryPicker::fit for the pair.
+            $text = Width::truncate($text, $width - 1) . '…';
         }
 
         return $text;

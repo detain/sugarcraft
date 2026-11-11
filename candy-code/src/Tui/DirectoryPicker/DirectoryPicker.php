@@ -438,14 +438,10 @@ final class DirectoryPicker
             return '';
         }
         if (Width::string($text) > $width) {
-            $out = '';
-            foreach (\mb_str_split($text) as $char) {
-                if (Width::string($out . $char) > $width - 1) {
-                    break;
-                }
-                $out .= $char;
-            }
-            $text = $out . '…';
+            // Canonical cluster walk (m18 fold, cc-fix-1111): replaces an O(n^2)
+            // per-codepoint re-measure loop; a cluster straddling the budget is
+            // dropped whole instead of leaving a dangling flag/selector fragment.
+            $text = Width::truncate($text, $width - 1) . '…';
         }
 
         return $text . \str_repeat(' ', \max(0, $width - Width::string($text)));
@@ -461,16 +457,11 @@ final class DirectoryPicker
         if (Width::string($text) <= $width) {
             return $text;
         }
-        $chars = \mb_str_split($text);
-        $out = '';
-        for ($i = \count($chars) - 1; $i >= 0; $i--) {
-            if (Width::string($chars[$i] . $out) > $width - 1) {
-                break;
-            }
-            $out = $chars[$i] . $out;
-        }
-
-        return '…' . $out;
+        // Canonical cell-slice tail (m18 fold, cc-fix-1111): the longest suffix
+        // that fits width-1 cells is exactly what dropAnsi keeps after skipping
+        // the leading total-(width-1) cells; a straddling wide cluster is dropped
+        // whole, so the tail always starts on a clean cell boundary.
+        return '…' . Width::dropAnsi($text, Width::string($text) - ($width - 1));
     }
 
     private function with(

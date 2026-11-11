@@ -187,4 +187,39 @@ final class DirectoryPickerTest extends TestCase
             self::assertLessThanOrEqual($cols, Width::string((string) \preg_replace('/\e\[[0-9;]*m/', '', $line)), 'frame line wider than the terminal');
         }
     }
+
+    /**
+     * m18 fold (cc-fix-1111): fit()'s cut is the canonical Width cluster
+     * slice, so a grapheme straddling the budget is dropped WHOLE. The
+     * replaced per-codepoint loop kept a lone regional indicator — half a
+     * flag — dangling before the ellipsis, and re-measured a row wider than
+     * its budget in that shape.
+     */
+    public function testFitDropsAWideClusterStraddlingTheBudgetWhole(): void
+    {
+        $fit = new \ReflectionMethod(DirectoryPicker::class, 'fit');
+        $fit->setAccessible(true);
+
+        $row = (string) $fit->invoke(null, "\u{1F1FA}\u{1F1F8} US", 2);
+
+        self::assertSame('… ', $row, 'the flag pair is one cluster: dropped whole, ellipsis then pad fill exactly 2 cells');
+        self::assertSame(2, Width::string($row), 'a fitted row never exceeds its cell budget');
+    }
+
+    /**
+     * m18 fold: fitLeft()'s tail is Width::dropAnsi and starts on a clean
+     * cluster boundary. The replaced codepoint walk from the right could
+     * lead the tail with an orphaned U+FE0F once its emoji base fell out of
+     * the budget.
+     */
+    public function testFitLeftKeepsATailStartingOnACleanClusterBoundary(): void
+    {
+        $fitLeft = new \ReflectionMethod(DirectoryPicker::class, 'fitLeft');
+        $fitLeft->setAccessible(true);
+
+        $tail = (string) $fitLeft->invoke(null, "a\u{2764}\u{FE0F}b\u{2764}c", 4);
+
+        self::assertSame("…b\u{2764}c", $tail, 'the heart+VS16 cluster is dropped whole: no orphan selector right after the ellipsis');
+        self::assertLessThanOrEqual(4, Width::string($tail));
+    }
 }
