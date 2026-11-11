@@ -163,11 +163,17 @@ export const usePushStore = defineStore('push', () => {
       return false
     }
     problem.value = null
+    // Hoisted above the try: the catch below must be able to NAME the
+    // subscription even when the throw lands mid-mint. The header law —
+    // the browser row is torn down after a refusal — covers the throw
+    // edge, not only the explicit-answer edge, and it cannot hold if the
+    // handle lives only inside the block that just failed.
+    let subscription: PushSubscription | null = null
     try {
       const worker = await registration()
       const { publicKey } = await connection.request('push.vapidKey', {})
       const existing = await worker.pushManager.getSubscription()
-      const subscription = existing ?? await worker.pushManager.subscribe({
+      subscription = existing ?? await worker.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: base64UrlToBytes(publicKey),
       })
@@ -195,9 +201,17 @@ export const usePushStore = defineStore('push', () => {
       active.value = true
       return true
     } catch {
-      // A throw between subscribe and the stored answer leaves the browser
+      // A throw between the mint and the stored answer leaves the browser
       // holding a row the server never accepted: tear it down for the same
-      // bearer-hygiene reason as the explicit refusal above.
+      // bearer-hygiene reason as the explicit refusal above. Fail-soft on
+      // purpose — a rejection escaping here would skip setConsent's rollback,
+      // leaving persisted consent ON over a dead handshake, which is worse
+      // than a bounded orphan (the server row self-heals via the core
+      // 404/410 drop, C-WEB-5.d). A null handle means the throw landed
+      // before any mint, so there is nothing to tear down.
+      if (subscription !== null) {
+        await subscription.unsubscribe().catch(() => undefined)
+      }
       problem.value = 'refused'
       return false
     }

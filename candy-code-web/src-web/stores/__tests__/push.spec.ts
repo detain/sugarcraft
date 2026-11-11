@@ -62,6 +62,9 @@ interface Recorder {
   methods: string[]
   vapidPublicKey: string
   subscribedResult: { subscribed: boolean; keyHash: string }
+  /** Arm the dial mock to THROW (not return) on this RPC name — the
+   *  F-n44 pins need the throw-after-mint edge, not a refusal answer. */
+  throwOn: string | null
 }
 
 const recorder = vi.hoisted(() => {
@@ -71,6 +74,7 @@ const recorder = vi.hoisted(() => {
     methods: ['push.vapidKey', 'push.subscribe', 'push.unsubscribe'] as string[],
     vapidPublicKey: '',
     subscribedResult: { subscribed: true, keyHash: 'kh-test' },
+    throwOn: null as string | null,
   } as Recorder
 })
 
@@ -86,6 +90,7 @@ vi.mock('../connection', async () => {
     request: async (method: string, params: Record<string, unknown>) => {
       recorder.calls.push(method)
       recorder.rpc.push({ method, params })
+      if (method === recorder.throwOn) throw new Error('push.spec armed throw: ' + method)
       if (method === 'push.vapidKey') return { publicKey: recorder.vapidPublicKey }
       if (method === 'push.subscribe') return recorder.subscribedResult
       if (method === 'push.unsubscribe') return { unsubscribed: true }
@@ -102,16 +107,24 @@ let runtimeCalls: string[] = []
 let delivered = false
 let registered = false
 let registerArgs: { url: string; options?: { type?: string } } | null = null
+/** When true the fake subscription's unsubscribe() REJECTS after marking —
+ *  the F-n44 teardown-fails edge (the fix must stay fail-soft). */
+let unsubscribeRejects = false
 
 function installPushRuntime(): void {
   runtimeCalls = []
   delivered = false
   registered = false
   registerArgs = null
+  unsubscribeRejects = false
   const subscription = {
     endpoint: ENDPOINT,
     toJSON: () => ({ endpoint: ENDPOINT, keys: { p256dh: PKEY, auth: AKEY } }),
-    unsubscribe: async () => { mark('browser-unsubscribe'); return true },
+    unsubscribe: async () => {
+      mark('browser-unsubscribe')
+      if (unsubscribeRejects) throw new Error('push.spec armed teardown failure')
+      return true
+    },
   }
   const pushManager = {
     getSubscription: async () => (delivered ? subscription : null),
@@ -164,6 +177,7 @@ beforeEach(() => {
   recorder.methods = ['push.vapidKey', 'push.subscribe', 'push.unsubscribe']
   recorder.vapidPublicKey = fakeVapidPublicKey()
   recorder.subscribedResult = { subscribed: true, keyHash: 'kh-test' }
+  recorder.throwOn = null
   keyLength = -1
 })
 
@@ -275,6 +289,38 @@ describe('push store (C-WEB-5.e)', () => {
     expect(push.problem).toBe('refused')
     expect(push.consent).toBe(false)
     expect(recorder.calls).toEqual(['register', 'push.vapidKey', 'browser-subscribe', 'push.subscribe', 'browser-unsubscribe'])
+  })
+
+  it('tears the browser subscription down when the subscribe dial THROWS after minting', async () => {
+    // F-n44 (B-71): the header law — "after a refusal the browser
+    // subscription is torn down" — must cover the THROW edge, not just the
+    // answered refusal. A rejecting `push.subscribe` previously escaped to a
+    // catch that could not name the try-scoped subscription, leaving the
+    // browser holding a row the server never accepted.
+    installPushRuntime()
+    recorder.throwOn = 'push.subscribe'
+    const push = usePushStore()
+    expect(await push.setConsent(true)).toBe(false)
+    expect(push.problem).toBe('refused')
+    expect(push.consent).toBe(false)
+    // Exactly one teardown attempt, after the mint and the failed dial.
+    expect(recorder.calls).toEqual(['register', 'push.vapidKey', 'browser-subscribe', 'push.subscribe', 'browser-unsubscribe'])
+  })
+
+  it('stays fail-soft when the throw-path teardown itself rejects', async () => {
+    // The catch's teardown must not swallow setConsent's consent rollback:
+    // a rejected unsubscribe() still resolves the flip to false with the
+    // flag rolled back (an escaping error would leave persisted consent ON
+    // over a dead handshake — strictly worse than the bounded orphan the
+    // core's next 404/410 drop already cleans, C-WEB-5.d).
+    installPushRuntime()
+    unsubscribeRejects = true
+    recorder.throwOn = 'push.subscribe'
+    const push = usePushStore()
+    expect(await push.setConsent(true)).toBe(false)
+    expect(push.problem).toBe('refused')
+    expect(push.consent).toBe(false)
+    expect(recorder.calls.filter((entry) => entry === 'browser-unsubscribe')).toHaveLength(1)
   })
 
   it('never lets the bearer endpoint reach storage', async () => {
