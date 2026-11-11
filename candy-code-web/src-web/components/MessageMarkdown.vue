@@ -1,12 +1,7 @@
-<script lang="ts">
-// Syntax colouring is its own chunk, fetched the first time a reply holds a
-// fenced block with a language — never part of the first page load.
-let highlighter: Promise<typeof import('../lib/highlight')> | null = null
-</script>
-
 <script setup lang="ts">
 import { computed, onMounted, onUpdated, ref } from 'vue'
 import { renderMarkdown } from '../lib/markdown'
+import { highlightIn } from '../lib/highlight'
 import { t } from '../lib/i18n'
 
 const props = defineProps<{ text: string }>()
@@ -14,17 +9,14 @@ const props = defineProps<{ text: string }>()
 const html = computed(() => renderMarkdown(props.text))
 const root = ref<HTMLElement | null>(null)
 
-async function colour(): Promise<void> {
+// The colouring module rides the eager chunk (DiffView pulls it in at load),
+// so this is a synchronous walk that no-ops when nothing matches. The old
+// dynamic import() was vite-flagged INEFFECTIVE_DYNAMIC_IMPORT: it never
+// moved the module into its own chunk (B-78).
+function colour(): void {
   const element = root.value
-  if (element === null || element.querySelector('pre > code[class*="language-"]') === null) return
-  try {
-    highlighter ??= import('../lib/highlight')
-    const { highlightIn } = await highlighter
-    if (root.value === element) highlightIn(element)
-  } catch {
-    // An unloadable chunk (a deploy mid-session) leaves the code plain.
-    highlighter = null
-  }
+  if (element === null) return
+  highlightIn(element)
 }
 
 /**
@@ -78,7 +70,7 @@ function decorate(): void {
 }
 
 function paint(): void {
-  void colour()
+  colour()
   decorate()
 }
 

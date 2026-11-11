@@ -1,9 +1,11 @@
 /**
- * Syntax colouring for fenced code blocks and diff bodies. MessageMarkdown
- * loads it on demand (a dynamic `import()` — its own chunk, fetched the first
- * time a reply holds a fenced block with a language); DiffView imports it
- * eagerly because every tool diff carries a file path to read a language from
- * (C-TUI-2.f). Deliberately small and dependency-free: a handful of language
+ * Syntax colouring for fenced code blocks and diff bodies. Both consumers
+ * import it statically: DiffView always needed it at load (every tool diff
+ * carries a file path to read a language from, C-TUI-2.f), so the module
+ * rides the eager chunk either way; MessageMarkdown only calls it per paint.
+ * Its old dynamic `import()` was vite-flagged INEFFECTIVE_DYNAMIC_IMPORT —
+ * it never moved the module into its own chunk (B-78). Deliberately small
+ * and dependency-free: a handful of language
  * families, each a list of token rules tried in order, enough to tell
  * comments, strings, numbers, keywords and tags apart. Never a parser.
  *
