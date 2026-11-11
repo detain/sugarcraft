@@ -4128,6 +4128,7 @@ TXT,
     // opt-out and owns up to the money. No trailing period — STDERR_LINE_FORMAT
     // adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.auto_review_default' => '⚠ autoReview is on by default for this launch: flagged auto-mode calls are reviewed by the title model, and every review is a paid model call. Set autoReview to false in ~/.candy-code/config.json to opt out',
+    'appLaunch.notice.paid_side_defaults' => '⚠ autoTitle, prompt suggestions and away recap are on by default: each adds small paid title-model calls. Turn any off with its CANDY_CODE_DISABLE_* variable or in the /settings view (user settings)',
     // C-SEC-6.b: names the file, what it added, and what could not be honoured.
     // No trailing period — STDERR_LINE_FORMAT adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.project_narrowing_rules' => '⚠ {file} narrowed this launch\'s permissions: {count} deny/ask rule(s) loaded first, {dropped} allow rule(s) dropped — a project file cannot grant allow',

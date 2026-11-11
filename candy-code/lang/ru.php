@@ -4051,6 +4051,7 @@ TXT,
     // opt-out and owns up to the money. No trailing period — STDERR_LINE_FORMAT
     // adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.auto_review_default' => '⚠ autoReview включён по умолчанию для этого запуска: помеченные вызовы auto-mode проверяются title-моделью, и каждая проверка — платный вызов модели. Установите autoReview в false в ~/.candy-code/config.json, чтобы отключить',
+    'appLaunch.notice.paid_side_defaults' => '⚠ autoTitle, подсказки промптов и обзор отсутствия включены по умолчанию: каждый добавляет небольшие платные вызовы title-модели. Отключите любой переменной CANDY_CODE_DISABLE_* или в окне /settings (настройки пользователя)',
     // C-SEC-6.b: names the file, what it added, and what could not be honoured.
     // No trailing period — STDERR_LINE_FORMAT adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.project_narrowing_rules' => '⚠ {file} сузил разрешения этого запуска: сначала загружено {count} правил deny/ask, отброшено {dropped} правил allow — файл проекта не может выдать allow',

@@ -4052,6 +4052,7 @@ TXT,
     // opt-out and owns up to the money. No trailing period — STDERR_LINE_FORMAT
     // adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.auto_review_default' => '⚠ autoReview è attivo per default in questo avvio: le chiamate in auto-mode segnalate vengono revisionate dal modello titolo, e ogni revisione è una chiamata a modello a pagamento. Imposta autoReview a false in ~/.candy-code/config.json per disattivarlo',
+    'appLaunch.notice.paid_side_defaults' => '⚠ autoTitle, suggerimenti prompt e riepilogo di assenza sono attivi per default: ciascuno aggiunge piccoli chiamate a pagamento al modello titolo. Disattivali con la variabile CANDY_CODE_DISABLE_* corrispondente o nella vista /settings (impostazioni utente)',
     // C-SEC-6.b: names the file, what it added, and what could not be honoured.
     // No trailing period — STDERR_LINE_FORMAT adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.project_narrowing_rules' => '⚠ {file} ha ridotto i permessi di questo avvio: {count} regola/e deny/ask caricata/e per prima, {dropped} regola/e allow scartata/e — un file di progetto non può concedere allow',

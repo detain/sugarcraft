@@ -4048,6 +4048,7 @@ TXT,
     // opt-out and owns up to the money. No trailing period — STDERR_LINE_FORMAT
     // adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.auto_review_default' => '⚠ 本次启动默认开启 autoReview：被标记的自动模式调用将由标题模型审查，每次审查均为付费模型调用。在 ~/.candy-code/config.json 中将 autoReview 设为 false 可退出',
+    'appLaunch.notice.paid_side_defaults' => '⚠ autoTitle、提示建议和离席回顾默认开启：每项都会增加少量付费标题模型调用。可用对应的 CANDY_CODE_DISABLE_* 变量或在 /settings 视图（用户设置）中关闭任一项',
     // C-SEC-6.b: names the file, what it added, and what could not be honoured.
     // No trailing period — STDERR_LINE_FORMAT adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.project_narrowing_rules' => '⚠ {file} 收窄了本次启动的权限：优先加载 {count} 条 deny/ask 规则，丢弃 {dropped} 条 allow 规则 — 项目文件不能授予 allow',

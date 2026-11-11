@@ -4049,6 +4049,7 @@ TXT,
     // opt-out and owns up to the money. No trailing period — STDERR_LINE_FORMAT
     // adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.auto_review_default' => '⚠ autoReview はこの起動でデフォルト有効: フラグ付きauto-mode呼び出しはタイトルモデルでレビューされ、各レビューは有料モデル呼び出しです。~/.candy-code/config.json で autoReview を false に設定して無効化できます',
+    'appLaunch.notice.paid_side_defaults' => '⚠ autoTitle、プロンプト衜き、あいじゅうまとめはデフォルトで有効：それぞれタイトルモデルへの小さな有料呼び出しを追加します。CANDY_CODE_DISABLE_* 変数または /settings ビュー（ユーザー設定）で無効化できます',
     // C-SEC-6.b: names the file, what it added, and what could not be honoured.
     // No trailing period — STDERR_LINE_FORMAT adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.project_narrowing_rules' => '⚠ {file} によりこの起動の権限が制限されました: {count} 件の deny/ask ルールを優先読込、{dropped} 件の allow ルールを破棄 — プロジェクトファイルは allow を付与できません',

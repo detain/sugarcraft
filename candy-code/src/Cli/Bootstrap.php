@@ -288,8 +288,8 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 54 is that sum — 53 after the FIX-3 trusted-bundle hooks aggregate
-     * (registerTrustedBundleHooks, one row whatever the fan-out) joined the
+     * 55 is that sum — 54 after the C-M17 paid-side disclosure row joined
+     * (permissionGate’s second), on top of the FIX-3 hooks aggregate joined the
      * roster on top of the §7-closeout user-tool skip aggregate
      * (userScriptTools, one row whatever the directory) joined the roster
      * on top of the C-SEC-7.b launch-switch pair
@@ -308,7 +308,7 @@ final class Bootstrap
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 54;
+    public const LAUNCH_NOTICE_LIMIT = 55;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -381,7 +381,7 @@ final class Bootstrap
         'mcpClient' => 2,
         'reportIgnoredFrontmatter' => 4,
         'lspClient' => 1,
-        'permissionGate' => 1,
+        'permissionGate' => 2,
         // C-SEC-6.b: one new PLACE that warns — the project-narrowing notice,
         // raised by the filter it reports on, never from inside the banner
         // branch above it. Independent worst-case row: a bypassed launch on a
@@ -7700,8 +7700,8 @@ public static function useMaxCost(?string $maxCost): void
                 $reviewer = \SugarCraft\Code\Permissions\ExecReviewer::new($reviewBackend)->withTranscript(
                     static fn (string $sessionId): array => \SugarCraft\Code\Host\TranscriptStore::new(self::sessionStore(prune: false))->load($sessionId),
                 );
-                if ($autoReviewImplicit) {
-                    self::warnPermissionConfigInTranscript(Lang::t('appLaunch.notice.auto_review_default'));
+                foreach (\SugarCraft\Code\Host\TitleService::launchPaidSideNotices($autoReviewImplicit) as $paidNotice) {
+                    self::warnPermissionConfigInTranscript($paidNotice);
                 }
             }
         }

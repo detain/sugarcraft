@@ -525,6 +525,92 @@ final class BootstrapPermissionGateTest extends TestCase
     }
 
     /**
+     * C-M17: the kill switch is the shell's word. CANDY_CODE_DISABLE_AUTO_REVIEW
+     * forces the reviewer off exactly like an explicit false — even over the
+     * implicit default — and a killed launch says nothing about the default.
+     */
+    public function testTheAutoReviewEnvKillForcesTheReviewerOffEvenOnTheImplicitDefault(): void
+    {
+        $provider = [
+            'provider' => 'probe17',
+            'providers' => [
+                'probe17' => ['type' => 'custom', 'name' => 'Probe17', 'baseUrl' => 'http://127.0.0.1:9', 'model' => 'probe-model-17'],
+            ],
+        ];
+        $this->clearGateNoticeStore();
+        putenv('CANDY_CODE_DISABLE_AUTO_REVIEW=1');
+
+        try {
+            $this->writeGateConfig($provider);
+            $this->assertNull(
+                Bootstrap::permissionGate(false, false)->reviewer(),
+                'the kill wins over the implicit default — no reviewer, no billed review loop',
+            );
+            $this->assertFalse(
+                LaunchNotices::reported(Lang::t('appLaunch.notice.auto_review_default')),
+                'a reviewer that cannot engage does not announce its own default',
+            );
+            $this->assertSame(0, $this->gateNoticeStoreSize(), 'the killed launch is said about nothing');
+        } finally {
+            putenv('CANDY_CODE_DISABLE_AUTO_REVIEW');
+            $this->clearGateNoticeStore();
+        }
+    }
+
+    /**
+     * C-M17: on a launch that resolves a reviewable model, the three
+     * default-ON paid dials say so once — and the row disappears exactly
+     * when every dial is switched off by its env kill. An explicit
+     * autoReview false with the same provider engages no reviewer at all,
+     * so the launch says nothing: the disclosure belongs to the first-run
+     * shape the dials actually spend in.
+     */
+    public function testThePaidSideDefaultsRowIsSaidOnceAndOnlyWhileADialIsOn(): void
+    {
+        $provider = [
+            'provider' => 'probe17b',
+            'providers' => [
+                'probe17b' => ['type' => 'custom', 'name' => 'Probe17b', 'baseUrl' => 'http://127.0.0.1:9', 'model' => 'probe-model-17b'],
+            ],
+        ];
+        $paidKey = Lang::t('appLaunch.notice.paid_side_defaults');
+        $reviewKey = Lang::t('appLaunch.notice.auto_review_default');
+        $this->clearGateNoticeStore();
+
+        try {
+            $this->writeGateConfig($provider);
+            Bootstrap::permissionGate(false, false);
+            $this->assertTrue(
+                LaunchNotices::reported($paidKey),
+                'the first-run launch with paid dials on discloses them, beside the t212 row',
+            );
+            $this->assertTrue(LaunchNotices::reported($reviewKey));
+
+            $this->clearGateNoticeStore();
+            putenv('CANDY_CODE_DISABLE_AUTO_TITLE=1');
+            putenv('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS=1');
+            putenv('CANDY_CODE_DISABLE_AWAY_RECAP=1');
+            try {
+                Bootstrap::permissionGate(false, false);
+                $this->assertFalse(
+                    LaunchNotices::reported($paidKey),
+                    'nothing on, nothing announced',
+                );
+                $this->assertTrue(
+                    LaunchNotices::reported($reviewKey),
+                    'the t212 row keeps its own polarity — the auto reviewer still engaged',
+                );
+            } finally {
+                putenv('CANDY_CODE_DISABLE_AUTO_TITLE');
+                putenv('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS');
+                putenv('CANDY_CODE_DISABLE_AWAY_RECAP');
+            }
+        } finally {
+            $this->clearGateNoticeStore();
+        }
+    }
+
+    /**
      * The silenced warning is ONLY the no-provider case, and it is silenced
      * ONLY for the implicit default: an explicit true that finds no model to
      * review with still says so, because that user asked for something that

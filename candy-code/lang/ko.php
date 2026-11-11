@@ -4049,6 +4049,7 @@ TXT,
     // opt-out and owns up to the money. No trailing period — STDERR_LINE_FORMAT
     // adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.auto_review_default' => '⚠ autoReview가 이번 실행에서 기본적으로 켜져 있습니다: 플래그된 auto 모드 호출은 타이틀 모델이 검토하며, 모든 검토는 유료 모델 호출입니다. ~/.candy-code/config.json에서 autoReview를 false로 설정하여 비활성화하세요',
+    'appLaunch.notice.paid_side_defaults' => '⚠ autoTitle, 프롬프트 제안, 재자리 요약이 기본으로 켜져 있습니다: 각각 타이틀 모델에 대한 작은 유료 호출을 추가합니다. CANDY_CODE_DISABLE_* 변수나 /settings 보기(사용자 설정)에서 끈니다',
     // C-SEC-6.b: names the file, what it added, and what could not be honoured.
     // No trailing period — STDERR_LINE_FORMAT adds one (LaunchNoticeOwnPeriodTest).
     'appLaunch.notice.project_narrowing_rules' => '⚠ {file}이 이번 실행의 권한을 축소했습니다: {count}개 deny/ask 규칙이 먼저 로드됨, {dropped}개 allow 규칙 폐기 — 프로젝트 파일은 allow를 부여할 수 없음',
