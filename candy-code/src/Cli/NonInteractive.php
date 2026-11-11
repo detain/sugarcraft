@@ -826,7 +826,7 @@ final class NonInteractive
         // BM-1: under --batch the session's first recorded turn is the
         // first ROW, not the argv prompt (which waits as the final row).
         $leadTurnText = $args->batch && $batchRows !== [] ? $batchRows[0] : (string) $args->prompt;
-        $persistSession = static function () use ($ownsSession, $opened, $sessionStore, $args, $history, $message, $sessionUsages, $backend, $leadTurnText): ?string {
+        $persistSession = static function () use ($ownsSession, $opened, $sessionStore, $history, $message, $sessionUsages, $backend, $leadTurnText): ?string {
             if (!$ownsSession || $opened === null || $sessionStore === null) {
                 return null;
             }
