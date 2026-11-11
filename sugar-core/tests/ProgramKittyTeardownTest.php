@@ -94,13 +94,17 @@ final class ProgramKittyTeardownTest extends TestCase
      * that throws from inside loop->run() — the exact unguarded-unwind shape
      * M-14 flagged (identical funnel to ProgramTerminalRecoveryTest's
      * loop-callback thrower). With $push false the program never touches
-     * the keyboard modes at all.
+     * the keyboard modes at all. With $explicitPop the batch pops the layer
+     * back off before the throw — the disarm half of the mirror.
      */
-    private static function throwingModel(bool $push = true): Model
+    private static function throwingModel(bool $push = true, bool $explicitPop = false): Model
     {
         $steps = [Cmd::tick(0.01, static function (): never {
             throw new \LogicException('model exploded mid-run');
         })];
+        if ($explicitPop) {
+            array_unshift($steps, Cmd::popKittyKeyboard());
+        }
         if ($push) {
             array_unshift($steps, Cmd::pushKittyKeyboard(KeyboardEnhancementsMsg::DISAMBIGUATE));
         }
@@ -304,6 +308,13 @@ final class ProgramKittyTeardownTest extends TestCase
      * The choke mirror round-trips: an app that pops the layer itself mid
      * run disarms the mirror, so the normal-exit teardown (and any later
      * unwind) owes nothing — the explicit pop is the one and only.
+     *
+     * The second half pins the DISARM itself on the path that consumes it:
+     * push, explicit pop, then a throwing exit. There the finally runs
+     * teardownTerminal(popKittyKeyboard: true), so only a mirror that the
+     * pop actually cleared keeps that teardown silent — an arm-only regex
+     * (sets true on '>' but never false on '<') leaves the mirror armed
+     * and emits an unbalanced second pop.
      */
     public function testExplicitMidRunPopDisarmsTheMirror(): void
     {
@@ -322,5 +333,30 @@ final class ProgramKittyTeardownTest extends TestCase
         fclose($writer);
         fclose($in);
         fclose($out);
+
+        // The disarm half: same explicit pop, but the exit THROWS, so the
+        // finally asks the teardown for a pop and only the mirror can refuse
+        // it. Red exactly under the arm-only mutation (pop count 2 there).
+        [$in2, $out2, $writer2] = $this->pipes();
+        $loop2 = new StreamSelectLoop();
+        $program2 = new Program(self::throwingModel(explicitPop: true), $this->options($in2, $out2, $loop2));
+        $loop2->addTimer(2.0, static fn () => $loop2->stop());
+
+        try {
+            $program2->run();
+            $this->fail('precondition: the model must throw');
+        } catch (\LogicException $e) {
+            $this->assertSame('model exploded mid-run', $e->getMessage());
+        }
+
+        $thrown = $this->drain($out2);
+        $this->assertSame(1, substr_count($thrown, self::push()));
+        $this->assertSame(1, substr_count($thrown, self::pop()),
+            'the explicit mid-run pop disarms the mirror: the unwind teardown adds no second pop');
+        $this->assertSame(1, substr_count($thrown, Ansi::altScreenLeave()));
+
+        fclose($writer2);
+        fclose($in2);
+        fclose($out2);
     }
 }
