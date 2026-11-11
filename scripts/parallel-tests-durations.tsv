@@ -1200,7 +1200,6 @@ candy-code/tests/Tools/BuiltIn/CanvasToolTest.php	0.025	7
 candy-code/tests/Config/ClaudeSettingsImportTest.php	0.025	19
 candy-code/tests/Tui/MediaForm/ScriptFieldsTest.php	0.025	19
 candy-code/tests/Skills/SkillFileReaderTest.php	0.024	14
-candy-code/tests/App/AppBuilderTest.php	0.024	40
 candy-code/tests/Permissions/PermissionRulePatternTest.php	0.024	62
 candy-code/tests/Config/PolicySnapshotTest.php	0.024	7
 candy-code/tests/Tui/CellWidthPaddingTest.php	0.024	7
