@@ -278,8 +278,15 @@ final class TtyStreamArgumentCensusTest extends TestCase
         // on its own - `FOO` could be defined as null. So the SET of them is
         // asserted rather than their shape, which means a new one has to be
         // looked at by a person exactly once.
-        self::assertSame(
-            [
+        // THE ROSTER IS A SET - compare it as one. The census walks the tree
+        // with a directory iterator, and readdir order is not the same on an
+        // ext4 GitHub runner as on a dev box (hashed dirs), so pinning the
+        // observed ORDER would red on a pure reshuffle with no new decision
+        // to look at - which is exactly the CI failure this arm showed twice
+        // (same four entries, two swapped). Sorting both sides keeps the
+        // load-bearing half: a NEW constant site still cannot pass without a
+        // person naming it in this block.
+        $roster = [
                 'src/Tui/Renderer.php: constant:STDOUT',
                 // cc-eval HELPW (weld 54c425083-era, LANE-CC rostering 2026-11-11):
                 // helpRenderWidth()'s TIOCGWINSZ arm builds `new Tty(STDOUT)`
@@ -300,7 +307,11 @@ final class TtyStreamArgumentCensusTest extends TestCase
                 // is reached only past a `stream_isatty(STDOUT)` early-return, so
                 // at the construction site STDOUT is a real stream, never null.
                 'tests/TerminalSizeFallbackIsolationTest.php: constant:STDOUT',
-            ],
+        ];
+        \sort($roster);
+        \sort($constants);
+        self::assertSame(
+            $roster,
             $constants,
             'a Tty is built with a CONSTANT as its stream, and a constant can be null. Check that this one '
                 . 'is a real stream, then add it here',
