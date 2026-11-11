@@ -116,8 +116,9 @@ final class Kernel32Test extends TestCase
     }
 
     /**
-     * A-10 (structural pin): the native GetConsoleMode call receives a
-     * handle materialized from the $h parameter, not a freshly-zeroed pointer.
+     * A-10 + C5 (structural pin): the native GetConsoleMode call receives the
+     * $h parameter value as an int64 argument, never a freshly-zeroed or
+     * cast-to-void* pointer CData.
      *
      * WHY A SOURCE SHAPE AND NOT A BEHAVIOR: on Linux ffi() throws before any
      * native call exists, so the defect this guards (the body historically cast
@@ -126,7 +127,9 @@ final class Kernel32Test extends TestCase
      * mode 0 via `?? 0`) can only be pinned from the declaration itself.
      * WindowsConsole::enable() cannot honour its save/restore contract on real
      * Windows while this returns false unconditionally, so the pin ships with
-     * A-10 rather than as a follow-up.
+     * A-10 rather than as a follow-up.  C5 adds the regression guard against
+     * the opposite historical shape: the cast-to-void* materialization that
+     * A-10 introduced faults natively on Windows (CI: silent mid-suite death).
      */
     public function testGetConsoleModeBodiesPassTheHandleArgumentToTheNativeCall(): void
     {
@@ -144,14 +147,19 @@ final class Kernel32Test extends TestCase
         $body    = substr($src, $start, $end - $start);
 
         self::assertStringContainsString(
-            '$handle->cdata = $h;',
+            '$handle = $h;',
             $body,
-            'getConsoleMode() must materialize its FFI handle from the $h parameter (mirror setConsoleMode()); a zero-initialised pointer is ERROR_INVALID_HANDLE on every call.',
+            'getConsoleMode() must pass the $h parameter value straight through to the native call (C5: the cdef declares the handle parameter long long, so the plain int is the argument).',
         );
         self::assertStringContainsString(
             'GetConsoleMode($handle',
             $body,
-            'getConsoleMode() must pass the materialized $handle to the native call, not construct an inline cast.',
+            'getConsoleMode() must pass the handle argument to the native call.',
+        );
+        self::assertStringNotContainsString(
+            "cast('void*'",
+            $body,
+            'C5 REGRESSION GUARD: the body must never rebuild the cast-to-void* materialization — that argument shape faults inside libffi on Windows (CI: silent mid-suite death) and its ->cdata rejects int writes on PHP 8.3.',
         );
     }
 
