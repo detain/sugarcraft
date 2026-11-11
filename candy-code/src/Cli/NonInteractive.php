@@ -798,7 +798,7 @@ final class NonInteractive
         // ABSENCE on a no-tool turn is the ordinary "the schema rode the
         // answer" case — never a hard `true` this renderer cannot itself
         // verify past the provider.
-        $schemaUnapplied = $jsonSchema !== null && ($sawToolResult || self::historyCarriesUnansweredToolResult($history));
+        $schemaUnapplied = $jsonSchema !== null && self::schemaUnappliedFor($sawToolResult, $history);
         if ($schemaUnapplied) {
             \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.json_schema_unapplied') . "\n");
         }
@@ -976,7 +976,7 @@ final class NonInteractive
                 // The schema leg is re-derived per row off the same observer
                 // slots (by reference in $onEvent), so each document tells
                 // the truth about its own turn.
-                $rowSchemaUnapplied = $jsonSchema !== null && $sawToolResult;
+                $rowSchemaUnapplied = $jsonSchema !== null && self::schemaUnappliedFor($sawToolResult, $trial);
                 if ($rowSchemaUnapplied) {
                     \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.json_schema_unapplied') . "\n");
                 }
@@ -1421,6 +1421,20 @@ final class NonInteractive
         }
 
         return $lastResult >= 0 && $lastResult >= $lastCall;
+    }
+
+    /**
+     * Whether one dispatched request answered WITHOUT its JSON schema riding: either
+     * the run just watched a tool result land (the observer the $onEvent closure
+     * mutates by reference — see historyCarriesUnansweredToolResult for why that is
+     * unseeable once a scope re-seeds the flag), or the request history already ends
+     * on a consumed tool round-trip the engine refused the schema for. Both arms say
+     * the same thing about the answer: the schema did not constrain it. Named so the
+     * batch loop and the single-pass arm state the predicate identically.
+     */
+    private static function schemaUnappliedFor(bool $observedToolResult, array $requestHistory): bool
+    {
+        return $observedToolResult || self::historyCarriesUnansweredToolResult($requestHistory);
     }
 
     /**
