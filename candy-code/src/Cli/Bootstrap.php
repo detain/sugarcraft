@@ -5039,7 +5039,7 @@ public static function useMaxCost(?string $maxCost): void
         // never hashed it — a silent edit there was exactly the gap.
         $userClaudePath = self::userClaudeSettingsFile();
 
-        $previous = PolicySnapshot::read($configDir);
+        [$previous, $snapshotCorrupt] = PolicySnapshot::readOrAccuse($configDir);
         $currentConfig = PolicySnapshot::fingerprint($userConfigPath);
         $currentHooks = PolicySnapshot::fingerprint($userHooksPath);
         $currentClaude = PolicySnapshot::fingerprint($userClaudePath);
@@ -5094,7 +5094,7 @@ public static function useMaxCost(?string $maxCost): void
         $projectHooksChanged = $previous !== null
             && $projectHookIdentities !== ($previous['projectHooks'] ?? []);
 
-        $changed = $userChanged || $projectHooksChanged;
+        $changed = $userChanged || $projectHooksChanged || $snapshotCorrupt;
 
         LaunchContext::rememberPolicyChanged($changed);
         LaunchContext::rememberPolicyPreviousProjectHooks($changed ? ($previous['projectHooks'] ?? []) : []);

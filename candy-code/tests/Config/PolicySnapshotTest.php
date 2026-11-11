@@ -10,7 +10,8 @@ use SugarCraft\Code\Config\PolicySnapshot;
 /**
  * rv-sec-3 (fix 8): the state file the next-launch policy-freshness notice
  * and the one-launch project-hook quarantine read and write. This file owns
- * the RECORD contract — round-trip, 0600, fail-open on corruption, and the
+ * the RECORD contract — round-trip, 0600, loud refusal on corruption (quiet
+ * only for true absence, m19), and the
  * fingerprint's absence semantics; the launch-side decision (compare →
  * notice → quarantine → rewrite) is behavioural and lives with the hook
  * machinery in tests/Cli/PolicyFreshnessQuarantineTest.
@@ -80,11 +81,33 @@ final class PolicySnapshotTest extends TestCase
     }
 
     /**
-     * Freshness is a notice, not a gate: every unreadable shape answers null
-     * — the same as an absent file — rather than a crash or a permanent
-     * quarantine.
+     * m19 polarity: this is a tamper-evidence cache, so corrupt bytes are an
+     * ACCUSATION, not an absence — read() refuses them loudly at the seam and
+     * {@see PolicySnapshot::readOrAccuse()} folds the refusal into the launch
+     * posture. The one legitimate null besides true absence is the documented
+     * version-1 baseline reset, which stays quiet.
      */
-    public function testCorruptionAndForeignVersionsDegradeToAbsent(): void
+    public function testTheVersionOneRecordStillResetsTheBaselineQuietly(): void
+    {
+        $path = PolicySnapshot::path($this->configDir);
+        // C-EXT-1.b: the user's own `.claude/settings.json` joined the
+        // fingerprint set and the record bumped to version 2 in the same
+        // commit, so a v1 record (no such field) is the PREVIOUS schema —
+        // the intended one-time reset, not corruption.
+        file_put_contents($path, (string) json_encode([
+            'version' => 1,
+            'userConfig' => null,
+            'userHooks' => null,
+            'projectHooks' => [],
+        ]));
+
+        $this->assertNull(
+            PolicySnapshot::read($this->configDir),
+            'a v1 record answers the documented baseline reset, not an accusation'
+        );
+    }
+
+    public function testCorruptionThrowsAtTheReadSeam(): void
     {
         $path = PolicySnapshot::path($this->configDir);
         $good = [
@@ -98,27 +121,69 @@ final class PolicySnapshotTest extends TestCase
         $cases = [
             'not json' => '{not json',
             'a list, not an object' => '[]',
+            'an empty object' => '{}',
+            'top-level null' => 'null',
             'foreign version' => (string) json_encode(['version' => 99] + $good),
-            // C-EXT-1.b: the user's own `.claude/settings.json` joined the
-            // fingerprint set, so the shape gate names it too — and a record
-            // written by the PREVIOUS schema cannot carry it, which is the
-            // intended one-time reset (below), not corruption.
+            // A v2 record missing a required fingerprint slot could never have
+            // been produced by write() — truncation or forgery; both accuse.
             'missing userConfig' => (string) json_encode(['version' => PolicySnapshot::VERSION, 'userHooks' => null, 'userClaudeSettings' => null, 'projectHooks' => []]),
             'missing userClaudeSettings' => (string) json_encode(['version' => PolicySnapshot::VERSION, 'userConfig' => null, 'userHooks' => null, 'projectHooks' => []]),
-            'the pre-C-EXT-1.b version 1 record' => (string) json_encode(['version' => 1] + $good),
             'projectHooks not array' => (string) json_encode(['version' => PolicySnapshot::VERSION, 'userConfig' => null, 'userHooks' => null, 'userClaudeSettings' => null, 'projectHooks' => 'nope']),
         ];
 
         foreach ($cases as $label => $bytes) {
             file_put_contents($path, $bytes);
-            $this->assertNull(PolicySnapshot::read($this->configDir), $label);
+            $thrown = null;
+            try {
+                PolicySnapshot::read($this->configDir);
+            } catch (\RuntimeException $e) {
+                $thrown = $e;
+            }
+
+            $this->assertNotNull(
+                $thrown,
+                $label . ': corrupt bytes must accuse, never degrade to a quiet no-snapshot'
+            );
+            $this->assertStringContainsString(
+                PolicySnapshot::FILE_NAME,
+                (string) $thrown?->getMessage(),
+                $label . ': the refusal names the file it refused'
+            );
         }
 
         // Explicit JSON null in the hashed slots is the LEGITIMATE shape
-        // (file absent at snapshot time) and must parse — assert the good
+        // (file absent at snapshot time) and must parse — asserting the good
         // record right after proves the loop above refused shapes, not nulls.
         PolicySnapshot::write($this->configDir, $good);
         $this->assertSame($good, PolicySnapshot::read($this->configDir));
+    }
+
+    public function testReadOrAccuseSeparatesAbsenceFromAccusation(): void
+    {
+        $good = [
+            'version' => PolicySnapshot::VERSION,
+            'userConfig' => null,
+            'userHooks' => null,
+            'userClaudeSettings' => null,
+            'projectHooks' => [],
+        ];
+
+        [$record, $suspicious] = PolicySnapshot::readOrAccuse($this->configDir);
+        $this->assertNull($record);
+        $this->assertFalse($suspicious, 'a first launch is not tamper: true absence stays quiet');
+
+        PolicySnapshot::write($this->configDir, $good);
+        [$record, $suspicious] = PolicySnapshot::readOrAccuse($this->configDir);
+        $this->assertSame($good, $record);
+        $this->assertFalse($suspicious);
+
+        file_put_contents(PolicySnapshot::path($this->configDir), '{not json');
+        [$record, $suspicious] = PolicySnapshot::readOrAccuse($this->configDir);
+        $this->assertNull($record);
+        $this->assertTrue(
+            $suspicious,
+            'a corrupt record is an accusation the launch posture must fold in, not a silent skip'
+        );
     }
 
     public function testARecordFromASiblingBuildWithoutTheRootsFieldStillLoads(): void

@@ -117,6 +117,55 @@ final class PolicyFreshnessQuarantineTest extends TestCase
     }
 
     /**
+     * m19: a snapshot file that cannot be read is NOT a "no snapshot" — on a
+     * tamper-evidence cache, corrupt bytes ARE the accusation. The launch must
+     * take the drifted posture (announce + quarantine every project-hook
+     * entry the launch cannot vouch for + heal the record), where the old
+     * hand-rolled read silently skipped the tamper-compare for exactly one
+     * launch — the window the review named. True absence stays quiet (the
+     * day-one test above), which is what makes this refusal load-bearing.
+     */
+    public function testACorruptSnapshotAccusesInsteadOfSilentlyResettingTheBaseline(): void
+    {
+        $this->writeUserHooks("hooks:\n  PreToolUse:\n    - name: from-home\n      command: 'true'\n");
+        $this->writeProjectHooks("hooks:\n  PreToolUse:\n    - name: old-guard\n      command: 'true'\n");
+
+        // ---- launch 1: baseline — the project hook is vouched for and the
+        // snapshot exists.
+        $names1 = $this->launchHookChain();
+        $this->assertContains('old-guard', $names1);
+        $snapshotPath = PolicySnapshot::path(static fn (): string => self::configDir());
+        $this->assertFileExists($snapshotPath);
+
+        // ---- someone (or something) tampers with the evidence between launches.
+        $this->resetFreshnessStatics();
+        file_put_contents($snapshotPath, '{not json');
+
+        // ---- launch 2: the corrupt record must be treated as drift — loud
+        // notice, and a hook this box used to run is quarantined until a
+        // human sees it again.
+        $before = \count(Bootstrap::launchNotices());
+        $names2 = $this->launchHookChain();
+        $notices = \array_slice(Bootstrap::launchNotices(), $before);
+
+        $this->assertNotSame([], $notices);
+        $this->assertStringContainsString(
+            'changed since the last launch',
+            implode("\n", $notices),
+            'a corrupt tamper-evidence record must announce, never pass silently'
+        );
+        $this->assertNotContains('old-guard', $names2, 'the accusing launch cannot vouch for any project entry — all quarantine');
+
+        // ---- the accusing launch also heals the record, so launch 3 sees the
+        // entry as one it just stated and loads it: quarantine is still one
+        // launch, not a permanent brick, and the corruption does not lurk.
+        $this->resetFreshnessStatics();
+        $names3 = $this->launchHookChain();
+        $this->assertContains('old-guard', $names3, 'the healed record restores normal one-launch quarantine semantics');
+        $this->assertFileExists($snapshotPath);
+    }
+
+    /**
      * C-EXT-1.b: the user's own `~/.claude/settings.json` joined the
      * fingerprint set. An edit to it between launches raises the same drift
      * notice a `config.json` or `hooks.yaml` edit raises — and the changed

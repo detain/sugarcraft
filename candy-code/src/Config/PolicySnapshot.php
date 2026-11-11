@@ -72,9 +72,13 @@ final class PolicySnapshot
      * guard armed (first launch after upgrade: nothing to compare, nothing to
      * quarantine — the snapshot written this launch is the baseline).
      *
-     * A present-but-malformed file is treated exactly like an absent one:
-     * freshness is a safety notice, and a corrupt record must not become a
-     * crash path or a permanent quarantine.
+     * A present-but-malformed file is NOT an absent one: this is a
+     * tamper-evidence cache, and answering "no snapshot" to corrupt bytes
+     * would skip exactly one tamper-compare on the very file the guard exists
+     * to accuse. A read that cannot be trusted therefore throws at the seam
+     * ({@see self::readOrAccuse()} folds the accusation into the launch
+     * posture — notice, quarantine-all-new, heal — instead of a silent pass).
+     * True absence stays quiet: a first launch has nothing to falsely accuse.
      *
      * `trustedRoots` is read defensively ({@see \SugarCraft\Code\Cli\Bootstrap}
      * treats a missing list as "no root-level quarantine, entry-level only")
@@ -88,28 +92,67 @@ final class PolicySnapshot
      */
     public static function read(callable $configDir): ?array
     {
-        $raw = @file_get_contents(self::path($configDir));
-        if (!is_string($raw)) {
+        $path = self::path($configDir);
+        if (!is_file($path)) {
             return null;
         }
 
+        // Gate on is_file() BEFORE the atomic reader: a present-but-empty file
+        // decodes to [] — indistinguishable from the reader's missing-file
+        // answer — so it must reach the shape gate below and be accused, never
+        // slip through as a quiet "no snapshot".
         try {
-            $data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
+            $data = AtomicJsonFile::new($path)->read();
+        } catch (\Throwable $e) {
+            throw new \RuntimeException(
+                self::FILE_NAME . ' at ' . $path . ' is unreadable: ' . $e->getMessage(),
+                0,
+                $e,
+            );
+        }
+
+        if (($data['version'] ?? null) === 1) {
             return null;
         }
 
-        if (!is_array($data)
-            || ($data['version'] ?? null) !== self::VERSION
+        if (($data['version'] ?? null) !== self::VERSION
             || !array_key_exists('userConfig', $data)
             || !array_key_exists('userHooks', $data)
             || !array_key_exists('userClaudeSettings', $data)
             || !is_array($data['projectHooks'] ?? null)) {
-            return null;
+            throw new \RuntimeException(
+                self::FILE_NAME . ' at ' . $path
+                    . ' is not a record this build could have written (corrupt or foreign).',
+            );
         }
 
         /** @var array{version: int, userConfig: ?string, userHooks: ?string, userClaudeSettings: ?string, projectHooks: array<string, list<string>>} $data */
         return $data;
+    }
+
+    /**
+     * The launch-seam reader: previous record plus a "be suspicious" bit.
+     *
+     * [null, false] — the file is genuinely absent: day one, compare nothing,
+     * accuse nothing. [null, true] — the file is present but cannot be
+     * trusted: the guard treats an unreadable evidence cache as a CHANGED
+     * policy (announce + quarantine every project-hook entry the launch
+     * cannot vouch for) and rewrites the file this launch, so the corrupt
+     * record heals instead of lurking. A silent skip here would re-open the
+     * exact one-launch tamper window the finding names.
+     *
+     * Only the RuntimeException this class raises at the read seam is folded;
+     * anything wider would swallow a real bug as policy suspicion.
+     *
+     * @return array{0: array{version: int, userConfig: ?string, userHooks: ?string, userClaudeSettings: ?string, trustedRoots?: list<string>, projectHooks: array<string, list<string>>}|null, 1: bool}
+     */
+    public static function readOrAccuse(callable $configDir): array
+    {
+        try {
+            return [self::read($configDir), false];
+        } catch (\RuntimeException) {
+            return [null, true];
+        }
     }
 
     /**

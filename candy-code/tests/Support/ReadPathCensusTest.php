@@ -542,10 +542,6 @@ final class ReadPathCensusTest extends TestCase
                 . 'the file CONtributes stays with the trust grant above',
         ],
         'Config/PolicySnapshot.php|file_get_contents' => [
-            'CALLER_SUPPLIED — read() resolves the snapshot path through the caller\'s '
-                . '$configDir callable; production hands it Bootstrap\'s trusted config dir (the '
-                . 'home-OWNED ~/.candy-code), and a missing or malformed record degrades to '
-                . 'null (baseline reset / entry-level-only quarantine), never a crash path.',
             'CALLER_SUPPLIED — fingerprint() hashes the exact bytes of a policy file whose '
                 . 'path the caller names (user config / hooks files in Bootstrap); a file that '
                 . 'cannot be read counts as ABSENT (null), the same verdict the loader itself '
