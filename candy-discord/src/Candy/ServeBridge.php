@@ -50,7 +50,6 @@ use SugarCraft\Code\Protocol\JsonRpc;
 use SugarCraft\Code\Server\ServerConfig;
 
 use function React\Promise\reject;
-use function React\Promise\resolve;
 
 final class ServeBridge
 {
