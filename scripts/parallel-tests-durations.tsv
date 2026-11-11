@@ -380,7 +380,6 @@ candy-code/tests/MCP/McpRuntimeDisableTest.php	1.336	5
 candy-code/tests/Tools/BuiltIn/GrepInstructionWiringTest.php	1.328	19
 candy-code/tests/Providers/ClaudeCodeStreamJsonTest.php	1.328	15
 candy-code/tests/Cli/HeadlessPermissionPromptTest.php	1.328	19
-candy-code/tests/Channels/ChannelRegistryTest.php	1.317	15
 candy-code/tests/Cli/PermissionWarningDrainTest.php	1.314	6
 candy-code/tests/Backend/EngineBackendLengthStopTest.php	1.311	34
 candy-code/tests/MCP/OAuthClientRegistrationTest.php	1.309	52
@@ -795,6 +794,7 @@ candy-code/tests/Skills/SkillForkTest.php	0.169	7
 candy-code/tests/MCP/McpClientTest.php	0.168	45
 candy-code/tests/Tools/BashSandboxTest.php	0.168	23
 candy-code/tests/Bundles/BundleUpdateTest.php	0.167	10
+candy-code/tests/Channels/ChannelRegistryTest.php	0.166	16
 candy-code/tests/Support/DaemonizeTest.php	0.166	6
 candy-code/tests/Diagnostics/TuiErrorLogTest.php	0.166	40
 candy-code/tests/Context/ContextCategoriesTest.php	0.166	9
@@ -881,6 +881,7 @@ candy-code/tests/Integration/SkillPathScopingWiringTest.php	0.109	6
 candy-code/tests/Support/MediaStoreTest.php	0.108	29
 candy-code/tests/Chat/EffortCommandTest.php	0.108	13
 candy-code/tests/Cli/NonInteractiveErrorLabelTest.php	0.108	5
+candy-code/tests/Channels/BundleChannelLoaderTest.php	0.107	19
 candy-code/tests/Context/SessionPromptMemoTest.php	0.107	10
 candy-code/tests/Host/TurnRunnerMentionFreshnessTest.php	0.106	3
 candy-code/tests/Backend/SessionStateForkCarryTest.php	0.105	4
@@ -922,7 +923,6 @@ candy-code/tests/Host/Commands/WorkflowLintCommandTest.php	0.091	8
 candy-code/tests/Cli/BootstrapTranscriptSeamCallSiteCensusTest.php	0.090	22
 candy-code/tests/Tools/BashPromptGuidanceTest.php	0.090	7
 candy-code/tests/Support/ProjectRootTest.php	0.090	6
-candy-code/tests/Channels/BundleChannelLoaderTest.php	0.090	18
 candy-code/tests/Hooks/RuntimeHookInputEncodingTest.php	0.089	6
 candy-code/tests/PlanModeToggleTest.php	0.089	10
 candy-code/tests/Host/Commands/MemoryExportCommandTest.php	0.088	8
