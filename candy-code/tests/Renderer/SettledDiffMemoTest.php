@@ -32,8 +32,10 @@ use SugarCraft\Core\I18n\T;
  * ambient state renderDiff() reads is folded into the memo key, and
  * that swapping the theme invalidates the memo without changing one
  * output byte. The source-shape census pins the ambient whitelist
- * itself: a future ambient read that is neither in the key nor in the
- * documented-pure list fails here.
+ * itself: a future DIRECT ambient read inside renderDiff() that is
+ * neither in the key nor in the documented-pure list fails here. The
+ * census scans renderDiff()'s direct body with comments stripped —
+ * its callees were audited ambient-free by hand, not pinned here.
  */
 final class SettledDiffMemoTest extends TestCase
 {
@@ -196,33 +198,46 @@ final class SettledDiffMemoTest extends TestCase
     public function testTheMemoEvictsTheOldestEntryBeyondItsCap(): void
     {
         $cap = self::diffMemoMax();
-        for ($i = 0; $i <= $cap; $i++) {
+
+        // Paint f0 FIRST and capture its real memo key through the same
+        // memoKeys() window the hit-order test reads. A literal label can
+        // never appear among the width:strlen:xxh128:... keys, so only the
+        // captured key makes the eviction an identity claim.
+        self::paint("--- a/f0\n+++ b/f0\n@@ -1 +1 @@\n-x\n+y\n", Theme::default(), 40);
+        $f0Key = self::memoKeys()[0];
+
+        for ($i = 1; $i <= $cap; $i++) {
             self::paint("--- a/f{$i}\n+++ b/f{$i}\n@@ -1 +1 @@\n-x\n+y\n", Theme::default(), 40);
         }
 
         self::assertCount($cap, self::memo(), 'one store past the cap drops exactly one entry');
+        self::assertNotContains($f0Key, self::memoKeys(), 'the entry dropped past the cap is the OLDEST one, by identity');
 
-        $survivors = self::memo();
-        $firstKey = array_key_first($survivors);
-        self::assertNotSame('M12-F0', $firstKey);
-        // The very first entry (f0) must be gone: repainting f0 cold re-adds one.
+        // The evicted entry is cold again: repainting f0 must land it back
+        // under the very same key (and push the next-oldest out in exchange).
         self::paint("--- a/f0\n+++ b/f0\n@@ -1 +1 @@\n-x\n+y\n", Theme::default(), 40);
         self::assertCount($cap, self::memo());
+        self::assertContains($f0Key, self::memoKeys(), 'the repaint of f0 re-enters the memo under its original key');
     }
 
     public function testTheMemoKeyCensusCoversEveryAmbientReadOfRenderDiff(): void
     {
-        // Source-shape census: renderDiff() must read EXACTLY the ambient
-        // state the key folds. An un-whitelisted ambient call inside it
-        // would serve stale bytes after a setting change — this fails first.
+        // Source-shape census: renderDiff()'s DIRECT body must read EXACTLY
+        // the ambient state the key folds. An un-whitelisted ambient call
+        // inside it would serve stale bytes after a setting change — this
+        // fails first. The scan runs on the COMMENT-STRIPPED body: a future
+        // edit that deletes a reader call while leaving prose that names it
+        // cannot false-green here.
         $method = new ReflectionMethod(Renderer::class, 'renderDiff');
         $lines = file($method->getFileName());
         self::assertIsArray($lines);
-        $body = implode('', array_slice($lines, $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1));
-
-        // strip comments so prose mentioning a reader cannot false-green the scan
-        $code = php_strip_whitespace($method->getFileName());
-        self::assertIsString($code);
+        // The open-tag prefix is load-bearing: without it token_get_all() hands
+        // back a single T_INLINE_HTML blob and comments are never stripped.
+        $body = self::codeWithoutComments("<?php\n" . implode('', array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        )));
 
         // The key must fold every reader renderDiff can observe ambient:
         $keyReaders = [
@@ -238,7 +253,7 @@ final class SettledDiffMemoTest extends TestCase
         // Every direct ambient entry point renderDiff may read is a key reader.
         // Settings::value / getenv / Tty / size reads outside those four would
         // be the stale-serve class M-12 cannot ship with.
-        foreach (['UiSettings::', 'Settings::value(', 'getenv(', 'filter_var(', '$_SERVER[', 'Tty::'] as $outlaw) {
+        foreach (['UiSettings::', 'Settings::value(', 'getenv(', 'filter_var(', '$_SERVER[', '$_ENV[', 'Tty::'] as $outlaw) {
             self::assertStringNotContainsString($outlaw, $body, $outlaw . ' is not part of the settled-diff key — fold it in or invalidate on its change');
         }
     }
@@ -295,6 +310,30 @@ final class SettledDiffMemoTest extends TestCase
         $constant = (new \ReflectionClass(Renderer::class))->getReflectionConstant('DIFF_MEMO_MAX');
 
         return (int) $constant->getValue();
+    }
+
+    /**
+     * House-canonical comment stripper (byte-identical twin of the four in
+     * HookLogConcurrentAppendTest, AuditHookConcurrentAppendTest,
+     * BinCandyCodeWiringTest and ForeignAgentPresetWiringTest): the memo-key
+     * census must match CODE only, so prose that merely names a reader can
+     * never carry a contains-leg across a call-site deletion.
+     */
+    private static function codeWithoutComments(string $source): string
+    {
+        $code = '';
+        foreach (token_get_all($source) as $token) {
+            if (\is_array($token)) {
+                if ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT) {
+                    continue;
+                }
+                $code .= $token[1];
+                continue;
+            }
+            $code .= $token;
+        }
+
+        return $code;
     }
 
     private static function removeTree(string $dir): void
