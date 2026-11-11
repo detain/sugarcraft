@@ -2342,7 +2342,7 @@ final class AgentTest extends TestCase
      * at all). The two consumers agree BY CONSTRUCTION, and one dispatch costs
      * FIVE subprocesses: the request build's render. The source leg below pins
      * the spelling that makes the agreement structural, not a courtesy
-     * (house precedent: {@see \SugarCraft\Code\Tests\Support\TtyStreamArgumentCensusTest}-style
+     * (house precedent: {@see \SugarCraft\Code\Tests\TtyStreamArgumentCensusTest}-style
      * call-site discipline by source scan).
      *
      * The simulated worker is still used deliberately: the remaining render
