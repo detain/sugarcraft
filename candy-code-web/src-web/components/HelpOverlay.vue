@@ -114,7 +114,7 @@ function displayName(command: CommandInfo): string {
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: var(--z-help);
   background: rgb(0 0 0 / 0.35);
   display: flex;
   justify-content: center;

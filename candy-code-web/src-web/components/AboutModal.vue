@@ -234,7 +234,7 @@ async function stopServer(): Promise<void> {
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: var(--z-dialog);
   background: rgb(0 0 0 / 0.45);
   display: flex;
   align-items: center;

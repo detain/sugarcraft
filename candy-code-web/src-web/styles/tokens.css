@@ -79,6 +79,25 @@
   --radius-3: 6px;
   --shadow-1: 0 0.2rem 0.6rem rgb(0 0 0 / 0.25);
   --shadow-2: -0.4rem 0 1rem rgb(0 0 0 / 0.3);
+  /* UXB-F18 (n57): the dialog-layer ladder, theme-invariant like the rest of
+     the geometry table. Every aria-modal backdrop used to sit on one literal
+     40, so two simultaneous dialogs stacked by DOM order, not policy — and
+     two ARE simultaneous by design: the help chord is document-level and
+     answers from anywhere outside a field (App.vue onHelpKey), so Help can
+     open over the palette, the lightbox, or About. Tiers, bottom to top:
+     30 approvals drawer and 20 side panels stay literals (below the band,
+     never in a tie); --z-dialog is the mutually-exclusive command/content
+     band (history, palette, media lightbox, about — each closes on a
+     pointerdown outside or is replaced before the next opens); --z-picker
+     carries the directory chooser, which must cover the band it was opened
+     from (already 45 before this comment named it); --z-help is the top
+     because Help is the only dialog reachable from inside the others and it
+     explains them — nothing it documents may paint over it. Tiers spaced 5
+     apart so an insertion never renumbers. Pinned by
+     src-web/__tests__/dialogLayerRoster.spec.ts. */
+  --z-dialog: 40;
+  --z-picker: 45;
+  --z-help: 50;
   /* CW-UX-17: the eleven context-breakdown swatch hues (dark set — the
      values the panel shipped as literals). Dracula and tokyoNight are dark
      surfaces and inherit these; the light blocks below carry a legible

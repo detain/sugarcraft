@@ -249,7 +249,7 @@ onBeforeUnmount(() => {
 .lightbox {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: var(--z-dialog);
   background: rgb(0 0 0 / 75%);
   display: grid;
   place-items: center;

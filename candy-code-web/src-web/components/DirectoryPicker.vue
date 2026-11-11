@@ -268,7 +268,7 @@ watch(selected, async () => {
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 45;
+  z-index: var(--z-picker);
   background: rgb(0 0 0 / 0.35);
   display: flex;
   justify-content: center;
