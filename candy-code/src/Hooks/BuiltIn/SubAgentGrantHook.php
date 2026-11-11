@@ -47,8 +47,12 @@ use SugarCraft\Code\ToolCall;
  * registers it on the sub-agent's per-turn chain even under `withoutHooks()`,
  * as it does the permission gate: a preset's declaration is the agent's own
  * statement about itself and a hooks switch is not a way to widen it. It is the
- * second gate, never a substitute for the first — the session's
- * {@see PermissionGateHook} still judges every call this one admits.
+ * second gate, never a substitute for the first: every call this one admits is
+ * still put to a {@see PermissionGateHook} — the delegated run's own, sitting
+ * over {@see \SugarCraft\Code\Agents\SubAgent::$permissionGate}, which is
+ * minted with the session's rules and mode ceiling and carries the session's
+ * channel scope (D6), so what the group bars stays barred across the
+ * delegation.
  *
  * AND THE PRESET'S PERMISSION MODE (roadmap 4.1-2), when it is stricter than
  * the session's: `$modeGate` is the sub-agent's own
