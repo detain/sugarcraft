@@ -615,6 +615,35 @@ final class Renderer
     /** @var \WeakReference<Theme>|null the theme {@see $diffMemo} was filled with */
     private static ?\WeakReference $diffMemoTheme = null;
 
+    /** Ceiling for {@see $toolBodyMemo} — settled bodies are few per session. */
+    private const TOOL_BODY_MEMO_MAX = 256;
+
+    /**
+     * Content-addressed memo for the settled tool rows' body leg — the block
+     * {@see settledToolBody()} renders for an expanded row, or for a
+     * collapsed row whose body is kept (an error's reason, a picture
+     * caption). Mirror of {@see $diffMemo} for the input the M-12 memo does
+     * not cover: the row body was scrubbed AND re-collapsed on every frame
+     * while the transcript painted (cc-review-1111 M-9), the third seat of
+     * the per-frame full-input cluster after the hidden-body count and the
+     * diff.
+     *
+     * Same shared-process contract as {@see $imageCache}: keyed on the raw
+     * body's hash plus every ambient read that changes the painted bytes —
+     * the collapse/expand state, the keep-when-collapsed state, the preview
+     * line budget, the character budget, and the locale (the trailer and the
+     * hidden-row wording run through `Lang::t`). The theme is NOT in the
+     * key: the memo belongs to one {@see Theme} object,
+     * {@see $toolBodyMemoTheme}, and is emptied when a frame renders with a
+     * different one. A theme switch costs one cold frame.
+     *
+     * @var array<string, string>
+     */
+    private static array $toolBodyMemo = [];
+
+    /** @var \WeakReference<Theme>|null the theme {@see $toolBodyMemo} was filled with */
+    private static ?\WeakReference $toolBodyMemoTheme = null;
+
     /**
      * The streaming partial's incremental render state (audit 15b-10).
      *
@@ -5426,9 +5455,9 @@ final class Renderer
                     $block .= "\n" . self::hiddenBodyHint($hiddenLines, $theme);
                 }
             } else {
-                $body = self::untrusted($rawBody);
+                $body = self::settledToolBody($rawBody, $keepWhenCollapsed, $isExpanded, $theme);
                 if ($body !== '') {
-                    $block .= "\n" . self::renderToolBody($body, $keepWhenCollapsed, $isExpanded, $theme);
+                    $block .= "\n" . $body;
                 }
             }
 
@@ -5799,6 +5828,53 @@ final class Renderer
             . self::dim($theme)->render(Lang::t('tui.tool.output_truncated'));
     }
 
+    /**
+     * The settled tool row's body leg, memoized (cc-review-1111 M-9): scrub
+     * the raw output once per distinct content/state pair instead of once
+     * per frame, mirroring {@see renderDiff()}'s settled-diff memo.
+     *
+     * The key folds every input that changes the painted bytes: the raw
+     * body's hash (the sanitizer and the clip are pure over it), the two
+     * per-row states the caller resolved, the ambient preview-line budget
+     * from {@see toolOutputPreviewLines()}, the character budget, and the
+     * locale — both the truncated trailer and (defensively) any hidden-row
+     * wording run through `Lang::t`. An empty scrubbed body renders as the
+     * empty string and is stored as such, exactly reproducing the call
+     * site's former `if ($body !== '')` skip.
+     */
+    private static function settledToolBody(string $rawBody, bool $keepWhenCollapsed, bool $isExpanded, Theme $theme): string
+    {
+        if (self::$toolBodyMemoTheme?->get() !== $theme) {
+            self::$toolBodyMemo = [];
+            self::$toolBodyMemoTheme = \WeakReference::create($theme);
+        }
+
+        $key = strlen($rawBody) . ':' . hash('xxh128', $rawBody)
+            . ':' . ($isExpanded ? '1' : '0')
+            . ':' . ($keepWhenCollapsed ? '1' : '0')
+            . ':' . self::toolOutputPreviewLines()
+            . ':' . self::TOOL_OUTPUT_MAX_CHARS
+            . ':' . \SugarCraft\Core\I18n\T::locale();
+
+        if (isset(self::$toolBodyMemo[$key])) {
+            // LRU touch: a served entry becomes the youngest.
+            $hit = self::$toolBodyMemo[$key];
+            unset(self::$toolBodyMemo[$key]);
+
+            return self::$toolBodyMemo[$key] = $hit;
+        }
+
+        $body = self::untrusted($rawBody);
+        $rendered = $body === '' ? '' : self::renderToolBody($body, $keepWhenCollapsed, $isExpanded, $theme);
+
+        self::$toolBodyMemo[$key] = $rendered;
+        if (\count(self::$toolBodyMemo) > self::TOOL_BODY_MEMO_MAX) {
+            unset(self::$toolBodyMemo[array_key_first(self::$toolBodyMemo)]);
+        }
+
+        return $rendered;
+    }
+
     /** The faint "N lines hidden" row that stands in for a collapsed body. */
     private static function hiddenBodyHint(int $count, Theme $theme): string
     {
@@ -5812,10 +5888,14 @@ final class Renderer
      *
      * Every tool row in the transcript is rebuilt on every frame, and most
      * of them are collapsed. Sanitizing each one's output again on each frame
-     * was the largest cost left in {@see renderHistory()}, and a tool body is
-     * the one input in a transcript that can be megabytes. Hashing the raw
-     * body is much cheaper than sanitizing it, and the sanitizer is a pure
-     * function, so the count is too.
+     * was the largest cost left in {@see renderHistory()} when this count was
+     * first memoized, and a tool body is the one input in a transcript that
+     * can be megabytes. Hashing the raw body is much cheaper than sanitizing
+     * it, and the sanitizer is a pure function, so the count is too. The
+     * rows whose bodies ARE painted — expanded, or kept while collapsed —
+     * are memoized whole by {@see settledToolBody()} (M-9), and a settled
+     * diff by {@see renderDiff()}'s memo (M-12), so no per-frame full-body
+     * sweep remains on a settled row.
      */
     private static function hiddenBodyLineCount(string $raw): int
     {
