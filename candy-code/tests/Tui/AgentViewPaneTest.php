@@ -163,6 +163,38 @@ final class AgentViewPaneTest extends TestCase
     }
 
     // =========================================================================
+    // AgentViewPane::stripEscapes — M-18 canonical ECMA-48 sweep
+    // =========================================================================
+
+    /**
+     * M-18: the pane's escape sweep must swallow DCS/SOS/PM/APC strings and
+     * 8-bit introducers, not only CSI and OSC. The hand-rolled CSI+OSC-only
+     * regex this seat shipped before the canonical Ansi::strip sweep was
+     * wired in left a sixel payload's body, an APC secret's text, and a lone
+     * 0x9B all visible as junk in the agent rows.
+     */
+    public function testStripEscapesSweepsDcsApcAndEightBitIntroducers(): void
+    {
+        $strip = new \ReflectionMethod(AgentViewPane::class, 'stripEscapes');
+
+        $this->assertSame(
+            'beforeafter',
+            $strip->invoke(null, "before\x1bP5;1qDEADBEEF\x1b\\after"),
+            'a DCS sixel payload must not survive the sweep',
+        );
+        $this->assertSame(
+            'ab',
+            $strip->invoke(null, "a\x1b_SomePrivateData\x1b\\b"),
+            'an APC string must not survive the sweep',
+        );
+        $this->assertSame(
+            'ab',
+            $strip->invoke(null, "a\x9b0mb"),
+            'an 8-bit CSI introducer must sweep like its ESC form',
+        );
+    }
+
+    // =========================================================================
     // AgentViewPane::statusColor — all 6 statuses
     // =========================================================================
 

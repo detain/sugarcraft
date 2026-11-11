@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Protocol\Methods;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentMode;
 use SugarCraft\Code\Agents\Live\AgentInbox;
@@ -419,7 +420,8 @@ final class AgentsMethods
 
     /**
      * One log item as the wire carries it: its type, time and known fields,
-     * every string scrubbed of terminal escapes, control bytes and
+     * every string scrubbed of terminal escapes ({@see Ansi::strip()} — the
+     * full ECMA-48 sweep, DCS/SOS/PM/APC included), control bytes and
      * Private-Use codepoints — a model and its tools wrote all of it.
      *
      * @param array<string, mixed> $item
@@ -444,7 +446,11 @@ final class AgentsMethods
     {
         if (\is_string($value)) {
             $value = \mb_scrub($value, 'UTF-8');
-            $value = \preg_replace('/\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]?|\x1b\][^\x07\x1b]*(?:\x07|\x1b\x5c)?|\x1b/', '', $value) ?? '';
+            // The canonical ECMA-48 sweep: CSI and OSC in both the 7-bit and
+            // the 8-bit form, plus DCS/SOS/PM/APC — the hand-rolled CSI+OSC
+            // regex this replaces left the payload body of a String-Terminated
+            // sequence behind as junk on the wire. {@see Ansi::strip()}
+            $value = Ansi::strip($value);
 
             return \preg_replace('/[\x00-\x08\x0b-\x1f\x7f]|[\x{80}-\x{9f}]|[\x{E000}-\x{F8FF}]/u', '', $value) ?? '';
         }

@@ -8,6 +8,7 @@ use SugarCraft\Code\Host\TranscriptProjector;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\ToolResult;
+use SugarCraft\Core\Util\Ansi;
 
 /**
  * The reader of a {@see SubAgentTranscriptLog}: an offset tail, and the
@@ -254,9 +255,10 @@ final class AgentTranscriptTail
     }
 
     /**
-     * $text with terminal escapes, control bytes (tab and newline kept), DEL,
-     * C1 and Private-Use codepoints removed, invalid UTF-8 scrubbed — and the
-     * survivor's imitation-control heads (fake role tags, ChatML-style
+     * $text with terminal escapes ({@see Ansi::strip()} — the full ECMA-48
+     * sweep, DCS/SOS/PM/APC included), control bytes (tab and newline kept),
+     * DEL, C1 and Private-Use codepoints removed, invalid UTF-8 scrubbed — and
+     * the survivor's imitation-control heads (fake role tags, ChatML-style
      * special tokens) folded into their inert visible spelling by
      * {@see ReportSanitizer::sanitize()}. Runs last: the escape sweep must
      * not be able to uncover a header the anchor never saw, and the
@@ -277,7 +279,11 @@ final class AgentTranscriptTail
             \chr(0x1C) => "\n", \chr(0x1D) => "\n", \chr(0x1E) => "\n",
             "\u{0085}" => "\n", "\u{2028}" => "\n", "\u{2029}" => "\n",
         ]);
-        $text = preg_replace('/\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]?|\x1b\][^\x07\x1b]*(?:\x07|\x1b\x5c)?|\x1b/', '', $text) ?? '';
+        // The canonical ECMA-48 sweep: CSI, OSC AND the DCS/SOS/PM/APC string
+        // classes, in both 7-bit and 8-bit form. A hand-rolled CSI+OSC-only
+        // regex (this line's predecessor) left a DCS/APC payload's body on the
+        // page as junk — see {@see Ansi::strip()}.
+        $text = Ansi::strip($text);
 
         return ReportSanitizer::sanitize(
             preg_replace('/[\x00-\x08\x0b-\x1f\x7f]|[\x{80}-\x{9f}]|[\x{E000}-\x{F8FF}]/u', '', $text) ?? '',

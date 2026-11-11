@@ -80,6 +80,25 @@ final class AgentsBackgroundControlTest extends TestCase
     }
 
     /** @return array{0: \SugarCraft\Code\Tests\Server\Support\WireClient, 1: string} */
+    /**
+     * M-18: the log-wire scrub must swallow DCS/SOS/PM/APC strings, not only
+     * CSI and OSC. Under the hand-rolled CSI+OSC-only regex this seat shipped
+     * (its predecessor) the sixel payload body rode onto the wire verbatim,
+     * junk bytes and all; only the canonical Ansi::strip sweep takes the whole
+     * ECMA-48 escape set.
+     */
+    public function testTheWireItemScrubSweepsAnEmbeddedDcsPayloadFromTheString(): void
+    {
+        $wireItem = new \ReflectionMethod(AgentsMethods::class, 'wireItem');
+
+        $wire = $wireItem->invoke(null, [
+            't' => 'message',
+            'content' => "before\x1bP5;1qDEADBEEF\x1b\\after",
+        ]);
+
+        self::assertSame('beforeafter', $wire['content']);
+    }
+
     private function turn(): array
     {
         $client = $this->fixture->client();

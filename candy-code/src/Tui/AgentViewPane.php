@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tui;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Code\Lang;
@@ -357,37 +358,37 @@ final class AgentViewPane
      * severed escape for an over-run, which is the defect the clamp exists to
      * close.
      *
-     * Three alternatives: a CSI (`ESC [`, parameter bytes 0x30..0x3f,
-     * intermediate bytes 0x20..0x2f, final byte 0x40..0x7e), an OSC (`ESC ]`
-     * up to BEL or ST), and then any ESC left over. The last one drops the ESC
-     * BYTE only and keeps what followed it, which is why `ESC ( B` comes back
-     * as `(B`: two visible cells, which is also what `Width::string()` scores
-     * the original.
+     * The canonical sweep: {@see Ansi::strip()} walks ECMA-48 in full — CSI
+     * (`ESC [` to a 0x40..0x7e final, or to end of input), OSC (`ESC ]` up to
+     * BEL or ST), the DCS/SOS/PM/APC string sequences (ST only, never BEL),
+     * their 8-bit single-byte introducers, and two-byte Fe escapes such as
+     * `ESC M`. The hand-rolled CSI+OSC regex this replaces matched none of
+     * the string sequences, so a sixel DCS left its whole payload behind on
+     * the row as visible junk. What is not consumed keeps its old shape: a
+     * LONE ESC drops the ESC BYTE only and keeps what followed it, which is
+     * why `ESC ( B` still comes back as `(B`: two visible cells, which is
+     * also what `Width::string()` scores the original.
      *
-     * On escape-FREE input this is the identity -- measured, 0 of 20,000
+     * On escape-FREE input this is the identity — measured, 0 of 20,000
      * random strings over an alphabet of ASCII, accents, emoji, ZWJ, tabs and
-     * bare brackets came back changed -- so nothing any existing geometry
+     * bare brackets came back changed — so nothing any existing geometry
      * figure was measured over moves at all.
      *
      * It is NOT width-neutral on escape-bearing input, and does not need to
      * be. `Width::string()` skips a CSI by scanning to the first byte in
-     * 0x40..0x7e whatever lies between, so a MALFORMED `ESC [` swallows the
-     * visible text after it; the grammar above stops at the first byte that is
-     * not a legal parameter or intermediate, and leaves that text on screen,
-     * which is what a real terminal does with it. Over 20,000 random
-     * escape-bearing strings the two disagree on width in 5,398. That
-     * disagreement is inert here because {@see render()} measures the STRIPPED
-     * text everywhere -- `$identityWidth`, `$opBudget`, the clamp and the
-     * right-pad all read fields that have already been through this function,
-     * and the raw field is never measured again after it.
+     * 0x40..0x7e whatever lies between, and the canonical sweep scans the CSI
+     * body the same way, treating embedded C0 bytes as consumed control
+     * traffic — a real VT parser executes them rather than displaying them.
+     * The two therefore disagree with hand-measured regularity over random
+     * escape-bearing strings. That disagreement is inert here because
+     * {@see render()} measures the STRIPPED text everywhere —
+     * `$identityWidth`, `$opBudget`, the clamp and the right-pad all read
+     * fields that have already been through this function, and the raw field
+     * is never measured again after it.
      */
     private static function stripEscapes(string $text): string
     {
-        return preg_replace(
-            '/\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e]?|\x1b\][^\x07\x1b]*(?:\x07|\x1b\x5c)?|\x1b/',
-            '',
-            $text,
-        ) ?? $text;
+        return Ansi::strip($text);
     }
 
     /**

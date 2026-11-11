@@ -160,6 +160,24 @@ final class TranscriptLogTailTest extends TestCase
         $this->assertSame('ok zone done', $rows[0]->content);
     }
 
+    /**
+     * M-18: the transcript tail must swallow DCS and APC device-control
+     * strings, not only CSI and OSC. The hand-rolled CSI+OSC-only regex this
+     * seat shipped before the canonical Ansi::strip sweep was wired in let a
+     * sixel payload's body and an APC secret's text land on the page as junk
+     * (or worse, as renderer input); the CSI and OSC legs below stay byte-for
+     * bytes the contract testLoggedTextIsUntrusted already pins.
+     */
+    public function testTheTailSweepsEmbeddedDcsAndApcPayloadsFromLoggedText(): void
+    {
+        $log = SubAgentTranscriptLog::forRun('s', 'a', $this->root);
+        $log->assistant("a\x1bP5;1qDEADBEEF\x1b\\b\x1b_SomePrivateData\x1b\\c");
+
+        $rows = AgentTranscriptTail::messages(AgentTranscriptTail::readAll($log->path()));
+
+        $this->assertSame('abc', $rows[0]->content);
+    }
+
     public function testTheSuiteNeverWritesIntoTheRealHome(): void
     {
         $this->assertStringNotContainsString('/.candy-code/', SubAgentTranscriptLog::defaultRoot(), 'tests/bootstrap.php pins the transcript root into the sandbox');
