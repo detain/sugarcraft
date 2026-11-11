@@ -494,6 +494,7 @@ candy-code/tests/Protocol/ClientToolMethodsTest.php	0.815	9
 candy-code/tests/Acp/AcpHandshakeTest.php	0.815	9
 candy-code/tests/Host/Commands/DoctorHostCommandTest.php	0.811	6
 candy-code/tests/Server/WsUpgradeTest.php	0.797	7
+candy-code/tests/Server/ReservedSessionNameGuardTest.php	0.793	8
 candy-code/tests/Commands/ShareCommandTest.php	0.778	43
 candy-code/tests/Backend/CommandBackendTest.php	0.777	15
 candy-code/tests/Permissions/PermissionFsmExtractionParityTest.php	0.775	15
