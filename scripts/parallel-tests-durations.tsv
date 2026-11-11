@@ -785,6 +785,7 @@ candy-code/tests/Preview/RunningRowPreviewTest.php	0.182	8
 candy-code/tests/Agents/TaskListHooksTest.php	0.179	10
 candy-code/tests/App/AgentWindowViewportTest.php	0.179	5
 candy-code/tests/Runtime/TaskCallIdThreadingTest.php	0.179	2
+candy-code/tests/Channels/ChannelRegistryTest.php	0.178	17
 candy-code/tests/Providers/VertexProviderTest.php	0.175	155
 candy-code/tests/Commands/SlashMenuCommandTextSanitizationTest.php	0.173	3
 candy-code/tests/Support/SecretEnvScrubTest.php	0.173	35
@@ -794,7 +795,6 @@ candy-code/tests/Skills/SkillForkTest.php	0.169	7
 candy-code/tests/MCP/McpClientTest.php	0.168	45
 candy-code/tests/Tools/BashSandboxTest.php	0.168	23
 candy-code/tests/Bundles/BundleUpdateTest.php	0.167	10
-candy-code/tests/Channels/ChannelRegistryTest.php	0.166	16
 candy-code/tests/Support/DaemonizeTest.php	0.166	6
 candy-code/tests/Diagnostics/TuiErrorLogTest.php	0.166	40
 candy-code/tests/Context/ContextCategoriesTest.php	0.166	9
