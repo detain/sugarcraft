@@ -219,7 +219,12 @@ final class ConversationRouter
 
         switch ($name) {
             case 'new':
-                $this->serve->createSession($args[0] ?? null)
+                // M-4: the replacement session carries the SAME channel-policy
+                // grammar as the auto-bound one — a free-text argument here
+                // used to land as the session name, silently dropping the
+                // conversation out of its D6 policy binding. Positional args
+                // are advisory.
+                $this->serve->createSession(self::grammarName($key))
                     ->then(function (array $created) use ($key, $ref, $channel): void {
                         $sessionId = (string) ($created['id'] ?? '');
                         if ($sessionId === '') {
@@ -597,7 +602,7 @@ final class ConversationRouter
             return \React\Promise\resolve($existing);
         }
 
-        return $this->serve->createSession()->then(function (array $created) use ($key, $ref): string {
+        return $this->serve->createSession(self::grammarName($key))->then(function (array $created) use ($key, $ref): string {
             $sessionId = (string) ($created['id'] ?? '');
             if ($sessionId === '') {
                 throw new \RuntimeException('session.create returned no id');
@@ -608,6 +613,37 @@ final class ConversationRouter
 
             return $sessionId;
         });
+    }
+
+    /**
+     * Stamp the §2.3 session grammar onto the existing `session.create` name
+     * field (zero protocol change) so the core's ChannelToolPolicyService can
+     * resolve this conversation's tool policy AT ADMISSION — the Discord
+     * bundle's M5 twin, mirrored exactly. Teams keys by conversation id: the
+     * DM ladder shapes (`dm:main`, `dm:<peer>`, `dm:<chan>:<peer>`,
+     * `dm:acc:<chan>:<peer>`) match Discord's, so the same kind logic speaks
+     * here — the aggregate is honestly a CHANNEL session (no per-sender
+     * identity to bind), a per-peer shape is a DM session whose tail IS the
+     * sender, and every other conversation id is a GROUP session. The
+     * agentId segment is a placeholder: policy keys on channel + kind + id,
+     * never on who runs the session. Without this stamp D6 per-channel
+     * policy was dead config on Teams (agent: appeared nowhere in the
+     * bundle).
+     */
+    private static function grammarName(string $key): string
+    {
+        $rest = Keys::parse($key)['rest'];
+        if (\str_starts_with($rest, 'dm:')) {
+            if ($rest === 'dm:main') {
+                return 'agent:main:msteams:channel:main';
+            }
+            // Every per-peer DM shape ends with the peer id.
+            $segments = \explode(':', $rest);
+
+            return 'agent:main:msteams:dm:' . $segments[\count($segments) - 1];
+        }
+
+        return 'agent:main:msteams:group:' . $rest;
     }
 
     private function followNow(string $sessionId, string $key): void

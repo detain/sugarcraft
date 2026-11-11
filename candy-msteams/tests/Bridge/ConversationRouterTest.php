@@ -253,6 +253,52 @@ final class ConversationRouterTest extends TestCase
         self::assertSame('switched', $this->face->delivered[count($this->face->delivered) - 1]);
     }
 
+    public function testAChannelConversationIsCreatedUnderTheGroupGrammar(): void
+    {
+        $this->boot();
+        $this->inboundOn('msteams:default:19:team-42@thread.v2', 'hello channel');
+
+        self::assertSame(1, $this->serve->createSeen);
+        self::assertSame('agent:main:msteams:group:19:team-42@thread.v2', $this->serve->createName, 'M-5: D6 policy resolves identity off the name field — Teams must stamp it too');
+    }
+
+    public function testAPerPeerDmIsCreatedUnderTheDmGrammarWithThePeerTail(): void
+    {
+        $this->boot();
+        $this->inboundOn('msteams:default:dm:peer-1', 'hello dms');
+
+        self::assertSame('agent:main:msteams:dm:peer-1', $this->serve->createName);
+    }
+
+    public function testTheAccountChannelPeerShapeStillEndsInItsPeer(): void
+    {
+        $this->boot();
+        $this->inboundOn('msteams:default:dm:acc:chan-9:peer-7', 'wide dm');
+
+        self::assertSame('agent:main:msteams:dm:peer-7', $this->serve->createName, 'the widest DM ladder shape resolves to the human it addresses');
+    }
+
+    public function testTheAggregateDmIsHonestlyCreatedAsAChannelSession(): void
+    {
+        $this->boot();
+        $this->inboundOn('msteams:default:dm:main', 'aggregate hello');
+
+        self::assertSame('agent:main:msteams:channel:main', $this->serve->createName, 'a folded multi-sender session names no sender — policy falls to the channel level');
+    }
+
+    public function testNewKeepsTheChannelPolicyGrammarOnTheReplacementSession(): void
+    {
+        $this->boot();
+        $this->inboundDm('bind me', false, 'm-1');
+
+        $this->router->runCommand('msteams', self::DM_KEY, self::REF, ['name' => 'new', 'args' => ['agent:squatter:victim']]);
+        self::runFor($this->loop, 300);
+
+        self::assertSame(2, $this->serve->createSeen, '/new must mint its own session, not reuse the bound one');
+        self::assertSame('agent:main:msteams:dm:peer-1', $this->serve->createName, 'M-4 twin: the grammar survives the /new turn, and a chat-typed title can never become the name');
+        self::assertStringContainsString('New session', $this->face->delivered[count($this->face->delivered) - 1]);
+    }
+
     public function testAMediaRefusalRetriesOnceWithoutAttachments(): void
     {
         $this->boot();
@@ -346,6 +392,15 @@ final class ConversationRouterTest extends TestCase
     private function inboundDm(string $text, bool $isMention, string $inboundId): void
     {
         $this->router->inbound('msteams', self::DM_KEY, ['conversationId' => '19:dm-9@thread.v2', 'serviceUrl' => 'https://s.test', 'activityId' => $inboundId], $text, $isMention, $inboundId);
+        self::runFor($this->loop, 300);
+    }
+
+    /** Drive one inbound message on an arbitrary §9.1 conversation key. */
+    private function inboundOn(string $key, string $text, bool $isMention = false): void
+    {
+        $conversationId = '19:' . \substr(\md5($key), 0, 8) . '@thread.v2';
+        $inboundId = 'm-' . \substr(\md5($key . $text), 0, 8);
+        $this->router->inbound('msteams', $key, ['conversationId' => $conversationId, 'serviceUrl' => 'https://s.test', 'activityId' => $inboundId], $text, $isMention, $inboundId);
         self::runFor($this->loop, 300);
     }
 
