@@ -309,6 +309,7 @@ candy-code/tests/Support/OneSidedHomeSandboxTest.php	1.732	5
 candy-code/tests/Host/SessionHostChannelScopeTest.php	1.732	9
 candy-code/tests/Runtime/ThinkingBlocksProductionFoldTest.php	1.731	8
 candy-code/tests/Commands/MemoryImportCommandTest.php	1.730	16
+candy-code/tests/Tools/BuiltIn/TeamToolTest.php	1.727	19
 candy-code/tests/Host/SessionHostIdleAutoTest.php	1.715	17
 candy-code/tests/Cli/BootstrapLaunchFormatConstantsTest.php	1.715	18
 candy-code/tests/Server/GatewayTrustRoutingTest.php	1.708	2
@@ -360,7 +361,6 @@ candy-code/tests/Chat/ColdResumeFinishedAgentTest.php	1.437	5
 candy-code/tests/Host/Commands/CommitHostCommandTest.php	1.432	7
 candy-code/tests/Backend/CancelSoftStopsAtBoundaryTest.php	1.427	4
 candy-code/tests/Cli/SubcommandsSessionLockGateTest.php	1.425	16
-candy-code/tests/Tools/BuiltIn/TeamToolTest.php	1.413	18
 candy-code/tests/Protocol/SessionFeedSubagentsTest.php	1.412	3
 candy-code/tests/Host/AheadOfNeedSkipRulesTest.php	1.407	9
 candy-code/tests/MCP/ClaudeCodeMcpServerTest.php	1.407	14
@@ -551,7 +551,6 @@ candy-code/tests/Agents/TaskListCasAndCycleTest.php	0.593	16
 candy-code/tests/Tools/WebFetchMarkdownTest.php	0.590	12
 candy-code/tests/App/SidePaneRowClickTest.php	0.589	8
 candy-code/tests/MCP/StdioMcpEnvScrubTest.php	0.586	6
-candy-code/tests/Tools/BuiltIn/TeamToolScopeTest.php	0.583	9
 candy-code/tests/Chat/CallbackAuthoredRefusalTest.php	0.582	8
 candy-code/tests/Support/VersionTest.php	0.582	31
 candy-code/tests/Host/CompactionFallbackParityTest.php	0.571	7
@@ -685,6 +684,7 @@ candy-code/tests/Runtime/ToolCallIdUniquenessTest.php	0.333	2
 candy-code/tests/Session/SessionSearchUnavailableTest.php	0.331	4
 candy-code/tests/Cli/BootstrapTrustGateSelfGrantTest.php	0.331	8
 candy-code/tests/Diagnostics/NoticeSinkIsolationTest.php	0.330	6
+candy-code/tests/Tools/BuiltIn/TeamToolScopeTest.php	0.330	9
 candy-code/tests/Tui/MenuBarMouseTest.php	0.329	16
 candy-code/tests/Integration/TeamLifecycleTest.php	0.328	8
 candy-code/tests/Chat/MemoryAddDefaultScopeTest.php	0.328	5
