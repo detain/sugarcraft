@@ -1164,6 +1164,19 @@ server session reads them when it starts.
 - **`compaction.keepRecent`** (10) is how many recent exchanges a compaction
   keeps in full; the three `compaction.summary…Chars` / `toolOutputChars` keys
   bound what a condensed exchange keeps and what the summariser is shown.
+- **What the summary budgets cost** — `compaction.summaryUserChars` (80) and
+  `compaction.summaryAssistantChars` (100) bound only the local heuristic, and
+  they cost different things: the user budget keeps the head of the message and
+  ellipsises the tail, while an assistant reply longer than the assistant
+  budget is dropped whole — the summary line carries the marker
+  `[exchanged information]` instead of any of its content. Whenever a
+  `summaryModel` answers for the exchange, its own summary wins and neither
+  budget applies; the heuristic is the fallback `compaction.mode` `llm`
+  degrades to, and the only path under `compaction.mode` `heuristic`.
+  Both budgets default aggressively because every retained character rides on
+  all later prompts: raise them (or set `summaryModel`) when condensed history
+  drops the detail you needed, lower them when the summary rows outstay their
+  welcome.
 - **The absolute caps** sit beside the percentages, and a tier fires at
   whichever is LOWER. **On by default:** the reminder at
   `compaction.reminderTokens` = 100,000 tokens and automatic compaction at
