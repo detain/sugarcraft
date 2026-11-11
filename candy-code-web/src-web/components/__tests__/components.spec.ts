@@ -33,6 +33,8 @@ describe('ToolCard', () => {
     expect(wrapper.find('[data-testid="tool-output"]').exists()).toBe(false)
     await wrapper.find('button.head').trigger('click')
     expect(wrapper.find('[data-testid="tool-output"]').text()).toBe('clean')
+    // UXB-F3: the expanded output region is keyboard-scrollable.
+    expect(wrapper.find('[data-testid="tool-output"]').attributes('tabindex')).toBe('0')
   })
 
   it('paints the live tail outside the collapsed body while the call runs (WEB-4)', () => {
@@ -42,11 +44,42 @@ describe('ToolCard', () => {
     expect(tail.text()).toContain('gcc -c a.c')
     expect(tail.text()).toContain('older output dropped')
     expect(wrapper.attributes('data-status')).toBe('running')
+    // UXB-F3: the live tail rides the same keyboard-scroll affordance.
+    expect(tail.find('pre').attributes('tabindex')).toBe('0')
   })
 
   it('shows no tail once the call is finished', () => {
     const wrapper = mount(ToolCard, { props: { item: tool({ progressTail: 'stale', progressSeq: 1 }) } })
     expect(wrapper.find('[data-testid="tool-progress"]').exists()).toBe(false)
+  })
+
+  /**
+   * CW-UXB-F1: the head button's accessible name carried no status token, so
+   * assistive tech could not tell running / done / denied / interrupted / error
+   * apart (done and interrupted were indistinguishable). A visually-hidden
+   * span in the head now carries the raw status token — the house raw-token
+   * idiom (TodoPanel, StatusBar) and zero new strings.
+   */
+  it('names every status token in the head for assistive tech', () => {
+    for (const status of ['running', 'done', 'denied', 'interrupted', 'error'] as const) {
+      const wrapper = mount(ToolCard, { props: { item: tool({ status }) } })
+      const head = wrapper.find('button.head')
+      expect(head.find('[data-testid="tool-status"]').text()).toBe(status)
+      expect(head.text()).toContain(status)
+    }
+  })
+
+  it('announces an interrupted call politely while other states stay silent', () => {
+    const live = (status: ToolItem['status']) =>
+      mount(ToolCard, { props: { item: tool({ status }) } })
+        .find('[data-testid="tool-status"]')
+        .attributes('aria-live')
+    // The transcript is deliberately non-live (SessionView), so the flip-on
+    // aria-live pattern (SessionTile) is the house mechanism for the one
+    // settled state that must reach the user as it arrives.
+    expect(live('interrupted')).toBe('polite')
+    expect(live('done')).toBe('off')
+    expect(live('running')).toBe('off')
   })
 
   it('opens a refusal and names its kind', () => {

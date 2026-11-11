@@ -178,3 +178,16 @@ describe('session tabs: the status dot word (UX-13)', () => {
     expect(tabB.find('.sr-only').exists()).toBe(false)
   })
 })
+
+/**
+ * UXB-F3: the tab strip scrolls horizontally on narrow viewports, and
+ * Firefox/Safari only give keyboard scroll to focusable overflow regions.
+ */
+describe('session tabs: keyboard scroll affordance (UXB-F3)', () => {
+  it('makes the scrollable tab strip focusable', async () => {
+    const { wrapper } = await setUp()
+    const tabs = wrapper.find('.tabs')
+    expect(tabs.attributes('tabindex')).toBe('0')
+    expect(tabs.attributes('role')).toBe('tablist')
+  })
+})

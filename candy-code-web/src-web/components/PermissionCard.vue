@@ -171,7 +171,7 @@ function onKey(event: KeyboardEvent): void {
       <span v-if="what" class="what">{{ what }}</span>
     </header>
     <p v-if="ask.reason" class="reason">{{ ask.reason }}</p>
-    <div v-if="planText" class="plan-body" data-testid="ask-plan">
+    <div v-if="planText" class="plan-body" data-testid="ask-plan" tabindex="0">
       <p v-if="planSummary" class="plan-summary">{{ planSummary }}</p>
       <MessageMarkdown :text="planText" />
     </div>

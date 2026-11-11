@@ -113,6 +113,8 @@ describe('PermissionCard plan approval (WEB-5a-iv)', () => {
     const wrapper = mount(PermissionCard, { props: { ask: planExit, canAnswer: true } })
     const plan = wrapper.find('[data-testid="ask-plan"]')
     expect(plan.exists()).toBe(true)
+    // UXB-F3: the scrollable plan body is keyboard-scrollable.
+    expect(plan.attributes('tabindex')).toBe('0')
     // The body rides the transcript's own markdown component (DOMPurify needs
     // a real DOM — happy-dom's walk is lossy — so the heading markup itself is
     // pinned at the parser stage below, per this suite's markdown convention).

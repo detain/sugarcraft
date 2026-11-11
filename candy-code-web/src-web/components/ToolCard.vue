@@ -108,6 +108,14 @@ function humaniseDenialKind(kind: string): string {
   <article class="tool" :class="item.status" :data-status="item.status" data-testid="tool-card">
     <button type="button" class="head" :aria-expanded="open" @click="toggleCard">
       <span class="icon" aria-hidden="true">{{ icon }}</span>
+      <!-- CW-UXB-F1: the glyph is paint; the status word is the truth. The raw
+           token joins the collapsed accessible name so running/done/denied/
+           interrupted/error stay distinct to a screen reader (house idiom:
+           TodoPanel.vue and StatusBar.vue announce raw state words in sr-only).
+           The live-region flip mirrors SessionTile.vue's focused toggle: 'off'
+           until the row settles interrupted, when the flip-on re-read is the
+           announcement the transcript deliberately never makes. -->
+      <span class="sr-only" :aria-live="item.status === 'interrupted' ? 'polite' : 'off'" data-testid="tool-status">{{ item.status }}</span>
       <span class="name">{{ item.name }}</span>
       <span class="arg">{{ summary }}</span>
       <span v-if="stats" class="stats"><span class="plus">+{{ stats.added }}</span> <span class="minus">−{{ stats.removed }}</span></span>
@@ -118,16 +126,16 @@ function humaniseDenialKind(kind: string): string {
       <p class="progress-tag">
         {{ t('web.transcript.tool_tail') }}<template v-if="item.progressTruncated"> {{ t('web.transcript.tool_tail_dropped') }}</template>
       </p>
-      <pre class="output">{{ tail }}</pre>
+      <pre class="output" tabindex="0">{{ tail }}</pre>
     </section>
     <div v-if="open" class="body">
       <p v-if="item.denial" class="denial">{{ item.denial.reason ? t('web.transcript.refused_reason', { kind: humaniseDenialKind(item.denial.kind), reason: item.denial.reason }) : t('web.transcript.refused', { kind: humaniseDenialKind(item.denial.kind) }) }}</p>
       <details class="args">
         <summary>{{ t('web.transcript.args_summary') }}</summary>
-        <pre>{{ argsJson }}</pre>
+        <pre tabindex="0">{{ argsJson }}</pre>
       </details>
       <DiffView v-if="item.diff" :diff="item.diff" />
-      <pre v-if="output !== null && output !== ''" class="output" data-testid="tool-output">{{ output }}</pre>
+      <pre v-if="output !== null && output !== ''" class="output" data-testid="tool-output" tabindex="0">{{ output }}</pre>
       <button v-if="item.truncated" type="button" class="more" @click="emit('loadFull', item)">{{ t('web.transcript.tool_load_full') }}</button>
       <!-- Artifact refs ride the event; the bytes are pulled by each card on
            demand (Appendix C-7). Media joins after the output region. -->

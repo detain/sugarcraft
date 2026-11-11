@@ -173,27 +173,34 @@ function showMoreRows(): void {
 </script>
 
 <template>
-  <div class="diff" :class="{ split }" data-testid="diff" role="table" :aria-label="split ? t('web.transcript.diff_split_aria') : t('web.transcript.diff_aria')">
-    <template v-if="!split">
-      <div v-for="row in shownRows" :key="row.key" class="row" :class="row.kind" role="row">
-        <span class="no numbers" role="cell">{{ row.oldNo }}</span>
-        <span class="no numbers" role="cell">{{ row.newNo }}</span>
-        <span class="sign" role="cell">{{ row.sign }}</span>
-        <span class="text" role="cell"><span v-if="row.html !== null" v-html="row.html" /><template v-else>{{ row.text }}</template></span>
-      </div>
-    </template>
-    <template v-else>
-      <div v-for="row in shownRows" :key="row.key" class="row" :class="row.classes" role="row">
-        <span v-if="row.spanText !== null" class="text" role="cell">{{ row.spanText }}</span>
-        <template v-else>
-          <span class="no numbers" role="cell">{{ row.left.no }}</span>
-          <span class="half" :class="row.left.kind" role="cell"><span v-if="row.left.html !== null" v-html="row.left.html" /><template v-else>{{ row.left.text }}</template></span>
-          <span class="divider" role="cell" aria-hidden="true">│</span>
-          <span class="no numbers" role="cell">{{ row.right.no }}</span>
-          <span class="half" :class="row.right.kind" role="cell"><span v-if="row.right.html !== null" v-html="row.right.html" /><template v-else>{{ row.right.text }}</template></span>
-        </template>
-      </div>
-    </template>
+  <!-- CW-UXB-F2/F3: the box is a plain focusable scroller (wide unified rows
+       overflow-x); the table semantics move to a rows wrapper so the show-more
+       line below is no longer a role="status" child inside a role="table" —
+       invalid structure that ATs dropped on >500-row diffs. Box, border and
+       scroll are byte-identical; only the ARIA parentage changed. -->
+  <div class="diff" :class="{ split }" data-testid="diff" tabindex="0">
+    <div class="rows" role="table" :aria-label="split ? t('web.transcript.diff_split_aria') : t('web.transcript.diff_aria')">
+      <template v-if="!split">
+        <div v-for="row in shownRows" :key="row.key" class="row" :class="row.kind" role="row">
+          <span class="no numbers" role="cell">{{ row.oldNo }}</span>
+          <span class="no numbers" role="cell">{{ row.newNo }}</span>
+          <span class="sign" role="cell">{{ row.sign }}</span>
+          <span class="text" role="cell"><span v-if="row.html !== null" v-html="row.html" /><template v-else>{{ row.text }}</template></span>
+        </div>
+      </template>
+      <template v-else>
+        <div v-for="row in shownRows" :key="row.key" class="row" :class="row.classes" role="row">
+          <span v-if="row.spanText !== null" class="text" role="cell">{{ row.spanText }}</span>
+          <template v-else>
+            <span class="no numbers" role="cell">{{ row.left.no }}</span>
+            <span class="half" :class="row.left.kind" role="cell"><span v-if="row.left.html !== null" v-html="row.left.html" /><template v-else>{{ row.left.text }}</template></span>
+            <span class="divider" role="cell" aria-hidden="true">│</span>
+            <span class="no numbers" role="cell">{{ row.right.no }}</span>
+            <span class="half" :class="row.right.kind" role="cell"><span v-if="row.right.html !== null" v-html="row.right.html" /><template v-else>{{ row.right.text }}</template></span>
+          </template>
+        </div>
+      </template>
+    </div>
     <p v-if="hiddenRows > 0" class="rest" role="status" data-testid="diff-more">
       <button type="button" class="link" data-testid="diff-show-more" @click="showMoreRows">{{ t('web.transcript.file_load_more') }}</button>
       <span>{{ hiddenRows }}</span>

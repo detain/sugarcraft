@@ -169,7 +169,7 @@ onBeforeUnmount(() => {
 
 <template>
   <nav v-if="visible" class="tabs-strip" :aria-label="t('web.grid.tabs_aria')" data-testid="session-tabs">
-    <div class="tabs" role="tablist">
+    <div class="tabs" role="tablist" tabindex="0">
       <div
         v-for="(id, index) in layout.tabs"
         :key="id"

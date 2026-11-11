@@ -226,6 +226,22 @@ describe('row cap keeps a giant diff paintable (MA-30)', () => {
     expect(wrapper.find('[data-testid="diff-more"]').exists()).toBe(false)
   })
 
+  it('keeps the live-region out of the table subtree and the scroller focusable', () => {
+    // CW-UXB-F2: the row-cap release line is a role=status live region and it
+    // used to sit inside the role=table subtree — invalid table structure for
+    // assistive tech. CW-UXB-F3: the overflow scroller must be focusable.
+    const wrapper = mount(DiffView, { props: { diff: BIG } })
+    const table = wrapper.find('[role="table"]')
+    expect(table.exists()).toBe(true)
+    // Non-vacuity: the table really is the row grid, not a stray role.
+    expect(table.element.querySelectorAll('[role="row"]').length).toBeGreaterThan(0)
+    const more = wrapper.find('[data-testid="diff-more"]')
+    expect(more.exists()).toBe(true)
+    expect(more.attributes('role')).toBe('status')
+    expect(more.element.closest('[role="table"]')).toBeNull()
+    expect(wrapper.find('[data-testid="diff"]').attributes('tabindex')).toBe('0')
+  })
+
   it('a fresh diff resets the budget', async () => {
     const wrapper = mount(DiffView, { props: { diff: BIG } })
     await wrapper.find('[data-testid="diff-show-more"]').trigger('click')
