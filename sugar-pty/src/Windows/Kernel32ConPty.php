@@ -632,14 +632,40 @@ CDEF;
         }
 
         if (!$ok) {
+            $byPtrError = $this->lastError();
+
+            // The spawn is already dying here, so the refusal path spends its
+            // one roundtrip on forensics the kernel can answer: which of the
+            // two sides is actually dead. blobAddr is the list's real address
+            // — an (int) cast of a void* CData yields the wrapper's stored
+            // handle, not the pointer, which is why an early run reported the
+            // blob as 0x1. The first word inside the blob is kernelbase's own
+            // bookkeeping; reading it says whether the list we initialized is
+            // still the list we allocated. ResizePseudoConsole is the cheap
+            // oracle for the pseudo-console handle: S_OK means the handle both
+            // attach shapes were refused is ALIVE, which indicts the attribute
+            // list; any other answer means the handle went stale upstream in
+            // ConPtySystem and Update honestly rejected it.
+            $blobAddr = (int) \FFI::cast('intptr_t', $list)->cdata;
+            $magicWord = $ffi->new('SIZE_T');
+            \FFI::memcpy(\FFI::addr($magicWord), $list, \FFI::sizeof($magicWord));
+            $coord = $ffi->new('COORD');
+            $coord->X = 80;
+            $coord->Y = 24;
+            $probeResult = (int) $ffi->ResizePseudoConsole($pseudoConsole, $coord);
+            $probeError = $this->lastError();
+
             throw new PtyException(\sprintf(
-                'UpdateProcThreadAttribute(PSEUDOCONSOLE) failed with win32 error %d [byPtr err=%d, blob=0x%016X, hpcn=0x%016X, cbSize=%d, attr=0x%08X]',
+                'UpdateProcThreadAttribute(PSEUDOCONSOLE) failed with win32 error %d [byPtr err=%d, blobAddr=0x%016X, align=%d, magic=0x%016X, hpcn=0x%016X, probeHr=0x%08X, probeErr=%d, cbSize=%d]',
                 $byValueError,
-                $this->lastError(),
-                (int) $list,
+                $byPtrError,
+                $blobAddr,
+                $blobAddr % 16,
+                (int) $magicWord->cdata,
                 $pseudoConsole,
+                $probeResult,
+                $probeError,
                 $cbSize,
-                self::PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
             ));
         }
     }
