@@ -58,3 +58,35 @@ describe('live tail (ISS-108)', () => {
     expect(wrapper.find('[data-testid="reply-announcement"]').text()).toBe('Reply complete: the full answer')
   })
 })
+
+/**
+ * CW-UX-A m38: the G4-C stale window — the server declared this session's
+ * ephemeral feed dropped and the fresh snapshot has not landed yet. The
+ * transcript's in-flow audit row scrolls; the pane chrome must say so.
+ */
+describe('stale window on the pane (m38)', () => {
+  it('paints the drop honestly while the feed is stale, and clears when the snapshot lands', async () => {
+    const wrapper = await openSession()
+    const session = useSessionStore('s1')
+    expect(wrapper.find('[data-testid="session-stale"]').exists()).toBe(false)
+
+    wire.serverEvent('server.overflow', { dropped: 5, action: 'resubscribe', sessionId: 's1' })
+    await flushPromises()
+    expect(session.stale).toBe(true)
+
+    const row = wrapper.find('[data-testid="session-stale"]')
+    expect(row.exists()).toBe(true)
+    expect(row.attributes('role')).toBe('status')
+    expect(row.text()).toBe('Events dropped while this tab fell behind (5) — resynchronising from a fresh snapshot.')
+
+    wire.answer('session.subscribe', {
+      reset: true,
+      throughSeq: 9,
+      pendingAsks: [],
+      snapshot: { sessionId: 's1', status: 'idle', lastSeq: 9, pendingAsks: [], queue: [], messages: [] },
+    })
+    await flushPromises()
+    expect(session.stale).toBe(false)
+    expect(wrapper.find('[data-testid="session-stale"]').exists()).toBe(false)
+  })
+})

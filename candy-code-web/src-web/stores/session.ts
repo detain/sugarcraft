@@ -8,7 +8,7 @@ import type { PastedDocument, PastedImage } from '../lib/paste'
 import { useConnectionStore } from './connection'
 import { useClientToolsStore } from './clientTools'
 import { useLayoutStore } from './layout'
-import { applyEvent, applyOlderPage, applyPendingAsks, applySnapshot, createState, noteOverflow, type ToolItem } from './reducer'
+import { applyEvent, applyOlderPage, applyPendingAsks, applySnapshot, createState, noteOverflow, overflowNoticeCopy, type ToolItem } from './reducer'
 
 export type Delivery = 'queue' | 'steer' | 'interrupt'
 export type Phase = 'idle' | 'subscribing' | 'live'
@@ -46,8 +46,9 @@ function setup(sessionId: string) {
   const olderError = ref<string | null>(null)
   let olderOrdinal = 0
   /** G4-C contract: the drop the pending fresh resubscribe must report — the
-   *  notice is re-appended after a snapshot replaces the transcript. */
-  let overflow: { key: string; dropped: number } | null = null
+   *  notice is re-appended after a snapshot replaces the transcript.
+   *  m38: a ref so the pane's staleNotice computed tracks the window. */
+  const overflow = ref<{ key: string; dropped: number } | null>(null)
   let overflowCount = 0
   let cursor = new SeqCursor<EventEnvelope>(0)
   let early: EventEnvelope[] = []
@@ -58,6 +59,12 @@ function setup(sessionId: string) {
   const busy = computed(() => state.status !== 'idle')
   const contextPct = computed(() =>
     state.contextTokens !== null && state.contextWindow ? Math.min(100, Math.round((state.contextTokens / state.contextWindow) * 100)) : null,
+  )
+  /** m38: pane-chrome copy for the stale window — the same G4-C audit sentence
+   *  as the transcript drop row, painted while the feed is declared dead and
+   *  no fresh snapshot has landed. null = window closed. */
+  const staleNotice = computed(() =>
+    stale.value && overflow.value ? overflowNoticeCopy(overflow.value.dropped) : null,
   )
 
   function handle(envelope: EventEnvelope): void {
@@ -92,11 +99,11 @@ function setup(sessionId: string) {
       cursor = new SeqCursor(subscription.throughSeq)
       // G4-C contract: the drop line is audit copy — it stays above the
       // replaced transcript so the user can see what was lost.
-      if (overflow) noteOverflow(state, overflow.dropped, overflow.key)
+      if (overflow.value) noteOverflow(state, overflow.value.dropped, overflow.value.key)
     }
     // A replay ({fromSeq, throughSeq}) follows as events; the cursor drops
     // whatever of it this client already holds.
-    overflow = null
+    overflow.value = null
     applyPendingAsks(state, subscription.pendingAsks)
     stale.value = false
     phase.value = 'live'
@@ -136,10 +143,13 @@ function setup(sessionId: string) {
       // the in-flight answer's subscription is already dead server-side.
       resubscribe: (dropped: number) => {
         if (phase.value === 'idle') return
-        stale.value = true
+        // m38: record the drop before opening the window — the pane row reads
+        // `overflow` through staleNotice, so there is never a beat where the
+        // feed is declared stale with nothing to say about it.
         overflowCount += 1
-        overflow = { key: `overflow:${overflowCount}`, dropped }
-        noteOverflow(state, dropped, overflow.key)
+        overflow.value = { key: `overflow:${overflowCount}`, dropped }
+        stale.value = true
+        noteOverflow(state, dropped, overflow.value.key)
         void subscribe(true, true)
       },
     })
@@ -395,6 +405,7 @@ function setup(sessionId: string) {
     phase,
     error,
     stale,
+    staleNotice,
     commands,
     commandsError,
     busy,

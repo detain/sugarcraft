@@ -323,12 +323,21 @@ export function applyPendingAsks(state: SessionState, asks: PendingAsk[]): void 
  * The line records how much fell behind; like the spend, compaction and
  * stop notices it is server-event data-text, not chrome copy.
  */
+/**
+ * The G4-C drop audit sentence, in one place. The transcript row and the
+ * m38 pane row paint the same copy — one source, no drift. Like the
+ * transcript row it is data-text (an audit of what the server declared),
+ * not chrome copy, so it stays the shipped English literal.
+ */
+export const overflowNoticeCopy = (dropped: number): string =>
+  `Events dropped while this tab fell behind (${dropped}) — resynchronising from a fresh snapshot.`
+
 export function noteOverflow(state: SessionState, dropped: number, key: string): void {
   upsert(state, {
     kind: 'notice',
     key,
     level: 'warn',
-    content: `Events dropped while this tab fell behind (${dropped}) — resynchronising from a fresh snapshot.`,
+    content: overflowNoticeCopy(dropped),
   })
 }
 

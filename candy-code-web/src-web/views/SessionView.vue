@@ -313,6 +313,10 @@ async function fetchOlderTranscript(): Promise<string | null> {
       <button type="button" class="link" @click="rename">{{ t('web.views.session.rename') }}</button>
     </header>
     <p v-if="session.error" class="error" role="alert">{{ session.error }}</p>
+    <!-- m38: the stale window painted on the pane — the drop the server
+         declared, in fixed chrome above the frozen transcript (the audit row
+         inside the scroller can be off-screen when the fall-behind happens). -->
+    <p v-if="session.staleNotice" class="stale-notice" role="status" aria-live="polite" data-testid="session-stale">{{ session.staleNotice }}</p>
     <Transcript
       :items="state.items"
       :subagents="state.subagents"
@@ -415,6 +419,15 @@ h1 {
   padding: 0 1rem;
 }
 .save-notice {
+  margin: 0 0 0.4rem;
+  color: var(--warn);
+  font-size: 0.875rem;
+  padding: 0 1rem;
+}
+/* m38: the stale-window notice rides the same warn chrome as the save
+   notice — it sits outside the scroller so a frozen transcript is never
+   mistaken for a live one. */
+.stale-notice {
   margin: 0 0 0.4rem;
   color: var(--warn);
   font-size: 0.875rem;
