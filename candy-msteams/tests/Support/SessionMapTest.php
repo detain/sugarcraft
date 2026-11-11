@@ -103,4 +103,36 @@ final class SessionMapTest extends TestCase
         self::assertSame(0, $map->cursor('conversation:7'));
         self::assertSame(0, $map->cursorForSession('session-A'));
     }
+
+    /**
+     * Adjudicated at weld (R-FM7-r1 MINOR-1): bind() deliberately never
+     * updates peer_id — the ON CONFLICT SET omits the column, and the
+     * bridges re-bind with a null peer, so the first peer wins for the
+     * lifetime of the key. That preserved-stale answer matches the
+     * pre-M-7 behaviour byte-for-byte; this leg pins it so a future
+     * touch of the SET clause cannot silently change the contract.
+     */
+    public function testRebindingLeavesTheStoredPeerIdUntouched(): void
+    {
+        $map = $this->map();
+        $map->bind('conversation:42', 'session-A', 'activity:1');
+        $map->noteSeqForSession('session-A', 500);
+
+        // Re-bind onto a fresh session WITH a different peer argument:
+        // the session and cursor legs move...
+        $map->bind('conversation:42', 'session-B', 'activity:2');
+        self::assertSame('session-B', $map->sessionIdFor('conversation:42'));
+        self::assertSame(0, $map->cursor('conversation:42'));
+
+        // ...but the stored peer_id is the original — never rewritten,
+        // not even by a null-peer re-bind (the bridges' re-bind shape).
+        $db = new \PDO('sqlite:' . $this->path);
+        $peer = $db->query("SELECT peer_id FROM bindings WHERE key = 'conversation:42'")->fetch(\PDO::FETCH_ASSOC);
+        self::assertSame('activity:1', $peer['peer_id']);
+
+        $map->bind('conversation:42', 'session-C');
+        self::assertSame('session-C', $map->sessionIdFor('conversation:42'));
+        $peer = $db->query("SELECT peer_id FROM bindings WHERE key = 'conversation:42'")->fetch(\PDO::FETCH_ASSOC);
+        self::assertSame('activity:1', $peer['peer_id']);
+    }
 }
