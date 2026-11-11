@@ -347,6 +347,46 @@ final class SettingsWriterTest extends TestCase
         }
     }
 
+    // ── paid side-call dials: a project switches them off, never on (C-M17) ──
+
+    /** @return iterable<string, array{0: string}> */
+    public static function projectOffOnlyPaidDials(): iterable
+    {
+        yield 'autoTitle' => ['sessions.autoTitle'];
+        yield 'prompt suggestions' => ['promptSuggestions'];
+        yield 'away recap' => ['sessions.awayRecap'];
+    }
+
+    #[DataProvider('projectOffOnlyPaidDials')]
+    public function testTheProjectTierMaySwitchAPaidSideDialOffButNeverOn(string $key): void
+    {
+        $writer = $this->userWriter()->withProject($this->root, true);
+
+        self::assertNull($writer->refusal(SettingsTier::You, $key, true), 'the user tier still switches it on');
+        self::assertNull($writer->refusal(SettingsTier::ProjectLocal, $key, false), 'off stays allowed: that is the narrowing the schema advertises');
+
+        $refusal = $writer->refusal(SettingsTier::ProjectLocal, $key, true);
+        self::assertNotNull($refusal, "an ON write from a project file is refused: {$key}");
+        self::assertStringContainsString('never on', $refusal);
+        self::assertSame($writer->refusal(SettingsTier::ProjectShared, $key, true), $refusal, 'both project files, one rule');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $writer->write(SettingsTier::ProjectLocal, [$key => true]);
+    }
+
+    public function testAPurelyUserTierSpendKeyStillRefusesAnyProjectWrite(): void
+    {
+        // autoReview was never project-settable, so the tier arm answers before
+        // any value leg: the message says "may not be set", not "never on".
+        $writer = $this->userWriter()->withProject($this->root, true);
+
+        foreach ([true, false] as $value) {
+            $refusal = $writer->refusal(SettingsTier::ProjectLocal, 'autoReview', $value);
+            self::assertNotNull($refusal, 'autoReview ' . var_export($value, true));
+            self::assertStringContainsString('may not be set by a project file', $refusal);
+        }
+    }
+
     // ── modelPrices (N-P5) ──────────────────────────────────────────────
 
     public function testAWellFormedPriceTableIsWritten(): void

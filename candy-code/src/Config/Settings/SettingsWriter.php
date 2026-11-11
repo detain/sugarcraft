@@ -227,7 +227,36 @@ final class SettingsWriter
             return "{$key}: a null would mask every lower layer — reset the key instead";
         }
 
+        // C-M17: the three default-ON paid side dials take their ON direction
+        // from the user tier alone; a project file contributes OFF only.
+        if ($tier->isProject() && $value === true) {
+            $offOnly = self::projectOffOnlyRefusal($key);
+
+            if ($offOnly !== null) {
+                return $offOnly;
+            }
+        }
+
         return self::typeRefusal($definition, $value) ?? self::validatorRefusal($definition, $value);
+    }
+
+    /**
+     * The paid side dials whose ON direction a project may not ask for
+     * (C-M17). A value ruling, not a schema one: the keys stay
+     * project-settable, because switching OFF is a sanctioned narrowing.
+     *
+     * @var list<string>
+     */
+    private const PROJECT_OFF_ONLY_KEYS = ['sessions.autoTitle', 'promptSuggestions', 'sessions.awayRecap'];
+
+    /** Why an ON write of an off-only key at project scope is refused, or null. */
+    private static function projectOffOnlyRefusal(string $key): ?string
+    {
+        if (!in_array($key, self::PROJECT_OFF_ONLY_KEYS, true)) {
+            return null;
+        }
+
+        return "{$key}: may be switched off by a project file but never on";
     }
 
     /**
