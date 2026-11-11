@@ -34,40 +34,65 @@ final class SessionMap
         if (!\is_dir($dir) && !@mkdir($dir, 0o700, true) && !\is_dir($dir)) {
             throw new \RuntimeException("state directory not creatable: {$dir}");
         }
-        $db = new \PDO('sqlite:' . $path);
-        $db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-        $db->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
-        $db->exec('PRAGMA journal_mode = WAL');
-        $db->exec('PRAGMA busy_timeout = 5000');
-        $db->exec('PRAGMA synchronous = NORMAL');
-        $db->exec(<<<'SQL'
-            CREATE TABLE IF NOT EXISTS bindings (
-                key        TEXT PRIMARY KEY,
-                session_id TEXT NOT NULL,
-                last_seq   INTEGER NOT NULL DEFAULT 0,
-                peer_id    TEXT,
-                created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
-            )
-            SQL);
-        $db->exec('CREATE INDEX IF NOT EXISTS bindings_session ON bindings (session_id)');
-        $db->exec(<<<'SQL'
-            CREATE TABLE IF NOT EXISTS last_conversation (
-                session_id TEXT PRIMARY KEY,
-                key        TEXT NOT NULL,
-                ref_json   TEXT NOT NULL,
-                updated_at INTEGER NOT NULL
-            )
-            SQL);
-        $db->exec(<<<'SQL'
-            CREATE TABLE IF NOT EXISTS seen_inbound (
-                platform  TEXT NOT NULL,
-                inbound_id TEXT NOT NULL,
-                seen_at   INTEGER NOT NULL,
-                PRIMARY KEY (platform, inbound_id)
-            )
-            SQL);
-        @chmod($path, 0o600);
+        // WAL sidecars (db-wal, db-shm) are created at the first write in
+        // the SHAPE OF THE PROCESS UMASK, and until checkpointed away they
+        // carry the very bindings and reply-address rows the main db is
+        // kept private for (cc-review-1111 register B-52, the D4 0600
+        // law). Open the connection and settle the schema inside a
+        // private window so the sidecars are born owner-only; the
+        // caller's mask comes back whatever the schema step does.
+        $priorUmask = \umask(0o077);
+        try {
+            $db = new \PDO('sqlite:' . $path);
+            $db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+            $db->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
+            $db->exec('PRAGMA journal_mode = WAL');
+            $db->exec('PRAGMA busy_timeout = 5000');
+            $db->exec('PRAGMA synchronous = NORMAL');
+            $db->exec(<<<'SQL'
+                CREATE TABLE IF NOT EXISTS bindings (
+                    key        TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    last_seq   INTEGER NOT NULL DEFAULT 0,
+                    peer_id    TEXT,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                )
+                SQL);
+            $db->exec('CREATE INDEX IF NOT EXISTS bindings_session ON bindings (session_id)');
+            $db->exec(<<<'SQL'
+                CREATE TABLE IF NOT EXISTS last_conversation (
+                    session_id TEXT PRIMARY KEY,
+                    key        TEXT NOT NULL,
+                    ref_json   TEXT NOT NULL,
+                    updated_at INTEGER NOT NULL
+                )
+                SQL);
+            $db->exec(<<<'SQL'
+                CREATE TABLE IF NOT EXISTS seen_inbound (
+                    platform  TEXT NOT NULL,
+                    inbound_id TEXT NOT NULL,
+                    seen_at   INTEGER NOT NULL,
+                    PRIMARY KEY (platform, inbound_id)
+                )
+                SQL);
+        } finally {
+            \umask($priorUmask);
+        }
+        // Re-assert on every piece that EXISTS: prior-era files (the db,
+        // or sidecars a crash left behind) were born before this window
+        // and only a chmod tightens them. A missing sidecar is a no-op —
+        // nothing wrote, so nothing leaked; a chmod that fails against an
+        // existing file means the state is not ours to make private, and
+        // that is said loudly rather than @-swallowed.
+        foreach ([$path, $path . '-wal', $path . '-shm'] as $piece) {
+            if (!\file_exists($piece)) {
+                continue;
+            }
+            if (!@\chmod($piece, 0o600)) {
+                throw new \RuntimeException("state file could not be made private: {$piece}");
+            }
+        }
         $this->db = $db;
     }
 
