@@ -1113,13 +1113,21 @@ final class TaskListTest extends TestCase
      * announces once per traversal on the operator log surface, named and
      * counted; a clean list costs zero warning lines, because an instrument
      * that always announces proves nothing when the poisoned case announces.
+     *
+     * The captured traversal carries TWO poisoned rows — status poison on
+     * one, corrupt dependency JSON on the other — so the count leg cannot be
+     * satisfied by per-row spam mistaking itself for one announcement, and
+     * the poisoned status value itself must never surface in the label list:
+     * the announcement names rows by id, it does not echo their corruption.
      */
     public function testTheSkipIsAnnouncedOnceOnTheLogSurfaceAndTheCleanListIsSilent(): void
     {
         $poisoned = new TaskList($this->dbPath);
         $poisoned->addTask($this->makeTask('m01-noise-poison', 'team-a', 'Announced', [], TaskStatus::Pending, 'tm-m01'));
+        $poisoned->addTask($this->makeTask('m01-noise-corrupt', 'team-a', 'Also announced', [], TaskStatus::Pending, 'tm-m01'));
         $poisoned->addTask($this->makeTask('m01-noise-good', 'team-a', 'Rendered', [], TaskStatus::Pending, 'tm-m01'));
         $this->poisonTaskRow('m01-noise-poison', 'status', 'quantum-state');
+        $this->poisonTaskRow('m01-noise-corrupt', 'depends_on', 'not-json');
 
         $logged = self::withErrorLogDiscarded(static function () use ($poisoned): void {
             $poisoned->tasksForTeammate('tm-m01');
@@ -1128,18 +1136,30 @@ final class TaskListTest extends TestCase
         $this->assertSame(
             1,
             substr_count($logged, 'undecodable task row'),
-            'the skip wrote its announcement a number of times other than once — or not at all. Captured log: ' . var_export($logged, true),
+            'the skip wrote its announcement a number of times other than once per traversal — with two poisoned rows, per-row logging emits twice. Captured log: ' . var_export($logged, true),
         );
-        $this->assertStringContainsString('candy-code: task list skipped 1', $logged, 'the line lost the envelope or the count');
+        $this->assertStringContainsString('candy-code: task list skipped 2', $logged, 'the line lost the envelope or the count');
         $this->assertStringContainsString('m01-noise-poison', $logged, 'the line did not name the skipped row');
+        $this->assertStringNotContainsString('quantum-state', $logged, 'the label leaked a poisoned field value into the announcement');
         $this->assertStringNotContainsString('refusing to render', $logged, 'the announcement must not claim a refusal that did not happen');
 
-        $clean = new TaskList($this->dbPath);
+        // A genuinely clean store, in its own database file: the poisoned
+        // rows above live in $this->dbPath, and the depends_on poison is
+        // invisible to no WHERE clause (its status stays 'pending'), so
+        // reusing that file would let the very poison under test leak into
+        // the silence polarity. The file is outside setUp's unlink, so it
+        // goes away right after the capture it exists for.
+        $cleanDb = $this->dbPath . '.clean';
+        $clean = new TaskList($cleanDb);
         $clean->addTask($this->makeTask('m01-noise-clean', 'team-a', 'Well formed'));
 
         $quiet = self::withErrorLogDiscarded(static function () use ($clean): void {
             $clean->pendingTasks();
         });
+
+        if (\file_exists($cleanDb)) {
+            \unlink($cleanDb);
+        }
 
         $this->assertStringNotContainsString('undecodable task row', $quiet, 'a clean listing announced anyway');
     }
