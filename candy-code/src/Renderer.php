@@ -4999,15 +4999,16 @@ final class Renderer
 
         $delta = substr($raw, strlen($memo['consumed']));
         if ($delta !== '') {
-            // One line per push(). The scanner keeps an unconsumed buffer and
-            // re-slices it once per newline, so a 200 KB first frame pushed in
-            // one piece would copy the buffer once per line, which is
-            // quadratic. Its state depends only on the bytes assembled so far,
-            // so how the delta is split does not change the sections.
-            foreach (preg_split('/(?<=\n)/', $delta, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $piece) {
-                foreach ($memo['stream']->push($piece) as $body) {
-                    $memo['bodies'] .= $body;
-                }
+            // One push() for the whole delta. The per-line split this
+            // replaces guarded a scanner that re-sliced its unconsumed
+            // buffer once per newline, making a 200 KB first frame
+            // quadratic; the scanner now resumes at a byte cursor
+            // (sugar-markdown 3574957df, 2026-11-03), so a chunk costs
+            // linear in its size. Its state depends only on the bytes
+            // assembled so far, so how the delta is split does not change
+            // the sections.
+            foreach ($memo['stream']->push($delta) as $body) {
+                $memo['bodies'] .= $body;
             }
             $memo['consumed'] = $raw;
         }

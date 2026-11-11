@@ -392,6 +392,63 @@ final class RenderMemoTest extends TestCase
         );
     }
 
+    /**
+     * m53 (B-42): the delta reaches the stream in ONE whole-chunk push, so
+     * growth jumps whose single delta spans many newlines must still answer
+     * byte-identically to a whole render — the shape the deleted per-line
+     * preg_split() loop used to slice up before feeding the scanner.
+     */
+    public function testADeltaSpanningManyNewlinesStillMatchesTheWholeRender(): void
+    {
+        $doc = self::streamingCorpus();
+        $full = strlen($doc);
+        $theme = Theme::byName('dark');
+
+        foreach ([40, 80, 100] as $width) {
+            self::clearMemos();
+            // Jumps, not steps: every delta after the first crosses several
+            // newlines, and the last jump carries the document's tail, which
+            // has no trailing newline.
+            foreach ([intdiv($full, 4), intdiv($full, 2), intdiv(3 * $full, 4), $full] as $len) {
+                $partial = substr($doc, 0, $len);
+                self::assertSame(
+                    self::wholeStreamingRender($partial, $theme, $width),
+                    self::streamingTurn($partial, $theme, $width),
+                    sprintf('width %d, jump to %d', $width, $len),
+                );
+            }
+        }
+
+        $memo = (new ReflectionProperty(Renderer::class, 'streamMemo'))->getValue();
+        self::assertIsArray($memo);
+        self::assertSame($doc, $memo['consumed'], 'the whole document arrived through whole-chunk pushes');
+    }
+
+    /**
+     * m53 (B-42) source-shape pin, in the program's prose-drift genre:
+     * streamingMarkdown() must never reintroduce the per-line preg_split()
+     * workaround — it predated the linear scanner cursor (sugar-markdown
+     * 3574957df, 2026-11-03) and re-slices every delta for no reason.
+     */
+    public function testStreamingMarkdownPushesEachDeltaWithoutSplittingItPerLine(): void
+    {
+        $method = new ReflectionMethod(Renderer::class, 'streamingMarkdown');
+        $lines = file((string) $method->getFileName());
+        self::assertIsArray($lines);
+        $body = implode('', array_slice(
+            $lines,
+            $method->getStartLine() - 1,
+            $method->getEndLine() - $method->getStartLine() + 1,
+        ));
+
+        self::assertStringNotContainsString('preg_split', $body, 'the stale per-line split must not come back');
+        self::assertSame(
+            1,
+            substr_count($body, "\$memo['stream']->push(\$delta)"),
+            'the delta reaches the stream in exactly one whole-chunk push',
+        );
+    }
+
     // =====================================================================
     // balanceSgr()
     // =====================================================================
