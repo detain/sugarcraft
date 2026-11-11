@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import { objectUrls } from '../../lib/media'
 import type { MediaRef } from '../../protocol/generated'
 import type { ToolItem } from '../../stores/reducer'
@@ -135,6 +136,72 @@ describe('MediaCard', () => {
     expect(wrapper.find('[data-testid="media-lightbox"]').exists()).toBe(true)
     await wrapper.find('[data-testid="lightbox-close"]').trigger('click')
     expect(wrapper.find('[data-testid="media-lightbox"]').exists()).toBe(false)
+  })
+
+  it('names the lightbox opener a real focusable button', async () => {
+    // CW-UX-B F13: the zoom control is a native <button> whose accessible
+    // name rides the thumbnail alt text, and it announces its own state.
+    const wrapper = mountCard({ media: media(), sessionId: 's1' })
+    await flushPromises()
+    await wire.answer('media.fetch', row())
+    const opener = wrapper.find('[data-testid="media-image"]')
+    expect(opener.element.tagName).toBe('BUTTON')
+    expect(opener.attributes('aria-expanded')).toBe('false')
+    await opener.trigger('click')
+    expect(opener.attributes('aria-expanded')).toBe('true')
+  })
+
+  it('announces the lightbox as a labelled modal with a named close control', async () => {
+    // The dialog-semantics half of F13: role=dialog + aria-modal + a real
+    // accessible name, and the close affordance is a visible labelled button.
+    const wrapper = mountCard({ media: media(), sessionId: 's1' })
+    await flushPromises()
+    await wire.answer('media.fetch', row())
+    await wrapper.find('[data-testid="media-image"]').trigger('click')
+    const box = wrapper.find('[data-testid="media-lightbox"]')
+    expect(box.attributes('role')).toBe('dialog')
+    expect(box.attributes('aria-modal')).toBe('true')
+    expect(box.attributes('aria-label')).toBe('Artifact full size')
+    expect(wrapper.find('[data-testid="lightbox-close"]').text()).toBe('close')
+  })
+
+  it('closes the lightbox on Escape, wherever the focus sits', async () => {
+    // The window keydown listener is armed for the life of the open box,
+    // so Escape lands even when focus never entered the dialog.
+    const wrapper = mountCard({ media: media(), sessionId: 's1' })
+    await flushPromises()
+    await wire.answer('media.fetch', row())
+    await wrapper.find('[data-testid="media-image"]').trigger('click')
+    expect(wrapper.find('[data-testid="media-lightbox"]').exists()).toBe(true)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="media-lightbox"]').exists()).toBe(false)
+  })
+
+  it('rides the dialog spine: focus opens on the close button, Escape hands it back', async () => {
+    // CW-UX-07 in production: opening moves focus to the panel's first
+    // tabbable element (the close button) and closing restores the opener.
+    const wrapper = mount(MediaCard, {
+      props: { media: media(), sessionId: 's1' },
+      global: { plugins: [pinia] },
+      attachTo: document.body,
+    })
+    try {
+      await flushPromises()
+      await wire.answer('media.fetch', row())
+      const opener = wrapper.find('[data-testid="media-image"]').element as HTMLElement
+      opener.focus()
+      await wrapper.find('[data-testid="media-image"]').trigger('click')
+      await flushPromises()
+      expect(document.activeElement).toBe(wrapper.find('[data-testid="lightbox-close"]').element)
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      await flushPromises()
+      expect(wrapper.find('[data-testid="media-lightbox"]').exists()).toBe(false)
+      expect(document.activeElement).toBe(opener)
+    } finally {
+      wrapper.unmount()
+      document.body.innerHTML = ''
+    }
   })
 
   it('shows an honest error row when the browser cannot decode the bytes', async () => {
