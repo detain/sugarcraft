@@ -309,7 +309,10 @@ final class AccessorDeprecationTest extends TestCase
 
     public function testTheReadmeCarriesTheEraSectionAndAgreesWithTheCensus(): void
     {
-        $readme = (string) file_get_contents(dirname(__DIR__) . '/README.md');
+        // EOL-normalize at the read: a Windows checkout (core.autocrlf)
+        // hands the README back CRLF, and the row regex below anchors on
+        // `$` per line — the trailing \r silently matched zero rows.
+        $readme = str_replace("\r\n", "\n", (string) file_get_contents(dirname(__DIR__) . '/README.md'));
         self::assertStringContainsString('## Accessor deprecation (2026-10-24)', $readme);
         $flat   = (string) preg_replace('/\s+/u', ' ', $readme);
         self::assertStringContainsString(
