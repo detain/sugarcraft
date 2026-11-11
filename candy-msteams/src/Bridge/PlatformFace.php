@@ -34,9 +34,14 @@ interface PlatformFace
      * contract: when a human answers, the adapter calls back into the
      * Bridge via the closure it was handed at construction.
      *
+     * `$nonce` is the per-ask secret the router minted at presentation
+     * (C-1 answer gate): the card's action data must carry it so a real
+     * submit proves it saw THIS card — a crafted answer without it is
+     * refused before it reaches the permission response.
+     *
      * @param array<string,mixed> $ask the permission.requested data
      */
-    public function promptApproval(array $ref, string $sessionId, array $ask): void;
+    public function promptApproval(array $ref, string $sessionId, array $ask, string $nonce = ''): void;
 
     /** Retire a presented approval prompt once answered (§7.5 single-use). */
     public function retireApproval(string $askId, string $line): void;

@@ -82,11 +82,12 @@ final class CardsTest extends TestCase
     public function testTheSubmitValueCarriesTheSameVocabulary(): void
     {
         self::assertSame(
-            ['askId' => 'ask_9', 'verdict' => 'always'],
+            ['askId' => 'ask_9', 'verdict' => 'always', 'nonce' => ''],
             Cards::parseSubmitValue([Cards::DATA_KEY => 'ask_9', 'verdict' => 'ALWAYS']),
+            'a nonce-less value parses (it is the pre-C-1/crafted shape) — the router gate refuses it fail-closed',
         );
         self::assertSame(
-            ['askId' => 'ask_9', 'verdict' => 'once'],
+            ['askId' => 'ask_9', 'verdict' => 'once', 'nonce' => ''],
             Cards::parseSubmitValue([Cards::DATA_KEY => 'ask_9', 'verdict' => 'wat']),
             'an unknown verdict word inside a REAL submit falls back to once',
         );

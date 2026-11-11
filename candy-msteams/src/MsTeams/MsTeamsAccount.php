@@ -163,15 +163,17 @@ final class MsTeamsAccount implements PlatformFace
     }
 
     /**
-     * §9.6: the adaptive card carries the ask, the summary and (display
-     * only) the approver roster — the WALL is the router's answerApproval,
-     * re-checked on the invoke path below. The 30-minute posture arms an
+     * §9.6: the adaptive card carries the ask, the summary, (display only)
+     * the approver roster, and the C-1 per-ask nonce in every action data —
+     * the WALL is the router's answerApproval (roster + nonce + conversation
+     * binding), re-checked on the invoke path below behind the account's
+     * access floor. The 30-minute posture arms an
      * expiry timer that RETIRES the card clock-triggered, and the same
      * retirement runs when an answer lands: card replace with no actions
      * at all. The universal same-chat `/approve` fallback needs no card —
      * it is parsed by the pipeline before the model, always.
      */
-    public function promptApproval(array $ref, string $sessionId, array $ask): void
+    public function promptApproval(array $ref, string $sessionId, array $ask, string $nonce = ''): void
     {
         $conversationId = (string) ($ref['conversationId'] ?? '');
         $serviceUrl = (string) ($ref['serviceUrl'] ?? '');
@@ -179,7 +181,7 @@ final class MsTeamsAccount implements PlatformFace
             return;
         }
         $roster = \array_map('strval', $this->listCfg('approvalRoster'));
-        $activity = Cards::cardActivity($this->appId, Cards::approvalCard($ask, self::approvalSummary($ask), $roster));
+        $activity = Cards::cardActivity($this->appId, Cards::approvalCard($ask, self::approvalSummary($ask), $roster, $nonce));
         $this->rest->sendActivity($serviceUrl, $conversationId, $activity)->then(
             function (array $sent) use ($ask, $serviceUrl, $conversationId): void {
                 $askId = (string) ($ask['askId'] ?? '');
@@ -371,11 +373,14 @@ final class MsTeamsAccount implements PlatformFace
 
     /**
      * Card answers arrive as invoke activities (Action.Submit posts the
-     * action data as `value`); the vocabulary is the SHARED one — the
-     * router's roster wall re-checks the actor the same way the text
-     * fallback path does, and an unknown/already-retired ask is surfaced
-     * as a harmless already-resolved answer (first-valid-answer-wins,
-     * §9.6).
+     * action data as `value`). C-1: the submitter first passes the
+     * account's access floor (the same dmPolicy/group ladder the message
+     * path applies, minus the pairing-code and mention arms — a submit is
+     * a targeted interaction, not a DM asking to be served), and the
+     * router then re-checks the actor against the roster AND the per-ask
+     * nonce + conversation binding this card was minted with. A crafted
+     * `value` naming anyone, or clicking a card from another conversation,
+     * is refused fail-closed before the permission wire.
      */
     private function handleInvoke(array $activity): void
     {
@@ -387,10 +392,71 @@ final class MsTeamsAccount implements PlatformFace
             return;
         }
         $from = \is_array($activity['from'] ?? null) ? $activity['from'] : [];
+        $authorId = (string) ($from['aadObjectId'] ?? $from['id'] ?? '');
+        $conversation = \is_array($activity['conversation'] ?? null) ? $activity['conversation'] : [];
+        $conversationId = (string) ($conversation['id'] ?? '');
+        $serviceUrl = \trim((string) ($activity['serviceUrl'] ?? ''));
+        $conversationType = (string) ($conversation['conversationType'] ?? (string) ($activity['conversationType'] ?? 'personal'));
+        $isDm = $conversationType === 'personal';
+        $key = $isDm
+            ? Keys::dmKey('msteams', $this->account, $authorId, $conversationId, $this->strCfg('dmScope', Keys::DM_PER_PEER))
+            : Keys::channelKey('msteams', $this->account, $conversationId);
+
+        if (!$this->invokeActorAllowed($isDm, $authorId, $conversationId)) {
+            $this->log->warn('msteams_invoke_refused', ['ask' => $answer['askId'], 'user' => $authorId]);
+            if ($conversationId !== '' && $serviceUrl !== '') {
+                $this->rest->sendActivity($serviceUrl, $conversationId, [
+                    'type' => 'message',
+                    'from' => ['id' => $this->appId],
+                    'textFormat' => 'markdown',
+                    'text' => '⛔ You are not permitted to answer approvals here.',
+                ])->then(null, fn (\Throwable $e) => $this->log->debug('msteams_invoke_refuse_failed', ['error' => $e->getMessage()]));
+            }
+
+            return;
+        }
         $this->router->answerByAskId($answer['askId'], $answer['verdict'], [
-            'userId' => (string) ($from['aadObjectId'] ?? $from['id'] ?? ''),
+            'userId' => $authorId,
             'name' => (string) ($from['name'] ?? ''),
-        ]);
+        ], $answer['nonce'], $key, 'card');
+    }
+
+    /**
+     * C-1 access floor for answer-carrying invokes: targeted submissions
+     * have no mention semantics, so the message path's mention/degraded
+     * arms do not apply — what applies is the whole dmPolicy ladder
+     * (pairing WITHOUT the code notice) and the group row with its
+     * disabled policy. Fail closed: unknown actor, unlisted group,
+     * disabled policy all refuse.
+     */
+    private function invokeActorAllowed(bool $isDm, string $authorId, string $conversationId): bool
+    {
+        if ($authorId === '') {
+            return false;
+        }
+        if ($isDm) {
+            $dmPolicy = $this->strCfg('dmPolicy', 'pairing');
+            if ($dmPolicy === 'open') {
+                return true;
+            }
+            if ($dmPolicy === 'disabled') {
+                return false;
+            }
+            if ($dmPolicy !== 'pairing') {
+                $allow = \array_map('strval', \array_merge($this->pairing->allowUsers($this->account), $this->listCfg('allowFrom')));
+
+                return $allow !== [] && \in_array($authorId, $allow, true);
+            }
+
+            return $this->pairing->isPaired($this->account, $authorId);
+        }
+        $groups = $this->mapCfg('groups');
+        $row = \is_array($groups[$conversationId] ?? null) ? $groups[$conversationId] : null;
+        if ($row === null && $this->strCfg('groupPolicy', 'allowlist') !== 'open') {
+            return false;
+        }
+
+        return $row === null || (string) ($row['policy'] ?? 'allowlist') !== 'disabled';
     }
 
     /**

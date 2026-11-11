@@ -9,9 +9,11 @@ namespace CandyCode\Bundles\MsTeams\MsTeams;
  * ask (tool, command summary, session) and one Action.Submit per verdict;
  * Teams delivers the action's `data` back inside the `value` of a message
  * activity addressed to the bot, which the webhook unpacks and answers
- * through the router's roster wall. The roster riding the card is a
+ * through the router's C-1 answer gate. The roster riding the card is a
  * COURTESY display only — enforcement lives in ConversationRouter's
- * approver check, because a hand-crafted activity can name anyone.
+ * approver check PLUS the per-ask nonce and conversation binding, because
+ * a hand-crafted activity can name anyone (the nonce is what a crafted
+ * `value` cannot forge).
  *
  * Retiring a card REPLACES it with a plain one-line card (§8.4's
  * answered-elsewhere posture): no dead buttons that would only collect a
@@ -36,14 +38,16 @@ final class Cards
     /**
      * The approval card for one ask. $ask is the permission.requested
      * payload; $summary is the pre-truncated single-line command digest the
-     * caller built; $roster lists the configured approvers (courtesy text).
+     * caller built; $roster lists the configured approvers (courtesy text);
+     * $nonce is the per-ask secret from the router's presentApproval — the
+     * card face of the C-1 answer gate requires it back on submit.
      *
      * @param array<string, mixed> $ask
      * @param list<string>         $roster
      *
      * @return array<string, mixed> the adaptive-card content object
      */
-    public static function approvalCard(array $ask, string $summary, array $roster): array
+    public static function approvalCard(array $ask, string $summary, array $roster, string $nonce = ''): array
     {
         $askId = (string) ($ask['askId'] ?? $ask['id'] ?? '');
         $body = [
@@ -56,10 +60,14 @@ final class Cards
 
         $actions = [];
         foreach (['once' => 'Allow once', 'always' => 'Allow always', 'deny' => 'Deny'] as $word => $title) {
+            $data = [self::DATA_KEY => $askId, 'verdict' => $word];
+            if ($nonce !== '') {
+                $data['nonce'] = $nonce;
+            }
             $actions[] = [
                 'type' => 'Action.Submit',
                 'title' => $title,
-                'data' => [self::DATA_KEY => $askId, 'verdict' => $word],
+                'data' => $data,
             ];
         }
 
@@ -109,7 +117,7 @@ final class Cards
      *
      * @param array<string, mixed> $value
      *
-     * @return array{askId: string, verdict: string}|null
+     * @return array{askId: string, verdict: string, nonce: string}|null
      */
     public static function parseSubmitValue(array $value): ?array
     {
@@ -118,8 +126,9 @@ final class Cards
             return null;
         }
         $word = \strtolower((string) ($value['verdict'] ?? 'once'));
+        $nonce = $value['nonce'] ?? '';
 
-        return ['askId' => $askId, 'verdict' => self::VERDICTS[$word] ?? 'once'];
+        return ['askId' => $askId, 'verdict' => self::VERDICTS[$word] ?? 'once', 'nonce' => \is_string($nonce) ? $nonce : ''];
     }
 
     /**
