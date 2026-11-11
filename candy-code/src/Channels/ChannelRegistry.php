@@ -263,7 +263,11 @@ final class ChannelRegistry
      */
     public function httpRouter(): \Closure
     {
-        return function (ServerRequestInterface $request): ?ResponseInterface {
+        // Every arm answers: 503 when disposed, 404 for names no HTTP
+        // channel owns (the stated no-fall-through law above), and the
+        // channel's own ResponseInterface otherwise — null is not a
+        // possible outcome of this handler, so the signature says so.
+        return function (ServerRequestInterface $request): ResponseInterface {
             if ($this->disposed) {
                 return Responses::error(503, 'channels_stopped', 'the channel surface has shut down');
             }
@@ -294,9 +298,9 @@ final class ChannelRegistry
      * JSON round-trip is refused at the door (logged), because delivering a
      * lossy array would hand a channel a lie about what the session said.
      * A fault inside onEvent() is logged and swallowed — the CWPD-9 law that
-     * the feed's listener must outlive any one consumer.
-     *
-     * @throws never — this method cannot break the feed
+     * the feed's listener must outlive any one consumer. (This method cannot
+     * break the feed; it throws nothing — every failure path ends in a log
+     * line and a return.)
      */
     public function handleEvent(string $sessionId, SessionEvent $event, ?\Closure $log = null): void
     {
