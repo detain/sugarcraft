@@ -824,6 +824,16 @@ CandyCode — 터미널용 AI 코딩 어시스턴트.
    CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS
                           비어 있지 않고 0이 아닌 값은 매 턴 후
                           회색 다음 메시지 제안 (→ 수락)을 비활성화합니다.
+   CANDY_CODE_DISABLE_AUTO_TITLE
+                          비어 있지 않고 0이 아닌 값은 타이틀 모델의 자동
+                          세션 제목 지정을 중지합니다.
+   CANDY_CODE_DISABLE_AWAY_RECAP
+                          비어 있지 않고 0이 아닌 값은 세션으로 돌아올 때
+                          보여주는 요약을 중지합니다.
+   CANDY_CODE_DISABLE_AUTO_REVIEW
+                          비어 있지 않고 0이 아닌 값은 자동 리뷰어를 강제로
+                          끕니다. 끌 수만 있고, 환경이 리뷰를 시작하지는
+                          않습니다.
    CANDY_CODE_DISABLE_AUTO_MEMORY
                           비어 있지 않고 0이 아닌 값은 자동 메모리가
                           턴 후 영구적 사실을 노트로 저장하는 것과,

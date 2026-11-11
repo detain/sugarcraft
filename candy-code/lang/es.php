@@ -826,6 +826,16 @@ Variables de entorno:
    CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS
                           Cualquier valor distinto de vacío o 0 desactiva la sugerencia
                           de siguiente mensaje en gris (→ la acepta) tras cada turno.
+   CANDY_CODE_DISABLE_AUTO_TITLE
+                          Cualquier valor salvo vacío o 0 desactiva los
+                          títulos automáticos del modelo de título.
+   CANDY_CODE_DISABLE_AWAY_RECAP
+                          Cualquier valor salvo vacío o 0 desactiva el
+                          resumen al volver a una sesión abandonada.
+   CANDY_CODE_DISABLE_AUTO_REVIEW
+                          Cualquier valor salvo vacío o 0 apaga el revisor
+                          automático. Solo puede apagar; nada en el
+                          entorno inicia revisiones.
    CANDY_CODE_DISABLE_AUTO_MEMORY
                           Cualquier valor distinto de vacío o 0 desactiva el autoguardado
                           de hechos duraderos como notas tras un turno, y

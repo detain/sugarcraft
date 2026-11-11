@@ -823,6 +823,15 @@ CandyCode — 终端 AI 编程助手。
    CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS
                           除空值或 0 外的任何值均停止每回合后
                           显示灰色下一条消息建议（→ 接受）。
+   CANDY_CODE_DISABLE_AUTO_TITLE
+                          除空或 0 以外的任何值会停止标题模型的
+                          自动命名会话。
+   CANDY_CODE_DISABLE_AWAY_RECAP
+                          除空或 0 以外的任何值会停止回到会话时的
+                          离开回顾。
+   CANDY_CODE_DISABLE_AUTO_REVIEW
+                          除空或 0 以外的任何值会强制关闭自动
+                          审查。它只能关闭；环境不会启动审查。
    CANDY_CODE_DISABLE_AUTO_MEMORY
                           除空值或 0 外的任何值均停止自动记忆
                           将持久事实保存为笔记，以及

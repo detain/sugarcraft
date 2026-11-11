@@ -826,6 +826,16 @@ Variáveis de ambiente:
    CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS
                           Qualquer valor diferente de vazio ou 0 para a sugestão
                           de próxima mensagem em cinza (→ aceita) após cada turno.
+   CANDY_CODE_DISABLE_AUTO_TITLE
+                          Qualquer valor exceto vazio ou 0 desliga os
+                          títulos automáticos do modelo de título.
+   CANDY_CODE_DISABLE_AWAY_RECAP
+                          Qualquer valor exceto vazio ou 0 desliga o
+                          resumo mostrado ao voltar a uma sessão.
+   CANDY_CODE_DISABLE_AUTO_REVIEW
+                          Qualquer valor exceto vazio ou 0 desliga o
+                          revisor automático. Só pode desligar; nada no
+                          ambiente inicia revisões.
    CANDY_CODE_DISABLE_AUTO_MEMORY
                           Qualquer valor diferente de vazio ou 0 para o salvamento
                           automático de fatos duráveis como notas após um turno, e

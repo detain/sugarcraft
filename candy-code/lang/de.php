@@ -826,6 +826,16 @@ Umgebungsvariablen:
    CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS
                           Jeder Wert außer leer oder 0 deaktiviert die ausgegrauten
                           Vorschläge für die nächste Nachricht (→ übernimmt) nach jedem Turn.
+   CANDY_CODE_DISABLE_AUTO_TITLE
+                          Jeder Wert außer leer oder 0 verhindert die
+                          automatischen Titel des Titelmodells.
+   CANDY_CODE_DISABLE_AWAY_RECAP
+                          Jeder Wert außer leer oder 0 verhindert die
+                          Rückschau nach der Rückkehr zu einer Sitzung.
+   CANDY_CODE_DISABLE_AUTO_REVIEW
+                          Jeder Wert außer leer oder 0 schaltet den
+                          automatischen Prüfer ab. Er kann nur abschalten;
+                          nichts in der Umgebung startet Prüfschleifen.
    CANDY_CODE_DISABLE_AUTO_MEMORY
                           Jeder Wert außer leer oder 0 deaktiviert das automatische
                           Speichern dauerhafter Fakten als Notizen nach einem Turn, und

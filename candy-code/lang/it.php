@@ -827,6 +827,16 @@ Variabili d'ambiente:
    CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS
                           Qualsiasi valore diverso da vuoto o 0 disattiva il suggerimento
                           del messaggio successivo in grigio (→ lo accetta) dopo ogni turno.
+   CANDY_CODE_DISABLE_AUTO_TITLE
+                          Qualsiasi valore tranne vuoto o 0 spegne i titoli
+                          automatici del modello titolo.
+   CANDY_CODE_DISABLE_AWAY_RECAP
+                          Qualsiasi valore tranne vuoto o 0 spegne il
+                          riepilogo mostrato al rientro in una sessione.
+   CANDY_CODE_DISABLE_AUTO_REVIEW
+                          Qualsiasi valore tranne vuoto o 0 spegne il
+                          revisore automatico. Può solo spegnere; nulla
+                          nell'ambiente avvia revisioni.
    CANDY_CODE_DISABLE_AUTO_MEMORY
                           Qualsiasi valore diverso da vuoto o 0 disattiva l'auto-memory:
                           il salvataggio di fatti duraturi come note dopo un turno e

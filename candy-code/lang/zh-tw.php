@@ -823,6 +823,15 @@ CandyCode — 終端機 AI 程式碼助理。
    CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS
                           任何非空且非 0 的值會停止每回合後的
                           灰色下一則訊息建議（→ 接受）。
+   CANDY_CODE_DISABLE_AUTO_TITLE
+                          除空或 0 以外的任何值會停止標題模型的
+                          自動命名工作階段。
+   CANDY_CODE_DISABLE_AWAY_RECAP
+                          除空或 0 以外的任何值會停止回到工作階段
+                          時的離開回顧。
+   CANDY_CODE_DISABLE_AUTO_REVIEW
+                          除空或 0 以外的任何值會強制關閉自動
+                          審查。它只能關閉；環境不會啟動審查。
    CANDY_CODE_DISABLE_AUTO_MEMORY
                           任何非空且非 0 的值會停止自動記憶
                           在回合後將持久事實儲存為筆記，以及

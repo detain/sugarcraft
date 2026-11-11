@@ -824,6 +824,16 @@ CandyCode — ターミナル向けAIコーディングアシスタント。
    CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS
                           空または 0 以外の値で、各ターン後のグレーアウト
                           された次メッセージ提案 (→ で採用) を停止する。
+   CANDY_CODE_DISABLE_AUTO_TITLE
+                          空でも 0 でもない値はタイトルモデルの自動
+                          セッション名付けを止めます。
+   CANDY_CODE_DISABLE_AWAY_RECAP
+                          空でも 0 でもない値はセッションに戻ったときの
+                          あいさつ要約を止めます。
+   CANDY_CODE_DISABLE_AUTO_REVIEW
+                          空でも 0 でもない値は自動レビュー係を
+                          強制的に切ります。切ることしかできず、環境から
+                          レビューが始まることはありません。
    CANDY_CODE_DISABLE_AUTO_MEMORY
                           空または 0 以外の値で、ターン後に永続的事実を
                           メモとして保存する自動メモリ、および

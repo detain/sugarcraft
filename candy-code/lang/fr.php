@@ -827,6 +827,16 @@ Variables d'environnement :
    CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS
                           Toute valeur autre que vide ou 0 désactive la suggestion
                           de message suivant grisée (→ l'accepte) après chaque tour.
+   CANDY_CODE_DISABLE_AUTO_TITLE
+                          Toute valeur sauf vide ou 0 désactive les titres
+                          automatiques du modèle de titre.
+   CANDY_CODE_DISABLE_AWAY_RECAP
+                          Toute valeur sauf vide ou 0 désactive le résumé
+                          montré au retour dans une session délaissée.
+   CANDY_CODE_DISABLE_AUTO_REVIEW
+                          Toute valeur sauf vide ou 0 éteint le relecteur
+                          automatique. Il ne peut qu'éteindre ; rien dans
+                          l'environnement ne démarre de relecture.
    CANDY_CODE_DISABLE_AUTO_MEMORY
                           Toute valeur autre que vide ou 0 désactive la sauvegarde
                           automatique de faits durables en notes après un tour, et

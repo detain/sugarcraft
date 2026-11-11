@@ -901,6 +901,16 @@ Environment variables:
    CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS
                           Any value other than empty or 0 stops the greyed
                           next-message suggestion (→ takes it) after each turn.
+   CANDY_CODE_DISABLE_AUTO_TITLE
+                          Any value other than empty or 0 stops the
+                          automatic titles the title model gives sessions.
+   CANDY_CODE_DISABLE_AWAY_RECAP
+                          Any value other than empty or 0 stops the recap
+                          shown when you return to a session you left.
+   CANDY_CODE_DISABLE_AUTO_REVIEW
+                          Any value other than empty or 0 forces the auto
+                          exec reviewer off. It can only switch reviews
+                          off; nothing in the environment starts them.
    CANDY_CODE_DISABLE_AUTO_MEMORY
                           Any value other than empty or 0 stops auto-memory
                           saving durable facts as notes after a turn, and
