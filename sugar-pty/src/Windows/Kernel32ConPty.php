@@ -285,7 +285,7 @@ CDEF;
 
         if (\PHP_VERSION_ID < self::MIN_PHP_VERSION_ID) {
             return \sprintf(
-                'this PHP is %s; FFI binding to Win32 in this package requires %s or newer',
+                'this PHP is %s; FFI binding to the Windows API in this package requires %s or newer',
                 \PHP_VERSION,
                 '8.4',
             );
@@ -351,7 +351,7 @@ CDEF;
             ));
         }
 
-        return (int) $out[0];
+        return (int) $out->cdata;
     }
 
     public function resizePseudoConsole(int $pseudoConsole, int $width, int $height): void
@@ -408,7 +408,13 @@ CDEF;
             ));
         }
 
-        return ['read' => (int) $read[0], 'write' => (int) $write[0]];
+        // Scalar out-params from FFI::new() are readable ONLY through ->cdata:
+        // [0] dimension access is reserved for pointer/array CData and throws
+        // "Cannot use object of type FFI\CData as array" on every other shape.
+        // This exact line was the Windows 8.4 CI error (open() died here before
+        // any refusal or live round-trip could run); the accessor is pinned by
+        // testEveryScalarOutParamReadGoesThroughCdataNotADimension.
+        return ['read' => (int) $read->cdata, 'write' => (int) $write->cdata];
     }
 
     public function peekNamedPipe(int $handle): ?array
@@ -437,8 +443,8 @@ CDEF;
         }
 
         return [
-            'available' => (int) $avail[0],
-            'leftThisMessage' => (int) $left[0],
+            'available' => (int) $avail->cdata,
+            'leftThisMessage' => (int) $left->cdata,
         ];
     }
 
@@ -458,7 +464,7 @@ CDEF;
             return false;
         }
 
-        $count = (int) $read[0];
+        $count = (int) $read->cdata;
 
         if ($count === 0) {
             return ''; // End of pipe; the caller learns closure from peekNamedPipe().
@@ -488,7 +494,7 @@ CDEF;
             return false;
         }
 
-        return (int) $written[0];
+        return (int) $written->cdata;
     }
 
     // ─── Process creation ───────────────────────────────────────────────────
@@ -505,7 +511,7 @@ CDEF;
         $ffi->InitializeProcThreadAttributeList(null, $attributeCount, 0, \FFI::addr($size));
         $queryError = $this->lastError();
 
-        if ((int) $size[0] <= 0) {
+        if ((int) $size->cdata <= 0) {
             throw new PtyException(\sprintf(
                 'InitializeProcThreadAttributeList(%d) reported no size (win32 error %d)',
                 $attributeCount,
@@ -513,10 +519,10 @@ CDEF;
             ));
         }
 
-        $bytes = (int) $size[0];
+        $bytes = (int) $size->cdata;
         $list = $ffi->new(\sprintf('unsigned char[%d]', $bytes));
         $size2 = $ffi->new('SIZE_T');
-        $size2[0] = $bytes;
+        $size2->cdata = $bytes;
 
         $ok = $ffi->InitializeProcThreadAttributeList(
             \FFI::addr($list),
@@ -715,7 +721,7 @@ CDEF;
             ));
         }
 
-        return (int) $code[0];
+        return (int) $code->cdata;
     }
 
     public function closeHandle(int $handle): bool

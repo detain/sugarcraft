@@ -314,9 +314,10 @@ final class EgressAllowlistModeTest extends TestCase
         self::assertStringNotContainsString('DRIVER-FAILED', $out, 'the driver\'s own scaffolding broke (port/listener/proxy-start) — that is a box fault, not a jail verdict: ' . $out);
         $refused = str_contains($out, 'JAIL-REFUSED');
         $roundTrip = str_contains($out, 'LIVE-OK-ALLOW') && str_contains($out, 'LIVE-OK-DENY');
+        $hairpinless = str_contains($out, 'LIVE-NO-HAIRPIN') && str_contains($out, 'LIVE-OK-DENY');
         self::assertTrue(
-            $refused || $roundTrip,
-            "the jail either refuses to start here (fail closed) or must allow the listed host and 403 the unlisted one; got: {$out} (status {$status})",
+            $refused || $roundTrip || $hairpinless,
+            "the jail either refuses to start here (fail closed) or must allow the listed host and 403 the unlisted one; a box that does not own the hairpin address may name that instead, but the deny leg always runs; got: {$out} (status {$status})",
         );
     }
 
@@ -366,10 +367,21 @@ if ($probeStatus !== 0 || !str_contains($jailed, 'jailed-ok')) {
 $public = '216.158.226.14';
 $errno = 0;
 $error = '';
-$server = @stream_socket_server('tcp://0.0.0.0:0', $errno, $error);
-if ($server === false) {
-    echo "DRIVER-FAILED listener\n";
-    exit(0);
+// The listener must OWN the hairpin address. A 0.0.0.0 bind on a box that
+// does not hold $public accepts nothing — the jail's packets route to the
+// real internet host that does — which is a topology fact, not a jail
+// verdict (GitHub runners hit exactly this). Binding $public directly asks
+// the kernel the question: EADDRNOTAVAIL means "this box cannot hairpin",
+// named as LIVE-NO-HAIRPIN so the test can honor it, while the deny leg
+// (refused at grant-matching, nothing leaves the box) still runs everywhere.
+$server = @stream_socket_server('tcp://' . $public . ':0', $errno, $error);
+$hairpin = $server !== false;
+if (!$hairpin) {
+    $server = @stream_socket_server('tcp://0.0.0.0:0', $errno, $error);
+    if ($server === false) {
+        echo "DRIVER-FAILED listener\n";
+        exit(0);
+    }
 }
 $name = (string) stream_socket_get_name($server, true);
 $port = (int) substr($name, (int) strrpos($name, ':') + 1);
@@ -385,6 +397,7 @@ try {
 $sb = Bubblewrap::fromSetting('allowlist')->withEgress($proxy->socketPath(), ["$public:$port"]);
 $token = uniqid('ale', true);
 
+if ($hairpin) {
 $allowed = proc_open(
     $sb->wrap('curl -s -m 15 -o /dev/null -w "%{http_code}" http://' . $public . ':' . $port . '/allow-' . $token, $root, false),
     [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
@@ -416,6 +429,9 @@ if ($allowed !== false) {
     proc_close($allowed);
 }
 echo $code === '200' ? "LIVE-OK-ALLOW\n" : "LIVE-ALLOW-GOT($code)\n";
+} else {
+    echo "LIVE-NO-HAIRPIN\n";
+}
 
 // TEST-NET-2 is not in the grant: EgressPolicy refuses at grant-matching,
 // before resolving, so nothing leaves this box.

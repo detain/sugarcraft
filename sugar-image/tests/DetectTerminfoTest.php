@@ -15,8 +15,10 @@ use SugarCraft\Image\Detect;
  * The terminfo sixl capability is consulted between env and DA1.
  *
  * A `$TERM` whose published terminal entry declares a Sixel capability
- * (`sixl`, `Sixel#1`, `SixelScreenMode`, `Ss1`/`Ss2` — the spellings
- * enumerated in sugar-colorprofile's SIXEL_TERMCAPS) IS a sixel terminal,
+ * (`sixl`, `Sixel#1`, `SixelScreenMode` — the spellings enumerated in
+ * sugar-colorprofile's SIXEL_TERMCAPS; the X3.64 status-line user caps
+ * `Ss1`/`Ss2` were dropped from that set by CP-22 and are NOT sixel
+ * markers), IS a sixel terminal,
  * and knowing that costs one local `infocmp -1` read — no bytes touch the
  * tty. Chafa's term.c consults the terminal database for the same reason;
  * Detect now does the same, wired through sugar-colorprofile's
@@ -270,7 +272,11 @@ final class DetectTerminfoTest extends TestCase
             'string Sixel=true'            => ["\tSixel=true,", true],
             'SixelScreenMode glued name'   => ["\tSixelScreenMode=1,", true],
             'underscore respelling'        => ["\tsixel_screen_mode=1,", true],
-            'user-defined Ss1'             => ["\tSs1=\\En,", true],
+            // CP-22 retired Ss1/Ss2 from the sixel name set: they initialize
+            // X3.64 status lines, so a terminal carrying only Ss1 says nothing
+            // about sixel graphics (sugar-colorprofile pins the same verdict
+            // in SixelTerminfoFixtureTest — this row was the stale twin).
+            'user-defined Ss1'             => ["\tSs1=\\En,", false],
             'positive header line'         => ["sus,xterm with sixel graphics,", false],
             'desc value only'              => ["\tdesc=xterm with sixel,", false],
             'comment mention'              => ["# sixl in a comment", false],

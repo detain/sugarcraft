@@ -511,6 +511,154 @@ NEEDLE;
     }
 
     /**
+     * LANE-A2: batch rows report the truth their own request history carries.
+     *
+     * The single-pass arm says false for a tool-ended transcript because the
+     * schema line ORs the helper (pinned by the resume witness above). Batch
+     * rows reset the observer per row, so before the fix row 2 claimed its
+     * answer rode the schema even though the engine refused the request —
+     * Runtime::jsonSchemaFor drops the schema whenever the newest tool
+     * activity is a consumed result, carried OR live. With the batch leg of
+     * the OR restored, EVERY row of a batch dispatched on top of a tool-ended
+     * transcript says so: three documents, all json_schema_applied:false,
+     * exactly three stderr notices. Revert the batch leg and the row-2 pin
+     * reddens; the row-1 pin stays green via the single-pass arm, which is
+     * why both rows are pinned here.
+     */
+    public function testBatchRowsOverACarriedToolRoundTripSayFalseOnEveryRow(): void
+    {
+        $root = \dirname(__DIR__, 2);
+        $dir = \sys_get_temp_dir() . '/crush-agt7b-batch-' . \bin2hex(\random_bytes(6));
+        \mkdir($dir . '/home/.candy-code', 0o700, true);
+        [$endpoint, $endpointPipes, $address] = $this->startCarriedEndpoint($dir);
+
+        // The child resolves the tree under test through a prepended
+        // worktree-source autoloader: a borrowed (symlinked) candy-code/vendor
+        // ships an optimized classmap pointing at ANOTHER checkout's src, and
+        // a behavior pin must observe THIS tree. On a normal CI install the
+        // prepend resolves to the very same files, so it is a no-op there.
+        $script = <<<'PHP'
+            <?php
+            require $argv[2] . '/vendor/autoload.php';
+            $underTest = $argv[2];
+            spl_autoload_register(static function (string $class) use ($underTest): void {
+                if (str_starts_with($class, 'SugarCraft\\Code\\')) {
+                    $src = $underTest . '/src/' . str_replace('\\', '/', substr($class, 16)) . '.php';
+                    if (is_file($src)) {
+                        require $src;
+                    }
+                }
+            }, true, true);
+            use SugarCraft\Code\Cli\ArgvParser;
+            use SugarCraft\Code\Cli\NonInteractive;
+            use SugarCraft\Code\Message;
+            use SugarCraft\Code\Session\EnhancedSessionStore;
+            use SugarCraft\Code\ToolCall;
+            use SugarCraft\Code\ToolResult;
+            $rows = [Message::user('earlier question')];
+            if ($argv[1] === 'carried') {
+                // A step whose RESULT row is last: the transcript ends on a
+                // CONSUMED round-trip, the shape the engine's schema gate
+                // reads as 'the newest tool activity is already answered'.
+                $rows[] = Message::assistant('looking')
+                    ->withToolCalls([new ToolCall(name: 'Agt7bNoSuchTool', arguments: [], id: 'agt7b-c1')])
+                    ->withStepId('agt7b-s1');
+                $rows[] = Message::assistant('')
+                    ->withToolResults([new ToolResult(name: 'Agt7bNoSuchTool', result: 'done', id: 'agt7b-c1')])
+                    ->withStepId('agt7b-s1');
+            } else {
+                $rows[] = Message::assistant('an ordinary answer');
+            }
+            $store = new EnhancedSessionStore((string) getenv('HOME') . '/.candy-code/session.db');
+            $store->saveTranscript($argv[4], $rows);
+            $args = ArgvParser::parse([
+                'candy-code', '--root', $argv[2], '--resume', $argv[4],
+                '--input-format', 'stream-json', '--batch', '-p', 'gamma',
+                '--json-schema', '{"type":"object"}', '--output-format', 'json',
+            ]);
+            if ($args->usageError !== null) {
+                fwrite(STDERR, 'USAGE-ERROR ' . $args->usageError . "\n");
+                exit(9);
+            }
+            exit(NonInteractive::run($args, null, NonInteractive::FORMAT_JSON));
+            PHP;
+
+        $documents = [];
+        $notices = [];
+        try {
+            foreach (['carried', 'clean'] as $mode) {
+                $file = $dir . '/agt7b-batch-child-' . $mode . '.php';
+                \file_put_contents($file, $script);
+                $process = \proc_open(
+                    [PHP_BINARY, $file, $mode, $root, $dir, 'agt7b-batch-' . $mode . '-session'],
+                    [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                    $pipes,
+                    $root,
+                    [
+                        'HOME' => $dir . '/home',
+                        'PATH' => \getenv('PATH') ?: '/usr/bin:/bin',
+                        'CANDY_CODE_PROVIDER' => 'sglang',
+                        'CANDY_CODE_MODEL' => 'agt7b-probe-model',
+                        'OPENAI_BASE_URL' => 'http://' . $address . '/v1',
+                    ],
+                );
+                self::assertIsResource($process, "{$mode} batch child failed to start");
+
+                // Two stream-json rows in, plus the appended prompt row; three
+                // documents must come back out.
+                \fwrite($pipes[0], \json_encode(['type' => 'user', 'content' => 'alpha']) . "\n" . \json_encode(['type' => 'user', 'content' => 'beta']) . "\n");
+                \fclose($pipes[0]);
+                \stream_set_timeout($pipes[1], 90);
+                \stream_set_timeout($pipes[2], 90);
+                $stdout = (string) \stream_get_contents($pipes[1]);
+                $stderr = (string) \stream_get_contents($pipes[2]);
+                \fclose($pipes[1]);
+                \fclose($pipes[2]);
+                $status = \proc_get_status($process);
+                if ($status['running']) {
+                    \proc_terminate($process, \defined('SIGTERM') ? SIGTERM : 15);
+                }
+                self::assertSame(0, \proc_close($process), "{$mode} batch child exited nonzero; stderr:\n{$stderr}");
+
+                $docs = [];
+                foreach (\explode("\n", $stdout) as $line) {
+                    $line = \trim($line);
+                    if ($line !== '') {
+                        $docs[] = \json_decode($line, true, 512, \JSON_THROW_ON_ERROR);
+                    }
+                }
+                self::assertCount(3, $docs, "{$mode} batch must emit exactly three documents; stdout:\n{$stdout}");
+                foreach ($docs as $index => $document) {
+                    self::assertSame('carried answer', $document['result'], "{$mode} row {$index} settled off the loopback");
+                }
+                $documents[$mode] = $docs;
+                $stderrByMode[$mode] = $stderr;
+                $notices[$mode] = \substr_count($stderr, 'could not constrain the settled answer');
+            }
+
+            self::assertSame(3, $notices['carried'], "all three rows of a batch on a tool-ended transcript announce the refusal; carried stderr:\n" . $stderrByMode['carried']);
+            self::assertFalse($documents['carried'][0]['json_schema_applied'], 'row 1: the single-pass arm already carried this truth');
+            self::assertFalse($documents['carried'][1]['json_schema_applied'], 'row 2: the batch arm must see the consumed round-trip in its own request history');
+            self::assertFalse($documents['carried'][2]['json_schema_applied'], 'row 3: the typed prompt row too — the carried round-trip stays the newest tool activity');
+
+            self::assertSame(0, $notices['clean'], 'a tool-less batch never announces');
+            self::assertArrayNotHasKey('json_schema_applied', $documents['clean'][0], 'row 1 clean: the schema rode; no flag to report');
+            self::assertArrayNotHasKey('json_schema_applied', $documents['clean'][1], 'row 2 clean: still no flag — the batch leg must not fabricate');
+            self::assertArrayNotHasKey('json_schema_applied', $documents['clean'][2], 'row 3 clean: still no flag');
+        } finally {
+            $this->removeCarriedTree($dir);
+            foreach ($endpointPipes as $pipe) {
+                @fclose($pipe);
+            }
+            $endpointStatus = proc_get_status($endpoint);
+            if ($endpointStatus['running']) {
+                proc_terminate($endpoint, \defined('SIGTERM') ? SIGTERM : 15);
+            }
+            proc_close($endpoint);
+        }
+    }
+
+    /**
      * Throwaway loopback for the resume witness: answers the chat completion
      * with an OpenAI-shaped SSE body and every other path (sglang's info
      * probes ride those) with a bare JSON object. Announces its port-0
