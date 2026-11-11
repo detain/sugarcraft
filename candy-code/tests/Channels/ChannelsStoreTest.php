@@ -154,6 +154,53 @@ final class ChannelsStoreTest extends TestCase
         );
     }
 
+    public function testAWriteLandingBetweenConstructionAndTheBootLedgerWriteSurvivesTheMerge(): void
+    {
+        // M-6: one file, two writers. The Discord plugin's CredentialStore
+        // may land a pairing write at any moment between this store's
+        // construction and the loader's first quarantine write — the boot
+        // write must merge against THOSE bytes, never against the snapshot
+        // taken in the constructor, or operator credentials vanish silently.
+        $this->seedRawLedger(json_encode(['seenEntrypoints' => ['/tmp/marks/old.php' => true]], JSON_THROW_ON_ERROR));
+        $store = $this->ledger();
+        $this->seedRawLedger(json_encode([
+            'seenEntrypoints' => ['/tmp/marks/old.php' => true],
+            'platforms' => ['discord' => ['accounts' => ['main' => ['token' => 'fresh-pair']]]],
+        ], JSON_THROW_ON_ERROR));
+        $store->recordEntrypoint('/tmp/marks/boot.php');
+        $disk = $this->ledger()->all();
+        self::assertSame(
+            'fresh-pair',
+            $disk['platforms']['discord']['accounts']['main']['token'] ?? null,
+            'a credential write landing after construction is merged around, not clobbered by, the boot ledger write',
+        );
+        self::assertTrue($this->ledger()->seenEntrypoint('/tmp/marks/old.php'), 'the fresh read keeps marks that are only on disk');
+        self::assertTrue($this->ledger()->seenEntrypoint('/tmp/marks/boot.php'), 'the quarantine mark itself lands');
+    }
+
+    public function testTheLedgerWriteRefusesWhenTheRecordRotsAfterConstruction(): void
+    {
+        // M-6: the refuse-to-write door is re-checked against disk at write
+        // time. Bytes that rotted AFTER a clean construction are operator
+        // bytes too — the constructor's success must not license a clobber.
+        $this->seedRawLedger(json_encode(['seenEntrypoints' => []], JSON_THROW_ON_ERROR));
+        $store = $this->ledger();
+        self::assertNull($store->readFailure(), 'construction read the good record cleanly');
+        $this->seedRawLedger('{torn mid boot');
+        $store->recordEntrypoint('/tmp/marks/late.php');
+        self::assertTrue($store->seenEntrypoint('/tmp/marks/late.php'), 'the in-memory mark keeps this launch deduping its quarantine');
+        self::assertSame(
+            '{torn mid boot',
+            (string) file_get_contents($this->configDir . '/' . ChannelsStore::FILE_NAME),
+            'the write-time read check refuses to overwrite bytes that became unreadable after construction',
+        );
+        self::assertNotNull($store->readFailure(), 'the fresh failure is named on the store, not swallowed');
+        self::assertFalse(
+            $this->ledger()->seenEntrypoint('/tmp/marks/late.php'),
+            'disk truth is still the broken record: the refused mark never reached it',
+        );
+    }
+
     private function ledger(): ChannelsStore
     {
         return ChannelsStore::create(fn (): string => $this->configDir);

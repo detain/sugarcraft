@@ -34,9 +34,21 @@ use SugarCraft\Core\Util\AtomicJsonFile;
  * a malformed or unreadable record is NEVER degraded to an empty one. Every
  * policy read through {@see all()} throws with the file named, the resolver
  * turns that into a refusingAll scope for every channel session, and the
- * boot ledger write stays suppressed until a read succeeds — a record we
- * never read is a record we must not overwrite. A MISSING file is still the
- * legitimate day-one empty state.
+ * boot ledger write stays suppressed while the disk refuses to parse — a
+ * record we cannot read is a record we must not overwrite. The door is
+ * re-checked against disk at EVERY write, not frozen at construction (M-6).
+ * A MISSING file is still the legitimate day-one empty state.
+ *
+ * One file, two writers (M-6): the Discord plugin's CredentialStore owns
+ * pairing and credentials in these same bytes, so the boot ledger write is
+ * a fresh-read merge — the quarantined path joins whatever the disk holds
+ * at that moment, the discipline that store's mutate() promises. A pairing
+ * row or policy edit landing between store construction and the boot write
+ * SURVIVES it. The residual window — a write racing between this class's
+ * read and its atomic rename — stays the loud-repair class the plugin
+ * documents, never a silent widening of access. The lstat, ownership and
+ * version guards themselves live plugin-side; this reader is loud on parse
+ * and IO failure.
  */
 final class ChannelsStore
 {
@@ -65,8 +77,10 @@ final class ChannelsStore
         // the boot path has one job with these bytes (the quarantine ledger)
         // and it does that job FAIL CLOSED from an empty in-memory view:
         // every entrypoint answers "unseen", so this launch quarantines, and
-        // recordEntrypoint() refuses to write while a read failure stands, so
-        // the operator's corrupt bytes survive to be repaired. The loud half
+        // recordEntrypoint() re-reads at write time and refuses while the
+        // disk refuses to parse (M-6 — the door rides the write, not the
+        // constructor), so the operator's corrupt bytes survive to be
+        // repaired. The loud half
         // of the contract is all(): every policy read throws until the file
         // parses again, and {@see ChannelToolPolicyService} turns that throw
         // into a refusingAll scope — corruption restricts nothing, ever.
@@ -94,19 +108,34 @@ final class ChannelsStore
     /**
      * Record the entrypoint as seen. Called when it is FIRST noticed — the
      * quarantine holds it this launch and the next launch finds it here.
+     * The mark is merged into the FRESH record on disk (M-6, one file two
+     * writers): keys another writer landed since construction — pairing
+     * rows, credentials, policy edits — survive this write; nothing but
+     * the merged seen-map is ever written.
      */
     public function recordEntrypoint(string $path): void
     {
         $seen = \is_array($this->data['seenEntrypoints'] ?? null) ? $this->data['seenEntrypoints'] : [];
         $seen[$path] = true;
-        $this->data['seenEntrypoints'] = $seen;
 
-        if (null !== $this->readFailure) {
-            // The permanizing-write door (M-1): we never write a record we
-            // never successfully read. The boot mark stays in memory for this
-            // launch's dedup, the corrupt bytes stay on disk for the operator.
+        try {
+            $record = $this->read();
+        } catch (\Throwable $e) {
+            // The permanizing-write door (M-1), re-checked against disk at
+            // write time (M-6): we never write a record we cannot currently
+            // read — not one torn at construction and not one that rotted
+            // since. The boot mark stays in memory for this launch's dedup,
+            // the broken bytes stay on disk for the operator.
+            $this->readFailure = $e->getMessage();
+            $this->data['seenEntrypoints'] = $seen;
+
             return;
         }
+
+        $fresh = \is_array($record['seenEntrypoints'] ?? null) ? $record['seenEntrypoints'] : [];
+        $record['seenEntrypoints'] = $seen + $fresh;
+        $this->data = $record;
+        $this->readFailure = null;
 
         $this->write();
     }

@@ -63,9 +63,11 @@ final class CredentialStore
      * Fresh-read, mutate, whole-record write. Pairing and allowlist growth
      * go through here so the P1 seen-entrypoint ledger and every unknown key
      * survive a bundle write (read law + 0600 write law enforced on both
-     * halves). The P1 core documents the same last-writer-wins race for this
-     * file; a lost pairing row shows up as a loud re-pair, never a silent
-     * widening of access.
+     * halves). The P1 core now shares this discipline for its boot ledger
+     * write (M-6): that write merges into the fresh record on disk, so the
+     * residual race here is only a write landing inside the boot writer's own
+     * read-to-rename window; a lost pairing row shows up as a loud re-pair,
+     * never a silent widening of access.
      *
      * @param \Closure(array<string, mixed>): array<string, mixed> $mutate
      *
