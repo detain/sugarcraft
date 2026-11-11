@@ -45,6 +45,11 @@ const stalled = computed(() =>
     seconds,
   })),
 )
+/**
+ * CW-COVER-B F4: rows the server trimmed off the snapshot roster to hold the
+ * display cap. The folded tree below looks complete; this count says it isn't.
+ */
+const dropped = computed(() => session.value.state.subagentsDropped)
 </script>
 
 <template>
@@ -61,6 +66,7 @@ const stalled = computed(() =>
         <span v-for="s in stalled" :key="s.agentId" class="stall-chip" data-testid="agent-stall" :title="'⚠ ' + s.name + ' · ' + s.seconds + 's'">⚠ {{ s.name }} · {{ s.seconds }}s</span>
       </p>
       <SubAgentTree :nodes="tree" :selected="panels.agentId" @open="(id: string) => panels.openAgent(id)" />
+      <p v-if="dropped > 0" class="dropped" role="status" data-testid="agents-dropped">{{ dropped === 1 ? t('web.agents.dropped_one', { n: dropped }) : t('web.agents.dropped_other', { n: dropped }) }}</p>
     </template>
   </div>
 </template>
@@ -96,5 +102,10 @@ const stalled = computed(() =>
   border: 1px solid var(--error);
   border-radius: 999px;
   padding: 0 0.45rem;
+}
+.dropped {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
 }
 </style>

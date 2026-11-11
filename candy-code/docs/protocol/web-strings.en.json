@@ -12,6 +12,8 @@
     "web.agents.catalog_reload": "reload",
     "web.agents.continue": "Continue",
     "web.agents.dismiss": "dismiss",
+    "web.agents.dropped_one": "{n} earlier subagent omitted",
+    "web.agents.dropped_other": "{n} earlier subagents omitted",
     "web.agents.interrupt": "interrupt",
     "web.agents.interrupt_title": "Interrupt send: the run skips this step's unstarted calls and reads your message first (Ctrl+Enter sends one without arming the toggle)",
     "web.agents.line_one": "{n} agent running",

@@ -1,21 +1,21 @@
 {
-  "_i18n-bl-KUkTH.js": {
-    "file": "assets/i18n-bl-KUkTH.js",
+  "_i18n-CK4iAuKO.js": {
+    "file": "assets/i18n-CK4iAuKO.js",
     "name": "i18n"
   },
   "index.html": {
-    "file": "assets/index-F6gE1fAY.js",
+    "file": "assets/index-dJSwACJO.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_i18n-bl-KUkTH.js"
+      "_i18n-CK4iAuKO.js"
     ],
     "dynamicImports": [
       "index.html"
     ],
     "css": [
-      "assets/index-DyKKvfH5.css"
+      "assets/index-DHTgv3Rt.css"
     ]
   },
   "src-web/sw.ts": {
@@ -24,7 +24,7 @@
     "src": "src-web/sw.ts",
     "isEntry": true,
     "imports": [
-      "_i18n-bl-KUkTH.js"
+      "_i18n-CK4iAuKO.js"
     ]
   }
 }

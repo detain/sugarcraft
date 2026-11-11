@@ -126,6 +126,9 @@ export interface SessionState {
   live: LivePart | null
   reasoning: LivePart | null
   subagents: Record<string, SubAgent>
+  /** CW-COVER-B F4: rows the server trimmed from the snapshot roster (display cap).
+   *  Snapshot-only — live events never carry it; the wire names the field iff ≥1. */
+  subagentsDropped: number
   /** The last turn's end when it was not a plain end_turn. */
   lastStop: { stopReason: string; error?: string } | null
   /** ISS-058: true while the server says older rows exist beyond what this client holds. */
@@ -168,6 +171,7 @@ export function createState(sessionId: string): SessionState {
     live: null,
     reasoning: null,
     subagents: {},
+    subagentsDropped: 0,
     lastStop: null,
     hasMoreOlder: false,
     olderCursor: null,
@@ -302,6 +306,9 @@ export function applySnapshot(state: SessionState, snapshot: SessionSnapshot): v
     const agent = raw as unknown as SubAgent
     if (typeof agent.id === 'string') state.subagents[agent.id] = agent
   }
+  // CW-COVER-B F4: the trim counter rides the snapshot alone. Absent means the
+  // server trimmed nothing, so a RESET over an older dropped count clears it.
+  state.subagentsDropped = snapshot.subagentsDropped ?? 0
 }
 
 /** Open questions the server reported on (re)subscribe: authoritative, whatever the cursor. */
