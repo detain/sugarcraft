@@ -152,7 +152,17 @@ CPROTO
     public function getStdHandle(int $nStdHandle): int
     {
         $stdHandle = $this->ffi()->new('unsigned long');
-        \FFI::memcpy($stdHandle, [$nStdHandle], 4);
+        // WHY not \FFI::memcpy($stdHandle, [$nStdHandle], 4): a PHP array is
+        // not an accepted source on ANY shipped PHP — CI on both Windows
+        // runner minors (8.3.36 and 8.4) threw 'TypeError: FFI::memcpy():
+        // Argument #2 ($from) must be of type FFI\CData or string, array
+        // given'. Scalar CData assignment is the documented since-7.4 shape
+        // and stores with C wrap-around, so the negative pseudo-handle
+        // constants (-10/-11/-12) land in the DWORD as (HANDLE)-N's low-bit
+        // encoding exactly as the 4-byte copy intended — the same canonical
+        // '$x->cdata = $v' pattern every other native-arg site in this file
+        // uses (waitForSingleObject, getConsoleMode).
+        $stdHandle->cdata = $nStdHandle;
         $h = $this->ffi()->GetStdHandle($stdHandle);
 
         return (int) \FFI::cast('intptr_t', $h)->cdata;
