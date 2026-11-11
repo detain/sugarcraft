@@ -176,7 +176,7 @@ BOOL ReadFile(intptr_t hFile, void *lpBuffer, DWORD nNumberOfBytesToRead, DWORD 
 BOOL WriteFile(intptr_t hFile, const void *lpBuffer, DWORD nNumberOfBytesToWrite, DWORD *lpNumberOfBytesWritten, void *lpOverlapped);
 
 BOOL InitializeProcThreadAttributeList(void *lpAttributeList, DWORD dwAttributeCount, DWORD dwFlags, SIZE_T *lpSize);
-BOOL UpdateProcThreadAttribute(void *lpAttributeList, DWORD dwFlags, SIZE_T Attribute, intptr_t lpValue, SIZE_T cbSize, void *lpPreviousValue, SIZE_T *lpReturnSize);
+BOOL UpdateProcThreadAttribute(void *lpAttributeList, DWORD dwFlags, SIZE_T Attribute, void *lpValue, SIZE_T cbSize, void *lpPreviousValue, SIZE_T *lpReturnSize);
 void DeleteProcThreadAttributeList(void *lpAttributeList);
 
 intptr_t GetProcessHeap(void);
@@ -589,21 +589,57 @@ CDEF;
 
         $ffi = $this->ffi();
         $size = $ffi->new('SIZE_T');
+        $list = $this->attributeLists[$attributeList];
+        $cbSize = \FFI::sizeof($ffi->new('intptr_t'));
 
+        // Shape A — the handle passed BY VALUE, as the MSDN CreateProcess
+        // sample spells it (lpValue carries the HPCON itself).
         $ok = $ffi->UpdateProcThreadAttribute(
-            $this->attributeLists[$attributeList],
+            $list,
             0,
             self::PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
-            $pseudoConsole,
-            \FFI::sizeof($ffi->new('intptr_t')),
+            $ffi->cast('void *', $pseudoConsole),
+            $cbSize,
             null,
             \FFI::addr($size),
         );
+        // Capture the code BEFORE any other call can touch it — the
+        // diagnosis must name the error Update actually left behind.
+        $byValueError = $this->lastError();
+
+        if (!$ok) {
+            // Shape B — a POINTER TO the HPCON slot. kernelbase's path for
+            // PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE has shipped in both
+            // spellings across Windows builds (copy-the-handle vs
+            // dereference-lpValue); a build that dereferences a bare handle
+            // faults internally and answers FALSE without calling
+            // SetLastError — exactly the "win32 error 0" signature this leg
+            // carried at CI run 42955157728 even after the allocator fix.
+            // Both shapes are attempted per call; whichever the build accepts
+            // wins, and a pointer stored in an already-populated list entry
+            // is harmless to the other shape (an overwrite, not a conflict).
+            $slot = $ffi->new('intptr_t');
+            $slot->cdata = $pseudoConsole;
+            $ok = $ffi->UpdateProcThreadAttribute(
+                $list,
+                0,
+                self::PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
+                \FFI::addr($slot),
+                $cbSize,
+                null,
+                \FFI::addr($size),
+            );
+        }
 
         if (!$ok) {
             throw new PtyException(\sprintf(
-                'UpdateProcThreadAttribute(PSEUDOCONSOLE) failed with win32 error %d',
+                'UpdateProcThreadAttribute(PSEUDOCONSOLE) failed with win32 error %d [byPtr err=%d, blob=0x%016X, hpcn=0x%016X, cbSize=%d, attr=0x%08X]',
+                $byValueError,
                 $this->lastError(),
+                (int) $list,
+                $pseudoConsole,
+                $cbSize,
+                self::PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
             ));
         }
     }
