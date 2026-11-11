@@ -10,6 +10,7 @@ use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\PrivateDir;
 use SugarCraft\Code\Support\ProcessTree;
+use SugarCraft\Code\Context\EnvironmentBlock;
 use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentManager;
@@ -516,12 +517,20 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *        {@see \SugarCraft\Code\Agents\Agent::$environmentRoot}, which is
      *        what makes that agent's last-resort environment capture name the
      *        directory the stage's tools are jailed to rather than the process
-     *        directory the launch happened to start in. THE ROOT, NOT A BLOCK:
-     *        the stage agents deliberately carry no `EnvironmentBlock` - the
-     *        P3.S6 paragraph of {@see \SugarCraft\Code\Agents\Agent::systemPrompt()}
-     *        measures what an attached block would change - so the per-stage
-     *        re-render and its five-git-subprocess cost stay as pinned, and
-     *        only the anchor of the capture moves. This closes a seam a phase
+     *        directory the launch happened to start in. THE ROOT, NOT A BLOCK
+     *        — as originally written here, true of every render until
+     *        cc-fix-1111 M-11 threaded the per-stage write signal: the P3.S6
+     *        paragraph of {@see \SugarCraft\Code\Agents\Agent::systemPrompt()}
+     *        measures what an attached block would change, and the build-out
+     *        it anticipated has since landed. On the suppression leg — only
+     *        while every dispatched result so far has POSITIVELY reported no
+     *        write, {@see renderStagePrompt()} — the engine now passes an
+     *        explicitly-marked capture so the render pays three live git polls
+     *        instead of five; every other render stays the unmarked fallback
+     *        exactly as pinned, and the first prompt of a run is byte-identical
+     *        to what this engine emitted before M-11. Only the anchor of the
+     *        capture moves; the volatile half is re-polled on every render
+     *        either way. This closes a seam a phase
      *        close-review found between the two assemblers: the Runtime one
      *        captures at the session root and states that invariant in its
      *        own doc-block; these six sites read the process directory until
@@ -567,6 +576,67 @@ final class WorkflowEngine implements WorkflowEngineInterface
          */
         private ?HookDispatcher $hookDispatcher = null,
     ) {}
+
+    /**
+     * M-11 (cc-fix-1111): the run-level write signal threaded through every
+     * stage render of one run. TRI-STATE, mirroring the main loop's
+     * Runtime::markWriteSinceLastRender step semantics exactly:
+     * NULL (the reset value at run start) means no positive report yet, so
+     * every render keeps the full five git subprocess polls — the first
+     * prompt of a run is byte-identical to what the pre-M-11 engine emitted;
+     * FALSE means every dispatched result so far positively reported "no
+     * write happened and none was possible", which lets later renders
+     * suppress exactly the two git diff sections (three polls, not five);
+     * TRUE means some result ran or may have run a tool, and suppression
+     * stays off until a later positive report parks it back to false.
+     * The git branch/status/log half is re-polled on EVERY render either
+     * way — the live-polled law ({@see \SugarCraft\Code\Tests\Providers\PromptStabilityTest})
+     * is untouched; only the diff tail moves, the same lever the main chat
+     * loop already ships. Freshness law quoted here per house discipline:
+     * "a model reading a stale git status after its own edits is worse than
+     * either cost" — which is why only POSITIVE reports move this field and
+     * the register measured 399 ms total / 373 ms of it in the diff sections.
+     */
+    private ?bool $stageWriteSignal = null;
+
+    /**
+     * Render a stage agent's system prompt under the current write signal.
+     *
+     * M-11 (cc-fix-1111), register option (a): "thread per-stage
+     * write-signal through AgentResult/complete frame OR take the
+     * constant-false hoist for tool-less workers". The threading is live;
+     * the signal is a self-report, never a structural guess (the hoist
+     * variant was declined for deriving from worker STRUCTURE instead of
+     * what the stage did — see the AgentResult::$requestedWrite docblock).
+     * Suppression passes an explicitly-marked capture at the same root the
+     * unmarked fallback would use ($this->environmentRoot ?? getcwd()), so
+     * the static half and the three live-polled commands are identical
+     * bytes; only the two diff sections are withheld, and only while every
+     * report so far positively says nothing wrote.
+     */
+    private function renderStagePrompt(Agent $agent): string
+    {
+        if ($this->stageWriteSignal === false) {
+            return $agent->systemPrompt(
+                EnvironmentBlock::capture($this->environmentRoot ?? (string) getcwd(), $agent->model)
+                    ->withWriteSinceLastRender(false)
+            );
+        }
+
+        return $agent->systemPrompt();
+    }
+
+    /**
+     * Fold one dispatched result's self-report into the run-level signal.
+     * Only POSITIVE reports move it (null leaves the identity alone —
+     * exactly the Runtime step semantics the main loop pins).
+     */
+    private function foldStageWriteSignal(AgentResult $result): void
+    {
+        if ($result->requestedWrite !== null) {
+            $this->stageWriteSignal = $result->requestedWrite;
+        }
+    }
 
     /**
      * The model every stage's agent is dispatched on.
@@ -1939,6 +2009,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 'inputJoins' => $prior['inputJoins'] ?? [],
             ];
 
+            // M-11 (cc-fix-1111): one run, one signal register; reset at the
+            // top so a fresh run (or a resume) starts with no positive
+            // reports and its first render pays the full five polls.
+            $this->stageWriteSignal = null;
+
             foreach ($workflow->stages as $stageIndex => $stage) {
                 // Skip stages that were already completed (resume support)
                 if ($stageIndex < $currentStageIndex) {
@@ -3214,7 +3289,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     ['role' => 'user', 'content' => $interpolatedPrompt],
                 ],
                 tools: $this->resolveRequestTools($task->tools),
-                systemPrompt: $agent->systemPrompt(),
+                systemPrompt: $this->renderStagePrompt($agent),
             );
 
             // Execute via pool, on what is left of the stage's budget
@@ -3225,6 +3300,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 'schema' => $task->outputSchema !== null,
             ];
             $dispatched[] = $record;
+            // M-11 (cc-fix-1111): fold this result's self-report before the
+            // next render on this path pays for it.
+            $this->foldStageWriteSignal($agentResult);
 
             if (!$multi) {
                 return $this->buildStageResult($stageName, $agentResult, $stageStartedAt);
@@ -3371,7 +3449,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     ['role' => 'user', 'content' => $interpolatedPrompt],
                 ],
                 tools: $this->resolveRequestTools($task->tools),
-                systemPrompt: $agent->systemPrompt(),
+                systemPrompt: $this->renderStagePrompt($agent),
             );
 
             $agentResult = $this->dispatchOne($subAgent, $request, $this->stagePool($stageTimeout, $stageClock));
@@ -3381,6 +3459,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 'schema' => $task->outputSchema !== null,
             ];
             $dispatched[] = $record;
+            // M-11 (cc-fix-1111): nested pipeline steps repeat the render —
+            // fold first, then let the next step's prompt see the report.
+            $this->foldStageWriteSignal($agentResult);
             $pipelineContext = self::withResults($pipelineContext, [$record]);
 
             // Track timing
@@ -3510,12 +3591,15 @@ final class WorkflowEngine implements WorkflowEngineInterface
             model: $taskAgent->model,
             messages: [['role' => 'user', 'content' => $taskPrompt]],
             tools: $this->resolveRequestTools($task->tools),
-            systemPrompt: $taskAgent->systemPrompt(),
+            systemPrompt: $this->renderStagePrompt($taskAgent),
         );
 
         $taskResult = $this->dispatchOne($taskSubAgent, $taskRequest, $this->stagePool($stageTimeout, $stageClock));
         $taskRecord = ['key' => self::resultKey($task->name, $stageName), 'result' => $taskResult, 'schema' => $task->outputSchema !== null];
         $dispatched[] = $taskRecord;
+        // M-11 (cc-fix-1111): the verifier renders after this dispatch —
+        // fold the task's report before that prompt is paid for.
+        $this->foldStageWriteSignal($taskResult);
 
         // If task itself fails, the whole stage fails immediately
         if ($taskResult->status === AgentStatus::Failed || $taskResult->status === AgentStatus::TimedOut) {
@@ -3545,7 +3629,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             model: $verifierAgent->model,
             messages: [['role' => 'user', 'content' => $verifierPrompt]],
             tools: $this->resolveRequestTools($verifier->tools),
-            systemPrompt: $verifierAgent->systemPrompt(),
+            systemPrompt: $this->renderStagePrompt($verifierAgent),
         );
 
         // --- Verdict-aware verifier loop ---
@@ -3595,6 +3679,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // Same key per attempt: the last settles into the results context,
             // the documented law for pool retries carried to verdict rounds.
             $dispatched[] = ['key' => self::resultKey($verifier->name, $stageName . '_verifier'), 'result' => $verifierResult, 'schema' => $verifier->outputSchema !== null];
+            // M-11 (cc-fix-1111): verdict-retry rounds re-dispatch on the
+            // same rendered request today; fold anyway so a future round
+            // that re-renders sees the honest report (idempotent per round).
+            $this->foldStageWriteSignal($verifierResult);
 
             if ($verifierResult->status !== AgentStatus::Completed) {
                 // A dead verifier speaks nothing: no verdict, no question —
@@ -3929,7 +4017,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 ['role' => 'user', 'content' => $firstInterpolated],
             ],
             tools: $this->resolveRequestTools($firstTask->tools),
-            systemPrompt: $firstAgent->systemPrompt(),
+            systemPrompt: $this->renderStagePrompt($firstAgent),
         );
 
         $subAgents = [];
@@ -4056,6 +4144,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $agentResults = [];
         foreach ($results as $agentResult) {
             $agentResults[] = $agentResult;
+            // M-11 (cc-fix-1111): fold each wave member's self-report so the
+            // NEXT stage's render sees whether anything in this wave wrote.
+            $this->foldStageWriteSignal($agentResult);
         }
         $dispatched = [...$dispatched, ...self::recordsInDeclarationOrder($resultKeys, $agentResults)];
 

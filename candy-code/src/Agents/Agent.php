@@ -696,6 +696,35 @@ final readonly class Agent
      * So this is escalated to the orchestrator as a declared-scope event - not
      * silently widened, and not silently dropped.
      *
+     * BUILD-OUT LANDED (2026-11-11, cc-fix-1111 register M-11, adjudicated
+     * option (a): 'thread per-stage write-signal through AgentResult/complete
+     * frame OR take the constant-false hoist for tool-less workers' - the
+     * SELF-REPORT was taken, not the structural hoist, because reason 2's own
+     * objection is exactly that a structure-derived constant is silently wrong
+     * the day the structure changes). What is true NOW: AgentResult carries a
+     * tri-state `?bool $requestedWrite` the worker itself emits (the live
+     * ProcessExecutor worker script reports `false` from inside - one provider
+     * call, no tool loop, a write impossible HERE - and the flip point is
+     * recorded at the emit as the future tool loop's own execute site;
+     * EngineExecutor reports honestly from its in-process ToolFinished record:
+     * any consumed tool round is `true`, a whole zero-tool run is a positive
+     * `false`; stopped/cancelled/error frames and the simulated worker carry no
+     * report at all, which is `null`, which suppresses nothing); WorkflowEngine
+     * threads that report as a run-level signal - the first render of a run
+     * still pays the full five and is byte-identical to every prompt ever
+     * sent, later renders pay three ONLY while every dispatched result so far
+     * positively reported no-write, and the two git diff sections are the only
+     * bytes withheld - branch, status and log re-poll EVERY render, so the
+     * live-polled law this class's own docblock defends is untouched (the
+     * register measured the withheld tail at 373ms of a 399ms render; the
+     * freshness law 'a model reading a stale git status after its own edits is
+     * worse than either cost' is the reason suppression rides the write
+     * signal and nothing else). The spawnWorker double render named above was
+     * deduped in the same step: the startup frame's agent prompt now carries
+     * the request's rendered value, so the two consumers agree BY CONSTRUCTION.
+     * The parameter-list pin named above reds exactly as designed and is
+     * re-pinned in-step by the same commit that lands the field.
+     *
      * THE ROSTER, AND ITS REACHABILITY, WHICH THE FIRST REVISION DID NOT STATE.
      * EIGHT call sites, derived and pinned by
      * {@see \SugarCraft\Code\Tests\Agents\AgentTest::testEveryProductionCallSiteOfTheAgentAssemblerIsDerivedAndAccountedFor()};
@@ -978,6 +1007,14 @@ final readonly class Agent
      * under reason 2, across `WorkflowEngine` + `AgentResult` + the worker IPC
      * frame. The `Bootstrap::agentManager()` attachment is downstream of none of that and cannot
      * substitute for it.
+     *
+     * THE PARAGRAPH ABOVE RECORDS THAT STEP; THE BUILD-IT-OUT IT NAMED LANDED
+     * (2026-11-11, cc-fix-1111 M-11, BUILD-OUT LANDED paragraph above). The
+     * four measured rows stay TRUE exactly as written - they measure THIS
+     * assembler, and the assembler changed nothing; what changed is that
+     * `WorkflowEngine` now hands a signal-driven block to the renders that
+     * repeat, so line 4's fresh-Agent cost is what a run pays ONCE, not what
+     * every stage pays.
      *
      * AND WHY THAT DISPOSITION IS RECORDED HERE AND NOT AT THE SITE, since a
      * "do not just add the flag" note in the roster loop is exactly what the

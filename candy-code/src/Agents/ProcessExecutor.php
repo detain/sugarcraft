@@ -640,7 +640,16 @@ final class ProcessExecutor implements ExecutorInterface
                 'id' => $agent->id,
                 'name' => $agent->agent->name,
                 'model' => $agent->agent->model,
-                'prompt' => $agent->agent->systemPrompt(),
+                // M-11 (cc-fix-1111): the request's rendered prompt is the
+                // single value both consumers see. This used to re-render
+                // Agent::systemPrompt() — a fresh unmemoised five-subprocess
+                // poll whose bytes could drift from the one already baked
+                // into $request, and the review's pin recorded exactly that:
+                // "nothing makes them agree". Now they agree by construction;
+                // the fallback only fires for a request that carries no
+                // prompt at all, where the old second render is the only
+                // thing the worker's own chain could have read.
+                'prompt' => $request->systemPrompt ?? $agent->agent->systemPrompt(),
             ],
             'task' => $agent->task,
             'request' => [
@@ -1651,12 +1660,19 @@ try {
     $fail('Provider call failed: ' . get_class($e) . ': ' . $e->getMessage());
 }
 
+// M-11 (cc-fix-1111): SELF-REPORT, not a parent-side guess. This script
+// makes one provider call and executes no tools — a tool_result frame is
+// read and discarded, never run — so a write from THIS worker is
+// structurally impossible and false is honest. The day this script grows a
+// tool loop, that loop's execute site sets this true; until then the number
+// below is what it is.
 $emit([
     'type' => 'complete',
     'status' => 'completed',
     'output' => $output,
     'tokensUsed' => $tokensUsed,
     'costUsd' => $costUsd,
+    'requestedWrite' => false,
 ]);
 
 exit(0);
@@ -1894,6 +1910,14 @@ PHP;
 
         $status = $statusMap[$message['status'] ?? ''] ?? AgentStatus::Completed;
 
+        // M-11 (cc-fix-1111): fold the worker's self-report when the frame
+        // carries one. Absent (stopped/cancelled/error frames, and the
+        // simulated worker) is NOT a false — it is no report at all, so the
+        // caller must keep every render at the full five polls.
+        $reportedWrite = array_key_exists('requestedWrite', $message) && is_bool($message['requestedWrite'])
+            ? $message['requestedWrite']
+            : null;
+
         return new AgentResult(
             agentId: $agentId,
             status: $status,
@@ -1902,6 +1926,7 @@ PHP;
             costUsd: (float) ($message['costUsd'] ?? 0.0),
             startedAt: $startedAt,
             completedAt: new \DateTimeImmutable(),
+            requestedWrite: $reportedWrite,
         );
     }
 

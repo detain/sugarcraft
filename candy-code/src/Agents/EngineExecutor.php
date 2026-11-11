@@ -539,6 +539,12 @@ final class EngineExecutor implements ExecutorInterface
         // numbers are untouched.
         $finalUsage = $blankUsages === [] ? $turn->reply->usage : Usage::sum([...$blankUsages, $turn->reply->usage]);
 
+        // M-11 (cc-fix-1111): this executor runs tools IN-PROCESS, so its
+        // own ToolFinished record IS the evidence. A tool round that was
+        // consumed here may have written anything — true, and no later
+        // render may suppress the diff sections. Zero tools across the whole
+        // run is a POSITIVE no-write report — false, the same honest claim
+        // the tool-less ProcessExecutor worker makes about itself.
         return new AgentResult(
             agentId: $agent->id,
             status: AgentStatus::Completed,
@@ -547,6 +553,7 @@ final class EngineExecutor implements ExecutorInterface
             costUsd: $finalUsage?->costUsd ?? 0.0,
             startedAt: $startedAt,
             completedAt: new \DateTimeImmutable(),
+            requestedWrite: $sawTool,
         );
     }
 

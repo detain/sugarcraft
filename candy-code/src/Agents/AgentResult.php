@@ -25,6 +25,24 @@ final class AgentResult
      *        keeps the cause apart from a wall-clock timeout so the restart
      *        budget can be judged independently; the status stays
      *        {@see AgentStatus::TimedOut} for every existing reader.
+     * @param ?bool $requestedWrite M-11 (cc-fix-1111) per-stage write signal,
+     *        the register's option (a): "thread per-stage write-signal through
+     *        AgentResult/complete frame OR take the constant-false hoist for
+     *        tool-less workers". A SELF-REPORT from whoever ran the agent, not
+     *        an inference from what shape the worker has. Tri-state, and the
+     *        caller may suppress the two git diff sections of a later render
+     *        ONLY on a positive false: null means NO REPORT and the render
+     *        stays exactly five subprocess polls; true means a tool round ran
+     *        (a write may have happened) and suppression is off; false is the
+     *        ProcessExecutor worker's honest structural report — it makes one
+     *        provider call and executes no tools, so nothing could have been
+     *        written — and {@see EngineExecutor}'s zero-tools leg, taken from
+     *        its own ToolFinished record. The freshness law this serves: "a
+     *        model reading a stale git status after its own edits is worse
+     *        than either cost" — the day a worker script grows a tool loop,
+     *        that loop's execute site is where this becomes true, and
+     *        AgentTest's parameter-list pin forces the caller threading to be
+     *        re-read in the same commit.
      */
     public function __construct(
         public readonly string $agentId,
@@ -37,6 +55,7 @@ final class AgentResult
         public readonly ?\DateTimeImmutable $completedAt = null,
         public readonly int $attempts = 1,
         public readonly bool $stalled = false,
+        public readonly ?bool $requestedWrite = null,
     ) {}
 
     /**

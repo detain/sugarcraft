@@ -1755,7 +1755,13 @@ final class AgentTest extends TestCase
         'src/Agents/AgentManager.php' => 1,
         'src/Agents/ProcessExecutor.php' => 1,
         'src/App/App.php' => 1,
-        'src/Workflows/WorkflowEngine.php' => 5,
+        // Five seams became two (2026-11-11, cc-fix-1111 M-11): the engine's
+        // five per-stage render calls now live INSIDE one helper, and only the
+        // two marked-or-unmarked legs it holds call the assembler. The
+        // re-disposition the scanner's roster asked for happened here -
+        // WorkflowEngine::renderStagePrompt() is the caller P3.S6 declined to
+        // exist, using the per-stage seam exactly as the escalation predicted.
+        'src/Workflows/WorkflowEngine.php' => 2,
     ];
 
     /**
@@ -1874,10 +1880,14 @@ final class AgentTest extends TestCase
         );
 
         $this->assertSame(
-            8,
+            5,
             array_sum($census),
             'prompt_plan.md P3.S6 states eight production call sites; Runtime::markWriteSinceLastRender()'
-                . "'s doc-block states nine. This is the derivation that settles it.",
+                . "'s doc-block states nine. This is the derivation that settles it. "
+                . 'FIVE since cc-fix-1111 M-11 (2026-11-11), which re-dispositioned P3.S6 per register '
+                . 'option (a): the engine\'s five per-stage seams collapsed into two inside '
+                . 'WorkflowEngine::renderStagePrompt(), so the eight-vs-nine prose disagreement above '
+                . 'stands as history and five live calls is the new settled derivation.',
         );
     }
 
@@ -2309,25 +2319,35 @@ final class AgentTest extends TestCase
     }
 
     /**
-     * ONE DISPATCH THROUGH THE WORKER RENDERS THE AGENT PROMPT TWICE, and this
-     * pins the cost rather than repairing it.
+     * ONE DISPATCH THROUGH THE WORKER USED TO RENDER THE AGENT PROMPT TWICE;
+     * the double render was REPAIRED by cc-fix-1111 M-11 (2026-11-11) and this
+     * pin now asserts the repaired cost.
      *
-     * `App::dispatchSkill()` and all five `WorkflowEngine` sites build the
-     * `CompleteRequest` with `$agent->systemPrompt()` and then hand the SubAgent
-     * to the pool, whose `ProcessExecutor::spawnWorker()` calls
-     * `$agent->agent->systemPrompt()` a second time to build the worker's
-     * startup message. `App::dispatchSkill()`'s own comment says the two
-     * consumers "must agree"; nothing makes them agree, because each is a fresh
-     * unmemoised render and the working tree can move between them.
+     * WHAT IT WAS. `App::dispatchSkill()` and all five `WorkflowEngine` sites
+     * built the `CompleteRequest` with `$agent->systemPrompt()` and then handed
+     * the SubAgent to the pool, whose `ProcessExecutor::spawnWorker()` called
+     * `$agent->agent->systemPrompt()` a SECOND time to build the worker's
+     * startup message. `App::dispatchSkill()`'s own comment said the two
+     * consumers "must agree"; nothing made them agree, because each was a fresh
+     * unmemoised render and the working tree could move between them. MEASURED
+     * then: TEN git subprocesses for one dispatch, recorded rather than
+     * repaired because `ProcessExecutor.php` sat outside P3.S6's declared file
+     * list. This pin carried the number and said what to do with it: "the
+     * double render was repaired and this pin should be replaced by one
+     * asserting five". That replacement is this commit.
      *
-     * MEASURED: TEN git subprocesses for one dispatch, not five. That is
-     * outside this step's declared file list to change - `ProcessExecutor.php`
-     * is not in it - so P3.S6 records the number instead of narrowing the
-     * second call away, and the escalation carries the finding.
+     * WHAT IT IS NOW. The startup frame's agent prompt carries the request's
+     * already-rendered value (`$request->systemPrompt`, with the render kept
+     * only as the null-coalesce fallback for a request that carries no prompt
+     * at all). The two consumers agree BY CONSTRUCTION, and one dispatch costs
+     * FIVE subprocesses: the request build's render. The source leg below pins
+     * the spelling that makes the agreement structural, not a courtesy
+     * (house precedent: {@see \SugarCraft\Code\Tests\Support\TtyStreamArgumentCensusTest}-style
+     * call-site discipline by source scan).
      *
-     * The simulated worker is used deliberately: the second render happens in
-     * the PARENT, before `proc_open()`, so the child never has to reach a model
-     * for this count to be the real one.
+     * The simulated worker is still used deliberately: the remaining render
+     * happens in the PARENT, before `proc_open()`, so the child never has to
+     * reach a model for this count to be the real one.
      */
     public function testOneDispatchThroughTheProcessExecutorRendersTheAgentPromptTwice(): void
     {
@@ -2365,11 +2385,21 @@ final class AgentTest extends TestCase
         });
 
         $this->assertSame(
-            10,
+            5,
             $dispatchCost,
-            'one dispatch no longer renders Agent::systemPrompt() exactly twice. If it now renders '
-                . 'once, the double render was repaired and this pin should be replaced by one asserting '
-                . 'five; if it renders more, a new caller was added.',
+            'one dispatch now renders Agent::systemPrompt() exactly once - the double render was '
+                . 'REPAIRED by cc-fix-1111 M-11: the spawnWorker startup frame carries the request\'s '
+                . 'rendered prompt and the two consumers agree BY CONSTRUCTION; five is the corrected '
+                . 'number. If it renders more, a new caller was added.',
+        );
+
+        $source = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Agents/ProcessExecutor.php');
+        $this->assertStringContainsString(
+            "'prompt' => \$request->systemPrompt",
+            $source,
+            'spawnWorker startup no longer carries the request-rendered prompt under the agent prompt '
+                . 'key; the second five-subprocess render is back, and the two consumers can drift '
+                . 'apart again exactly as the history above records',
         );
     }
 
@@ -2579,6 +2609,13 @@ final class AgentTest extends TestCase
                 // per-stage write signal, so the P3.S6 disposition below
                 // still rests untouched on the absence of one.
                 'stalled',
+                // The tri-state per-stage write self-report this pin's own
+                // failure message below predicted. Its arrival RE-decided the
+                // disposition per register option (a) - a per-stage write
+                // signal threaded through AgentResult and the worker complete
+                // frame - by cc-fix-1111 M-11 (2026-11-11). The consumer is
+                // {@see \SugarCraft\Code\Workflows\WorkflowEngine::renderStagePrompt()}.
+                'requestedWrite',
             ],
             array_map(
                 static fn (\ReflectionParameter $parameter): string => $parameter->getName(),
@@ -3269,6 +3306,210 @@ final class AgentTest extends TestCase
     }
 
     /**
+     * THE M-11 SUPPRESSION LEG, END TO END THROUGH THE REAL ENGINE.
+     *
+     * cc-fix-1111 register M-11 (2026-11-11) took the sibling pin's OWN
+     * re-disposition instruction - "the write signal now has a per-stage seam
+     * a caller is using - rather than silenced by moving this number" - and
+     * shipped register option (a) verbatim: "thread per-stage write-signal
+     * through AgentResult/complete frame OR take the constant-false hoist for
+     * tool-less workers". A SELF-REPORT was threaded, not a structural hoist.
+     * This test is the other half of that sentence: with every stage result
+     * POSITIVELY reporting no-write (what the structurally tool-less
+     * ProcessExecutor worker reports from inside its own script, and what
+     * EngineExecutor reports for a zero-tool run), stage one still pays the
+     * full five polls and every later stage pays three - the two git diff
+     * sections are the ONLY thing withheld, and the branch/status/log polls
+     * still run per render, so the live-polled law the PromptStabilityTest
+     * pins is untouched.
+     */
+    public function testARealWorkflowEnginePipelineWithPositiveNoWriteReportsSuppressesTheDiffTailFromEveryLaterStage(): void
+    {
+        $repo = self::ensureFixtureRepo();
+        $originalCwd = (string) getcwd();
+        $staged = 'Staged changes (git diff --cached, index vs HEAD):';
+
+        try {
+            $this->assertTrue(chdir($repo), "could not enter the fixture repository {$repo}");
+
+            foreach ([2, 4] as $stages) {
+                $name = 'm11-engine-pipeline-' . $stages;
+                $systemPrompts = [];
+
+                $executor = $this->getMockBuilder(ExecutorInterface::class)
+                    ->onlyMethods(['execute', 'executeStream', 'cancel', 'cancelAll'])
+                    ->getMock();
+                $executor->method('execute')->willReturnCallback(
+                    static function (SubAgent $agent, CompleteRequest $request) use (&$systemPrompts): AgentResult {
+                        $systemPrompts[] = (string) $request->systemPrompt;
+
+                        return new AgentResult(
+                            agentId: $agent->id,
+                            status: AgentStatus::Completed,
+                            output: 'stage-output-' . \count($systemPrompts),
+                            startedAt: new DateTimeImmutable(),
+                            completedAt: new DateTimeImmutable(),
+                            requestedWrite: false,
+                        );
+                    },
+                );
+
+                $tasks = [];
+                for ($stage = 0; $stage < $stages; $stage++) {
+                    $tasks[] = Tasks::agent("m11-step-{$stage}")->prompt("step {$stage}");
+                }
+
+                $registry = new WorkflowRegistry();
+                $registry->register(
+                    (new WorkflowBuilder())
+                        ->name($name)
+                        ->description('M-11: a real WorkflowEngine pipeline over positive no-write reports')
+                        ->pipeline('process', $tasks)
+                        ->build(),
+                );
+
+                $engine = new WorkflowEngine($registry, new AgentWorkerPool(5, $executor));
+
+                $subprocesses = self::gitSubprocessesDuring(static function () use ($engine, $name): void {
+                    $result = $engine->run($name, []);
+                    self::assertTrue(
+                        $result->isSuccess(),
+                        "the workflow {$name} did not complete, so the subprocess count below is a count of a run that did not happen"
+                    );
+                });
+
+                $this->assertCount($stages, $systemPrompts, "the M-11 pipeline handed the executor {$stages} requests worth of system prompt");
+                $this->assertSame(
+                    5 + 3 * ($stages - 1),
+                    $subprocesses,
+                    'the first stage must pay the full five live polls and every later stage three: two diff '
+                        . 'sections withheld behind the positive no-write self-reports. Any other number means '
+                        . 'the suppression leg stopped deriving from reports - five per stage is the old cost, '
+                        . 'three flat would mean stage one got suppressed too, and anything lower would mean '
+                        . 'the volatile half is being memoised, which the live-polled law forbids.'
+                );
+
+                $dateInsensitive = array_map(
+                    static fn (string $prompt): string => (string) preg_replace(
+                        '/^Current date: .*$/m',
+                        'Current date: <normalised>',
+                        $prompt
+                    ),
+                    $systemPrompts,
+                );
+
+                $this->assertStringContainsString($staged, $systemPrompts[0], 'the first prompt of the run must carry the diff sections - no report exists yet at that point, so the render is the unmarked five by design');
+                foreach (\array_slice($dateInsensitive, 1) as $index => $prompt) {
+                    $this->assertStringNotContainsString(
+                        $staged,
+                        (string) $prompt,
+                        'stage ' . ($index + 1) . ' rendered the diff tail despite every report so far positively saying no write had happened'
+                    );
+                }
+                $this->assertSame(
+                    1,
+                    \count(array_unique(\array_slice($dateInsensitive, 1))),
+                    'the suppressed prompts drifted from each other beyond the withheld diff tail - the three '
+                        . 'live polls, the statics and the header are supposed to be byte-identical, which is '
+                        . 'what makes the tail the only thing the signal may move'
+                );
+
+                foreach ($systemPrompts as $index => $prompt) {
+                    $this->assertSame(
+                        1,
+                        preg_match_all('/^Current date: \d{4}-\d{2}-\d{2}$/m', $prompt),
+                        "M-11 engine stage {$index} did not emit exactly one `Current date: Y-m-d` line"
+                    );
+                }
+            }
+        } finally {
+            chdir($originalCwd);
+        }
+    }
+
+    /**
+     * THE M-11 FRESHNESS PAIR. A single positive write report re-opens the
+     * diff sections on every later render of the run - five polls per stage,
+     * header present each time - because 'a model reading a stale git status
+     * after its own edits is worse than either cost'. This is the leg that
+     * keeps the suppression honest: the cache never outruns the repo.
+     */
+    public function testARealWorkflowEnginePipelineWithAWriteReportKeepsEveryStageRenderAtFivePolls(): void
+    {
+        $repo = self::ensureFixtureRepo();
+        $originalCwd = (string) getcwd();
+        $staged = 'Staged changes (git diff --cached, index vs HEAD):';
+
+        try {
+            $this->assertTrue(chdir($repo), "could not enter the fixture repository {$repo}");
+
+            foreach ([2, 4] as $stages) {
+                $name = 'm11-engine-write-report-' . $stages;
+                $systemPrompts = [];
+
+                $executor = $this->getMockBuilder(ExecutorInterface::class)
+                    ->onlyMethods(['execute', 'executeStream', 'cancel', 'cancelAll'])
+                    ->getMock();
+                $executor->method('execute')->willReturnCallback(
+                    static function (SubAgent $agent, CompleteRequest $request) use (&$systemPrompts): AgentResult {
+                        $systemPrompts[] = (string) $request->systemPrompt;
+
+                        return new AgentResult(
+                            agentId: $agent->id,
+                            status: AgentStatus::Completed,
+                            output: 'stage-output-' . \count($systemPrompts),
+                            startedAt: new DateTimeImmutable(),
+                            completedAt: new DateTimeImmutable(),
+                            requestedWrite: true,
+                        );
+                    },
+                );
+
+                $tasks = [];
+                for ($stage = 0; $stage < $stages; $stage++) {
+                    $tasks[] = Tasks::agent("m11-wr-{$stage}")->prompt("step {$stage}");
+                }
+
+                $registry = new WorkflowRegistry();
+                $registry->register(
+                    (new WorkflowBuilder())
+                        ->name($name)
+                        ->description('M-11: a real WorkflowEngine pipeline over write reports')
+                        ->pipeline('process', $tasks)
+                        ->build(),
+                );
+
+                $engine = new WorkflowEngine($registry, new AgentWorkerPool(5, $executor));
+
+                $subprocesses = self::gitSubprocessesDuring(static function () use ($engine, $name): void {
+                    $result = $engine->run($name, []);
+                    self::assertTrue(
+                        $result->isSuccess(),
+                        "the workflow {$name} did not complete, so the subprocess count below is a count of a run that did not happen"
+                    );
+                });
+
+                $this->assertSame(
+                    5 * $stages,
+                    $subprocesses,
+                    'a stage that reports a write must leave every later render at the full five polls - '
+                        . 'suppressing after a reported write is the stale-status failure the freshness law forbids'
+                );
+
+                foreach ($systemPrompts as $index => $prompt) {
+                    $this->assertSame(
+                        1,
+                        substr_count($prompt, $staged),
+                        "engine stage {$index} lost the staged-diff section despite a write report upstream"
+                    );
+                }
+            }
+        } finally {
+            chdir($originalCwd);
+        }
+    }
+
+    /**
      * The line numbers of every live `->systemPrompt(` call in one PHP source.
      *
      * Token-driven rather than textual, and the difference is FIVE call sites.
@@ -3277,21 +3518,27 @@ final class AgentTest extends TestCase
      * this one has already gone stale twice.
      *
      * `cd candy-code && /usr/bin/grep -rno -- '->systemPrompt(' src/ | wc -l`
-     * answers THIRTEEN. This scanner reports EIGHT. The five extras are all
+     * answers TEN. This scanner reports FIVE. The five extras are all
      * prose, and
      * `cd candy-code && /usr/bin/grep -rc -- '->systemPrompt(' src/ | /usr/bin/grep -v ':0$'`
-     * says where they sit: `App/App.php` 2, `Agents/Agent.php` 4,
-     * `Agents/ProcessExecutor.php` 1, `Agents/AgentManager.php` 1,
-     * `Workflows/WorkflowEngine.php` 5. One of App's two is the comment inside
-     * `App::dispatchSkill()` describing the second render (`ProcessExecutor
-     * sends the request's systemPrompt AND, separately,` ...); ALL FOUR of
-     * `Agent.php`'s are doc-block prose - one quoting a census command of its
-     * own in the roster header, the other three narrating the
+     * says where they sit: `Agents/Agent.php` 4 and `Skills/SkillFork.php` 1.
+     * ALL FOUR of `Agent.php`'s are doc-block prose - one quoting a census
+     * command of its own in the roster header, the other three narrating the
      * `WorkflowEngine` render seams (`$firstAgent->systemPrompt()` at the
      * parallel stage, and the argument-position evaluation that makes the
-     * parent-side render synchronous). So a textual census of the agent
-     * assembler's callers over-counts by FIVE, in two of the four files whose
+     * parent-side render synchronous); SkillFork's one is the comment that
+     * narrates the second render (`ProcessExecutor sends the request's
+     * systemPrompt AND, separately,` ...). So a textual census of the agent
+     * assembler's callers over-counts by FIVE, in the two prose files whose
      * classification is the whole content of P3.S6.
+     *
+     * TEN/FIVE since cc-fix-1111 M-11 (2026-11-11), which re-dispositioned
+     * P3.S6 per register option (a): `WorkflowEngine`'s five live seams
+     * collapsed into two inside `renderStagePrompt()` and the tree-wide text
+     * moved thirteen to ten with them (the old App 2 / SkillFork 0 split
+     * became App 1 / SkillFork 1 as the narration moved files). Re-derive
+     * both commands before believing any number in this family, including
+     * this paragraph.
      *
      * WHY THE FIGURE MOVED, since it is the second correction: this step's own
      * doc-block prose is what changed it. `git show c7e5a6454:candy-code/src/Agents/Agent.php
