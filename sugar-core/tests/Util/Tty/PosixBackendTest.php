@@ -54,7 +54,8 @@ final class PosixBackendTest extends TestCase
      * shared constant itself.
      *
      * Mutation map: reverting the POSIX arm to its old 200x60 literal reddens
-     * the first leg here; reverting the Windows arm to its own 80x24 reddens
+     * the delegation leg below (the file-read above it stays green); reverting
+     * the Windows arm to its own 80x24 reddens
      * the behavioral witness in WindowsBackendTest; editing the constant's
      * value reddens the third leg here.
      */
