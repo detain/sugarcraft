@@ -46,6 +46,31 @@ final class SessionMethods
 {
     public const SESSION_ID_MAX = 128;
 
+    /**
+     * Prefix of the bridge session-name grammar
+     * (`agent:<agentId>:<channel>:<kind>:<id>`) that
+     * {@see \SugarCraft\Code\Channels\ChannelToolPolicyService()} reads as its
+     * per-channel tool-policy handle.
+     */
+    public const RESERVED_NAME_PREFIX = 'agent:';
+
+    /**
+     * Client identities (the `client.name` they declare in `server.hello`)
+     * allowed to stamp {@see self::RESERVED_NAME_PREFIX} names over the wire.
+     *
+     * M-4 (reviews-1111): the grammar was unreserved at this edge, so a
+     * free-text title could collide with a bridge-bound session name and —
+     * through the rename path — silently drop that session into the policy
+     * service's `refusingAll` bucket. The collision is refused AT ENTRY
+     * instead; the policy semantics themselves are untouched. Bundle
+     * minters ride the same self-declared identity axis the D6 trust door
+     * already judges these bundles by, so the discord and msteams bridges
+     * keep minting grammar names with zero protocol change.
+     *
+     * @var list<string>
+     */
+    public const RESERVED_NAME_MINTERS = ['candy-code-discord-bundle', 'candy-code-msteams-bundle'];
+
     /** How many leading hex chars of a token `session.shares` rows echo for display. */
     public const SHARE_TOKEN_PREFIX_CHARS = 8;
 
@@ -160,6 +185,30 @@ final class SessionMethods
         ];
     }
 
+    /**
+     * Refuse a client-supplied session name that collides with the reserved
+     * bridge grammar (M-4). Only the two allow-listed bundle identities may
+     * mint `agent:` names; every other caller gets a loud `invalid_params`
+     * (`reserved_session_name`) so a user title can never reach the policy
+     * service's `refusingAll` bucket by accident.
+     */
+    private static function refuseReservedSessionName(?string $name, CallContext $call): void
+    {
+        if ($name === null || !\str_starts_with($name, self::RESERVED_NAME_PREFIX)) {
+            return;
+        }
+
+        $identity = $call->client->info()['name'] ?? null;
+        if (\is_string($identity) && \in_array($identity, self::RESERVED_NAME_MINTERS, true)) {
+            return;
+        }
+
+        throw RpcError::invalidParams(
+            'the "agent:" session-name prefix is reserved for bridge channel policy',
+            'reserved_session_name',
+        );
+    }
+
     /** @return array<string, mixed> */
     private static function create(CallContext $call, Params $params): array
     {
@@ -167,6 +216,7 @@ final class SessionMethods
             throw RpcError::of(ErrorCode::Busy, 'the server is shutting down', 'draining');
         }
         $name = $params->optionalString('name', 256);
+        self::refuseReservedSessionName($name, $call);
         $mode = self::admittedMode($call, $params);
         // C-SES-7.e: an ephemeral ("Incognito") session opens a live host
         // with NO store row — TranscriptStore saves, the usage-record sink
@@ -243,6 +293,10 @@ final class SessionMethods
     {
         $sessionId = self::sessionId($params);
         $name = \trim($params->string('name', 256));
+        // The reserved-grammar refusal fires before the store lookup: a
+        // refused name is refused whether or not the session exists, so the
+        // error a collide-trying client sees never depends on store state.
+        self::refuseReservedSessionName($name, $call);
         $store = $call->server->hub()->workspace()->sessionStore;
         if ($store === null || $store->session($sessionId) === null) {
             throw RpcError::notFound(\sprintf('no session %s', $sessionId), 'session_not_found');
@@ -497,6 +551,9 @@ final class SessionMethods
             throw RpcError::invalidParams($tooLong->getMessage(), 'import_too_large');
         }
 
+        $importName = $params->optionalString('name', 256);
+        self::refuseReservedSessionName($importName, $call);
+
         $format = null;
         if (($formatName = $params->optionalString('format', 32)) !== null) {
             $format = ImportFormat::tryFrom($formatName);
@@ -530,7 +587,7 @@ final class SessionMethods
         try {
             $imported = SessionImporter::new()
                 ->withBounds(null, self::IMPORT_MAX_CONTENT_BYTES)
-                ->importString($store, $content, $format, $params->optionalString('name', 256), $sourceKey);
+                ->importString($store, $content, $format, $importName, $sourceKey);
         } catch (ImportRefusedException $refused) {
             throw RpcError::invalidParams($refused->getMessage(), 'import_refused');
         }
