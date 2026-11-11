@@ -76,6 +76,8 @@ final class DiscordChannel implements ChannelInterface
 
     private ?TimerInterface $sweepTimer = null;
 
+    private ?TimerInterface $pruneTimer = null;
+
     private ?SessionMap $map = null;
 
     private ?TextSafety $safety = null;
@@ -209,6 +211,15 @@ final class DiscordChannel implements ChannelInterface
                 $this->sweepIdleThreads($idleHours);
             });
         }
+
+        // The dedupe ledger stays bounded without a platform-side sweep — the
+        // same contract the Teams face meets (msteams §9.5). claimInbound()
+        // wrote a seen_inbound row per delivery while pruneSeen() had no
+        // caller here, so the ledger grew forever; 6 h is amply frequent for
+        // the 7-day keep. (m09)
+        $this->pruneTimer = $this->loop->addPeriodicTimer(21600.0, function (): void {
+            $this->map?->pruneSeen(7);
+        });
     }
 
     public function dispose(): void
@@ -218,13 +229,14 @@ final class DiscordChannel implements ChannelInterface
         }
         $this->disposed = true;
 
-        foreach ([$this->pollTimer, $this->sweepTimer] as $timer) {
+        foreach ([$this->pollTimer, $this->sweepTimer, $this->pruneTimer] as $timer) {
             if ($timer !== null && $this->loop !== null) {
                 $this->loop->cancelTimer($timer);
             }
         }
         $this->pollTimer = null;
         $this->sweepTimer = null;
+        $this->pruneTimer = null;
 
         $this->queueGate?->cancelAll();
         foreach ($this->faces as $face) {
