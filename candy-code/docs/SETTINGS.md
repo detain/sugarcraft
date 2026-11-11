@@ -1681,6 +1681,11 @@ notices those keys too; its toast counts them among the settings that need a
 restart instead of applying them. And one key keeps its own word: `keybindings`
 carries the `reload` badge and waits for "`/keys reload`" below.
 
+One roster key now sits at a dead seat: `chatToolTimeoutSeconds` is read only by
+`Chat::waitForToolChildrenAsync()`, the fork-wait of the chat-native dispatch, and
+no production path registers tools for that dispatch — the live bound for parallel
+tools is `parallelToolDeadlineSeconds`, named above.
+
 The **trust list is not**: it is frozen for the life of the process, so a
 project cannot become trusted mid-session. The asymmetry is deliberate — you
 opted the repository in, and the project tier cannot reach `provider`,

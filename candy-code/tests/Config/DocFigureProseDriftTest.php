@@ -3075,6 +3075,43 @@ final class DocFigureProseDriftTest extends TestCase
     }
 
     /**
+     * m12 (DEF-B): the SETTINGS.md dead-seat sentence for `chatToolTimeoutSeconds`
+     * says the key's only reader sits on a dispatch production never enters. The
+     * census below is the keystone — it re-derives the dormancy live, so wiring
+     * `Chat::registerTool()` anywhere reddens this arm alongside the disclosure it
+     * polices, instead of letting the page quietly go false.
+     */
+    public function testTheChatToolTimeoutRowDisclosesItsDeadSeat(): void
+    {
+        $key = (new \ReflectionClassConstant('SugarCraft\Code\Tools\ToolLimits', 'PARALLEL_TIMEOUT_KEY'))->getValue();
+        self::assertSame('chatToolTimeoutSeconds', $key, 'the key the dead-seat disclosure names is no longer the one src registers');
+
+        $settings = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SETTINGS.md'));
+        self::assertMatchesRegularExpression(
+            '/One roster key now sits at a dead seat: `' . preg_quote((string) $key, '/') . '` is read only by `Chat::waitForToolChildrenAsync\(\)`/',
+            $settings,
+            'SETTINGS.md lost the dead-seat sentence for `' . $key . '` — the row now overstates what the key does'
+        );
+        self::assertStringContainsString(
+            'the live bound for parallel tools is `parallelToolDeadlineSeconds`',
+            $settings,
+            'the dead-seat sentence no longer names the live lever beside it — readers are left without a way out'
+        );
+
+        $callers = [];
+        foreach (self::everySourceFileIn(\dirname(__DIR__, 2), ['src', 'bin']) as $relative => $path) {
+            $code = self::codeOnly((string) file_get_contents($path));
+            if (str_contains($code, '->registerTool(') || str_contains($code, '::registerTool(')) {
+                $callers[] = $relative;
+            }
+        }
+        self::assertSame(
+            [],
+            $callers,
+            'Chat::registerTool() gained a production caller (' . implode(', ', $callers) . ') — the chat-native dispatch is alive, and the SETTINGS.md dead-seat disclosure must be re-derived'
+        );
+    }
+    /**
      * E686 tranche-8 (AN): three ENVIRONMENT roster sentences. The deprecated
      * aliases table counts itself against the two legacy names src still
      * pairs; the permission-mode cell enumerates exactly the live enum values;

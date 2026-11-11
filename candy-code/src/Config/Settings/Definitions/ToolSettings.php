@@ -386,6 +386,16 @@ final class ToolSettings implements SettingDefinitionSet
                 ->withHelp(Lang::t('settings.bashMaxTimeoutSeconds.help'))
                 ->withReaderSymbol(Bash::class . '::withTimeoutBounds')
                 ->withReadBy('`EngineBackend::turnTools()` → `ToolLimits::applyTo()` → `Bash::withTimeoutBounds()`, each turn'),
+            // DORMANT ON THE PRODUCTION PATH (m12): the only reader is
+            // `Chat::waitForToolChildrenAsync()`, the fork-wait of the chat-native
+            // dispatch — and production never enters that dispatch. Its single gate
+            // requires a non-empty tool registry (`HandlesTurnCompletion.php`:
+            // `$this->tools !== []`), while `Chat::registerTool()` has zero call
+            // sites outside its definition; `Doctor`'s W1.G2 note carries the same
+            // verdict. The live bound for parallel tools is
+            // `parallelToolDeadlineSeconds`. The key stays registered so a file
+            // that still carries it keeps being validated and layered rather than
+            // refused as unknown.
             SettingDefinition::new(ToolLimits::PARALLEL_TIMEOUT_KEY, SettingType::Int, Chat::PARALLEL_TOOL_TIMEOUT_SECONDS)
                 ->withCategory(SettingCategory::Tools)
                 ->withRiskClass(RiskClass::Tuning)
