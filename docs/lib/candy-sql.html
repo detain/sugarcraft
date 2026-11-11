@@ -155,6 +155,8 @@
             <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
             <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
             <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#play">Play</a></li>
         </ul>
     </nav>
 
@@ -418,6 +420,20 @@ $db = ConnectionFactory::fromConfig(ConnectionFactory::fromDsn('mysql://user:pas
 </table>
     </div>
   </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2 id="demos">Demos.</h2>
+        <p class="lede">VHS-recorded GIF of the dashboard on a seeded in-memory database, regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-sql/.vhs/play.gif" alt="Play" onerror="this.parentElement.style.display='none'">
+                <h3 id="play">Play</h3>
+                <span class="demo-caption">A seeded SQLite database opened in the dashboard — cycle tables, Tab to the query pane, run a SELECT, Ctrl+R to refresh.</span>
+            </div>
+        </div>
+    </div>
 </section>
 </main>
 
