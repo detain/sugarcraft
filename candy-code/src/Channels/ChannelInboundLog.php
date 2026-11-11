@@ -55,6 +55,19 @@ use SugarCraft\Core\Util\AtomicJsonFile;
  * grammars never enter this file or any line it logs; the sweep is
  * defense-in-depth, and a channel still owns redacting its own payloads
  * before they arrive here.
+ *
+ * Saturation (the bounded-ledger trade of spec §9.5): {@see MAX_RECORDS}
+ * gates the count of pending rows, and pending rows are never shed below the
+ * {@see RETENTION_SECONDS} horizon — that is what keeps first-delivery-wins
+ * true. A sustained unique-key flood therefore holds REFUSED_SATURATED for
+ * at most one horizon per cohort: refused calls still drive {@see sweep()},
+ * so the aged cohort transitions to DEAD loudly (never silently dropped) and
+ * its slots free for new traffic; a re-flood can re-occupy them, an inherent
+ * property of any bounded admission queue answered by loud refusal, not by a
+ * silent drop. Shedding the oldest pending row past a lower ceiling was
+ * considered and REJECTED by design — an early shed re-opens the dedupe door
+ * for a re-sent key, which is exactly the double-dispatch this ledger exists
+ * to prevent.
  */
 final class ChannelInboundLog
 {
@@ -66,7 +79,10 @@ final class ChannelInboundLog
     /** ...or twenty-four hours of age (stamp-compare), and it is dead-lettered. Also the dedupe window. */
     public const RETENTION_SECONDS = 86400;
 
-    /** Total rows kept (pending rows are never pruned — see the saturation refusal). */
+    /** Total rows kept. Pending rows are never pruned below the horizon, so a
+     *  saturated ledger frees its oldest slots no later than one
+     *  {@see RETENTION_SECONDS} after the newest flood cohort arrived — see
+     *  the saturation paragraph in the class docblock. */
     public const MAX_RECORDS = 512;
 
     /** Serialized cap of one stored payload, applied AFTER redaction, never before. */

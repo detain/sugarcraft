@@ -12,8 +12,10 @@ use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
  * Durable channel-log pins (spec 9.5 Track B): the ledger answers
  * inbound-before-dispatch, dedupes the first delivery, dead-letters the
  * poison at eight attempts or a day of age by stamp-compare, redacts
- * secrets before any byte lands, and answers the two replay shapes —
- * REPLAY from an intact file, RESET after a loud quarantine.
+ * secrets before any byte lands, answers the two replay shapes —
+ * REPLAY from an intact file, RESET after a loud quarantine — and pins the
+ * bounded-flood law at the saturation door (zero-byte refusals, age-boundary
+ * recovery, dedupe standing through pressure).
  */
 final class ChannelInboundLogTest extends TestCase
 {
@@ -468,6 +470,75 @@ final class ChannelInboundLogTest extends TestCase
         self::assertCount(ChannelInboundLog::MAX_RECORDS, $ledger->rows());
         self::assertArrayNotHasKey('chan|k0', $ledger->rows(), 'oldest acked sheds first');
         self::assertArrayHasKey('chan|k599', $ledger->rows(), 'newest rows stay');
+    }
+
+    public function testFloodRefusalsGrowTheLedgerByZeroBytes(): void
+    {
+        $ledger = $this->inboxLedger();
+        for ($i = 0; $i < ChannelInboundLog::MAX_RECORDS; ++$i) {
+            $ledger->record('chan', 'f' . $i, ['n' => 'body']);
+        }
+        $atCap = (string) \file_get_contents($ledger->path());
+
+        for ($i = 0; $i < 8; ++$i) {
+            self::assertSame(
+                ChannelInboundLog::REFUSED_SATURATED,
+                $ledger->record('chan', 'flood-' . $i, ['n' => 'one too many']),
+                'the door answers every unique key past the cap',
+            );
+        }
+
+        self::assertSame($atCap, \file_get_contents($ledger->path()), 'a flood of refusals writes zero bytes');
+        self::assertCount(ChannelInboundLog::MAX_RECORDS, $ledger->pending()['records']);
+        self::assertCount(ChannelInboundLog::MAX_RECORDS, $ledger->rows());
+    }
+
+    public function testSaturationFreesSlotsAtTheAgeBoundaryNeverBelow(): void
+    {
+        $ledger = $this->inboxLedger();
+        for ($i = 0; $i < ChannelInboundLog::MAX_RECORDS; ++$i) {
+            $ledger->record('chan', 'w' . $i, ['n' => 'body']);
+        }
+
+        $this->now += ChannelInboundLog::RETENTION_SECONDS - 1;
+        self::assertSame(
+            ChannelInboundLog::REFUSED_SATURATED,
+            $ledger->record('chan', 'too-early', ['n' => 'inside the window']),
+            'just-inside: the never-lose horizon keeps the door shut',
+        );
+
+        $this->now += 2;
+        self::assertSame(
+            ChannelInboundLog::RECORDED,
+            $ledger->record('chan', 'aged-clear', ['n' => 'the horizon passed']),
+            'just-outside: the aged cohort freed a slot',
+        );
+
+        self::assertSame(
+            ChannelInboundLog::STATE_DEAD,
+            $ledger->rows()['chan|w0']['state'],
+            'aged pending became DEAD loudly, never silently dropped',
+        );
+        self::assertCount(ChannelInboundLog::MAX_RECORDS + 1, $ledger->rows(), 'one row of headroom between sweeps is by design');
+
+        $ledger->pending();
+        self::assertCount(ChannelInboundLog::MAX_RECORDS, $ledger->rows(), 'the next sweep sheds the dead cohort back to the cap');
+        self::assertArrayNotHasKey('chan|w0', $ledger->rows(), 'oldest dead sheds first');
+    }
+
+    public function testDuplicateDeliveryStillAnswersDuplicateThroughSaturation(): void
+    {
+        $ledger = $this->inboxLedger();
+        self::assertSame(ChannelInboundLog::RECORDED, $ledger->record('chan', 'm-holder', ['n' => 'first copy']));
+        for ($i = 0; $i < ChannelInboundLog::MAX_RECORDS - 1; ++$i) {
+            $ledger->record('chan', 'c' . $i, ['n' => 'body']);
+        }
+
+        self::assertSame(
+            ChannelInboundLog::DUPLICATE,
+            $ledger->record('chan', 'm-holder', ['n' => 're-send under pressure']),
+            'saturation never opens a double-dispatch door',
+        );
     }
 
     /**
