@@ -9,6 +9,7 @@ use SugarCraft\Code\Agents\Task;
 use SugarCraft\Code\Agents\TaskList;
 use SugarCraft\Code\Agents\TaskStatus;
 use SugarCraft\Code\Support\ForkedChild;
+use SugarCraft\Code\Tests\Support\DiscardsErrorLogTrait;
 use SugarCraft\Code\Tests\Support\ReapsForkedChildrenTrait;
 
 /**
@@ -16,6 +17,7 @@ use SugarCraft\Code\Tests\Support\ReapsForkedChildrenTrait;
  */
 final class TaskListTest extends TestCase
 {
+    use DiscardsErrorLogTrait;
     use ReapsForkedChildrenTrait;
 
     private string $dbPath;
@@ -1024,5 +1026,141 @@ final class TaskListTest extends TestCase
             createdAt: new \DateTimeImmutable(),
             dependsOn: $dependsOn,
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // m01: poisoned-row containment in rowsToTasks()
+    // -------------------------------------------------------------------------
+
+    /**
+     * THE HEADLINE (m01). ONE UNDECODABLE ROW MUST NOT BRICK THE WHOLE BOARD.
+     *
+     * Before the fix, every listing surface funneled through a single
+     * unguarded loop: one row with a status outside the enum raised a
+     * ValueError out of TaskStatus::from() and took every well-formed
+     * neighbour down with it. This surfaces the poison through
+     * tasksForTeammate() — that query filters by assignee, NOT by status,
+     * so the row genuinely reaches the decode loop (pendingTasks() would
+     * have hidden it behind its own WHERE status clause). This mirrors the
+     * MCP parseTools skip-and-record precedent
+     * (StdioMcpServerToolListRobustnessTest): the bad row is skipped, the
+     * good rows render.
+     */
+    public function testAPoisonedStatusRowIsSkippedAndItsWellFormedNeighboursStillRender(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('m01-good-a', 'team-a', 'Good A'));
+        $list->addTask($this->makeTask('m01-poison-status', 'team-a', 'Poisoned', [], TaskStatus::Pending, 'tm-m01'));
+        $list->addTask($this->makeTask('m01-good-b', 'team-a', 'Good B', [], TaskStatus::Pending, 'tm-m01'));
+
+        $this->poisonTaskRow('m01-poison-status', 'status', 'quantum-state');
+
+        $ids = array_map(static fn (Task $t): string => $t->id, $list->tasksForTeammate('tm-m01'));
+        sort($ids);
+
+        $this->assertSame(
+            ['m01-good-b'],
+            $ids,
+            'a single undecodable row must be skipped, not abort the traversal',
+        );
+    }
+
+    /**
+     * THE OTHER TWO THROW ROUTES, one row each: a malformed created_at
+     * raises out of the DateTimeImmutable constructor, corrupt dependency
+     * JSON raises out of json_decode(..., JSON_THROW_ON_ERROR). Both must
+     * land in the same containment, or the fix only covers the third of the
+     * three parse sites the finding named.
+     */
+    public function testAPoisonedTimestampAndCorruptDependencyJsonAreEachContained(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('m01-poison-date', 'team-a', 'Bad created_at'));
+        $list->addTask($this->makeTask('m01-poison-json', 'team-a', 'Bad depends_on'));
+        $list->addTask($this->makeTask('m01-survivor', 'team-a', 'Well formed'));
+
+        $this->poisonTaskRow('m01-poison-date', 'created_at', 'not-a-date');
+        $this->poisonTaskRow('m01-poison-json', 'depends_on', 'not-json');
+
+        $ids = array_map(static fn (Task $t): string => $t->id, $list->pendingTasks());
+
+        $this->assertSame(['m01-survivor'], $ids, 'either poison escaping containment re-bricks the board');
+    }
+
+    /**
+     * FAIL-CLOSED ON THE BAD ROW ONLY. A lookup of the poisoned id reads as
+     * not-found (the row never becomes a half-built Task), while a lookup of
+     * a well-formed neighbour still returns its task. The claim path shares
+     * this containment through getTaskWithoutLock().
+     */
+    public function testALookupOfAPoisonedRowReportsNotFoundWithoutDisturbingItsNeighbours(): void
+    {
+        $list = new TaskList($this->dbPath);
+        $list->addTask($this->makeTask('m01-lookup-poison', 'team-a', 'Poisoned lookup'));
+        $list->addTask($this->makeTask('m01-lookup-good', 'team-a', 'Good lookup'));
+
+        $this->poisonTaskRow('m01-lookup-poison', 'status', 'quantum-state');
+
+        $this->assertNull($list->task('m01-lookup-poison'), 'the poisoned row leaked past containment as a partial object');
+        $found = $list->task('m01-lookup-good');
+        $this->assertNotNull($found, 'the neighbour vanished with the poison');
+        $this->assertSame('m01-lookup-good', $found?->id);
+    }
+
+    /**
+     * THE SKIP IS LOUD — AND QUIET WHEN THERE IS NOTHING TO SKIP, both
+     * polarities paired exactly like the MCP drain rows: a poisoned list
+     * announces once per traversal on the operator log surface, named and
+     * counted; a clean list costs zero warning lines, because an instrument
+     * that always announces proves nothing when the poisoned case announces.
+     */
+    public function testTheSkipIsAnnouncedOnceOnTheLogSurfaceAndTheCleanListIsSilent(): void
+    {
+        $poisoned = new TaskList($this->dbPath);
+        $poisoned->addTask($this->makeTask('m01-noise-poison', 'team-a', 'Announced', [], TaskStatus::Pending, 'tm-m01'));
+        $poisoned->addTask($this->makeTask('m01-noise-good', 'team-a', 'Rendered', [], TaskStatus::Pending, 'tm-m01'));
+        $this->poisonTaskRow('m01-noise-poison', 'status', 'quantum-state');
+
+        $logged = self::withErrorLogDiscarded(static function () use ($poisoned): void {
+            $poisoned->tasksForTeammate('tm-m01');
+        });
+
+        $this->assertSame(
+            1,
+            substr_count($logged, 'undecodable task row'),
+            'the skip wrote its announcement a number of times other than once — or not at all. Captured log: ' . var_export($logged, true),
+        );
+        $this->assertStringContainsString('candy-code: task list skipped 1', $logged, 'the line lost the envelope or the count');
+        $this->assertStringContainsString('m01-noise-poison', $logged, 'the line did not name the skipped row');
+        $this->assertStringNotContainsString('refusing to render', $logged, 'the announcement must not claim a refusal that did not happen');
+
+        $clean = new TaskList($this->dbPath);
+        $clean->addTask($this->makeTask('m01-noise-clean', 'team-a', 'Well formed'));
+
+        $quiet = self::withErrorLogDiscarded(static function () use ($clean): void {
+            $clean->pendingTasks();
+        });
+
+        $this->assertStringNotContainsString('undecodable task row', $quiet, 'a clean listing announced anyway');
+    }
+
+    /**
+     * Overwrite one column of one row straight through SQLite, impersonating
+     * the stale/foreign writer the finding described (a row written by an
+     * older build or another tool, never a TaskList() API call). Column
+     * names are this test's own literals, never the poison values, which
+     * arrive bound.
+     */
+    private function poisonTaskRow(string $taskId, string $column, string $value): void
+    {
+        $db = new \SQLite3($this->dbPath);
+        $stmt = $db->prepare("UPDATE tasks SET {$column} = :value WHERE id = :id");
+        self::assertIsObject($stmt);
+        $stmt->bindValue(':value', $value, \SQLITE3_TEXT);
+        $stmt->bindValue(':id', $taskId, \SQLITE3_TEXT);
+        $this->assertNotFalse($stmt->execute(), "the poison UPDATE for {$taskId} failed outright");
+        $this->assertSame(1, $db->changes(), "no row matched the poison write for {$taskId}");
+        $stmt->close();
+        $db->close();
     }
 }

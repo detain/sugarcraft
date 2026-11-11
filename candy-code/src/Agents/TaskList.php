@@ -8,6 +8,7 @@ use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookDispatcher;
 use SugarCraft\Code\Hooks\HookDispatchResult;
 use SugarCraft\Code\Background\BackgroundSupervisor;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Support\ProcessTree;
 use SugarCraft\Code\Support\TimedFileLock;
 
@@ -886,17 +887,59 @@ final class TaskList
     /**
      * Convert SQLite result rows into Task objects.
      *
+     * A row that cannot be decoded is SKIPPED and announced — it does not take
+     * the rest of the list down with it. {@see rowToTask()} validates nothing
+     * the session database hands it: a status outside the enum throws
+     * {@see \ValueError} out of {@see TaskStatus::from()}, a malformed date
+     * throws out of {@see \DateTimeImmutable}, corrupt dependency JSON throws
+     * out of `json_decode(..., JSON_THROW_ON_ERROR)` — and every listing
+     * surface funnels through this loop, so historically one poisoned row
+     * killed the whole task board. The containment mirrors the MCP
+     * `parseTools()` skip-and-record precedent: the bad row is refused, named
+     * and counted on the operator log once per traversal, the good rows
+     * render. Fail-closed applies to the poisoned row only — a lookup by its
+     * id reads as not-found rather than re-raising.
+     *
      * @param \SQLite3Result $result
      * @return Task[]
      */
     private function rowsToTasks(\SQLite3Result $result): array
     {
         $tasks = [];
+        /** @var list<string> $undecodable */
+        $undecodable = [];
         while ($row = $result->fetchArray(\SQLITE3_ASSOC)) {
-            $tasks[] = $this->rowToTask($row);
+            try {
+                $tasks[] = $this->rowToTask($row);
+            } catch (\Throwable) {
+                $undecodable[] = self::undecodableRowLabel($row);
+            }
+        }
+
+        if ($undecodable !== []) {
+            Log::channel(Log::APP, sprintf(
+                'task list skipped %d undecodable task row(s) (first: %s) — the rest of the list still renders',
+                count($undecodable),
+                implode(', ', array_slice($undecodable, 0, 5)),
+            ));
         }
 
         return $tasks;
+    }
+
+    /**
+     * How a skipped row is named in the announcement: its id when one is
+     * readable, and a fixed sentinel otherwise. The row's own field values
+     * are never interpolated — a poisoned row is exactly the data this
+     * method must not trust enough to print.
+     *
+     * @param array<string, mixed> $row
+     */
+    private static function undecodableRowLabel(array $row): string
+    {
+        $id = $row['id'] ?? null;
+
+        return is_string($id) && $id !== '' ? $id : '<no usable id>';
     }
 
     /**
