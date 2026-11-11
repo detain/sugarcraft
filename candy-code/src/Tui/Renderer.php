@@ -1637,9 +1637,9 @@ final class Renderer
     /**
      * A single syntax highlighter shared by every review frame (M-13): the
      * class is documented deterministic and stateless per tokenization, and
-     * its internal per-language token cache only pays off when the instance
-     * outlives a frame — rebuilding it per paint threw the cache away each
-     * tick.
+     * its per-language pattern cache is class-static, already shared across
+     * instances and outliving frames even under the old per-frame rebuild —
+     * so this hoist stops allocating a zero-state object each tick.
      */
     private static function reviewHighlighter(): RegexHighlighter
     {
