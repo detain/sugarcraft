@@ -1272,6 +1272,47 @@ final class StdioMcpServer implements McpServer
     }
 
     /**
+     * Public framing primitive: write exactly one newline-delimited JSON-RPC
+     * frame (payload + "\n") under an optional monotonic deadline, absorbing
+     * stderr while waiting for write-readiness — the same drain law every
+     * internal leg obeys, so a full stderr pipe can never wedge this side.
+     *
+     * Embedders that previously hand-framed their own writes around this
+     * transport's private leg (register nit n29: ~4 loops in candy-code's
+     * HttpMcpServer / ClaudeCodeMcpServer / LspConnection) call THIS instead
+     * of re-deriving the delimiter. It carries no exchange lock and no
+     * dead-holder salvage prefix on purpose: full request/response
+     * sequencing (lock, reply matching, half-line recovery) lives in
+     * {@see self::request()} and {@see self::notify()}, which are preferred
+     * whenever the caller is speaking the protocol rather than emitting one
+     * raw frame.
+     *
+     * The payload must be a single-line JSON document — an embedded raw
+     * newline would forge a second wire frame, so it is refused loudly at
+     * the boundary (the private leg must still accept the salvage-prefixed
+     * shape, which is why this validates and delegates instead of replacing).
+     *
+     * @param float|null $deadline absolute monotonic instant, same law as
+     *        {@see self::notify()}: compute it from {@see self::monotonicNow()}
+     * @return bool true once the whole frame went out; false when it did not
+     *         (not started, dead pipe, deadline lost)
+     * @throws \InvalidArgumentException when $json embeds a newline, or when
+     *         $deadline is not a monotonic instant
+     */
+    public function writeFramed(string $json, ?float $deadline = null): bool
+    {
+        if (str_contains($json, "\n")) {
+            throw new \InvalidArgumentException(
+                'MCP frame payload must be a single-line JSON document; an embedded newline would forge a second wire frame.',
+            );
+        }
+
+        self::refuseImplausibleDeadline($deadline);
+
+        return $this->writeLine($json, $deadline);
+    }
+
+    /**
      * Run one exchange under the cross-process lock (see FORK SAFETY above).
      *
      * $body gets the line prefix ("\n" when a previous holder died while

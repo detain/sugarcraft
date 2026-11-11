@@ -504,4 +504,161 @@ final class StdioMcpServerRoundTripTest extends TestCase
         $watched = new StdioMcpServer('probe', PHP_BINARY, [self::fixture('prompt_server.php')]);
         self::assertFalse($watched->isUp(), 'construction alone never spawns');
     }
+
+    public function testWriteFramedDeliversExactlyOneWireLine(): void
+    {
+        // Tight handshake ceiling: a broken delimiter starves the handshake,
+        // and this leg must go red in seconds, not the 60s default.
+        $server = $this->spawn('echoer', 'echo_server.php', 5.0);
+        $server->start();
+
+        $frame = '{"jsonrpc":"2.0","id":"framed-receipt","method":"tools/call","params":{"name":"echo","arguments":{"raw":"FRAMED-TOKEN"}}}';
+
+        self::assertTrue(
+            $server->writeFramed($frame, StdioMcpServer::monotonicNow() + 3.0),
+            'the public framing helper claimed the frame did not go out',
+        );
+
+        // Raw-wire receipt: the answer must land as ONE self-terminated line —
+        // the frame the helper wrote, exactly as the payload said, with the
+        // private leg's newline as the only delimiter. A neutered delimiter
+        // here means no line ever terminates and the read returns null.
+        $line = self::readWireLine($server, 6.0);
+        self::assertIsString($line, 'the framed write produced no terminated wire line within the budget');
+
+        $decoded = json_decode((string) $line, true);
+        self::assertSame('framed-receipt', $decoded['id'] ?? null, 'the reply does not answer the framed request');
+        // The fixture's echo law: the raw argument rides back VERBATIM as the
+        // whole result — so the token's reappearance here is byte-for-byte
+        // proof the payload crossed the pipe exactly as framed.
+        self::assertSame('FRAMED-TOKEN', $decoded['result'] ?? null, 'the payload did not ride the frame intact');
+
+        // And exactly one frame went out: a double-framing helper would leave
+        // a second (ghost) answer on the wire.
+        self::assertNull(self::readWireLine($server, 0.3), 'the framed write produced more than one wire frame');
+    }
+
+    public function testWriteFramedRefusesAnEmbeddedNewlineBeforeTheWire(): void
+    {
+        $server = $this->spawn('echoer', 'echo_server.php', 5.0);
+        $server->start();
+
+        // A payload with an embedded raw newline would be split by the server
+        // into TWO frames — the second one forged. The guard must refuse the
+        // whole thing before a single byte reaches the pipe.
+        $forged = '{"jsonrpc":"2.0","id":"framed-first","method":"tools/call","params":{"name":"echo","arguments":{"raw":"FIRST"}}}'
+            . "\n"
+            . '{"jsonrpc":"2.0","id":"ghost-forgery","method":"tools/call","params":{"name":"echo","arguments":{"raw":"GHOST"}}}';
+
+        $refusal = null;
+        try {
+            $server->writeFramed($forged);
+        } catch (\InvalidArgumentException $e) {
+            $refusal = $e->getMessage();
+        }
+        // Capture, exit the try, assert after — harness law.
+        self::assertIsString($refusal, 'a payload with an embedded newline reached the wire');
+        self::assertStringContainsString('single-line', $refusal);
+
+        // Nothing was written: the NEXT clean frame's answer is the first line
+        // on the wire. A neutered guard lets framed-first answer first and this
+        // id assert goes red — the pin cannot pass vacuously.
+        $clean = '{"jsonrpc":"2.0","id":"framed-clean","method":"tools/call","params":{"name":"echo","arguments":{"raw":"CLEAN"}}}';
+        self::assertTrue($server->writeFramed($clean, StdioMcpServer::monotonicNow() + 3.0));
+
+        $line = self::readWireLine($server, 6.0);
+        self::assertIsString($line);
+        $decoded = json_decode((string) $line, true);
+        self::assertSame('framed-clean', $decoded['id'] ?? null, 'the refused payload leaked bytes onto the wire ahead of the clean frame');
+    }
+
+    public function testThePublicFramingHelperDelegatesAndNeverDoubleFrames(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../src/StdioMcpServer.php');
+
+        $framed = self::methodBody($src, 'function writeFramed(string $json');
+        $line = self::methodBody($src, 'function writeLine(string $json');
+
+        self::assertNotSame('', $framed, 'the public framing helper vanished from the transport');
+        self::assertNotSame('', $line, 'the private write leg vanished from the transport');
+
+        // The helper must DELEGATE to the private core (which owns the
+        // salvage-prefix contract) and must not re-frame anything itself:
+        // exactly one newline concat across both bodies, and it lives in the
+        // private leg.
+        self::assertSame(1, substr_count($framed, '$this->writeLine($json, $deadline)'), 'the helper stopped delegating to the single private leg');
+        self::assertSame(1, substr_count($framed . $line, ' . "\n"'), 'framing escaped the private core — the public helper or the core now double-frames');
+        self::assertSame(1, substr_count($framed, 'str_contains($json,'), 'the boundary newline guard vanished from the public helper');
+    }
+
+    /**
+     * Read one terminated line straight off the child's stdout pipe (the raw
+     * wire), bypassing the library's own reader — proof of frame SHAPE, not of
+     * parsed replies. Returns null when no line arrives within the budget.
+     */
+    private static function readWireLine(StdioMcpServer $server, float $budgetSeconds): ?string
+    {
+        $property = new \ReflectionProperty(StdioMcpServer::class, 'pipes');
+        $property->setAccessible(true);
+        $pipes = $property->getValue($server);
+        $out = $pipes[1] ?? null;
+        self::assertIsResource($out, 'the stdout pipe is gone — nothing to read the wire from');
+
+        $buffer = '';
+        $deadline = microtime(true) + $budgetSeconds;
+        while (microtime(true) < $deadline) {
+            $reads = [$out];
+            $writes = null;
+            $excepts = null;
+            if (stream_select($reads, $writes, $excepts, 0, 50000) === false) {
+                break;
+            }
+
+            if ($reads !== []) {
+                $chunk = fread($out, 65536);
+                if ($chunk === false) {
+                    break;
+                }
+
+                $buffer .= $chunk;
+                $at = strpos($buffer, "\n");
+                if ($at !== false) {
+                    return substr($buffer, 0, $at);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Slice a method's body (braces included) out of raw source for the
+     * structural pins above; '' when the anchor is missing.
+     */
+    private static function methodBody(string $src, string $anchor): string
+    {
+        $start = strpos($src, $anchor);
+        if ($start === false) {
+            return '';
+        }
+
+        $open = strpos($src, '{', $start);
+        if ($open === false) {
+            return '';
+        }
+
+        $depth = 0;
+        for ($i = $open, $len = strlen($src); $i < $len; ++$i) {
+            if ($src[$i] === '{') {
+                ++$depth;
+            } elseif ($src[$i] === '}') {
+                --$depth;
+                if ($depth === 0) {
+                    return substr($src, $open, $i - $open + 1);
+                }
+            }
+        }
+
+        return '';
+    }
 }

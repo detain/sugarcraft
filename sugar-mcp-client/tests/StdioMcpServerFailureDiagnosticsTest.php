@@ -388,4 +388,34 @@ final class StdioMcpServerFailureDiagnosticsTest extends TestCase
         self::assertStringContainsString('1 malformed tool definition', $server->malformedToolDefinitionsReport());
         self::assertTrue($server->isUp());
     }
+
+    public function testWriteFramedGuardOrderAtTheBoundary(): void
+    {
+        // No child is started at all: both guards must fire at the boundary,
+        // BEFORE any pipe check — so their order is observable even unstarted.
+        $server = $this->spawn('echo_server.php');
+
+        $newlineRefusal = null;
+        try {
+            $server->writeFramed("{\"a\":1}\n{\"b\":2}", 1.8e9);
+        } catch (\InvalidArgumentException $e) {
+            $newlineRefusal = $e->getMessage();
+        }
+        self::assertIsString($newlineRefusal, 'the frame-shape guard stopped being first at the boundary');
+        self::assertStringContainsString('single-line', $newlineRefusal);
+
+        $deadlineRefusal = null;
+        try {
+            $server->writeFramed('{"jsonrpc":"2.0"}', 1.8e9);
+        } catch (\InvalidArgumentException $e) {
+            $deadlineRefusal = $e->getMessage();
+        }
+        self::assertIsString($deadlineRefusal, 'the public helper stopped refusing a wall-clock deadline');
+        self::assertStringContainsString('wall-clock', $deadlineRefusal);
+
+        // Well-formed payload + plausible deadline on an unstarted transport:
+        // no throw, honest false — validation precedes the pipe, the pipe
+        // answers truthfully.
+        self::assertFalse($server->writeFramed('{"jsonrpc":"2.0"}', StdioMcpServer::monotonicNow() + 5.0));
+    }
 }

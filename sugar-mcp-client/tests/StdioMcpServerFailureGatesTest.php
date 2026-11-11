@@ -498,4 +498,29 @@ final class StdioMcpServerFailureGatesTest extends TestCase
         $second = $server->callTool('echo', ['raw' => 'second'], timeoutSeconds: 1.0);
         self::assertStringContainsString('Tool call timed out', (string) ($second['error'] ?? ''));
     }
+
+    public function testWriteFramedReportsWhetherTheFrameWentOut(): void
+    {
+        $frame = '{"jsonrpc":"2.0","id":"gates-1","method":"tools/call","params":{"name":"echo","arguments":{"raw":"gated"}}}';
+
+        // 5.0s handshake ceiling — a starved delimiter must redden this leg
+        // in seconds, never the 60s default.
+        $server = $this->spawn('echo_server.php', [], 5.0);
+        self::assertFalse(
+            $server->writeFramed($frame),
+            'a never-started server claimed the frame went out',
+        );
+
+        $server->start();
+        self::assertTrue(
+            $server->writeFramed($frame, StdioMcpServer::monotonicNow() + 3.0),
+            'the live server refused a well-formed frame',
+        );
+
+        $server->stop();
+        self::assertFalse(
+            $server->writeFramed($frame),
+            'a stopped server claimed the frame went out',
+        );
+    }
 }
