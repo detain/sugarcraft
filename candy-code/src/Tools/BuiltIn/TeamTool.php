@@ -12,6 +12,7 @@ use SugarCraft\Code\Agents\TeamConfig;
 use SugarCraft\Code\Agents\TeamManager;
 use SugarCraft\Code\Agents\TeamMessage;
 use SugarCraft\Code\Hooks\HookDispatcher;
+use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
@@ -50,6 +51,14 @@ use SugarCraft\Code\Tools\ToolResult;
  * built per call, in the process that runs it, and nothing is opened when the
  * tool set is built.
  *
+ * SCOPING. Because that store is per-user, a stamp is what keeps projects
+ * apart: each tool carries a workspace fingerprint (home + resolved root,
+ * {@see self::scopeFor()}) and every team it creates wears it. A call naming
+ * another workspace's team — or a team written before the stamp existed — is
+ * refused outright, and a team-less `list` counts foreign teams without
+ * naming them. The stamp is not an auth token; it closes the accidental
+ * cross-project drive that model-visible team ids made trivial (M-3).
+ *
  * HOOKS. The task lists raise `TaskCreated` (an `add`; a block refuses the
  * task), `TaskCompleted` (a `complete`; a block marks the completion
  * contested) and `TeammateIdle` (a `claim` with no task named; a block hands
@@ -87,28 +96,32 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
      * @param int                     $ownerPid  the process claims are recorded against
      * @param (\Closure(int, ?int): bool)|null $isAlive liveness probe for crash recovery;
      *        null uses {@see TaskList}'s own (procfs + signal 0)
+     * @param string                  $scope     this launch's workspace fingerprint (see {@see self::scopeFor()})
      */
     private function __construct(
         private \Closure $teams,
         private int $ownerPid,
         private ?\Closure $isAlive,
+        private string $scope,
     ) {
     }
 
     /**
      * The tool over $teams (default: the user's team store), recording claims
      * against $ownerPid (default: this process — the one building the tool
-     * set, see the class doc).
+     * set, see the class doc), stamped to $scope (default: the current
+     * working directory's workspace — see {@see self::scopeFor()}).
      *
      * @param (\Closure(): TeamManager)|null      $teams
      * @param (\Closure(int, ?int): bool)|null    $isAlive
      */
-    public static function new(?\Closure $teams = null, ?int $ownerPid = null, ?\Closure $isAlive = null): self
+    public static function new(?\Closure $teams = null, ?int $ownerPid = null, ?\Closure $isAlive = null, ?string $scope = null): self
     {
         return new self(
             $teams ?? static fn (): TeamManager => new TeamManager(),
             $ownerPid ?? (int) getmypid(),
             $isAlive,
+            $scope ?? self::scopeFor(''),
         );
     }
 
@@ -116,13 +129,63 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
      * The launch's Team tool: the user's team store, whose task lists raise
      * `TaskCreated` / `TaskCompleted` / `TeammateIdle` through the launch's
      * hook chain ({@see TeamManager::useLaunchHooks()}), run in this launch's
-     * root — the directory a hook script sees as its working directory.
+     * root — the directory a hook script sees as its working directory. The
+     * tool is stamped to that same root, so it can only drive teams this
+     * workspace created (M-3, cc-review-1111).
      */
     public static function fromCatalog(ToolBuildContext $context): self
     {
         $root = $context->root;
 
-        return self::new(static fn (): TeamManager => new TeamManager(projectRoot: $root));
+        return self::new(static fn (): TeamManager => new TeamManager(projectRoot: $root), scope: self::scopeFor($root));
+    }
+
+    /**
+     * This tool's workspace fingerprint, as {@see self::scopeFor()} derived it.
+     */
+    public function scope(): string
+    {
+        return $this->scope;
+    }
+
+    /**
+     * The fingerprint binding a tool to the workspace it serves: home plus the
+     * resolved project root. It is not a secret and not an identity claim on
+     * the order of one — the membership layer it would have guarded
+     * ({@see Team::addTeammate()}) has no production callers — it only stops
+     * one project's agent from driving another project's teams through the
+     * shared per-user registry, where team ids are model-chosen and visible
+     * through `list`.
+     */
+    private static function scopeFor(string $root): string
+    {
+        $resolved = realpath($root);
+
+        return hash('sha256', HomeDirectory::path() . "\0" . ($resolved !== false ? $resolved : ($root === '' ? (string) getcwd() : $root)));
+    }
+
+    /**
+     * Refuse, loudly, to drive a team this workspace did not create. A null
+     * stamp is a team written before scoping existed: acting on it is refused
+     * the same way, because the refusal is the only safe answer that does not
+     * pretend the legacy row belongs to the caller.
+     */
+    private function refuseOutOfScope(Team $team): ?ToolResult
+    {
+        if ($team->scopeKey === $this->scope) {
+            return null;
+        }
+        if ($team->scopeKey === null) {
+            return self::error(sprintf(
+                'team "%s" predates workspace scoping; acting on it here is refused — `create` a fresh team for this workspace',
+                $team->id,
+            ));
+        }
+
+        return self::error(sprintf(
+            'team "%s" belongs to another workspace; only the launch that created it can act on it from here',
+            $team->id,
+        ));
     }
 
     public function name(): string
@@ -146,7 +209,8 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             . '`background: true`, telling it the team id, its teammate name, and to repeat claim → work → '
             . 'complete until claim finds nothing; a teammate whose preset disallows Team reports back instead, '
             . 'and you complete its task. Dependencies cannot form a cycle, and a task whose claimant\'s session '
-            . 'died is put back to pending on the next list or claim.';
+            . 'died is put back to pending on the next list or claim. Teams are scoped to the workspace that '
+            . 'created them: naming another workspace\'s team (or one created before scoping) is refused.';
     }
 
     public function inputSchema(): array
@@ -204,6 +268,9 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             if ($team === null) {
                 return self::error(sprintf('no team "%s"; `list` without `team` names the teams there are', $teamId));
             }
+            if (($outOfScope = $this->refuseOutOfScope($team)) !== null) {
+                return $outOfScope;
+            }
 
             return match ($action) {
                 'add' => $this->add($team, $args),
@@ -254,7 +321,7 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             $config = $config->withDefaultTimeoutSeconds($timeout);
         }
 
-        $teams->createTeam($teamId, $teamId, self::LEAD, $config);
+        $teams->createTeam($teamId, $teamId, self::LEAD, $config, $this->scope);
 
         return self::ok(sprintf(
             'Team "%s" created (lead "%s", %s%s%s). `add` its tasks, then start each teammate with Task'
@@ -349,7 +416,12 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
     private function listTeams(TeamManager $teams): ToolResult
     {
         $lines = [];
+        $foreign = 0;
         foreach ($teams->teams() as $team) {
+            if ($team->scopeKey !== $this->scope) {
+                ++$foreign;
+                continue;
+            }
             $counts = [];
             foreach (self::allTasks($team->taskList()) as $task) {
                 $counts[$task->status->value] = ($counts[$task->status->value] ?? 0) + 1;
@@ -362,7 +434,15 @@ final readonly class TeamTool implements Tool, BuildsFromCatalog
             $lines[] = sprintf('- %s: %s', $team->id, $summary === [] ? 'no tasks' : implode(', ', $summary));
         }
 
-        return self::ok($lines === [] ? 'No teams. `create` one.' : "Teams:\n" . implode("\n", $lines));
+        // Foreign teams are counted but never named: their ids are other
+        // workspaces' business (M-3), while hiding them entirely would make a
+        // mis-shared registry look empty.
+        $suffix = $foreign === 0 ? '' : sprintf(' (+%d team%s scoped to other workspaces, not listed)', $foreign, $foreign === 1 ? '' : 's');
+        if ($lines !== []) {
+            return self::ok("Teams:\n" . implode("\n", $lines) . $suffix);
+        }
+
+        return self::ok($foreign === 0 ? 'No teams. `create` one.' : 'No teams in this workspace. `create` one.' . $suffix);
     }
 
     private function listTasks(TeamManager $teams, Team $team): ToolResult
