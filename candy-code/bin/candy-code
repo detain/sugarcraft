@@ -685,14 +685,20 @@ foreach ((new InputReader())->parse(Detect::takeStrayInputBytes()) as $earlyMsg)
 $finalModel = $program->run();
 
 // E705: the Kitty keyboard push rides App::init() as a Cmd; the pop cannot.
-// Every way out of run() — QuitMsg, SIGINT's InterruptMsg, kill() — stops the
-// loop without giving the model a turn to emit anything, so the balanced
-// `CSI < 1 u` is written here, after teardown, where all exits funnel.
-// Non-Kitty terminals ignore the bytes; a terminal we never pushed to cannot
-// have its base flags popped below default. The exception exit that once left
-// this pop unscheduled rides core's armed release hook instead —
-// releaseTerminalForShutdown pops first, so the push stays balanced there
-// too, and this line is never reached on that path.
+// Every RETURNED way out of run() — QuitMsg, SIGINT's InterruptMsg, kill() —
+// stops the loop without giving the model a turn to emit anything, so the
+// balanced `CSI < 1 u` is written here, after teardown, where all returned
+// exits funnel. Non-Kitty terminals ignore the bytes; a terminal we never
+// pushed to cannot have its base flags popped below default.
+// ADJUDICATED 2026-11-11 (M-14/bd1): an escaping Throwable never reaches
+// this line — its pairing pop rides core's run() finally, which hands
+// teardownTerminal the throw-leg pop, mirror-gated on
+// kittyKeyboardPushed and paid before the alt-screen leave. The armed
+// release hook, releaseTerminalForShutdown, is the backstop for what skips
+// the finally entirely — a hard fatal still holding the attach latch — and
+// its pop is unconditional precisely because a stranded run cannot ask
+// which layer it hit. Three exits, three payers: returned (here), thrown
+// (teardown), fatal (backstop).
 fwrite(STDOUT, Ansi::popKittyKeyboard());
 
 // Step 3.D-2: the session ends HERE, once, after every way out of run() has
