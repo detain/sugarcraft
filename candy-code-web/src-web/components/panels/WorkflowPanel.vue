@@ -39,10 +39,12 @@ function stopPolling(): void {
   pollTimer = null
 }
 
-watch(() => props.sessionId, (id) => {
-  // A session change re-reads from scratch; the poll re-arms only if the new
-  // session's rows hold an open running one.
+watch(() => props.sessionId, (id, previous) => {
+  // A session change re-reads from scratch and stops refreshing the session
+  // left behind — its events would reload rows no open panel shows; the poll
+  // re-arms only if the new session's rows hold an open running one.
   stopPolling()
+  if (previous !== undefined && previous !== id) workflows.unwatch(previous)
   void workflows.loadRuns(id)
 }, { immediate: true })
 watch(() => workflows.names, (names) => {
@@ -65,8 +67,12 @@ watch(polled, (workflowId) => {
   if (workflowId !== null) pollTimer = setInterval(() => void pollStatus(workflowId), STATUS_POLL_MS)
 }, { immediate: true })
 
-// Closing the panel destroys it; the interval must not outlive the view.
-onBeforeUnmount(stopPolling)
+// Closing the panel destroys it; neither the interval nor the event watch
+// may outlive the view.
+onBeforeUnmount(() => {
+  workflows.unwatch(props.sessionId)
+  stopPolling()
+})
 
 async function act(action: () => Promise<unknown>): Promise<void> {
   error.value = null

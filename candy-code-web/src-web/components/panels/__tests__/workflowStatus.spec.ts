@@ -136,3 +136,62 @@ describe('WorkflowPanel live status poll', () => {
     expect(wire.sent('workflow.status')).toHaveLength(1)
   })
 })
+
+describe('WorkflowPanel event watch lifecycle', () => {
+  it('stops refreshing a session once its panel closes', async () => {
+    // F-n46 (CW-QUAL-A F-NIT-6): the store's event watch must not outlive the
+    // panel that opened it — one live `workflow.runs` subscription per session
+    // EVER opened was the zombie leak. A closed panel leaves nothing to
+    // refresh: neither the turn-end reload nor a `Workflow` tool call may
+    // reach the unwatched session again.
+    const wrapper = await openPanel([SETTLED])
+    wrapper.unmount()
+    await flushPromises()
+    const closed = wire.sent('workflow.runs').length
+
+    wire.event('s1', 'turn.completed', {})
+    wire.event('s1', 'tool.finished', { name: 'Workflow' })
+    await flushPromises()
+    expect(wire.sent('workflow.runs')).toHaveLength(closed)
+  })
+
+  it('watches a reopened panel again — exactly one reload per event', async () => {
+    // Re-open re-watches (the store keeps one Set, so re-watching is idempotent),
+    // and one watch means one reload per event — a leaked double-watch would
+    // send twice per turn completion.
+    const first = await openPanel([SETTLED])
+    first.unmount()
+    await flushPromises()
+
+    const reopened = wire.sent('workflow.runs').length
+    mount(WorkflowPanel, { props: { sessionId: 's1' }, global: { plugins: [pinia] } })
+    await flushPromises()
+    await wire.answer('workflow.runs', { items: [SETTLED] })
+    expect(wire.sent('workflow.runs')).toHaveLength(reopened + 1)
+
+    wire.event('s1', 'turn.completed', {})
+    await flushPromises()
+    await wire.answer('workflow.runs', { items: [SETTLED] })
+    expect(wire.sent('workflow.runs')).toHaveLength(reopened + 2)
+  })
+
+  it('drops the previous session from the watch on a switch', async () => {
+    // Switching the panel's session must drop the session left behind: its
+    // events reload rows no open panel shows, and a failure poisons the shared
+    // store's `error` ref that the visible session's header reads.
+    const wrapper = await openPanel([SETTLED])
+    await wrapper.setProps({ sessionId: 's2' })
+    await flushPromises()
+    await wire.answer('workflow.runs', { items: [SETTLED] })
+
+    const switched = wire.sent('workflow.runs').length
+    wire.event('s1', 'turn.completed', {})
+    await flushPromises()
+    expect(wire.sent('workflow.runs')).toHaveLength(switched)
+
+    wire.event('s2', 'turn.completed', {})
+    await flushPromises()
+    await wire.answer('workflow.runs', { items: [SETTLED] })
+    expect(wire.sent('workflow.runs')).toHaveLength(switched + 1)
+  })
+})

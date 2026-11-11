@@ -8,12 +8,16 @@ export type WorkflowRun = MethodResult<'workflow.runs'>['items'][number]
 
 /**
  * The workflows a session can run and the runs it has seen (roadmap O-6c):
- * `workflow.list` on every handshake; `workflow.runs` per session when a panel
- * shows it, and again whenever that session's turn ends or a `Workflow` tool
- * call starts or finishes — a `/workflow` run is a turn, and the model's own
- * `Workflow` tool runs are tool calls. While a run is open, the panel polls
- * its live status with `workflow.status` (a run's transcript-derived row
- * goes stale mid-flight, so the engine answers this one directly).
+ * `workflow.list` on every handshake; `workflow.runs` for a session while a
+ * panel shows it, and again whenever a watched session's turn ends or a
+ * `Workflow` tool call starts or finishes — a `/workflow` run is a turn, and
+ * the model's own `Workflow` tool runs are tool calls. The watch lives exactly
+ * as long as the panel: closing or switching drops it (`unwatch`), so a session
+ * no open panel shows never keeps a live event subscription reloading its rows
+ * — or failing into the shared `error` ref — for the rest of the page's life.
+ * While a run is open, the panel polls its live status with `workflow.status`
+ * (a run's transcript-derived row goes stale mid-flight, so the engine answers
+ * this one directly).
  */
 export const useWorkflowsStore = defineStore('workflows', () => {
   const connection = useConnectionStore()
@@ -47,6 +51,15 @@ export const useWorkflowsStore = defineStore('workflows', () => {
     } catch (failure) {
       error.value = describe(failure)
     }
+  }
+
+  /**
+   * Stop refreshing $sessionId from its events — the mirror of {@link loadRuns},
+   * called by the panel that watched it when it closes or switches away. The
+   * rows already read stay in `runs`; a later re-open re-watches.
+   */
+  function unwatch(sessionId: string): void {
+    watched.delete(sessionId)
   }
 
   /**
@@ -92,7 +105,7 @@ export const useWorkflowsStore = defineStore('workflows', () => {
     }
   })
 
-  return { available, names, runs, error, load, runsFor, loadRuns, status, run, pause, resume }
+  return { available, names, runs, error, load, runsFor, loadRuns, unwatch, status, run, pause, resume }
 })
 
 /**
