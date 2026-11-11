@@ -138,7 +138,11 @@ final class PtyDriver
                 ProcessContainment::scrubbedEnv(),
                 $cols,
                 $rows,
-                true,
+                // Not a hard-coded true: ConPTY has no ctty and refuses the
+                // request outright, so the capability answers (C-TUI-6.d's
+                // other half — the seam that picked ConPTY must also decide
+                // whether the ctty wrapper applies). POSIX stays true.
+                PtyBackend::honoursControllingTerminal(),
             );
         } catch (\Throwable $failure) {
             // spawn() throwing AFTER open() succeeded would otherwise strand the

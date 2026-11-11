@@ -204,6 +204,29 @@ final class BinServeLiveE2ETest extends TestCase
         self::assertFalse($probe, 'socket still accepts connections after a clean stop: ' . $errstr);
     }
 
+    /**
+     * Structural twin of the exit-0 pin above: the readiness banner is the
+     * launchers' contract that SIGTERM will be HANDLED, so the pcntl arms must
+     * textually precede the banner write in the bin. 2026-11-11 CI race class:
+     * on loaded runners the child was descheduled between the banner fwrite
+     * and pcntl_signal(), a TERM landed on the default disposition, and the
+     * live pin died with 143-vs-0 while every quiet machine passed. The
+     * reorder fixed it; this pin keeps the ordering from silently drifting
+     * back (it is byte-order logic, so it runs without spawning anything).
+     */
+    public function testSignalHandlersAreArmedBeforeTheReadinessBanner(): void
+    {
+        $bin = (string) \realpath(__DIR__ . '/../../bin/candy-git-server');
+        self::assertNotFalse($bin, 'bin/candy-git-server missing next to the lib');
+        $source = (string) \file_get_contents($bin);
+
+        $arms = \strpos($source, '\\pcntl_signal(15, $stop)');
+        $banner = \strpos($source, "Lang::t('cli.serve_http_banner'");
+        self::assertIsInt($arms, 'the SIGTERM arm vanished from bin serve --http');
+        self::assertIsInt($banner, 'the readiness banner vanished from bin serve --http');
+        self::assertLessThan($banner, $arms, 'SIGTERM must be armed BEFORE the banner proves the server is stoppable');
+    }
+
     // -------------------------------------------------------------------------
     // Launched-server plumbing
     // -------------------------------------------------------------------------

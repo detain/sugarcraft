@@ -12,15 +12,18 @@ use SugarCraft\Pty\Windows\ConPtyMasterPty;
 use SugarCraft\Pty\Windows\ConPtyPair;
 use SugarCraft\Pty\Windows\ConPtySlavePty;
 use SugarCraft\Pty\Windows\ConPtySystem;
+use SugarCraft\Pty\Windows\Kernel32ConPty;
 
 /**
  * The system-level adapter: construction law, open() wiring, refusal paths,
  * and the spawn orchestration the slave performs on the pair's behalf.
  *
  * Everything here runs on Linux through the transcript double; the one
- * Windows-shaped claim it pins is the NEGATIVE — that a POSIX host refuses the
- * ConPTY backend naming its reason before any FFI is touched (the sibling
- * {@see ConPtyLiveTest} carries the positive, Windows-only).
+ * Windows-shaped claim it pins is the NEGATIVE — that a host which cannot
+ * serve ConPTY refuses the backend naming its reason before any FFI is
+ * touched (the sibling {@see ConPtyLiveTest} carries the positive,
+ * Windows-only). The refusal test self-skips on hosts where the binding is
+ * genuinely live, since there is nothing there to refuse.
  */
 final class ConPtySystemTest extends TestCase
 {
@@ -99,6 +102,14 @@ final class ConPtySystemTest extends TestCase
         // the OS family BEFORE anything FFI-shaped, so a Linux open() fails
         // with the reason in prose — and the refusal message law (point at the
         // host, never the tracker) applies.
+        if (Kernel32ConPty::supported() === null) {
+            // The name says POSIX, but what the law cares about is "a host that
+            // cannot serve ConPTY". On Windows with PHP >= 8.4 and ext-ffi the
+            // binding genuinely works, so open() must NOT refuse and there is
+            // nothing to check here; ConPtyLiveTest owns the working path.
+            self::markTestSkipped('ConPTY is genuinely supported on this host; there is nothing to refuse');
+        }
+
         $system = new ConPtySystem();
 
         try {

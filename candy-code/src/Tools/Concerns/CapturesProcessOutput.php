@@ -541,7 +541,10 @@ trait CapturesProcessOutput
                 ProcessContainment::scrubbedEnv(),
                 80,
                 24,
-                true,
+                // Same capability answer as PtyDriver::run(): the ConPTY
+                // pair throws on a hard-wired true, the POSIX map's absence
+                // keeps the historical request (LANE-CC, 2026-11-11).
+                PtyBackend::honoursControllingTerminal(),
             );
         } catch (\Throwable $failure) {
             // spawn() throwing AFTER open() succeeded would strand the master
