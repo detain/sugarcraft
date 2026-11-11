@@ -751,7 +751,10 @@ if (!stream_isatty(\STDIN)) {
     // $GLOBALS, not a local: see the cost list above. This handle is what
     // occupies descriptor 0 for the rest of the run, and it has to outlive the
     // method PHPUnit includes this file from.
-    $GLOBALS['__candyCodeSuiteStdin'] = fopen('/dev/null', 'r');
+    // Windows has no /dev/null — its null device is NUL — and fopen() of a
+    // missing path warns under the suite's failOnWarning before any caller
+    // can notice the false handle.
+    $GLOBALS['__candyCodeSuiteStdin'] = fopen(\PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null', 'r');
 }
 
 /*
