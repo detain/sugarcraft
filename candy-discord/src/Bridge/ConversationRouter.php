@@ -42,8 +42,14 @@ use React\Promise\PromiseInterface;
  * stays answerable, only the buttons go away), `target` restricts buttons
  * to dm/channel conversations, `sessionFilter`/`agentFilter` are regex
  * doors, and `approvers` is the answer roster enforced by
- * {@see answerApproval()}. The roster is the wall: a button's per-user
- * allowance is a platform courtesy a forged callback could walk around.
+ * {@see answerApproval()}. The configured roster is ONE wall (empty =
+ * documented everyone); behind it rides the C-1 answer gate: every answer
+ * must also prove conversation binding — a button/card click carries the
+ * per-ask nonce minted at presentation, a text `/approve` must arrive in
+ * the ask's own conversation, and the adapter applies the platform's
+ * access floor to the answerer first. A button's per-user allowance stays
+ * a platform courtesy; unbound answers are refused fail-closed and never
+ * touch the permission response.
  *
  * MUTABLE ON PURPOSE: it mirrors live session state.
  */
@@ -60,6 +66,15 @@ final class ConversationRouter
 
     /** @var array<string, string> askId → sessionId (an answer names only the ask) */
     private array $askSession = [];
+
+    /** @var array<string, string> askId → per-ask answer nonce minted at presentation (C-1) */
+    private array $askNonce = [];
+
+    /** @var array<string, string> askId → conversation key the ask was presented on (C-1 binding) */
+    private array $askConversation = [];
+
+    /** @var array<string, array<string,mixed>> askId → presentation ref (where refusal lines are delivered) */
+    private array $askRef = [];
 
     private ?QueueGate $queueGate = null;
 
@@ -240,7 +255,7 @@ final class ConversationRouter
 
                     return;
                 }
-                $this->answerApproval($sessionId, $askId, $verdict, $ref['__actor'] ?? ['userId' => 'text-fallback']);
+                $this->answerApproval($sessionId, $askId, $verdict, $ref['__actor'] ?? ['userId' => 'text-fallback'], '', $key, 'text');
                 break;
             case 'model':
                 $sessionId = $this->map->sessionIdFor($key);
@@ -330,7 +345,7 @@ final class ConversationRouter
             case 'permission.resolved':
                 $askId = (string) ($data['askId'] ?? '');
                 if ($askId !== '') {
-                    unset($this->presentedAsks[$askId], $this->askSession[$askId]);
+                    unset($this->presentedAsks[$askId], $this->askSession[$askId], $this->askNonce[$askId], $this->askConversation[$askId], $this->askRef[$askId]);
                     $verdict = (string) ($data['reply'] ?? 'resolved');
                     foreach ($this->channelFaces() as $candidate) {
                         $candidate->retireApproval($askId, self::resolvedLine($verdict, $data));
@@ -369,8 +384,10 @@ final class ConversationRouter
     /**
      * exec-approval posture (§7.9): target/session/agent doors first, then
      * either the button payload or the same-chat text fallback. Approver
-     * identity is enforced at answer time in answerApproval() — the roster
-     * there is the wall; button allowed_users are platform courtesy.
+     * identity is enforced at answer time in answerApproval() — the
+     * configured roster is one wall; the per-ask nonce minted below and
+     * the conversation binding recorded beside it are the C-1 answer gate
+     * behind it. Button allowed_users remain platform courtesy.
      *
      * agentFilter matches against the ask's tool + arguments haystack: the
      * v1 serve event carries no agent identity, so this is tool-scoped
@@ -410,10 +427,14 @@ final class ConversationRouter
                 return;
             }
         }
+        $nonce = \bin2hex(\random_bytes(8));
         $this->presentedAsks[$askId] = true;
         $this->askSession[$askId] = $sessionId;
+        $this->askNonce[$askId] = $nonce;
+        $this->askConversation[$askId] = $conversationKey;
+        $this->askRef[$askId] = (array) $conversation['ref'];
         if ((bool) ($approvals['enabled'] ?? true)) {
-            $channel->promptApproval($conversation['ref'], $sessionId, $ask);
+            $channel->promptApproval($conversation['ref'], $sessionId, $ask, $nonce);
 
             return;
         }
@@ -423,9 +444,22 @@ final class ConversationRouter
     /**
      * A human answered (button press, card submit, or the text fallback).
      *
+     * Two walls, in order (C-1): the configured approver roster rejects
+     * non-approvers ON the permission wire (the ask resolves denied — the
+     * pre-existing shape, unchanged); then the BINDING wall refuses
+     * fail-closed, BEFORE anything reaches respondPermission, any answer
+     * that cannot prove it belongs to this ask: the button/card face must
+     * carry the nonce minted at presentation and answer inside the ask's
+     * conversation; the text face must answer inside the ask's
+     * conversation. A refused answer leaves the ask pending for a
+     * legitimate approver and is surfaced as a deny line.
+     *
      * @param array<string,mixed> $actor
+     * @param string              $nonce           custom_id / card-data nonce ('' = text face)
+     * @param string|null         $conversationKey the conversation the ANSWER arrived on
+     * @param string              $face            'button' | 'card' | 'text'
      */
-    public function answerApproval(string $sessionId, string $askId, string $verdict, array $actor): void
+    public function answerApproval(string $sessionId, string $askId, string $verdict, array $actor, string $nonce = '', ?string $conversationKey = null, string $face = 'text'): void
     {
         $approvers = (array) ($this->policy['approvals']['approvers'] ?? $this->policy['approvers'] ?? []);
         $userId = (string) ($actor['userId'] ?? '');
@@ -433,6 +467,11 @@ final class ConversationRouter
             $this->log->warn('approval_by_non_approver', ['ask' => $askId]);
             $this->serve->respondPermission($sessionId, $askId, 'reject', "refused: {$userId} is not an approver")
                 ->then(null, fn (\Throwable $e) => $this->log->warn('approval_refuse_failed', ['error' => $e->getMessage()]));
+
+            return;
+        }
+        if (!$this->answerIsBound($sessionId, $askId, $nonce, $conversationKey, $face)) {
+            $this->refuseUnbound($askId, $userId, $face);
 
             return;
         }
@@ -449,29 +488,37 @@ final class ConversationRouter
     }
 
     /**
-     * The ask-first spelling an adapter reaches with only an askId: the
-     * session is whatever the ask was presented on. Unknown asks (answered
-     * after a restart, before the re-follow landed) resolve through
-     * `permission.pending` so a stale button still answers correctly.
+     * The ask-first spelling an adapter reaches with an askId and the
+     * answer's own context: the session is whatever the ask was presented
+     * on. Unknown asks (answered after a restart, before the re-follow
+     * landed) resolve through `permission.pending` so the TEXT `/approve`
+     * recovery keeps working — but C-1 binds every answer here too: the
+     * nonce/conversation gate in answerApproval() refuses a stale button
+     * from a dead process fail-closed (the re-follow re-presents the ask
+     * with a fresh card), and a text answer must arrive on the session's
+     * own conversation.
      *
      * @param array<string,mixed> $actor
+     * @param string              $nonce           button/card face: the per-ask secret from the payload
+     * @param string|null         $conversationKey the conversation the answer arrived on
+     * @param string              $face            'button' | 'card' | 'text'
      */
-    public function answerByAskId(string $askId, string $verdict, array $actor): void
+    public function answerByAskId(string $askId, string $verdict, array $actor, string $nonce = '', ?string $conversationKey = null, string $face = 'text'): void
     {
         $sessionId = $this->askSession[$askId] ?? null;
         if ($sessionId !== null) {
-            $this->answerApproval($sessionId, $askId, $verdict, $actor);
+            $this->answerApproval($sessionId, $askId, $verdict, $actor, $nonce, $conversationKey, $face);
 
             return;
         }
         $this->serve->call('permission.pending', [])->then(
-            function (array $r) use ($askId, $verdict, $actor): void {
+            function (array $r) use ($askId, $verdict, $actor, $nonce, $conversationKey, $face): void {
                 foreach ((array) ($r['pending'] ?? $r['asks'] ?? []) as $entry) {
                     if (\is_array($entry) && (string) ($entry['askId'] ?? '') === $askId) {
                         $sid = (string) ($entry['sessionId'] ?? '');
                         if ($sid !== '') {
                             $this->askSession[$askId] = $sid;
-                            $this->answerApproval($sid, $askId, $verdict, $actor);
+                            $this->answerApproval($sid, $askId, $verdict, $actor, $nonce, $conversationKey, $face);
 
                             return;
                         }
@@ -481,6 +528,63 @@ final class ConversationRouter
             },
             fn (\Throwable $e) => $this->log->warn('permission_pending_failed', ['error' => $e->getMessage()]),
         );
+    }
+
+    /**
+     * The C-1 binding wall. Asks presented in THIS process carry their
+     * minted nonce and presentation key; an answer arriving with neither
+     * match is not an answer to this ask. For asks this process never
+     * presented (post-restart text `/approve` — the documented recovery
+     * line), the binding is derived lazily from the session's own last
+     * conversation; the button/card face can never pass that way, because
+     * the nonce died with the presenting process and old payloads parse
+     * without one.
+     */
+    private function answerIsBound(string $sessionId, string $askId, string $nonce, ?string $conversationKey, string $face): bool
+    {
+        if ($conversationKey === null || $conversationKey === '') {
+            return false; // an answer with no origin never reaches someone else's ask
+        }
+        $bound = $this->askConversation[$askId] ?? null;
+        if ($bound === null) {
+            $conversation = $this->map->lastConversation($sessionId);
+            if ($conversation === null) {
+                return false;
+            }
+            $bound = (string) $conversation['key'];
+            $this->askConversation[$askId] = $bound;
+            $this->askRef[$askId] = (array) $conversation['ref'];
+        }
+        if ($conversationKey !== $bound) {
+            return false;
+        }
+        if ($face !== 'text') {
+            $expected = (string) ($this->askNonce[$askId] ?? '');
+
+            return $expected !== '' && \hash_equals($expected, $nonce);
+        }
+
+        return true;
+    }
+
+    /**
+     * Refused fail-closed: logged LOUD, denied visibly in the ask's own
+     * presentation conversation (the legitimate approvers' eyes), and the
+     * permission wire is NOT touched — another user's pending ask stays
+     * pending for its real approver.
+     */
+    private function refuseUnbound(string $askId, string $userId, string $face): void
+    {
+        $this->log->warn('approval_answer_unbound', ['ask' => $askId, 'actor' => $userId, 'face' => $face]);
+        $key = $this->askConversation[$askId] ?? null;
+        $ref = $this->askRef[$askId] ?? null;
+        if ($key === null || !\is_array($ref)) {
+            return;
+        }
+        $channel = $this->channelFor($key);
+        if ($channel !== null) {
+            $this->deliver($channel, $ref, '⛔ Approval answer refused: it did not match the card presented here (a forged or stale click). The question is still open — answer with the buttons below or `/approve <askId> once|always|deny`.');
+        }
     }
 
     // ── plumbing ────────────────────────────────────────────────────────

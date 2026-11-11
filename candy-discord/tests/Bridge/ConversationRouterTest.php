@@ -30,6 +30,9 @@ final class RecordingRouterFace implements PlatformFace
     /** @var list<array> */
     public array $prompted = [];
 
+    /** @var array<string,string> askId → nonce the router handed the face (C-1 tests read it to forge/legit-click) */
+    public array $promptNonces = [];
+
     /** @var array<string,string> */
     public array $retired = [];
 
@@ -57,9 +60,10 @@ final class RecordingRouterFace implements PlatformFace
         return resolve(null);
     }
 
-    public function promptApproval(array $ref, string $sessionId, array $ask): void
+    public function promptApproval(array $ref, string $sessionId, array $ask, string $nonce = ''): void
     {
         $this->prompted[] = $ask;
+        $this->promptNonces[(string) ($ask['askId'] ?? '')] = $nonce;
     }
 
     public function retireApproval(string $askId, string $line): void

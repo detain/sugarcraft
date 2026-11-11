@@ -169,18 +169,19 @@ final class DiscordAccount implements PlatformFace
      * §7.9: render-once (the Bridge's presentedAsks gate is upstream), with
      * the approver roster stamped per button (`allowed_users` is the
      * platform-side courtesy filter; the roster check in the Bridge's
-     * answerApproval is the actual wall), and an expiry timer that RETIRES
+     * answerApproval is one wall, the C-1 nonce + conversation binding
+     * carried from here is the other), and an expiry timer that RETIRES
      * the prompt when nobody answers — the same disable-on-resolve PATCH,
      * clock-triggered.
      */
-    public function promptApproval(array $ref, string $sessionId, array $ask): void
+    public function promptApproval(array $ref, string $sessionId, array $ask, string $nonce = ''): void
     {
         $channelId = (string) ($ref['channelId'] ?? '');
         if ($channelId === '') {
             return;
         }
         $roster = \array_map('strval', $this->listCfg('approvalRoster'));
-        $payload = Buttons::approvalPayload($ask, self::approvalSummary($ask), $roster);
+        $payload = Buttons::approvalPayload($ask, self::approvalSummary($ask), $roster, $nonce);
         $this->rest->send($channelId, (string) $payload['content'], [
             'components' => $payload['components'],
             'flags' => Buttons::FLAG_COMPONENTS_V2,
@@ -576,13 +577,32 @@ final class DiscordAccount implements PlatformFace
         );
         $userId = (string) ($member['user']['id'] ?? $interaction['user']['id'] ?? '');
         $userName = (string) ($member['user']['global_name'] ?? $member['user']['username'] ?? $userId);
+        $isDm = !isset($interaction['guild_id']) || (string) $interaction['guild_id'] === '';
+        $channelId = (string) ($interaction['channel_id'] ?? '');
+        $guildId = (string) ($interaction['guild_id'] ?? '');
+        $key = $isDm
+            ? Keys::dmKey('discord', $this->account, $userId, $channelId, $this->strCfg('dmScope', Keys::DM_PER_PEER))
+            : Keys::channelKey('discord', $this->account, $channelId);
 
         if ($kind === Buttons::INTERACTION_TYPE_BUTTON) {
             $parsed = Buttons::parseButton($interaction);
             if ($parsed === null) {
                 return;
             }
-            $this->router->answerByAskId($parsed['askId'], $parsed['verdict'], ['userId' => $userId, 'name' => $userName]);
+            // C-1: a button IS an approval answer — the clicker must pass
+            // the same access floor the message path applies, before the
+            // answer (nonce + binding, enforced by the router) goes near
+            // the permission wire. Refusal is ephemeral and loud.
+            if (!$this->interactionActorAllowed($isDm, $userId, $guildId, $channelId)) {
+                $this->log->warn('approval_button_refused', ['ask' => $parsed['askId'], 'user' => $userId]);
+                $this->rest->respondInteraction($id, $token, Buttons::RESPONSE_TYPE_MESSAGE, [
+                    'content' => '⛔ You are not permitted to answer approvals here.',
+                    'flags' => Buttons::FLAG_EPHEMERAL,
+                ])->then(null, fn (\Throwable $e) => $this->log->debug('button_refuse_ack_failed', ['error' => $e->getMessage()]));
+
+                return;
+            }
+            $this->router->answerByAskId($parsed['askId'], $parsed['verdict'], ['userId' => $userId, 'name' => $userName], $parsed['nonce'], $key, 'button');
             // ACK the button so Discord stops the spinner; the message is
             // retired by the permission.resolved event, not here.
             $this->rest->respondInteraction($id, $token, 6, [])->then(null, fn (\Throwable $e) => $this->log->debug('button_ack_failed', ['error' => $e->getMessage()]));
@@ -597,7 +617,6 @@ final class DiscordAccount implements PlatformFace
         if ($command === null) {
             return;
         }
-        $channelId = (string) ($interaction['channel_id'] ?? '');
         $answer = fn (string $text): PromiseInterface => $this->rest->respondInteraction(
             $id,
             $token,
@@ -613,13 +632,64 @@ final class DiscordAccount implements PlatformFace
             return;
         }
 
-        $isDm = !isset($interaction['guild_id']) || (string) $interaction['guild_id'] === '';
-        $key = $isDm
-            ? Keys::dmKey('discord', $this->account, $userId, $channelId, $this->strCfg('dmScope', Keys::DM_PER_PEER))
-            : Keys::channelKey('discord', $this->account, $channelId);
+        if ($command['name'] === 'approve' && !$this->interactionActorAllowed($isDm, $userId, $guildId, $channelId)) {
+            // C-1: the slash /approve spelling answers the same wire as a
+            // button click, so it takes the same floor. (Gating the other
+            // slash commands is surface-hijack work tracked as the C-1
+            // remainder — deliberately outside this answer gate.)
+            $this->log->warn('approval_slash_refused', ['user' => $userId]);
+            $answer('⛔ You are not permitted to answer approvals here.')
+                ->then(null, fn (\Throwable $e) => $this->log->debug('slash_refuse_ack_failed', ['error' => $e->getMessage()]));
+
+            return;
+        }
+
         $ref = ['channelId' => $channelId, 'messageId' => ''];
         $answer(self::ackFor($command['name']))->then(null, fn (\Throwable $e) => $this->log->warn('slash_ack_failed', ['error' => $e->getMessage()]));
         $this->router->runCommand('discord', $key, $ref + ['__actor' => ['userId' => $userId, 'name' => $userName]], $command);
+    }
+
+    /**
+     * C-1 access floor for ANSWER-carrying interactions (button clicks and
+     * slash /approve): a targeted interaction has no mention semantics, so
+     * the message path's mention/degraded arms do not apply — what applies
+     * is the whole dmPolicy ladder (pairing WITHOUT the code notice: this
+     * is not a DM asking to be served) and the guild policy row with its
+     * channel allowlist. Fail closed: unknown actor, unknown guild,
+     * disabled policy all refuse.
+     */
+    private function interactionActorAllowed(bool $isDm, string $userId, string $guildId, string $channelId): bool
+    {
+        if ($userId === '') {
+            return false;
+        }
+        if ($isDm) {
+            $dmPolicy = $this->strCfg('dmPolicy', 'pairing');
+            if ($dmPolicy === 'open') {
+                return true;
+            }
+            if ($dmPolicy === 'disabled') {
+                return false;
+            }
+            if ($dmPolicy !== 'pairing') {
+                $allow = \array_map('strval', \array_merge($this->pairing->allowUsers($this->account), $this->listCfg('allowFrom')));
+
+                return $allow !== [] && \in_array($userId, $allow, true);
+            }
+
+            return $this->pairing->isPaired($this->account, $userId);
+        }
+        $guilds = $this->mapCfg('guilds');
+        $guild = \is_array($guilds[$guildId] ?? null) ? $guilds[$guildId] : null;
+        if ($guild === null && $this->strCfg('groupPolicy', 'allowlist') !== 'open') {
+            return false;
+        }
+        if ($guild !== null && (string) ($guild['policy'] ?? 'allowlist') === 'disabled') {
+            return false;
+        }
+        $channels = \is_array($guild['allowChannels'] ?? null) ? $guild['allowChannels'] : [];
+
+        return $channels === [] || \in_array($channelId, \array_map('strval', $channels), true);
     }
 
     /**

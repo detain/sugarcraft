@@ -61,18 +61,24 @@ final class Buttons
      *
      * §7.9 posture: when an approver roster is configured, each button
      * carries a components-v2 `allowed_users` list so Discord itself
-     * greys the buttons for everyone else (the bridge-side roster check in
-     * {@see ConversationRouter::answerApproval()} still answers the wire —
-     * defense in depth, the platform filter is a courtesy, not the wall).
+     * greys the buttons for everyone else (the bridge-side answer gate in
+     * {@see ConversationRouter::answerApproval()} — configured roster,
+     * per-ask nonce, conversation binding — is the wall; the platform
+     * filter is a courtesy, not the wall).
      * The per-button field spelling joins the offline-unverifiable family
      * disclosed at the top of this class; P4 live-check covers it.
      *
      * @param array<string,mixed> $ask        a `permission.requested` data object
      * @param list<string>        $allowedUsers Discord user ids, empty = everyone
+     * @param string              $nonce      per-ask secret from the router's
+     *                                        presentApproval; the button face
+     *                                        of the answer gate requires it
+     *                                        (C-1) — a copied or guessed
+     *                                        custom_id without it is refused
      *
      * @return array<string,mixed>
      */
-    public static function approvalPayload(array $ask, string $summary, array $allowedUsers = []): array
+    public static function approvalPayload(array $ask, string $summary, array $allowedUsers = [], string $nonce = ''): array
     {
         $askId = (string) ($ask['askId'] ?? '');
         $tool = (string) ($ask['tool'] ?? 'tool');
@@ -84,7 +90,7 @@ final class Buttons
                 'type' => self::COMPONENT_BUTTON,
                 'style' => $style,
                 'label' => $label,
-                'custom_id' => self::PREFIX . ':' . $askId . ':' . $verdict,
+                'custom_id' => self::PREFIX . ':' . $askId . ':' . $verdict . ($nonce === '' ? '' : ':' . $nonce),
             ];
             if ($allowedUsers !== []) {
                 $button['allowed_users'] = \array_map(
@@ -124,9 +130,14 @@ final class Buttons
     }
 
     /**
+     * The per-ask nonce (C-1) rides as a fourth segment; a three-segment
+     * custom id (a card presented before the nonce law, or a hand-rolled
+     * forgery) parses with an EMPTY nonce and the router's button face
+     * refuses it fail-closed — old cards answer only through /approve.
+     *
      * @param array<string,mixed> $interaction an INTERACTION_CREATE dispatch
      *
-     * @return array{askId: string, verdict: string}|null
+     * @return array{askId: string, verdict: string, nonce: string}|null
      */
     public static function parseButton(array $interaction): ?array
     {
@@ -134,8 +145,8 @@ final class Buttons
             return null;
         }
         $customId = (string) ($interaction['data']['custom_id'] ?? '');
-        $parts = \explode(':', $customId, 3);
-        if (\count($parts) !== 3 || $parts[0] !== self::PREFIX) {
+        $parts = \explode(':', $customId, 4);
+        if (\count($parts) < 3 || $parts[0] !== self::PREFIX) {
             return null;
         }
         $verdict = self::VERDICTS[$parts[2]] ?? null;
@@ -143,7 +154,7 @@ final class Buttons
             return null;
         }
 
-        return ['askId' => $parts[1], 'verdict' => $verdict];
+        return ['askId' => $parts[1], 'verdict' => $verdict, 'nonce' => $parts[3] ?? ''];
     }
 
     /** Same-chat text fallback (§7.5): `/approve <askId> [once|always|deny]`. */
