@@ -247,6 +247,14 @@ export const useAgentsStore = defineStore('agents', () => {
    * skips the current step's unstarted sequential calls, `steer` (or, on
    * the wire, nothing) delivers at the next step boundary. The message shows
    * as pending until the run's transcript shows it read.
+   *
+   * Pairing law: an answer settles exactly one pending row — this send's own
+   * row while it is still listed, otherwise the OLDEST row still sending the
+   * same text, never scanning backward. The wire carries no client-side id
+   * (the server mints msgId only for the answer), so a send's identity is its
+   * entry object first and text+FIFO by contract once a hot reload or reset
+   * drops that object; concurrent same-text sends settle independently, each
+   * against its own row.
    */
   async function message(sessionId: string, agentId: string, text: string, mode?: MessageMode): Promise<PendingMessage> {
     const entry: PendingMessage = { text, status: 'sending', ...(mode ? { mode } : {}) }
@@ -258,7 +266,12 @@ export const useAgentsStore = defineStore('agents', () => {
     } catch (failure) {
       settled = { text, status: 'failed', error: describe(failure), ...(mode ? { mode } : {}) }
     }
-    setPending(sessionId, agentId, (pending) => pending.map((p) => (p === entry || (p.text === text && p.status === 'sending') ? settled : p)))
+    setPending(sessionId, agentId, (pending) => {
+      const own = pending.indexOf(entry)
+      const index = own !== -1 ? own : pending.findIndex((p) => p.text === text && p.status === 'sending')
+      if (index === -1) return pending
+      return pending.map((p, i) => (i === index ? settled : p))
+    })
     return settled
   }
 

@@ -78,6 +78,98 @@ describe('agents store', () => {
     await wire.answer('agents.control', { agentId: 'a1', status: 'queued', msgId: 'm2' })
     await pausing
   })
+
+  // Pairing law for the agents.message settle leg (m30): the wire carries no
+  // client-side id, so a send is paired by its own entry object first and by
+  // text+FIFO only when that object is gone. These pins drive the answers in
+  // BOTH arrival orders; the pre-m30 text-equality map settled every same-text
+  // twin at once, so a reversed arrival stranded one row (and dropped its
+  // msgId from the pending view until the inbox item landed).
+
+  it('pairs two same-text sends with their own answers, oldest first', async () => {
+    await wire.connect()
+    const agents = useAgentsStore()
+
+    const first = agents.message('s1', 'a1', 'ship it')
+    const second = agents.message('s1', 'a1', 'ship it')
+    await flush()
+    expect(agents.transcript('s1', 'a1').pending.map((p) => p.status)).toEqual(['sending', 'sending'])
+
+    // The harness answers the newest frame first, so reach for the ids
+    // directly: frame 0 is the first send, frame 1 the second.
+    wire.socket().answer({ agentId: 'a1', status: 'queued', msgId: 'm1' }, wire.sent('agents.message')[0]!.id)
+    await flush()
+    wire.socket().answer({ agentId: 'a1', status: 'queued', msgId: 'm2' }, wire.sent('agents.message')[1]!.id)
+    await flush()
+
+    expect((await first).msgId).toBe('m1')
+    expect((await second).msgId).toBe('m2')
+    expect(agents.transcript('s1', 'a1').pending).toEqual([
+      { text: 'ship it', status: 'queued', msgId: 'm1' },
+      { text: 'ship it', status: 'queued', msgId: 'm2' },
+    ])
+  })
+
+  it('pairs two same-text sends when the answers arrive reversed', async () => {
+    await wire.connect()
+    const agents = useAgentsStore()
+
+    const first = agents.message('s1', 'a1', 'ship it')
+    const second = agents.message('s1', 'a1', 'ship it')
+    await flush()
+
+    // Reversed arrival: the SECOND send's answer lands first.
+    wire.socket().answer({ agentId: 'a1', status: 'queued', msgId: 'm2' }, wire.sent('agents.message')[1]!.id)
+    await flush()
+    wire.socket().answer({ agentId: 'a1', status: 'queued', msgId: 'm1' }, wire.sent('agents.message')[0]!.id)
+    await flush()
+
+    expect((await first).msgId).toBe('m1')
+    expect((await second).msgId).toBe('m2')
+    expect(agents.transcript('s1', 'a1').pending).toEqual([
+      { text: 'ship it', status: 'queued', msgId: 'm1' },
+      { text: 'ship it', status: 'queued', msgId: 'm2' },
+    ])
+  })
+
+  it('settles a lost-row answer against the oldest same-text sender (FIFO by contract)', async () => {
+    await wire.connect()
+    const agents = useAgentsStore()
+
+    const first = agents.message('s1', 'a1', 'again')
+    const second = agents.message('s1', 'a1', 'again')
+    const third = agents.message('s1', 'a1', 'again')
+    await flush()
+    const frames = wire.sent('agents.message')
+    expect(frames).toHaveLength(3)
+
+    // Drop the SECOND send's pending row (as a reset or hot reload would), then
+    // let its answer land. With no object identity left it pairs against the
+    // OLDEST same-text sender, never scanning backward.
+    agents.dismissPending('s1', 'a1', 1)
+    wire.socket().answer({ agentId: 'a1', status: 'queued', msgId: 'm_b' }, frames[1]!.id)
+    await flush()
+    expect((await second).msgId).toBe('m_b')
+    expect(agents.transcript('s1', 'a1').pending).toEqual([
+      { text: 'again', status: 'queued', msgId: 'm_b' },
+      { text: 'again', status: 'sending' },
+    ])
+
+    // The FIRST send's own row is gone too (replaced by the settled copy just
+    // now), so its answer falls through to the only remaining sender.
+    wire.socket().answer({ agentId: 'a1', status: 'queued', msgId: 'm_a' }, frames[0]!.id)
+    await flush()
+    expect((await first).msgId).toBe('m_a')
+
+    // Nothing is sending any more: the third answer settles no row.
+    wire.socket().answer({ agentId: 'a1', status: 'queued', msgId: 'm_c' }, frames[2]!.id)
+    await flush()
+    expect((await third).msgId).toBe('m_c')
+    expect(agents.transcript('s1', 'a1').pending).toEqual([
+      { text: 'again', status: 'queued', msgId: 'm_b' },
+      { text: 'again', status: 'queued', msgId: 'm_a' },
+    ])
+  })
 })
 
 describe('todos store', () => {
