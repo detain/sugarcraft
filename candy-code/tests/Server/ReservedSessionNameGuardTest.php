@@ -167,6 +167,15 @@ final class ReservedSessionNameGuardTest extends TestCase
         self::assertNotNull($discord->verdict('Bash'));
         self::assertNull($discord->verdict('Read'));
 
+        // The msteams router stamps Teams groups with the id's own colons
+        // percent-encoded (ConversationRouter::grammarName): the raw
+        // '19:team-42@thread.v2' tail would explode into six segments and
+        // land in the fail-closed refusingAll bucket — the M-5 defect the
+        // encode prevents. The minted encoded form must resolve a live scope.
+        $teams = $policy->scopeFor('agent:main:msteams:group:19%3Ateam-42@thread.v2');
+        self::assertNotNull($teams, 'the minted colon-encoded Teams group shape must resolve a scope');
+        self::assertFalse($teams->blocksEverything(), 'the encoded group id must not fall into refusingAll');
+
         // A plain user title resolves NO channel scope at all (it is simply
         // not a policy-bound session) — and that is exactly the silent hole
         // the entry guard keeps a rename from ever turning into refusingAll.
