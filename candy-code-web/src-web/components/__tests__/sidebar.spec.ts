@@ -137,3 +137,27 @@ describe('sidebar server search (C-SES-2.c)', () => {
     expect(wire.sent('session.list').filter((frame) => (frame.params as { query?: string } | undefined)?.query === 'octopus')).toHaveLength(1)
   })
 })
+
+describe('sidebar list-cap notice (M-20)', () => {
+  // The store walks at most PAGE x listCap rows and raises `capped` when a
+  // page budget runs out mid-walk. The index itself hides the truncation —
+  // a 2001st session is invisibly nonexistent unless the sidebar says so.
+  it('announces the cap loudly when the walk was truncated', async () => {
+    const wrapper = await mountSidebar(['s1', 's2'])
+    const sessions = useSessionsStore()
+    expect(wrapper.find('[data-testid="sessions-capped"]').exists()).toBe(false)
+    sessions.capped = true
+    await wrapper.vm.$nextTick()
+    const notice = wrapper.find('[data-testid="sessions-capped"]')
+    expect(notice.exists()).toBe(true)
+    expect(notice.attributes('role')).toBe('status')
+    expect(notice.text()).toContain(String(sessions.listCap))
+  })
+
+  it('stays silent when the list was not capped', async () => {
+    const wrapper = await mountSidebar(['s1', 's2'])
+    expect(useSessionsStore().capped).toBe(false)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="sessions-capped"]').exists()).toBe(false)
+  })
+})

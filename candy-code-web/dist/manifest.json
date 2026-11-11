@@ -1,21 +1,21 @@
 {
-  "_i18n-CK4iAuKO.js": {
-    "file": "assets/i18n-CK4iAuKO.js",
+  "_i18n-Ddc8Ircl.js": {
+    "file": "assets/i18n-Ddc8Ircl.js",
     "name": "i18n"
   },
   "index.html": {
-    "file": "assets/index-CT92goSH.js",
+    "file": "assets/index-DBRVJjs_.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
     "imports": [
-      "_i18n-CK4iAuKO.js"
+      "_i18n-Ddc8Ircl.js"
     ],
     "dynamicImports": [
       "index.html"
     ],
     "css": [
-      "assets/index-CCIZI-mN.css"
+      "assets/index-CQNhWtMF.css"
     ]
   },
   "src-web/sw.ts": {
@@ -24,7 +24,7 @@
     "src": "src-web/sw.ts",
     "isEntry": true,
     "imports": [
-      "_i18n-CK4iAuKO.js"
+      "_i18n-Ddc8Ircl.js"
     ]
   }
 }

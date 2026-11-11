@@ -472,6 +472,9 @@ function onKey(event: KeyboardEvent): void {
         </ul>
       </li>
     </ul>
+    <!-- M-20: the listing walk caps at sessions.listCap rows; say so loudly
+         instead of letting the next-oldest sessions be invisibly nonexistent. -->
+    <p v-if="sessions.capped" class="capped" role="status" data-testid="sessions-capped">{{ t('web.chrome.sidebar.capped', { n: sessions.listCap }) }}</p>
     <div v-if="shareDialog" ref="sharePanel" class="share" role="dialog" aria-modal="true" :aria-label="t('web.chrome.sidebar.share_dialog_aria')" data-testid="share-dialog" @keydown="dialog.onKeydown">
       <p>{{ t('web.chrome.sidebar.share_published') }}</p>
       <code class="share-url" data-testid="share-url">{{ shareDialog.url }}</code>
@@ -662,6 +665,7 @@ ul {
   background: var(--warn);
 }
 .empty,
+.capped,
 .error {
   margin: 0;
   font-size: 0.875rem;

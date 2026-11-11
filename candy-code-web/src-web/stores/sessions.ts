@@ -459,6 +459,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     loaded,
     error,
     capped,
+    // M-20: publish the walk cap (PAGE x MAX_PAGES) so the sidebar can announce
+    // truncation with the real number instead of duplicating the arithmetic.
+    listCap: PAGE * MAX_PAGES,
     showArchived,
     searchResults,
     searching,

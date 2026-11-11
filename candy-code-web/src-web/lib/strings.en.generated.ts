@@ -151,6 +151,7 @@ export const WEB_STRINGS_EN: Record<string, string> = {
     "web.chrome.sidebar.archived_label": "archived",
     "web.chrome.sidebar.badge_title": "{n} waiting for an answer",
     "web.chrome.sidebar.branch_title": "Branch at session start: {branch}",
+    "web.chrome.sidebar.capped": "Showing the newest {n} sessions — search finds more.",
     "web.chrome.sidebar.close": "Close",
     "web.chrome.sidebar.close_host": "Close {dir}/ host",
     "web.chrome.sidebar.close_host_confirm": "Close the host for {root}? Its sessions stay on disk; the rows leave the list.",
