@@ -14,6 +14,11 @@ use SugarCraft\Code\Support\HomeDirectory;
  * activity: shared task list, shared mailbox, and the set of teammate agents
  * belonging to this team. The team ID is the namespace for all persisted state
  * (stored under ~/.candy-code/teams/{teamId}/).
+ *
+ * The registry is per-USER, so teams from every project a user has ever run
+ * land in one file. A Team therefore carries the workspace scope its creating
+ * tool instance stamped ({@see TeamTool::$scope}); teams written before the
+ * stamp exists carry null and are treated as legacy by the tool gate.
  */
 final class Team
 {
@@ -43,6 +48,15 @@ final class Team
         ?HookDispatcher $hookDispatcher = null,
         /** Where those hooks run ({@see TaskList}'s `$projectRoot`); null is the process directory. */
         ?string $projectRoot = null,
+        /**
+         * The workspace fingerprint the creating {@see TeamTool} stamped at
+         * launch, or null for a team written before scoping existed. The tool
+         * gate refuses to drive a team whose stamp differs from its own —
+         * team ids are model-chosen and visible through `list`, so without a
+         * stamp one project's agent could read or claim another project's
+         * mailbox and task rows.
+         */
+        public readonly ?string $scopeKey = null,
     ) {
         $this->taskList = new TaskList($this->basePath() . '/tasks.sqlite', $hookDispatcher, $projectRoot);
         $this->mailbox = new Mailbox($this->basePath() . '/mailbox');

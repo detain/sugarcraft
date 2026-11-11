@@ -48,7 +48,7 @@ final class TeamManager
     /**
      * Registered team metadata, keyed by team ID — what the registry holds.
      *
-     * @var array<string, array{name: string, leadAgentId: string, createdAt: string}>
+     * @var array<string, array{name: string, leadAgentId: string, createdAt: string, scope: string}>
      */
     private array $meta = [];
 
@@ -114,6 +114,8 @@ final class TeamManager
         string $name,
         string $leadAgentId,
         ?TeamConfig $config = null,
+        /** Workspace fingerprint stamping the team to the launch that made it; '' = legacy/unscoped (see {@see Team::$scopeKey}). */
+        string $scopeKey = '',
     ): Team {
         $this->refresh();
         if (isset($this->meta[$teamId])) {
@@ -145,6 +147,7 @@ final class TeamManager
             maxTeammates: $config->maxTeammates,
             hookDispatcher: $this->hooks ?? self::$launchHooks,
             projectRoot: $this->projectRoot ?? self::$launchRoot,
+            scopeKey: $scopeKey === '' ? null : $scopeKey,
         );
 
         $this->teams[$teamId] = $team;
@@ -152,6 +155,7 @@ final class TeamManager
             'name' => $name,
             'leadAgentId' => $leadAgentId,
             'createdAt' => $team->createdAt->format(\DateTimeImmutable::ATOM),
+            'scope' => $scopeKey,
         ];
         $this->teamConfigs[$teamId] = $config;
         $this->saveRegistry();
@@ -422,6 +426,7 @@ final class TeamManager
                 'name' => (string) $entry['name'],
                 'leadAgentId' => (string) $entry['leadAgentId'],
                 'createdAt' => (string) $entry['createdAt'],
+                'scope' => (string) ($entry['scope'] ?? ''),
             ];
             $config = \is_array($entry['config'] ?? null) ? $entry['config'] : null;
             $configs[$teamId] = $config === null
@@ -466,6 +471,7 @@ final class TeamManager
             maxTeammates: $config->maxTeammates,
             hookDispatcher: $this->hooks ?? self::$launchHooks,
             projectRoot: $this->projectRoot ?? self::$launchRoot,
+            scopeKey: $meta['scope'] === '' ? null : $meta['scope'],
         );
     }
 
@@ -555,6 +561,7 @@ final class TeamManager
                 'name' => $meta['name'],
                 'leadAgentId' => $meta['leadAgentId'],
                 'createdAt' => $meta['createdAt'],
+                'scope' => ($meta['scope'] ?? ''),
                 'config' => [
                     'maxTeammates' => $config->maxTeammates,
                     'defaultTimeoutSeconds' => $config->defaultTimeoutSeconds,
