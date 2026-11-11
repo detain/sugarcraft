@@ -28,6 +28,8 @@ const approvals = useApprovalsStore()
 const text = ref('')
 const sending = ref(false)
 const error = ref<string | null>(null)
+// The server's persistence verdict for the last answer attempted here.
+const notice = ref<string | null>(null)
 
 const session = computed<SessionStore>(() => useSessionStore(props.id))
 const state = computed(() => session.value.state)
@@ -93,8 +95,9 @@ async function send(): Promise<void> {
 }
 
 async function answer(askId: string, reply: Reply, cascade: boolean, note = '', save = false): Promise<void> {
+  notice.value = null
   try {
-    await session.value.respond(askId, reply, { ...(cascade ? { cascade: true } : {}), ...(note !== '' ? { note } : {}), ...(save ? { remember: 'user' } : {}) })
+    notice.value = await session.value.respond(askId, reply, { ...(cascade ? { cascade: true } : {}), ...(note !== '' ? { note } : {}), ...(save ? { remember: 'user' } : {}) })
   } catch (failure) {
     error.value = describe(failure)
   }
@@ -152,6 +155,7 @@ async function answer(askId: string, reply: Reply, cascade: boolean, note = '', 
       >
     </form>
     <p v-if="error" class="error" role="alert" data-testid="tile-error">{{ error }}</p>
+    <p v-if="notice" class="save-notice" role="status" data-testid="tile-save-notice">{{ notice }}</p>
   </article>
 </template>
 
@@ -272,6 +276,12 @@ header {
   margin: 0;
   padding: 0 0.6rem 0.4rem;
   color: var(--error);
+  font-size: 0.8125rem;
+}
+.save-notice {
+  margin: 0;
+  padding: 0 0.6rem 0.4rem;
+  color: var(--warn);
   font-size: 0.8125rem;
 }
 .body .error {

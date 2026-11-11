@@ -4,7 +4,7 @@
     "name": "i18n"
   },
   "index.html": {
-    "file": "assets/index-7pU-kS2C.js",
+    "file": "assets/index-Cp4Pg_s6.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
@@ -15,7 +15,7 @@
       "index.html"
     ],
     "css": [
-      "assets/index-CjOVYddd.css"
+      "assets/index-Cj8RG9Qw.css"
     ]
   },
   "src-web/sw.ts": {

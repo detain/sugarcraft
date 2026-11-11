@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { Events, PendingAsk } from '../protocol/generated'
 import { ProtocolError } from '../protocol/jsonrpc'
+import { respondNotice } from '../lib/respondNotice'
 import { useConnectionStore } from './connection'
 
 export type SessionAsk = PendingAsk & { sessionId: string }
@@ -100,16 +101,20 @@ export const useApprovalsStore = defineStore('approvals', () => {
   /**
    * Answer $ask from anywhere (the drawer). An `already_resolved` or
    * `ask_not_found` refusal means another client won or the turn ended: the
-   * question is gone either way, so it leaves the drawer.
+   * question is gone either way, so it leaves the drawer. Resolves with the
+   * server's persistence verdict for the answer — the sentence naming where
+   * the always-allow patterns were saved, or why they were not — so the
+   * surface that asked can announce it; null when there was nothing to say.
    */
-  async function respond(ask: SessionAsk, reply: Reply, options: { cascade?: boolean; note?: string; remember?: 'session' | 'project' | 'user' } = {}): Promise<void> {
+  async function respond(ask: SessionAsk, reply: Reply, options: { cascade?: boolean; note?: string; remember?: 'session' | 'project' | 'user' } = {}): Promise<string | null> {
     try {
-      await connection.request('permission.respond', { sessionId: ask.sessionId, askId: ask.askId, reply, ...options })
+      const result = await connection.request('permission.respond', { sessionId: ask.sessionId, askId: ask.askId, reply, ...options })
       remove(ask.askId)
+      return respondNotice(result)
     } catch (failure) {
       if (failure instanceof ProtocolError && (failure.kind === 'already_resolved' || failure.kind === 'ask_not_found')) {
         remove(ask.askId)
-        return
+        return null
       }
       throw failure
     }

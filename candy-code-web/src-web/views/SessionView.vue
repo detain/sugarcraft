@@ -23,6 +23,8 @@ const connection = useConnectionStore()
 const sessions = useSessionsStore()
 const layout = useLayoutStore()
 const error = ref<string | null>(null)
+// The server's persistence verdict for the last answer attempted here.
+const notice = ref<string | null>(null)
 const sending = ref(false)
 
 const session = computed<SessionStore>(() => useSessionStore(props.id))
@@ -159,8 +161,9 @@ async function stop(): Promise<void> {
 }
 
 async function answer(askId: string, reply: Reply, cascade: boolean, note: string, failed: () => void, save = false): Promise<void> {
+  notice.value = null
   try {
-    await session.value.respond(askId, reply, { ...(cascade ? { cascade: true } : {}), ...(note !== '' ? { note } : {}), ...(save ? { remember: 'user' } : {}) })
+    notice.value = await session.value.respond(askId, reply, { ...(cascade ? { cascade: true } : {}), ...(note !== '' ? { note } : {}), ...(save ? { remember: 'user' } : {}) })
   } catch (failure) {
     error.value = describe(failure)
     // ISS-110: the question is still open — hand the card back to the user.
@@ -342,6 +345,7 @@ async function fetchOlderTranscript(): Promise<string | null> {
     <div class="dock">
       <QueueStrip :queue="state.queue" :flash-key="lastSteerKey" @remove="dequeue" @refresh="refreshQueue" />
       <p v-if="error" class="error" role="alert" data-testid="session-error">{{ error }}</p>
+      <p v-if="notice" class="save-notice" role="status" data-testid="session-save-notice">{{ notice }}</p>
       <Composer
         v-model="draft"
         :busy="session.busy"
@@ -405,6 +409,12 @@ h1 {
 .error {
   margin: 0 0 0.4rem;
   color: var(--error);
+  font-size: 0.875rem;
+  padding: 0 1rem;
+}
+.save-notice {
+  margin: 0 0 0.4rem;
+  color: var(--warn);
   font-size: 0.875rem;
   padding: 0 1rem;
 }

@@ -27,6 +27,8 @@ const settings = useSettingsStore()
 const router = useRouter()
 const panel = ref<HTMLElement | null>(null)
 const error = ref<string | null>(null)
+// The server's persistence verdict for the last answer attempted here.
+const notice = ref<string | null>(null)
 // A failed answer remounts its card so its buttons come back.
 const attempts = ref<Record<string, number>>({})
 
@@ -35,8 +37,9 @@ const notificationsAvailable = typeof Notification !== 'undefined'
 
 async function answer(ask: SessionAsk, reply: Reply, cascade: boolean, note: string, failed: () => void, save = false): Promise<void> {
   error.value = null
+  notice.value = null
   try {
-    await approvals.respond(ask, reply, { ...(cascade ? { cascade: true } : {}), ...(note !== '' ? { note } : {}), ...(save ? { remember: 'user' } : {}) })
+    notice.value = await approvals.respond(ask, reply, { ...(cascade ? { cascade: true } : {}), ...(note !== '' ? { note } : {}), ...(save ? { remember: 'user' } : {}) })
   } catch (failure) {
     error.value = describe(failure)
     attempts.value = { ...attempts.value, [ask.askId]: (attempts.value[ask.askId] ?? 0) + 1 }
@@ -102,6 +105,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
       <button type="button" class="link" :aria-label="t('web.approvals.close_aria')" data-testid="approvals-close" @click="close">&#10005;</button>
     </header>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <p v-if="notice" class="save-notice" role="status" data-testid="approvals-save-notice">{{ notice }}</p>
     <p v-if="approvals.total === 0" class="empty" data-testid="approvals-empty">{{ t('web.approvals.drawer_empty') }}</p>
     <section v-for="group in approvals.bySession" :key="group.sessionId" class="group" data-testid="approvals-group" :data-session-id="group.sessionId">
       <h3>
@@ -187,6 +191,11 @@ h3 a {
 .error {
   margin: 0;
   color: var(--error);
+  font-size: 0.875rem;
+}
+.save-notice {
+  margin: 0;
+  color: var(--warn);
   font-size: 0.875rem;
 }
 </style>

@@ -53,6 +53,10 @@ function event(type: string, data: Record<string, unknown>, durable = true): voi
   socket().event({ sessionId: 's1', ...(durable ? { seq: ++seq } : {}), type, ts: 1, durable, turnId: 't1', data })
 }
 
+// M-22 fixture: the success-shaped saved notice (SavedRules::append via
+// chat.permission.persisted) names the config the grant landed in.
+const SAVED = 'Allowed "Bash" anywhere inside this project — saved to your user config (~/.candy-code/config.json)'
+
 beforeEach(() => {
   setActivePinia(createPinia())
   sockets = []
@@ -152,6 +156,27 @@ describe('session store', () => {
     socket().fail(-32009, 'already_resolved', 'already answered', frame?.id)
     await answering
     expect(session.state.asks).toEqual([])
+  })
+
+  // M-22: the per-session answer path must carry the respond RESULT's
+  // persistence verdict out to its surface, not await-discard it.
+  it('resolves an answer that tried to persist with the server save-notice', async () => {
+    await connect()
+    const session = useSessionStore('s1')
+    session.state.asks = [{ askId: 'a1', toolCallId: 'c', tool: 'Bash', arguments: {}, options: ['once', 'always', 'reject'] }]
+    const answering = session.respond('a1', 'always', { remember: 'user' })
+    answer('permission.respond', { applied: true, reply: 'always', saved: SAVED })
+    await expect(answering).resolves.toBe(SAVED)
+    expect(sent('permission.respond').pop()?.params).toMatchObject({ sessionId: 's1', askId: 'a1', reply: 'always', remember: 'user' })
+  })
+
+  it('resolves with no notice when nothing was generalisable to persist', async () => {
+    await connect()
+    const session = useSessionStore('s1')
+    session.state.asks = [{ askId: 'a1', toolCallId: 'c', tool: 'Bash', arguments: {}, options: ['once'] }]
+    const answering = session.respond('a1', 'once')
+    answer('permission.respond', { applied: true, reply: 'once', saved: null })
+    await expect(answering).resolves.toBeNull()
   })
 })
 

@@ -35,6 +35,11 @@ async function setUp() {
   return { wire, router, wrapper }
 }
 
+// M-22 fixtures: the server's saved sentence, shape-identical between the
+// saved and refused-write verdicts (SavedRules::append).
+const NOT_SAVED = 'Allowed "Bash" anywhere inside this project — not saved (config write failed: Disk quota exceeded)'
+const SAVED = 'Allowed "Bash" anywhere inside this project — saved to your user config (~/.candy-code/config.json)'
+
 beforeEach(() => {
   setActivePinia(createPinia())
   localStorage.clear()
@@ -76,6 +81,55 @@ describe('approvals drawer', () => {
     wire.serverEvent('permission.settled', { sessionId: 'b', askId: 'k2', reply: 'once' })
     await flushPromises()
     expect(wrapper.find('[data-testid="approvals-empty"]').exists()).toBe(true)
+  })
+
+  // M-22: an Always-with-save whose config write FAILED still returns
+  // applied:true — the card leaving looked identical to a persisted grant.
+  // The server's saved sentence must now be announced where it was answered.
+  it('says so when the save did not persist, beside where the question was answered', async () => {
+    const { wire, wrapper } = await setUp()
+    wire.serverEvent('permission.asked', ask('k1', 'a'))
+    useLayoutStore().toggleApprovals(true)
+    await flushPromises()
+
+    // C-SEC-6.c MA-34 two-step: the first press arms, the second answers with save.
+    await wrapper.find('[data-ask-id="k1"] [data-testid="ask-always-save"]').trigger('click')
+    await wrapper.find('[data-ask-id="k1"] [data-testid="ask-always-save"]').trigger('click')
+    expect(wire.sent('permission.respond').pop()?.params).toMatchObject({ sessionId: 'a', askId: 'k1', reply: 'always', remember: 'user' })
+    wire.answer('permission.respond', { applied: true, reply: 'always', saved: NOT_SAVED })
+    await flushPromises()
+
+    const notice = wrapper.find('[data-testid="approvals-save-notice"]')
+    expect(notice.exists()).toBe(true)
+    expect(notice.text()).toBe(NOT_SAVED)
+    expect(notice.attributes('role')).toBe('status')
+    // The verdict outlives the card: the question itself is gone.
+    expect(wrapper.find('[data-ask-id="k1"]').exists()).toBe(false)
+  })
+
+  it('names the config a saved grant landed in', async () => {
+    const { wire, wrapper } = await setUp()
+    wire.serverEvent('permission.asked', ask('k1', 'a'))
+    useLayoutStore().toggleApprovals(true)
+    await flushPromises()
+
+    await wrapper.find('[data-ask-id="k1"] [data-testid="ask-always-save"]').trigger('click')
+    await wrapper.find('[data-ask-id="k1"] [data-testid="ask-always-save"]').trigger('click')
+    wire.answer('permission.respond', { applied: true, reply: 'always', saved: SAVED })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="approvals-save-notice"]').text()).toBe(SAVED)
+  })
+
+  it('carries no notice line for a plain answer', async () => {
+    const { wire, wrapper } = await setUp()
+    wire.serverEvent('permission.asked', ask('k1', 'a'))
+    useLayoutStore().toggleApprovals(true)
+    await flushPromises()
+
+    await wrapper.find('[data-ask-id="k1"] [data-testid="ask-once"]').trigger('click')
+    wire.answer('permission.respond', { applied: true, reply: 'once', saved: null })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="approvals-save-notice"]').exists()).toBe(false)
   })
 
   it('a refused answer shows why and gives the card its buttons back', async () => {

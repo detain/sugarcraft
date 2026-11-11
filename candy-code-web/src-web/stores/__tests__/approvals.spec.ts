@@ -16,6 +16,11 @@ async function connected(): Promise<Wire> {
   return wire
 }
 
+// M-22 fixtures: the server's saved notice is a translated sentence built in
+// SavedRules::append (chat.permission.persisted / chat.permission.not_persisted),
+// shape-identical between the saved and the refused-write verdicts.
+const NOT_SAVED = 'Allowed "Bash" anywhere inside this project — not saved (config write failed: Disk quota exceeded)'
+
 describe('approvals across sessions', () => {
   it('shows a question in a session nobody here follows the moment it is put', async () => {
     const wire = await connected()
@@ -66,6 +71,39 @@ describe('approvals across sessions', () => {
     const late = approvals.respond(approvals.all[0]!, 'reject')
     wire.socket.fail(-32009, 'already_resolved')
     await late
+    expect(approvals.total).toBe(0)
+  })
+
+  // M-22: the respond RESULT carries the server's persistence verdict — a
+  // sentence naming where the always-allow patterns were saved, or why they
+  // were not. Discarding it made a failed config write look like a silent
+  // success (refusal-looks-success on the durability axis).
+  it('resolves an answer that tried to persist with the server save-notice', async () => {
+    const wire = await connected()
+    const approvals = useApprovalsStore()
+    wire.serverEvent('permission.asked', ask('k1', 's1'))
+
+    const answered = approvals.respond(approvals.all[0]!, 'always', { remember: 'user' })
+    expect(wire.sent('permission.respond').pop()?.params).toMatchObject({ sessionId: 's1', askId: 'k1', reply: 'always', remember: 'user' })
+    wire.answer('permission.respond', { applied: true, reply: 'always', saved: NOT_SAVED })
+    await expect(answered).resolves.toBe(NOT_SAVED)
+    // The card still leaves on a successful answer — the notice is additive.
+    expect(approvals.total).toBe(0)
+  })
+
+  it('resolves with no notice for a plain answer, and none for a swallowed stale refusal', async () => {
+    const wire = await connected()
+    const approvals = useApprovalsStore()
+    wire.serverEvent('permission.asked', ask('k1', 's1'))
+    wire.serverEvent('permission.asked', ask('k2', 's1'))
+
+    const plain = approvals.respond(approvals.all[0]!, 'once')
+    wire.answer('permission.respond', { applied: true, reply: 'once', saved: null })
+    await expect(plain).resolves.toBeNull()
+
+    const late = approvals.respond(approvals.all[0]!, 'always', { remember: 'user' })
+    wire.socket.fail(-32009, 'already_resolved')
+    await expect(late).resolves.toBeNull()
     expect(approvals.total).toBe(0)
   })
 

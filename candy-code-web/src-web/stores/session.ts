@@ -3,6 +3,7 @@ import { computed, reactive, ref } from 'vue'
 import { SeqCursor } from '../protocol/cursor'
 import type { EventEnvelope, MethodResult, PermissionMode, Subscription } from '../protocol/generated'
 import { ProtocolError } from '../protocol/jsonrpc'
+import { respondNotice } from '../lib/respondNotice'
 import type { PastedDocument, PastedImage } from '../lib/paste'
 import { useConnectionStore } from './connection'
 import { useClientToolsStore } from './clientTools'
@@ -280,14 +281,21 @@ function setup(sessionId: string) {
     return connection.request('session.cancel', { sessionId, mode, clearQueue })
   }
 
-  /** Answer a question; an `already_resolved` refusal means another client won, and closes the card. */
-  async function respond(askId: string, reply: 'once' | 'always' | 'reject', options: { cascade?: boolean; note?: string; remember?: 'session' | 'project' | 'user' } = {}): Promise<void> {
+  /**
+   * Answer a question; an `already_resolved` refusal means another client won, and closes the card.
+   * Resolves with the server's persistence verdict (where the always-allow
+   * patterns were saved, or why not) so the answering surface can announce
+   * it; null when there was nothing to say or the card left without an
+   * outcome of ours.
+   */
+  async function respond(askId: string, reply: 'once' | 'always' | 'reject', options: { cascade?: boolean; note?: string; remember?: 'session' | 'project' | 'user' } = {}): Promise<string | null> {
     try {
-      await connection.request('permission.respond', { sessionId, askId, reply, ...options })
+      const result = await connection.request('permission.respond', { sessionId, askId, reply, ...options })
+      return respondNotice(result)
     } catch (failure) {
       if (failure instanceof ProtocolError && (failure.kind === 'already_resolved' || failure.kind === 'ask_not_found')) {
         state.asks = state.asks.filter((ask) => ask.askId !== askId)
-        return
+        return null
       }
       throw failure
     }
