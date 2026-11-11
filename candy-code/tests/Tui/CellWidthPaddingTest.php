@@ -15,9 +15,11 @@ use SugarCraft\Code\Tui\SplitLayout;
  * Padding in a TUI must be measured in terminal CELLS, never in bytes.
  *
  * Both classes under test had already been made cell-aware on their
- * TRUNCATION path — {@see SplitLayout} grew `truncateToWidth()` and
- * {@see AgentViewPane} grew `truncate()`, each walking `preg_split('//u')`
- * and consulting a `charWidth()` table. Neither class's PADDING path was
+ * TRUNCATION path — {@see SplitLayout} grew `truncateToWidth()`, whose cut
+ * now delegates to the cluster-aware, ANSI-preserving
+ * `Width::truncateAnsi()`; {@see AgentViewPane} grew `truncate()`, still
+ * walking `preg_split('//u')` and consulting a `charWidth()` table.
+ * Neither class's PADDING path was
  * converted with it, so both kept a byte-counting `str_pad()`/`strlen()`
  * next to a cell-counting truncator. The tell-tale `strlen()` was even
  * deleted from `SplitLayout` while the defect it named stayed, which is why
@@ -138,6 +140,66 @@ final class CellWidthPaddingTest extends TestCase
                 );
             }
         }
+    }
+
+    /**
+     * When content overruns its pane, {@see SplitLayout::render()} must
+     * cut it short with an ellipsis. Rows arriving in a split are not
+     * plain text: the production band hands over SGR-coloured rows that
+     * were pre-clipped upstream only by the CALLER's discipline. A cut
+     * landing mid-escape leaks the colour across the divider, and a
+     * corrupt row is broken functionality by the doctrine above — so the
+     * truncator itself must treat an escape sequence as indivisible.
+     */
+    public function testAStyledRowCutToThePaneBudgetKeepsEveryEscapeSequenceWhole(): void
+    {
+        $cols = 16;
+        $layout = SplitLayout::vertical('L', "\x1b[31mabcdefghij\x1b[0m", 13, 16);
+        [$leftWidth] = $layout->paneSizes($cols);
+
+        $row = \explode("\n", $layout->render($cols, 1))[0];
+
+        $this->assertStringContainsString(
+            "\u{2026}",
+            $row,
+            'the pane was too narrow for the row, so the ellipsis must have fired',
+        );
+
+        $stripped = \preg_replace('/\x1b\[[0-9;]*m/', '', $row);
+        $this->assertStringNotContainsString("\x1b", (string) $stripped, 'the cut shredded an escape sequence');
+        $this->assertStringContainsString(
+            "\x1b[0m",
+            $row,
+            'the trailing colour reset must survive a cut that drops the text after it',
+        );
+
+        $this->assertLessThanOrEqual($cols, Width::string($row));
+        $this->assertSame($leftWidth, self::cellColumnOf($row, "\u{2502}"), 'the divider must not shift when the right row is cut');
+    }
+
+    /**
+     * The same cut must respect grapheme clusters: a family emoji is four
+     * codepoints joined by three ZWJ marks yet renders as one two-cell
+     * glyph, and a codepoint walk can sever the family mid-joiner. The
+     * dangling joiner before the ellipsis draws a lone spouse or a
+     * tofu box depending on the terminal.
+     */
+    public function testAJoinerSequenceIsCutAtTheClusterBoundaryNeverMidFamily(): void
+    {
+        $cols = 16;
+        $family = "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}\u{200D}\u{1F466}";
+        $layout = SplitLayout::vertical('L', $family . 'xy', 3, 4);
+
+        $row = \explode("\n", $layout->render($cols, 1))[0];
+
+        $this->assertStringContainsString("\u{2026}", $row, 'the pane was too narrow, so the ellipsis must have fired');
+        $this->assertStringNotContainsString(
+            "\u{200D}\u{2026}",
+            $row,
+            'the ellipsis may not follow a joiner whose family it dropped',
+        );
+        $this->assertStringContainsString($family, $row, 'a cluster that fits the budget must survive whole');
+        $this->assertLessThanOrEqual($cols, Width::string($row));
     }
 
     // =========================================================================

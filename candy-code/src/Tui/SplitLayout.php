@@ -277,7 +277,16 @@ final class SplitLayout
     }
 
     /**
-     * Truncate a single line to a maximum width.
+     * Truncate a single line to a maximum width, in terminal CELLS.
+     *
+     * A line that overruns its pane keeps its first (maxWidth - 1) cells and
+     * gains an ellipsis. The cut is delegated to the canonical {@see
+     * Width::truncateAnsi()}: escape sequences pass through whole — a cut may
+     * never split an SGR run — and the clip lands on a grapheme-cluster
+     * boundary, so a joined emoji family is kept or dropped, never severed
+     * mid-joiner. Styled rows already reach production splits (the band
+     * arrives pre-clipped only by the caller's discipline), so this is the
+     * seam that keeps a colour from bleeding across the divider.
      */
     private function truncateToWidth(string $line, int $maxWidth): string
     {
@@ -291,21 +300,9 @@ final class SplitLayout
             return $line;
         }
 
-        // Work backwards from the end to leave room for ellipsis
-        $chars = preg_split('//u', $line, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        $result = '';
-        $w = 0;
-
-        foreach ($chars as $char) {
-            $charWidth = $this->charWidth($char);
-            if ($w + $charWidth > $maxWidth - 1) { // leave room for "…"
-                break;
-            }
-            $result .= $char;
-            $w += $charWidth;
-        }
-
-        return $result . "\u{2026}";
+        // Leave room for the ellipsis: the canonical ANSI-aware cluster
+        // truncator cuts the first (maxWidth - 1) cells whole.
+        return Width::truncateAnsi($line, $maxWidth - 1) . "\u{2026}";
     }
 
     /**
@@ -340,21 +337,15 @@ final class SplitLayout
      * cannot keep a column aligned no matter how careful either one is.
      *
      * Width::string() also strips ANSI before measuring, which this loop never
-     * did. That fixes the fast path below. The slow path still walks raw
-     * codepoints, so a line long enough to need truncating AND carrying SGR
-     * can still be cut mid-sequence -- a known seam, left as-is because the
-     * two call sites feed it unstyled pane text.
+     * did. That fixes the fast path below, and the slow path now delegates its
+     * cut to the cluster-aware {@see Width::truncateAnsi()} — styled content
+     * survives a truncation whole-sequence either way. The production band
+     * arrives STYLED (pre-clipped upstream by its caller); the claim that its
+     * call sites feed this class unstyled text was false to disk, and the
+     * truncator no longer depends on that discipline to stay honest.
      */
     private function visualWidth(string $text): int
     {
         return Width::string($text);
-    }
-
-    /**
-     * Visual width of a single codepoint: 0 for control, 1 for regular, 2 for wide.
-     */
-    private function charWidth(string $char): int
-    {
-        return Width::string($char);
     }
 }
