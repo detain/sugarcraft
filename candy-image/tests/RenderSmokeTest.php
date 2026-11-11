@@ -196,11 +196,21 @@ final class RenderSmokeTest extends TestCase
         $default = $render(['--format=symbols', '--width=6']);
         $selected = $render(['--format=symbols', '--width=6', '--symbols=braille']);
         $quantized = $render(['--format=symbols', '--width=6', '--canvas=ansi16']);
-        $exhaustive = $render(['--format=symbols', '--width=6', '--work=9']);
+
+        // The work dial is pinned at an explicit 6x3 box, NOT at the auto-derived
+        // 6x2 box of this fixture: a per-candidate observer probe (2026-11-10)
+        // showed that since the tag-algebra selection re-ordering, the greedy
+        // top-k search already lands on the exhaustive optimum in every cell of
+        // the 6x2 geometry — identical winning symbols AND identical errors at
+        // --work=1 vs --work=9 — so a correct search cannot move bytes there.
+        // At 6x3 the budget genuinely binds (greedy error 22272 vs exhaustive
+        // 19840), which is what proves the flag reaches the renderer's search.
+        $budgetBase = $render(['--format=symbols', '--width=6', '--height=3']);
+        $exhaustive = $render(['--format=symbols', '--width=6', '--height=3', '--work=9']);
 
         $this->assertNotSame($default, $selected, '--symbols=braille must change the corpus');
         $this->assertNotSame($default, $quantized, '--canvas=ansi16 must change the pens');
-        $this->assertNotSame($default, $exhaustive, '--work=9 must reach the exhaustive search');
+        $this->assertNotSame($budgetBase, $exhaustive, '--work=9 must reach the exhaustive search');
     }
 
     public function testScaleFlagIsAcceptedOnTheRenderPath(): void

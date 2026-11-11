@@ -757,6 +757,8 @@ final class WidthTest extends TestCase
         // The known departures, asserted BOTH ways below so the list
         // cannot rot into a rubber stamp: an entry that stops disagreeing
         // fails this test and must be deleted.
+        //
+        // PERMANENT (block-shape mechanism, true whatever the host data):
         //   U+A4CF / U+1F6FF — UNASSIGNED codepoints that sit at the
         //           end of a block-shaped isWide() range, so they score 2
         //           where the oracle's fallback says 1. Benign: nothing paints
@@ -765,20 +767,35 @@ final class WidthTest extends TestCase
         //   U+1F900 CIRCLED CROSS FORMEE WITH FOUR DOTS — assigned, and ICU
         //           calls it Neutral, but it is the first codepoint of the
         //           block-shaped 0x1F900..0x1F9FF range, so it scores 2.
-        //   SC-1 REVIEW FIX (2026-11-04, mirror refresh): the eleven points
-        //   after these three are Unicode-16.0 codepoints this machine's ICU
-        //   (74.2 = Unicode 15.1 data) has not caught up with — EAW-W
-        //   recategorisations of So/No symbols (trigrams U+2630/2637, dice
-        //   U+268A/268F, hexagrams U+4DC0/4DFF, Tai Xuan Jing U+1D300/1D356,
-        //   counting rod U+1D360/1D376) and the U+18CFF leg head (unassigned
-        //   to ICU, assigned W by 16.0.0's Tangut Supplement). The shipped 2
-        //   is the data-correct side; each entry disappears the moment ICU
-        //   learns the truth and the both-ways arm below says "delete it".
-        $knownDepartures = [
-            0xA4CF, 0x1F6FF, 0x1F900,
+        //
+        // CONDITIONAL (host-data skew, SC-1 follow-through): the eleven
+        //   below are codepoints Unicode 16.0.0 made Wide or assigned that
+        //   ICU data older than 16.0 still scores 1 — EAW-W recategorisations
+        //   of So/No symbols (trigrams U+2630/2637, dice U+268A/268F,
+        //   hexagrams U+4DC0/4DFF, Tai Xuan Jing U+1D300/1D356, counting rod
+        //   U+1D360/1D376) and the U+18CFF leg head (unassigned pre-16.0,
+        //   assigned W by 16.0.0's Tangut Supplement). The shipped 2 is the
+        //   data-correct side. On a host whose ICU has learned 16.0 — the
+        //   ubuntu-26.04 / current-macOS CI runners as of 2026-11 — each
+        //   entry AGREES, the both-ways arm says "delete it", and exactly
+        //   that happened there once the fleet moved to Unicode-16 ICU; on
+        //   a host whose data still predates 16.0 (ICU ≤ 75) the departure
+        //   is real and the entry must stay listed. So the roster is gated
+        //   on the host DATA, probed through U+2630's own East_Asian_Width
+        //   property: that change IS Unicode 16.0's, so the property answer
+        //   is the data, and no ICU→Unicode version table has to be
+        //   inferred (vendor backports would defeat a version_compare
+        //   gate). Either way all eleven stay driven through the loop —
+        //   agree-when-expected and disagree-when-documented are both
+        //   pinned, so the anti-rot holds on both host families.
+        $unicode16Recategorisations = [
             0x2630, 0x2637, 0x268A, 0x268F, 0x4DC0, 0x4DFF,
             0x18CFF, 0x1D300, 0x1D356, 0x1D360, 0x1D376,
         ];
+        $icuDataKnowsUnicode16 = \IntlChar::getIntPropertyValue(0x2630, \IntlChar::PROPERTY_EAST_ASIAN_WIDTH) === 5;
+        $knownDepartures = $icuDataKnowsUnicode16
+            ? [0xA4CF, 0x1F6FF, 0x1F900]
+            : [0xA4CF, 0x1F6FF, 0x1F900, ...$unicode16Recategorisations];
 
         $mismatches = [];
         $departuresStillReal = [];

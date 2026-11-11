@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Tests\Integration\LiveSglangSmokeTest;
 use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
 use SugarCraft\Code\Tests\Support\SuiteSkipRoster;
@@ -99,6 +100,10 @@ final class SuiteSkipRosterTest extends TestCase
     /** The C-TUI-6.d Windows ConPTY key — the private `WINDOWS_PTYRUN_CONPTY`, by literal; same predicate. */
     private const WINDOWS_PTYRUN_CONPTY_ENTRY =
         'SugarCraft\\Code\\Tests\\Windows\\WindowsPtyRunSmokeTest::testPtyRunDrivesAReadPromptOverConPty';
+
+    /** The LANE-CC macOS setsid-preference key: the roster's private `SETSID_PREFERENCE`, by literal; same predicate. */
+    private const SETSID_ENTRY =
+        'SugarCraft\\Code\\Tests\\Support\\ProcessContainmentPhpSetsidTest::testARealSetsidIsStillPreferredWhenPresent';
 
     /**
      * Runs $body with CANDY_CODE_PHAR forced UNARMED and restores the caller's
@@ -299,12 +304,17 @@ final class SuiteSkipRosterTest extends TestCase
                         self::WINDOWS_BASH_VERBATIM_ENTRY => SuiteSkipRoster::EXPECTED[self::WINDOWS_BASH_VERBATIM_ENTRY],
                         self::WINDOWS_BASH_TREE_KILL_ENTRY => SuiteSkipRoster::EXPECTED[self::WINDOWS_BASH_TREE_KILL_ENTRY],
                         self::WINDOWS_PTYRUN_CONPTY_ENTRY => SuiteSkipRoster::EXPECTED[self::WINDOWS_PTYRUN_CONPTY_ENTRY],
+                    ]) + (ProcessContainment::locateOnPath('setsid') !== ''
+                    ? []
+                    : [
+                        self::SETSID_ENTRY => SuiteSkipRoster::EXPECTED[self::SETSID_ENTRY],
                     ]),
                 'over a path-repo symlink farm the layout-conditional test RUNS while the dormant '
                 . 'smokes stay rostered, so the effective roster must be the const minus exactly '
                 . 'its GitignoreAwareness key (and minus the premise and the rename arm wherever '
                 . 'phar writing is possible, and minus the jail arm wherever bubblewrap starts, '
-                . 'and minus the three C-TUI-6.d Windows smoke arms wherever this host IS Windows), '
+                . 'and minus the three C-TUI-6.d Windows smoke arms wherever this host IS Windows, '
+                . 'and minus the setsid-preference arm wherever a native setsid(1) is located on PATH), '
                 . 'reasons intact',
             );
         } finally {
@@ -330,6 +340,9 @@ final class SuiteSkipRosterTest extends TestCase
                 unset($expected[self::JAIL_ENTRY]);
                 unset($expected[self::JAIL_TOOL_ENTRY]);
             }
+            if (ProcessContainment::locateOnPath('setsid') !== '') {
+                unset($expected[self::SETSID_ENTRY]);
+            }
 
             self::assertSame(
                 $expected,
@@ -342,7 +355,8 @@ final class SuiteSkipRosterTest extends TestCase
                 . 'too, so the effective roster must be the full const -- all unconditional and '
                 . 'dormant keys, all reasons, same order (minus the premise and the rename arm '
                 . 'wherever phar writing is possible, and minus the jail arm wherever bubblewrap '
-                . 'starts, and they RUN instead of skipping)',
+                . 'starts, and minus the setsid-preference arm wherever a native setsid(1) is '
+                . 'located, and they RUN instead of skipping)',
             );
         } finally {
             $this->purgeFarmSandbox($dir);
@@ -380,6 +394,13 @@ final class SuiteSkipRosterTest extends TestCase
                 unset($unarmed[self::PHAR_PREMISE_ENTRY]);
                 unset($unarmed[self::PHAR_RENAME_ENTRY]);
             }
+            if (SuiteSkipRoster::scriptJailRuns()) {
+                unset($unarmed[self::JAIL_ENTRY]);
+                unset($unarmed[self::JAIL_TOOL_ENTRY]);
+            }
+            if (ProcessContainment::locateOnPath('setsid') !== '') {
+                unset($unarmed[self::SETSID_ENTRY]);
+            }
 
             self::assertSame(
                 $unarmed,
@@ -387,7 +408,9 @@ final class SuiteSkipRosterTest extends TestCase
                     static fn () => SuiteSkipRoster::expectedForLayout($farm),
                 ),
                 'the unarmed gate may not lift anything -- the smokes skip and stay rostered (the '
-                . 'premise and the rename arm lift only where phar writing is possible)',
+                . 'premise and the rename arm lift only where phar writing is possible, and the '
+                . 'jail arm wherever bubblewrap starts, and the setsid-preference arm wherever a '
+                . 'native setsid(1) is located on PATH)',
             );
 
             putenv('CANDY_CODE_LIVE_SGLANG=0');

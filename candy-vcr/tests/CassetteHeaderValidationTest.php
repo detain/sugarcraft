@@ -348,9 +348,38 @@ final class CassetteHeaderValidationTest extends TestCase
     {
         // The ceiling and the migrator chain must agree: v2 is readable
         // today, and the recorder still writes v1. Raising either side
-        // without the other is caught here.
-        $this->assertSame(2, CassetteHeader::MAX_READABLE_VERSION);
-        $this->assertSame(1, CassetteHeader::CURRENT_VERSION);
+        // without the other is caught here. The values are pinned through
+        // the real serialization boundary — a direct assertSame against a
+        // class constant compares each constant to its own literal
+        // (statically certain, so PHPStan flags it), same discipline as
+        // testConstants().
+        $ceiling = \json_decode(
+            \json_encode(new CassetteHeader(
+                version: CassetteHeader::MAX_READABLE_VERSION,
+                createdAt: '2026-05-07T10:00:00Z',
+                cols: 80,
+                rows: 24,
+                runtime: 'test',
+            ), \JSON_THROW_ON_ERROR),
+            true,
+            flags: \JSON_THROW_ON_ERROR,
+        );
+        $stamped = \json_decode(
+            \json_encode(new CassetteHeader(
+                version: CassetteHeader::CURRENT_VERSION,
+                createdAt: '2026-05-07T10:00:00Z',
+                cols: 80,
+                rows: 24,
+                runtime: 'test',
+            ), \JSON_THROW_ON_ERROR),
+            true,
+            flags: \JSON_THROW_ON_ERROR,
+        );
+        $this->assertIsArray($ceiling);
+        $this->assertIsArray($stamped);
+
+        $this->assertSame(2, $ceiling['version'], 'the readable ceiling is exactly v2');
+        $this->assertSame(1, $stamped['version'], "the recorder's stamp is exactly v1");
         $this->assertLessThanOrEqual(
             CassetteHeader::MAX_READABLE_VERSION,
             V1ToV2Migrator::TARGET_VERSION,

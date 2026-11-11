@@ -116,7 +116,8 @@ final class LogCommand extends Command
                 return Command::FAILURE;
             }
         } else {
-            $output->write($line, true, OutputInterface::OUTPUT_RAW);
+            // LF-pinned trailer: write(..., true) emits PHP_EOL (CRLF on Windows).
+            $output->write($line . "\n", false, OutputInterface::OUTPUT_RAW);
         }
         return $level === LogLevel::Fatal ? 1 : Command::SUCCESS;
     }
