@@ -31,12 +31,17 @@ namespace SugarCraft\Code\Context\Triggers;
  * hatch (`Stability` beside `PromptSection`) stays unused because instanceof
  * over three closed final classes is already exhaustive.
  *
- * WHAT THIS TYPE IS FOR TODAY (P6.S1). It is the shared type for the
- * heterogeneous collections the next step's loader will build
- * (`array{Trigger}`), and it is the seam the plan's "one union, not three
- * parallel loaders" requirement names. Nothing is wired to it yet by design:
- * the consumer lands in P6.S2, and per §1.10 shipping these classes unwired
- * is the intended state of this step, not a leftover to tidy.
+ * WHAT THIS TYPE IS FOR TODAY (truth-flipped 2026-11-11: this paragraph
+ * announced the families unwired, the pre-P6.S5b state). It is the shared
+ * type for the heterogeneous collections {@see \SugarCraft\Code\Context\Rule}
+ * builds from parsed frontmatter (`array{Trigger}`), and it is the seam the
+ * plan's "one union, not three parallel loaders" requirement names. The
+ * consumers landed: {@see \SugarCraft\Code\Context\RulePathNudge} fires
+ * `PathTrigger` for path-scoped rules through its matchesAny() gate at tool
+ * time, and fires `KeywordTrigger` whole-word matching through its
+ * intentMatches() seam over saved memory intents' `when:` triggers. The
+ * marker stays methodless for `IntentTrigger` by design — the model reads the
+ * intent description and decides, exactly as above.
  *
  * Every implementer is a final, immutable value object constructed from
  * plain PHP arrays/strings — no parsing, no filesystem, no environment. They

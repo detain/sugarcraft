@@ -38,14 +38,19 @@ use SugarCraft\Code\Support\Frontmatter;
  * the wiring named below, its inertness announced at launch by
  * {@see \SugarCraft\Code\Support\FrontmatterKeyAudit}.
  *
- * THE TRIGGERS ARE BUILT, NOT FIRED. P6.S1 shipped {@see KeywordTrigger},
- * {@see PathTrigger} and {@see IntentTrigger} unwired precisely so this class
- * is their first consumer, and this class's job is only to turn the parsed
- * frontmatter arrays into those value objects - `paths:` -> {@see PathTrigger},
- * `keywords:` -> {@see KeywordTrigger}, `description` -> {@see IntentTrigger}.
- * Deciding whether a rule FIRES for a given prompt, path, or turn is NOT here:
- * keyword/whole-word matching is P7.S4's wiring, and glob-scoped rules actually
- * reaching the assembled prompt is P6.S5. That split is why a rule with no
+ * THE TRIGGERS ARE BUILT HERE AND FIRED ELSEWHERE (truth-flipped 2026-11-11:
+ * this paragraph announced them built-but-not-fired, the pre-P6.S5b state).
+ * This class's job is only to turn the parsed frontmatter arrays into those
+ * value objects - `paths:` -> {@see PathTrigger}, `keywords:` -> {@see KeywordTrigger},
+ * `description` -> {@see IntentTrigger}. Deciding whether a rule FIRES for a
+ * given prompt, path, or turn is NOT here either: {@see RulePathNudge} decides
+ * it at tool time, firing each rule's {@see PathTrigger} through its
+ * matchesAny() gate so path-scoped rules reach the model as a transient
+ * tool-result channel instead of the standing prompt. The same class also
+ * fires {@see KeywordTrigger} whole-word matching — through its
+ * intentMatches() seam, over saved memory intents' `when:` triggers — while
+ * the rule channel itself still does not read `keywords:`, that matcher
+ * staying dormant for rules as pinned by the nudge test suite. A rule with no
  * trigger keys still loads with an empty {@see $triggers} list: it is a
  * standing rule, always eligible, gated on nothing.
  *
