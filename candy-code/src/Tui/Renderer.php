@@ -2168,10 +2168,10 @@ final class Renderer
      *
      * 1. The band is pre-clipped to `$bandCols` with the ANSI-AWARE
      *    {@see clipWidth()}. {@see SplitLayout} has a truncator of its own, but
-     *    its slow path walks raw codepoints and its own docblock records that
-     *    it can cut a line mid-SGR; the band is styled, so a cut there would
-     *    leak a colour across the divider into the agent column. Handing it
-     *    content that already fits means that truncator never fires on it.
+     *    it now delegates to the same canonical Width::truncateAnsi() the band's
+     *    own clipWidth() already uses, so a cut there keeps SGR sequences whole.
+     *    Handing it content that already fits is still belt-and-braces: it keeps
+     *    SplitLayout's slow path cold.
      * 2. The proportions are handed over as numerator = `$bandCols`,
      *    denominator = `$cols`, which makes `SplitLayout::splitPosition()`
      *    return `round($bandCols / $cols * $cols)` = exactly `$bandCols`. The
