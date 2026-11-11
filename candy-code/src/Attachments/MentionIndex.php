@@ -113,7 +113,21 @@ final class MentionIndex
             return [];
         }
 
-        return self::$filesMemo[$key] ??= self::discover($key);
+        return self::listingOf($key);
+    }
+
+    /**
+     * The memoized listing for an ALREADY-RESOLVED root — the shared tail of
+     * files() and rank(). Split out so the per-keystroke hot path resolves
+     * realpath() exactly once per call (n09: rank() used to pay it twice,
+     * once inside files() and again for its memo key, around machinery that
+     * goes out of its way to avoid per-keystroke syscalls).
+     *
+     * @return list<string>
+     */
+    private static function listingOf(string $rootReal): array
+    {
+        return self::$filesMemo[$rootReal] ??= self::discover($rootReal);
     }
 
     /**
@@ -129,22 +143,26 @@ final class MentionIndex
      */
     public static function rank(string $partial, string $root, int $limit = self::POPUP_LIMIT): array
     {
-        $files = self::files($root);
+        $rootReal = realpath($root);
+        if ($rootReal === false || !is_dir($rootReal)) {
+            return [];
+        }
+
+        $files = self::listingOf($rootReal);
         if ($files === [] || $limit < 1) {
             return [];
         }
-        $root = realpath($root) ?: $root;
 
         if ($partial === '') {
             return self::head($files, $limit);
         }
 
-        $memoKey = $root . "\0" . $partial;
+        $memoKey = $rootReal . "\0" . $partial;
         if ($limit <= self::RANK_MEMO_TOP_ROWS && isset(self::$rankMemo[$memoKey])) {
             return array_slice(self::$rankMemo[$memoKey], 0, $limit);
         }
 
-        $scored = self::scored($partial, $files, self::lowered($root));
+        $scored = self::scored($partial, $files, self::lowered($rootReal));
 
         if ($limit > self::RANK_MEMO_TOP_ROWS) {
             // A caller wider than the stored window sees a fresh full slice

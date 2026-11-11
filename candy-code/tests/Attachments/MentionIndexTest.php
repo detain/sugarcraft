@@ -154,6 +154,20 @@ final class MentionIndexTest extends TestCase
 
         MentionIndex::forget($this->root);
         $this->assertContains('late.txt', array_map(static fn(string $p): string => basename($p), MentionIndex::files($this->root)));
+
+        // n09 (PERF-B): the realpath-once law. rank() used to resolve the same
+        // root twice per call — once inside files(), again for its memo key —
+        // and because both spellings answer byte-identically, no behavioral
+        // test can catch a re-spread. Pin the shape: each hot-path body
+        // resolves realpath() exactly once and reaches the memo through the
+        // shared listingOf tail.
+        $lines = file((string) (new \ReflectionClass(MentionIndex::class))->getFileName());
+        foreach (['files' => 'self::listingOf($key)', 'rank' => 'self::listingOf($rootReal)'] as $method => $tail) {
+            $bound = new \ReflectionMethod(MentionIndex::class, $method);
+            $body = implode('', array_slice($lines, $bound->getStartLine() - 1, $bound->getEndLine() - $bound->getStartLine() + 1));
+            self::assertSame(1, substr_count($body, 'realpath('), $method . ' resolves realpath exactly once per call');
+            self::assertStringContainsString($tail, $body, $method . ' feeds the memo through the shared listingOf tail');
+        }
     }
 
     /**
