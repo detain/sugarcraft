@@ -544,7 +544,11 @@ final class MentionIndex
      * {@see \SugarCraft\Code\Host\TurnRunner::complete()} at every turn end
      * (C-WEB-1.c) — that is what makes a file the turn wrote visible to the
      * next `@` without a restart — and tests use it as the process-wide reset
-     * around their own fixtures.
+     * around their own fixtures. The per-root arm drops ALL THREE memos: a
+     * root that was primed and then deleted no longer resolves, and its
+     * entries still answer to the caller's canonical string (rank() keys its
+     * memo the same `realpath ?: $root` way), so the drop stays total
+     * whichever way the directory left.
      */
     public static function forget(?string $root = null): void
     {
@@ -557,13 +561,11 @@ final class MentionIndex
             return;
         }
 
-        $key = realpath($root);
-        if ($key !== false) {
-            unset(self::$filesMemo[$key], self::$lowerMemo[$key]);
-            foreach (array_keys(self::$rankMemo) as $memoKey) {
-                if (str_starts_with($memoKey, $key . "\0")) {
-                    unset(self::$rankMemo[$memoKey]);
-                }
+        $key = realpath($root) ?: $root;
+        unset(self::$filesMemo[$key], self::$lowerMemo[$key]);
+        foreach (array_keys(self::$rankMemo) as $memoKey) {
+            if (str_starts_with($memoKey, $key . "\0")) {
+                unset(self::$rankMemo[$memoKey]);
             }
         }
     }

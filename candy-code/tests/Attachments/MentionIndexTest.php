@@ -156,6 +156,111 @@ final class MentionIndexTest extends TestCase
         $this->assertContains('late.txt', array_map(static fn(string $p): string => basename($p), MentionIndex::files($this->root)));
     }
 
+    /**
+     * m55 (CC-PERF-B MIN-1, adjudicated): the per-root drop must clear ALL
+     * THREE memos, not just the listing. The review row claimed a method that
+     * never existed (forgetFiles/$liveFiles — zero hits tree-wide) while
+     * asserting the rank/lower legs stayed warm; the live loop at
+     * {@see MentionIndex::forget()} does drop them — pin that so the claimed
+     * asymmetry can never grow back, and pin the negative control that one
+     * root's forget leaves the OTHER root's entries alone (a drop that
+     * overshot would silently re-pay every other project's cold walk).
+     */
+    public function testForgettingARootDropsItsRankAndLowerMemoEntries(): void
+    {
+        $other = \sys_get_temp_dir() . '/w2b-index-' . uniqid('o', true);
+        mkdir($other . '/src', 0777, true);
+        exec('git init --quiet ' . escapeshellarg($other) . ' 2>&1');
+        file_put_contents($other . '/src/Chat.php', '');
+
+        try {
+            MentionIndex::rank('cha', $this->root);
+            MentionIndex::rank('cha', $other);
+            $real = realpath($this->root);
+            $otherReal = realpath($other);
+
+            $files = (new \ReflectionProperty(MentionIndex::class, 'filesMemo'))->getValue();
+            $lower = (new \ReflectionProperty(MentionIndex::class, 'lowerMemo'))->getValue();
+            $this->assertArrayHasKey($real, $files, 'fixture: both roots are listed');
+            $this->assertArrayHasKey($otherReal, $files);
+            $this->assertArrayHasKey($real, $lower, 'fixture: both byte screens are memoized');
+            $this->assertArrayHasKey($otherReal, $lower);
+            $rankMemo = $this->currentRankMemo();
+            $this->assertArrayHasKey($real . "\0" . 'cha', $rankMemo, 'fixture: both rank windows are memoized');
+            $this->assertArrayHasKey($otherReal . "\0" . 'cha', $rankMemo);
+
+            MentionIndex::forget($this->root);
+
+            $files = (new \ReflectionProperty(MentionIndex::class, 'filesMemo'))->getValue();
+            $lower = (new \ReflectionProperty(MentionIndex::class, 'lowerMemo'))->getValue();
+            $rankMemo = $this->currentRankMemo();
+            $this->assertArrayNotHasKey($real, $files, 'the dropped root loses its listing');
+            $this->assertArrayNotHasKey($real, $lower, 'the dropped root loses its byte screen too');
+            $this->assertArrayNotHasKey($real . "\0" . 'cha', $rankMemo, 'and its rank window — the leg the review row claimed was never cleared');
+            $this->assertArrayHasKey($otherReal, $files, 'the other root keeps every leg');
+            $this->assertArrayHasKey($otherReal, $lower);
+            $this->assertArrayHasKey($otherReal . "\0" . 'cha', $rankMemo);
+        } finally {
+            exec('rm -rf ' . escapeshellarg($other) . ' 2>&1');
+        }
+    }
+
+    /**
+     * The one invalidation gap the m55 probe actually found: a root primed
+     * then DELETED no longer resolves, and the old false-guard skipped the
+     * whole per-root drop — ghost entries in all three memos surviving a
+     * forget that claimed to answer for them. The fix mirrors rank()'s own
+     * `realpath ?: $root` keying (worst case: the caller's raw string names a
+     * key the memos never used, and the unsets no-op).
+     */
+    public function testForgetStillDropsARootDeletedAfterItWasPrimed(): void
+    {
+        $canonical = realpath($this->root);
+        $this->assertContains('src/Chat.php', array_column(MentionIndex::rank('cha', $this->root), 'path'), 'fixture: the cold popup lists the root');
+        $this->assertArrayHasKey($canonical . "\0" . 'cha', $this->currentRankMemo(), 'fixture: the cold rank stored its window');
+
+        exec('rm -rf ' . escapeshellarg($this->root) . ' 2>&1');
+        // The rank() above realpath'd this path, and PHP caches that answer
+        // for realpath_cache_ttl (120s here) — drop the entry or forget()
+        // would still resolve the ghost and the fallback leg never runs.
+        clearstatcache(true, $this->root);
+        $this->assertFalse(realpath($this->root), 'fixture: the root is gone, so forget() must fall back to the caller string');
+
+        // The canonical spelling is the only name the caller still has for a
+        // deleted directory — and exactly the key all three memos were seeded
+        // under — so the fallback leg is exercised the same way on any host
+        // (/tmp being a symlink would otherwise split the two spellings).
+        MentionIndex::forget($canonical);
+
+        $this->assertSame([], array_filter(
+            array_keys($this->currentRankMemo()),
+            static fn(string $memoKey): bool => str_starts_with($memoKey, $canonical . "\0"),
+        ), 'the rank window of the deleted root is gone');
+        $this->assertArrayNotHasKey($canonical, (new \ReflectionProperty(MentionIndex::class, 'filesMemo'))->getValue() ?? [], 'and so are the listing and the screen');
+        $this->assertArrayNotHasKey($canonical, (new \ReflectionProperty(MentionIndex::class, 'lowerMemo'))->getValue() ?? []);
+    }
+
+    /**
+     * The stale-after-add leg on the RANK side (the listing side is pinned at
+     * {@see self::testTheListingIsAMemoAndForgetRefreshesIt()}): a warm
+     * window cannot see a file created after it was stored, and forgetting
+     * the root lands the refresh through the memoized query too, screen and
+     * all. Production reaches this drop by {@see \SugarCraft\Code\Host\TurnRunner::complete()}
+     * at every turn end — the end-to-end turn shape is pinned by
+     * tests/Host/TurnRunnerMentionFreshnessTest.php.
+     */
+    public function testAWarmRankWindowCannotSeeAFileAddedAfterItButTheDropRefreshesIt(): void
+    {
+        file_put_contents($this->root . '/late.php', '');
+        $this->assertContains('late.php', array_column(MentionIndex::rank('late', $this->root), 'path'), 'fixture: the cold window lists what exists at the popup');
+
+        file_put_contents($this->root . '/later.php', '');
+        $this->assertNotContains('later.php', array_column(MentionIndex::rank('late', $this->root), 'path'), 'the warm window serves the pre-add order — the documented bounded staleness');
+
+        MentionIndex::forget($this->root);
+        $this->assertContains('later.php', array_column(MentionIndex::rank('late', $this->root), 'path'), 'the drop re-arms the cold walk and the new file lands');
+    }
+
     public function testAMissingRootListsNothing(): void
     {
         $this->assertSame([], MentionIndex::files($this->root . '-nowhere'));
