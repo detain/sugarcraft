@@ -51,9 +51,13 @@ final class HomeDirectoryPathReaderInventoryTest extends TestCase
     }
 
     /**
-     * EIGHT callers, in eight files, one call each — the figure the doc-block's
+     * NINE callers, in nine files, one call each — the figure the doc-block's
      * paragraph rests on. Named per-file so a dropped or added call says which
-     * file it was in.
+     * file it was in. `Tools\BuiltIn\TeamTool` joined the roster dated
+     * 2026-11-12, when the cc-review-1111 M-3 fix salted its team-scope stamp
+     * key with this home so two projects cannot share one per-user team store;
+     * it files under STORE LOCATION beside its Agents family, and it refuses
+     * outright when the home cannot be established.
      *
      * IT WAS TEN, and the two departures are a security change rather than a
      * tidy-up. `Commands\CommandLoader` derived its USER tier's directory from
@@ -78,6 +82,7 @@ final class HomeDirectoryPathReaderInventoryTest extends TestCase
                 'src/Cli/Bootstrap.php' => 1,
                 'src/Skills/SkillDiscovery.php' => 1,
                 'src/Skills/SkillLoader.php' => 1,
+                'src/Tools/BuiltIn/TeamTool.php' => 1,
                 'src/Workflows/WorkflowRegistry.php' => 1,
             ],
             $this->callersPerFile(),

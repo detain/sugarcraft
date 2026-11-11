@@ -69,7 +69,10 @@ final class HomeDirectory
      * derivation over `src/`, not maintained by hand, and the previous hand list
      * is why. It claimed to be "every remaining reader named by grep" and was
      * wrong in three directions at once: it named NINE where `grep` found TEN at
-     * that revision (EIGHT at this one, the two departures named below);
+     * that revision (EIGHT at this one — the roster has since moved to NINE,
+     * `Tools\BuiltIn\TeamTool`'s `scopeFor()` team-scope stamp joining below
+     * dated 2026-11-12 with the cc-review-1111 M-3 cross-team scoping fix; the
+     * two departures named below);
      * it named {@see \SugarCraft\Code\Workflows\WorkflowEngine}, which does not
      * call this at all (its only mention is a `{@see}`, and the real caller is
      * {@see \SugarCraft\Code\Workflows\WorkflowRegistry}); and it omitted
@@ -88,11 +91,14 @@ final class HomeDirectory
      * {@see \SugarCraft\Code\Skills\SkillLoader},
      * {@see \SugarCraft\Code\Skills\SkillDiscovery}.
      *
-     * STORE LOCATION (the fallback is a convenience, not a trust decision), five:
+     * STORE LOCATION (the fallback is a convenience, not a trust decision), six:
      * {@see \SugarCraft\Code\Agents\Team},
      * {@see \SugarCraft\Code\Agents\TeamManager},
      * {@see \SugarCraft\Code\Agents\Teammate},
-     * {@see \SugarCraft\Code\Agents\WorktreeManager} and
+     * {@see \SugarCraft\Code\Agents\WorktreeManager},
+     * {@see \SugarCraft\Code\Tools\BuiltIn\TeamTool} (its `scopeFor()`, the
+     * team-scope stamp key, joining with the M-3 scoping fix of 2026-11-12 — the
+     * scope namespaces the shared per-user team stores), and
      * {@see \SugarCraft\Code\Cli\Bootstrap} (its `homePath()`, which
      * {@see \SugarCraft\Code\Cli\Bootstrap::trustedConfigDirPath()} deliberately
      * does NOT go through).
