@@ -416,9 +416,12 @@ function askResolutionOutcome(data: Events['permission.resolved']): 'unanswered'
  * queueId — a dropped queue entry vanished with its text unrecoverable and the
  * sent-vs-removed distinction was lost. 'sent' stays silent by design: the
  * prompt rides into the transcript as the turn's own user message. A removal
- * (or any shape that is neither) leaves no other trace, so it earns a notice
- * row. Mirrors the askResolutionOutcome split (m24): content holds the server
- * text VERBATIM (server text never client-translated — F-M22 law) and rides in
+ * earns a notice row because it is the ONLY shape that leaves no other
+ * trace — the classifier matches reason 'removed' exactly, so a frame that
+ * is neither (nor a legacy one carrying no reason at all) stays silent,
+ * byte-identical to before this fix. Mirrors the askResolutionOutcome split
+ * (m24): content holds the server text VERBATIM (server text never
+ * client-translated — F-M22 law) and rides in
  * the per-queueId key, so TranscriptItem resolves the prose at presentation and
  * a replay replaces its own row instead of stacking copies.
  */

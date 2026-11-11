@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { mount } from '@vue/test-utils'
 
 import type { EventEnvelope } from '../../protocol/generated'
+import TranscriptItem from '../../components/TranscriptItem.vue'
 import { applyEvent, createState, type NoticeItem, type SessionState } from '../reducer'
+import type { TranscriptItem as TranscriptItemModel } from '../reducer'
 
 /**
  * m25 (CW-COVER-B F3): the server distinguishes WHY a queued prompt left the
@@ -102,5 +105,33 @@ describe('turn.dequeued notice surface (m25)', () => {
     const rows = noticeRows(state)
     expect(rows).toHaveLength(2)
     expect(rows.map((row) => row.key)).toEqual(['dequeued:removed:q1', 'dequeued:removed:q2'])
+  })
+})
+
+/**
+ * Presentation legs (m25 review MINOR-2): the reducer row is only half the
+ * story — TranscriptItem chooses the localized prose from the key at paint
+ * time, so its ternary, key prefix, and {text} param need the same mount-pin
+ * treatment F-m24's askResolutionNotice gives its rows. Without these, the
+ * branch could mis-spell a key or invert empty-vs-nonempty and ship silently.
+ */
+describe('TranscriptItem: dequeued-removal rows paint localized prose (m25)', () => {
+  const notice = (key: string, content: string) =>
+    mount(TranscriptItem, { props: { item: { kind: 'notice', key, level: 'info', content } as TranscriptItemModel } })
+
+  it('paints the removed-with-text string over the stored verbatim prompt', () => {
+    expect(notice('dequeued:removed:q1', 'next').find('.notice').text()).toBe('Queued prompt removed: next')
+  })
+
+  it('paints the bare removed string when no text arrived', () => {
+    expect(notice('dequeued:removed:q2', '').find('.notice').text()).toBe('Queued prompt removed')
+  })
+
+  it('still paints the steer row from its key alone, glyph content ignored', () => {
+    expect(notice('steered:s1', '⇥').find('.notice').text()).toBe('Steered into the running turn')
+  })
+
+  it('leaves every other notice row rendering its content unchanged', () => {
+    expect(notice('plain-echo', 'some echo').find('.notice').text()).toBe('some echo')
   })
 })
