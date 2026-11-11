@@ -10,6 +10,7 @@ use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Memory\AgentMemory;
 use SugarCraft\McpClient\McpRouter;
+use SugarCraft\Code\Permissions\ChannelToolScope;
 use SugarCraft\Code\Permissions\PermissionAction;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
@@ -407,13 +408,24 @@ final class AgentManager
      * in both directions: a preset's `tools:` still bounds what its agent can
      * call, which is scoping rather than permission-mode policy.
      *
+     * CHANNEL SCOPE RIDES THE DELEGATION (D6). A session admitted under a
+     * per-group/channel tool policy carries that policy's scope on its gate;
+     * passing the same {@see ChannelToolScope} here puts it on the sub-agent's
+     * own gate, so a channel deny — or a refusing-all admission — binds
+     * delegated calls exactly as it binds the session's. Null is an
+     * unrestricted session: the child's gate then carries no channel opinion.
+     * The scope is a restriction only; it never grants a tool the preset's
+     * `tools:` lacks.
+     *
      * @param PermissionMode|null $permissionMode The mode the agent asks for —
      *        a preset's `permissionMode:`. Null uses PermissionMode::Default.
      * @param PermissionMode|null $sessionMode The mode of the session that
      *        delegates — the ceiling. Null when the caller has no session gate
      *        to name; the requested mode then stands as asked.
+     * @param ChannelToolScope|null $sessionScope The D6 channel scope carried
+     *        by the delegating session's gate, if any; see the paragraph above.
      */
-    public function createSubAgent(string $agentName, string $task, ?PermissionMode $permissionMode = null, ?PermissionMode $sessionMode = null): SubAgent
+    public function createSubAgent(string $agentName, string $task, ?PermissionMode $permissionMode = null, ?PermissionMode $sessionMode = null, ?ChannelToolScope $sessionScope = null): SubAgent
     {
         $agent = $this->get($agentName);
         if ($agent === null) {
@@ -432,7 +444,7 @@ final class AgentManager
                 : $mode->stricterOf($sessionMode);
         }
 
-        $gate = $this->createPermissionGate($mode);
+        $gate = $this->createPermissionGate($mode, $sessionScope);
 
         $subAgent = new SubAgent(
             // E329: the literal prefix is a NAMESPACE, not an entropy source —
@@ -758,16 +770,20 @@ final class AgentManager
 
     /**
      * Create a PermissionGate from a PermissionMode using the configured factory,
-     * or return a default gate if no factory is configured.
+     * or return a default gate if no factory is configured. The D6 channel scope
+     * is applied here — AFTER the factory — so the configured factory's own
+     * signature stays mode-only: a null scope leaves the gate byte-identical
+     * (withChannelScope no-ops on null), and every gate minted on this path
+     * enforces the delegating session's channel policy.
      */
-    private function createPermissionGate(PermissionMode $mode): PermissionGate
+    private function createPermissionGate(PermissionMode $mode, ?ChannelToolScope $scope = null): PermissionGate
     {
         if ($this->permissionGateFactory !== null) {
-            return ($this->permissionGateFactory)($mode);
+            return ($this->permissionGateFactory)($mode)->withChannelScope($scope);
         }
 
         // Default factory: create a basic gate with no custom rules
-        return new PermissionGate($mode);
+        return (new PermissionGate($mode))->withChannelScope($scope);
     }
 
     /**
