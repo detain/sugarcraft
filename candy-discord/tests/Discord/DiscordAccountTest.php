@@ -19,6 +19,8 @@ use CandyCode\Bundles\Discord\Tests\Fixture\FakeDiscordApi;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
+use React\EventLoop\TimerInterface;
+use SugarCraft\Code\Backend\PendingAsk;
 
 /**
  * The account face driven through its private intake with fixture
@@ -161,6 +163,75 @@ final class DiscordAccountTest extends TestCase
         self::assertSame('PATCH', $patch['method']);
         self::assertSame('Resolved.', $patch['body']['content']);
         self::assertSame([], $patch['body']['components']);
+    }
+
+    public function testATtlBeyondTheCoreCeilingArmsTheCeilingAndLogsLoudly(): void
+    {
+        $lines = [];
+        $this->buildFace(['approvals' => ['ttlMinutes' => 120]], new Log(
+            static function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            },
+        ));
+        $this->face->promptApproval(['channelId' => 'c1', 'messageId' => 'm1'], 'sess_1',
+            ['askId' => 'ask_clamp', 'tool' => 'Bash', 'arguments' => []]);
+        $this->settle();
+        self::assertSame((float) PendingAsk::EXPIRY_SECONDS, $this->armedApprovalInterval('ask_clamp'),
+            'the card window must never outlive the core expiry that governs the answer');
+        $clamps = \array_values(\array_filter($lines,
+            static fn (string $line): bool => \str_contains($line, '"event":"approval_ttl_clamped"')));
+        self::assertCount(1, $clamps, 'a clamped posture is announced exactly once');
+        self::assertStringContainsString('"configuredMinutes":120', $clamps[0]);
+        self::assertStringContainsString('"armedSeconds":' . PendingAsk::EXPIRY_SECONDS, $clamps[0]);
+        self::assertNull($this->api->lastCallFor('/channels/c1/messages/msg_out'),
+            'clamping arms a shorter clock, it does not retire the card early');
+    }
+
+    public function testTheDefaultTtlArmsTheCoreWindowQuietly(): void
+    {
+        $lines = [];
+        $this->buildFace([], new Log(
+            static function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            },
+        ));
+        $this->face->promptApproval(['channelId' => 'c1', 'messageId' => 'm1'], 'sess_1',
+            ['askId' => 'ask_default', 'tool' => 'Bash', 'arguments' => []]);
+        $this->settle();
+        self::assertSame((float) PendingAsk::EXPIRY_SECONDS, $this->armedApprovalInterval('ask_default'));
+        self::assertSame([], \array_filter($lines,
+            static fn (string $line): bool => \str_contains($line, 'approval_ttl_clamped')),
+            'a co-TTL default needs no announcement');
+    }
+
+    public function testTheSixtySecondFloorStillBindsBelowTheCeiling(): void
+    {
+        $lines = [];
+        $this->buildFace(['approvals' => ['ttlMinutes' => 1]], new Log(
+            static function (string $line) use (&$lines): void {
+                $lines[] = $line;
+            },
+        ));
+        $this->face->promptApproval(['channelId' => 'c1', 'messageId' => 'm1'], 'sess_1',
+            ['askId' => 'ask_floor', 'tool' => 'Bash', 'arguments' => []]);
+        $this->settle();
+        self::assertSame(60.0, $this->armedApprovalInterval('ask_floor'));
+        self::assertSame([], \array_filter($lines,
+            static fn (string $line): bool => \str_contains($line, 'approval_ttl_clamped')));
+    }
+
+    /**
+     * The interval the ask's retirement timer was armed with — the clock
+     * law is pinned at arm time, no waiting on wall clock.
+     */
+    private function armedApprovalInterval(string $askId): float
+    {
+        $timers = new \ReflectionProperty(DiscordAccount::class, 'approvalTimers');
+        $timers->setAccessible(true);
+        $timer = $timers->getValue($this->face)[$askId] ?? null;
+        self::assertInstanceOf(TimerInterface::class, $timer);
+
+        return $timer->getInterval();
     }
 
     public function testTheThreadProbeArchivesOnlyRealThreads(): void

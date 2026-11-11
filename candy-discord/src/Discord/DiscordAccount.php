@@ -13,6 +13,7 @@ use CandyCode\Bundles\Discord\Support\TextSafety;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
+use SugarCraft\Code\Backend\PendingAsk;
 
 /**
  * One Discord account's face: gateway dispatches in, REST out (§7).
@@ -172,7 +173,9 @@ final class DiscordAccount implements PlatformFace
      * answerApproval is one wall, the C-1 nonce + conversation binding
      * carried from here is the other), and an expiry timer that RETIRES
      * the prompt when nobody answers — the same disable-on-resolve PATCH,
-     * clock-triggered.
+     * clock-triggered. The window self-clamps to the core expiry ceiling
+     * (see approvalTtlSeconds(), co-TTL code-chat §11.6) so the card can
+     * never advertise an answer window the core will not honor.
      */
     public function promptApproval(array $ref, string $sessionId, array $ask, string $nonce = ''): void
     {
@@ -193,9 +196,8 @@ final class DiscordAccount implements PlatformFace
                     return;
                 }
                 $this->approvalMessages[$askId] = ['channel' => $channelId, 'message' => (string) ($sent['id'] ?? '')];
-                $minutes = (int) $this->nested('approvals', 'ttlMinutes', 30);
                 $this->approvalTimers[$askId] = $this->loop->addTimer(
-                    \max(60, $minutes * 60),
+                    $this->approvalTtlSeconds(),
                     function () use ($askId): void {
                         unset($this->approvalTimers[$askId]);
                         $this->retireApproval($askId, "\u{231B} Approval expired; answer with /approve <askId> once|always|deny while the ask is still open.");
@@ -204,6 +206,35 @@ final class DiscordAccount implements PlatformFace
             },
             fn (\Throwable $e) => $this->log->warn('approval_prompt_failed', ['error' => $e->getMessage()]),
         );
+    }
+
+    /**
+     * The card-side window of the co-TTL pair (code-chat §11.6): the core
+     * refuses the ask at PendingAsk::EXPIRY_SECONDS no matter what this
+     * card promises, so the advertised window self-clamps to that ceiling
+     * and says so LOUDLY — a longer configured ttlMinutes must never leave
+     * a live card sitting over a dead ask. Short windows keep the
+     * 60-second floor. Reading the constant (rather than repeating its
+     * value) is what makes the docblock's "must move with it" law
+     * structural: the card follows the core, silently in the safe
+     * direction, noisily in the lying direction.
+     */
+    private function approvalTtlSeconds(): int
+    {
+        $minutes = (int) $this->nested('approvals', 'ttlMinutes', 30);
+        $seconds = \max(60, $minutes * 60);
+        $ceiling = PendingAsk::EXPIRY_SECONDS;
+        if ($seconds > $ceiling) {
+            $this->log->warn('approval_ttl_clamped', [
+                'configuredMinutes' => $minutes,
+                'requestedSeconds' => $seconds,
+                'armedSeconds' => $ceiling,
+            ]);
+
+            return $ceiling;
+        }
+
+        return $seconds;
     }
 
     public function retireApproval(string $askId, string $line): void
