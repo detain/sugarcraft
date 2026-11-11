@@ -460,14 +460,15 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * "TWENTY-ONE spellings remain by hand, in FIFTEEN files" — the §7 closeout
+     * "TWENTY-THREE spellings remain by hand, in SIXTEEN files" — the §7 closeout
      * re-derived the set after the waves that landed since it last read
      * "THIRTEEN ... EIGHT": the new spellings are the boundary judgement in
      * {@see \SugarCraft\Code\Cli\LaunchContext}'s extra-root dedup, the
      * EnvironmentBlock root probe, the HookLog fallback-arm anchor, the two
      * host-command shelf gates (context dump, memory export), the
      * TranscriptProjector media-store containment, the Bubblewrap `--config`
-     * under-the-root refusal, and one further compare in PathJail's
+     * under-the-root refusal and its jail-cwd tmpfs re-bind (LANE-CC,
+     * 2026-11-11), and one further compare in PathJail's
      * ancestor walk. All of them admit or refuse with their answer; none
      * joins the exclusion list below.
      *
@@ -574,8 +575,11 @@ final class ContainedPathInventoryTest extends TestCase
                 'Tools/PathJail.php' => 6,
                 // C-TOOL-4.c: the bwrap `--config` re-bind refuses a path
                 // that does not sit under the jail root — binding it would
-                // undo the jail, so the compare is the refusal.
-                'Tools/Sandbox/Bubblewrap.php' => 1,
+                // undo the jail, so the compare is the refusal. LANE-CC
+                // jail-cwd (2026-11-11): the `--chdir` target sitting under
+                // the private tmpfs is re-bound read-only only when the
+                // normalised path lies under /tmp — a second compare.
+                'Tools/Sandbox/Bubblewrap.php' => 2,
                 'Tui/SessionPicker.php' => 1,
                 // C4 (cc-eval workflow include/output walk): the glob
                 // fan-out re-contains every found name against the workflow
@@ -587,7 +591,7 @@ final class ContainedPathInventoryTest extends TestCase
         );
 
         unset($counts['Agents/AgentPresetRegistry.php'], $counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Server/Http/Router.php'], $counts['Server/Http/SharePageController.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php'], $counts['Tools/Concerns/BuildsUnifiedDiff.php'], $counts['Support/StartupSummary.php']);
-        $this->assertSame(22, array_sum($counts), 'containment spellings still by hand');
+        $this->assertSame(23, array_sum($counts), 'containment spellings still by hand');
         $this->assertCount(16, $counts, 'files still holding one');
     }
 
