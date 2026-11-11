@@ -63,8 +63,20 @@ export const useContextSourcesStore = defineStore('contextSources', () => {
    */
   let generation = 0
 
+  /**
+   * m52: the session the LAST `load` was armed for, stamped at call time
+   * (not at settle, so a switch still in flight counts). The generation
+   * counter ranks recency only — a debounced reload armed for session A
+   * that fires after the user moved to B would become the newest
+   * generation of the WRONG session, win the latch, and stamp A's record
+   * over B's selection. Recency orders concurrent loads; identity is what
+   * decides whether a deferred load should run at all.
+   */
+  let selectedId: string | null = null
+
   async function load(id: string): Promise<void> {
     const mine = ++generation
+    selectedId = id
     loading.value = true
     const knownBefore = new Set(pendingTrusts.value.map((row) => row.askId))
     try {
@@ -141,6 +153,10 @@ export const useContextSourcesStore = defineStore('contextSources', () => {
     if (reloadTimer !== null) return
     reloadTimer = setTimeout(() => {
       reloadTimer = null
+      // m52: the timer outlives the session it was armed for. By the time it
+      // fires the user may have switched; re-check identity against the last
+      // armed load and drop stale work before it can win the recency latch.
+      if (selectedId !== id) return
       void load(id)
     }, 500)
   }

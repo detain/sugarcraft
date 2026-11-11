@@ -111,3 +111,60 @@ describe('contextSources on context.changed (C-CTX-2.d)', () => {
     expect(store.sources).toBeNull()
   })
 })
+
+/**
+ * m52 (cc-review-1111, CW-QUAL-A MIN4): the debounce timer captured the session
+ * it was armed for, while the latch inside load() ranks RECENCY only. A reload
+ * armed for sA that fires after the user switched (and measured) sB becomes the
+ * newest generation of the VACATED session — it wins the latch and stamps sA's
+ * record over sB's selection, blanking the panel the user is now looking at.
+ * The armed work must carry identity: drop it when its session is no longer
+ * the one the last load was armed for.
+ */
+describe('contextSources debounce across a session switch (m52)', () => {
+  it('a reload armed for the previous session is dropped once the selection moved', async () => {
+    await wire.connect()
+    const store = useContextSourcesStore()
+    await loadPanel('sA', store)
+
+    // The debounced reload arms for sA while sA is the measured session.
+    wire.event('sA', 'context.changed', { reason: 'settle' }, false)
+
+    // The user switches to sB, and that measurement completes, BEFORE the
+    // debounce window closes.
+    const switching = store.load('sB')
+    await flushPromises()
+    await wire.answer('context.sources', sourcesFor('sB'))
+    expect(store.sessionId).toBe('sB')
+    expect(firstPath(store)).toBe('/repo-sB/CLAUDE.md')
+
+    await wait(600)
+    await flushPromises()
+
+    // The armed sA reload must never fire once the selection moved.
+    expect(wire.sent('context.sources')).toHaveLength(2)
+
+    // If a straggler frame was dialled anyway (red-before), let its answer
+    // land so the stale-write below is caught by the state asserts too.
+    const stale = wire.sent('context.sources')[2]
+    if (stale !== undefined) {
+      wire.socket().answer(sourcesFor('sA-stale'), stale.id as string)
+      await flushPromises()
+    }
+    expect(store.sessionId).toBe('sB')
+    expect(firstPath(store)).toBe('/repo-sB/CLAUDE.md')
+    expect(store.error).toBeNull()
+  })
+
+  it('the reload still runs for the session that stays selected', async () => {
+    // Positive control: the identity gate must not neuter the debounce —
+    // that half is pinned jointly with the first test of this file.
+    await wire.connect()
+    const store = useContextSourcesStore()
+    await loadPanel('sA', store)
+    wire.event('sA', 'context.changed', { reason: 'settle' }, false)
+    await wait(600)
+    await flushPromises()
+    expect(wire.sent('context.sources')).toHaveLength(2)
+  })
+})
