@@ -9,6 +9,7 @@ use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Chat;
 use SugarCraft\Code\Host\Commands\CommandContext;
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Tui\Components\PaneLabel;
 
 /**
  * Implements the /agents and /agent commands for listing and inspecting agents.
@@ -16,6 +17,14 @@ use SugarCraft\Code\Lang;
  * Usage:
  *   /agents        — render the roster (working agents first) as a table
  *   /agent <name>  — show details for a specific agent
+ *
+ * Every field printed here is text read off disk by the preset loader — a
+ * cloned repository's foreign agents directory arrives with no trust door at
+ * all, only its permissionMode is gated at construction — or typed into
+ * argv. So every agent-derived emit crosses {@see self::safe()}, the same
+ * choke AgentDashboardPane routes its rows through. Lookup keys stay raw:
+ * an agent is fetched by its exact on-disk name — the sweep happens where
+ * bytes leave the process, never where they are matched.
  *
  * @mirrors charmbracelet/crush AgentsCommand
  */
@@ -76,6 +85,24 @@ final class AgentsCommand
     public function __construct(
         private readonly AgentManager $agentManager,
     ) {
+    }
+
+    /**
+     * The terminal-injection choke for every string this command prints.
+     *
+     * Delegates to {@see PaneLabel::safe()}, the canonical pane-boundary
+     * sweep: it removes ANSI and OSC-class escapes and their payload text,
+     * NUL/BEL/DEL and lone C1 bytes, and the private-use arena the image
+     * markers and zone sentinels occupy, then collapses every run of
+     * whitespace and control space — including the LF/CR/TAB a bare ANSI
+     * strip deliberately keeps — into a single space. A description
+     * carrying a newline must not splice a second row into the transcript,
+     * and a name carrying a clipboard or title sequence must not reach a
+     * terminal at all. Benign text is byte-identical through it.
+     */
+    private static function safe(string $raw): string
+    {
+        return PaneLabel::safe($raw);
     }
 
     /**
@@ -154,15 +181,15 @@ final class AgentsCommand
 
         foreach ([...$working, ...$idle] as $agent) {
             $table = $table->row(
-                TranscriptTable::cell($agent->name, $columns[$labels['Agent']]),
-                TranscriptTable::cell($agent->description, $columns[$labels['Description']]),
+                TranscriptTable::cell(self::safe($agent->name), $columns[$labels['Agent']]),
+                TranscriptTable::cell(self::safe($agent->description), $columns[$labels['Description']]),
                 TranscriptTable::cell(
                     $agent->inheritsModel || trim($agent->model) === ''
                         ? Lang::t('cmd.agents.cell.session')
-                        : $agent->model,
+                        : self::safe($agent->model),
                     $columns[$labels['Model']],
                 ),
-                TranscriptTable::cell($agent->source->value, $columns[$labels['Tier']]),
+                TranscriptTable::cell(self::safe($agent->source->value), $columns[$labels['Tier']]),
                 // Through cell() like its neighbours even though this class
                 // writes the string itself: what keeps the table's natural
                 // width under TranscriptTable's derived cap — and so keeps the
@@ -189,39 +216,40 @@ final class AgentsCommand
         $agent = $this->agentManager->get($name);
 
         if ($agent === null) {
-            echo "\n  " . Lang::t('cmd.agents.unknown', ['name' => $name]) . "\n";
+            echo "\n  " . Lang::t('cmd.agents.unknown', ['name' => self::safe($name)]) . "\n";
             echo '  ' . Lang::t('cmd.agents.unknown-hint') . "\n\n";
 
             return 1;
         }
 
-        echo "\n  " . Lang::t('cmd.agents.detail.agent', ['name' => $agent->name]) . "\n";
+        echo "\n  " . Lang::t('cmd.agents.detail.agent', ['name' => self::safe($agent->name)]) . "\n";
         echo "  " . str_repeat("─", 50) . "\n";
-        echo '  ' . Lang::t('cmd.agents.detail.description', ['description' => $agent->description]) . "\n";
-        echo '  ' . Lang::t('cmd.agents.detail.model', ['model' => $agent->model]) . "\n";
-        echo '  ' . Lang::t('cmd.agents.detail.provider', ['provider' => $agent->provider]) . "\n";
+        echo '  ' . Lang::t('cmd.agents.detail.description', ['description' => self::safe($agent->description)]) . "\n";
+        echo '  ' . Lang::t('cmd.agents.detail.model', ['model' => self::safe($agent->model)]) . "\n";
+        echo '  ' . Lang::t('cmd.agents.detail.provider', ['provider' => self::safe($agent->provider)]) . "\n";
         // ISS-031: which convention wrote this agent, and the exact file it was
         // read from (or null for the six built-ins, which have no file). A
         // roster the operator cannot trace to a path is the silence this item
         // exists to end.
-        echo '  ' . Lang::t('cmd.agents.detail.source', ['source' => $agent->source->value]) . "\n";
-        if ($agent->sourcePath !== null && $agent->sourcePath !== '') {
-            echo '  ' . Lang::t('cmd.agents.detail.path', ['path' => $agent->sourcePath]) . "\n";
+        echo '  ' . Lang::t('cmd.agents.detail.source', ['source' => self::safe($agent->source->value)]) . "\n";
+        $sourcePath = $agent->sourcePath;
+        if ($sourcePath !== null && $sourcePath !== '') {
+            echo '  ' . Lang::t('cmd.agents.detail.path', ['path' => self::safe($sourcePath)]) . "\n";
         }
         echo '  ' . Lang::t('cmd.agents.detail.status', [
             'status' => $agent->isActive ? Lang::t('cmd.agents.status.active') : Lang::t('cmd.agents.status.inactive'),
         ]) . "\n";
 
         if ($agent->skillNames !== []) {
-            echo '  ' . Lang::t('cmd.agents.detail.skills', ['skills' => implode(", ", $agent->skillNames)]) . "\n";
+            echo '  ' . Lang::t('cmd.agents.detail.skills', ['skills' => self::safe(implode(", ", $agent->skillNames))]) . "\n";
         }
 
         if ($agent->tools !== []) {
-            echo '  ' . Lang::t('cmd.agents.detail.tools', ['tools' => implode(", ", $agent->tools)]) . "\n";
+            echo '  ' . Lang::t('cmd.agents.detail.tools', ['tools' => self::safe(implode(", ", $agent->tools))]) . "\n";
         }
 
         if ($agent->hooks !== []) {
-            echo '  ' . Lang::t('cmd.agents.detail.hooks', ['hooks' => implode(", ", $agent->hooks)]) . "\n";
+            echo '  ' . Lang::t('cmd.agents.detail.hooks', ['hooks' => self::safe(implode(", ", $agent->hooks))]) . "\n";
         }
 
         echo "\n";
