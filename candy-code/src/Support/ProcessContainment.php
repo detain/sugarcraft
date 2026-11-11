@@ -293,32 +293,7 @@ final class ProcessContainment
     }
 
     /**
-     * Run ONE candidate's claim through one short-lived proc_open closed by
-     * the single proc_close below: forwards `exit 7`, and its child leads
-     * its own group.
-     *
-     * The pipes are DRAINED before they close, up to the probe deadline: an
-     * output stream closed unread can kill the child on SIGPIPE while it
-     * writes its own error, and proc_close then reports a corrupted status
-     * (measured: the helper arm's missing-binary probe answers 125
-     * undrained, 127 drained) — the drain is what keeps the exit-code leg
-     * honest. Drained chunks are DISCARDED, nothing reaches the parent's
-     * streams (ChildStderrCaptureTest's census relies on the silence).
-     *
-     * The pid is read from proc_get_status() EXACTLY ONCE, at launch: the
-     * child cannot have exited that early, and any later call reaps it —
-     * erasing the zombie whose pgid the leadership poll below reads (the
-     * kernel keeps a reaped-pending task's group answerable until
-     * proc_close takes it). Leadership is POLLED, not sampled, because the
-     * PHP arm detaches only once its interpreter reaches posix_setsid(). A
-     * candidate that neither drains to EOF nor detaches inside the deadline
-     * is terminated and rejected, so a broken arm costs one bounded probe —
-     * never the process's remaining life.
-     *
-     * @param list<string> $candidate
-     */
-    /**
-     * Is this child leading (or unverifiably not contradicting) its own
+     * Does this pid lead (or uncontradictably fail to contradict) its own
      * process group? THE single leadership predicate, shared by the
      * detached-arm probe below and by ProcessContainmentPhpSetsidTest —
      * production and its test must not run two dialects of the same poll
@@ -357,6 +332,31 @@ final class ProcessContainment
         }
     }
 
+    /**
+     * Run ONE candidate's claim through one short-lived proc_open closed by
+     * the single proc_close below: forwards `exit 7`, and its child leads
+     * its own group.
+     *
+     * The pipes are DRAINED before they close, up to the probe deadline: an
+     * output stream closed unread can kill the child on SIGPIPE while it
+     * writes its own error, and proc_close then reports a corrupted status
+     * (measured: the helper arm's missing-binary probe answers 125
+     * undrained, 127 drained) — the drain is what keeps the exit-code leg
+     * honest. Drained chunks are DISCARDED, nothing reaches the parent's
+     * streams (ChildStderrCaptureTest's census relies on the silence).
+     *
+     * The pid is read from proc_get_status() EXACTLY ONCE, at launch: the
+     * child cannot have exited that early, and any later call reaps it —
+     * erasing the zombie whose pgid {@see childLeadsOwnGroup()} reads (the
+     * kernel keeps a reaped-pending task's group answerable until
+     * proc_close takes it). Leadership is POLLED, not sampled, because the
+     * PHP arm detaches only once its interpreter reaches posix_setsid(). A
+     * candidate that neither drains to EOF nor detaches inside the deadline
+     * is terminated and rejected, so a broken arm costs one bounded probe —
+     * never the process's remaining life.
+     *
+     * @param list<string> $candidate
+     */
     private static function probeDetachedCandidate(array $candidate): bool
     {
         $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
