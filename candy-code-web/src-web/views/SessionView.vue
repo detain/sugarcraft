@@ -321,6 +321,8 @@ async function fetchOlderTranscript(): Promise<string | null> {
       :can-load-older="state.hasMoreOlder"
       :loading-older="session.loadingOlder"
       :fetch-older="fetchOlderTranscript"
+      :subscribing="session.phase === 'subscribing'"
+      :failed="session.error !== null"
       @load-full="loadFull"
       @rewind="rewindHere"
       @edit-resend="editAndResend"

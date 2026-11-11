@@ -26,6 +26,20 @@ const props = defineProps<{
   loadingOlder?: boolean
   /** Pull one older page; resolves to the server-failure text to surface, or null. */
   fetchOlder?: () => Promise<string | null>
+  /**
+   * M-21: the pane's snapshot is still in flight (session.phase is
+   * 'subscribing'). An empty `items` then carries no information about the
+   * session, so the empty claim must not paint — the host passes this
+   * through from the store, never from a local guess.
+   */
+  subscribing?: boolean
+  /**
+   * M-21: the session pane has a standing load/subscribe failure (the host
+   * mirrors `session.error !== null` here). The empty claim would describe
+   * an unknown state as an empty transcript; it goes silent and the error
+   * row beside it carries the truth alone.
+   */
+  failed?: boolean
 }>()
 // C-TUI-3.b: the two checkpoint row actions ride through to the view, which
 // owns the transcript order, the confirm guard, and the composer draft.
@@ -168,10 +182,14 @@ defineExpose({ jumpToEnd })
       <button type="button" :aria-pressed="view.showThinking" data-testid="toggle-thinking" @click="view.toggleThinking()">{{ t('web.transcript.show_thinking') }}</button>
       <button type="button" :aria-pressed="view.expandTools" data-testid="toggle-tools" @click="view.toggleExpandTools()">{{ t('web.transcript.expand_tools') }}</button>
     </div>
-    <!-- CW-UX-09: a blank scroller is not an answer. The block is keyed off the
-         item count alone; the wording reuses the agents-view empty catalog
-         string verbatim (same shape of nothing). -->
-    <p v-if="items.length === 0" class="empty" data-testid="transcript-empty">{{ t('web.agents.transcript_empty') }}</p>
+    <!-- CW-UX-09: a blank scroller is not an answer. M-21: which honest row
+         paints depends on WHY the list is empty — a snapshot still in
+         flight says 'loading' (role=status), and a standing subscribe/load
+         failure says nothing here at all (the error row beside it carries
+         the truth). Only a settled pane may claim emptiness; the wording
+         reuses the agents-view empty catalog string verbatim. -->
+    <p v-if="items.length === 0 && subscribing === true" class="empty" role="status" data-testid="transcript-loading">{{ t('web.transcript.loading') }}</p>
+    <p v-else-if="items.length === 0 && failed !== true" class="empty" data-testid="transcript-empty">{{ t('web.agents.transcript_empty') }}</p>
     <div class="inner">
       <div class="list" :style="{ height: `${total}px` }">
         <div

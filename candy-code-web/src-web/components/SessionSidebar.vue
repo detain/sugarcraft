@@ -427,7 +427,12 @@ function onKey(event: KeyboardEvent): void {
     <!-- C-SES-7.e: the tray toggle drives the store's re-read of the server. -->
     <label class="tray"><input v-model="trayShown" type="checkbox" data-testid="show-archived"> {{ t('web.chrome.sidebar.show_archived') }}</label>
     <p v-if="error" class="error" role="alert" data-testid="sidebar-error">{{ error }}</p>
-    <p v-if="sessions.loaded && sessions.items.length === 0" class="empty">{{ t('web.chrome.sidebar.empty') }}</p>
+    <!-- M-21: a cold index must never read as an empty one — until the
+         first list has landed (and unless the store itself reported a
+         load failure) this row carries role=status. The "no sessions
+         yet" claim below stays gated on sessions.loaded. -->
+    <p v-if="!sessions.loaded && sessions.error === null" class="empty" role="status" data-testid="sidebar-loading">{{ t('web.chrome.sidebar.loading') }}</p>
+    <p v-else-if="sessions.loaded && sessions.items.length === 0" class="empty">{{ t('web.chrome.sidebar.empty') }}</p>
     <p v-else-if="filter.trim() !== '' && !sessions.searching && shown.length === 0" class="empty" data-testid="search-empty">{{ t('web.chrome.sidebar.search_empty', { query: filter.trim() }) }}</p>
     <ul>
       <li v-for="summary in shown" :key="summary.id" class="row" :class="{ open: menuFor === summary.id }">
