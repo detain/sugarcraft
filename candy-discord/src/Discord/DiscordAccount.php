@@ -655,22 +655,26 @@ final class DiscordAccount implements PlatformFace
             ['content' => $text, 'flags' => $this->boolCfg('slashEphemeral', true) ? Buttons::FLAG_EPHEMERAL : 0],
         );
 
-        if ($command['name'] === 'pair') {
-            // §7.3: the pairing surface is account-local — codes answer
-            // ephemerally and never ride the model or the transcript.
-            $this->handlePairCommand(['channelId' => $channelId, 'messageId' => ''], (array) $command['args'], $answer);
+        // C-1 remainder (F-C1SLASH): EVERY slash verb takes the message-path
+        // floor — /new mints sessions, /stop cancels turns, /model flips
+        // models, /pair answers the pairing surface, /approve answers a
+        // permission ask; an actor who cannot reach the text spelling must
+        // not reach any of them through an interaction either. The approve
+        // deny keeps its exact string (pinned); the rest refuse generically.
+        if (!$this->interactionActorAllowed($isDm, $userId, $guildId, $channelId)) {
+            $this->log->warn('slash_refused', ['command' => $command['name'], 'user' => $userId]);
+            $answer($command['name'] === 'approve'
+                ? '⛔ You are not permitted to answer approvals here.'
+                : '⛔ You are not permitted to use commands here.',
+            )->then(null, fn (\Throwable $e) => $this->log->debug('slash_refuse_ack_failed', ['error' => $e->getMessage()]));
 
             return;
         }
 
-        if ($command['name'] === 'approve' && !$this->interactionActorAllowed($isDm, $userId, $guildId, $channelId)) {
-            // C-1: the slash /approve spelling answers the same wire as a
-            // button click, so it takes the same floor. (Gating the other
-            // slash commands is surface-hijack work tracked as the C-1
-            // remainder — deliberately outside this answer gate.)
-            $this->log->warn('approval_slash_refused', ['user' => $userId]);
-            $answer('⛔ You are not permitted to answer approvals here.')
-                ->then(null, fn (\Throwable $e) => $this->log->debug('slash_refuse_ack_failed', ['error' => $e->getMessage()]));
+        if ($command['name'] === 'pair') {
+            // §7.3: the pairing surface is account-local — codes answer
+            // ephemerally and never ride the model or the transcript.
+            $this->handlePairCommand(['channelId' => $channelId, 'messageId' => ''], (array) $command['args'], $answer);
 
             return;
         }
@@ -681,8 +685,9 @@ final class DiscordAccount implements PlatformFace
     }
 
     /**
-     * C-1 access floor for ANSWER-carrying interactions (button clicks and
-     * slash /approve): a targeted interaction has no mention semantics, so
+     * C-1 access floor for gated interactions: every button click and
+     * every slash verb (F-C1 + the F-C1SLASH remainder): a targeted
+     * interaction has no mention semantics, so
      * the message path's mention/degraded arms do not apply — what applies
      * is the whole dmPolicy ladder (pairing WITHOUT the code notice: this
      * is not a DM asking to be served) and the guild policy row with its

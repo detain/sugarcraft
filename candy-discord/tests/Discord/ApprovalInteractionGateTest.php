@@ -9,8 +9,9 @@
  * interaction path was ungated: an unpaired DM peer or a member of a
  * non-served guild could answer approval buttons and slash /approve.
  * Refusal is loud: warn log + an ephemeral deny message on the
- * interaction itself. Other slash verbs are deliberately NOT touched
- * here (surface-hijack work is the tracked C-1 remainder).
+ * interaction itself. F-C1SLASH landed the tracked remainder: EVERY
+ * slash verb (the /pair door included) now takes this same floor —
+ * the surface-hijack arm flipped the F-C1 scope lock by design.
  */
 
 declare(strict_types=1);
@@ -148,19 +149,53 @@ final class ApprovalInteractionGateTest extends TestCase
         self::assertStringContainsString('not permitted', (string) ($call['body']['data']['content'] ?? ''));
     }
 
-    public function testOtherSlashVerbsAreNotTouchedByThisGate(): void
+    public function testAnUnpairedSlashVerbIsRefusedNotAcked(): void
     {
-        // Scope lock (F-C1): only approval answers take the floor here.
-        // /new from an unpaired DM still gets the ordinary ack (the model
-        // door itself is the C-1 surface-hijack remainder, disclosed).
+        // C-1 remainder (F-C1SLASH): this flips the F-C1 scope lock by
+        // design — /new from an unpaired DM is refused ephemerally instead
+        // of minting a serve session (the surface-hijack arm).
         $this->buildAccountFace(['dmPolicy' => 'pairing']);
         $this->drive($this->slashInteraction('u1', 'new', []));
         $this->settle();
 
-        $call = $this->api->lastCallFor('/callback');
-        self::assertNotNull($call);
-        self::assertSame(4, (int) ($call['body']['type'] ?? 0));
-        self::assertStringNotContainsString('not permitted', (string) ($call['body']['data']['content'] ?? ''));
+        $this->assertRefusedOnFakeApi();
+    }
+
+    public function testAPairedSlashVerbPassesTheFloorAndGetsTheOrdinaryAck(): void
+    {
+        $this->store->writeDiscordPairing('default', [], ['u1']);
+        $this->buildAccountFace(['dmPolicy' => 'pairing']);
+        $this->drive($this->slashInteraction('u1', 'new', []));
+        $this->settle();
+
+        $content = (string) ($this->callbackCall()['body']['data']['content'] ?? '');
+        self::assertStringNotContainsString('not permitted', $content);
+        self::assertStringContainsString('Opening a new session', $content, 'a floor-passing actor keeps the ordinary ack');
+    }
+
+    public function testAnUnpairedSlashPairIsRefusedWithoutAnswering(): void
+    {
+        // The /pair door sat BEFORE the F-C1 gate block, fully ungated: a
+        // stranger could `/pair list` the pending codes over the wire.
+        $this->buildAccountFace(['dmPolicy' => 'pairing']);
+        $this->drive($this->slashInteraction('u1', 'pair', ['list']));
+        $this->settle();
+
+        $content = (string) ($this->callbackCall()['body']['data']['content'] ?? '');
+        self::assertStringContainsString('not permitted', $content);
+        self::assertStringNotContainsString('pending pairings', $content, 'a refusal must not answer the pairing surface');
+    }
+
+    public function testAPairedSlashPairStillAnswers(): void
+    {
+        $this->store->writeDiscordPairing('default', [], ['u1']);
+        $this->buildAccountFace(['dmPolicy' => 'pairing']);
+        $this->drive($this->slashInteraction('u1', 'pair', ['list']));
+        $this->settle();
+
+        $content = (string) ($this->callbackCall()['body']['data']['content'] ?? '');
+        self::assertStringNotContainsString('not permitted', $content);
+        self::assertStringContainsString('No pending pairings.', $content);
     }
 
     public function testThePairingCodeNoticeIsNotReemittedOnApprovalRefusal(): void
