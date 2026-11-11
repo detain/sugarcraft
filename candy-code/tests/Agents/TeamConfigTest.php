@@ -42,12 +42,6 @@ final class TeamConfigTest extends TestCase
         $this->assertTrue($config->autoAssignTasks);
     }
 
-    public function testDefaultInboxPath(): void
-    {
-        $config = new TeamConfig();
-        $this->assertSame('~/.candy-code/teams/', $config->inboxPath);
-    }
-
     // -------------------------------------------------------------------------
     // Custom values via constructor
     // -------------------------------------------------------------------------
@@ -59,14 +53,12 @@ final class TeamConfigTest extends TestCase
             defaultTimeoutSeconds: 1200,
             allowPeerMessaging: false,
             autoAssignTasks: false,
-            inboxPath: '/var/teams/',
         );
 
         $this->assertSame(10, $config->maxTeammates);
         $this->assertSame(1200, $config->defaultTimeoutSeconds);
         $this->assertFalse($config->allowPeerMessaging);
         $this->assertFalse($config->autoAssignTasks);
-        $this->assertSame('/var/teams/', $config->inboxPath);
     }
 
     // -------------------------------------------------------------------------
@@ -89,7 +81,6 @@ final class TeamConfigTest extends TestCase
             defaultTimeoutSeconds: 1200,
             allowPeerMessaging: false,
             autoAssignTasks: false,
-            inboxPath: '/custom/path/',
         );
         $modified = $original->withMaxTeammates(20);
 
@@ -98,7 +89,6 @@ final class TeamConfigTest extends TestCase
         $this->assertSame(1200, $modified->defaultTimeoutSeconds);
         $this->assertFalse($modified->allowPeerMessaging);
         $this->assertFalse($modified->autoAssignTasks);
-        $this->assertSame('/custom/path/', $modified->inboxPath);
     }
 
     // -------------------------------------------------------------------------
@@ -159,19 +149,6 @@ final class TeamConfigTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // withInboxPath()
-    // -------------------------------------------------------------------------
-
-    public function testWithInboxPath(): void
-    {
-        $original = new TeamConfig(inboxPath: '~/.teams/');
-        $modified = $original->withInboxPath('/tmp/teams/');
-
-        $this->assertSame('~/.teams/', $original->inboxPath);
-        $this->assertSame('/tmp/teams/', $modified->inboxPath);
-    }
-
-    // -------------------------------------------------------------------------
     // Immutability - with*() returns new instance
     // -------------------------------------------------------------------------
 
@@ -183,7 +160,6 @@ final class TeamConfigTest extends TestCase
         $this->assertNotSame($original, $original->withDefaultTimeoutSeconds(600));
         $this->assertNotSame($original, $original->withAllowPeerMessaging(false));
         $this->assertNotSame($original, $original->withAutoAssignTasks(false));
-        $this->assertNotSame($original, $original->withInboxPath('/new/path/'));
     }
 
     // -------------------------------------------------------------------------
@@ -216,11 +192,5 @@ final class TeamConfigTest extends TestCase
     {
         $config = new TeamConfig(defaultTimeoutSeconds: 86400);
         $this->assertSame(86400, $config->defaultTimeoutSeconds);
-    }
-
-    public function testEmptyInboxPath(): void
-    {
-        $config = new TeamConfig(inboxPath: '');
-        $this->assertSame('', $config->inboxPath);
     }
 }

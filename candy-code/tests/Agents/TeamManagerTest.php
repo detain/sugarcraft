@@ -373,7 +373,6 @@ final class TeamManagerTest extends TestCase
             defaultTimeoutSeconds: 300,
             allowPeerMessaging: false,
             autoAssignTasks: false,
-            inboxPath: '~/my/inbox',
         );
 
         $tm = $this->createTeamManager();
@@ -391,7 +390,6 @@ final class TeamManagerTest extends TestCase
         $this->assertSame(300, $retrievedConfig->defaultTimeoutSeconds);
         $this->assertFalse($retrievedConfig->allowPeerMessaging);
         $this->assertFalse($retrievedConfig->autoAssignTasks);
-        $this->assertSame('~/my/inbox', $retrievedConfig->inboxPath);
     }
 
     public function testGetTeamConfigReturnsNullForNonexistent(): void

@@ -549,7 +549,6 @@ final class TeamManager
                     defaultTimeoutSeconds: (int) ($config['defaultTimeoutSeconds'] ?? 600),
                     allowPeerMessaging: (bool) ($config['allowPeerMessaging'] ?? true),
                     autoAssignTasks: (bool) ($config['autoAssignTasks'] ?? true),
-                    inboxPath: (string) ($config['inboxPath'] ?? '~/.candy-code/teams/'),
                 );
         }
 
@@ -674,7 +673,6 @@ final class TeamManager
                     'defaultTimeoutSeconds' => $config->defaultTimeoutSeconds,
                     'allowPeerMessaging' => $config->allowPeerMessaging,
                     'autoAssignTasks' => $config->autoAssignTasks,
-                    'inboxPath' => $config->inboxPath,
                 ],
             ];
         }
@@ -685,8 +683,8 @@ final class TeamManager
         // team. sugar-core's AtomicJsonFile is this package's canonical answer
         // (adopted at Session.php for exactly this reason): full payload into
         // a same-dir temp, mode settled before the first byte, one rename to
-        // publish. 0600 because the registry names teams, leads and inbox
-        // paths — nothing a co-tenant should read.
+        // publish. 0600 because the registry names teams, leads and their
+        // settings — nothing a co-tenant should read.
         try {
             AtomicJsonFile::new($this->registryPath)
                 ->withPermissions(0600)

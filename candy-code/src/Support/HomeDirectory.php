@@ -81,7 +81,10 @@ final class HomeDirectory
      * omitted {@see \SugarCraft\Code\Memory\ForeignMemoryImporter}, whose user
      * tier put foreign memory bodies in the model's context off this resolution
      * — that one is now on {@see owned()}, which is what took the count from
-     * eleven to ten. Drift in the sentence asserting there is none is the exact
+     * eleven to ten. One more left on 2026-11-11, when cc-fix-1111 m07 deleted
+     * {@see \SugarCraft\Code\Agents\Teammate}'s dead `inboxPath()` surface — it
+     * taught a never-existing `inboxes/` layout and had no production caller.
+     * Drift in the sentence asserting there is none is the exact
      * defect this doc-block exists to remove, so
      * {@see \SugarCraft\Code\Tests\Support\HomeDirectoryPathReaderInventoryTest}
      * fails in BOTH directions — a name here that does not call it, and a caller
@@ -91,10 +94,9 @@ final class HomeDirectory
      * {@see \SugarCraft\Code\Skills\SkillLoader},
      * {@see \SugarCraft\Code\Skills\SkillDiscovery}.
      *
-     * STORE LOCATION (the fallback is a convenience, not a trust decision), six:
+     * STORE LOCATION (the fallback is a convenience, not a trust decision), five:
      * {@see \SugarCraft\Code\Agents\Team},
      * {@see \SugarCraft\Code\Agents\TeamManager},
-     * {@see \SugarCraft\Code\Agents\Teammate},
      * {@see \SugarCraft\Code\Agents\WorktreeManager},
      * {@see \SugarCraft\Code\Tools\BuiltIn\TeamTool} (its `scopeFor()`, the
      * team-scope stamp key, joining with the M-3 scoping fix of 2026-11-12 — the

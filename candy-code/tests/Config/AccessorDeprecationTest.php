@@ -108,7 +108,6 @@ final class AccessorDeprecationTest extends TestCase
             'TeamManager::getTeam' => ['SugarCraft\Code\Agents\TeamManager', 'Agents/TeamManager.php', 'getTeam', 'team', false],
             'TeamManager::getTeamConfig' => ['SugarCraft\Code\Agents\TeamManager', 'Agents/TeamManager.php', 'getTeamConfig', 'teamConfig', false],
             'TeamManager::getTeams' => ['SugarCraft\Code\Agents\TeamManager', 'Agents/TeamManager.php', 'getTeams', 'teams', false],
-            'Teammate::getInboxPath' => ['SugarCraft\Code\Agents\Teammate', 'Agents/Teammate.php', 'getInboxPath', 'inboxPath', false],
             'Teammate::getStatus' => ['SugarCraft\Code\Agents\Teammate', 'Agents/Teammate.php', 'getStatus', 'status', false],
             'WorkflowEngine::getStatus' => ['SugarCraft\Code\Workflows\WorkflowEngine', 'Workflows/WorkflowEngine.php', 'getStatus', 'status', false],
             'WorktreeManager::getWorktreePath' => ['SugarCraft\Code\Agents\WorktreeManager', 'Agents/WorktreeManager.php', 'getWorktreePath', 'worktreePath', false],
@@ -130,7 +129,6 @@ final class AccessorDeprecationTest extends TestCase
             'TaskList::getTasksForTeammate' => [TaskList::class, 'getTasksForTeammate', 'tasksForTeammate', ['tm'], static fn (string $d): object => new TaskList($d . '/tasks.db'), false],
             'TaskList::getUnblockedTasks' => [TaskList::class, 'getUnblockedTasks', 'unblockedTasks', ['tm'], static fn (string $d): object => new TaskList($d . '/tasks.db'), false],
             'Mailbox::getUnreadCount' => [Mailbox::class, 'getUnreadCount', 'unreadCount', ['tm'], static fn (string $d): object => new Mailbox($d), false],
-            'Teammate::getInboxPath' => [Teammate::class, 'getInboxPath', 'inboxPath', [], static fn (string $d): object => new Teammate('t1', 'team1', 'Name', AgentType::Coder, 'model', []), false],
             'Teammate::getStatus' => [Teammate::class, 'getStatus', 'status', [], static fn (string $d): object => new Teammate('t1', 'team1', 'Name', AgentType::Coder, 'model', []), false],
             'TeamManager::getTeams' => [TeamManager::class, 'getTeams', 'teams', [], static fn (string $d): object => new TeamManager($d . '/teams'), false],
             'TeamManager::getTeam' => [TeamManager::class, 'getTeam', 'team', ['nope'], static fn (string $d): object => new TeamManager($d . '/teams'), false],
@@ -251,7 +249,7 @@ final class AccessorDeprecationTest extends TestCase
         $roster = array_keys(self::eraPairs());
         sort($roster);
         self::assertSame($roster, $marked, 'the marked-forwarder census and the era roster moved apart — add/remove rows in lockstep');
-        self::assertCount(55, $marked, 'the era carries exactly 55 marked forwarders');
+        self::assertCount(54, $marked, 'the era carries exactly 54 marked forwarders');
     }
 
     public function testNoUnmarkedPublicGetAccessorSurvivesOutsideTheCarveOuts(): void

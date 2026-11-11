@@ -3065,7 +3065,6 @@ API and stay as-is. Boolean `is*()`/`has*()` predicates are convention-compliant
 | `Agents` | `TeamManager` | `getTeam()` | `team()` |
 | `Agents` | `TeamManager` | `getTeamConfig()` | `teamConfig()` |
 | `Agents` | `TeamManager` | `getTeams()` | `teams()` |
-| `Agents` | `Teammate` | `getInboxPath()` | `inboxPath()` |
 | `Agents` | `Teammate` | `getStatus()` | `status()` |
 | `Workflows` | `WorkflowEngine` | `getStatus()` | `status()` |
 | `Agents` | `WorktreeManager` | `getWorktreePath()` | `worktreePath()` |

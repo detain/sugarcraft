@@ -7,10 +7,11 @@ namespace SugarCraft\Code\Agents;
 /**
  * Configuration for team behavior in candy-code.
  *
- * Controls team size limits, task assignment strategy, messaging between
- * teammates, and where team communication files are stored. All values
- * are immutable after construction — use with*() methods to produce derived
- * instances.
+ * Controls team size limits, task assignment strategy, and messaging between
+ * teammates. All values are immutable after construction — use with*()
+ * methods to produce derived instances. The on-disk location of the team
+ * mailboxes is owned by {@see Team} (which builds {@see Mailbox}), not by
+ * this config.
  */
 final readonly class TeamConfig
 {
@@ -44,12 +45,6 @@ final readonly class TeamConfig
          * teammate claims one by name.
          */
         public bool $autoAssignTasks = true,
-
-        /**
-         * Directory path where team inbox and message files are stored.
-         * Expandable via FileSystem::expandPath().
-         */
-        public string $inboxPath = '~/.candy-code/teams/',
     ) {}
 
     /**
@@ -62,7 +57,7 @@ final readonly class TeamConfig
             defaultTimeoutSeconds: $this->defaultTimeoutSeconds,
             allowPeerMessaging: $this->allowPeerMessaging,
             autoAssignTasks: $this->autoAssignTasks,
-            inboxPath: $this->inboxPath,
+
         );
     }
 
@@ -76,7 +71,7 @@ final readonly class TeamConfig
             defaultTimeoutSeconds: $defaultTimeoutSeconds,
             allowPeerMessaging: $this->allowPeerMessaging,
             autoAssignTasks: $this->autoAssignTasks,
-            inboxPath: $this->inboxPath,
+
         );
     }
 
@@ -90,7 +85,7 @@ final readonly class TeamConfig
             defaultTimeoutSeconds: $this->defaultTimeoutSeconds,
             allowPeerMessaging: $allowPeerMessaging,
             autoAssignTasks: $this->autoAssignTasks,
-            inboxPath: $this->inboxPath,
+
         );
     }
 
@@ -104,21 +99,8 @@ final readonly class TeamConfig
             defaultTimeoutSeconds: $this->defaultTimeoutSeconds,
             allowPeerMessaging: $this->allowPeerMessaging,
             autoAssignTasks: $autoAssignTasks,
-            inboxPath: $this->inboxPath,
+
         );
     }
 
-    /**
-     * Create a new config with a different inboxPath value.
-     */
-    public function withInboxPath(string $inboxPath): self
-    {
-        return new self(
-            maxTeammates: $this->maxTeammates,
-            defaultTimeoutSeconds: $this->defaultTimeoutSeconds,
-            allowPeerMessaging: $this->allowPeerMessaging,
-            autoAssignTasks: $this->autoAssignTasks,
-            inboxPath: $inboxPath,
-        );
-    }
 }
