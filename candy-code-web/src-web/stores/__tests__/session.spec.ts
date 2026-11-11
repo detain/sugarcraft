@@ -178,6 +178,46 @@ describe('session store', () => {
     answer('permission.respond', { applied: true, reply: 'once', saved: null })
     await expect(answering).resolves.toBeNull()
   })
+
+  // n59 (CW-UX-B): loadCommands used to swallow command.list failures into an
+  // empty list — a dead RPC left the palette blank, indistinguishable from a
+  // session that genuinely has no commands. The list still degrades to [] so
+  // typing never crashes, but the failure lands in visible store state.
+  it('surfaces a failed command.list in commandsError and clears it on the next clean answer', async () => {
+    await connect()
+    const session = useSessionStore('s1')
+    const subscribed = session.subscribe()
+    answer('session.subscribe', {
+      reset: true, throughSeq: 1, pendingAsks: [],
+      snapshot: { sessionId: 's1', status: 'idle', lastSeq: 1, pendingAsks: [], queue: [], messages: [] },
+    })
+    await subscribed
+    socket().fail(-32601, 'method_not_found', 'unknown method', sent('command.list').pop()?.id)
+    await flush()
+    expect(session.commands).toEqual([])
+    expect(session.commandsError).toBe('unknown method')
+
+    const reloading = session.loadCommands()
+    answer('command.list', { items: [{ name: 'clear', source: 'builtin', runsIn: 'server' }] })
+    await reloading
+    expect(session.commands).toEqual([{ name: 'clear', source: 'builtin', runsIn: 'server' }])
+    expect(session.commandsError).toBeNull()
+  })
+
+  it('keeps a clean command.list unchanged: list fills and no error state appears', async () => {
+    await connect()
+    const session = useSessionStore('s1')
+    const subscribed = session.subscribe()
+    answer('session.subscribe', {
+      reset: true, throughSeq: 1, pendingAsks: [],
+      snapshot: { sessionId: 's1', status: 'idle', lastSeq: 1, pendingAsks: [], queue: [], messages: [] },
+    })
+    await subscribed
+    answer('command.list', { items: [{ name: 'clear', source: 'builtin', runsIn: 'server' }] })
+    await flush()
+    expect(session.commands).toEqual([{ name: 'clear', source: 'builtin', runsIn: 'server' }])
+    expect(session.commandsError).toBeNull()
+  })
 })
 
 describe('sessions and approvals stores', () => {

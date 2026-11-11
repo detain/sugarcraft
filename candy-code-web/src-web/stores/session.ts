@@ -36,6 +36,10 @@ function setup(sessionId: string) {
    *  again once the fresh subscription's snapshot has replaced the store. */
   const stale = ref(false)
   const commands = ref<CommandInfo[]>([])
+  /** n59: the command list is empty because the fetch failed, not because the
+   *  session has no commands — the palette renders this instead of silence.
+   *  Same spine as `error`/`olderError`: the server's own message, verbatim. */
+  const commandsError = ref<string | null>(null)
   /** ISS-058: paging state — busy flag, last page refusal, and the row offset
    *  that keeps fallback keys unique across pages. */
   const loadingOlder = ref(false)
@@ -204,8 +208,13 @@ function setup(sessionId: string) {
     try {
       const result = await connection.request('command.list', { sessionId })
       commands.value = result.items as CommandInfo[]
-    } catch {
+      commandsError.value = null
+    } catch (failure) {
+      // n59: the list degrades to empty (typing must never crash on it) but
+      // the failure becomes visible state — an empty palette from a dead RPC
+      // is no longer indistinguishable from a session with no commands.
       commands.value = []
+      commandsError.value = describe(failure)
     }
   }
 
@@ -387,6 +396,7 @@ function setup(sessionId: string) {
     error,
     stale,
     commands,
+    commandsError,
     busy,
     contextPct,
     subscribe,

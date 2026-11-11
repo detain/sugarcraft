@@ -42,6 +42,12 @@ const router = useRouter()
 const query = ref('')
 const selected = ref(0)
 const error = ref<string | null>(null)
+// n59: a background command.list failure rides the SAME alert line — the
+// commands group vanishing is then explained, not silent. The store keeps the
+// state across opens; the local `error` stays transient (cleared on open/pick).
+const commandsUnavailable = computed<string | null>(() =>
+  props.sessionId === null ? null : useSessionStore(props.sessionId).commandsError,
+)
 const input = ref<HTMLInputElement | null>(null)
 const paletteEl = ref<HTMLElement | null>(null)
 // CW-UX-07: the palette keeps its own Escape (the input's handler) and its
@@ -196,7 +202,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKey))
         data-testid="palette-input"
         @keydown="onInputKey"
       >
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
+      <p v-if="error || commandsUnavailable" class="error" role="alert">{{ error || commandsUnavailable }}</p>
       <ul id="palette-list" role="listbox">
         <li
           v-for="(entry, i) in shown"
