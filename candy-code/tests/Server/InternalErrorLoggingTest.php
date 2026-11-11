@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tests\Server;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Ratchet\RFC6455\Messaging\Frame;
 use React\Stream\ThroughStream;
@@ -217,5 +218,156 @@ final class InternalErrorLoggingTest extends TestCase
         }
 
         return (int) \unpack('n', \substr($wire, 2, 2))[1];
+    }
+
+    /*
+     * The close handshake (CC-LOGIC-A NIT-3): what a peer's CLOSE frame is
+     * allowed to drag back onto the wire. The peer's code arrives through
+     * the vendor's CloseFrameChecker, whose RECEIVED set is wider than the
+     * SEND set — §7.4.2 holds 3000-3999 "reserved for future libraries" —
+     * and the reason is ours to send, never the peer's, so it must not
+     * echo and must never split a character at the 123-byte payload cap.
+     */
+
+    public function testAReservedLibraryCloseCodeIsAnsweredWithNormalClosure(): void
+    {
+        [$wire, $seen] = $this->answerToPeerClose(3500);
+
+        self::assertSame(Frame::CLOSE_NORMAL, self::closeCodeOf($wire), 'a reserved 3000-3999 code never rides back out raw');
+        self::assertSame([Frame::CLOSE_NORMAL], $seen, 'the handler sees the code we actually sent');
+    }
+
+    /**
+     * The codes the checker can forward and the send set covers: echoed
+     * byte-stably, so the clamp costs the legitimate handshake nothing.
+     *
+     * @return array<string, array{int}>
+     */
+    public static function sendableCloseCodes(): array
+    {
+        $cases = [];
+        foreach ([1000, 1001, 1002, 1003, 1007, 1008, 1009, 1010, 1011, 4000, 4999] as $code) {
+            $cases['code ' . $code] = [$code];
+        }
+
+        return $cases;
+    }
+
+    #[DataProvider('sendableCloseCodes')]
+    public function testADefinedCloseCodeIsEchoedBackByteStably(int $code): void
+    {
+        [$wire, $seen] = $this->answerToPeerClose($code);
+
+        self::assertSame($code, self::closeCodeOf($wire), 'the echo carries exactly the code the peer sent');
+        self::assertSame([$code], $seen);
+    }
+
+    public function testAWideCharacterCloseReasonIsCutOnACharacterBoundary(): void
+    {
+        // 122 ASCII bytes then a 3-byte character: a raw substr(…, 0, 123)
+        // would emit half of 'あ' on the wire. mb_strcut backs off to the
+        // boundary instead (the AuditHook idiom).
+        $reason = \str_repeat('a', 122) . 'あい';
+        $toClient = new ThroughStream();
+        $wire = '';
+        $toClient->on('data', static function (string $chunk) use (&$wire): void {
+            $wire .= $chunk;
+        });
+        $seen = [];
+        $connection = new Connection('nce-utf', 'bearer', $toClient, new ThroughStream(), $this->recordingHandler($seen), ServerConfig::MAX_CLIENT_FRAME_BYTES);
+
+        $connection->close(Frame::CLOSE_POLICY, $reason);
+
+        [, $sentReason] = self::closeFrameOf($wire);
+        self::assertSame(\str_repeat('a', 122), $sentReason, 'the cut lands on a character boundary');
+        self::assertTrue(\mb_check_encoding($sentReason, 'UTF-8'), 'half a character never leaves the process');
+        self::assertLessThanOrEqual(123, \strlen($sentReason));
+    }
+
+    public function testACloseFrameWithAnEmptyPayloadAnswersNormalClosure(): void
+    {
+        [$wire, $seen] = $this->answerToPeerClose(null);
+
+        self::assertSame(Frame::CLOSE_NORMAL, self::closeCodeOf($wire));
+        self::assertSame([Frame::CLOSE_NORMAL], $seen);
+    }
+
+    public function testAPeerSuppliedCloseReasonNeverRidesTheAnswer(): void
+    {
+        [$wire] = $this->answerToPeerClose(1008, 'forged-by-peer');
+
+        self::assertSame(Frame::CLOSE_POLICY, self::closeCodeOf($wire), '1008 is sendable and echoes');
+        self::assertSame(4, \strlen($wire), 'the answer is header plus our code — no reason bytes at all');
+        self::assertStringNotContainsString('forged', $wire, 'a peer cannot put words into our close frame');
+    }
+
+    /** Drive one client CLOSE frame over a live Connection; return [wire, codes the handler saw]. */
+    private function answerToPeerClose(?int $code, string $reason = ''): array
+    {
+        $toClient = new ThroughStream();
+        $wire = '';
+        $toClient->on('data', static function (string $chunk) use (&$wire): void {
+            $wire .= $chunk;
+        });
+        $fromClient = new ThroughStream();
+        $seen = [];
+        new Connection('nce-' . \bin2hex(\random_bytes(3)), 'bearer', $toClient, $fromClient, $this->recordingHandler($seen), ServerConfig::MAX_CLIENT_FRAME_BYTES);
+
+        $fromClient->write(self::maskedCloseFrame($code, $reason));
+
+        return [$wire, $seen];
+    }
+
+    /** A handler that records the close codes its socket ends with. */
+    private function recordingHandler(array &$codes): MessageHandler
+    {
+        $codes = [];
+
+        return new class ($codes) implements MessageHandler {
+            /** @var list<int> */
+            private array $sink;
+
+            /** @param list<int> $codes aliased, so onClose appends reach the caller */
+            public function __construct(array &$codes)
+            {
+                $this->sink = &$codes;
+            }
+
+            public function onOpen(Connection $connection): void
+            {
+            }
+
+            public function onMessage(Connection $connection, string $payload): void
+            {
+            }
+
+            public function onClose(Connection $connection, int $code): void
+            {
+                $this->sink[] = $code;
+            }
+        };
+    }
+
+    /** One unfragmented masked CLOSE frame as a browser would send it; null code means an empty payload. */
+    private static function maskedCloseFrame(?int $code, string $reason = ''): string
+    {
+        $payload = $code === null ? '' : \pack('n', $code) . $reason;
+        $key = \random_bytes(4);
+        $masked = '';
+        foreach (\str_split($payload) as $i => $byte) {
+            $masked .= $byte ^ $key[$i % 4];
+        }
+
+        return \chr(0x80 | Frame::OP_CLOSE) . \chr(0x80 | \strlen($payload)) . $key . $masked;
+    }
+
+    /** @return array{int, string} the code and reason of the first unmasked server CLOSE frame */
+    private static function closeFrameOf(string $wire): array
+    {
+        self::assertGreaterThan(3, \strlen($wire), 'a close answer was sent');
+        self::assertSame(Frame::OP_CLOSE, \ord($wire[0]) & 0x0f);
+        $payloadLength = \ord($wire[1]) & 0x7f;
+
+        return [(int) \unpack('n', \substr($wire, 2, 2))[1], \substr($wire, 4, $payloadLength - 2)];
     }
 }

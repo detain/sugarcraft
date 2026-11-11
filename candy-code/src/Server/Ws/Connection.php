@@ -187,7 +187,12 @@ final class Connection
         return true;
     }
 
-    /** Close with $code (RFC 6455 §7.4) and end the stream. Idempotent. */
+    /**
+     * Close with $code (RFC 6455 §7.4) and end the stream. Idempotent.
+     * The reason is capped to the 123 payload bytes a 2-byte code leaves in
+     * a 125-byte control frame, cut with `mb_strcut()` rather than
+     * `substr()`: a byte cut can split a multi-byte character (AuditHook idiom).
+     */
     public function close(int $code = Frame::CLOSE_NORMAL, string $reason = ''): void
     {
         if ($this->closed) {
@@ -195,7 +200,7 @@ final class Connection
         }
 
         $this->closeCode = $code;
-        $this->buffer->sendFrame($this->buffer->newCloseFrame($code, \substr($reason, 0, 123)));
+        $this->buffer->sendFrame($this->buffer->newCloseFrame($code, \mb_strcut($reason, 0, 123, 'UTF-8')));
         $this->toClient->end();
         $this->gone();
     }
@@ -242,9 +247,51 @@ final class Connection
             case Frame::OP_CLOSE:
                 $payload = $frame->getPayload();
                 $code = \strlen($payload) >= 2 ? (int) \unpack('n', \substr($payload, 0, 2))[1] : Frame::CLOSE_NORMAL;
-                $this->close($code === Frame::CLOSE_NO_STATUS ? Frame::CLOSE_NORMAL : $code);
+                $this->close(self::echoableCloseCode($code));
                 break;
         }
+    }
+
+    /**
+     * The close codes an endpoint may put on the wire (RFC 6455 §7.4.1,
+     * plus the RFC 8424 pair).
+     *
+     * @var list<int>
+     */
+    private const SENDABLE_CLOSE_CODES = [
+        Frame::CLOSE_NORMAL,
+        Frame::CLOSE_GOING_AWAY,
+        Frame::CLOSE_PROTOCOL,
+        Frame::CLOSE_BAD_DATA,
+        Frame::CLOSE_BAD_PAYLOAD,
+        Frame::CLOSE_POLICY,
+        Frame::CLOSE_TOO_BIG,
+        Frame::CLOSE_MAND_EXT,
+        Frame::CLOSE_SRV_ERR,
+        1012,
+        1013,
+    ];
+
+    /**
+     * The close code we may answer a client's CLOSE frame with.
+     *
+     * The vendor's CloseFrameChecker already refuses the never-sendable
+     * codes (1004-1006, 1015, anything outside 1000-4999) by substituting
+     * its own server-built 1002/1007 frame before this sees one, but its
+     * RECEIVED set is wider than the send set: §7.4.2 holds 3000-3999
+     * reserved for future libraries, frameworks and applications, and the
+     * old echo put one straight back on the wire. A peer choosing such a
+     * code is still closing legitimately, so the answer is Normal Closure;
+     * 1002 would accuse it of a protocol error the checker itself allowed.
+     * This also absorbs the old 1005 special case — it is not in the set.
+     */
+    private static function echoableCloseCode(int $code): int
+    {
+        if ($code >= 4000 && $code <= 4999) {
+            return $code;
+        }
+
+        return \in_array($code, self::SENDABLE_CLOSE_CODES, true) ? $code : Frame::CLOSE_NORMAL;
     }
 
     private function gone(): void
