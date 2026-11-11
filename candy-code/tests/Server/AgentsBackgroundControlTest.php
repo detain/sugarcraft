@@ -79,7 +79,6 @@ final class AgentsBackgroundControlTest extends TestCase
         self::assertSame('queued', $paused['status'], 'a nested run still takes the other verbs');
     }
 
-    /** @return array{0: \SugarCraft\Code\Tests\Server\Support\WireClient, 1: string} */
     /**
      * M-18: the log-wire scrub must swallow DCS/SOS/PM/APC strings, not only
      * CSI and OSC. Under the hand-rolled CSI+OSC-only regex this seat shipped
@@ -99,6 +98,7 @@ final class AgentsBackgroundControlTest extends TestCase
         self::assertSame('beforeafter', $wire['content']);
     }
 
+    /** @return array{0: \SugarCraft\Code\Tests\Server\Support\WireClient, 1: string} */
     private function turn(): array
     {
         $client = $this->fixture->client();
