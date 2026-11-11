@@ -1686,6 +1686,13 @@ One roster key now sits at a dead seat: `chatToolTimeoutSeconds` is read only by
 no production path registers tools for that dispatch — the live bound for parallel
 tools is `parallelToolDeadlineSeconds`, named above.
 
+`parallelToolDeadlineSeconds` is also re-read without always being honoured: it
+applies only strictly below `turnIdleTimeoutSeconds` (120 seconds by default), and
+a configured value at or past that ceiling is neither refused at save nor announced —
+the reader falls back to the documented default of 90 seconds, or one below the
+ceiling when the ceiling is lower, treating an impossible pairing as nonsense to
+replace rather than data to obey.
+
 The **trust list is not**: it is frozen for the life of the process, so a
 project cannot become trusted mid-session. The asymmetry is deliberate — you
 opted the repository in, and the project tier cannot reach `provider`,

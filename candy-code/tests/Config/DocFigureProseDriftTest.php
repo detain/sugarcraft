@@ -3111,6 +3111,28 @@ final class DocFigureProseDriftTest extends TestCase
             'Chat::registerTool() gained a production caller (' . implode(', ', $callers) . ') — the chat-native dispatch is alive, and the SETTINGS.md dead-seat disclosure must be re-derived'
         );
     }
+
+    public function testTheParallelDeadlineCeilingIsDisclosedInNumbers(): void
+    {
+        $turnIdle = (int) (new \ReflectionClassConstant(EngineBackend::class, 'COMPLETE_TIMEOUT_SECONDS'))->getValue();
+        $deadline = (int) (new \ReflectionClassConstant(Runtime::class, 'PARALLEL_TOOL_DEADLINE_SECONDS'))->getValue();
+
+        $settings = self::markdownProse((string) file_get_contents(\dirname(__DIR__, 2) . '/docs/SETTINGS.md'));
+        self::assertSame(1, preg_match(
+            '/re-read without always being honoured: it applies only strictly below `turnIdleTimeoutSeconds` \((\d+) seconds by default\), and a configured value at or past that ceiling is neither refused at save nor announced — the reader falls back to the documented default of (\d+) seconds/',
+            $settings,
+            $pair
+        ), 'SETTINGS.md lost the ceiling-pairing disclosure for `parallelToolDeadlineSeconds` — the fallback the reader performs would be silent again');
+        self::assertSame($turnIdle, (int) $pair[1], 'the disclosed turn-idle ceiling drifted from EngineBackend::COMPLETE_TIMEOUT_SECONDS');
+        self::assertSame($deadline, (int) $pair[2], 'the disclosed fallback drifted from Runtime::PARALLEL_TOOL_DEADLINE_SECONDS');
+
+        self::assertStringContainsString(
+            'honourableDeadline',
+            self::sourceOf('Backend/EngineBackend.php'),
+            'the rejecter the disclosure describes is gone from the reader — the pairing sentence would then overstate the mechanism'
+        );
+    }
+
     /**
      * E686 tranche-8 (AN): three ENVIRONMENT roster sentences. The deprecated
      * aliases table counts itself against the two legacy names src still
