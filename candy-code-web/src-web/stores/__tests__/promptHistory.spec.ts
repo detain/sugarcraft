@@ -288,7 +288,7 @@ describe('cross-tab clear survives scope transitions (L-DBA MAJOR-1)', () => {
     off()
   })
 
-  it('the predicate answers live, foreign-bucket, legacy and versioned names, and no other key', async () => {
+  it('the predicate answers live, foreign-bucket and legacy names, and no other key', async () => {
     // Dynamic import: the pre-fix tree lacks the export, and a static one
     // would sink every behavioral pin above into one module-load error
     // instead of showing them fail for the real reason.
@@ -303,8 +303,9 @@ describe('cross-tab clear survives scope transitions (L-DBA MAJOR-1)', () => {
     expect(physicalKeyMatches('promptHistory', 'candy-code-web:b9b9b9b9/promptHistory')).toBe(true)
     // Legacy unversioned bare name:
     expect(physicalKeyMatches('promptHistory', 'candy-code-web:promptHistory')).toBe(true)
-    // Versioned pre-namespacing name:
-    expect(physicalKeyMatches('drafts', 'candy-code-web:v1:drafts')).toBe(true)
+    // The versioned namespace was retired with CW-DBA-16 — a v1-shaped name
+    // answers nothing now:
+    expect(physicalKeyMatches('drafts', 'candy-code-web:v1:drafts')).toBe(false)
     // A different logical key must never match:
     expect(physicalKeyMatches('drafts', 'candy-code-web:a0a0a0a0/promptHistory')).toBe(false)
     expect(physicalKeyMatches('promptHistory', 'candy-code-web:a0a0a0a0/drafts')).toBe(false)

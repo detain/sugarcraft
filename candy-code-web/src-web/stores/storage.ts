@@ -20,15 +20,7 @@
  */
 const PREFIX = 'candy-code-web:'
 
-/**
- * The versioned namespace (CW-DBA-16). Keys the helpers own will be re-read
- * under this prefix once every raw `candy-code-web:` literal in the tree is
- * either routed through `storageKey()` or added to its sweep list, so the
- * flip and the sweep land together rather than stranding a reader.
- */
-const VERSIONED_PREFIX = 'candy-code-web:v1:'
-
-/** The unversioned pointer naming whose bucket the transcript caches live in. */
+/** The pointer naming whose bucket the transcript caches live in. */
 const SCOPE_POINTER = PREFIX + 'cacheScope'
 
 /** A minted scope must be path-safe inside a localStorage name. */
@@ -39,30 +31,6 @@ const SCOPED_KEYS = new Set(['drafts', 'promptHistory'])
 
 /** Everything one principal left behind that is not a preference. */
 const PRINCIPAL_KEYS = ['drafts', 'promptHistory', 'tabs', 'lastSession', 'focused']
-
-/**
- * One-time migration sweep (CW-DBA-16): move each listed bare key from the
- * unversioned prefix to the versioned one. A destination that already exists
- * is never clobbered, and the unlisted keys stay put for their owners to claim
- * — a partial sweep is safe by construction. Blocked or absent storage skips
- * the whole sweep silently: boot does not depend on a convenience move.
- */
-export function migrateUnversionedKeys(movable: readonly string[]): void {
-  try {
-    const store = globalThis.localStorage
-    if (!store) return
-    for (const key of movable) {
-      const unversioned = PREFIX + key
-      const raw = store.getItem(unversioned)
-      if (raw === null) continue
-      const versioned = VERSIONED_PREFIX + key
-      if (store.getItem(versioned) === null) store.setItem(versioned, raw)
-      store.removeItem(unversioned)
-    }
-  } catch {
-    // storage blocked: every key simply stays where it is
-  }
-}
 
 let ephemeralScope: string | null = null
 
@@ -130,8 +98,8 @@ export function storageKey(key: string): string {
 /**
  * Whether a `storage` event's key names THIS logical key's stored copy, under
  * any scope the event could plausibly arrive from: the name resolving live,
- * any other principal's bucket (`candy-code-web:<scope>/key`), or the bare and
- * versioned pre-namespacing copies. Cross-tab watchers MUST compare per event,
+ * any other principal's bucket (`candy-code-web:<scope>/key`), or the bare
+ * pre-namespacing copy. Cross-tab watchers MUST compare per event,
  * never against a name captured at module or setup time — the scope rotates
  * under every login and sign-out, and a snapshot matcher goes silently stale
  * at the first transition (the sign-out in the other tab then no longer
@@ -143,7 +111,7 @@ export function storageKey(key: string): string {
  */
 export function physicalKeyMatches(key: string, eventKey: string): boolean {
   if (eventKey === physical(key)) return true
-  if (eventKey === PREFIX + key || eventKey === VERSIONED_PREFIX + key) return true
+  if (eventKey === PREFIX + key) return true
   if (!SCOPED_KEYS.has(key)) return false
   if (!eventKey.startsWith(PREFIX) || !eventKey.endsWith('/' + key)) return false
   const bucket = eventKey.slice(PREFIX.length, eventKey.length - key.length - 1)
@@ -189,8 +157,8 @@ function fireErase(key: string): void {
 /**
  * Remove everything one principal left (CW-DBA-9): every scoped bucket
  * member — no inventory key carries a '/' unsuffixed, so a shape scan is an
- * exact membership test — plus the bare and versioned pre-namespacing copies
- * of the principal keys. Those names carried transcript text and tab state
+ * exact membership test — plus the bare pre-namespacing copy of the principal
+ * keys. Those names carried transcript text and tab state
  * since before any scope existed, so anything still under them belongs to a
  * previous principal by definition.
  */
@@ -205,7 +173,6 @@ function sweepPrincipalState(): void {
     }
     for (const key of PRINCIPAL_KEYS) {
       store.removeItem(PREFIX + key)
-      store.removeItem(VERSIONED_PREFIX + key)
     }
   } catch {
     // storage blocked: the scope is a memory-only luxury in that browser anyway

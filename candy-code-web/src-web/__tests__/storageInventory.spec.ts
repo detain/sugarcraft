@@ -15,7 +15,6 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
-import { migrateUnversionedKeys } from '../stores/storage'
 
 /** Every file under src-web except generated mirrors and the tests. */
 function sourcesUnder(dir: string): string[] {
@@ -96,75 +95,20 @@ describe('browser storage inventory (MA-13)', () => {
 })
 
 /**
- * CW-DBA-16: the storage namespace gets its migration HOOK here, but the
- * PREFIX FLIP itself is held — raw `'candy-code-web:...'` literals outside
- * this wrapper (the login secret in `protocol/auth.ts`, the keymap mirror,
- * SessionTabs and a dozen specs) would strand mid-flip. The sweep is
- * therefore deliberately per-key: it moves ONLY the suffixes it is handed,
- * never clobbers a destination that already answers, and is idempotent —
- * so a partial fleet sweep is safe by construction, and the flip lands as
- * one mechanical commit once every literal is routed through `storageKey`.
+ * CW-DBA-16 was RETIRED (register B-23): the versioned namespace had no
+ * production caller — `physical()` has always built bare-`PREFIX` names, so
+ * the migration hook, the versioned sweep arms and their planted-key pins
+ * were a migration story with no migration. A real flip must land as ONE
+ * mechanical commit routing every raw `'candy-code-web:...'` literal (the
+ * login secret in `protocol/auth.ts`, the keymap mirror, SessionTabs and the
+ * specs) through `storageKey` — mirroring keymap.ts's LIVE reader-side
+ * migration, which is wired and pinned, not a dormant hook again. These pins
+ * fail closed if the machinery reappears before that commit does.
  */
-describe('unversioned key migration (CW-DBA-16)', () => {
-  test('listed keys move under the versioned prefix and the old name is gone', () => {
-    localStorage.clear()
-    localStorage.setItem('candy-code-web:drafts', '{"s1":"typed"}')
-    localStorage.setItem('candy-code-web:promptHistory', '["a prompt"]')
-    migrateUnversionedKeys(['drafts', 'promptHistory'])
-    expect(localStorage.getItem('candy-code-web:v1:drafts')).toBe('{"s1":"typed"}')
-    expect(localStorage.getItem('candy-code-web:v1:promptHistory')).toBe('["a prompt"]')
-    expect(localStorage.getItem('candy-code-web:drafts')).toBeNull()
-    expect(localStorage.getItem('candy-code-web:promptHistory')).toBeNull()
-  })
-
-  test('an existing destination wins — the sweep consumes the old copy, never overwrites', () => {
-    localStorage.clear()
-    localStorage.setItem('candy-code-web:drafts', '{"stale":"unversioned"}')
-    localStorage.setItem('candy-code-web:v1:drafts', '{"kept":"versioned"}')
-    migrateUnversionedKeys(['drafts'])
-    expect(localStorage.getItem('candy-code-web:v1:drafts')).toBe('{"kept":"versioned"}')
-    expect(localStorage.getItem('candy-code-web:drafts')).toBeNull()
-  })
-
-  test('keys that were not listed stay exactly where their owners put them', () => {
-    localStorage.clear()
-    localStorage.setItem('candy-code-web:keymap', '{"legacy":"a lane E/F literal"}')
-    migrateUnversionedKeys(['drafts'])
-    expect(localStorage.getItem('candy-code-web:keymap')).toBe('{"legacy":"a lane E/F literal"}')
-    expect(localStorage.getItem('candy-code-web:v1:keymap')).toBeNull()
-    localStorage.clear()
-  })
-
-  test('sweeping twice moves nothing and throws nothing', () => {
-    localStorage.clear()
-    localStorage.setItem('candy-code-web:drafts', '{"once":true}')
-    migrateUnversionedKeys(['drafts'])
-    expect(() => migrateUnversionedKeys(['drafts'])).not.toThrow()
-    expect(localStorage.getItem('candy-code-web:v1:drafts')).toBe('{"once":true}')
-    expect(localStorage.getItem('candy-code-web:drafts')).toBeNull()
-    localStorage.clear()
-  })
-
-  test('blocked storage skips the sweep silently', () => {
-    localStorage.clear()
-    localStorage.setItem('candy-code-web:drafts', '{"the":"payload"}')
-    // A real Storage instance so the wrapper's own door still passes, with a
-    // getItem that always throws (private mode / cleared site data).
-    const blocked = Object.create(Object.getPrototypeOf(localStorage)) as Storage
-    blocked.getItem = (): string => {
-      throw new Error('storage is blocked')
-    }
-    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
-    Object.defineProperty(globalThis, 'localStorage', { value: blocked, configurable: true, writable: true })
-    try {
-      expect(() => migrateUnversionedKeys(['drafts'])).not.toThrow()
-    } finally {
-      if (original) Object.defineProperty(globalThis, 'localStorage', original)
-    }
-    // Restored: the planted key was never touched by the blocked sweep.
-    expect(localStorage.getItem('candy-code-web:drafts')).toBe('{"the":"payload"}')
-    expect(localStorage.getItem('candy-code-web:v1:drafts')).toBeNull()
-    localStorage.clear()
+describe('storage name routing (CW-DBA-16 retirement)', () => {
+  test('storage.ts carries no versioned-prefix machinery', () => {
+    const store = readFileSync(join(ROOT, 'stores/storage.ts'), 'utf8')
+    expect(store).not.toMatch(/VERSIONED_PREFIX|migrateUnversionedKeys|candy-code-web:v1:/)
   })
 
   test('the prompt-history ring derives its storage name — no full literal left in the file', () => {

@@ -281,10 +281,7 @@ documents the protocol and the UI).
 ### Browser storage
 
 Everything this UI keeps client-side lives in `localStorage` under the
-`candy-code-web:` prefix. A versioned `candy-code-web:v1:` namespace exists in
-`src-web/stores/storage.ts` (`VERSIONED_PREFIX`) but is dormant — no
-production caller reads or writes under it yet; the live keys are the bare
-prefix ones. Default retention is indefinite — state survives
+`candy-code-web:` prefix. Default retention is indefinite — state survives
 server restarts. Sign-out clears the credential, the transcript caches and
 the tab-restore keys (`tabs`, `focused`, `lastSession`); the transcript
 caches ride a per-login scope bucket, so the sweep is provably complete

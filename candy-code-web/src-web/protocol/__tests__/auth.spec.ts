@@ -168,17 +168,14 @@ describe('sign-out sweeps the browser (WEB-6 C)', () => {
     expect(localStorage.getItem('candy-code-web:mode')).toBe('"grid"')
   })
 
-  it('the sweep reaches the bare and versioned pre-namespacing copies', async () => {
+  it('the sweep reaches the bare pre-namespacing copies', async () => {
     localStorage.clear()
     localStorage.setItem('candy-code-web:drafts', '{"s1":"legacy typed"}')
     localStorage.setItem('candy-code-web:promptHistory', '["legacy sent"]')
-    localStorage.setItem('candy-code-web:v1:drafts', '{"s1":"versioned typed"}')
-    localStorage.setItem('candy-code-web:v1:promptHistory', '["versioned sent"]')
     const { fetchImpl } = responder(() => json(200, { ok: true }))
     await logout(fetchImpl)
     for (const key of ['drafts', 'promptHistory']) {
       expect(localStorage.getItem(`candy-code-web:${key}`)).toBeNull()
-      expect(localStorage.getItem(`candy-code-web:v1:${key}`)).toBeNull()
     }
   })
 
@@ -281,7 +278,6 @@ describe('cache scope (CW-DBA-9 / OD-28 namespacing)', () => {
     localStorage.clear()
     localStorage.setItem('candy-code-web:drafts', '{"s1":"waiting"}')
     localStorage.setItem('candy-code-web:promptHistory', '["waiting"]')
-    localStorage.setItem('candy-code-web:v1:drafts', '{"s2":"waiting too"}')
     expect(readJson<unknown>('drafts', null)).toBeNull()
     expect(loadPromptHistory()).toEqual([])
   })
@@ -303,7 +299,6 @@ describe('cache scope (CW-DBA-9 / OD-28 namespacing)', () => {
     localStorage.setItem('candy-code-web:a0a0a0a0/drafts', '{"A":"typed"}')
     localStorage.setItem('candy-code-web:a0a0a0a0/promptHistory', '["sent"]')
     localStorage.setItem('candy-code-web:drafts', '{"Z":"legacy"}')
-    localStorage.setItem('candy-code-web:v1:promptHistory', '["legacy"]')
     localStorage.setItem('candy-code-web:tabs', '["A"]')
     localStorage.setItem('candy-code-web:lastSession', '"A"')
     localStorage.setItem('candy-code-web:focused', '"A"')
@@ -315,7 +310,6 @@ describe('cache scope (CW-DBA-9 / OD-28 namespacing)', () => {
     expect(localStorage.getItem('candy-code-web:a0a0a0a0/drafts')).toBeNull()
     expect(localStorage.getItem('candy-code-web:a0a0a0a0/promptHistory')).toBeNull()
     expect(localStorage.getItem('candy-code-web:drafts')).toBeNull()
-    expect(localStorage.getItem('candy-code-web:v1:promptHistory')).toBeNull()
     expect(localStorage.getItem('candy-code-web:tabs') ?? '[]').toBe('[]')
     expect(localStorage.getItem('candy-code-web:lastSession') ?? 'null').toBe('null')
     expect(localStorage.getItem('candy-code-web:focused') ?? 'null').toBe('null')
