@@ -871,6 +871,9 @@ final class TreeWideGuardRosterTest extends TestCase
         // sys_get_temp_dir() candy_code_wf_orphan_* tree setUp() made — the
         // real-SIGKILL harness' pause records and child residue live there.
         'Workflows/WorkflowOrphanedRunTest.php' => ['scandir($dir)'],
+        // LANE-CC attribution (rt2 CI 2026-11-11): the hook-events fixture's
+        // removeTree() sweeps the sys_get_temp_dir() wf6-c6-* dir the test mkdirs.
+        'Workflows/WorkflowStageHookEventsTest.php' => ['scandir($dir)'],
         'Workflows/WorkflowRegistryTest.php' => ['scandir($dir)'],
         // tearDown() removes the sys_get_temp_dir() HOME sandbox setUp() made.
         'Workflows/WorkflowRetriesTest.php' => ['RecursiveDirectoryIterator($dir,\FilesystemIterator::SKIP_DOTS)'],

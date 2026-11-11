@@ -281,6 +281,11 @@ final class TtyStreamArgumentCensusTest extends TestCase
         self::assertSame(
             [
                 'src/Tui/Renderer.php: constant:STDOUT',
+                // cc-eval HELPW (weld 54c425083-era, LANE-CC rostering 2026-11-11):
+                // helpRenderWidth()'s TIOCGWINSZ arm builds `new Tty(STDOUT)`
+                // behind a stream_isatty(STDOUT) guard, so at the construction
+                // site STDOUT is the process's own real descriptor-1 stream.
+                'src/Cli/Help.php: constant:STDOUT',
                 // C-PRV-1.c login key read: `new Tty(\STDIN)` in
                 // src/Cli/Subcommands.php::openLoginTtyHandle() is the raw-mode
                 // handle behind the echo-off API-key prompt. Adjudicated 2026-10-27
