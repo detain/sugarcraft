@@ -409,6 +409,10 @@ async function onPaste(event: ClipboardEvent): Promise<void> {
  * break the browser's native text-drag into the textarea, so the types
  * guard answers synchronously, before any await, and a text/plain drag
  * falls through unpreventended for the browser to insert.
+ *
+ * M46 (cc-review-1111): the keyboard equivalent is the paste itself —
+ * onPaste feeds the clipboard to the same two readers, so Ctrl+V attaches
+ * images and documents without a mouse.
  */
 async function onDrop(event: DragEvent): Promise<void> {
     if (!event.dataTransfer?.types?.includes("Files")) return;
@@ -441,6 +445,23 @@ const blockedReason = computed(() => {
     if (props.busy && delivery.value !== "interrupt")
         return t("web.composer.blocked_turn");
     return "";
+});
+
+/**
+ * M42 (cc-review-1111): the association half of the combobox contract. The
+ * textarea keeps focus and `composer-opt-${selected}` already rides the
+ * highlight, but assistive tech can only announce WHICH popup is open if the
+ * combobox names it — so each suggestion list carries a stable id and this
+ * computed picks the open one. The precedence mirrors the keydown popup math
+ * exactly (commands > agents > mcp > files); undefined means no popup, and
+ * Vue omits the attribute.
+ */
+const activeListId = computed(() => {
+    if (suggestions.value.length > 0) return "composer-list-commands";
+    if (agentMentions.value.length > 0) return "composer-list-agents";
+    if (mcpMentions.value.length > 0) return "composer-list-mcp";
+    if (files.value.length > 0) return "composer-list-files";
+    return undefined;
 });
 
 // The parent clears the draft only once the send was accepted; the chips ride
@@ -1042,6 +1063,7 @@ defineExpose({ focus: () => input.value?.focus() });
             class="suggest"
             role="listbox"
             data-testid="command-suggestions"
+            id="composer-list-commands"
         >
             <li
                 v-for="(command, i) in suggestions"
@@ -1064,6 +1086,7 @@ defineExpose({ focus: () => input.value?.focus() });
             class="suggest"
             role="listbox"
             data-testid="mcp-suggestions"
+            id="composer-list-mcp"
         >
             <li
                 v-for="(mention, i) in mcpMentions"
@@ -1083,6 +1106,7 @@ defineExpose({ focus: () => input.value?.focus() });
             class="suggest"
             role="listbox"
             data-testid="agent-suggestions"
+            id="composer-list-agents"
         >
             <li
                 v-for="(name, i) in agentMentions"
@@ -1102,6 +1126,7 @@ defineExpose({ focus: () => input.value?.focus() });
             class="suggest"
             role="listbox"
             data-testid="file-suggestions"
+            id="composer-list-files"
         >
             <li
                 v-for="(file, i) in files"
@@ -1171,6 +1196,7 @@ defineExpose({ focus: () => input.value?.focus() });
                 role="combobox"
                 aria-autocomplete="list"
                 aria-haspopup="listbox"
+                :aria-controls="activeListId"
                 :aria-expanded="
                     suggestions.length > 0 ||
                     mcpMentions.length > 0 ||
@@ -1305,6 +1331,7 @@ defineExpose({ focus: () => input.value?.focus() });
                     disabled || modelValue.trim() === '' || blockedReason !== ''
                 "
                 :title="blockedReason"
+                :aria-describedby="blockedReason !== '' ? 'composer-send-blocked' : undefined"
                 data-testid="composer-send"
                 @click="submit"
             >
@@ -1318,6 +1345,16 @@ defineExpose({ focus: () => input.value?.focus() });
                         : t("web.composer.send")
                 }}
             </button>
+            <p
+                v-if="blockedReason !== ''"
+                id="composer-send-blocked"
+                class="sr-only"
+                role="status"
+                aria-live="polite"
+                data-testid="composer-send-blocked"
+            >
+                {{ blockedReason }}
+            </p>
             <button
                 v-if="busy"
                 type="button"

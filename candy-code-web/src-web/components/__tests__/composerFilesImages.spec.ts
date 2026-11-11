@@ -251,3 +251,30 @@ describe('Composer @agent popup (C-AGT-4.d)', () => {
     expect(searchFiles).toHaveBeenCalledWith('agent:rev')
   })
 })
+
+/**
+ * M42 (cc-review-1111): the textarea already owned the highlight — arrows,
+ * Tab and Enter complete a row, and `aria-activedescendant` rides the
+ * selection — but the combobox never named the listbox it opens. Screen
+ * readers announce "listbox" only when `aria-controls` points at the live
+ * one, so the association attribute, not the keyboard, was the real gap.
+ */
+describe('Composer combobox association (M42)', () => {
+  const input = (wrapper: ReturnType<typeof mountComposer>) => wrapper.find('[data-testid="composer-input"]')
+
+  it('a commands popup names itself to the combobox, id and all', async () => {
+    const wrapper = mountComposer({ commands: [compact] })
+    await typeInto(wrapper, '/co')
+    expect(input(wrapper).attributes('aria-controls')).toBe('composer-list-commands')
+    expect(wrapper.find('[data-testid="command-suggestions"]').attributes('id')).toBe('composer-list-commands')
+  })
+
+  it('the file popup takes over the association, and the closing edge drops it', async () => {
+    const searchFiles = vi.fn(async () => ['src/a.rs'])
+    const wrapper = mountComposer({ searchFiles })
+    await typeInto(wrapper, '@sr')
+    expect(input(wrapper).attributes('aria-controls')).toBe('composer-list-files')
+    await typeInto(wrapper, '@sr ') // the closing edge: no list, no association
+    expect(input(wrapper).attributes('aria-controls')).toBeUndefined()
+  })
+})

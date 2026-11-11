@@ -210,3 +210,49 @@ describe('Composer paste chips (C-WEB-4.a)', () => {
     expect(send?.[0]).toBe(`${LONG}\n${SECOND}`)
   })
 })
+
+/**
+ * M44 (cc-review-1111): a blocked send may not speak only through `title`.
+ * A tooltip answers a hovering pointer; a keyboard or screen-reader user
+ * lands on a disabled button and hears nothing at all. The refusal reason —
+ * the SAME translated value the tooltip renders, no new prose — rides an
+ * sr-only `role="status"` row that `aria-describedby` ties to the button.
+ */
+describe('Composer blocked-send announcement (M44)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('busy with a non-interrupt delivery announces the refusal as a status row', async () => {
+    const wrapper = mountComposer({ modelValue: 'look', busy: true })
+    // The refusal only exists once something is attached — the mirror of the
+    // server law (blockedReason answers '' on a bare draft).
+    await wrapper.find('[data-testid="composer-input"]').trigger('paste', { clipboardData: { items: [clipboardItem(pngFile())] } })
+    await flushPromises()
+    const row = wrapper.find('[data-testid="composer-send-blocked"]')
+    expect(row.exists()).toBe(true)
+    expect(row.attributes('role')).toBe('status')
+    expect(row.attributes('aria-live')).toBe('polite')
+    expect(row.text()).toBe('A turn is running — switch delivery to interrupt, or wait for it to end.')
+    expect(wrapper.find('[data-testid="composer-send"]').attributes('aria-describedby')).toBe('composer-send-blocked')
+  })
+
+  it('switching the delivery mode to interrupt removes the row and the reference', async () => {
+    const wrapper = mountComposer({ modelValue: 'look', busy: true })
+    await wrapper.find('[data-testid="composer-input"]').trigger('paste', { clipboardData: { items: [clipboardItem(pngFile())] } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="composer-send-blocked"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="composer-delivery"]').setValue('interrupt')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="composer-send-blocked"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="composer-send"]').attributes('aria-describedby')).toBeUndefined()
+  })
+
+  it('a quiet send has nothing to announce', async () => {
+    const wrapper = mountComposer({ modelValue: 'look' })
+    await wrapper.find('[data-testid="composer-input"]').trigger('paste', { clipboardData: { items: [clipboardItem(pngFile())] } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="composer-send-blocked"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="composer-send"]').attributes('aria-describedby')).toBeUndefined()
+  })
+})
