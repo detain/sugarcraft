@@ -79,6 +79,15 @@ final class Program
     private ?bool $activeFocusReporting = null;
     private ?bool $activeBracketedPaste = null;
     /**
+     * Kitty keyboard flag-stack mirror (M-14): true between a dispatched
+     * `CSI > <flags> u` push and the matching pop. Teardown consults it so a
+     * throwing exit pops exactly the layer this program pushed and a program
+     * that never pushed emits no stray pop. One layer is the program
+     * contract — {@see Cmd::pushKittyKeyboard()} rides init, the pairing pop
+     * rides exit.
+     */
+    private bool $kittyKeyboardPushed = false;
+    /**
      * True between a {@see setupTerminal()} that acquired the terminal and
      * the {@see teardownTerminal()} that releases it. Makes teardown
      * idempotent: run()'s finally must be able to call it blindly — after a
@@ -455,6 +464,12 @@ final class Program
         // the early-quit return and the throw path share this single exit.
         $tickTimer = null;
         $inputWatched = false;
+        // M-14: the two `return $this->model;` sites below flip this before
+        // the finally runs; a still-false flag means a Throwable is unwinding
+        // past us — the one exit where the consumer's post-run pop line (and
+        // the shutdown hook, whose latch this finally lowers) can never fire,
+        // so teardown owes the kitty pairing pop.
+        $normalReturn = false;
         try {
             // Initial size + env + colour-profile + init Cmd. Each
             // honours the matching ProgramOptions override when set —
@@ -477,6 +492,7 @@ final class Program
 
             // Pending dispatch may have already requested quit. Skip the loop.
             if (!$this->running) {
+                $normalReturn = true;
                 return $this->model;
             }
 
@@ -526,6 +542,7 @@ final class Program
             // notes on this method.
             $this->loop->run();
 
+            $normalReturn = true;
             return $this->model;
         } finally {
             if ($tickTimer !== null) {
@@ -535,7 +552,7 @@ final class Program
                 $this->loop->removeReadStream($this->input);
             }
             $this->releaseRuntime();
-            $this->teardownTerminal();
+            $this->teardownTerminal(popKittyKeyboard: !$normalReturn);
             $this->recorder?->close();
         }
     }
@@ -810,6 +827,13 @@ final class Program
         if ($msg instanceof RawMsg) {
             // Side-channel: write bytes verbatim, no re-render, no model
             // notification. Caller is responsible for cursor-area effects.
+            // M-14: a whole-string kitty push/pop is the one side-channel
+            // shape with terminal state the teardown must account for — it
+            // arms and disarms the pop mirror, so an escaping Throwable still
+            // gets the pairing pop (see teardownTerminal()).
+            if (preg_match('/\A\x1b\[([><])(\d+)u\z/', $msg->bytes, $m)) {
+                $this->kittyKeyboardPushed = $m[1] === '>';
+            }
             $this->writeOutput($msg->bytes);
             return;
         }
@@ -1529,8 +1553,19 @@ final class Program
      * caller's own terminal. The runExec and Ctrl-Z suspend paths pair this
      * with setupTerminal(), which re-arms the latch, so their re-entry
      * emission counts are unchanged.
+     *
+     * `$popKittyKeyboard` is set only by run()'s finally on the Throwable
+     * unwind (M-14): that exit reaches neither the consumer's post-run pop
+     * line nor the shutdown backstop (this method lowers the latch it gates
+     * on), so the pairing pop can ride nowhere else. It is honored only when
+     * the mirror says this program pushed, and it rides BEFORE the alt-screen
+     * leave — the byte-safe ordering documented on releaseTerminalForShutdown
+     * (the pop must reach the app screen the user returns to, not the shell's
+     * restored one). The re-entry and hook paths pass the default false: the
+     * first must leave the flags armed for the resumed run, the second pops
+     * itself just before calling this method.
      */
-    private function teardownTerminal(): void
+    private function teardownTerminal(bool $popKittyKeyboard = false): void
     {
         if (!$this->terminalAttached) {
             return;
@@ -1563,6 +1598,10 @@ final class Program
             // returns to.
             $this->writeOutput(Ansi::setWindowTitle(''));
             $this->lastWindowTitle = null;
+        }
+        if ($popKittyKeyboard && $this->kittyKeyboardPushed) {
+            $this->writeOutput(Ansi::popKittyKeyboard());
+            $this->kittyKeyboardPushed = false;
         }
         if ($this->options->useAltScreen) {
             $this->writeOutput(Ansi::altScreenLeave());
@@ -1675,6 +1714,7 @@ final class Program
             return;
         }
         $this->writeOutput(Ansi::popKittyKeyboard());
+        $this->kittyKeyboardPushed = false; // the backstop's unconditional pop settles the mirror too
         $this->teardownTerminal();
     }
 
