@@ -38,8 +38,8 @@ function reload(): void {
     {{ t('web.chrome.banner.stopped') }}
     <button type="button" @click="connection.retryNow()">{{ t('web.chrome.banner.try_again') }}</button>
   </div>
-  <div v-else-if="connection.status === 'stopped' && connection.lastError" class="banner error" role="alert">
-    {{ connection.lastError }}
+  <div v-else-if="connection.status === 'stopped' && connection.lastError" class="banner error" role="alert" data-testid="banner-stopped-error">
+    {{ t('web.chrome.banner.stopped_error', { lastError: connection.lastError }) }}
   </div>
 </template>
 
