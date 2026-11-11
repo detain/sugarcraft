@@ -81,12 +81,14 @@ final class ChannelRegistry
      *
      * Returns the loader's buckets with the registration-time refusals
      * merged into `refusals`; the CALLER renders notices through Lang (the
-     * loader's data-only law extends through here).
+     * loader's data-only law extends through here). A loader `require-failed`
+     * row is voiced through $log right here, exactly like this method's own
+     * constructor and start faults.
      *
      * @param list<Bundle>  $bundles
      * @param list<string>  $trustedNames
      *
-     * @return array{loaded: list<array{bundle: string, path: string, class: string, kind: string}>, quarantined: list<array{bundle: string, path: string, class: string, kind: string}>, refusals: list<array{bundle: string, path?: string, class?: string, name?: string, reason: string}>}
+     * @return array{loaded: list<array{bundle: string, path: string, class: string, kind: string}>, quarantined: list<array{bundle: string, path: string, class: string, kind: string}>, refusals: list<array{bundle: string, path?: string, class?: string, name?: string, reason: string, error?: string}>}
      *
      * @throws \LogicException when called twice on one registry
      */
@@ -108,6 +110,15 @@ final class ChannelRegistry
         };
 
         $buckets = BundleChannelLoader::load($bundles, $trustedNames, $store, ['channel', 'subscriber']);
+
+        // m04: the loader ANSWERED with these rows instead of letting one throwing
+        // file abort the boot; voice their diagnostics exactly as loudly as this
+        // method voices its own constructor/start faults, then load the survivors.
+        foreach ($buckets['refusals'] as $row) {
+            if (($row['reason'] ?? '') === 'require-failed' && isset($row['error'])) {
+                $log((string) $row['error']);
+            }
+        }
 
         foreach ($buckets['loaded'] as $entry) {
             $where = ['bundle' => $entry['bundle'], 'path' => $entry['path'], 'class' => $entry['class']];

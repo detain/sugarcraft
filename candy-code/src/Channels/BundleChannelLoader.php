@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Channels;
 
 use SugarCraft\Code\Bundles\Bundle;
+use SugarCraft\Code\Server\ErrorLog;
 use SugarCraft\Code\Support\ContainedPath;
 
 /**
@@ -41,7 +42,10 @@ use SugarCraft\Code\Support\ContainedPath;
  * bucket — loaded, quarantined, or refused with a machine reason word — so
  * the caller renders notices through Lang in any locale. `class-missing`
  * and `class-not-declared` are refusals too: the manifest must name a class
- * the file actually declares, and a guessed class name is never honoured.
+ * the file actually declares, and a guessed class name is never honoured. An
+ * entrypoint whose file THROWS at require time is refused `require-failed` with
+ * its diagnostic carried in the row for the registry to log — an answer, never
+ * an announcement.
  *
  * Collision refusal (a channel name or class clashing with a built-in or
  * another accepted bundle) is NOT here: that is the registry's job at
@@ -63,7 +67,7 @@ final class BundleChannelLoader
      * @param ChannelsStore $store         the seen-ledger backing quarantine
      * @param list<string> $kinds          manifest entrypoint kinds to read
      *
-     * @return array{loaded: list<array{bundle: string, path: string, class: string, kind: string}>, quarantined: list<array{bundle: string, path: string, class: string, kind: string}>, refusals: list<array{bundle: string, path: string, class: string, kind: string, reason: string}>}
+     * @return array{loaded: list<array{bundle: string, path: string, class: string, kind: string}>, quarantined: list<array{bundle: string, path: string, class: string, kind: string}>, refusals: list<array{bundle: string, path: string, class: string, kind: string, reason: string, error?: string}>}
      */
     public static function load(array $bundles, array $trustedNames, ChannelsStore $store, array $kinds = ['channel']): array
     {
@@ -119,7 +123,16 @@ final class BundleChannelLoader
                         continue;
                     }
 
-                    require_once $entry['path'];
+                    try {
+                        require_once $entry['path'];
+                    } catch (\Throwable $e) {
+                        // m04: one throwing bundle file used to abort the whole
+                        // boot, dimming every sibling. The diagnostic travels AS
+                        // DATA in the row — the loader still only answers.
+                        $refusals[] = $where + ['reason' => 'require-failed', 'error' => ErrorLog::line($e, 'channel require ' . $entry['class'])];
+
+                        continue;
+                    }
 
                     if ($entry['class'] === '') {
                         $refusals[] = $where + ['reason' => 'class-missing'];

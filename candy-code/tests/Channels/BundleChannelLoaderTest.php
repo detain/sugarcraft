@@ -157,6 +157,35 @@ final class BundleChannelLoaderTest extends TestCase
         self::assertFileExists($marker, 'the check is load-then-verify, and the sentinel ran before it');
     }
 
+    public function testAThrowingEntrypointIsRefusedAndItsSiblingBundlesStillLoad(): void
+    {
+        // m04: a trusted bundle whose entrypoint file THROWS at require time used
+        // to abort the entire loader — every sibling bundle lost its channels for
+        // the launch. Now the blow-up is one refused row carrying its diagnostic,
+        // and the remaining bundles load normally.
+        $boom = $this->throwingEntryFile('boom');
+        $badBundle = $this->bundleFromEntrypoints('boom', ['channel' => [$boom]]);
+        $calmEntry = $this->entryFile('calm');
+        $goodBundle = $this->bundleFromEntrypoints('calm', ['channel' => [$calmEntry]]);
+        $trusted = [$this->trusted('boom'), $this->trusted('calm')];
+        $store = $this->store();
+        $first = BundleChannelLoader::load([$badBundle, $goodBundle], $trusted, $store);
+        self::assertCount(2, $first['quarantined'], 'first sight quarantines both, runs neither');
+        self::assertFileDoesNotExist($calmEntry['marker'], 'first sight runs nothing');
+        $buckets = BundleChannelLoader::load([$badBundle, $goodBundle], $trusted, $store);
+        self::assertSame('require-failed', $buckets['refusals'][0]['reason'] ?? null);
+        self::assertSame($badBundle->name, $buckets['refusals'][0]['bundle'] ?? null);
+        self::assertSame($boom['path'], $buckets['refusals'][0]['path'] ?? null);
+        $diagnostic = (string) ($buckets['refusals'][0]['error'] ?? '');
+        self::assertNotSame('', $diagnostic, 'the row carries its diagnostic as data for the registry to voice');
+        self::assertStringContainsString('cc-p1-m04 blown at require', $diagnostic);
+        self::assertCount(1, $buckets['loaded'], 'the sibling bundle still loads — one blown file cannot dim the feed');
+        self::assertSame($calmEntry['class'], $buckets['loaded'][0]['class'] ?? null);
+        self::assertFileExists($calmEntry['marker'], 'the good bytes ran');
+        self::assertFileExists($boom['marker'], 'honest shape: the thrower ran until it threw');
+        self::assertTrue($store->seenEntrypoint($boom['path']), 'an attempted file stays on the ledger, matching the class-check refusal');
+    }
+
     public function testAnEntrypointWithNoDeclaredClassRefusesAfterExecution(): void
     {
         $slug = 'no-class';
@@ -287,6 +316,18 @@ final class BundleChannelLoaderTest extends TestCase
         $markerExport = var_export($marker, true);
         $file = $dir . '/entry-' . $this->counter . '.php';
         file_put_contents($file, "<?php\nfile_put_contents({$markerExport}, 'executed');\nclass {$class}\n{\n}\n");
+        return ['path' => (string) realpath($file), 'class' => $class, 'marker' => $marker];
+    }
+
+    /** @return array{path:string,class:string,marker:string} an entrypoint file that throws at top level. */
+    private function throwingEntryFile(string $slug): array
+    {
+        $dir = $this->bundleDir($slug);
+        $class = 'CcP1Blown' . getmypid() . '_' . (++self::$classSeq);
+        $marker = $this->markers[$slug] ??= $this->tempDir . '/marker-' . $slug . '-' . $this->counter;
+        $markerExport = var_export($marker, true);
+        $file = $dir . '/entry-boom-' . $slug . '.php';
+        file_put_contents($file, "<?php\nfile_put_contents({$markerExport}, 'executed');\nthrow new \\RuntimeException('cc-p1-m04 blown at require');\n");
         return ['path' => (string) realpath($file), 'class' => $class, 'marker' => $marker];
     }
 

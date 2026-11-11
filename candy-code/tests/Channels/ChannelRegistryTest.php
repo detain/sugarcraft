@@ -133,6 +133,22 @@ final class ChannelRegistryTest extends TestCase
         self::assertNotSame([], $this->faultLinesCarrying('channel '), 'the ctor fault line reached the log with the class prefix');
     }
 
+    public function testARequireThrowingEntrypointNeverDimsItsSiblingBundle(): void
+    {
+        // m04: before the fix, a bundle file that throws at require time escaped
+        // the loader, aborted boot(), and the registry stayed booted-but-dead —
+        // every bundle's channels were gone for the launch. Now the sibling lives.
+        [$bundleA, $bundleB, $trusted] = $this->twoBundleStage();
+        $this->bakeRequireThrower($bundleA);
+        $this->bakeWorkingChannel($bundleB, 'B-chan', $this->journal());
+        [$bundleA, $bundleB] = [$this->refresh($bundleA), $this->refresh($bundleB)];
+        $registry = ChannelRegistry::new();
+        $buckets = $registry->boot([$bundleA, $bundleB], $trusted, $this->seenLedger($bundleA, $bundleB), $this->scratch, Loop::get(), $this->collector());
+        self::assertSame('require-failed', $buckets['refusals'][0]['reason'] ?? null);
+        self::assertSame(['B-chan'], $registry->startedNames(), 'one blown file cannot dim the whole feed');
+        self::assertNotSame([], $this->faultLinesCarrying('channel require '), 'the loader carried the diagnostic as data and boot voiced it on the established fault channel');
+    }
+
     public function testAClassThatIgnoresTheChannelContractIsRefusedNotWrapped(): void
     {
         [$bundleA] = $this->twoBundleStage();
@@ -363,6 +379,13 @@ final class ChannelRegistryTest extends TestCase
     public function dispose(): void {}
 ';
         $this->plantClass($bundle, $this->classText($bundle, 'boom-ctor', 'ChannelInterface', '', $members));
+    }
+
+    private function bakeRequireThrower(Bundle $bundle): void
+    {
+        // m04: the FILE itself blows at require time — before any class is ever
+        // declared, so no instance-check arm can catch it.
+        $this->plantClass($bundle, "throw new \\RuntimeException('registry-stage blown');\n", $this->nextId());
     }
 
     private function bakeStartThrower(Bundle $bundle): void
