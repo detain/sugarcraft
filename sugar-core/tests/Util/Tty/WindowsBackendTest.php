@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Tests\Util\Tty;
 
+use SugarCraft\Core\Util\Tty\Backend;
 use SugarCraft\Core\Util\Tty\WindowsBackend;
 use SugarCraft\Core\Tests\Util\Tty\FakeInterruptFlags;
 use SugarCraft\Core\Tests\Util\Tty\FakeKernel32;
@@ -79,15 +80,18 @@ final class WindowsBackendTest extends TestCase
 
     // ─── size() ──────────────────────────────────────────────────────────────
 
-    public function testSizeFallsBackTo80x24WhenNoScreenBufferInfo(): void
+    public function testSizeFallsBackToSharedLastResortSizeWhenNoScreenBufferInfo(): void
     {
         $fake = new FakeKernel32();
         $fake->setScreenBufferInfo(null);
 
         $size = $this->backend($fake)->size();
 
-        $this->assertSame(80, $size['cols']);
-        $this->assertSame(24, $size['rows']);
+        // The literal 200x60 is deliberate: pre-m17 this site answered its own
+        // 80x24 under the shared size() contract. Any revert of either side of
+        // the unification reddens this witness.
+        $this->assertSame(['cols' => 200, 'rows' => 60], $size);
+        $this->assertSame(Backend::LAST_RESORT_SIZE, $size);
     }
 
     public function testSizeReturnsScreenBufferInfoWhenAvailable(): void

@@ -228,7 +228,10 @@ final class WindowsBackend implements Backend
             // Fall through to fallback.
         }
 
-        return ['cols' => 80, 'rows' => 24];
+        // Last resort — the shared answer every backend gives (see Backend::LAST_RESORT_SIZE).
+        // Pre-m17 this site returned its own 80x24 literal, diverging from the
+        // POSIX backend under one size() contract; that split was the defect.
+        return self::LAST_RESORT_SIZE;
     }
 
     // ─── Raw mode ────────────────────────────────────────────────────────────

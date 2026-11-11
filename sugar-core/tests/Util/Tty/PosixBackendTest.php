@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Tests\Util\Tty;
 
+use SugarCraft\Core\Util\Tty\Backend;
 use SugarCraft\Core\Util\Tty\PosixBackend;
 use SugarCraft\Pty\Libc;
 use SugarCraft\Pty\Posix\PosixPtySystem;
@@ -42,6 +43,33 @@ final class PosixBackendTest extends TestCase
             }
             fclose($r);
         }
+    }
+
+    /**
+     * The last-resort arm of size() (arm 7) cannot be driven behaviorally
+     * from a test: arms 4-6 shell out to stty/who and depend on the host's
+     * controlling terminal and wtmp, so on some machines they always resolve
+     * before arm 7 is reached. The fold is therefore pinned at the source
+     * shape (the house source-scan genre) plus a literal witness on the
+     * shared constant itself.
+     *
+     * Mutation map: reverting the POSIX arm to its old 200x60 literal reddens
+     * the first leg here; reverting the Windows arm to its own 80x24 reddens
+     * the behavioral witness in WindowsBackendTest; editing the constant's
+     * value reddens the third leg here.
+     */
+    public function testSizeLastResortArmReturnsTheSharedConstant(): void
+    {
+        $src = file_get_contents(__DIR__ . '/../../../src/Util/Tty/PosixBackend.php');
+        $this->assertNotFalse($src);
+
+        // The arm must delegate to the shared constant, never re-spell a literal.
+        $this->assertStringContainsString('return self::LAST_RESORT_SIZE;', $src);
+        $this->assertStringNotContainsString("return ['cols' => 200, 'rows' => 60];", $src);
+
+        // Literal witness on the constant: both backends share THIS answer,
+        // so they cannot drift apart — or together — without reddening here.
+        $this->assertSame(['cols' => 200, 'rows' => 60], Backend::LAST_RESORT_SIZE);
     }
 
     /**

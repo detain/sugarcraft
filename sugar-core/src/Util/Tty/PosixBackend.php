@@ -213,8 +213,8 @@ final class PosixBackend implements Backend
             }
         }
 
-        // 7. Final fallback — reasonable default for modern terminals
-        return ['cols' => 200, 'rows' => 60];
+        // 7. Final fallback — the shared last-resort answer (see Backend::LAST_RESORT_SIZE).
+        return self::LAST_RESORT_SIZE;
     }
 
     /**

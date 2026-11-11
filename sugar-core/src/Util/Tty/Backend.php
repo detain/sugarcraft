@@ -42,7 +42,25 @@ interface Backend
     public static function openTty(): ?array;
 
     /**
+     * The single last-resort answer every backend returns from `size()` when
+     * no detection arm reaches a real terminal.
+     *
+     * Historically the two backends disagreed under this one contract: POSIX
+     * answered 200x60 while Windows answered 80x24, so consumers could not
+     * predict the fallback from the interface alone (review finding m17 —
+     * root cause of the fleet-wide "80x24 vs 60x200" puzzle). The unified
+     * value is the POSIX answer because it is the shape already relied on by
+     * the TUI consumers' own fallback pins.
+     *
+     * @var array{cols:int, rows:int}
+     */
+    public const LAST_RESORT_SIZE = ['cols' => 200, 'rows' => 60];
+
+    /**
      * Returns the current terminal dimensions as `[cols, rows]`.
+     *
+     * When every detection arm fails, the answer is exactly
+     * `self::LAST_RESORT_SIZE` — no backend may answer differently.
      *
      * @return array{cols:int, rows:int}
      */
