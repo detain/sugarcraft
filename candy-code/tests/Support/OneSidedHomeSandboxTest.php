@@ -75,7 +75,6 @@ final class OneSidedHomeSandboxTest extends TestCase
      * @var list<string>
      */
     private const NOT_YET_MIGRATED = [
-        'App/AppBuilderTest.php',
         'Backend/EngineBackendParallelConfigTest.php',
         'Cli/SessionRetentionWiringTest.php',
         'Context/ImportResolverTest.php',
