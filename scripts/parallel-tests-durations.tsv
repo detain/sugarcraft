@@ -112,6 +112,7 @@ candy-code/tests/Tui/KeyboardHandlerTest.php	5.700	86
 candy-code/tests/Integration/BinCandyCodeWiringTest.php	5.682	1355
 candy-code/tests/Server/WorkspaceHostTest.php	5.640	8
 candy-code/tests/Providers/TransientFailureTest.php	5.444	57
+candy-code/tests/Agents/TaskListTest.php	5.402	50
 candy-code/tests/Session/SessionForkTest.php	5.387	11
 candy-code/tests/Workflows/WorkflowLoopUntilTest.php	5.372	12
 candy-code/tests/Integration/ParallelToolCallsTest.php	5.339	27
@@ -166,7 +167,6 @@ candy-code/tests/Workflows/WorkflowProviderHandoffTest.php	3.591	6
 candy-code/tests/Session/ContextLedgerPersistenceTest.php	3.568	7
 candy-code/tests/Context/GlobDialectDifferentialTest.php	3.563	13
 candy-code/tests/Lint/TestRunnerTest.php	3.560	13
-candy-code/tests/Agents/TaskListTest.php	3.539	46
 candy-code/tests/Server/TlsListenerTest.php	3.530	4
 candy-code/tests/Sessions/BackgroundSupervisorReapTest.php	3.490	10
 candy-code/tests/Chat/CustomCommandShellAsyncTest.php	3.479	10
