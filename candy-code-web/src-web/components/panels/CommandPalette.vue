@@ -22,7 +22,7 @@ import { clearPromptHistory } from '../../stores/promptHistory'
  * Typing narrows the list (every word must appear); arrows move, Enter picks,
  * Escape closes.
  */
-const props = defineProps<{ activeId: string | null }>()
+const props = defineProps<{ sessionId: string | null }>()
 
 interface Entry {
   id: string
@@ -65,8 +65,8 @@ const entries = computed<Entry[]>(() => {
   for (const panel of PANELS) {
     list.push({ id: `panel-${panel}`, group: t('web.panels.palette_group_panels'), label: t('web.panels.palette_panel_entry', { label: PANEL_LABELS[panel] }), run: () => panels.show(panel) })
   }
-  if (props.activeId !== null) {
-    const session = useSessionStore(props.activeId)
+  if (props.sessionId !== null) {
+    const session = useSessionStore(props.sessionId)
     for (const command of session.commands) {
       if (command.runsIn !== 'server' && command.source !== 'file') continue
       const name = command.name.replace(/^\//, '')
@@ -80,7 +80,7 @@ const entries = computed<Entry[]>(() => {
     }
   }
   for (const summary of sessions.items) {
-    if (summary.id === props.activeId) continue
+    if (summary.id === props.sessionId) continue
     list.push({
       id: `session-${summary.id}`,
       group: t('web.panels.palette_group_sessions'),
@@ -134,13 +134,13 @@ function clearHistory(): void {
 }
 
 async function runCommand(name: string, argumentHint: string | null): Promise<void> {
-  if (props.activeId === null) return
+  if (props.sessionId === null) return
   if (argumentHint) {
     // It needs an argument: hand it to the composer to finish.
-    layout.setDraft(props.activeId, `/${name} `)
+    layout.setDraft(props.sessionId, `/${name} `)
     return
   }
-  await useSessionStore(props.activeId).send(`/${name}`)
+  await useSessionStore(props.sessionId).send(`/${name}`)
 }
 
 async function pick(entry: Entry | undefined): Promise<void> {

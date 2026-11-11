@@ -45,7 +45,7 @@ async function openPalette() {
   const router = createAppRouter(createMemoryHistory())
   await router.push('/')
   await router.isReady()
-  const wrapper = mount(CommandPalette, { props: { activeId: null }, global: { plugins: [pinia, router] }, attachTo: document.body })
+  const wrapper = mount(CommandPalette, { props: { sessionId: null }, global: { plugins: [pinia, router] }, attachTo: document.body })
   usePanelsStore().togglePalette(true)
   await flushPromises()
   return wrapper

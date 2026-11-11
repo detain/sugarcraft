@@ -20,5 +20,5 @@ useTodosStore()
 
 <template>
   <SidePanels :session-id="activeId" />
-  <CommandPalette :active-id="activeId" />
+  <CommandPalette :session-id="activeId" />
 </template>

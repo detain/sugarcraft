@@ -214,7 +214,7 @@ describe('CommandPalette', () => {
     const router = createAppRouter(createMemoryHistory())
     await router.push('/')
     await router.isReady()
-    const wrapper = mount(CommandPalette, { props: { activeId: null }, global: { plugins: [pinia, router] }, attachTo: document.body })
+    const wrapper = mount(CommandPalette, { props: { sessionId: null }, global: { plugins: [pinia, router] }, attachTo: document.body })
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }))
     await flushPromises()
@@ -242,7 +242,7 @@ describe('CommandPalette', () => {
     const router = createAppRouter(createMemoryHistory())
     const { useSessionStore } = await import('../../../stores/session')
     useSessionStore('s1').commands = [{ name: 'rename', argumentHint: '<name>', source: 'builtin', runsIn: 'server' }]
-    const wrapper = mount(CommandPalette, { props: { activeId: 's1' }, global: { plugins: [pinia, router] } })
+    const wrapper = mount(CommandPalette, { props: { sessionId: 's1' }, global: { plugins: [pinia, router] } })
     usePanelsStore().togglePalette(true)
     await flushPromises()
     await wrapper.find('[data-testid="palette-input"]').setValue('/rename')
