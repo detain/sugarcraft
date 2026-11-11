@@ -410,8 +410,8 @@ final class MethodSchemas
                 'items' => Schema::arrayOf(Schema::object([
                     'key' => Schema::string(),
                     'type' => Schema::string(),
-                    'default' => Schema::any(),
-                    'defaultText' => Schema::string(),
+                    'default' => Schema::any()->describe('The raw fallback inside the schema — the value a reader falls back to when no tier sets the key. It is NOT necessarily the shipped effective default: when one raw value cannot say it (permissionMode depends on the entry point), the floored truth rides `defaultText`, and that is what docs and the settings view print.'),
+                    'defaultText' => Schema::string()->describe('The human spelling of the effective default, present when the raw `default` cannot say it alone; absent when the raw default is the answer.'),
                     'group' => Schema::string(),
                     'label' => Schema::string(),
                     'help' => Schema::string(),

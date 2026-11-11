@@ -1527,7 +1527,9 @@ export interface Methods {
       items: ({
         key: string
         type: string
+        /** The raw fallback inside the schema — the value a reader falls back to when no tier sets the key. It is NOT necessarily the shipped effective default: when one raw value cannot say it (permissionMode depends on the entry point), the floored truth rides `defaultText`, and that is what docs and the settings view print. */
         default?: unknown
+        /** The human spelling of the effective default, present when the raw `default` cannot say it alone; absent when the raw default is the answer. */
         defaultText?: string
         group: string
         label: string

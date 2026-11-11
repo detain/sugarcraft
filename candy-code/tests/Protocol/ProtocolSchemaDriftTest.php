@@ -183,6 +183,29 @@ final class ProtocolSchemaDriftTest extends TestCase
     }
 
     /**
+     * The `default` on a settings.schema item is the raw fallback inside the
+     * schema — for permissionMode that raw spelling is the permissive one,
+     * while the shipped runtime floors it per entry point and the floored
+     * truth rides `defaultText` (decision D5, C-SEC-7.a). The fields must
+     * say so on the wire, or a doc generator reading `default` alone
+     * publishes a permissive default the shipped app never uses.
+     */
+    public function testTheSettingsSchemaNotesWhatARawDefaultMeans(): void
+    {
+        $schema = MethodSchemas::result('settings.schema');
+        self::assertNotNull($schema);
+        $item = $schema->toArray()['properties']['items']['items']['properties'];
+
+        $default = (string) ($item['default']['description'] ?? '');
+        self::assertStringContainsString('NOT necessarily the shipped effective default', $default, 'the raw default on the wire is not labelled as the schema fallback');
+        self::assertStringContainsString('defaultText', $default, 'the note must point readers at where the floored truth rides');
+        self::assertStringContainsString('permissionMode', $default, 'the note must name the key whose raw default misleads');
+
+        $defaultText = (string) ($item['defaultText']['description'] ?? '');
+        self::assertStringContainsString('raw', $defaultText, 'the paired field must say when it is present');
+    }
+
+    /**
      * Call $method and assert its result fits the method's result schema.
      *
      * @param array<string, mixed> $params
