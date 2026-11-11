@@ -360,6 +360,7 @@ candy-code/tests/Chat/ColdResumeFinishedAgentTest.php	1.437	5
 candy-code/tests/Host/Commands/CommitHostCommandTest.php	1.432	7
 candy-code/tests/Backend/CancelSoftStopsAtBoundaryTest.php	1.427	4
 candy-code/tests/Cli/SubcommandsSessionLockGateTest.php	1.425	16
+candy-code/tests/Tools/BuiltIn/TeamToolTest.php	1.413	18
 candy-code/tests/Protocol/SessionFeedSubagentsTest.php	1.412	3
 candy-code/tests/Host/AheadOfNeedSkipRulesTest.php	1.407	9
 candy-code/tests/MCP/ClaudeCodeMcpServerTest.php	1.407	14
@@ -528,7 +529,6 @@ candy-code/tests/Host/TurnRunnerLedgerTest.php	0.670	3
 candy-code/tests/ClaudeCodeMcpClientTest.php	0.666	21
 candy-code/tests/Host/TurnControllerTest.php	0.666	18
 candy-code/tests/BaseSystemPromptTest.php	0.665	28
-candy-code/tests/Tools/BuiltIn/TeamToolTest.php	0.661	18
 candy-code/tests/Chat/SessionPickerDebouncedSearchTest.php	0.649	7
 candy-code/tests/Context/InstructionDiffTurnContextTest.php	0.648	14
 candy-code/tests/MCP/McpWriteBudgetShapeTest.php	0.645	2
@@ -551,6 +551,7 @@ candy-code/tests/Agents/TaskListCasAndCycleTest.php	0.593	16
 candy-code/tests/Tools/WebFetchMarkdownTest.php	0.590	12
 candy-code/tests/App/SidePaneRowClickTest.php	0.589	8
 candy-code/tests/MCP/StdioMcpEnvScrubTest.php	0.586	6
+candy-code/tests/Tools/BuiltIn/TeamToolScopeTest.php	0.583	9
 candy-code/tests/Chat/CallbackAuthoredRefusalTest.php	0.582	8
 candy-code/tests/Support/VersionTest.php	0.582	31
 candy-code/tests/Host/CompactionFallbackParityTest.php	0.571	7
