@@ -1239,8 +1239,20 @@ final class Program
             return;
         }
         $this->escapeFlushPending = true;
-        $this->addOneShotTimer(0.05, function (): void {
+        $generation = $this->runtimeGeneration;
+        $this->addOneShotTimer(0.05, function () use ($generation): void {
             $this->escapeFlushPending = false;
+            // Teardown law (crush_libs.md sugar-core #3, pinned by
+            // ProgramRuntimeTeardownTest): a flush must never promote into a
+            // torn-down Program. releaseRuntime() bumps runtimeGeneration
+            // FIRST, so a generation captured at arm time distinguishes a
+            // stale callback — the same idiom deferTick() guards with. On
+            // the macOS runner the loop can deliver one more stream callback
+            // inside the stop window, arming this timer after the quit was
+            // requested; this check closes that window from the fire side.
+            if ($generation !== $this->runtimeGeneration) {
+                return;
+            }
             $msg = $this->reader->flushPending();
             if ($msg !== null) {
                 $this->dispatch($msg);
@@ -1274,17 +1286,24 @@ final class Program
         }
         // A lone ESC byte is buffered for disambiguation (could be a
         // CSI / Alt-key prefix). Promote it to a standalone Escape
-        // after a brief delay if no follow-up arrives.
-        if ($this->reader->hasPendingEscape()) {
-            $this->scheduleEscapeFlush();
-        }
-        // An open paste envelope whose end marker never arrives would
-        // swallow every later keystroke. Each read inside a paste pushes
-        // the deadline out; silence past it closes the paste.
-        if ($this->reader->isPasting()) {
-            $this->schedulePasteIdleFlush();
-        } else {
-            $this->cancelPasteIdleFlush();
+        // after a brief delay if no follow-up arrives. Bytes that
+        // arrive AFTER the stop request must arm nothing: the loop
+        // can still call this callback once inside the stop window,
+        // and a timer armed then races releaseRuntime()'s sweep
+        // (ProgramRuntimeTeardownTest, macOS runner shape). The
+        // buffered prefix survives for the next run()'s first read.
+        if ($this->running) {
+            if ($this->reader->hasPendingEscape()) {
+                $this->scheduleEscapeFlush();
+            }
+            // An open paste envelope whose end marker never arrives would
+            // swallow every later keystroke. Each read inside a paste pushes
+            // the deadline out; silence past it closes the paste.
+            if ($this->reader->isPasting()) {
+                $this->schedulePasteIdleFlush();
+            } else {
+                $this->cancelPasteIdleFlush();
+            }
         }
         return true;
     }
@@ -1301,8 +1320,16 @@ final class Program
     {
         $this->cancelPasteIdleFlush();
         $armedAt = hrtime(true);
-        $this->pasteIdleTimer = $this->addOneShotTimer($seconds, function () use ($armedAt, $seconds): void {
+        $generation = $this->runtimeGeneration;
+        $this->pasteIdleTimer = $this->addOneShotTimer($seconds, function () use ($armedAt, $seconds, $generation): void {
             $this->pasteIdleTimer = null;
+            if ($generation !== $this->runtimeGeneration) {
+                // Torn-down runtime: this callback READS input itself
+                // further down, which would dispatch into a finished
+                // Program — the same stale-callback class deferTick()
+                // guards (teardown law, ProgramRuntimeTeardownTest).
+                return;
+            }
             if (!$this->reader->isPasting()) {
                 return;
             }
