@@ -102,6 +102,36 @@ final class BackpressureTest extends TestCase
         self::assertSame([Outbox::CLOSE_TRY_AGAIN_LATER], $client->closeCodes());
     }
 
+    public function testAShedThatLandsUnderSoftLeavesOverflowImmediately(): void
+    {
+        $client = WireClient::open(new ProtocolPendingHandler());
+        $outbox = Outbox::for($client->connection, Loop::get(), static fn (int $dropped): string => '{"overflow":' . $dropped . '}', 100, 200, 60.0);
+        $client->toClient->pause();
+        $outbox->push('{"durable":0}');
+
+        // The second delta crosses the hard mark; the shed that follows leaves
+        // the durable message and its notice behind, well under the soft mark.
+        $outbox->pushEphemeral(self::delta(\str_repeat('y', 20), 1));
+        $outbox->pushEphemeral(self::delta(\str_repeat('y', 20), 2));
+
+        self::assertFalse($outbox->isOverflowing(), 'a shed that lands under soft leaves overflow at once');
+        self::assertSame(0, $outbox->dropped(), 'the recovery clears the counter beside the flag');
+
+        // Under soft again, the next crossing is a fresh episode: a second
+        // notice counting its own drops, not silence behind a stale flag.
+        $outbox->pushEphemeral(self::delta(\str_repeat('y', 20), 3));
+        $outbox->pushEphemeral(self::delta(\str_repeat('y', 20), 4));
+        $outbox->push('{"durable":1}');
+        $client->toClient->resume();
+
+        $received = $client->received();
+        self::assertSame([0, 1], \array_column($received, 'durable'), 'durable messages are never shed');
+        self::assertSame([2, 2], \array_column($received, 'overflow'), 'each episode notices its own count');
+        self::assertFalse($outbox->isOverflowing(), 'a drained queue leaves overflow');
+        $this->runLoop(0.01);
+        self::assertTrue($client->connection->isOpen(), 'a recovered grace window does not close the socket');
+    }
+
     public function testWatermarksMustBeOrdered(): void
     {
         $client = WireClient::open(new ProtocolPendingHandler());

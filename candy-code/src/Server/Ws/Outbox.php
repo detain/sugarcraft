@@ -216,7 +216,10 @@ final class Outbox
 
     /**
      * Past the hard mark: shed every queued ephemeral message, tell the client
-     * once, and arm the 1013 close for a queue that stays this full.
+     * once, and arm the 1013 close for a queue that stays this full. The shed
+     * itself may land the queue under soft, so recovery is re-evaluated right
+     * here — a stale flag would silence the next episode's notice and skip
+     * re-arming the close window.
      */
     private function overflow(): void
     {
@@ -247,6 +250,7 @@ final class Outbox
                 }
             });
         }
+        $this->flush();
     }
 
     private function cancelGrace(): void
