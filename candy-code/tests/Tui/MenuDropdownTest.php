@@ -10,6 +10,7 @@ use SugarCraft\Code\Providers\ProviderInterface;
 use SugarCraft\Code\Tui\Components\MenuBar;
 use SugarCraft\Code\Tui\Renderer as TuiRenderer;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 
 final class MenuDropdownTest extends TestCase
 {
@@ -215,5 +216,118 @@ final class MenuDropdownTest extends TestCase
         $inner = preg_replace(['/^\x{2502} /u', '/\x{2502}$/u'], '', $plain);
 
         return rtrim((string) $inner);
+    }
+
+    /**
+     * M-16: spliceInto() must cut the overlapped run by CELLS, not codepoints.
+     * Pre-fix (measured): 'ab漢字cd' answered 'abXYcd' (字 dropped), '漢字abc'
+     * answered '漢XYc' (ab dropped), and the ZWJ family re-split into an orphan
+     * plus a re-appearing tail. ASCII stays byte-identical either way.
+     */
+    public function testSpliceIntoHonoursCellBoundariesNotCodepoints(): void
+    {
+        $splice = new \ReflectionMethod(TuiRenderer::class, 'spliceInto');
+        $splice->setAccessible(true);
+
+        self::assertSame('abXYefgh', $splice->invoke(null, 'abcdefgh', 'XY', 2));
+        self::assertSame('abXY字cd', $splice->invoke(null, 'ab漢字cd', 'XY', 2));
+        self::assertSame('漢XYabc', $splice->invoke(null, '漢字abc', 'XY', 2));
+        self::assertSame('👨‍👩‍👧XYcd', $splice->invoke(null, '👨‍👩‍👧abcd', 'XY', 2));
+
+        // Invariant: the spliced tail equals the original line's tail dropped
+        // to the same CELL offset — no glyph is ever lost or duplicated.
+        $strip = static fn(string $s): string => preg_replace('/\e\[[0-9;]*m/', '', $s) ?? '';
+        $lines = ['abcdefgh', 'ab漢字cd', '漢字abc', '👨‍👩‍👧abcd', 'mix漢字a👨‍👩‍👧Zab', "a\x1b[32m漢字\x1b[0mb"];
+        $patches = ['XY', 'A', '漢字', '👨‍👩‍👧', '', "\x1b[1mBB\x1b[0m"];
+        foreach ($lines as $line) {
+            $lineWidth = Width::string($line);
+            for ($col = 0; $col <= $lineWidth; $col++) {
+                foreach ($patches as $patch) {
+                    $tailStart = $col + Width::string($patch);
+                    $result = $strip($splice->invoke(null, $line, $patch, $col));
+                    $expectedTail = $lineWidth > $tailStart ? Width::dropAnsi($strip($line), $tailStart) : '';
+                    self::assertSame(
+                        $expectedTail,
+                        Width::dropAnsi($result, $tailStart),
+                        sprintf('cells past tail %d over line %s', $tailStart, $line),
+                    );
+                }
+            }
+        }
+    }
+
+    /**
+     * M-16 blind spot closed at the paint level: a dropdown spliced over a
+     * wide-glyph transcript row must keep the surviving tail cells and must
+     * never re-split a grapheme cluster (pre-fix, '字ef' vanished entirely at
+     * 80x24 and the ZWJ family re-appeared orphaned past the box at 120x30 —
+     * both are the measured overlayMenu reproductions).
+     */
+    public function testDropdownSpliceOverWideGlyphTranscriptKeepsCellsAndClusters(): void
+    {
+        $p = $this->createMock(ProviderInterface::class);
+        $p->method('name')->willReturn('stub');
+
+        $chat = (new Chat(history: [Message::user('ab漢字cd漢字ef')]))->withSize(80, 24);
+        $app = App::new($p, 'm')->withChat($chat);
+
+        MenuBar::closeMenu();
+        MenuBar::openMenu(3);
+        $plain = Ansi::strip(TuiRenderer::renderView($app, 80, 24)->body);
+        $rows = explode("\n", $plain);
+
+        $imageRow = null;
+        foreach ($rows as $row) {
+            if (str_contains($row, 'Generate image')) {
+                $imageRow = $row;
+                break;
+            }
+        }
+        self::assertNotNull($imageRow, 'the Tools dropdown must paint its Generate image row over this layout');
+        self::assertStringContainsString('│字ef', $imageRow, 'the wide tail past the box must survive the splice');
+        foreach ($rows as $row) {
+            self::assertLessThanOrEqual(80, Width::string($row), 'no painted row may exceed the frame width');
+        }
+
+        $chat2 = (new Chat(history: [Message::user('👨‍👩‍👧 family abcd')]))->withSize(80, 24);
+        $app2 = App::new($p, 'm')->withChat($chat2);
+
+        MenuBar::closeMenu();
+        MenuBar::openMenu(4);
+        $plain2 = Ansi::strip(TuiRenderer::renderView($app2, 80, 24)->body);
+
+        $panesRow = null;
+        foreach (explode("\n", $plain2) as $row) {
+            if (str_contains($row, 'Panes ▸')) {
+                $panesRow = $row;
+                break;
+            }
+        }
+        self::assertNotNull($panesRow, 'the View dropdown must paint its Panes row over this layout');
+        self::assertStringNotContainsString("\u{200D}", $panesRow, 'the spliced row must not carry an orphaned ZWJ');
+        // Cell-exact truth: the box's right edge ends at cell 44, so the tail
+        // begins at cell 44 with 'bcd'. Pre-fix the CODEPOINT cut answered
+        // 'y abcd' at this layout.
+        self::assertStringContainsString('│bcd', $panesRow);
+
+        // 120x30 reproduces the cluster-split symptom directly: pre-fix the
+        // tail re-appeared as an orphaned U+200D + 👩‍👧 past the box edge;
+        // cell-aware consumption leaves the clean '│ family abcd' boundary.
+        MenuBar::closeMenu();
+        MenuBar::openMenu(4);
+        $plain3 = Ansi::strip(TuiRenderer::renderView($app2, 120, 30)->body);
+        $panesRow3 = null;
+        foreach (explode("\n", $plain3) as $row) {
+            if (str_contains($row, 'Panes ▸')) {
+                $panesRow3 = $row;
+                break;
+            }
+        }
+        self::assertNotNull($panesRow3, 'the View dropdown must paint its Panes row at 120x30 too');
+        self::assertStringNotContainsString("\u{200D}", $panesRow3, 'no orphaned ZWJ may re-appear past the box');
+        self::assertStringContainsString('│ family abcd', $panesRow3);
+        foreach (explode("\n", $plain3) as $row) {
+            self::assertLessThanOrEqual(120, Width::string($row), 'no painted row may exceed the frame width');
+        }
     }
 }

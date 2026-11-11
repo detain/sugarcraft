@@ -3064,13 +3064,18 @@ final class Renderer
         $headPad = str_repeat(' ', max(0, $col - Width::string($head)));
         $tailStart = $col + $plainWidth;
         $lineWidth = Width::string($line);
-        $tail = $lineWidth > $tailStart
-            ? Width::truncateAnsi($line, $lineWidth) // keep styling reset simple
-            : '';
 
         // Drop the overlapped run from the tail by re-truncating from the left.
-        if ($tail !== '') {
-            $tail = mb_substr(preg_replace('/\e\[[0-9;]*m/', '', $tail) ?? '', $tailStart);
+        // $tailStart counts CELLS, so the cut must be cell-aware: a codepoint
+        // cut (mb_substr) silently drops wide glyphs whose cells fall inside
+        // the overlapped run and splits ZWJ/combining clusters mid-grapheme,
+        // leaving an orphan on the head side and a re-appearing tail. The
+        // tail is SGR-stripped BEFORE the drop, so it stays plain exactly as
+        // before — Width::dropAnsi contributes the cell/cluster boundary, and
+        // for pure-ASCII lines it is byte-identical to the old codepoint cut.
+        $tail = '';
+        if ($lineWidth > $tailStart) {
+            $tail = Width::dropAnsi(preg_replace('/\e\[[0-9;]*m/', '', $line) ?? '', $tailStart);
         }
 
         return $head . $headPad . $patch . $tail;
