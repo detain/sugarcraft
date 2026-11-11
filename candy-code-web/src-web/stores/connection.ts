@@ -3,16 +3,22 @@ import { computed, ref, shallowRef } from 'vue'
 import { login, logout, ticket, wsUrl } from '../protocol/auth'
 import { CandyCodeClient, type ClientOptions, type ClientStatus, type HelloResult } from '../protocol/client'
 import type { EventEnvelope, MethodName, MethodParams, MethodResult, Subscription } from '../protocol/generated'
+import { t } from '../lib/i18n'
 
 export type { ClientStatus as ConnectionStatus }
 
+/**
+ * String keys for each status, for the header chip (F-w1: the words live in
+ * the web.* lang packs like every other visible string; the map carries key
+ * ids and `t()` renders them, so a locale overlay re-labels the chip).
+ */
 const LABELS: Record<ClientStatus, string> = {
-  idle: 'not connected',
-  connecting: 'connecting…',
-  connected: 'connected',
-  reconnecting: 'reconnecting…',
-  'signed-out': 'signed out',
-  stopped: 'disconnected',
+  idle: 'web.chrome.connection.idle',
+  connecting: 'web.chrome.connection.connecting',
+  connected: 'web.chrome.connection.connected',
+  reconnecting: 'web.chrome.connection.reconnecting',
+  'signed-out': 'web.chrome.connection.signed_out',
+  stopped: 'web.chrome.connection.stopped',
 }
 
 /**
@@ -70,7 +76,7 @@ export const useConnectionStore = defineStore('connection', () => {
    * and the grace the server asked for; a fresh handshake clears it.
    */
   const shutdown = shallowRef<{ reason: string; graceSeconds: number } | null>(null)
-  const statusLabel = computed(() => LABELS[status.value])
+  const statusLabel = computed(() => t(LABELS[status.value]))
   const connected = computed(() => status.value === 'connected')
   const scopes = computed(() => hello.value?.principal.scopes ?? [])
   /**
