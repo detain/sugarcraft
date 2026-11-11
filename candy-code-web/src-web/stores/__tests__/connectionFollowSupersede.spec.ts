@@ -10,6 +10,10 @@ import { useConnectionStore } from '../connection'
  * holder's registration. A superseded follower now hears about it through
  * the same resumed({ error }) channel a lost follow already speaks, and the
  * identity-guarded unsubscribe protects the current holder.
+ *
+ * The delivery envelopes use `message.created`, a real durable session kind
+ * from the server's EventType catalogue — an earlier draft carried the
+ * non-existent `notice.shown` as filler (n38, cc-review-1111).
  */
 
 function follower() {
@@ -41,7 +45,7 @@ describe('follow supersession (CW-8)', () => {
     expect(newOne.resumed).not.toHaveBeenCalled()
 
     // Delivery goes to the current holder only.
-    const envelope = { sessionId: 's9', seq: 1, type: 'notice.shown', ts: 1, durable: true, data: {} }
+    const envelope = { sessionId: 's9', seq: 1, type: 'message.created', ts: 1, durable: true, data: {} }
     wire.socket().event(envelope)
     await Promise.resolve()
     expect(newOne.event).toHaveBeenCalledTimes(1)
@@ -57,7 +61,7 @@ describe('follow supersession (CW-8)', () => {
     connection.follow('s9', newOne)
     unsubOld()
 
-    const envelope = { sessionId: 's9', seq: 2, type: 'notice.shown', ts: 1, durable: true, data: {} }
+    const envelope = { sessionId: 's9', seq: 2, type: 'message.created', ts: 1, durable: true, data: {} }
     wire.socket().event(envelope)
     await Promise.resolve()
     expect(newOne.event).toHaveBeenCalledTimes(1)

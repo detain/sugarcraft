@@ -11,6 +11,12 @@ import { useConnectionStore, type SessionFollower } from '../connection'
  * later envelope in the batch (the batch was already spliced off the
  * queue: the loss was silent and permanent). Each consumer is isolated
  * now; a crash is that consumer's problem, not the spine's.
+ *
+ * The envelope kinds are real catalogue entries (n38, cc-review-1111:
+ * `server.tick` for the server-scope pair, `message.created` for the
+ * session-scope ones; the earlier `notice.shown` filler never existed on
+ * the wire). The envelope SHAPE stays simplified — the spine routes by
+ * `type` and `sessionId` and never inspects `durable` or `seq`.
  */
 
 let wire: Wire
@@ -36,10 +42,10 @@ describe('the event spine isolates its consumers (CW-1)', () => {
       seen.push(`${event.type}:${event.seq}`)
     })
 
-    wire.socket().event(envelope(null, 'notice.shown', { content: 'one' }, 1))
-    wire.socket().event(envelope(null, 'notice.shown', { content: 'two' }, 2))
+    wire.socket().event(envelope(null, 'server.tick', {}, 1))
+    wire.socket().event(envelope(null, 'server.tick', {}, 2))
 
-    expect(seen).toEqual(['notice.shown:1', 'notice.shown:2'])
+    expect(seen).toEqual(['server.tick:1', 'server.tick:2'])
   })
 
   it('a throwing follower still leaves the store listeners the delivery', () => {
@@ -51,9 +57,9 @@ describe('the event spine isolates its consumers (CW-1)', () => {
       heard.push(`${event.type}`)
     })
 
-    wire.socket().event(envelope('s1', 'notice.shown', { content: 'hi' }, 1))
+    wire.socket().event(envelope('s1', 'message.created', {}, 1))
 
-    expect(heard).toEqual(['notice.shown'])
+    expect(heard).toEqual(['message.created'])
   })
 
   it('the follower keeps its delivery even when a store listener explodes', () => {
@@ -65,8 +71,8 @@ describe('the event spine isolates its consumers (CW-1)', () => {
       throw new Error('listener first crash — on base it ran AFTER follower delivery for envelope one, then killed envelope two')
     })
 
-    wire.socket().event(envelope('s2', 'notice.shown', {}, 1))
-    wire.socket().event(envelope('s2', 'notice.shown', {}, 2))
+    wire.socket().event(envelope('s2', 'message.created', {}, 1))
+    wire.socket().event(envelope('s2', 'message.created', {}, 2))
 
     // Base reached envelope one's follower (listener runs after it in the
     // per-envelope loop) but envelope two never flushed at all.
