@@ -289,7 +289,28 @@ final class TeamToolTest extends TestCase
         $inbox = $this->ok($tool->execute(['action' => 'inbox', 'team' => 'alpha', 'teammate' => 'lead']));
         self::assertStringContainsString("not the user's instructions", $inbox);
         self::assertStringContainsString('- from alice: parser done', $inbox);
-        self::assertSame('No unread messages.', $this->ok($tool->execute(['action' => 'inbox', 'team' => 'alpha', 'teammate' => 'lead'])));
+        self::assertSame('No unread messages in team "alpha".', $this->ok($tool->execute(['action' => 'inbox', 'team' => 'alpha', 'teammate' => 'lead'])));
+    }
+
+    public function testInboxOutputNamesItsTeamSoCrossTeamViewsDistinguish(): void
+    {
+        $tool = $this->tool();
+        $this->ok($tool->execute(['action' => 'create', 'team' => 'alpha']));
+        $this->ok($tool->execute(['action' => 'create', 'team' => 'beta']));
+        $this->ok($tool->execute(['action' => 'message', 'team' => 'alpha', 'teammate' => 'lead', 'to' => 'worker', 'text' => 'alpha note']));
+        $this->ok($tool->execute(['action' => 'message', 'team' => 'beta', 'teammate' => 'lead', 'to' => 'worker', 'text' => 'beta note']));
+
+        $alpha = $this->ok($tool->execute(['action' => 'inbox', 'team' => 'alpha', 'teammate' => 'worker']));
+        $beta = $this->ok($tool->execute(['action' => 'inbox', 'team' => 'beta', 'teammate' => 'worker']));
+
+        self::assertStringContainsString('team "alpha"', $alpha);
+        self::assertStringContainsString('- from lead: alpha note', $alpha);
+        self::assertStringContainsString('team "beta"', $beta);
+        self::assertStringContainsString('- from lead: beta note', $beta);
+        // The nit: bare "- from lead" lines merged across teams; each view
+        // must name only its own team.
+        self::assertStringNotContainsString('beta', $alpha);
+        self::assertStringNotContainsString('alpha', $beta);
     }
 
     public function testUnknownActionsAndTeamsAreRefused(): void

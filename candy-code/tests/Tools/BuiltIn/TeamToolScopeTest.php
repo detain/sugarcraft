@@ -78,7 +78,11 @@ final class TeamToolScopeTest extends TestCase
         $refusal = $this->err($intruder->execute(['action' => 'message', 'team' => 'alpha', 'teammate' => 'mallory', 'to' => 'lead', 'text' => 'poisoned result']));
         self::assertStringContainsString('belongs to another workspace', $refusal);
 
-        self::assertSame('No unread messages.', $this->ok($victim->execute(['action' => 'inbox', 'team' => 'alpha', 'teammate' => 'lead'])));
+        // n13 team-stamp fuse (lane-report pre-authorized): scope invariant
+        // unchanged — the inbox is provably STILL EMPTY after the refused
+        // cross-workspace message; only the presentation string now carries
+        // its team name.
+        self::assertSame('No unread messages in team "alpha".', $this->ok($victim->execute(['action' => 'inbox', 'team' => 'alpha', 'teammate' => 'lead'])));
     }
 
     public function testCompletingAnotherWorkspacesTaskIsRefusedAndTheClaimSurvives(): void
