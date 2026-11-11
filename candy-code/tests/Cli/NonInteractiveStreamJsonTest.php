@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use React\Promise\PromiseInterface;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Backend\CancellationToken;
+use SugarCraft\Code\Backend\ObservesReasoning;
 use SugarCraft\Code\Cli\ArgvParser;
 use SugarCraft\Code\Cli\NonInteractive;
 use SugarCraft\Code\Events\SpendCapBreached;
@@ -44,7 +45,7 @@ final class NonInteractiveStreamJsonTest extends TestCase
      */
     private function streamingBackend(string $answer): Backend
     {
-        return new class($answer) implements Backend {
+        return new class($answer) implements Backend, ObservesReasoning {
             public function __construct(private readonly string $answer)
             {
             }
@@ -70,7 +71,7 @@ final class NonInteractiveStreamJsonTest extends TestCase
                 return Message::assistant($this->answer);
             }
 
-            public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+            public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null): PromiseInterface
             {
                 throw new \LogicException('not used on the sync -p path');
             }
@@ -150,7 +151,7 @@ final class NonInteractiveStreamJsonTest extends TestCase
 
     public function testARefusalStillLandsOnTheDocumentAndTheStderrChannelNotJustTheStream(): void
     {
-        $backend = new class implements Backend {
+        $backend = new class implements Backend, ObservesReasoning {
             public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onHeartbeat = null): Message
             {
                 if ($onEvent !== null) {
@@ -160,7 +161,7 @@ final class NonInteractiveStreamJsonTest extends TestCase
                 return Message::assistant('capped');
             }
 
-            public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+            public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null): PromiseInterface
             {
                 throw new \LogicException('not used');
             }
@@ -187,13 +188,13 @@ final class NonInteractiveStreamJsonTest extends TestCase
 
     public function testAFailingRunStillEndsOnATypedErrorDocument(): void
     {
-        $backend = new class implements Backend {
+        $backend = new class implements Backend, ObservesReasoning {
             public function complete(array $history, ?callable $onToken = null, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onHeartbeat = null): Message
             {
                 throw new \RuntimeException('provider exploded');
             }
 
-            public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null): PromiseInterface
+            public function completeAsync(array $history, ?callable $onToken = null, ?CancellationToken $cancellation = null, ?callable $onEvent = null, ?callable $onReasoning = null): PromiseInterface
             {
                 throw new \LogicException('not used');
             }

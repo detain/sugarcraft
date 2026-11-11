@@ -327,16 +327,14 @@ function cmdServeHttp(array $args): int
         \fwrite(\STDERR, 'candy-git-server: ' . $e->getMessage() . "\n");
         return 1;
     }
-    \fwrite(\STDOUT, 'candy-git-server: ' . Lang::t('cli.serve_http_banner', [
-        'addr' => (string) $listener->listenAddress(),
-        'repos' => (string) $served,
-        'published' => (string) $published,
-        'users' => (string) $storedUserCount,
-        'anon' => $config->allowAnonymousRead ? 'on' : 'off',
-    ]) . "\n");
-
     // Graceful stop when signals are available; without pcntl the process
     // dies on the terminal's SIGINT default, which is still truthful.
+    //
+    // The handlers MUST be armed before the readiness banner is published
+    // (2026-11-11, CI 143-vs-0 race): launchers treat the banner as "TERM
+    // will be handled gracefully", and a loaded runner that deschedules the
+    // child between the banner write and pcntl_signal() took the default
+    // disposition instead — exit 143 where the contract promises 0.
     if (\function_exists('pcntl_signal')) {
         $stop = static function () use ($listener): void {
             $listener->stop();
@@ -348,6 +346,14 @@ function cmdServeHttp(array $args): int
         // pcntl is loaded; SIGTERM defaults to 15, SIGINT to 2 — literals on
         // purpose (no ext-pcntl constant assumptions in bin).
     }
+
+    \fwrite(\STDOUT, 'candy-git-server: ' . Lang::t('cli.serve_http_banner', [
+        'addr' => (string) $listener->listenAddress(),
+        'repos' => (string) $served,
+        'published' => (string) $published,
+        'users' => (string) $storedUserCount,
+        'anon' => $config->allowAnonymousRead ? 'on' : 'off',
+    ]) . "\n");
 
     \React\EventLoop\Loop::get()->run();
     $listener->stop();

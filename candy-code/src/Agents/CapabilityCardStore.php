@@ -206,6 +206,6 @@ final class CapabilityCardStore
             return $bySession !== 0 ? $bySession : strcmp($a['name'], $b['name']);
         });
 
-        return array_values($rows);
+        return $rows;
     }
 }
