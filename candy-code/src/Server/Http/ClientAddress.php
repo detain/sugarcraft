@@ -27,6 +27,9 @@ final class ClientAddress
     /**
      * The client's IP: the TCP peer, or — behind a trusted proxy — the
      * right-most `X-Forwarded-For` entry that is not itself a trusted proxy.
+     * The text is the as-spelled form (the raw hop or stack-given peer);
+     * for a bucket or limiter key use {@see key()} so one client cannot
+     * mint many buckets with repr variants of the same address.
      *
      * @param list<string> $trustedProxies
      */
@@ -49,6 +52,33 @@ final class ClientAddress
         }
 
         return $peer;
+    }
+
+    /**
+     * The canonical bucket key for $address (n04): one client, one limiter
+     * row, whatever spelling reached us. A `%zone` scope id is trimmed to
+     * the address it qualifies, an IPv4-mapped IPv6 form (what a dual-stack
+     * `::` listener reports for every IPv4 peer, and any spelling a
+     * proxy-forwarded client can write) folds to the IPv4 it carries, and
+     * case/leading-zero compressed hex collapses through the same pack as
+     * {@see normalise()} does. Two genuinely different addresses never
+     * merge: text that is not an IP at all (the only way a key stays
+     * unparseable — the peer comes from the stack, and `of()` already
+     * refuses unparseable forwarded hops) stays byte-stable rather than
+     * collapsing into a shared '' bucket. Display keeps {@see of()}'s raw
+     * text; the guard's admission check keeps {@see normalise()}.
+     */
+    public static function key(string $address): string
+    {
+        $spelled = \trim($address);
+        if ($spelled === '') {
+            return '';
+        }
+
+        $zone = \strpos($spelled, '%');
+        $canonical = self::normalise($zone === false ? $spelled : \substr($spelled, 0, $zone));
+
+        return $canonical === '' ? $spelled : $canonical;
     }
 
     /**

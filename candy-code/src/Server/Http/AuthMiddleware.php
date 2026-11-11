@@ -112,7 +112,7 @@ final class AuthMiddleware
     public function __invoke(ServerRequestInterface $request, callable $next): mixed
     {
         $path = $request->getUri()->getPath();
-        $address = ClientAddress::of($request, $this->config->trustedProxies);
+        $address = ClientAddress::key(ClientAddress::of($request, $this->config->trustedProxies));
 
         // A `/ws` that is not an upgrade never authenticates and never strikes:
         // 426 first, exactly what the Router would answer one stage later.

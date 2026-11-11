@@ -277,6 +277,33 @@ final class AuthMiddlewareTest extends TestCase
         self::assertSame(204, $this->call('POST', '/api/ticket', $this->cookieHeaders($session))->getStatusCode());
     }
 
+    public function testMappedAndZonePeerSpellingsStrikeTheCanonicalBucket(): void
+    {
+        // n04: a dual-stack `::` listener reports every IPv4 peer as
+        // ::ffff:a.b.c.d, and a link-local peer can carry a %zone scope id.
+        // The strikes must land in the canonical bucket the limiter is read
+        // with, and the trip announces the canonical — key and display are
+        // one decision made at the seam, so no side bucket can exist.
+        for ($i = 0; $i < RateLimiter::MAX_FAILURES; ++$i) {
+            $this->call('GET', '/ws', self::UPGRADE + ['Authorization' => 'Bearer wrong'], HostAndOriginGuard::ORIGIN_SAME, '::ffff:127.0.0.1');
+        }
+
+        self::assertGreaterThan(0, $this->auth->limiter->retryAfter('127.0.0.1'), 'the mapped peer trips the canonical IPv4 twin');
+        self::assertSame(0, $this->auth->limiter->retryAfter('::ffff:127.0.0.1'), 'the raw spelling mints no side bucket');
+        self::assertSame(
+            1,
+            \count(\array_filter($this->logLines, static fn (string $l): bool => \str_starts_with($l, 'locked out 127.0.0.1'))),
+            'the lockout is announced under the canonical address',
+        );
+
+        for ($i = 0; $i < RateLimiter::MAX_FAILURES; ++$i) {
+            $this->call('GET', '/ws', self::UPGRADE + ['Authorization' => 'Bearer wrong'], HostAndOriginGuard::ORIGIN_SAME, 'fe80::1%lo');
+        }
+
+        self::assertGreaterThan(0, $this->auth->limiter->retryAfter('fe80::1'), 'the zone-qualified peer trips the zone-stripped bucket');
+        self::assertSame(0, $this->auth->limiter->retryAfter('fe80::1%lo'));
+    }
+
     private function assertSameNowLocked(): void
     {
         self::assertGreaterThan(0, $this->auth->limiter->retryAfter('127.0.0.1'), 'the address is locked out');

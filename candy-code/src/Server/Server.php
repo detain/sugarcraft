@@ -534,7 +534,7 @@ final class Server
      */
     private function perAddressCap(ServerRequestInterface $request, callable $next): mixed
     {
-        $address = ClientAddress::of($request, $this->config->trustedProxies);
+        $address = ClientAddress::key(ClientAddress::of($request, $this->config->trustedProxies));
         $running = $this->inFlightByAddress[$address] ?? 0;
         if ($running >= self::MAX_CONCURRENT_PER_ADDRESS) {
             return Responses::error(429, 'rate_limited', 'too many simultaneous requests from this address', ['Retry-After' => '1']);

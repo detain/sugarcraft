@@ -150,4 +150,34 @@ final class ClientAddressGuardTest extends TestCase
         self::assertNull(ClientAddress::normaliseRange('10.0.0.0/8/8'));
         self::assertTrue(ClientAddress::inAny('::ffff:10.0.0.1', ['10.0.0.0/8']), 'a mapped trusted proxy matches its IPv4 entry too');
     }
+
+    public function testTheLimiterKeyFoldsAddressReprVariants(): void
+    {
+        // n04: one client holds exactly one limiter bucket, whatever spelling
+        // reached the seam, and two genuinely different addresses never merge.
+        self::assertSame('127.0.0.1', ClientAddress::key('::ffff:127.0.0.1'), 'the dual-stack peer form is its IPv4 twin');
+        self::assertSame('192.0.2.7', ClientAddress::key('::FFFF:192.0.2.7'));
+        self::assertSame('1.2.3.4', ClientAddress::key('::ffff:0102:0304'), 'the hex-compressed mapped form folds to the quad it carries');
+        self::assertSame(ClientAddress::key('1.2.3.4'), ClientAddress::key('::ffff:0102:0304'));
+        self::assertSame('fe80::1', ClientAddress::key('fe80::1%lo'), 'the zone id qualifies the address, it is not part of it');
+        self::assertSame(ClientAddress::key('fe80::1'), ClientAddress::key('FE80::1%eth0'), 'case and zone fold together');
+        self::assertSame('1.2.3.4', ClientAddress::key(' ::ffff:1.2.3.4 '), 'a padded spelling keys like the bare one');
+
+        // Negative controls: everything else is byte-stable at the key.
+        self::assertSame('198.51.100.4', ClientAddress::key('198.51.100.4'));
+        self::assertSame('2001:db8::1', ClientAddress::key('2001:db8::1'));
+        self::assertSame('', ClientAddress::key(''), 'no peer stays no peer');
+        self::assertSame('not-an-ip', ClientAddress::key('not-an-ip'), 'unparseable text fails CLOSED to itself, never into a shared empty bucket');
+
+        // Proven non-folds: the platform's inet_pton REJECTS leading-zero and
+        // hex IPv4 literals outright (PHP stream sockets never deliver them),
+        // so they are distinct text, not sneakily-equal numbers — no heuristic.
+        self::assertSame('01.02.03.04', ClientAddress::key('01.02.03.04'));
+        self::assertSame('0x01020304', ClientAddress::key('0x01020304'));
+        self::assertNotSame(ClientAddress::key('1.2.3.4'), ClientAddress::key('01.02.03.04'));
+
+        // Different clients never share a bucket through the folding.
+        self::assertNotSame(ClientAddress::key('::ffff:1.2.3.4'), ClientAddress::key('::ffff:1.2.3.5'));
+        self::assertNotSame(ClientAddress::key('fe80::1%lo'), ClientAddress::key('fe80::2%lo'));
+    }
 }

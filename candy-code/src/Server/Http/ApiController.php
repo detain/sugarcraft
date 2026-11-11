@@ -67,7 +67,7 @@ final class ApiController
             return $this->webhooks->handle(
                 $request,
                 \substr($path, \strlen(ServerConfig::HOOK_ROUTE_PREFIX)),
-                ClientAddress::of($request, $this->config->trustedProxies),
+                ClientAddress::key(ClientAddress::of($request, $this->config->trustedProxies)),
             );
         }
 
@@ -87,7 +87,7 @@ final class ApiController
         $body = self::jsonBody($request);
         $code = $body['code'] ?? null;
         $token = $body['token'] ?? null;
-        $address = ClientAddress::of($request, $this->config->trustedProxies);
+        $address = ClientAddress::key(ClientAddress::of($request, $this->config->trustedProxies));
 
         // ISS-008: the owner token is tested before the lockout gate — this
         // endpoint is the one place the token hides in the BODY, where only
