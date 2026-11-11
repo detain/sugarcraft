@@ -57,6 +57,27 @@ describe('ToolCard', () => {
     expect(legacy.text()).toContain('Refused (user rejected): nope')
   })
 
+  it('renders a reloaded refusal with the byte-identical label as the live frame (m27)', () => {
+    // m27: the LIVE tool.finished frame carries the enum's PHP case name ('Refused'),
+    // while a persisted SNAPSHOT row serialises the enum's backing value
+    // ('Permission denied:'). Both spellings must land on the same noun, or the
+    // reloaded refusal repeats the prefix inside its own label.
+    const pairs = [
+      { name: 'Refused', value: 'Permission denied:', noun: 'permission' },
+      { name: 'Unanswered', value: 'Permission required:', noun: 'no answer' },
+      { name: 'Hook', value: 'Hook denied:', noun: 'hook' },
+    ]
+    for (const { name, value, noun } of pairs) {
+      // The reason rides the full error string in both shapes (the server builds
+      // it as `value . ' ' . detail`), so it is byte-equal live vs reloaded.
+      const reason = `${value} hold off`
+      const live = mount(ToolCard, { props: { item: tool({ status: 'denied', denial: { kind: name, reason } }) } })
+      const reload = mount(ToolCard, { props: { item: tool({ status: 'denied', denial: { kind: value, reason } }) } })
+      expect(reload.text()).toBe(live.text())
+      expect(live.text()).toContain(`Refused (${noun}): ${reason}`)
+    }
+  })
+
   it('shows the diff with its +/− counts', async () => {
     const wrapper = mount(ToolCard, { props: { item: tool({ name: 'Edit', arguments: { file_path: 'notes.txt' }, diff: DIFF }) } })
     expect(wrapper.find('.stats').text()).toBe('+1 −1')

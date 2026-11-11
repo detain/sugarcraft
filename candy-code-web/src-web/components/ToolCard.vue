@@ -74,16 +74,26 @@ function openAgent(id: string): void {
 }
 
 /**
- * MA-22: `denial.kind` rides the wire as the server enum's PHP case name
+ * MA-22: `denial.kind` rides the live wire as the server enum's PHP case name
  * (`Refused`, `Unanswered`, `Hook` — TranscriptProjector stamps `->name`) — an
  * identifier, not a word to drop into a human sentence. These nouns are the three
  * kinds' reader-facing names; anything unknown is camel-split instead of echoed
  * verbatim, so a case rename server-side still reads as words client-side.
+ *
+ * m27: a persisted SNAPSHOT row serialises the enum's backing VALUE instead of the
+ * case name (Message.php stamps `->value`), and the camel-split fallback cannot
+ * space-punctuate 'Permission denied:' — without these value keys a reloaded
+ * refusal labels itself 'permission denied: Permission denied: …'. The three
+ * values are frozen server-side (E347/E375), so this is the full pair, not a
+ * growing list; an unmapped future spelling still degrades to camel-split words.
  */
 const DENIAL_KIND_NOUNS: Record<string, string> = {
   Refused: 'permission',
   Unanswered: 'no answer',
   Hook: 'hook',
+  'Permission denied:': 'permission',
+  'Permission required:': 'no answer',
+  'Hook denied:': 'hook',
 }
 
 function humaniseDenialKind(kind: string): string {
