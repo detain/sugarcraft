@@ -1250,7 +1250,16 @@ final class Program
             // the macOS runner the loop can deliver one more stream callback
             // inside the stop window, arming this timer after the quit was
             // requested; this check closes that window from the fire side.
-            if ($generation !== $this->runtimeGeneration) {
+            // A generation match is not sufficient on its own: when a lone ESC
+            // and the quit land in the SAME StreamSelectLoop tick, loop->run()
+            // cannot return (and releaseRuntime() cannot bump) until the tick
+            // has run every due timer — the flush fires with a VALID generation
+            // into a Program that has already stopped. running is the signal
+            // that a stop was requested; readInput() honours it between the
+            // messages of one chunk, and the flush must judge the same
+            // predicate, or a keystroke nobody waited for dispatches into a
+            // model that has already returned.
+            if ($generation !== $this->runtimeGeneration || !$this->running) {
                 return;
             }
             $msg = $this->reader->flushPending();
@@ -1322,12 +1331,18 @@ final class Program
         $armedAt = hrtime(true);
         $generation = $this->runtimeGeneration;
         $this->pasteIdleTimer = $this->addOneShotTimer($seconds, function () use ($armedAt, $seconds, $generation): void {
+            // Drop the handle first: whatever happens below, this timer has
+            // fired and its handle is spent. A torn-down runtime (generation
+            // bumped in releaseRuntime()) or a Program already stopped but not
+            // yet released — the coalesced-tick window the lone-ESC flush
+            // documents above — must never let this callback READ input further
+            // down and dispatch into a finished model. running is judged at fire
+            // time exactly as readInput() judges it between the messages of one
+            // chunk; bytes arriving after a stop serve the NEXT run, never this
+            // one (stale-callback class deferTick() guards; teardown law,
+            // ProgramRuntimeTeardownTest).
             $this->pasteIdleTimer = null;
-            if ($generation !== $this->runtimeGeneration) {
-                // Torn-down runtime: this callback READS input itself
-                // further down, which would dispatch into a finished
-                // Program — the same stale-callback class deferTick()
-                // guards (teardown law, ProgramRuntimeTeardownTest).
+            if ($generation !== $this->runtimeGeneration || !$this->running) {
                 return;
             }
             if (!$this->reader->isPasting()) {
