@@ -372,10 +372,17 @@ export const useSessionsStore = defineStore('sessions', () => {
    *
    * `searchResults` is null while no query is active — the sidebar lists the
    * full index then; while one is active it lists exactly what the server
-   * ranked.
+   * ranked. A failed query drops that contract's stale half: the previous
+   * ranking is cleared and the refusal lands in `searchError` (m37).
    */
   const searchResults = ref<SessionSummary[] | null>(null)
   const searching = ref(false)
+  /**
+   * m37: a failed search lands its refusal here as a message string — the
+   * same idiom as session.ts's `olderError` and load()'s catch above. The
+   * store never throws at the component; there is one honest source to read.
+   */
+  const searchError = ref<string | null>(null)
   let searchTimer: ReturnType<typeof setTimeout> | null = null
   let searchSeq = 0
 
@@ -388,11 +395,13 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (term === '') {
       searchSeq++
       searchResults.value = null
+      searchError.value = null
       searching.value = false
       return
     }
     searching.value = true
     searchSeq++
+    searchError.value = null
     const seq = searchSeq
     searchTimer = setTimeout(() => {
       searchTimer = null
@@ -404,9 +413,15 @@ export const useSessionsStore = defineStore('sessions', () => {
           )
           if (seq !== searchSeq) return
           searchResults.value = result.items
-        } catch {
-          // A failed search leaves the previous results on screen; the index
-          // itself is untouched either way.
+        } catch (failure) {
+          if (seq !== searchSeq) return
+          // m37: a failed query must not keep the PREVIOUS query's ranking
+          // painted under the new term. Clearing lets the sidebar's existing
+          // empty affordance take over honestly; the index itself is
+          // untouched either way. The refusal lands as a message string per
+          // the `olderError` idiom — never thrown at the component.
+          searchResults.value = []
+          searchError.value = failure instanceof Error ? failure.message : String(failure)
         } finally {
           if (seq === searchSeq) searching.value = false
         }
@@ -465,6 +480,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     showArchived,
     searchResults,
     searching,
+    searchError,
     sharesBySession,
     load,
     setShowArchived,

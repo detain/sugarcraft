@@ -176,3 +176,73 @@ describe('sessions lists other roots in one flight (CW-DBA-11)', () => {
     expect(sessions.loaded).toBe(true)
   })
 })
+
+/**
+ * m37 (reviews-1111 B-25): a refused server search used to leave the
+ * PREVIOUS query's ranking painted under the new term — the catch arm was a
+ * no-op comment. The store now clears the results (the sidebar's existing
+ * empty affordance takes over) and lands the refusal as a message string in
+ * `searchError`, the same idiom session.ts's `olderError` follows. These
+ * pins drive the real 250ms debounce with real timers (the sidebar search
+ * spec's precedent).
+ */
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+describe('sessions search failure drops the stale ranking (m37)', () => {
+  it('clears the previous ranking and lands the refusal message', async () => {
+    const { wire, sessions } = await quiet()
+
+    sessions.search('first')
+    await sleep(400)
+    await wire.answer('session.list', { items: [row('a')], nextCursor: null })
+    expect(sessions.searchResults?.map((r) => r.id)).toEqual(['a'])
+    expect(sessions.searchError).toBeNull()
+
+    sessions.search('second')
+    await sleep(400)
+    await wire.fail('session.list', -32000, 'internal_error', 'search exploded')
+
+    // The stale ['a'] is gone — an empty, honestly-labeled result set takes
+    // over — and the refusal is readable, not swallowed.
+    expect(sessions.searchResults).toEqual([])
+    expect(sessions.searchError).toBe('search exploded')
+    expect(sessions.searching).toBe(false)
+  })
+
+  it('the next query clears the refusal at its start and success repopulates', async () => {
+    const { wire, sessions } = await quiet()
+
+    sessions.search('a')
+    await sleep(400)
+    await wire.fail('session.list', -32000, 'internal_error', 'boom')
+    expect(sessions.searchError).toBe('boom')
+
+    // Typing the next term nulls the refusal right away: no error ghost
+    // while a fresh query is in flight.
+    sessions.search('b')
+    expect(sessions.searchError).toBeNull()
+
+    await sleep(400)
+    await wire.answer('session.list', { items: [row('b')], nextCursor: null })
+    expect(sessions.searchResults?.map((r) => r.id)).toEqual(['b'])
+    expect(sessions.searchError).toBeNull()
+  })
+
+  it('a refusal that loses the race to a newer query cannot stamp state', async () => {
+    const { wire, sessions } = await quiet()
+
+    sessions.search('x')
+    await sleep(400)
+    // A newer term bumps the sequence; its frame arms ~250ms later.
+    sessions.search('y')
+    // The only frame out on the wire right now is 'x' — fail it. Its seq is
+    // already stale, so the catch arm must return before touching state.
+    await wire.fail('session.list', -32000, 'internal_error', 'stale refused')
+    expect(sessions.searchError).toBeNull()
+
+    await sleep(400)
+    await wire.answer('session.list', { items: [row('c')], nextCursor: null })
+    expect(sessions.searchResults?.map((r) => r.id)).toEqual(['c'])
+    expect(sessions.searchError).toBeNull()
+  })
+})
