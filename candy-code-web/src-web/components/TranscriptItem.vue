@@ -48,7 +48,16 @@ async function copyText(text: string): Promise<void> {
  * replayed state never freezes whichever language the fold happened in.
  */
 function noticeText(item: NoticeItem): string {
-  return item.key.startsWith('steered:') ? t('web.transcript.steered') : item.content
+  if (item.key.startsWith('steered:')) return t('web.transcript.steered')
+  // m24: the askResolutionOutcome class rides the key prefix; the stored
+  // content is the server's note verbatim (never client-translated).
+  if (item.key.startsWith('ask-resolved:unanswered:'))
+    return item.content === ''
+      ? t('web.transcript.ask_unanswered')
+      : t('web.transcript.ask_unanswered_note', { note: item.content })
+  if (item.key.startsWith('ask-resolved:answered:'))
+    return t('web.transcript.ask_answered_note', { note: item.content })
+  return item.content
 }
 
 // Every run, when this call started one: the card grows the tree below its

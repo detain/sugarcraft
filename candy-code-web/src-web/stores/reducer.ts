@@ -398,6 +398,18 @@ function upsert(state: SessionState, item: TranscriptItem): void {
   else state.items.push(item)
 }
 
+/**
+ * m24 (CW-COVER-B F2): the outcome class of a resolution worth a transcript
+ * row. A cancellation is never a "no" (the server's PermissionResolved keeps
+ * them apart on purpose) and a note-carrying answer carries feedback the
+ * fold must not swallow; a plain answer with no note is the historical
+ * silent clear — the answering client already knows what it did.
+ */
+function askResolutionOutcome(data: Events['permission.resolved']): 'unanswered' | 'answered' | null {
+  if (data.cancelled === true) return 'unanswered'
+  return typeof data.note === 'string' && data.note !== '' ? 'answered' : null
+}
+
 function appendDelta(part: LivePart | null, partId: string, offset: number, text: string): LivePart {
   const current = part !== null && part.partId === partId ? part : { partId, bytes: 0, text: '', gap: false }
   if (offset < current.bytes) return current
@@ -630,7 +642,25 @@ export function applyEvent(state: SessionState, envelope: EventEnvelope): void {
     }
 
     case 'permission.resolved': {
+      // m24 (CW-COVER-B F2): the frame is durable on the session scope and
+      // carries WHY the ask went away — a cancellation note (timeout,
+      // turn end, parent gone) or the reject/AskUser feedback. Dropping it
+      // made an auto-rejected ask vanish exactly as if a human answered.
+      // CW-EN-EU02 split: the row's content is the server's note VERBATIM
+      // (server text is never client-translated — the F-M22 law); the
+      // outcome rides in the key and TranscriptItem resolves the prose at
+      // presentation. Keyed by askId+outcome so a replay replaces its own
+      // row. A plain answer with no note keeps the historical silent clear.
       const { data } = envelope as unknown as Ev<'permission.resolved'>
+      const outcome = askResolutionOutcome(data)
+      if (outcome !== null) {
+        upsert(state, {
+          kind: 'notice',
+          key: `ask-resolved:${outcome}:${data.askId}`,
+          level: outcome === 'unanswered' ? 'warn' : 'info',
+          content: typeof data.note === 'string' ? data.note : '',
+        })
+      }
       state.asks = state.asks.filter((ask) => ask.askId !== data.askId)
       break
     }
