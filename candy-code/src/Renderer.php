@@ -514,6 +514,32 @@ final class Renderer
     private static array $imageCache = [];
 
     /**
+     * Distinct header probes {@see $imageProbeMemo} keeps before it starts
+     * evicting the least recently used one. The same ceiling as the encoded
+     * pictures above: a probe is only useful while its picture is on screen.
+     */
+    private const IMAGE_PROBE_MAX = 8;
+
+    /**
+     * Source pixel dimensions keyed by the digest of the source bytes, in
+     * least-recently-used-first order (B-41, m52(A-id)).
+     *
+     * The picture cache above cannot carry the dimensions: they feed its key,
+     * so they must be known before it is consulted. This memo answers that
+     * chicken-and-egg with a parse of its own - one per distinct picture
+     * instead of one per frame, per picture. The key is a content digest and
+     * nothing else, so the SHARED-PROCESS CONTRACT stated on {@see $imageCache}
+     * needs no ambient folding here.
+     *
+     * A null value is a NEGATIVE memo: the header was unreadable, and a
+     * corrupt screenshot should cost one probe rather than a parse per
+     * repaint. Callers omit the dimensions leg on null - never a lie.
+     *
+     * @var array<string, array{0: int, 1: int}|null>
+     */
+    private static array $imageProbeMemo = [];
+
+    /**
      * Distinct settled assistant bodies {@see $markdownMemo} keeps before it
      * evicts the least recently used one.
      *
@@ -5393,16 +5419,18 @@ final class Renderer
      * it" and "will my terminal even show it" - the second being the entire
      * point of the `/doctor` swatch this was reported against.
      *
-     * Dimensions come from `getimagesizefromstring()` (header only, no
-     * bitmap decode - a collapsed row must stay cheap) and are simply omitted
-     * when the header is unreadable; the expand path reports the real failure.
+     * Dimensions come from {@see imageDimensions()}, memoized by digest so a
+     * collapsed row never re-parses the header on repaint; they are simply
+     * omitted when the header is unreadable, and the expand path reports the
+     * real failure.
      * The protocol string is truncated with the rest of the line to preserve
      * the one-logical-line-per-row invariant.
      */
     private static function collapsedImageNotice(ToolResult $result, Theme $theme, int $width): string
     {
-        $size = @getimagesizefromstring((string) $result->imageBytes);
-        $dimensions = \is_array($size) && $size[0] > 0 && $size[1] > 0 ? "{$size[0]}×{$size[1]} " : '';
+        $bytes = (string) $result->imageBytes;
+        $size = self::imageDimensions(hash('xxh3', $bytes), $bytes);
+        $dimensions = $size === null ? '' : "{$size[0]}×{$size[1]} ";
         $protocol = $result->imageProtocol === null || $result->imageProtocol === ''
             ? ''
             : self::oneLine($result->imageProtocol) . ' ';
@@ -5410,6 +5438,55 @@ final class Renderer
         $text = Width::truncate('🖼 ' . $dimensions . $protocol . Lang::t('tui.tool.image_hidden'), max(1, $width));
 
         return self::dim($theme)->render($text);
+    }
+
+    /**
+     * The image leg's one header probe per picture: pixel dimensions of
+     * `$bytes`, memoized by the digest the caller already paid for.
+     *
+     * This is the ONLY `getimagesizefromstring()` call site in the image leg
+     * by design (B-41, m52(A-id)): the expanded path used to parse the header
+     * twice per frame - once to build the picture-cache key and once more for
+     * the accessibility row - while a collapsed row parsed it again on every
+     * repaint. The census test
+     * `testTheHeaderProbeHasASingleCallSiteInTheImageLeg` holds that shape.
+     *
+     * Returns `[width, height]` in source pixels, or null when the header is
+     * unreadable - the null is memoized too, so a corrupt screenshot costs one
+     * probe rather than a parse per frame. Callers omit the dimensions leg on
+     * null; nothing is ever guessed. Never throws: the probe's warning is
+     * deliberately suppressed, and the real failure surfaces from the decode
+     * inside {@see renderToolImage()}'s cache-miss arm.
+     *
+     * @param string $digest `hash('xxh3', $bytes)` from the caller - the key
+     *                       is content-only, so the shared-process contract
+     *                       documented on {@see $imageCache} needs no ambient
+     *                       folding here
+     *
+     * @return array{0: int, 1: int}|null
+     */
+    private static function imageDimensions(string $digest, string $bytes): ?array
+    {
+        if (\array_key_exists($digest, self::$imageProbeMemo)) {
+            // LRU touch: re-insert so the freshest probe sits last.
+            $dims = self::$imageProbeMemo[$digest];
+            unset(self::$imageProbeMemo[$digest]);
+            self::$imageProbeMemo[$digest] = $dims;
+
+            return $dims;
+        }
+
+        $size = @getimagesizefromstring($bytes);
+        $dims = \is_array($size) && $size[0] > 0 && $size[1] > 0
+            ? [(int) $size[0], (int) $size[1]]
+            : null;
+
+        if (\count(self::$imageProbeMemo) >= self::IMAGE_PROBE_MAX) {
+            array_shift(self::$imageProbeMemo);
+        }
+        self::$imageProbeMemo[$digest] = $dims;
+
+        return $dims;
     }
 
     /**
@@ -5443,7 +5520,9 @@ final class Renderer
      * Both the decode and the encode are memoized in {@see $imageCache} because
      * this runs on every frame; only the (cheap) {@see ImageLayer::place()}
      * registration is redone per frame, since placement ids are positional to
-     * the frame being built.
+     * the frame being built. The header probe is memoized too - one digest-keyed
+     * {@see imageDimensions()} lookup per picture (B-41), reused for the cache
+     * key and both dimensions legs - so a repaint parses nothing.
      *
      * @param int $imageRows tallest box to encode at. The height derived from
      *                       the aspect ratio is clamped to it so one tall source
@@ -5463,12 +5542,17 @@ final class Renderer
         // runtime paints the picture over. The content width can now be as
         // small as 1 (audit 15b-09), so the old floor of 8 is gone.
         $cols = max(1, min(self::IMAGE_COLS, $width));
-        $rows = self::imageRows($bytes, $cols, $imageRows);
+        // One digest, one header probe per picture (B-41): the memoized dims
+        // feed the cache key below and both dimensions legs, so a repaint of
+        // the same bytes parses nothing.
+        $digest = hash('xxh3', $bytes);
+        $dims = self::imageDimensions($digest, $bytes);
+        $rows = self::imageRows($dims, $cols, $imageRows);
         // A-06: protocol() names the PROTOCOL; the ascii colour arms share
         // 'ascii', so modeDetail() rides the key to keep ansi256 vs
         // truecolor encodings from cross-serving on a /rendermode switch.
         $detail = $mosaic->modeDetail();
-        $key = hash('xxh3', $bytes) . ':' . $cols . 'x' . $rows . ':' . $mosaic->protocol() . ($detail === null ? '' : ':' . $detail);
+        $key = $digest . ':' . $cols . 'x' . $rows . ':' . $mosaic->protocol() . ($detail === null ? '' : ':' . $detail);
 
         if (isset(self::$imageCache[$key])) {
             $hit = self::$imageCache[$key];
@@ -5498,8 +5582,9 @@ final class Renderer
         // screen reader, a copy-out, or a terminal that silently drops the
         // pixel protocol still learns what is there. Built per call, never
         // cached: the cache key is picture-only by design and the row depends
-        // on the pane width and theme of the frame being built.
-        $alt = self::imageAltLine($result, $theme, $width, $mosaic);
+        // on the pane width and theme of the frame being built. The dimensions
+        // leg rides the probe above - the alt line parses nothing.
+        $alt = self::imageAltLine($result, $theme, $width, $mosaic, $dims);
 
         return $alt . "\n" . ($mosaic->isInline() ? $hit['body'] : $images->place($hit['body'], $cols, $rows));
     }
@@ -5519,16 +5604,17 @@ final class Renderer
      * never sees a wrapped description. The whole row is the catalogued
      * `tui.tool.image_shown` template; `{file}` carries its own leading
      * space when a path is known (empty when not), and `{details}` joins the
-     * dimensions and render-mode legs.
+     * dimensions and render-mode legs. The pixel dimensions arrive in $dims -
+     * the {@see imageDimensions()} result the caller already memoized - rather
+     * than a fresh header parse per repaint (B-41).
      */
-    private static function imageAltLine(ToolResult $result, Theme $theme, int $width, Mosaic $mosaic): string
+    private static function imageAltLine(ToolResult $result, Theme $theme, int $width, Mosaic $mosaic, ?array $dims): string
     {
         $path = $result->imagePath;
         $file = $path === null || $path === '' ? '' : self::oneLine(basename($path));
-        // Same header-only probe collapsedImageNotice() uses: cheap per frame,
-        // and an unreadable header only costs the dimensions leg, never a lie.
-        $size = @getimagesizefromstring((string) $result->imageBytes);
-        $dimensions = \is_array($size) && $size[0] > 0 && $size[1] > 0 ? "{$size[0]}×{$size[1]}" : '';
+        // The dimensions leg rides the caller's memoized probe; an unreadable
+        // header costs the dimensions leg, never a lie.
+        $dimensions = $dims === null ? '' : "{$dims[0]}×{$dims[1]}";
 
         $detail = $mosaic->modeDetail();
         $mode = self::oneLine($mosaic->protocol()) . ($detail === null ? '' : ':' . self::oneLine($detail));
@@ -5546,22 +5632,22 @@ final class Renderer
     }
 
     /**
-     * Cell height for an image of $bytes drawn $cols wide, clamped to $budget.
+     * Cell height for an image of $dims pixel dimensions drawn $cols wide,
+     * clamped to $budget.
      *
-     * Split out of {@see renderToolImage()} so the cheap header-only dimension
-     * probe stays outside that method's cache lookup - the height is part of
-     * the cache key, so it has to be known before the key is built, and
-     * `getimagesizefromstring()` reads the header only rather than decoding the
-     * whole bitmap the way {@see ImageSource::fromString()} does.
+     * Split out of {@see renderToolImage()} so the dimension arithmetic stays
+     * outside that method's cache lookup - the height is part of the cache
+     * key, so it has to be known before the key is built - and the dimensions
+     * arrive pre-parsed from {@see imageDimensions()} rather than a fresh
+     * header read per repaint (B-41).
      *
-     * Falls back to a square box when the header is unreadable: the real
-     * decode is about to fail anyway, and this only has to produce a stable
-     * cache key for that failure.
+     * Falls back to a square box when $dims is null (unreadable header): the
+     * real decode is about to fail anyway, and this only has to produce a
+     * stable cache key for that failure.
      */
-    private static function imageRows(string $bytes, int $cols, int $budget): int
+    private static function imageRows(?array $dims, int $cols, int $budget): int
     {
-        $size = @getimagesizefromstring($bytes);
-        $aspect = \is_array($size) && $size[0] > 0 && $size[1] > 0 ? $size[0] / $size[1] : 1.0;
+        $aspect = $dims === null ? 1.0 : $dims[0] / $dims[1];
 
         // Cells are about twice as tall as they are wide, so the /2 is what
         // keeps a square image square rather than doubled in height.

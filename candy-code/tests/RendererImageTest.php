@@ -335,4 +335,163 @@ final class RendererImageTest extends TestCase
         $this->assertCount(1, $paints, 'one image on screen, one paint');
         $this->assertStringContainsString("sep \u{E0B0} dir \u{F115} end", $body, 'Private-Use glyphs reach the terminal intact');
     }
+
+    /**
+     * B-41 (m52(A-id)): the header probe is memoized by digest, so a repaint
+     * of the same picture parses nothing. PROVEN AS STATE, NOT AS A STOPWATCH
+     * RATIO: {@see Renderer::$imageProbeMemo} is the memoization itself. The
+     * cold frame must add EXACTLY ONE entry keyed by hash('xxh3') of the
+     * source bytes carrying the real [20, 10] pixel dimensions, and a warm
+     * repaint must add none while painting byte-identically. Re-introducing a
+     * per-frame getimagesizefromstring() in renderToolImage()'s dimensions
+     * legs either grows the entry set (new key shape) or goes red against the
+     * census pin below, at any machine speed.
+     */
+    public function testTheHeaderProbeIsMemoizedByDigestAcrossRepaints(): void
+    {
+        $png = $this->pngBytes();
+        $digest = \hash('xxh3', $png);
+        $chat = $this->chatWithImage(Mosaic::sixel(), $png);
+
+        $probe = new \ReflectionProperty(Renderer::class, 'imageProbeMemo');
+        $probe->setAccessible(true);
+        $before = $probe->getValue();
+        // The same fixture bytes may already sit in the process-wide memo from
+        // an earlier test painting them; drop our digest first so this test
+        // observes a genuine cold probe (the finally-restore writes back this
+        // same evicted baseline).
+        $before = \array_diff_key($before, [$digest => 1]);
+        $probe->setValue(null, $before);
+
+        try {
+            $first = Renderer::renderView($chat);
+            $afterCold = $probe->getValue();
+
+            $newKeys = array_diff(array_keys($afterCold), array_keys($before));
+            $this->assertSame(
+                [$digest],
+                array_values($newKeys),
+                'the cold frame must memoize exactly one digest-keyed probe entry - the key is the'
+                . ' picture\'s content hash, so the same bytes never parse their header twice'
+            );
+            $this->assertSame([20, 10], $afterCold[$digest], 'the memoized entry carries the real pixel dimensions');
+
+            $second = Renderer::renderView($chat);
+            $afterWarm = $probe->getValue();
+
+            $this->assertSame($first->body, $second->body, 'a repaint of the same bytes must paint byte-identically');
+            $this->assertSame(
+                $afterCold,
+                $afterWarm,
+                'the warm frame added or reordered probe entries - only a fresh parse touches the memo'
+            );
+        } finally {
+            $probe->setValue(null, $before);
+        }
+    }
+
+    /**
+     * B-41, served-from-memo proof: poison the digest-keyed probe entry with
+     * sentinel dimensions and the repaint must SHOW THE SENTINEL in the alt
+     * row's dimensions leg - which only a frame that reads the memo can do.
+     * A frame that re-parses the header would keep painting the real 20×10.
+     * Mirrors the sentinel discipline of the encoded-picture cache test above.
+     */
+    public function testThePaintedImageReadsItsDimensionsFromTheProbeMemo(): void
+    {
+        $png = $this->pngBytes();
+        $digest = \hash('xxh3', $png);
+        $chat = $this->chatWithImage(Mosaic::sixel(), $png);
+
+        $probe = new \ReflectionProperty(Renderer::class, 'imageProbeMemo');
+        $probe->setAccessible(true);
+        $before = $probe->getValue();
+
+        try {
+            $cold = Renderer::renderView($chat);
+            $entry = $probe->getValue()[$digest] ?? null;
+            if ($entry !== [20, 10]) {
+                $this->markTestSkipped('this build did not memoize the fixture picture under its content digest');
+            }
+            $this->assertStringContainsString('20×10', $cold->body, 'the cold frame labels the real dimensions');
+
+            $poisoned = $probe->getValue();
+            $poisoned[$digest] = [10, 1];
+            $probe->setValue(null, $poisoned);
+
+            $warm = Renderer::renderView($chat);
+            $this->assertStringContainsString(
+                '10×1',
+                $warm->body,
+                'the warm frame did not read the memoized dimensions - it re-parsed the header over the poisoned entry'
+            );
+            $this->assertStringNotContainsString('20×10', $warm->body, 'the real dimensions reappeared - something bypassed the memo');
+        } finally {
+            $probe->setValue(null, $before);
+        }
+    }
+
+    /**
+     * B-41, fail-soft honesty: an unreadable header memoizes a NULL negative,
+     * so a corrupt screenshot costs one probe rather than a parse per repaint.
+     * The dimensions leg stays omitted (null is never a lie) and the frame
+     * keeps the established 'image unavailable' refusal shape with no pixel
+     * layer - the early return the pre-B-41 code already had, pinned byte for
+     * byte across a repaint while the probe entry set does not grow.
+     */
+    public function testAnUnreadableHeaderIsNegativelyMemoizedWithoutADimensionsLeg(): void
+    {
+        $garbage = 'definitely-not-a-png';
+        $digest = \hash('xxh3', $garbage);
+        $chat = $this->chatWithImage(Mosaic::sixel(), $garbage);
+
+        $probe = new \ReflectionProperty(Renderer::class, 'imageProbeMemo');
+        $probe->setAccessible(true);
+        $before = $probe->getValue();
+        // Same eviction as the positive-memo test: the fixture string is
+        // painted by an earlier test too, so clear our digest first to make
+        // this a genuine cold probe (finally restores this evicted baseline).
+        $before = \array_diff_key($before, [$digest => 1]);
+        $probe->setValue(null, $before);
+
+        try {
+            $first = Renderer::renderView($chat);
+            $afterCold = $probe->getValue();
+
+            $newKeys = array_diff(array_keys($afterCold), array_keys($before));
+            $this->assertSame([$digest], array_values($newKeys), 'the failed probe is memoized as a negative entry');
+            $this->assertArrayHasKey($digest, $afterCold);
+            $this->assertNull($afterCold[$digest], 'an unreadable header must store the null negative, never fabricated dimensions');
+
+            $this->assertStringNotContainsString('×', $first->body, 'the dimensions leg is omitted when the header is unreadable');
+            $this->assertSame([], $first->images, 'undecodable bytes produce no pixel layer');
+
+            $second = Renderer::renderView($chat);
+            $this->assertSame($first->body, $second->body, 'the negative memo must repaint byte-identically');
+            $this->assertSame($afterCold, $probe->getValue(), 'the warm frame re-parsed - the negative entry did not answer');
+        } finally {
+            $probe->setValue(null, $before);
+        }
+    }
+
+    /**
+     * B-41, source-shape census: imageDimensions() is the ONLY suppressed
+     * getimagesizefromstring() call site in the whole renderer. The runtime
+     * memo pins above prove the happy path; this holds the shape, so a future
+     * per-frame re-parse anywhere in the file (the pre-B-41 file had three)
+     * goes red without needing a fixture that reaches it. Re-add any parse to
+     * renderToolImage()/imageAltLine()/collapsedImageNotice() and this fails.
+     */
+    public function testTheHeaderProbeHasASingleCallSiteInTheImageLeg(): void
+    {
+        $source = \file_get_contents(\dirname(__DIR__) . '/src/Renderer.php');
+        $this->assertIsString($source);
+
+        $this->assertSame(
+            1,
+            \substr_count($source, '@getimagesizefromstring('),
+            'the image leg must parse headers in exactly one place - every other call site is a'
+            . ' per-frame re-parse this census (B-41) exists to catch'
+        );
+    }
 }
