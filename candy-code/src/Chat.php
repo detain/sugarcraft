@@ -451,7 +451,11 @@ final class Chat implements Model
      * otherwise leave the parent blocked forever waiting on pcntl_waitpid();
      * past this deadline, stragglers are SIGKILLed and reported as timeouts.
      * The default of `chatToolTimeoutSeconds` (roadmap
-     * N-P4c), read when a batch starts.
+     * N-P4c), read when a batch starts — that forked dispatch never fires in
+     * production (every real completion resolves tool calls through
+     * EngineBackend/Runtime, whose live cap is `parallelToolDeadlineSeconds`),
+     * so this budget governs the forked batch path only (B-14, F-m12t
+     * dormancy disclosure; the knob's help/readBy prose carries the same law).
      */
     public const PARALLEL_TOOL_TIMEOUT_SECONDS = 30;
 
