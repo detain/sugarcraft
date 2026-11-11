@@ -8533,18 +8533,22 @@ DOC;
      * `Runtime.php`'s statement of how many `Agent::systemPrompt()` call sites
      * pay the un-suppressed git cost must be the number the TREE produces.
      *
-     * WHY A TEST AND NOT A CORRECTED WORD. The sentence said "nine". MEASURED,
-     * it is EIGHT - and the "nine" was not a typo: prompt_plan.md's own P3.S5
+     * WHY A TEST AND NOT A CORRECTED WORD. The sentence said "nine". MEASURED
+     * at the time, it was EIGHT - and the "nine" was not a typo: prompt_plan.md's own P3.S5
      * and P3.S6 sections both say "nine live sites", so the doc-block
      * faithfully inherited a figure from the brief, inside the very commit
      * whose purpose was to record a gap accurately. §16.8 rule 2 says ship the
      * generator, not the count; rule 44 says a brief carries more authority
      * than a review because nothing downstream is asked to falsify it. This is
-     * the downstream thing that falsifies it, and P3.S6 needs the number.
+     * the downstream thing that falsifies it, and P3.S6 needs the number. The
+     * EIGHT falsified in turn by cc-fix-1111 M-11 (2026-11-11), which collapsed
+     * `WorkflowEngine`'s five live seams into two inside `renderStagePrompt()`;
+     * the census now derives FIVE, and this test answered with the new number
+     * rather than rotting the prose - which is the point of deriving.
      *
-     * IT PINS AGREEMENT, NOT A LITERAL. There is no `assertSame(8, ...)` here:
+     * IT PINS AGREEMENT, NOT A LITERAL. There is no hard-coded total here:
      * the census derives the count and the assertion is that the PROSE says
-     * what the census found, so a ninth call site reds this with both numbers
+     * what the census found, so a further call site reds this with both numbers
      * named rather than silently ageing the sentence. That is the shape
      * prompt_plan.md §17.1 corrected an earlier census into.
      */
@@ -8652,7 +8656,7 @@ DOC;
                 'src/Agents/AgentManager.php' => 1,
                 'src/Agents/ProcessExecutor.php' => 1,
                 'src/App/App.php' => 1,
-                'src/Workflows/WorkflowEngine.php' => 5,
+                'src/Workflows/WorkflowEngine.php' => 2,
             ],
             $perFile,
             'the Agent-assembler call sites moved between files - src/Runtime.php enumerates them and must be re-read',

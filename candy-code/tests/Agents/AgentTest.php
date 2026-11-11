@@ -3535,10 +3535,14 @@ final class AgentTest extends TestCase
      * TEN/FIVE since cc-fix-1111 M-11 (2026-11-11), which re-dispositioned
      * P3.S6 per register option (a): `WorkflowEngine`'s five live seams
      * collapsed into two inside `renderStagePrompt()` and the tree-wide text
-     * moved thirteen to ten with them (the old App 2 / SkillFork 0 split
-     * became App 1 / SkillFork 1 as the narration moved files). Re-derive
-     * both commands before believing any number in this family, including
-     * this paragraph.
+     * moved thirteen to ten with them - the whole three-line delta is
+     * `WorkflowEngine`, five textual seams to two. An earlier draft of this
+     * sentence credited the move with turning "App 2 / SkillFork 0" into
+     * "App 1 / SkillFork 1"; that is FALSE TO THE DISK. The same grep counts
+     * one in `App/App.php` and one in `Skills/SkillFork.php` at base
+     * 02b6b1b53, and this commit touched neither file. Re-derive both
+     * commands before believing any number in this family, including this
+     * paragraph.
      *
      * WHY THE FIGURE MOVED, since it is the second correction: this step's own
      * doc-block prose is what changed it. `git show c7e5a6454:candy-code/src/Agents/Agent.php
