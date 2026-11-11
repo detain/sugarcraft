@@ -16,7 +16,9 @@
  * recorder stops the MediaRecorder itself when the timer fires and delivers
  * the finished take there, so a forgotten button cannot stream forever and
  * a capped take still reaches its transcription. The server's transport
- * enforces its own cap independently.
+ * enforces its own cap independently. A stop() landing between the cap
+ * halting the encoder and its queued onstop event claims the delivery, so
+ * the take reaches exactly one arm and a billed transcription never doubles.
  *
  * Permission UX is browser truth: getUserMedia prompts, and a refusal
  * surfaces as a named error code the composer turns into a notice. There
@@ -138,6 +140,7 @@ export async function startTake(
   }
   let settle: ((take: Take) => void) | null = null
   let dead = false
+  let claimed = false
   const release = (): void => {
     clearTimeout(timer)
     for (const track of stream.getTracks()) track.stop()
@@ -149,7 +152,7 @@ export async function startTake(
     if (resolve !== null) {
       release()
       resolve(take)
-    } else if (!dead) {
+    } else if (!dead && !claimed) {
       release()
       onCapped?.(take)
     }
@@ -163,7 +166,11 @@ export async function startTake(
     stop(): Promise<Take> {
       if (dead) return Promise.reject(new RecorderError('unknown', 'the take was already abandoned'))
       if (recorder.state === 'inactive') {
-        // The cap already stopped the encoder; deliver what the chunks hold.
+        // The cap already stopped the encoder, but its onstop event may still
+        // be in flight. Claiming here keeps that event from handing the same
+        // take to onCapped for a second (billed) delivery; the bytes ride
+        // this promise instead — the caller still receives them once.
+        claimed = true
         const take: Take = { blob: new Blob(chunks, { type: rung.send }), mime: rung.send }
         release()
         return Promise.resolve(take)

@@ -23,6 +23,9 @@ class FakeMediaRecorder {
   started = 0
   stops = 0
   requestedMime: string | undefined
+  /** Real browsers flip the state inside stop() and queue the onstop event; this models that gap. */
+  deferStop = false
+  stopQueued = false
   ondataavailable: ((event: BlobEvent) => void) | null = null
   onstop: (() => void) | null = null
 
@@ -42,6 +45,17 @@ class FakeMediaRecorder {
   stop(): void {
     this.stops++
     this.state = 'inactive'
+    if (this.deferStop) {
+      this.stopQueued = true
+      return
+    }
+    this.onstop?.()
+  }
+
+  /** Let the queued onstop dispatch finally run, as the browser's event task would. */
+  flushStop(): void {
+    if (!this.stopQueued) return
+    this.stopQueued = false
     this.onstop?.()
   }
 
@@ -251,6 +265,63 @@ describe('startTake lifecycle', () => {
       await vi.advanceTimersByTimeAsync(1)
       expect(far).toHaveLength(1)
       await wide
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('the cap race: a stop() landing while the onstop event is in flight delivers once, quietly', async () => {
+    vi.useFakeTimers()
+    try {
+      FakeMediaRecorder.instances = []
+      const capped: Take[] = []
+      const { win, tracks } = winFor({})
+      let active!: Awaited<ReturnType<typeof startTake>>
+      const opening = startTake(win, 2, (take) => capped.push(take)).then((a) => { active = a })
+      await vi.advanceTimersByTimeAsync(0) // let the awaited gum resolve
+      const rec = FakeMediaRecorder.instances[0]!
+      rec.deferStop = true // state flips in stop(); the event dispatch is still queued
+
+      rec.emit(4)
+      await vi.advanceTimersByTimeAsync(2000) // the cap fires
+      expect(rec.state).toBe('inactive') // the encoder stopped…
+      expect(capped).toHaveLength(0) // …but its event has not run yet
+
+      const take = await active.stop() // the user's click lands in that window
+      expect(take.blob.size).toBe(4) // the take is delivered here, once
+
+      rec.flushStop() // now let the in-flight event dispatch
+      expect(capped).toHaveLength(0) // the cap arm honours the claim: no second delivery
+      expect(rec.stops).toBe(1)
+      expect(tracks.every((t) => t.stopped)).toBe(true)
+      await opening
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('a cap event with no racing stop() still delivers onCapped exactly once', async () => {
+    vi.useFakeTimers()
+    try {
+      FakeMediaRecorder.instances = []
+      const capped: Take[] = []
+      const { win } = winFor({})
+      let active!: Awaited<ReturnType<typeof startTake>>
+      const opening = startTake(win, 2, (take) => capped.push(take)).then((a) => { active = a })
+      await vi.advanceTimersByTimeAsync(0)
+      const rec = FakeMediaRecorder.instances[0]!
+      rec.deferStop = true
+
+      rec.emit(5)
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(capped).toHaveLength(0) // queued, not yet dispatched
+      rec.flushStop()
+      expect(capped).toHaveLength(1) // the deferred arm really dispatches — no vacuity
+      expect(capped[0]!.blob.size).toBe(5)
+      const grace = await active.stop()
+      expect(grace.blob.size).toBe(5) // the stale-handle grace keeps its word
+      expect(capped).toHaveLength(1)
+      await opening
     } finally {
       vi.useRealTimers()
     }
