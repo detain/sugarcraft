@@ -196,6 +196,17 @@ input {
 .status.cancelled {
   color: var(--error);
 }
+/* Arms completing the run-row vocabulary the template binds at :class.
+ * `resuming` is an active continuation: pinned to the accent explicitly so
+ * a future default change cannot silently recolor it. `orphaned` is paused's
+ * crash-class sibling — warning-colored like ProcessesSection's .status.unknown,
+ * never the "still working" accent it wore unarmed. */
+.status.resuming {
+  color: var(--accent);
+}
+.status.orphaned {
+  color: var(--warn);
+}
 .name {
   overflow: hidden;
   text-overflow: ellipsis;
