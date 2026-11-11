@@ -8,6 +8,7 @@ use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
 use SugarCraft\Code\Support\PtyBackend;
 use SugarCraft\Code\Support\WindowsShell;
+use SugarCraft\Code\Support\WindowsTaskKill;
 
 /**
  * Runs a shell command capturing BOTH stdout and stderr.
@@ -138,7 +139,9 @@ trait CapturesProcessOutput
      * exit first loses its group to `proc_get_status()`'s own reaping, and
      * re-deriving the id at kill time would then signal a dead pid while
      * the group lived. `groupKilled` carries the honest claim — true only
-     * when the recorded group was confirmed empty afterwards; a kill that
+     * when the recorded group was confirmed empty afterwards (on Windows,
+     * the direct-exec spawn's recorded pid doubles as the tree handle and
+     * taskkill /T /F's own exit code is the confirmation); a kill that
      * could not be confirmed must never be narrated as one.
      *
      * $envOverrides is handed to {@see ProcessContainment::scrubbedEnv()} and
@@ -388,11 +391,27 @@ trait CapturesProcessOutput
      * process's group and there is no group of ours to record — answering
      * null keeps both the kill and the claim honest.
      *
+     * On Windows there is no process group at all, but the spawn shape
+     * C-TUI-6.a uses (a direct-exec array form, no wrapper the child could
+     * have been folded into) makes the child the ROOT OF OUR OWN TREE:
+     * every descendant under it was started by us. The recorded pid is
+     * therefore the faithful twin of a setsid group id, and
+     * {@see WindowsTaskKill::tree()} is the twin of kill(-pgid, ·) —
+     * with taskkill's own exit code standing in for the ESRCH answer as
+     * the "tree is empty" oracle (see {@see terminateGroup()}).
+     *
      * @param resource $process
      */
     private static function recordedGroupId($process): ?int
     {
-        if (!\function_exists('posix_kill') || ProcessContainment::detachedSpawnBinary() === '') {
+        // On Windows the recorded pid IS the handle (no group, no wrapper,
+        // but the direct-exec child roots our own tree). Off Windows the
+        // setsid wrapper is what gives the group its existence: without it
+        // the child shares THIS process's group and there is nothing of
+        // ours to record.
+        if (!WindowsShell::isWindows()
+            && (!\function_exists('posix_kill') || ProcessContainment::detachedSpawnBinary() === '')
+        ) {
             return null;
         }
 
@@ -418,24 +437,48 @@ trait CapturesProcessOutput
      * the ladder only reports gone once the leader's corpse has been reaped
      * AND kill(-pgid, 0) answers ESRCH — a zombie leader still holds its
      * group "alive" for signalling purposes, which is why the poll reads
-     * proc_get_status() first. Without a group id the verdict covers only
+     * proc_get_status() first. On Windows the twin oracle is taskkill's own
+     * verdict: the ladder reports gone only once the leader is reaped AND a
+     * rung's taskkill /T /F answered 0 — a taskkill that failed on a dead
+     * leader walked no tree at all, so its descendants are unaccounted for
+     * and no claim may be narrated. Without a group id the verdict covers only
      * the child this process spawned, and callers must not claim more.
      *
      * @param resource $process
      */
     private static function terminateGroup($process, ?int $groupId): bool
     {
+        $treeConfirmed = false;
+
         return ProcessReaper::escalate(
-            static function (int $signal) use ($process, $groupId): void {
+            static function (int $signal) use ($process, $groupId, &$treeConfirmed): void {
                 if ($groupId !== null && \function_exists('posix_kill') && @\posix_kill(-$groupId, $signal)) {
+                    return;
+                }
+                if ($groupId !== null && WindowsShell::isWindows()) {
+                    // The recorded pid IS the tree handle (see
+                    // recordedGroupId()); consult taskkill directly rather
+                    // than through terminate(), which falls back to a
+                    // leader-only proc_terminate and would answer true for
+                    // a tree it never walked. The fallback below keeps
+                    // proc_close() bounded when the walk fails.
+                    $treeConfirmed = WindowsTaskKill::tree($groupId) || $treeConfirmed;
+                    if (!$treeConfirmed) {
+                        ProcessContainment::terminate($process, $signal);
+                    }
+
                     return;
                 }
                 ProcessContainment::terminate($process, $signal);
             },
-            static function () use ($process, $groupId): bool {
+            static function () use ($process, $groupId, &$treeConfirmed): bool {
                 // The status read doubles as the leader's reaper.
                 if ((proc_get_status($process)['running'] ?? false) === true) {
                     return false;
+                }
+
+                if ($groupId !== null && WindowsShell::isWindows()) {
+                    return $treeConfirmed;
                 }
 
                 return $groupId === null
