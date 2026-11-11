@@ -36,6 +36,22 @@ const FIXED_KEYS: readonly [string, string][] = [
   ['web.chrome.help.fixed_stop', 'Esc Esc'],
 ]
 
+/**
+ * B-38 (CW-UX-B F16): keys the app really consumes that read as surprises —
+ * each traced to its source. Composer.vue's completion popup steals Tab and
+ * answers ↑/↓ (hi-jack noted as UXB-F8); with an empty draft Tab/→ accept the
+ * ghost prompt once; PermissionCard.vue answers `y`/`a`/`n` on the focused
+ * card (`a` only when Always is offered), and an AskUser question's choices
+ * are numbered buttons answered by click (or focus + Enter) — never digits.
+ */
+const SURPRISE_KEYS: readonly [string, string][] = [
+  ['web.chrome.help.surprise_cycle', '↑ / ↓'],
+  ['web.chrome.help.surprise_accept', 'Tab'],
+  ['web.chrome.help.surprise_ghost', 'Tab · →'],
+  ['web.chrome.help.surprise_answer', 'y · a · n'],
+  ['web.chrome.help.surprise_choices', '1. 2. 3.'],
+]
+
 const shortcuts = computed(() => {
   const bindings = loadKeymap()
   return KEY_ACTIONS.map((action) => ({ action, label: t(ACTION_LABELS[action]), keys: bindingLabel(bindings[action]) }))
@@ -65,6 +81,14 @@ function displayName(command: CommandInfo): string {
       <h3>{{ t('web.chrome.help.composer_keys') }}</h3>
       <ul data-testid="help-fixed">
         <li v-for="row in FIXED_KEYS" :key="row[0]" data-testid="help-fixed-row">
+          <code class="keys">{{ row[1] }}</code>
+          <span class="what">{{ t(row[0]) }}</span>
+        </li>
+      </ul>
+
+      <h3>{{ t('web.chrome.help.surprises') }}</h3>
+      <ul data-testid="help-surprises">
+        <li v-for="row in SURPRISE_KEYS" :key="row[0]" data-testid="help-surprise-row">
           <code class="keys">{{ row[1] }}</code>
           <span class="what">{{ t(row[0]) }}</span>
         </li>

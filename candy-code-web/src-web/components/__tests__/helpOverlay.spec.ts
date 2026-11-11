@@ -7,6 +7,7 @@ import App from '../../App.vue'
 import HelpOverlay from '../../components/HelpOverlay.vue'
 import { SIGN_IN_CODE } from '../../keys'
 import { createAppRouter } from '../../router'
+import { WEB_STRINGS_EN } from '../../lib/strings.en.generated'
 import { useConnectionStore } from '../../stores/connection'
 import type { CommandInfo } from '../../stores/session'
 import { FakeSocket, FakeTimers, helloResult } from '../../__tests__/fakes'
@@ -202,5 +203,30 @@ describe('help overlay listing (C-WEB-4.b)', () => {
     const view = mount(HelpOverlay, { props: { open: true, commands: [] } })
     expect(view.find('[data-testid="help-no-commands"]').exists()).toBe(true)
     expect(view.findAll('[data-testid="help-command"]')).toHaveLength(0)
+  })
+
+  /**
+   * B-38 (CW-UX-B F16): the overlay must list the keys the app really consumes
+   * outside the rebindable set — composer completion cycling, the Tab hijack,
+   * the ghost-prompt accept, the y/a/n approval answers, and the numbered
+   * AskUser choices. Each glyph row is fixed; the prose rides the generated
+   * English bundle, so a lang edit and the overlay can never drift apart.
+   */
+  it('lists the surprise keys with glyphs and bundle-backed prose', async () => {
+    const view = mount(HelpOverlay, { props: { open: true, commands: [] } })
+    await view.setProps({ open: true })
+    const heading = view.findAll('h3').map((h) => h.text())
+    expect(heading).toContain(WEB_STRINGS_EN['web.chrome.help.surprises'])
+    const rows = view.findAll('[data-testid="help-surprise-row"]')
+    expect(rows).toHaveLength(5)
+    expect(rows.map((row) => row.find('.keys').text())).toEqual(['↑ / ↓', 'Tab', 'Tab · →', 'y · a · n', '1. 2. 3.'])
+    const proseKeys = [
+      'web.chrome.help.surprise_cycle',
+      'web.chrome.help.surprise_accept',
+      'web.chrome.help.surprise_ghost',
+      'web.chrome.help.surprise_answer',
+      'web.chrome.help.surprise_choices',
+    ]
+    expect(rows.map((row) => row.find('.what').text())).toEqual(proseKeys.map((key) => WEB_STRINGS_EN[key]))
   })
 })
