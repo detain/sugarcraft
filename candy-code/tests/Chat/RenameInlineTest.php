@@ -178,6 +178,22 @@ final class RenameInlineTest extends TestCase
         self::assertSame('Mine', $this->store->getSession('s1')['name']);
     }
 
+    /**
+     * m54: a typed '/rename agent:x' is refused at the RenameCommand gate the
+     * same way the wire refuses it — the refusal reaches the transcript as the
+     * usual error reply, the screen keeps the old name, and the store is never
+     * written.
+     */
+    public function testARenameIntoTheReservedAgentPrefixIsRefusedLoudly(): void
+    {
+        $after = $this->submit($this->chat(name: 'Old title'), '/rename agent:spy');
+
+        $last = $after->history[count($after->history) - 1];
+        self::assertStringContainsString('reserved for bridge channel policy', (string) $last->content);
+        self::assertSame('Old title', $after->currentSessionName(), 'the screen keeps the old name');
+        self::assertNull($this->store->getSession('s1')['name'] ?? null, 'the store was never written');
+    }
+
     public function testAUserSourceIsNeverReplacedByAGeneratedTitle(): void
     {
         $chat = $this->chat(source: TitleSource::User);

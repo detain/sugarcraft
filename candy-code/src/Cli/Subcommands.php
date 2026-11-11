@@ -33,6 +33,7 @@ use SugarCraft\Code\Bundles\MarketplaceRegistry;
 use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\Keychain;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\ReservedSessionGrammar;
 use SugarCraft\Code\Session\Import\ImportFormat;
 use SugarCraft\Code\Session\Import\ImportRefusedException;
 use SugarCraft\Code\Session\Import\SessionImportLedger;
@@ -3382,6 +3383,18 @@ final class Subcommands
         if (isset($args->subcommandArgs[1]) && $title === '') {
             return NonInteractive::failUsage(
                 'candy-code: ' . Lang::t('cli.session.rename.no_title'),
+                $args->outputFormat,
+                Lang::t('cli.session.rename.usage'),
+            );
+        }
+
+        // m54: 'agent:' is bridge channel-policy grammar — a row renamed into
+        // it would parse as a channel session with no admission entry and be
+        // treated refusingAll (every tool silently stripped). Refused name up
+        // front, exactly like the wire leg never waits on the store.
+        if (ReservedSessionGrammar::isReserved($title)) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . ReservedSessionGrammar::refusalMessage(),
                 $args->outputFormat,
                 Lang::t('cli.session.rename.usage'),
             );

@@ -14,6 +14,7 @@ use SugarCraft\Code\Role;
 use SugarCraft\Code\Session\EnhancedSessionStore;
 use SugarCraft\Code\Session\SessionStore;
 use SugarCraft\Code\Session\TitleSource;
+use SugarCraft\Code\Support\ReservedSessionGrammar;
 use SugarCraft\Code\App\SessionTitledMsg;
 
 /**
@@ -248,7 +249,14 @@ final class TitleService
                     // carries the call's COST to the tracker. An empty title is
                     // dropped by the consumer; the usage is not.
                     $title = self::sanitizeTitle($msg->content);
-                    if ($title === '') {
+                    // m54: a generated title wearing bridge grammar is an
+                    // unusable answer — a row renamed into 'agent:' parses as a
+                    // channel session with no admission entry, so
+                    // ChannelToolPolicyService treats it refusingAll (every
+                    // tool silently stripped). Drop it exactly like the empty
+                    // title below: the call's cost still rides the Msg, and the
+                    // row stays unnamed so a later turn can title it again.
+                    if ($title === '' || ReservedSessionGrammar::isReserved($title)) {
                         return new SessionTitledMsg($sessionId, '', $msg->usage);
                     }
                     try {

@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Host\Commands;
 use SugarCraft\Code\Host\TitleService;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Session\TitleSource;
+use SugarCraft\Code\Support\ReservedSessionGrammar;
 
 /**
  * `/rename` — name the current session (roadmap P-A4; its logic moved out of
@@ -76,6 +77,13 @@ final class RenameCommand implements HostCommand
         if ($title === '') {
             return [Lang::t('host.rename.blank'), []];
         }
+
+        // m54: 'agent:' is bridge channel-policy grammar. A row renamed into
+        // it parses as a channel session with no admission entry, so
+        // ChannelToolPolicyService treats it refusingAll — every tool silently
+        // stripped. Refuse before the write; run()'s catch turns this into the
+        // same loud host.rename.error reply every other refusal gets.
+        ReservedSessionGrammar::refuse($title);
 
         $store->renameSession($sessionId, $title, TitleSource::User);
 

@@ -129,6 +129,33 @@ final class TitleServiceTest extends TestCase
         self::assertSame(TitleSource::User, TitleSource::fromStored($store->getSession('s1')['title_source']));
     }
 
+    /**
+     * m54: a titler that answers with bridge-grammar text is an unusable
+     * answer — the exact shape a blank title already takes: no store write,
+     * the cost still rides the Msg, and the row stays unnamed for the next
+     * turn's retry.
+     */
+    public function testAGeneratedReservedTitleIsRefusedWithoutAStoreWrite(): void
+    {
+        $store = self::store('s1');
+        $call = TitleService::new()->titleCall(
+            self::recorder('agent:Fix the bridge', Usage::new(totalTokens: 5)),
+            $store,
+            's1',
+            null,
+            [Message::user('hello')],
+        );
+        self::assertNotNull($call);
+
+        $msg = self::settle($call());
+
+        self::assertInstanceOf(SessionTitledMsg::class, $msg);
+        self::assertSame('', $msg->title, 'the reserved answer never becomes a title');
+        self::assertSame(5, $msg->usage?->totalTokens, 'the call was still billed');
+        self::assertNull($store->getSession('s1')['name'] ?? null, 'the row stays unnamed');
+        self::assertNull($store->getSession('s1')['title_source'] ?? null, 'no source was latched');
+    }
+
     public function testTitleCallIsGatedToTheFirstVisibleUserTurnOfAnUnnamedStoredSession(): void
     {
         $service = TitleService::new();

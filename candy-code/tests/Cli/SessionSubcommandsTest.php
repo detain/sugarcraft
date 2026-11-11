@@ -272,6 +272,20 @@ final class SessionSubcommandsTest extends TestCase
         self::assertSame('session rename: no title given', $this->usageDoor(['session', 'rename', 'sess-main-0001']));
     }
 
+    /**
+     * m54: 'agent:' is bridge channel-policy grammar — the rename verb refuses
+     * it at the usage door before any store write, same exit as every other
+     * usage error.
+     */
+    public function testRenamingIntoTheReservedAgentPrefixIsExitTwoAndWritesNothing(): void
+    {
+        self::assertSame(
+            'the "agent:" session-name prefix is reserved for bridge channel policy',
+            $this->usageDoor(['session', 'rename', 'sess-main-0001', 'agent:spy']),
+        );
+        self::assertSame('login work', $this->store->getSession('sess-main-0001')['name'], 'nothing was renamed');
+    }
+
     // ── show / rename / pin / archive / delete ───────────────────────────
 
     public function testShowPrintsTheRowAndTheTranscript(): void

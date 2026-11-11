@@ -343,6 +343,31 @@ final class ConformanceTest extends TestCase
         self::assertSame('session_not_found', $b->request('session.get', ['sessionId' => $sessionId])['error']['data']['kind']);
     }
 
+    /**
+     * m54: renaming INTO the reserved 'agent:' grammar is refused with the
+     * same typed error the creation-side guard ships — before the store is
+     * consulted, so an unknown id refuses identically — and near-miss names
+     * that merely contain the letters still rename on the ordinary path.
+     */
+    public function testRenamingIntoTheReservedAgentPrefixIsRefusedOnTheWire(): void
+    {
+        $a = $this->fixture->client('a');
+        $sessionId = $this->fixture->session($a, ['name' => 'first']);
+
+        $refused = $a->request('session.rename', ['sessionId' => $sessionId, 'name' => 'agent:ghost']);
+        self::assertSame(ErrorCode::InvalidParams->value, $refused['error']['code']);
+        self::assertSame('reserved_session_name', $refused['error']['data']['kind']);
+        self::assertStringContainsString('reserved for bridge channel policy', (string) $refused['error']['message']);
+
+        $unknown = $a->request('session.rename', ['sessionId' => 'no-such-session', 'name' => 'agent:ghost']);
+        self::assertSame('reserved_session_name', $unknown['error']['data']['kind'], 'the grammar refuses before any store lookup');
+
+        foreach (['agentwise', 'Agents'] as $nearMiss) {
+            $ok = $a->request('session.rename', ['sessionId' => $sessionId, 'name' => $nearMiss]);
+            self::assertArrayNotHasKey('error', $ok, "near-miss '{$nearMiss}' is ordinary text and must rename");
+        }
+    }
+
     public function testBuiltInsWithAHostBodyRunOnTheServerAndTheRestAreClientSide(): void
     {
         $client = $this->fixture->client();

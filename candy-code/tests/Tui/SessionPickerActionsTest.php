@@ -180,6 +180,25 @@ final class SessionPickerActionsTest extends TestCase
         $this->assertStringNotContainsString("\u{E000}", (string) $this->store->getSession('s3')['name']);
     }
 
+    /**
+     * m54: committing an inline rename INTO the reserved 'agent:' prefix
+     * refuses through the handler's outer catch — the editor stays open with
+     * the refusal notice, and the row keeps its stored name.
+     */
+    public function testInlineRenameIntoTheReservedAgentPrefixIsRefused(): void
+    {
+        $refused = $this->press($this->open(), [
+            'r',
+            'backspace', 'backspace', 'backspace', 'backspace', 'backspace',
+            'a', 'g', 'e', 'n', 't', ':', 'x',
+            'enter',
+        ]);
+
+        $this->assertStringContainsString('reserved for bridge channel policy', (string) $refused->sessionPicker()?->notice());
+        $this->assertSame('Third', $this->store->getSession('s3')['name'], 'the row keeps its stored name');
+        $this->assertTrue($refused->sessionPicker()?->isRenaming(), 'the editor stays open on refusal');
+    }
+
     // ── delete ───────────────────────────────────────────────────────────
 
     public function testDeleteNeedsTwoPresses(): void

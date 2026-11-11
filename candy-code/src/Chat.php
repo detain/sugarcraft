@@ -16539,6 +16539,12 @@ final class Chat implements Model
 
                         return $keep($this->reloadSessionPicker($picker, $rename['id'])->withNotice(Lang::t('chat.picker.name_cleared')));
                     }
+                    // m54: 'agent:' is bridge channel-policy grammar — a row
+                    // renamed into it parses as a channel session with no
+                    // admission entry, so ChannelToolPolicyService treats it
+                    // refusingAll (tools silently stripped). The outer catch
+                    // reports this throw as the usual chat.picker.error notice.
+                    \SugarCraft\Code\Support\ReservedSessionGrammar::refuse($title);
                     $store->renameSession($rename['id'], $title, \SugarCraft\Code\Session\TitleSource::User);
                     $next = $rename['id'] === $this->currentSessionId
                         ? $this->mutate(['currentSessionName' => $title, 'currentSessionTitleSource' => \SugarCraft\Code\Session\TitleSource::User])
