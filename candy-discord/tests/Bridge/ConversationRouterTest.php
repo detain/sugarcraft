@@ -348,6 +348,78 @@ final class ConversationRouterTest extends TestCase
         self::assertSame('agent:main:discord:dm:peer-1', $this->serve->createName, 'M-4: a chat-typed title can neither drop the binding nor squat reserved grammar');
     }
 
+    /**
+     * M-8: the core never re-feeds a RESET snapshot as frames (the
+     * subscriber stream pins at throughSeq and goes live strictly above
+     * it). A bridge holding a mid-log cursor must ACCOUNT for the
+     * un-replayed window before absorbing it: one disclosure naming the
+     * gap and the discarded row count, and only then does the cursor
+     * advance. Field law: never cursor-skip on RESET.
+     */
+    public function testAResetWithAGapIsAccountedAndDisclosed(): void
+    {
+        $this->boot();
+        $this->inboundDm('bind me', false, 'm-1');
+        $this->map->noteSeqForSession('sess_fixture_1', 10);
+        $before = \count($this->face->delivered);
+
+        $this->serve->resetOnSubscribe = true;
+        $this->router->adoptBindings();
+        self::runFor($this->loop, 300);
+
+        $chunks = \array_slice($this->face->delivered, $before);
+        self::assertCount(1, $chunks);
+        self::assertStringContainsString('seq 11–40', $chunks[0]);
+        self::assertStringContainsString('2 snapshot row(s) were discarded', $chunks[0]);
+        self::assertSame(40, $this->map->cursorForSession('sess_fixture_1'));
+    }
+
+    /**
+     * A first open (cursor 0) has claimed nothing, so a reset carries no
+     * un-replayed gap: no alarm, and the cursor is not pre-advanced —
+     * it starts empty and lives rise frame by frame. This pins that the
+     * M-8 accounting never fabricates a false disclosure on a fresh
+     * binding.
+     */
+    public function testAFirstOpenResetAbsorbsQuietly(): void
+    {
+        $this->boot();
+        $this->inboundDm('bind me', false, 'm-1');
+        $before = \count($this->face->delivered);
+
+        $this->serve->resetOnSubscribe = true;
+        $this->router->adoptBindings();
+        self::runFor($this->loop, 300);
+
+        self::assertCount(0, \array_slice($this->face->delivered, $before));
+        self::assertSame(0, $this->map->cursorForSession('sess_fixture_1'));
+    }
+
+    /**
+     * The worst carrier-loss shape: a reset answer with no snapshot key
+     * at all. The disclosure must still name the gap and report zero
+     * rows the bridge could even point at, and only then absorb the
+     * cursor (M-8).
+     */
+    public function testTheFeedCanArriveWithoutAnySnapshotCarrier(): void
+    {
+        $this->boot();
+        $this->inboundDm('bind me', false, 'm-1');
+        $this->map->noteSeqForSession('sess_fixture_1', 10);
+        $before = \count($this->face->delivered);
+
+        $this->serve->resetOnSubscribe = true;
+        $this->serve->discardOnly = true;
+        $this->router->adoptBindings();
+        self::runFor($this->loop, 300);
+
+        $chunks = \array_slice($this->face->delivered, $before);
+        self::assertCount(1, $chunks);
+        self::assertStringContainsString('seq 11–40', $chunks[0]);
+        self::assertStringContainsString('0 snapshot row(s) were discarded', $chunks[0]);
+        self::assertSame(40, $this->map->cursorForSession('sess_fixture_1'));
+    }
+
     /** @param array<string,mixed> $policy */
     private function boot(array $policy = []): void
     {

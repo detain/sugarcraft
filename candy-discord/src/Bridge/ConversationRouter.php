@@ -91,11 +91,7 @@ final class ConversationRouter
     ) {
         $serve->onEvent(fn (array $envelope) => $this->handleEvent($envelope));
         $serve->onFollowResult(function (string $sessionId, array $result): void {
-            foreach ((array) ($result['pendingAsks'] ?? []) as $ask) {
-                if (\is_array($ask)) {
-                    $this->presentApproval($sessionId, $ask);
-                }
-            }
+            $this->consumeFollowResult($sessionId, $result);
         });
     }
 
@@ -649,12 +645,75 @@ final class ConversationRouter
         $cursor = $this->map->cursorForSession($sessionId);
         $this->serve->follow($sessionId, $cursor > 0 ? $cursor : null, fn (): int => $this->map->cursorForSession($sessionId))
             ->then(function (array $result) use ($sessionId): void {
-                foreach ((array) ($result['pendingAsks'] ?? []) as $ask) {
-                    if (\is_array($ask)) {
-                        $this->presentApproval($sessionId, $ask);
-                    }
-                }
+                $this->consumeFollowResult($sessionId, $result);
             }, fn (\Throwable $e) => $this->log->warn('follow_failed', ['session' => $sessionId, 'error' => $e->getMessage()]));
+    }
+
+    /**
+     * Consume a follow result: the pendingAsks ride, and a RESET answer is
+     * ACCOUNTED for before it is absorbed. The core stream never re-feeds the
+     * snapshot window (SessionFeed pins the subscriber's lastSent at
+     * throughSeq and goes live strictly above it), and snapshot message rows
+     * carry no seq — re-delivering them could not dedupe against frames this
+     * bridge already delivered and WOULD duplicate the tail. The honest shape
+     * of "never cursor-skip on RESET" is therefore: measure the replayed-in
+     * gap, disclose it loudly (error log + one notice into the bound
+     * conversation), and only THEN advance the session cursor to throughSeq.
+     * A first open (cursor 0) has claimed nothing, so nothing is skipped and
+     * no alarm is raised.
+     *
+     * @param array<string,mixed> $result
+     */
+    private function consumeFollowResult(string $sessionId, array $result): void
+    {
+        foreach ((array) ($result['pendingAsks'] ?? []) as $ask) {
+            if (\is_array($ask)) {
+                $this->presentApproval($sessionId, $ask);
+            }
+        }
+
+        if (($result['reset'] ?? false) !== true) {
+            return;
+        }
+
+        $through = (int) ($result['throughSeq'] ?? 0);
+        $seen = $this->map->cursorForSession($sessionId);
+        $snapshot = $result['snapshot'] ?? null;
+        $dropped = \is_array($snapshot) && \is_array($snapshot['messages'] ?? null)
+            ? \count($snapshot['messages'])
+            : 0;
+
+        if ($seen <= 0 || $through <= $seen) {
+            $this->log->debug('serve_reset_open', [
+                'session' => $sessionId,
+                'cursor' => $seen,
+                'throughSeq' => $through,
+                'snapshotRows' => $dropped,
+            ]);
+
+            return;
+        }
+
+        $this->log->error('reset_snapshot_discarded', [
+            'session' => $sessionId,
+            'cursor' => $seen,
+            'throughSeq' => $through,
+            'snapshotDropped' => $dropped,
+        ]);
+
+        $conversation = $this->map->lastConversation($sessionId);
+        $channel = $conversation === null ? null : $this->channelFor($conversation['key']);
+
+        if ($conversation !== null && $channel !== null) {
+            $this->deliver($channel, $conversation['ref'], \sprintf(
+                '⚠ The serve log could not replay seq %d–%d while this bridge was away — %d snapshot row(s) were discarded; some replies may be missing here.',
+                $seen + 1,
+                $through,
+                $dropped
+            ));
+        }
+
+        $this->map->noteSeqForSession($sessionId, $through);
     }
 
     private function deliver(PlatformFace $channel, array $ref, string $text): void

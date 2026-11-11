@@ -62,6 +62,28 @@ final class FakeServe
 
     public ?int $lastAfterSeq = null;
 
+    /**
+     * Test-only dial: every session.subscribe answers with the `reset`
+     * branch shape (throughSeq 40, a two-row snapshot window) instead of
+     * the snapshot/replay defaults — and no event frames follow. The core
+     * never re-streams the gap window after a reset; that is what makes a
+     * discarded snapshot lossy (SessionFeed::subscribe pins lastSent to
+     * throughSeq and the live gate drops seq <= lastSent).
+     */
+    public bool $resetOnSubscribe = false;
+
+    /**
+     * Test-only dial (pairs with resetOnSubscribe): the reset answer
+     * carries NO snapshot key at all — the worst carrier-loss shape.
+     */
+    public bool $discardOnly = false;
+
+    /**
+     * Test-only dial: false makes the default replay path answer the cursor
+     * but stream ZERO event frames.
+     */
+    public bool $defaultReplay = true;
+
     public ?string $lastIdempotencyKey = null;
 
     public string $seenText = '';
@@ -269,6 +291,27 @@ final class FakeServe
                 $this->subscribeSeen++;
                 $after = $params['afterSeq'] ?? null;
                 $this->lastAfterSeq = $after === null ? null : (int) $after;
+                if ($this->resetOnSubscribe) {
+                    // The reset branch of SessionFeed::subscribe: ONE answer
+                    // carrying the snapshot window, lastSent pinned to
+                    // throughSeq, and the missed seqs NEVER streamed again.
+                    $window = ['reset' => true, 'throughSeq' => 40, 'pendingAsks' => []];
+                    if (!$this->discardOnly) {
+                        $window['snapshot'] = (object) [
+                            'messages' => [
+                                ['role' => 'assistant', 'content' => 'lost one'],
+                                ['role' => 'assistant', 'content' => 'lost two'],
+                            ],
+                            'status' => 'idle',
+                            'pendingAsks' => [],
+                        ];
+                    }
+                    $this->emit($id, [
+                        'jsonrpc' => '2.0', 'id' => $rpcId,
+                        'result' => (object) $window,
+                    ]);
+                    break;
+                }
                 if ($after === null) {
                     // Snapshot path (SessionFeed::subscribe, reset branch).
                     $this->emit($id, [
@@ -289,11 +332,13 @@ final class FakeServe
                     'jsonrpc' => '2.0', 'id' => $rpcId,
                     'result' => (object) ['fromSeq' => (int) $after + 1, 'throughSeq' => 7, 'pendingAsks' => []],
                 ]);
-                for ($seq = (int) $after + 1; $seq <= 7; $seq++) {
-                    $this->pushEvent([
-                        'sessionId' => 'sess_fixture_1', 'seq' => $seq, 'type' => 'tool.started',
-                        'ts' => 1, 'durable' => true, 'data' => (object) ['tool' => 'Bash', 'replayed' => true],
-                    ]);
+                if ($this->defaultReplay) {
+                    for ($seq = (int) $after + 1; $seq <= 7; $seq++) {
+                        $this->pushEvent([
+                            'sessionId' => 'sess_fixture_1', 'seq' => $seq, 'type' => 'tool.started',
+                            'ts' => 1, 'durable' => true, 'data' => (object) ['tool' => 'Bash', 'replayed' => true],
+                        ]);
+                    }
                 }
                 break;
             case 'session.send':

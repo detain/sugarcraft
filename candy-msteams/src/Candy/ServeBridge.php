@@ -219,11 +219,15 @@ final class ServeBridge
     /**
      * Follow $session. With $afterSeq the server REPLAYS what that cursor
      * missed (replay-on-gap); when the log can no longer reach it the answer
-     * comes back `reset` with a snapshot. NOTHING here re-pins a cursor to
-     * throughSeq: the field re-feeds the snapshot window as durable seq'd
-     * frames and the router's largest-wins cursor absorbs them monotonically.
-     * Field law: never cursor-skip on RESET. A null $afterSeq opens from a
-     * bounded snapshot.
+     * comes back `reset` with a snapshot — and the CORE stream pins this
+     * subscriber at throughSeq, going live strictly above it. The snapshot
+     * array is the ONLY carrier of that window and its message rows carry no
+     * seq, so they are never re-fed as durable frames. The router's
+     * ConversationRouter::consumeFollowResult is where the contract lands: it
+     * accounts the un-replayed gap loudly (log + one disclosure) and only
+     * THEN absorbs throughSeq into the session cursor. Field law: never
+     * cursor-skip on RESET — the skip must be accounted before it is taken.
+     * A null $afterSeq opens from a bounded snapshot.
      *
      * @param ?\Closure(): ?int $cursor re-reads the persisted cursor before a
      *        reconnect re-subscribe, so a seq learned between the drop and
