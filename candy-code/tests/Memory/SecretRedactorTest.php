@@ -67,4 +67,51 @@ final class SecretRedactorTest extends TestCase
         self::assertSame($text, SecretRedactor::new()->redact($text));
         self::assertFalse(SecretRedactor::new()->containsSecret($text));
     }
+
+    /** @return iterable<string, array{0: string, 1: bool}> */
+    public static function names(): iterable
+    {
+        // Whole names from the shared vocabulary — the same words the
+        // assignment arm reads before its colon.
+        yield 'token' => ['token', true];
+        yield 'secret' => ['secret', true];
+        yield 'password' => ['password', true];
+        yield 'api_key' => ['api_key', true];
+        yield 'api-key' => ['api-key', true];
+        yield 'API_KEY' => ['API_KEY', true];
+        yield 'private_key' => ['private_key', true];
+        yield 'client_secret' => ['client_secret', true];
+        yield 'auth_token' => ['auth_token', true];
+        yield 'access_key' => ['access_key', true];
+        yield 'credentials' => ['credentials', true];
+        yield 'credential' => ['credential', true];
+        yield 'camel case whole name' => ['apiKey', true];
+        // Names that only RESEMBLE the vocabulary stay the writer's own.
+        yield 'qualified' => ['my_api_key', false];
+        yield 'pluralised' => ['tokens', false];
+        yield 'embedded' => ['tokenizer', false];
+        yield 'secretary' => ['secretary', false];
+        yield 'bare key' => ['key', false];
+        yield 'label' => ['label', false];
+        yield 'empty' => ['', false];
+    }
+
+    #[DataProvider('names')]
+    public function testTheKeyArmMatchesWholeSecretNamesOnly(string $name, bool $expected): void
+    {
+        self::assertSame($expected, SecretRedactor::isSecretName($name));
+    }
+
+    public function testTheKeyArmSharesTheAssignmentArmVocabulary(): void
+    {
+        // One vocabulary, two arms: every word the assignment arm reads
+        // before its colon is also a whole key name on its own.
+        $assignment = (new \ReflectionClass(SecretRedactor::class))->getConstant('ASSIGNMENT_PATTERN');
+        $keyArm = (new \ReflectionClass(SecretRedactor::class))->getConstant('KEY_NAME_PATTERN');
+
+        self::assertIsString($assignment);
+        self::assertIsString($keyArm);
+        self::assertStringContainsString(SecretRedactor::SECRET_NAME_WORDS, $assignment);
+        self::assertStringContainsString(SecretRedactor::SECRET_NAME_WORDS, $keyArm);
+    }
 }

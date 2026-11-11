@@ -296,6 +296,110 @@ final class ChannelInboundLogTest extends TestCase
         self::assertStringContainsString('&token=[REDACTED]', $raw);
     }
 
+    public function testSecretNamedKeysAreMaskedAtTheKeyPosition(): void
+    {
+        $ledger = $this->inboxLedger();
+
+        self::assertSame('recorded', $ledger->record('chan', 'm-keymask', [
+            'api_key' => 'plain english note',
+            'harmless' => 'ordinary note',
+            'auth' => ['token' => 'hello world greeting'],
+        ]));
+
+        $raw = (string) \file_get_contents($ledger->path());
+        // The NAMES are gone, at every depth: no key survives that just
+        // labels a secret.
+        self::assertStringNotContainsString('api_key', $raw);
+        self::assertStringNotContainsString('"token"', $raw);
+        // The shape stays: each masked key carries its (value-armed) payload.
+        self::assertStringContainsString('"[REDACTED]": "plain english note"', $raw);
+        self::assertStringContainsString(': "hello world greeting"', $raw);
+        // Unaffected keys ride through untouched, including the value arm's
+        // own verdict on their content.
+        self::assertStringContainsString('"harmless": "ordinary note"', $raw);
+    }
+
+    public function testInnocuousKeysAndTheirOrderAreUntouchedByTheKeyArm(): void
+    {
+        $ledger = $this->inboxLedger();
+
+        self::assertSame('recorded', $ledger->record('chan', 'm-keyclean', [
+            'text' => 'plain note',
+            // Names that merely CONTAIN a secret word are not secret names;
+            // widening the key arm past a whole-name match reddens this leg.
+            'tokenizer' => 'wide leg one',
+            'secretary' => 'wide leg two',
+            'my_api_key' => 'wide leg three',
+            'nested' => ['count' => 7, 'label' => 'status: ok'],
+        ]));
+
+        $raw = (string) \file_get_contents($ledger->path());
+        self::assertStringNotContainsString('[REDACTED]', $raw);
+        $positions = [];
+        foreach (['text', 'tokenizer', 'secretary', 'my_api_key', 'nested', 'count', 'label'] as $needle) {
+            $positions[$needle] = \strpos($raw, '"' . $needle . '"');
+            self::assertNotFalse($positions[$needle], 'key ' . $needle . ' survived');
+        }
+        // Insertion order is preserved through the rebuild, level for level.
+        self::assertLessThan($positions['tokenizer'], $positions['text']);
+        self::assertLessThan($positions['secretary'], $positions['tokenizer']);
+        self::assertLessThan($positions['my_api_key'], $positions['secretary']);
+        self::assertLessThan($positions['nested'], $positions['my_api_key']);
+        self::assertLessThan($positions['label'], $positions['count']);
+    }
+
+    public function testTheRedactionWalkPreservesKeysOrderTypesAndIntegersWhenNoArmFires(): void
+    {
+        // Direct walk pair: any tree the key arm never touches must come
+        // out of the rebuilt level identical — same keys, same insertion
+        // order (including integer-key promotion), same value types — so
+        // the byte-identity of unaffected records does not rest on the
+        // JSON alone.
+        $redactTree = new \ReflectionMethod(ChannelInboundLog::class, 'redactTree');
+        $redactTree->setAccessible(true);
+        $ledger = $this->inboxLedger();
+
+        /** @var array<array-key, mixed> $tree */
+        $tree = $redactTree->invoke($ledger, [
+            'b_first' => 'plain',
+            'a_second' => 7,
+            3 => 'integer keyed',
+            'nested' => ['deep' => true, 'deeper' => ['n' => null]],
+            'floaty' => 1.5,
+        ]);
+
+        self::assertSame(
+            ['b_first', 'a_second', 3, 'nested', 'floaty'],
+            \array_keys($tree),
+        );
+        self::assertSame('plain', $tree['b_first']);
+        self::assertSame(7, $tree['a_second']);
+        self::assertSame('integer keyed', $tree[3]);
+        self::assertSame(['deep', 'deeper'], \array_keys($tree['nested']), 'nested keys keep order');
+        self::assertTrue($tree['nested']['deep']);
+        self::assertNull($tree['nested']['deeper']['n']);
+        self::assertSame(1.5, $tree['floaty']);
+    }
+
+    public function testTwoSecretNamedKeysCollapseToTheOneMaskedRowWithoutMergingValues(): void
+    {
+        $ledger = $this->inboxLedger();
+
+        self::assertSame('recorded', $ledger->record('chan', 'm-keyclash', [
+            'api_key' => 'alpha value here',
+            'token' => 'beta value here',
+        ]));
+
+        $raw = (string) \file_get_contents($ledger->path());
+        self::assertSame(1, \substr_count($raw, '"[REDACTED]"'));
+        // The first entry keeps its (value-armed) payload; the colliding
+        // later one is dropped whole, so neither value is miscredited to
+        // the other and no numbered fake key is invented.
+        self::assertStringContainsString(': "alpha value here"', $raw);
+        self::assertStringNotContainsString('beta value here', $raw);
+        self::assertStringNotContainsString('api_key', $raw);
+    }
+
     public function testRedactionRunsBeforeTheSizeCap(): void
     {
         $shrinker = ' token sk-proj-' . \str_repeat('z', 4000) . ' tail text';

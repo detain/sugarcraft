@@ -462,8 +462,14 @@ final class ChannelInboundLog
     }
 
     /**
-     * Redact every string leaf recursively. Runs before the size cap, in
-     * this order, never the other way round.
+     * Redact every string leaf recursively — and every key that IS a secret
+     * name in the shared {@see \SugarCraft\Code\Memory\SecretRedactor::SECRET_NAME_WORDS}
+     * vocabulary, so the key and value arms cannot drift apart. A matched key
+     * is masked with the redaction marker and its value still passes the value
+     * arms; if two keys at one level collapse onto the masked name, the later
+     * entry is dropped — a rename must never silently overwrite. Insertion
+     * order is preserved for every unaffected level. Runs before the size cap,
+     * in this order, never the other way round.
      *
      * @param array<array-key, mixed> $tree
      *
@@ -471,16 +477,27 @@ final class ChannelInboundLog
      */
     private function redactTree(array $tree): array
     {
+        $redacted = [];
         foreach ($tree as $leaf => $value) {
+            $name = $leaf;
+            if (\is_string($leaf) && SecretRedactor::isSecretName($leaf)) {
+                $name = SecretRedactor::MARKER;
+                if (\array_key_exists($name, $redacted)) {
+                    continue;
+                }
+            }
+
             if (\is_array($value)) {
                 /** @var array<array-key, mixed> $value */
-                $tree[$leaf] = $this->redactTree($value);
+                $redacted[$name] = $this->redactTree($value);
             } elseif (\is_string($value)) {
-                $tree[$leaf] = ($this->redactLeaf)($value);
+                $redacted[$name] = ($this->redactLeaf)($value);
+            } else {
+                $redacted[$name] = $value;
             }
         }
 
-        return $tree;
+        return $redacted;
     }
 
     /**

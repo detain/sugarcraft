@@ -58,10 +58,22 @@ final class SecretRedactor
     private const USERINFO_PATTERN = '#\b([a-z][a-z0-9+.-]*://[^\s/:@]+:)[^\s/@]+(@)#i';
 
     /**
+     * The secret-NAME vocabulary shared by every arm of this class: the
+     * assignment matcher below and {@see isSecretName()} — one list, so the
+     * arms cannot drift out of each other's fashion.
+     */
+    public const SECRET_NAME_WORDS
+        = 'pass(?:word|wd)?|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|auth[_-]?token|credentials?';
+
+    /**
      * `password = value`, `"api_key": "value"`, `export TOKEN=value`: the key
      * stays, a value that passes {@see looksRandom()} goes.
      */
-    private const ASSIGNMENT_PATTERN = '/((?:\b|_)(?:pass(?:word|wd)?|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|auth[_-]?token|credentials?)\b["\']?\s*[:=]\s*["\']?)([^\s"\',;]{8,})/i';
+    private const ASSIGNMENT_PATTERN
+        = '/((?:\b|_)(?:' . self::SECRET_NAME_WORDS . ')\b["\']?\s*[:=]\s*["\']?)([^\s"\',;]{8,})/i';
+
+    /** A whole string that IS a secret name — the array-key arm's shape. */
+    private const KEY_NAME_PATTERN = '/^(?:' . self::SECRET_NAME_WORDS . ')$/i';
 
     /** Shannon entropy, bits per character, a value must reach to count as random. */
     private const MIN_ENTROPY = 3.0;
@@ -96,6 +108,19 @@ final class SecretRedactor
     public function containsSecret(string $text): bool
     {
         return $this->redact($text) !== $text;
+    }
+
+    /**
+     * Whether $name IS a secret name outright (`api_key`, `token`, `pwd`) —
+     * the array-key arm for trees where the value sits under a suspicious key
+     * instead of inside a string. Whole-string match on the same
+     * {@see SECRET_NAME_WORDS} the assignment arm reads, so qualified spellings
+     * (`my_api_key`) and pluralisations (`tokens`) stay ordinary words; a value
+     * under such a key is still swept by {@see redact()} as an ordinary string.
+     */
+    public static function isSecretName(string $name): bool
+    {
+        return preg_match(self::KEY_NAME_PATTERN, $name) === 1;
     }
 
     /**
