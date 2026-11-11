@@ -82,6 +82,12 @@ final class SpawnPtySystemIntegrationTest extends TestCase
         $this->assertSame(['/usr/bin/env'], $system->lastSpawnCmd);
         $this->assertSame(['TERM' => 'xterm-256color', 'USER' => 'alice'], $system->lastSpawnEnv);
         $this->assertTrue($system->lastSpawnControllingTerminal, 'Spawn must request controllingTerminal:true');
+        // Production truth: InProcessTransport resolves the geometry to
+        // non-null ints (handler → session → 80/24 fallback) before calling
+        // spawn(), so the contract's null-means-keep-current geometry is
+        // never exercised from this path. Pin the resolved pair so a future
+        // call site that passes null (or restsamps defaults) goes red here.
+        $this->assertSame([132, 43], $system->lastSpawnGeometry, 'spawn() must receive the resolved non-null geometry');
     }
 }
 
@@ -101,6 +107,8 @@ final class SpyPtySystem implements PtySystem
     /** @var array<string,string>|null */
     public ?array $lastSpawnEnv = null;
     public bool $lastSpawnControllingTerminal = false;
+    /** @var array{0:?int,1:?int}|null Geometry handed to the last spawn() */
+    public ?array $lastSpawnGeometry = null;
 
     public function open(int $cols = 80, int $rows = 24): PtyPair
     {
@@ -147,9 +155,9 @@ final class SpyMasterPty implements MasterPty
     }
 
     public function fd(): int { return -1; }
-    public function read(int $_len = 8192, ?float $_timeout = null): ?string { return ''; }
+    public function read(int $len = 8192, ?float $timeout = 0.05): ?string { return ''; }
     public function write(string $bytes): int { return \strlen($bytes); }
-    public function resize(int $_cols, int $_rows): void {}
+    public function resize(int $cols, int $rows): void {}
     public function size(): array { return ['cols' => 80, 'rows' => 24, 'xpix' => 0, 'ypix' => 0]; }
     public function stream(): mixed { return $this->stream; }
     public function close(): void { $this->closed = true; if (\is_resource($this->stream)) { @\fclose($this->stream); } }
@@ -165,14 +173,15 @@ final class SpySlavePty implements SlavePty
     public function spawn(
         array $cmd,
         ?array $env = null,
-        int $_cols = 80,
-        int $_rows = 24,
+        ?int $cols = null,
+        ?int $rows = null,
         bool $controllingTerminal = false,
     ): Child {
         $this->sys->spawnCalls++;
         $this->sys->lastSpawnCmd = $cmd;
         $this->sys->lastSpawnEnv = $env;
         $this->sys->lastSpawnControllingTerminal = $controllingTerminal;
+        $this->sys->lastSpawnGeometry = [$cols, $rows];
         return new SpyChild();
     }
 }
@@ -183,5 +192,5 @@ final class SpyChild implements Child
     public function exited(): bool { return true; }
     public function wait(): int { return 0; }
     public function exitCode(): ?int { return 0; }
-    public function kill(int $_signal): void {}
+    public function kill(int $signal): void {}
 }

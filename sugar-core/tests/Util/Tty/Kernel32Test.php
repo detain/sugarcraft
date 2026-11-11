@@ -131,6 +131,12 @@ final class Kernel32Test extends TestCase
     public function testGetConsoleModeBodiesPassTheHandleArgumentToTheNativeCall(): void
     {
         $src     = (string) file_get_contents((new \ReflectionClass(Kernel32::class))->getFileName());
+        // WHY: a Windows checkout (core.autocrlf=true rewrites the working
+        // tree to CRLF) puts "\r" before the "\n" ending each line, so the
+        // LF-anchored "\n    }\n" needle below could never match and the
+        // pin would fail for the wrong reason. Normalising keeps this
+        // assertion about the body's shape honest on every platform.
+        $src     = str_replace("\r\n", "\n", $src);
         $start   = strpos($src, 'public function getConsoleMode(');
         self::assertNotFalse($start, 'Kernel32 no longer declares getConsoleMode() — update this pin, do not delete it.');
         $end     = strpos($src, "\n    }\n", $start);

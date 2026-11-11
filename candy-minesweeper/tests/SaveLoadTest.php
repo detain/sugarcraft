@@ -17,21 +17,35 @@ use SugarCraft\Minesweeper\Game;
  * makes Board::serialize()/unserialize() reachable from production, plus the
  * 0600 AtomicJsonFile slot under $HOME/.config/candy-minesweeper/.
  *
- * HOME is sandboxed per test (snapshotted BEFORE any mutation, both restore
- * forms handled — a restore that only ever writes the set-form leaves the
- * variable unset and poisons later tests that read the developer's real HOME).
+ * HOME *and* XDG_CONFIG_HOME are sandboxed per test (both snapshotted BEFORE
+ * any mutation, both restore forms handled — a restore that only ever writes
+ * the set-form leaves the variable unset and poisons later tests that read the
+ * developer's real HOME). Game::savePath() asks XDG first, so a HOME-only
+ * sandbox is one-sided: on a runner that exports XDG_CONFIG_HOME the slot
+ * escapes the temp dir, leaks across tests through the shared directory, and
+ * answers non-null even when HOME is unset — which is exactly how the
+ * 26.04-runner leg reddened this family while every developer box stayed
+ * green. The sandbox must own the whole resolution chain.
  */
 final class SaveLoadTest extends TestCase
 {
     private ?string $savedHome;
+    private string|false $savedXdg;
     private string $homeDir = '';
+    private string $xdgDir = '';
 
     protected function setUp(): void
     {
         $this->savedHome = getenv('HOME');
+        $this->savedXdg = getenv('XDG_CONFIG_HOME');
         $this->homeDir = sys_get_temp_dir() . '/candy-minesweeper-home-' . bin2hex(random_bytes(6));
         mkdir($this->homeDir, 0700, true);
+        // Distinct from homeDir/.config so testXdgConfigHomeRedirectsTheSlot's
+        // "HOME fallback is not written" leg stays a real assertion.
+        $this->xdgDir = $this->homeDir . '/xdg-config';
+        mkdir($this->xdgDir, 0700, true);
         putenv('HOME=' . $this->homeDir);
+        putenv('XDG_CONFIG_HOME=' . $this->xdgDir);
     }
 
     protected function tearDown(): void
@@ -41,16 +55,23 @@ final class SaveLoadTest extends TestCase
         } else {
             putenv('HOME=' . $this->savedHome);
         }
-        $slotDir = $this->homeDir . '/.config/candy-minesweeper';
-        if (is_dir($slotDir)) {
-            // FilesystemIterator, not glob: AtomicJsonFile's lock sidecar is a
-            // dotfile, and glob('*') would miss it and leave the rmdir failing.
-            foreach (new \FilesystemIterator($slotDir) as $residue) {
-                @unlink($residue->getPathname());
-            }
-            @rmdir($slotDir);
+        if ($this->savedXdg === false) {
+            putenv('XDG_CONFIG_HOME');
+        } else {
+            putenv('XDG_CONFIG_HOME=' . $this->savedXdg);
         }
-        @rmdir($this->homeDir . '/.config');
+        foreach ([$this->homeDir . '/.config', $this->xdgDir] as $configLeg) {
+            $slotDir = $configLeg . '/candy-minesweeper';
+            if (is_dir($slotDir)) {
+                // FilesystemIterator, not glob: AtomicJsonFile's lock sidecar is a
+                // dotfile, and glob('*') would miss it and leave the rmdir failing.
+                foreach (new \FilesystemIterator($slotDir) as $residue) {
+                    @unlink($residue->getPathname());
+                }
+                @rmdir($slotDir);
+            }
+            @rmdir($configLeg);
+        }
         @rmdir($this->homeDir);
     }
 
@@ -71,6 +92,9 @@ final class SaveLoadTest extends TestCase
 
     public function testSaveWritesTheSingleSlotUnderConfig(): void
     {
+        // This pin is about the HOME fallback leg specifically; setUp sandboxes
+        // XDG too, and XDG wins, so clear the preferred leg to reach ~/.config.
+        putenv('XDG_CONFIG_HOME');
         $g = self::liveGame();
         [$g, ] = $g->update(self::press(KeyType::Char, 'S'));
 
@@ -187,7 +211,10 @@ final class SaveLoadTest extends TestCase
 
     public function testSaveAndLoadDegradeQuietlyWithoutHome(): void
     {
-        putenv('HOME');   // unset for this test only; tearDown restores the snapshot
+        // savePath() asks XDG_CONFIG_HOME first, so "without HOME" is only a
+        // no-path state when the preferred leg is absent too.
+        putenv('HOME');       // unset for this test only; tearDown restores the snapshot
+        putenv('XDG_CONFIG_HOME');
 
         $g = self::liveGame();
         $this->assertNull(Game::savePath());

@@ -469,7 +469,10 @@ final class InputReader
             return;
         }
         $cut = $size;
-        for ($back = 1; $back <= 3 && $back <= $size; $back++) {
+        // WHY no `$back <= $size` bound: the guard above proves $size >=
+        // MAX_PASTE_BYTES, so the 3-byte walk-back can never index below
+        // zero; the bound was provably dead.
+        for ($back = 1; $back <= 3; $back++) {
             $b = ord($this->pasteBuf[$size - $back]);
             if (($b & 0xc0) === 0x80) {
                 continue; // continuation byte — keep looking for its lead
