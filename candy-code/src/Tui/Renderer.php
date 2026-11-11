@@ -475,6 +475,44 @@ final class Renderer
     private static array $scrollRegions = [];
 
     /**
+     * How many content-addressed review sweeps the memo below keeps. Bound
+     * modestly: each entry is a list of scrubbed strings for one patch, so
+     * the ceiling is worst-case megabytes, not the tens-of-megabytes a patch
+     * of 6,600 lines a frame would cost unpinned (cc-review-1111 rollup
+     * M-13 measured 2.5-30.4ms/frame at that size).
+     */
+    private const REVIEW_MEMO_MAX = 64;
+
+    /**
+     * Scrubbed text of the diff-review pane, keyed by its content — the
+     * shared-process memo contract of {@see \SugarCraft\Code\Renderer::$diffMemo}
+     * (M12) applied to the TUI's per-frame full-input sweep. While the diff
+     * pane is open every idle tick re-painted the overlay, and the four
+     * derivations below ({@see self::reviewArtifacts()}: label scrub, patch
+     * scrub, gutter-header scan, per-row language scan) walked the ENTIRE
+     * review each frame although only {@see self::reviewDiffRow()} of the
+     * visible window needs fresh work. Every stored artifact is a pure
+     * function of the review's raw bytes — Sanitize sweeps, the UnifiedScan
+     * header flags and languageForPath touch no theme, terminal size,
+     * settings or locale (verified in their sources) — so, unlike the
+     * painted-bytes diff memo, nothing ambient is key material and the
+     * theme itself is deliberately NOT a discriminator: switching themes
+     * with a review open re-paints from the same warm text. Keys carry the
+     * patch length plus a 128-bit content hash (the markdown memo's key
+     * discipline: a collision overwrites a pane, never corrupts one). Plain
+     * unset() only — never array_splice(), which reindexes int-string keys.
+     *
+     * @var array<string, array{labels: list<string>, lines: list<string>, headers: list<bool>, languages: list<?string>}>
+     */
+    private static array $reviewMemo = [];
+
+    /**
+     * The one syntax highlighter the review pane uses; see {@see
+     * self::reviewHighlighter()} for why a single instance is correct.
+     */
+    private static ?RegexHighlighter $reviewHighlighter = null;
+
+    /**
      * The scrollable surface under the pointer, or null — then the wheel is
      * the transcript's, as it always was.
      *
@@ -1395,11 +1433,14 @@ final class Renderer
         $bodyRows = max(1, $paneRows - $chrome);
 
         // File-derived text rides the canonical untrusted policy before it
-        // is measured, clipped or styled.
-        $labels = array_map(self::reviewText(...), $review->fileLabels());
-        $lines = array_map(self::reviewText(...), $review->bodyLines());
-        $headers = DiffGutter::fileHeaders($lines);
-        $languages = self::reviewRowLanguages($lines, $headers);
+        // is measured, clipped or styled — once per content, not once per
+        // frame (M-13: the sweep scales with the whole patch while only the
+        // visible window needs live work).
+        $artifacts = self::reviewArtifacts($review);
+        $labels = $artifacts['labels'];
+        $lines = $artifacts['lines'];
+        $headers = $artifacts['headers'];
+        $languages = $artifacts['languages'];
 
         $listWidth = 0;
         foreach ($labels as $label) {
@@ -1416,7 +1457,7 @@ final class Renderer
         $box[] = Style::new()->foreground($theme->systemLabel)->bold()->render(self::reviewText($review->title()));
         $box[] = self::reviewDim($theme)->render(ScreenReaderMode::glyph(str_repeat('─', $cols)));
 
-        $highlighter = new RegexHighlighter();
+        $highlighter = self::reviewHighlighter();
         for ($i = 0; $i < $bodyRows; $i++) {
             if ($listWidth > 0) {
                 $entry = $labels[$listScroll + $i] ?? null;
@@ -1541,6 +1582,68 @@ final class Renderer
         self::scanChrome($a, $cols, $menuBar, $dropped, self::lineCount($frame), self::lineCount($menuBar), []);
 
         return new View($frame);
+    }
+
+    /**
+     * The four content-derived sweeps behind the review pane, served from a
+     * content-addressed memo (M-13): a frame while a review is open re-reads
+     * the entire patch, the entire label column, re-flags the gutter headers
+     * and re-walks every row's language — but all four are pure functions of
+     * the review's raw bytes, so a re-paint (an idle tick, a scroll, a
+     * resize) costs a hash and four array reads instead of the full sweep.
+     * Scroll and motion inside the SAME content are served warm by design.
+     *
+     * @return array{labels: list<string>, lines: list<string>, headers: list<bool>, languages: list<?string>}
+     */
+    private static function reviewArtifacts(DiffReview $review): array
+    {
+        $files = $review->files();
+        $patch = (string) ($files[$review->selectedIndex()]['patch'] ?? '');
+        $labelSource = implode("\n", $review->fileLabels());
+        // Raw key material from the VO's stored bytes — never from the
+        // sanitized render input, so hostile metadata cannot collide with a
+        // legitimate review's entry.
+        $key = strlen($patch) . ':' . hash('xxh128', $patch)
+            . ':' . strlen($labelSource) . ':' . hash('xxh128', $labelSource);
+
+        if (isset(self::$reviewMemo[$key])) {
+            // Re-insert so the entry becomes the most-recently-used;
+            // plain unset only — array_splice() would reindex integer-like
+            // keys and strand a poisoned entry past the bound.
+            $artifacts = self::$reviewMemo[$key];
+            unset(self::$reviewMemo[$key]);
+            self::$reviewMemo[$key] = $artifacts;
+
+            return $artifacts;
+        }
+
+        $lines = array_map(self::reviewText(...), $review->bodyLines());
+        $headers = DiffGutter::fileHeaders($lines);
+        $artifacts = [
+            'labels' => array_map(self::reviewText(...), $review->fileLabels()),
+            'lines' => $lines,
+            'headers' => $headers,
+            'languages' => self::reviewRowLanguages($lines, $headers),
+        ];
+
+        self::$reviewMemo[$key] = $artifacts;
+        if (count(self::$reviewMemo) > self::REVIEW_MEMO_MAX) {
+            unset(self::$reviewMemo[array_key_first(self::$reviewMemo)]);
+        }
+
+        return $artifacts;
+    }
+
+    /**
+     * A single syntax highlighter shared by every review frame (M-13): the
+     * class is documented deterministic and stateless per tokenization, and
+     * its internal per-language token cache only pays off when the instance
+     * outlives a frame — rebuilding it per paint threw the cache away each
+     * tick.
+     */
+    private static function reviewHighlighter(): RegexHighlighter
+    {
+        return self::$reviewHighlighter ??= new RegexHighlighter();
     }
 
     /**
