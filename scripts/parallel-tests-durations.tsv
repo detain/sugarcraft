@@ -509,6 +509,7 @@ candy-code/tests/Providers/CodexProviderTest.php	0.743	15
 candy-code/tests/Backend/ModelPruneInTurnTest.php	0.741	3
 candy-code/tests/Protocol/SessionFeedBufferTest.php	0.736	3
 candy-code/tests/Share/ShareStoreTest.php	0.729	18
+candy-code/tests/Attachments/MentionIndexTest.php	0.727	20
 candy-code/tests/Tools/BuiltIn/ReadBinaryScanTest.php	0.725	14
 candy-code/tests/Commands/MemoryLogRestoreCommandTest.php	0.724	6
 candy-code/tests/Tools/BuiltIn/MemoryRecallSourcesTest.php	0.721	14
@@ -574,7 +575,6 @@ candy-code/tests/Chat/BackgroundStopCommandTest.php	0.538	5
 candy-code/tests/Permissions/ChatAlwaysGrantScopeTest.php	0.533	5
 candy-code/tests/Media/FieldSpecParityTest.php	0.532	71
 candy-code/tests/Protocol/McpMethodsTest.php	0.531	5
-candy-code/tests/Attachments/MentionIndexTest.php	0.528	17
 candy-code/tests/Context/SymbolMapBlockTest.php	0.527	8
 candy-code/tests/Chat/InterimNarrationKeptTest.php	0.525	4
 candy-code/tests/Tools/SubagentsToolTest.php	0.522	10
