@@ -1278,10 +1278,11 @@ final class StdioMcpServer implements McpServer
      * internal leg obeys, so a full stderr pipe can never wedge this side.
      *
      * Embedders that previously hand-framed their own writes around this
-     * transport's private leg (register nit n29: ~4 loops in candy-code's
-     * HttpMcpServer / ClaudeCodeMcpServer / LspConnection) call THIS instead
-     * of re-deriving the delimiter. It carries no exchange lock and no
-     * dead-holder salvage prefix on purpose: full request/response
+     * transport's private leg (register nit n29: the newline-delimited stdio
+     * copies around this transport in candy-code — notably
+     * `ClaudeCodeMcpClient::writeAll`) call THIS instead of re-deriving the
+     * delimiter. It carries no exchange lock and no dead-holder salvage
+     * prefix on purpose: full request/response
      * sequencing (lock, reply matching, half-line recovery) lives in
      * {@see self::request()} and {@see self::notify()}, which are preferred
      * whenever the caller is speaking the protocol rather than emitting one
