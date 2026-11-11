@@ -325,8 +325,11 @@ final class ChannelRegistry
         // bridge notes is why consumers key on it.
         $envelope['sessionId'] = $sessionId;
 
-        $json = \json_encode($envelope);
-        if ($json === false || \json_decode($json, true) != $envelope) {
+        // The zero-fraction flag keeps integral floats (a $5.00 spend cap) distinguishable
+        // from their int twins across the round-trip, so the identity compare below can
+        // enforce the law on types without refusing envelopes channels legitimately deliver.
+        $json = \json_encode($envelope, \JSON_PRESERVE_ZERO_FRACTION);
+        if ($json === false || \json_decode($json, true) !== $envelope) {
             $this->faultLog($log)('a channel event envelope failed the JSON round-trip law and was not delivered');
 
             return;

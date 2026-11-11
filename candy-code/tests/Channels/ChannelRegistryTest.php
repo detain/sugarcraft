@@ -245,6 +245,53 @@ final class ChannelRegistryTest extends TestCase
         self::assertSame('', trim((string) file_get_contents($sink)), 'nothing is delivered after the teardown');
     }
 
+    /**
+     * m03: the round-trip gate in handleEvent() compared with LOOSE equality where it
+     * means identity — an integral float (a $5.00 spend cap, $0.00 spent) collapses to
+     * int across encode/decode and `5 == 5.0` waved the type lie through. The fix is
+     * strict `!==` PLUS a JSON_PRESERVE_ZERO_FRACTION encode: without the flag the
+     * strict law would refuse legitimate spend_cap.breached envelopes outright (the
+     * floats arrive via TranscriptProjector from SpendCapBreached's float $spentUsd/
+     * $capUsd), so the flag is what lets the law demand identity honestly. The pins
+     * below prove both halves against the live encoder, then lock the source shape —
+     * a behavior-level fixture cannot discriminate, because every reachable envelope
+     * carries the same deliver/refuse verdict before and after (recorded honestly in
+     * the lane report as unreachable-hardening).
+     */
+    public function testTheJsonRoundTripLawComparesIdenticallyNotLoosely(): void
+    {
+        $spendCapShape = ['spent' => 0.0, 'cap' => 5.0];
+        $naive = json_decode(json_encode($spendCapShape), true);
+        self::assertSame(['spent' => 0, 'cap' => 5], $naive, 'the naive wire collapses integral floats to ints');
+        self::assertNotSame($spendCapShape, $naive, 'which is exactly the type lie the loose compare hid');
+        self::assertSame(
+            $spendCapShape,
+            json_decode(json_encode($spendCapShape, JSON_PRESERVE_ZERO_FRACTION), true),
+            'with the flag the round-trip is truly identical, so the law can demand identity',
+        );
+
+        $source = file_get_contents(dirname(__DIR__, 2) . '/src/Channels/ChannelRegistry.php');
+        self::assertIsString($source);
+        $start = strpos($source, 'public function handleEvent');
+        self::assertIsInt($start, 'handleEvent() must remain the door the round-trip law guards');
+        $body = substr($source, $start);
+        $end = strpos($body, 'public function ', 1);
+        self::assertIsInt($end, 'handleEvent must be followed by another public function — re-derive the slice when it changes');
+        $body = substr($body, 0, $end);
+
+        self::assertStringContainsString(
+            '!== $envelope',
+            $body,
+            'the JSON round-trip law compares loosely where it means identity (m03)',
+        );
+        self::assertStringNotContainsString('!= $envelope', $body, 'the loose spelling must not survive beside the strict one');
+        self::assertStringContainsString(
+            'JSON_PRESERVE_ZERO_FRACTION',
+            $body,
+            'the encode must keep integral floats float or the strict law bricks spend-cap events',
+        );
+    }
+
     public function testDisposeAllIsIdempotentAndDisposesEachStartedChannelOnce(): void
     {
         [$bundleA, $bundleB, $trusted] = $this->twoBundleStage();
