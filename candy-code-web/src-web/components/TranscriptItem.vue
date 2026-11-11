@@ -46,6 +46,10 @@ async function copyText(text: string): Promise<void> {
  * the steer row's content a locale-free glyph marker — prose is resolved at
  * presentation so a locale switch repaints rows already on screen, and the
  * replayed state never freezes whichever language the fold happened in.
+ * m25 (CW-COVER-B F3): the dequeued-removal row follows the same split — the
+ * key names the outcome, content carries the server's queue text verbatim
+ * (never client-translated), and the prose below is chosen here so switching
+ * language repaints removals already on screen.
  */
 function noticeText(item: NoticeItem): string {
   if (item.key.startsWith('steered:')) return t('web.transcript.steered')
@@ -57,6 +61,11 @@ function noticeText(item: NoticeItem): string {
       : t('web.transcript.ask_unanswered_note', { note: item.content })
   if (item.key.startsWith('ask-resolved:answered:'))
     return t('web.transcript.ask_answered_note', { note: item.content })
+  if (item.key.startsWith('dequeued:removed:')) {
+    return item.content === ''
+      ? t('web.transcript.prompt_removed')
+      : t('web.transcript.prompt_removed_text', { text: item.content })
+  }
   return item.content
 }
 

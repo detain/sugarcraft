@@ -410,6 +410,22 @@ function askResolutionOutcome(data: Events['permission.resolved']): 'unanswered'
   return typeof data.note === 'string' && data.note !== '' ? 'answered' : null
 }
 
+/**
+ * m25 (CW-COVER-B F3): the server's turn.dequeued frame carries
+ * {queueId, text?, reason: 'sent' | 'removed'} but the fold used to read only
+ * queueId — a dropped queue entry vanished with its text unrecoverable and the
+ * sent-vs-removed distinction was lost. 'sent' stays silent by design: the
+ * prompt rides into the transcript as the turn's own user message. A removal
+ * (or any shape that is neither) leaves no other trace, so it earns a notice
+ * row. Mirrors the askResolutionOutcome split (m24): content holds the server
+ * text VERBATIM (server text never client-translated — F-M22 law) and rides in
+ * the per-queueId key, so TranscriptItem resolves the prose at presentation and
+ * a replay replaces its own row instead of stacking copies.
+ */
+function turnDequeuedOutcome(data: Ev<'turn.dequeued'>['data']): 'removed' | null {
+  return data.reason === 'removed' ? 'removed' : null
+}
+
 function appendDelta(part: LivePart | null, partId: string, offset: number, text: string): LivePart {
   const current = part !== null && part.partId === partId ? part : { partId, bytes: 0, text: '', gap: false }
   if (offset < current.bytes) return current
@@ -681,6 +697,14 @@ export function applyEvent(state: SessionState, envelope: EventEnvelope): void {
 
     case 'turn.dequeued': {
       const { data } = envelope as unknown as Ev<'turn.dequeued'>
+      if (turnDequeuedOutcome(data) === 'removed') {
+        upsert(state, {
+          kind: 'notice',
+          key: `dequeued:removed:${data.queueId}`,
+          level: 'info',
+          content: typeof data.text === 'string' ? data.text : '',
+        })
+      }
       state.queue = state.queue.filter((entry) => entry.queueId !== data.queueId)
       break
     }
