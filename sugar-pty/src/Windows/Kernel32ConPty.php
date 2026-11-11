@@ -44,13 +44,18 @@ use SugarCraft\Pty\PtyException;
  *
  * ## Why the attribute list and the job are ids, not values
  *
- * Both are owned buffers whose lifetime must outlast the call that named them:
- * `PROC_THREAD_ATTRIBUTE_LIST` is a blob `CreateProcessW` dereferences, and
- * `FFI::new()` results are GC-managed — a local variable holding one is freed
- * when the method returns, and the pointer Windows kept becomes a
- * use-after-free. Retaining them in {@see $attributeLists} / {@see $jobs} and
- * handing back an int is what keeps the pointer valid until the matching
- * `delete*` call, and it is what lets the test double in
+ * Both are owned buffers whose lifetime must outlast the call that named them.
+ * The list is additionally an ALIGNED buffer: kernelbase lays the attribute
+ * blob's internal pointers out on `MEMORY_ALLOCATION_ALIGNMENT` (16 bytes on
+ * x64) and fails `UpdateProcThreadAttribute` on a lesser-aligned one WITHOUT
+ * calling `SetLastError` — that no-error FALSE is exactly the "win32 error 0"
+ * the Windows 8.4 CI leg reported. MSDN's sample builds the blob with
+ * `malloc()`, whose CRT contract answers that alignment; `FFI::new()` would
+ * route through PHP's emalloc, which only guarantees 8, so the list comes from
+ * `HeapAlloc` of the process heap instead — and its memory is not GC-managed
+ * at all. What {@see $attributeLists} / {@see $jobs} retain and hand back an
+ * int for is the pointer (a wrapper kept so the matching `delete*` frees the
+ * heap block exactly once), and it is what lets the test double in
  * `sugar-pty/tests/Windows/FakeConPtyApi.php` implement the same interface
  * without owning a single byte of C memory. The
  * same shape of problem, and the same answer, as sugar-core's
@@ -174,6 +179,10 @@ BOOL InitializeProcThreadAttributeList(void *lpAttributeList, DWORD dwAttributeC
 BOOL UpdateProcThreadAttribute(void *lpAttributeList, DWORD dwFlags, SIZE_T Attribute, intptr_t lpValue, SIZE_T cbSize, void *lpPreviousValue, SIZE_T *lpReturnSize);
 void DeleteProcThreadAttributeList(void *lpAttributeList);
 
+intptr_t GetProcessHeap(void);
+void *HeapAlloc(intptr_t hHeap, DWORD dwFlags, SIZE_T dwBytes);
+BOOL HeapFree(intptr_t hHeap, DWORD dwFlags, void *lpMem);
+
 BOOL CreateProcessW(const void *lpApplicationName, const void *lpCommandLine, void *lpProcessAttributes, void *lpThreadAttributes, BOOL bInheritHandles, DWORD dwCreationFlags, const void *lpEnvironment, const void *lpCurrentDirectory, STARTUPINFOEXW *lpStartupInfo, PROCESS_INFORMATION *lpProcessInformation);
 
 DWORD WaitForSingleObject(intptr_t hHandle, DWORD dwMilliseconds);
@@ -207,16 +216,20 @@ CDEF;
     private static ?self $instance = null;
 
     /**
-     * Live attribute-list buffers, id => CData.
+     * Live attribute-list blobs, id => heap-backed `void *` CData.
      *
      * A `PROC_THREAD_ATTRIBUTE_LIST` is dereferenced by `CreateProcessW` long
-     * after the call that built it, so the owning CData must outlive
-     * {@see initializeAttributeList()}. Freed by {@see deleteAttributeList()}.
+     * after the call that built it; the heap block outlives every PHP variable,
+     * and the wrapper is retained so {@see deleteAttributeList()} frees it
+     * exactly once.
      */
     private array $attributeLists = [];
 
     /** Live job objects, id => `array{handle:int, buffer:?\FFI\CData}`. */
     private array $jobs = [];
+
+    /** The process heap handle, resolved once by {@see heap()}. */
+    private ?int $processHeap = null;
 
     /** Monotonic id source for {@see $attributeLists} / {@see $jobs}. */
     private int $nextId = 1;
@@ -520,18 +533,35 @@ CDEF;
         }
 
         $bytes = (int) $size->cdata;
-        $list = $ffi->new(\sprintf('unsigned char[%d]', $bytes));
+        // HeapAlloc, not FFI::new: kernelbase reads and writes the blob's
+        // internal pointers on MEMORY_ALLOCATION_ALIGNMENT (16 bytes on x64),
+        // and a lesser-aligned list makes UpdateProcThreadAttribute answer
+        // FALSE with GetLastError still 0 — the "win32 error 0" CI signature.
+        // The CRT malloc the MSDN sample uses carries that alignment by
+        // contract; emalloc behind FFI::new() only guarantees 8.
+        $list = $ffi->HeapAlloc($this->heap(), 0, $bytes);
+
+        if ($list === null) {
+            throw new PtyException(\sprintf(
+                'HeapAlloc(%d bytes) for the attribute list failed with win32 error %d',
+                $bytes,
+                $this->lastError(),
+            ));
+        }
+
         $size2 = $ffi->new('SIZE_T');
         $size2->cdata = $bytes;
 
         $ok = $ffi->InitializeProcThreadAttributeList(
-            \FFI::addr($list),
+            $list,
             $attributeCount,
             0,
             \FFI::addr($size2),
         );
 
         if (!$ok) {
+            $ffi->HeapFree($this->heap(), 0, $list);
+
             throw new PtyException(\sprintf(
                 'InitializeProcThreadAttributeList(%d, %d bytes) failed with win32 error %d',
                 $attributeCount,
@@ -541,7 +571,8 @@ CDEF;
         }
 
         $id = $this->nextId++;
-        // Retained: CreateProcessW dereferences this buffer later.
+        // Retained: CreateProcessW dereferences this buffer later, and the
+        // wrapper is what deleteAttributeList() frees the heap block through.
         $this->attributeLists[$id] = $list;
 
         return $id;
@@ -560,7 +591,7 @@ CDEF;
         $size = $ffi->new('SIZE_T');
 
         $ok = $ffi->UpdateProcThreadAttribute(
-            \FFI::addr($this->attributeLists[$attributeList]),
+            $this->attributeLists[$attributeList],
             0,
             self::PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
             $pseudoConsole,
@@ -586,7 +617,9 @@ CDEF;
         }
 
         unset($this->attributeLists[$attributeList]);
-        $this->ffi()->DeleteProcThreadAttributeList(\FFI::addr($list));
+        $ffi = $this->ffi();
+        $ffi->DeleteProcThreadAttributeList($list);
+        $ffi->HeapFree($this->heap(), 0, $list);
     }
 
     public function createProcess(
@@ -629,7 +662,7 @@ CDEF;
         // "must be set to sizeof(STARTUPINFOEXW)" — here 112, not the inner
         // STARTUPINFOW's 104. CreateProcessW validates cb against the flag.
         $startup->StartupInfo->cb = \FFI::sizeof($startup);
-        $startup->lpAttributeList = \FFI::addr($list);
+        $startup->lpAttributeList = $list;
         // wShowWindow + the flag that makes it mean anything: a ConPTY child left
         // with the default show-state opens a console window on a desktop.
         $startup->StartupInfo->wShowWindow = self::SW_HIDE;
@@ -742,6 +775,28 @@ CDEF;
     public function lastError(): int
     {
         return (int) $this->ffi()->GetLastError();
+    }
+
+    /**
+     * The process heap handle, resolved once — the allocator whose alignment
+     * contract the attribute list requires; see {@see initializeAttributeList()}.
+     */
+    private function heap(): int
+    {
+        if ($this->processHeap === null) {
+            $handle = (int) $this->ffi()->GetProcessHeap();
+
+            if ($handle === 0) {
+                throw new PtyException(\sprintf(
+                    'GetProcessHeap failed with win32 error %d',
+                    $this->lastError(),
+                ));
+            }
+
+            $this->processHeap = $handle;
+        }
+
+        return $this->processHeap;
     }
 
     // ─── Job object ─────────────────────────────────────────────────────────
