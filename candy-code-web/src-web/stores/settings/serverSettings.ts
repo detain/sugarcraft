@@ -35,6 +35,16 @@ export const useServerSettingsStore = defineStore('serverSettings', () => {
   const tiers = shallowRef<TierInfo[]>([])
   const values = shallowRef<Record<string, EffectiveValue>>({})
   const files = shallowRef<SettingsFile[]>([])
+  /**
+   * What each tier's OWN file holds (raw key=>value, each read with a
+   * `settings.get` for that scope). `stage()` compares an edit against this,
+   * never against the merged effective value in `values`: an edit that
+   * deliberately shadows a higher-priority tier matches effective BY DESIGN,
+   * and comparing against effective discarded every such pin silently
+   * (cc-review-1111 CW-QUAL-A n45). A tier whose read failed is unknown, and
+   * an unknown tier never swallows an edit — fail open.
+   */
+  const ownValues = ref<Partial<Record<TierScope, Record<string, unknown>>>>({})
   const loaded = ref(false)
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -68,6 +78,25 @@ export const useServerSettingsStore = defineStore('serverSettings', () => {
       values.value = effective.values as Record<string, EffectiveValue>
       files.value = effective.files ?? []
       loaded.value = true
+      // The staged edits compare against what each tier's own file holds,
+      // and that never appears in the merged effective answer above (see
+      // stage()). These reads ride load()'s settle so the save's re-read
+      // leaves the comparison basis fresh, and a refused or failed tier
+      // read is absorbed: its absence makes stage() fail open, never the
+      // form's whole load fail.
+      const own = await Promise.all(
+        tiers.value.map(async (entry: TierInfo): Promise<[TierScope, Record<string, unknown> | undefined]> => {
+          try {
+            const read = await connection.request('settings.get', { scope: entry.scope })
+            return [entry.scope, read.values as Record<string, unknown>]
+          } catch {
+            return [entry.scope, undefined]
+          }
+        }),
+      )
+      const ownMap: Partial<Record<TierScope, Record<string, unknown>>> = {}
+      for (const [entryScope, read] of own) if (read !== undefined) ownMap[entryScope] = read
+      ownValues.value = ownMap
     } catch (failure) {
       error.value = message(failure)
     } finally {
@@ -95,10 +124,19 @@ export const useServerSettingsStore = defineStore('serverSettings', () => {
     preview.value = null
   }
 
-  /** Stage `value` for `key`; staging the value it already has drops the edit. */
+  /**
+   * Stage `value` for `key`; drops the edit only when it restages the value
+   * the tier being written already holds in its OWN file. Comparing against
+   * the merged effective value instead silently discarded every deliberate
+   * shadow — pinning a value a higher-priority tier already provides looks
+   * identical in the merged view but is a real write (cc-review-1111
+   * CW-QUAL-A n45). When the staged tier's own file is unknown (its read
+   * failed) the edit stands: fail open, never swallow a user's write.
+   */
   function stage(key: string, value: unknown): void {
     const next = { ...staged.value }
-    if (sameValue(value, values.value[key]?.value)) delete next[key]
+    const own = ownValues.value[scope.value]
+    if (own !== undefined && sameValue(value, own[key])) delete next[key]
     else next[key] = { action: 'set', value }
     staged.value = next
     preview.value = null
