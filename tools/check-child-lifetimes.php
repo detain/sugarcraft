@@ -65,6 +65,16 @@ declare(strict_types=1);
  * fix is paste-and-judge, and a row whose site has disappeared or changed
  * count reds the other way. Unaccounted findings exit 1.
  *
+ * EACH ROW ALSO NAMES THE DIMENSION IT VOUCHES FOR (n08): a row's `kind` is
+ * `reap-bounded` when its load-bearing claim is the reap proof the scanner
+ * cannot derive (it licences an `unclassified` finding), or `fd-open` when
+ * its claim is the descriptor judgement — what the child sees above fd 2 is
+ * the accepted shape (it licences an `exposed` finding). The map lives in
+ * KIND_LICENSES beside the roster. A key whose row vouches for one dimension
+ * presented with a finding of the other shape reds as `KIND MISMATCH`, so a
+ * future mismatch accuses precisely instead of riding a licence granted for
+ * a different question.
+ *
  * WHAT A ROW MEANS, per kind (rule 7 — this is the judgement record, not an
  * exemption list): for the two `sugar-pty` rows and the `sugar-core` row, the
  * same REPORT candy-code's `ACCOUNTED_FOR_IN_LIBS` files — the fix lives in
@@ -73,7 +83,8 @@ declare(strict_types=1);
  * bounded TERM→KILL reap ladder at each site's teardown in this same round,
  * which closes the orphan half; the fd≥3 inheritance half REMAINS and this
  * row is where that stays written down. A row is allowed to say "exposed and
- * reported"; it is not allowed to say nothing.
+ * reported"; it is not allowed to say nothing — and since n08 it must also
+ * say WHICH of the two dimensions its reason adjudicates, via `kind`.
  *
  * Usage:
  *     php tools/check-child-lifetimes.php [--root=<dir>] [--list]
@@ -98,16 +109,42 @@ require_once __DIR__ . '/../candy-code/tests/Support/ChildLifetimeScanner.php';
 final class CheckChildLifetimes
 {
     /**
+     * The taxonomy the roster's `kind` field speaks (n08): each row-kind names
+     * the ONE dimension its reason adjudicates, and licences exactly the
+     * finding shape that dimension answers.
+     *
+     *  - `reap-bounded` licences `unclassified` findings — the row SUPPLIES the
+     *    reap proof the scanner cannot derive (a bounded TERM→KILL→proc_close
+     *    ladder, or a pool/registry that reaps); the residual fd≥3 inheritance
+     *    is disclosed inside the reason, not silently forgiven.
+     *  - `fd-open` licences `exposed` findings — the row's load-bearing claim
+     *    is the DESCRIPTOR judgement: what the child sees above fd 2 is the
+     *    accepted, written-down shape of the library.
+     *
+     * A rostered key presented with a finding the row's kind does not licence
+     * reds as KIND MISMATCH — the precise accusation a key-only match hides.
+     *
+     * @var array<string, string>
+     */
+    public const KIND_LICENSES = [
+        'reap-bounded' => 'unclassified',
+        'fd-open' => 'exposed',
+    ];
+
+    /**
      * Every finding this tool derives from the tree today, with its judgement.
      *
      * Key: `<path relative to repo root>::<function the scanner names>`.
      * Count drift in either direction is red — see the class doc-block.
+     * `kind` is the dimension the row vouches for (see KIND_LICENSES); a row
+     * matched against a finding of the other shape accuses, it does not cover.
      *
-     * @var array<string, array{count: int, reason: string}>
+     * @var array<string, array{count: int, kind: string, reason: string}>
      */
     public const ACCOUNTED = [
         'sugar-core/src/WorkerPool.php::spawnWorker' => [
             'count' => 1,
+            'kind' => 'reap-bounded',
             'reason' => 'pool worker held in $this->workers and drained from the ReactPHP loop, '
                 . 'so it outlives spawnWorker() by design; the scanner reads it as UNCLASSIFIED '
                 . 'because the handle goes to is_resource() first. Spec is 0,1,2 only. Same site '
@@ -115,6 +152,7 @@ final class CheckChildLifetimes
         ],
         'sugar-pty/src/Spawn.php::proc' => [
             'count' => 1,
+            'kind' => 'fd-open',
             'reason' => 'the PTY child, whose three stdio descriptors are all the one open slave '
                 . 'stream; the handle is kept for the life of the pty, so silence above fd 2 is '
                 . 'the shape of the library, not an oversight in it. Report row — NOT FIXABLE '
@@ -122,6 +160,7 @@ final class CheckChildLifetimes
         ],
         'sugar-pty/src/Posix/PosixProcess.php::spawn' => [
             'count' => 1,
+            'kind' => 'fd-open',
             'reason' => 'the same shape one layer down: the spec names fd 0 as a file and routes '
                 . '1 and 2 to pipes or the real STDOUT/STDERR — the author thought about '
                 . 'descriptors and still says nothing about 3+. Report row — NOT FIXABLE FROM '
@@ -129,6 +168,7 @@ final class CheckChildLifetimes
         ],
         'sugar-dashboard/src/Plugin/ExternalModule.php::startProcess' => [
             'count' => 1,
+            'kind' => 'fd-open',
             'reason' => 'persistent third-party plugin daemon, pipes on 0,1,2. E366 shipped the '
                 . 'bounded TERM→KILL reap ladder in __destruct() (this round), so the child '
                 . 'cannot outlive the dashboard; the fd≥3 inheritance exposure stands and this '
@@ -136,6 +176,7 @@ final class CheckChildLifetimes
         ],
         'sugar-image/src/Renderer/ChafaRenderer.php::render' => [
             'count' => 1,
+            'kind' => 'reap-bounded',
             'reason' => 'chafa CLI child: stdout pipe, fd 2 a private temp-file sink (D-07 — never '
                 . 'the caller\'s fd 2, never a reader-less pipe). The scanner stops at self::reap, '
                 . 'which polls stdout-EOF-ed exit under bounded post-EOF budgets (E646 slice '
@@ -148,6 +189,7 @@ final class CheckChildLifetimes
         ],
         'sugar-video/src/AudioPlayer.php::start' => [
             'count' => 1,
+            'kind' => 'fd-open',
             'reason' => 'ffplay/mpv companion with all-/dev/null FILE sinks (no parent-side pipe '
                 . 'at all — closing a reader-less stderr pipe SIGPIPEs the child). E366 shipped '
                 . '__destruct + a bounded reap ladder (round-90 folded it onto sugar-core '
@@ -156,6 +198,7 @@ final class CheckChildLifetimes
         ],
         'sugar-video/src/Decode/FfmpegDecoder.php::open' => [
             'count' => 1,
+            'kind' => 'fd-open',
             'reason' => 'ffmpeg decode child. close() now walks a bounded grace-then-escalate ladder '
                 . '(sugar-core BoundedShutdown, folded from the per-lib BoundedReaper copy) '
                 . 'before proc_close() and __destruct() calls close() (E366); the fd≥3 exposure '
@@ -163,6 +206,7 @@ final class CheckChildLifetimes
         ],
         'sugar-mcp-client/src/StdioMcpServer.php::start' => [
             'count' => 1,
+            'kind' => 'fd-open',
             'reason' => 'persistent MCP server child, pipes on 0,1,2 — the handle lives between '
                 . 'start() and stop() by protocol design (a tool call is long work). stop() '
                 . 'closes pipes first (graceful EOF exit) then walks sugar-core '
@@ -172,6 +216,7 @@ final class CheckChildLifetimes
         ],
         'candy-top/src/Collect/Process/AsyncCommand.php::spawn' => [
             'count' => 1,
+            'kind' => 'reap-bounded',
             'reason' => 'candy-top\'s one helper-child spawn site: the nvidia-smi queries of the '
                 . 'shared GPU feed (through the Collect/Gpu/SmiProcess adapter, where this row '
                 . 'used to live) and the ipmitool reads of the ipmi box. It must outlive spawn(): '
@@ -189,6 +234,7 @@ final class CheckChildLifetimes
         ],
         'candy-git-server/src/Git/StatelessRpc.php::advertise' => [
             'count' => 1,
+            'kind' => 'reap-bounded',
             'reason' => 'smart-HTTP advertisement child (git upload-pack --advertise-refs), '
                 . 'request-scoped. The scanner stops at self::reapBounded, which TERMinates, '
                 . 'polls 1 s, escalates to an EXPLICIT SIGKILL for TERM-immune children, polls '
@@ -202,6 +248,7 @@ final class CheckChildLifetimes
         ],
         'candy-git-server/src/Git/StatelessRpc.php::negotiate' => [
             'count' => 1,
+            'kind' => 'reap-bounded',
             'reason' => 'the same request-scoped reap story for the negotiation child (git '
                 . 'upload-pack / git receive-pack): stdin is written by writeBounded under the '
                 . 'same deadline discipline before the finally hands off to reapBounded — '
@@ -282,7 +329,9 @@ final class CheckChildLifetimes
     }
 
     /**
-     * Judge derived findings against ACCOUNTED.
+     * Judge derived findings against ACCOUNTED — first whether a key is
+     * rostered at all, then whether the row's KIND vouches for the shape
+     * the tree derives (n08), then count and staleness per key.
      *
      * @param  list<array{key: string, kind: string, line: int, detail: string}> $findings
      * @return list<string> empty means green
@@ -297,11 +346,29 @@ final class CheckChildLifetimes
         $problems = [];
 
         foreach ($findings as $finding) {
-            if (!isset(self::ACCOUNTED[$finding['key']])) {
+            $row = self::ACCOUNTED[$finding['key']] ?? null;
+
+            if ($row === null) {
                 $problems[] = sprintf(
                     'UNACCOUNTED %s at %s:%d — %s',
                     $finding['kind'],
                     $finding['key'],
+                    $finding['line'],
+                    $finding['detail'],
+                );
+
+                continue;
+            }
+
+            $licensed = self::KIND_LICENSES[$row['kind']];
+
+            if ($finding['kind'] !== $licensed) {
+                $problems[] = sprintf(
+                    'KIND MISMATCH at %s: row kind %s (licences %s findings), the tree derives %s at line %d — %s',
+                    $finding['key'],
+                    $row['kind'],
+                    $licensed,
+                    $finding['kind'],
                     $finding['line'],
                     $finding['detail'],
                 );

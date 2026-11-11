@@ -16,6 +16,14 @@ declare(strict_types=1);
  * without its roster row following, this file reddens the `tools/ guards`
  * job instead of the manifest job silently losing an arm.
  *
+ * N08 (2026-11-11) gave the verdict a second red mode on top of UNACCOUNTED,
+ * STALE and COUNT DRIFT: a rostered key whose row vouches for the WRONG
+ * dimension — a `reap-bounded` licence meeting an `exposed` derivation, or a
+ * `fd-open` licence meeting an `unclassified` one — accuses as KIND MISMATCH,
+ * naming both sides. The dimension pins below hold each direction red with
+ * its exact message, so a future row that quietly licenses the other shape
+ * cannot pass as covered.
+ *
  * WHY THE GREEN POLARITIES CALL derive() RATHER THAN THE CLI: the default
  * roster describes THIS repository. A throwaway fixture tree under /tmp can
  * never satisfy it — every sugar-pty/sugar-core/sugar-dashboard/sugar-video row
@@ -231,9 +239,10 @@ final class ChildLifetimesToolTest extends TestCase
     public function testASecondSiteUnderAnExistingKeyDriftsTheCount(): void
     {
         $key = (string) \array_key_first(\CheckChildLifetimes::ACCOUNTED);
+        $licensed = \CheckChildLifetimes::KIND_LICENSES[\CheckChildLifetimes::ACCOUNTED[$key]['kind']];
         $findings = [
-            ['key' => $key, 'kind' => 'exposed', 'line' => 1, 'detail' => 'a'],
-            ['key' => $key, 'kind' => 'exposed', 'line' => 2, 'detail' => 'b'],
+            ['key' => $key, 'kind' => $licensed, 'line' => 1, 'detail' => 'a'],
+            ['key' => $key, 'kind' => $licensed, 'line' => 2, 'detail' => 'b'],
         ];
 
         $problems = \CheckChildLifetimes::verdict($findings);
@@ -259,11 +268,110 @@ final class ChildLifetimesToolTest extends TestCase
         $findings = [];
         foreach (\CheckChildLifetimes::ACCOUNTED as $key => $row) {
             for ($n = 0; $n < $row['count']; $n++) {
-                $findings[] = ['key' => $key, 'kind' => 'exposed', 'line' => $n, 'detail' => 'x'];
+                $findings[] = [
+                    'key' => $key,
+                    'kind' => \CheckChildLifetimes::KIND_LICENSES[$row['kind']],
+                    'line' => $n,
+                    'detail' => 'x',
+                ];
             }
         }
 
         $this->assertSame([], \CheckChildLifetimes::verdict($findings));
+    }
+
+    /**
+     * Roster hygiene after n08: every row names a kind, every kind is in the
+     * licensed vocabulary, and the split of the eleven rows across the two
+     * dimensions is a measured census — a row drifting dimension must be
+     * re-adjudicated here, not silently re-labelled.
+     */
+    public function testEveryRowKindIsLicensedAndCensusHolds(): void
+    {
+        $this->assertSame(
+            ['reap-bounded' => 'unclassified', 'fd-open' => 'exposed'],
+            \CheckChildLifetimes::KIND_LICENSES,
+        );
+
+        $counts = [];
+        foreach (\CheckChildLifetimes::ACCOUNTED as $key => $row) {
+            $this->assertIsString($row['kind'], $key);
+            $this->assertArrayHasKey($row['kind'], \CheckChildLifetimes::KIND_LICENSES, $key);
+            $this->assertIsInt($row['count'], $key);
+            $this->assertGreaterThan(0, $row['count'], $key);
+            $this->assertIsString($row['reason'], $key);
+            $this->assertNotSame('', $row['reason'], $key);
+            $counts[$row['kind']] = ($counts[$row['kind']] ?? 0) + 1;
+        }
+
+        // 5/6 measured 2026-11-11 at the n08 split (rows: reap-bounded =
+        // WorkerPool::spawnWorker, ChafaRenderer::render, AsyncCommand::spawn,
+        // StatelessRpc::advertise, StatelessRpc::negotiate; fd-open =
+        // Spawn::proc, PosixProcess::spawn, ExternalModule::startProcess,
+        // AudioPlayer::start, FfmpegDecoder::open, StdioMcpServer::start).
+        // Re-derive with the tool if a row changes dimension.
+        $this->assertSame(['reap-bounded' => 5, 'fd-open' => 6], $counts);
+    }
+
+    /**
+     * RED polarity, n08 leg one: the rostered WorkerPool key vouches for
+     * reap-bounded only; feed it an exposed derivation and it accuses as
+     * KIND MISMATCH naming both dimensions — NOT as UNACCOUNTED, which would
+     * tell a future author to add a row rather than re-adjudicate the one
+     * that exists.
+     */
+    public function testAReapBoundedLicenceOnAnExposedShapeAccusesPrecisely(): void
+    {
+        $problems = \CheckChildLifetimes::verdict([[
+            'key' => 'sugar-core/src/WorkerPool.php::spawnWorker',
+            'kind' => 'exposed',
+            'line' => 350,
+            'detail' => 'child stored beyond the call',
+        ]]);
+
+        $mismatch = \array_values(\array_filter(
+            $problems,
+            static fn (string $problem): bool => \str_starts_with($problem, 'KIND MISMATCH at '),
+        ));
+
+        $this->assertCount(1, $mismatch);
+        $this->assertStringStartsWith('KIND MISMATCH at sugar-core/src/WorkerPool.php::spawnWorker', $mismatch[0]);
+        $this->assertStringContainsString('reap-bounded', $mismatch[0]);
+        $this->assertStringContainsString('unclassified', $mismatch[0]);
+
+        // The ten rows this fixture derives nothing from read STALE in the
+        // same verdict — correct here; the door is the accusation CLASS, not
+        // the problem count. WorkerPool itself matches its own row, so no
+        // UNACCOUNTED may appear anywhere.
+        foreach ($problems as $problem) {
+            $this->assertStringNotContainsString('UNACCOUNTED', $problem);
+        }
+    }
+
+    /**
+     * RED polarity, n08 leg two: the mirror direction — Spawn::proc vouches
+     * for fd-open (descriptor) accounting; an unclassified derivation under
+     * it must accuse precisely, naming fd-open and the exposed shape its
+     * licence carries.
+     */
+    public function testAFdOpenLicenceOnAnUnclassifiedShapeAccusesPrecisely(): void
+    {
+        $problems = \CheckChildLifetimes::verdict([[
+            'key' => 'sugar-pty/src/Spawn.php::proc',
+            'kind' => 'unclassified',
+            'line' => 103,
+            'detail' => 'lifetime not classifiable from the body',
+        ]]);
+
+        $mismatch = \array_values(\array_filter(
+            $problems,
+            static fn (string $problem): bool => \str_starts_with($problem, 'KIND MISMATCH at '),
+        ));
+
+        $this->assertCount(1, $mismatch);
+        $this->assertStringStartsWith('KIND MISMATCH at sugar-pty/src/Spawn.php::proc', $mismatch[0]);
+        $this->assertStringContainsString('fd-open', $mismatch[0]);
+        $this->assertStringContainsString('exposed', $mismatch[0]);
     }
 
     /**
