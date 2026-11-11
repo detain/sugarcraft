@@ -509,7 +509,7 @@ final class ServerTest extends TestCase
         self::assertStringNotContainsString('if ($user === null) return null;', $auth);
         self::assertSame(
             2,
-            \substr_count($auth, 'self::BASIC_AUTH_DECOY_HASH'),
+            \substr_count($auth, 'self::basicAuthDecoyHash()'),
             'unknown-user and key-only refusals must each burn the decoy',
         );
         self::assertStringContainsString('if (!\password_verify($password, $hash)) {', $auth);
@@ -517,9 +517,14 @@ final class ServerTest extends TestCase
 
     public function testDecoyDigestIsCostMatchedAndNeverMatches(): void
     {
-        $const = (new \ReflectionClass(Server::class))->getReflectionConstant('BASIC_AUTH_DECOY_HASH');
-        self::assertNotFalse($const);
-        $decoy = (string) $const->getValue();
+        $decoy = (string) (new \ReflectionMethod(Server::class, 'basicAuthDecoyHash'))->invoke(null);
+
+        // Memoized: the mint is paid once per process and every refusal
+        // burns the very same digest.
+        self::assertSame(
+            $decoy,
+            (string) (new \ReflectionMethod(Server::class, 'basicAuthDecoyHash'))->invoke(null),
+        );
 
         $info = \password_get_info($decoy);
         self::assertSame('bcrypt', $info['algoName']);

@@ -169,6 +169,11 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             permissionGate: $engine->permissionGate(),
             environmentRoot: $this->root,
             toolRegistry: $engine->tools(),
+            // C6: the session's hook dispatcher rides the per-call engine so
+            // /workflow stages announce lifecycle events exactly like the
+            // turn path's tool calls do. Null when the backend has no
+            // HookManager — an unarmed engine is byte-identical to a pre-C6 one.
+            hookDispatcher: $engine->hookDispatcher(),
         );
 
         try {

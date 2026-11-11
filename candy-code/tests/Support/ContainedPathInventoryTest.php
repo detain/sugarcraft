@@ -176,6 +176,9 @@ final class ContainedPathInventoryTest extends TestCase
         // The a2a lane added this call but never took the row; cured here so
         // the derivation and the map agree again (the scan found it, the map
         // did not name it — exactly the drift this guard exists for).
+        // a5 (cc-eval capability bank): a stored card is read back only
+        // through the jail — the is_link()/below() refusal at the store's
+        // read leg is one routed compare, and it answers refusal with null.
         'Agents/CapabilityCardStore.php' => 1,
         'Agents/ForeignAgentPresetRegistry.php' => 2,
         'Agents/WorktreeConfig.php' => 2,
@@ -426,8 +429,8 @@ final class ContainedPathInventoryTest extends TestCase
             'THIRTY-SIX' => 36, 'THIRTY-SEVEN' => 37, 'THIRTY-EIGHT' => 38, 'THIRTY-NINE' => 39,
             'FORTY' => 40, 'FORTY-ONE' => 41, 'FORTY-TWO' => 42, 'FORTY-THREE' => 43,
             'FORTY-FOUR' => 44, 'FORTY-FIVE' => 45, 'FORTY-SIX' => 46, 'FORTY-SEVEN' => 47, 'FORTY-EIGHT' => 48, 'FORTY-NINE' => 49, 'FIFTY' => 50, 'FIFTY-ONE' => 51, 'FIFTY-THREE' => 53, 'FIFTY-FOUR' => 54, 'FIFTY-FIVE' => 55, 'FIFTY-SIX' => 56,
-            'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64, 'SIXTY-FIVE' => 65, 'SIXTY-SEVEN' => 67, 'SIXTY-NINE' => 69,
-        'SEVENTY' => 70, 'SEVENTY-ONE' => 71, 'SEVENTY-TWO' => 72,
+            'SIXTY' => 60, 'SIXTY-ONE' => 61, 'SIXTY-FOUR' => 64, 'SIXTY-FIVE' => 65, 'SIXTY-SEVEN' => 67, 'SIXTY-EIGHT' => 68, 'SIXTY-NINE' => 69,
+            'SEVENTY' => 70, 'SEVENTY-ONE' => 71, 'SEVENTY-TWO' => 72, 'SEVENTY-THREE' => 73, 'SEVENTY-FOUR' => 74, 'SEVENTY-FIVE' => 75,
             'TWENTY-ONE' => 21, 'TWENTY-TWO' => 22, 'TWENTY-THREE' => 23, 'TWENTY-FOUR' => 24, 'TWENTY-FIVE' => 25,
         ];
 
@@ -481,14 +484,15 @@ final class ContainedPathInventoryTest extends TestCase
     }
 
     /**
-     * "TWENTY-ONE spellings remain by hand, in FIFTEEN files" — the §7 closeout
+     * "TWENTY-THREE spellings remain by hand, in SIXTEEN files" — the §7 closeout
      * re-derived the set after the waves that landed since it last read
      * "THIRTEEN ... EIGHT": the new spellings are the boundary judgement in
      * {@see \SugarCraft\Code\Cli\LaunchContext}'s extra-root dedup, the
      * EnvironmentBlock root probe, the HookLog fallback-arm anchor, the two
      * host-command shelf gates (context dump, memory export), the
      * TranscriptProjector media-store containment, the Bubblewrap `--config`
-     * under-the-root refusal, and one further compare in PathJail's
+     * under-the-root refusal and its jail-cwd tmpfs re-bind (LANE-CC,
+     * 2026-11-11), and one further compare in PathJail's
      * ancestor walk. All of them admit or refuse with their answer; none
      * joins the exclusion list below.
      *
@@ -595,16 +599,24 @@ final class ContainedPathInventoryTest extends TestCase
                 'Tools/PathJail.php' => 6,
                 // C-TOOL-4.c: the bwrap `--config` re-bind refuses a path
                 // that does not sit under the jail root — binding it would
-                // undo the jail, so the compare is the refusal.
-                'Tools/Sandbox/Bubblewrap.php' => 1,
+                // undo the jail, so the compare is the refusal. LANE-CC
+                // jail-cwd (2026-11-11): the `--chdir` target sitting under
+                // the private tmpfs is re-bound read-only only when the
+                // normalised path lies under /tmp — a second compare.
+                'Tools/Sandbox/Bubblewrap.php' => 2,
                 'Tui/SessionPicker.php' => 1,
+                // C4 (cc-eval workflow include/output walk): the glob
+                // fan-out re-contains every found name against the workflow
+                // root's realpath before reading it — a planted link out of
+                // the root is refused, not read. One boundary compare.
+                'Workflows/WorkflowEngine.php' => 1,
             ],
             $counts,
         );
 
         unset($counts['Agents/AgentPresetRegistry.php'], $counts['Agents/WorktreeManager.php'], $counts['Chat.php'], $counts['Diagnostics/TuiErrorLog.php'], $counts['Renderer.php'], $counts['Server/Http/Router.php'], $counts['Server/Http/SharePageController.php'], $counts['Skills/SkillLoader.php'], $counts['Tui/SessionPicker.php'], $counts['Tools/Concerns/BuildsUnifiedDiff.php'], $counts['Support/StartupSummary.php']);
-        $this->assertSame(21, array_sum($counts), 'containment spellings still by hand');
-        $this->assertCount(15, $counts, 'files still holding one');
+        $this->assertSame(23, array_sum($counts), 'containment spellings still by hand');
+        $this->assertCount(16, $counts, 'files still holding one');
     }
 
     /**

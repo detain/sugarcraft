@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Glossary — SugarCraft</title>
+    <meta name="description" content="The vocabulary of the SugarCraft terminal UI ecosystem: runtimes, frames, zones, and protocols.">
+    <meta property="og:title" content="Glossary — SugarCraft">
+    <meta property="og:description" content="The vocabulary of the SugarCraft terminal UI ecosystem: runtimes, frames, zones, and protocols.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://sugarcraft.github.io/GLOSSARY.html">
+    <meta property="og:image" content="https://sugarcraft.github.io/img/social-preview.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://sugarcraft.github.io/img/social-preview.png">
+    <link rel="canonical" href="https://sugarcraft.github.io/GLOSSARY.html">
+    <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
+    <link rel="icon" type="image/png" href="img/profile.png">
+    <link rel="apple-touch-icon" href="img/profile.png">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/search.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to main content</a>
+<!--nav:start-->
+<nav class="nav" aria-label="Main navigation"><div class="nav-inner">
+    <a class="brand" href="/"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
+    <div class="nav-links">
+        <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
+            <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <span>Search</span>
+        </button>
+        <ul class="nav-items">
+            <li class="nav-item"><a href="/">Home</a></li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Libraries <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/libraries.html">All libraries →</a>
+                    <a href="/lib/sugar-core.html">sugar-core</a>
+                    <a href="/lib/sugar-style.html">sugar-style</a>
+                    <a href="/lib/sugar-cellbuffer.html">sugar-cellbuffer</a>
+                    <a href="/lib/sugar-async.html">sugar-async</a>
+                    <a href="/lib/sugar-spring.html">sugar-spring</a>
+                    <a href="/lib/sugar-mouse.html">sugar-mouse</a>
+                    <a href="/lib/sugar-widgets.html">sugar-widgets</a>
+                    <a href="/lib/sugar-charts.html">sugar-charts</a>
+                    <a href="/lib/sugar-forms.html">sugar-forms</a>
+                    <a href="/lib/sugar-markdown.html">sugar-markdown</a>
+                    <a href="/lib/sugar-cli.html">sugar-cli</a>
+                    <a href="/lib/sugar-ssh-server.html">sugar-ssh-server</a>
+                    <a href="/lib/sugar-metrics.html">sugar-metrics</a>
+                    <a href="/lib/sugar-log.html">sugar-log</a>
+                    <a href="/lib/sugar-image.html">sugar-image</a>
+                    <a href="/lib/sugar-animation.html">sugar-animation</a>
+                    <a href="/lib/sugar-video.html">sugar-video</a>
+                    <a href="/lib/sugar-colorprofile.html">sugar-colorprofile</a>
+                    <a href="/lib/sugar-ansi-parser.html">sugar-ansi-parser</a>
+                    <a href="/lib/sugar-vterm.html">sugar-vterm</a>
+                    <a href="/lib/sugar-pty.html">sugar-pty</a>
+                    <a href="/lib/sugar-focus.html">sugar-focus</a>
+                    <a href="/lib/sugar-gallery.html">sugar-gallery</a>
+                    <a href="/lib/sugar-treelist.html">sugar-treelist</a>
+                    <a href="/lib/sugar-constraints.html">sugar-constraints</a>
+                    <a href="/lib/sugar-panels.html">sugar-panels</a>
+                    <a href="/lib/sugar-overlay.html">sugar-overlay</a>
+                    <a href="/lib/sugar-navstack.html">sugar-navstack</a>
+                    <a href="/lib/sugar-dashboard.html">sugar-dashboard</a>
+                    <a href="/lib/sugar-quickpick.html">sugar-quickpick</a>
+                    <a href="/lib/sugar-input.html">sugar-input</a>
+                    <a href="/lib/sugar-fuzzy.html">sugar-fuzzy</a>
+                    <a href="/lib/sugar-flexbox.html">sugar-flexbox</a>
+                    <a href="/lib/sugar-toast.html">sugar-toast</a>
+                    <a href="/lib/sugar-datepicker.html">sugar-datepicker</a>
+                    <a href="/lib/sugar-readline.html">sugar-readline</a>
+                    <a href="/lib/sugar-table.html">sugar-table</a>
+                    <a href="/lib/sugar-diff.html">sugar-diff</a>
+                    <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
+                    <a href="/lib/sugar-testing.html">sugar-testing</a>
+                </div>
+            </li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Apps <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/apps.html">All apps →</a>
+                    <a href="/lib/candy-starter.html">candy-starter</a>
+                    <a href="/lib/candy-scriptui.html">candy-scriptui</a>
+                    <a href="/lib/candy-codeshot.html">candy-codeshot</a>
+                    <a href="/lib/candy-mdview.html">candy-mdview</a>
+                    <a href="/lib/candy-ansi-inspect.html">candy-ansi-inspect</a>
+                    <a href="/lib/candy-ssh-launcher.html">candy-ssh-launcher</a>
+                    <a href="/lib/candy-kv.html">candy-kv</a>
+                    <a href="/lib/candy-mail.html">candy-mail</a>
+                    <a href="/lib/candy-git-server.html">candy-git-server</a>
+                    <a href="/lib/candy-tetris.html">candy-tetris</a>
+                    <a href="/lib/candy-files.html">candy-files</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
+                    <a href="/lib/candy-code-web.html">candy-code-web</a>
+                    <a href="/lib/candy-vcr.html">candy-vcr</a>
+                    <a href="/lib/candy-git.html">candy-git</a>
+                    <a href="/lib/candy-sql.html">candy-sql</a>
+                    <a href="/lib/candy-codetime.html">candy-codetime</a>
+                    <a href="/lib/candy-minesweeper.html">candy-minesweeper</a>
+                    <a href="/lib/candy-gifview.html">candy-gifview</a>
+                    <a href="/lib/candy-image.html">candy-image</a>
+                    <a href="/lib/candy-top.html">candy-top</a>
+                    <a href="/lib/candy-flappy.html">candy-flappy</a>
+                </div>
+            </li>
+            <li class="nav-item nav-item-drop-right">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Docs <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop">
+                    <a href="/#architecture">Architecture</a>
+                    <a href="/#quickstart">Quickstart</a>
+                    <a href="/compare.html">Compare</a>
+                    <a href="/GETTING-STARTED.html">Getting Started</a>
+                    <a href="/GLOSSARY.html">Glossary</a>
+                    <a href="/KEYMAPS.html">Keymaps</a>
+                    <a href="/cookbook/index.html">Cookbook</a>
+                </div>
+            </li>
+            <li class="nav-item"><a href="/#demos">Demos</a></li>
+            <li class="nav-item"><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a></li>
+        </ul>
+    </div>
+</div></nav>
+<!--nav:end-->
+
+<main id="main">
+
+<article class="prose">
+
+<h1><a id="sugarcraft-glossary" href="#sugarcraft-glossary" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>SugarCraft glossary</h1>
+<p>Every term the root <a href="https://github.com/detain/sugarcraft/blob/master/README.md">README</a> and the library docs assume you
+already know, defined in two or three lines each with a pointer to the code
+that makes it true. This page is fleet-wide; <a href="https://github.com/detain/sugarcraft/blob/master/candy-code/docs/GLOSSARY.md">candy-code's own
+glossary</a> covers the agent-app vocabulary
+(ACP, refusal kinds, presets) separately.</p>
+<h2><a id="how-a-terminal-app-draws" href="#how-a-terminal-app-draws" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>How a terminal app draws</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>TUI</strong></td>
+<td>Terminal User Interface — an interactive app that runs in a text terminal, redrawing the whole screen (or parts of it) instead of scrolling output.</td>
+</tr>
+<tr>
+<td><strong>ANSI</strong></td>
+<td>The family of escape-sequence conventions a terminal understands — bytes starting <code>ESC [</code> / <code>ESC ]</code> that move the cursor, set colors, toggle modes. Everything a TUI &quot;draws&quot; is ANSI text.</td>
+</tr>
+<tr>
+<td><strong>ECMA-48</strong></td>
+<td>The 1976 ISO-parented standard that defines the control sequences ANSI terminals follow (C0/C1 controls, CSI structure). SugarCraft's parser models it in <a href="/lib/sugar-ansi-parser.html"><code>sugar-ansi-parser</code></a>.</td>
+</tr>
+<tr>
+<td><strong>VT500</strong></td>
+<td>Digital Equipment's late terminal-model spec — the de-facto reference register of CSI/DEC Private modes that modern terminals emulate. <code>sugar-ansi-parser</code>'s state machine targets it.</td>
+</tr>
+<tr>
+<td><strong>CSI</strong></td>
+<td>Control Sequence Introducer — <code>ESC [</code> — the prefix of most commands (cursor movement, SGR, mode set/reset).</td>
+</tr>
+<tr>
+<td><strong>SGR</strong></td>
+<td>Select Graphic Rendition — the CSI <code>m</code> command: <code>ESC[1m</code> bold, <code>ESC[38;2;R;G;Bm</code> truecolor. Style rendering is a stream of SGR parameters; defined and emitted by <a href="https://github.com/detain/sugarcraft/blob/master/sugar-style/src/Style.php"><code>sugar-style/src/Style.php</code></a>.</td>
+</tr>
+<tr>
+<td><strong>OSC</strong></td>
+<td>Operating System Command — <code>ESC ] … ESC \</code> (or BEL) — out-of-band messages: window titles, hyperlinks, iTerm2 image chunks.</td>
+</tr>
+<tr>
+<td><strong>OSC 8</strong></td>
+<td>The hyperlink extension: <code>ESC]8;;URL ESC\</code> text <code>ESC]8;; ESC\</code>. A click target without a mouse protocol; emitted by <a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Util/Ansi.php"><code>SugarCraft\Core\Util\Ansi::hyperlink()</code></a> and consumed by <code>sugar-markdown</code>.</td>
+</tr>
+<tr>
+<td><strong>alternate screen</strong></td>
+<td>The second full-screen buffer many terminals keep (<code>ESC[?1049h</code>) — enter it and the user's scrollback survives you. <code>sugar-core</code>'s <code>Program</code> owns this lifecycle.</td>
+</tr>
+<tr>
+<td><strong>raw mode</strong></td>
+<td>TTY setting that turns off line buffering and echo, so the app reads each keystroke immediately. Set up by <code>sugar-core</code>'s input stack; required for arrow keys to arrive as bytes at all.</td>
+</tr>
+<tr>
+<td><strong>PTY</strong></td>
+<td>Pseudo-Terminal — the kernel master/slave pair that gives a child process a fake tty. Used to run programs under a terminal (<code>sugar-pty</code>, candy-code's PtyRun tool).</td>
+</tr>
+<tr>
+<td><strong>cell-diff</strong></td>
+<td>The renderer keeps the previous frame as a grid of cells and writes only the characters that changed. <code>sugar-cellbuffer</code>'s <code>Buffer::diff()</code> is the shared engine.</td>
+</tr>
+<tr>
+<td><strong>&quot;cursed&quot; cell-diff mode</strong></td>
+<td>sugar-core's opt-in raw-line diffing mode — the historic lipgloss term for byte-level (not cell-level) frame differencing: cheaper, but only correct when every row is rewritten exactly. See the sugar-core README row (&quot;opt-in cursed cell-diff mode&quot;).</td>
+</tr>
+<tr>
+<td><strong>rune</strong></td>
+<td>One user-perceived character in one grid cell (may be several bytes / codepoints: an emoji, a combining sequence). <a href="https://github.com/detain/sugarcraft/blob/master/sugar-cellbuffer/src/Cell.php"><code>sugar-cellbuffer/src/Cell.php</code></a> stores <code>rune</code>/style/link/width.</td>
+</tr>
+<tr>
+<td><strong>braille chart</strong></td>
+<td>An 8-dot Braille cell (<code>⣀</code>-shaped glyphs, U+2800 block) used as a 2×4-pixel plotting cell — line graphs in text. Produced by <a href="https://github.com/detain/sugarcraft/blob/master/sugar-charts/src/Sparkline/Sparkline.php"><code>sugar-charts/src/Sparkline/Sparkline.php</code></a> and the charts <a href="https://github.com/detain/sugarcraft/blob/master/sugar-charts/src/Canvas/Canvas.php"><code>Canvas</code></a>/<a href="https://github.com/detain/sugarcraft/blob/master/sugar-charts/src/Canvas/BrailleGrid.php"><code>BrailleGrid</code></a>; candy-top's CPU graphs are these, hence &quot;braille graphs, btop-compatible&quot;.</td>
+</tr>
+<tr>
+<td><strong>luminance ramp</strong></td>
+<td>Grayscale block glyphs (<code>░▒▓█</code>) chosen by pixel brightness — the fallback way to show an image or GIF where truecolor or graphics protocols are unavailable (<code>sugar-animation</code>, <code>candy-gifview</code>, sugar-image's ANSI tier).</td>
+</tr>
+<tr>
+<td><strong>half block</strong></td>
+<td>The <code>▄</code>/<code>▀</code> glyphs; sugar-image's always-available ANSI tier paints one image row per two such half-cells.</td>
+</tr>
+</tbody>
+</table>
+<h2><a id="keyboard-and-mouse-protocols" href="#keyboard-and-mouse-protocols" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Keyboard and mouse protocols</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Kitty progressive keyboard protocol</strong></td>
+<td>A graphics-protocol-era keyboard extension (<code>CSI &gt;1u</code> flags) that reports every key + modifier combination unambiguously, and lets apps &quot;disambiguate&quot; chords. Decoded by <a href="/lib/sugar-input.html"><code>sugar-input</code></a>; negotiated on startup by apps such as candy-code and candy-files.</td>
+</tr>
+<tr>
+<td><strong>xterm modifyOtherKeys</strong></td>
+<td>xterm's older alternative for reporting chords as <code>CSI 27;modifier;keysym ~</code>. Also decoded by <code>sugar-input</code>.</td>
+</tr>
+<tr>
+<td><strong>X10 mouse</strong></td>
+<td>The 1984 DEC VT52-era mouse report (<code>ESC [ M</code> + 3 bytes) — button press only, coordinates capped to 223 columns. <code>sugar-input</code>'s mouse decoders read it.</td>
+</tr>
+<tr>
+<td><strong>urxvt mouse</strong></td>
+<td>The rxvt-unicode extension adding drag/motion reports to the X10 encoding.</td>
+</tr>
+<tr>
+<td><strong>SGR mouse</strong></td>
+<td>The modern encoding (<code>CSI &lt; button;x;y M/m</code>) — arbitrary coordinates, press and release distinguishable; what candy-top enables (<code>?1002h</code> + <code>?1006h</code>).</td>
+</tr>
+<tr>
+<td><strong>marker / zone / sentinel</strong></td>
+<td>The click plumbing trio: a <strong>marker</strong> is the pair of invisible codepoints wrapped around rendered content, a <strong>zone</strong> is the rectangle the renderer discovers from those markers when a frame is scanned, and the <strong>sentinels</strong> are the codepoints themselves — U+E000 (open) and U+E001 (close), constants <code>Sanitize::ZONE_SENTINEL_OPEN/CLOSE</code> in <a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Util/Sanitize.php"><code>sugar-core/src/Util/Sanitize.php</code></a>. The marker builder is <a href="https://github.com/detain/sugarcraft/blob/master/sugar-mouse/src/Mark.php"><code>SugarCraft\Mouse\Mark::zone()</code></a>.</td>
+</tr>
+<tr>
+<td><strong>PUA</strong></td>
+<td>Private Use Areas — Unicode blocks reserved for app-defined glyphs. SugarCraft reserves U+E000–U+F8FF: the two zone sentinels plus image-overlay markers live there, which is why untrusted text is swept of them (see <strong>untrusted</strong> below and <a href="/TRUST-BOUNDARY.html">docs/TRUST-BOUNDARY.md</a>).</td>
+</tr>
+</tbody>
+</table>
+<h2><a id="runtime-vocabulary" href="#runtime-vocabulary" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Runtime vocabulary</h2>
+<p>SugarCraft's interactive stack is an MVC-style Model–Update–View runtime (the
+architecture pioneered by The Elm Architecture and ported to Go as Bubble
+Tea). The words, per <a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Model.php"><code>sugar-core</code></a>:</p>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Model</strong></td>
+<td>An immutable value object holding your app's whole state, implementing <code>SugarCraft\Core\Model</code> — <code>init()</code>, <code>update()</code>, <code>view()</code>, <code>subscriptions()</code>.</td>
+</tr>
+<tr>
+<td><strong>Msg</strong></td>
+<td>Anything that happened: a key press, a tick, an async result. A <code>SugarCraft\Core\Msg</code> value handed to <code>update()</code>.</td>
+</tr>
+<tr>
+<td><strong>Update</strong></td>
+<td><code>Model::update(Msg): [Model, ?Cmd]</code> — the single place state changes; returns the next model plus an optional effect.</td>
+</tr>
+<tr>
+<td><strong>View</strong></td>
+<td>`Model::view(): string</td>
+</tr>
+<tr>
+<td><strong>Cmd</strong></td>
+<td>A deferred effect — a <code>Closure</code> returned by <code>update()</code> that the runtime runs and feeds its resulting Msg back in (<a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Cmd.php"><code>sugar-core/src/Cmd.php</code></a>).</td>
+</tr>
+<tr>
+<td><strong>Subscriptions</strong></td>
+<td>The model's declared live sources (timers, streams, key-repeat…) that <code>update()</code> never touches; the runtime reconciles them after each cycle (<a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Subscriptions.php"><code>sugar-core/src/Subscriptions.php</code></a>).</td>
+</tr>
+<tr>
+<td><strong>Program</strong></td>
+<td>The harness that owns the event loop, raw mode, alt-screen, and the Update→View tick (<a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Program.php"><code>sugar-core/src/Program.php</code></a>). Your app is just a Model.</td>
+</tr>
+<tr>
+<td><strong>tick</strong></td>
+<td>One loop iteration's repaint decision; frame-rate is a <code>ProgramOptions</code> setting.</td>
+</tr>
+<tr>
+<td><strong>frame</strong></td>
+<td>Two senses — (1) TEA: one complete <code>view()</code> output painted to screen; (2) candy-vcr/VHS: one recorded (or rendered) image in a session tape/GIF. Each lib names its sense locally.</td>
+</tr>
+</tbody>
+</table>
+<h2><a id="styling-and-color" href="#styling-and-color" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Styling and color</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Style</strong></td>
+<td>An immutable set-and-render description — bold, colors, underline — as a <code>SugarCraft\Style\Style</code> value object (<a href="https://github.com/detain/sugarcraft/blob/master/sugar-style/src/Style.php"><code>sugar-style/src/Style.php</code></a>); its setters keep lipgloss's bare names (<code>bold()</code>, <code>fg()</code>) and still return a new instance via a private <code>with()</code> — sugar-style is the documented naming exception, so the <code>with*()</code> spelling belongs to the other value-object families. Never &quot;the Sprinkles Style&quot; — that package no longer exists.</td>
+</tr>
+<tr>
+<td><strong>theme</strong></td>
+<td>A <em>named, loadable collection</em> of style choices — a file on disk you select (candy-top ships btop-compatible theme files; sugar-style's <a href="https://github.com/detain/sugarcraft/blob/master/sugar-style/src/Theme.php"><code>Theme.php</code></a> is the programmatic kind: <code>Theme::ansi()</code>).</td>
+</tr>
+<tr>
+<td><strong>palette</strong></td>
+<td>The <em>in-memory set</em> of colors resolved for one render — <a href="https://github.com/detain/sugarcraft/blob/master/sugar-style/src/Palette.php"><code>sugar-style/src/Palette.php</code></a> (and <code>sugar-colorprofile</code>'s tiered palettes). A theme selects a palette; the palette is what styles index into.</td>
+</tr>
+<tr>
+<td><strong>ColorProfile</strong></td>
+<td>The terminal's color <em>depth</em> — Ansi16/Ansi256/TrueColor — detected once at startup from TERM/<code>COLORTERM</code>/<code>NO_COLOR</code>/CI env by <a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Util/ColorProfile.php"><code>sugar-core</code>'s <code>Util\ColorProfile::detect()</code></a> and dispatched as a <a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Msg/ColorProfileMsg.php"><code>ColorProfileMsg</code></a>; apps may then pick different palettes per tier.</td>
+</tr>
+<tr>
+<td><strong>NO_COLOR</strong></td>
+<td>The community convention: set <code>NO_COLOR</code> to any non-empty value and programs drop color. Honored fleet-wide via core detection plus per-app config; see <a href="/KEYMAPS.html#color-and-reduced-motion-env">KEYMAPS.md</a> for the app-by-app caveat.</td>
+</tr>
+</tbody>
+</table>
+<h2><a id="layout-words-pane-vs-panel-vs-box" href="#layout-words-pane-vs-panel-vs-box" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Layout words: pane vs panel vs box</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>pane</strong></td>
+<td>A dockable, <em>switchable</em> region of a multi-view app window — candy-code's are the <code>Pane</code> enum cases (chat, files, agents…) in <a href="https://github.com/detain/sugarcraft/blob/master/candy-code/src/Tui/Pane.php"><code>candy-code/src/Tui/Pane.php</code></a>; one active pane at a time, draggable dividers.</td>
+</tr>
+<tr>
+<td><strong>panel</strong></td>
+<td>A self-contained bordered widget rendered <em>inside</em> a screen — sugar-panels' box-drawing tree (<a href="https://github.com/detain/sugarcraft/blob/master/sugar-panels/src/SugarPanels.php"><code>sugar-panels/src/SugarPanels.php</code></a>): each panel has a border and title, they tile, you never &quot;switch to&quot; them.</td>
+</tr>
+<tr>
+<td><strong>box</strong></td>
+<td>The bordered rectangle a panel draws; also the unit of candy-top's screen (CPU box, mem box).</td>
+</tr>
+</tbody>
+</table>
+<h2><a id="recording-words-cassette-vs-tape" href="#recording-words-cassette-vs-tape" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Recording words: cassette vs tape</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>cassette</strong></td>
+<td>A <em>recorded interactive session</em> — the JSONL event tape candy-vcr writes and replays to drive tests and demos deterministically (<a href="https://github.com/detain/sugarcraft/blob/master/candy-vcr/src/Cassette.php"><code>candy-vcr/src/Cassette.php</code></a>).</td>
+</tr>
+<tr>
+<td><strong>tape</strong> (VHS)</td>
+<td>A <em>declarative GIF script</em> — the <code>.vhs/*.tape</code> file that says &quot;type this command, sleep, screenshot&quot; so CI renders the demo GIF (<a href="https://github.com/detain/sugarcraft/blob/master/AGENTS.md">AGENTS.md convention</a>, workflow <a href="https://github.com/detain/sugarcraft/blob/master/.github/workflows/vhs.yml"><code>vhs.yml</code></a>). Named after the <code>charmbracelet/vhs</code> tool it mirrors.</td>
+</tr>
+</tbody>
+</table>
+<h2><a id="trust-words" href="#trust-words" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Trust words</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>trusted</strong></td>
+<td>Data your program authored — your Model's own strings, config you wrote. It may contain markers and SGR freely.</td>
+</tr>
+<tr>
+<td><strong>untrusted</strong></td>
+<td>Anything from outside: tool output, file contents, network, prompt injections possible. Must pass through <a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Util/Sanitize.php"><code>Sanitize::untrusted()</code> / <code>untrustedForMarkedFrames()</code></a> before reaching a presentation sink, which strips forged sentinels and escape payloads. The full fleet contract is <a href="/TRUST-BOUNDARY.html">docs/TRUST-BOUNDARY.md</a>.</td>
+</tr>
+</tbody>
+</table>
+<h2><a id="port-and-package-vocabulary" href="#port-and-package-vocabulary" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Port and package vocabulary</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>upstream / antecedent</strong></td>
+<td>The original project a SugarCraft package models. &quot;<strong>Port of</strong> charmbracelet/x&quot; or &quot;<strong>Design antecedent:</strong> treilik/bubbleboxer&quot; means the API and semantics follow that project deliberately (see the <code>Mirrors …</code> docblock law in <a href="https://github.com/detain/sugarcraft/blob/master/AGENTS.md">AGENTS.md</a>); a bare &quot;inspired by&quot; would overstate nothing but also promise nothing — the docs use port/antecedent consistently, and README phrases like &quot;bubblezone-style&quot; name a specific antecedent project the same way.</td>
+</tr>
+<tr>
+<td><strong>façade</strong></td>
+<td>A package that re-exports another's classes via <code>class_alias</code> (e.g. <code>sugar-widgets</code> → sugar-forms symbols). Ships only an alias smoke-test, never a copied suite (<a href="https://github.com/detain/sugarcraft/blob/master/AGENTS.md">AGENTS.md</a> façade law).</td>
+</tr>
+<tr>
+<td><strong>path repository</strong></td>
+<td>A composer <code>repositories[]</code> entry pointing at a sibling checkout. Never committed to a published lib manifest (it is a fatal for split-repo clones); CI injects the closure at build time — <a href="https://github.com/detain/sugarcraft/blob/master/tools/check-path-repos.php">tools/check-path-repos.php</a>.</td>
+</tr>
+<tr>
+<td><strong>phar</strong></td>
+<td>PHP Archive — a single self-contained executable file (<code>php candy-top.phar</code>), built and signed for <code>candy-code/v*</code> and <code>candy-top/v*</code> tags (<a href="https://github.com/detain/sugarcraft/blob/master/SECURITY.md">SECURITY.md</a>).</td>
+</tr>
+</tbody>
+</table>
+<h2><a id="legacy-campaign-ids" href="#legacy-campaign-ids" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Legacy campaign IDs</h2>
+<p>You will occasionally see labels like <strong>F-18</strong> (README's candy-image row),
+<strong>E-nnn</strong>, <strong>ISS-nnn</strong>, <strong>wave-N</strong>, or <strong>tranche-N</strong> inside prose. These are
+<strong>internal audit/campaign finding IDs</strong> — each was the handle for one line of
+a dated review ledger (F-nn: the chafa study findings; E-nnn: the candy-code
+hardening backlog; ISS-nnn: the tracked issue list). They are history, not
+product vocabulary: nothing in the API depends on them, and the ledgers that
+resolve them are not shipped with the packages. <strong>Read the sentence around
+one and ignore the ID.</strong> New docs and code are written without them.</p>
+
+</article>
+
+</main>
+
+<footer class="footer">
+    <p>SugarCraft — MIT-licensed PHP terminal toolkits and apps. Built with <a href="https://www.php.net/">PHP</a>.</p>
+    <p><a href="/compare.html">Compare</a> · <a href="/404.html">404</a> · <a href="https://github.com/sugarcraft">GitHub</a></p>
+</footer>
+
+<script src="js/main.js"></script>
+
+<div class="search-modal" id="search-modal" role="dialog" aria-modal="true" aria-label="Search the site" hidden>
+    <div class="search-modal-box">
+        <input class="search-input" id="search-input" type="text" placeholder="Search libraries, tools, topics..." autocomplete="off" spellcheck="false">
+        <ul class="search-results" id="search-results" role="listbox" aria-label="Search results"></ul>
+        <div class="search-hint"><kbd>Ctrl+K</kbd> to open · <kbd>Esc</kbd> to close · <kbd>↵</kbd> to search GitHub</div>
+    </div>
+</div>
+<script src="js/search.js" defer></script>
+<script src="js/nav.js" defer></script>
+</body>
+</html>

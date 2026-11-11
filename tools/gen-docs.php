@@ -107,6 +107,18 @@ const SEARCH_TRIGGER_BUTTON =
  * cannot discover; documented-but-unread is a knob they set with no effect.
  * The row shape is load-bearing: two spaces, the NAME, then the description.
  */
+/* The five narrative pages tools/gen-doc-pages.php renders, in the order they
+   appear in the search index (packages first, then these). Paths are relative
+   to docs/. Declared up here because the top-level main flow below runs the
+   moment the file is invoked. */
+const DOC_SEARCH_PAGES = [
+    'GETTING-STARTED.html',
+    'GLOSSARY.html',
+    'KEYMAPS.html',
+    'TRUST-BOUNDARY.html',
+    'cookbook/index.html',
+];
+
 const USAGE = <<<'TXT'
     usage: gen-docs.php [--extract|--check|--help]
 
@@ -243,22 +255,27 @@ foreach ($stubs as $old => $final) {
     $written++;
 }
 
-// index.html count patch — the generator OWNS the homepage's library/app counts
-// so they can never drift from the authoritative MATCHUPS split. Every count
-// token (meta/og/JSON-LD descriptions, the hero prose, the two .stat numerals,
-// and the two section <h2> headings) is rewritten from the computed $nLib/$nApp.
-// The patch is idempotent: it matches count POSITIONS, not specific values, so a
-// second run is a no-op and --check catches any hand-edit that reintroduces drift.
-if (is_file($index)) {
-    $currentIndex = (string) file_get_contents($index);
-    $patchedIndex = patch_index_counts($currentIndex, $nLib, $nApp);
+// Catalogue count patch — the generator OWNS the library/app counts on the
+// homepage AND on the two full-catalogue pages (docs-fix L2b), so they can never
+// drift from the authoritative MATCHUPS split. Every count token on a page (the
+// meta/og/JSON-LD descriptions, the hero prose, the two .stat numerals, and the
+// section <h2> headings) is rewritten from the computed $nLib/$nApp; regexes whose
+// shape a page does not carry are no-ops there. The patch is idempotent: it
+// matches count POSITIONS, not specific values, so a second run is a no-op and
+// --check catches any hand-edit that reintroduces drift.
+foreach ([$index, "$docs/libraries.html", "$docs/apps.html"] as $counted) {
+    if (!is_file($counted)) {
+        continue;
+    }
+    $currentCounts = (string) file_get_contents($counted);
+    $patchedCounts = patch_index_counts($currentCounts, $nLib, $nApp);
     if ($mode === '--check') {
-        if ($currentIndex !== $patchedIndex) {
-            fwrite(STDERR, "drift: index.html counts differ from computed $nLib/$nApp\n");
+        if ($currentCounts !== $patchedCounts) {
+            fwrite(STDERR, 'drift: ' . basename($counted) . " counts differ from computed $nLib/$nApp\n");
             $drift++;
         }
-    } elseif ($currentIndex !== $patchedIndex) {
-        file_put_contents($index, $patchedIndex);
+    } elseif ($currentCounts !== $patchedCounts) {
+        file_put_contents($counted, $patchedCounts);
         $written++;
     }
 }
@@ -268,8 +285,13 @@ if (is_file($index)) {
 // package the site no longer ships (the hand-rolled file had rotted to 46/62
 // entries with pre-rework prose baked in). Schema is search.js's contract:
 // {name, slug, category, description, url}, one compact object per line.
+// The five narrative pages tools/gen-doc-pages.php renders are indexed too
+// (site-code 11-11): they have no _data row, so each field is parsed back out
+// of the committed page itself — its visible <h1> for the name, its own
+// og:description meta for the snippet, the same fields the _data-backed
+// entries are built from (displayName/ogDescription) in the same priority.
 $searchPath = $docs . '/js/search-index.json';
-$searchJson = build_search_index($slugs, $types, $dataDir);
+$searchJson = build_search_index($slugs, $types, $dataDir, $docs);
 if ($mode === '--check') {
     $currentSearch = is_file($searchPath) ? (string) file_get_contents($searchPath) : '';
     if ($currentSearch !== $searchJson) {
@@ -507,6 +529,16 @@ function extract_one(string $slug, string $html): array
     $tagln  = $grab('#<p class="detail-sub">(.*?)</p>#s');
     $php    = $grab('#MIT-licensed · PHP (8\.[0-9]+\+)</div>#');
 
+    // Since MD-9 (site a11y wave) the generator hides the decorative emoji from
+    // assistive tech inside the heading: <h2><span aria-hidden="true">EMOJI</span>
+    // NAME</h2>. Unwrap that shape back to the plain "EMOJI NAME" text before the
+    // split below — otherwise extract stores the span markup inside displayName
+    // and the next regen prints it raw into the codecov badge's alt attribute,
+    // breaking the generate → extract → generate fixed point (LANE-D, 2026-11-11).
+    if (preg_match('#^<span aria-hidden="true">([^\x00-\x7F]+)</span> (.+)$#su', $h2, $m)) {
+        $h2 = $m[1] . ' ' . $m[2];
+    }
+
     // Split the h2 into an optional leading emoji and the display name. Display
     // names are ASCII CamelCase, so a leading non-ASCII run is the emoji.
     $emoji = '';
@@ -524,9 +556,19 @@ function extract_one(string $slug, string $html): array
     // Body content: from the lede paragraph through the close of the Demos section.
     $ledePos = strpos($html, '<p class="lede" style="margin-top: 28px;">');
     $footPos = strpos($html, '<footer class="footer">');
-    $body = ($ledePos !== false && $footPos !== false)
-        ? rtrim(substr($html, $ledePos, $footPos - $ledePos)) . "\n"
-        : '';
+    $body = '';
+    if ($ledePos !== false && $footPos !== false) {
+        $bodyText = rtrim(substr($html, $ledePos, $footPos - $ledePos));
+        // The skip-link and <main> wrapper are template-owned since L2b I8: the
+        // page-close </main> rides the assembly glue in generate_one(), so the
+        // extractor strips it back off here. Without this the tag would be
+        // stored in the body AND re-added by the glue, double-nesting <main>
+        // on the next regen and breaking the extract/generate fixed point.
+        if (str_ends_with($bodyText, '</main>')) {
+            $bodyText = rtrim(substr($bodyText, 0, -\strlen('</main>')));
+        }
+        $body = $bodyText . "\n";
+    }
 
     $meta = [
         'title'          => $title,
@@ -579,13 +621,14 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
 
     // Breadcrumb carries the authoritative MATCHUPS split (39 libraries / 19
     // apps). The count is DERIVED from $nLib/$nApp (never hardcoded), and the
-    // same generator run patches index.html's counts to match (see
-    // patch_index_counts below), so the lib pages and the homepage can no longer
-    // drift apart on the number.
+    // same generator run patches the catalogue pages' counts to match (see
+    // patch_index_counts below), so the lib pages and the catalogue pages can
+    // no longer drift apart on the number. Since L2b the target is the full
+    // catalogue page (../libraries.html / ../apps.html), not an index anchor.
     $plural = $type === 'app' ? 'apps' : 'libraries';
     $count  = $type === 'app' ? $nApp : $nLib;
     $breadcrumb = '<p style="color: var(--ink-2); margin: 0 0 16px 0;">'
-        . '<a href="../#' . $plural . '"><span aria-hidden="true">←</span> All ' . $count . ' ' . $plural . '</a></p>';
+        . '<a href="../' . $plural . '.html"><span aria-hidden="true">←</span> All ' . $count . ' ' . $plural . '</a></p>';
 
     // Decorative emoji is hidden from assistive tech — the heading's accessible
     // name is the package name already (MD-9, sugar-docs-reviews-1104 root drain).
@@ -599,6 +642,8 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
         . 'alt="' . $name . ' code coverage" loading="lazy"></a></p>';
 
     $content = normalize_self_links(rtrim($body));
+
+    [$content, $toc] = doc_toc_for($content);
 
     $footer = build_footer($slug, (string) $meta['phpVersion']);
 
@@ -616,7 +661,9 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
         . "      </div>\n"
         . "    </div>\n"
         . '    ' . $codecov . "\n\n"
-        . '    ' . $content . "\n\n"
+        . ($toc !== ''
+            ? $toc . "    <div class=\"docs-body\">\n" . wrap_docs_body($content, $slug)
+            : '    ' . $content) . "\n</main>\n\n"
         . $footer . "\n\n"
         . search_tail() . "\n";
 
@@ -625,6 +672,121 @@ function generate_one(string $slug, string $type, array $meta, string $body, int
     // rule set covers standard and divergent chrome alike (both are idempotent,
     // so pages that already comply pass through byte-identical).
     return guarantee_demo_gif_onerror(guarantee_search_trigger($page));
+}
+
+/**
+ * Mint stable ids on h2/h3 headings in a hand-written body and build the
+ * on-page contents card that leads a long detail page. Short bodies (fewer
+ * than four headings), already-outlined bodies, and headingless fixtures
+ * pass through byte-identical so the shared chrome and every test fixture
+ * keep their exact bytes.
+ *
+ * @return array{0: string, 1: string} [content with heading ids, TOC block or empty string]
+ */
+function doc_toc_for(string $content): array
+{
+    if (str_contains($content, 'class="doc-toc"')) {
+        return [$content, ''];
+    }
+
+    $pattern = '/<h([23])((?:\s[^>]*)?)>(.*?)<\/h\1>/s';
+    if (preg_match_all($pattern, $content) < 4) {
+        return [$content, ''];
+    }
+
+    // ids the page chrome already owns; a heading must never shadow them.
+    $reserved = ['main', 'search-input', 'search-results', 'search-modal', 'search-trigger'];
+
+    $seen = [];
+    $entries = [];
+    $minted = preg_replace_callback($pattern, static function (array $m) use (&$seen, &$entries, $reserved): string {
+        $level = (int) $m[1];
+        $attrs = $m[2];
+        $inner = $m[3];
+
+        $plain = trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($inner), ENT_QUOTES, 'UTF-8')));
+        $label = htmlspecialchars($plain, ENT_QUOTES);
+
+        if (preg_match('/\bid="([^"]+)"/', $attrs, $existing) === 1) {
+            $entries[] = [$level, $existing[1], $label];
+            return $m[0];
+        }
+
+        $slug = trim(preg_replace('/[^a-z0-9]+/', '-', strtolower($plain)), '-');
+        if ($slug === '' || in_array($slug, $reserved, true)) {
+            return $m[0];
+        }
+        if (isset($seen[$slug])) {
+            $seen[$slug]++;
+            $slug .= '-' . $seen[$slug];
+        } else {
+            $seen[$slug] = 1;
+        }
+
+        $entries[] = [$level, $slug, $label];
+        return '<h' . $level . ' id="' . $slug . '"' . $attrs . '>' . $inner . '</h' . $level . '>';
+    }, $content);
+
+    if ($minted === null || $entries === []) {
+        return [$content, ''];
+    }
+
+    $lines = '';
+    foreach ($entries as [$level, $id, $label]) {
+        $class = $level === 2 ? 'toc-h2' : 'toc-h3';
+        $lines .= "            <li class=\"{$class}\"><a href=\"#{$id}\">{$label}</a></li>\n";
+    }
+
+    $toc = "    <nav class=\"doc-toc\" aria-label=\"On this page\">\n"
+        . "        <ul class=\"doc-toc-list\">\n"
+        . $lines
+        . "        </ul>\n"
+        . "    </nav>\n\n";
+
+    return [$minted, $toc];
+}
+
+/**
+ * Close the docs-body wrapper immediately before the body's own closing of
+ * the template's container and section.
+ *
+ * Hand-written bodies may continue with fully self-balanced sections after
+ * that point, so the wrapper cannot simply close before the last tag run of
+ * the content: it must close before the run that precedes the FIRST
+ * </section> unmatched by any body-opened <section> (the template section's
+ * closer). Emitted anywhere later, the wrapper div is still open when that
+ * closer arrives and libxml reports "Opening and ending tag mismatch:
+ * section and div" on the page. Fails loud when a body deviates from the
+ * closed-container-then-closed-section shape every real body uses rather
+ * than silently shipping a mismatched page.
+ */
+function wrap_docs_body(string $content, string $slug): string
+{
+    if (preg_match_all('~<section\b|</section>~', $content, $sections, PREG_OFFSET_CAPTURE) === false || $sections[0] === []) {
+        throw new RuntimeException("Body for {$slug} never closes the template section; the docs-body wrapper cannot be placed.");
+    }
+
+    $depth = 0;
+    $templateClose = -1;
+    foreach ($sections[0] as $section) {
+        if (str_starts_with((string) $section[0], '</')) {
+            if ($depth === 0) {
+                $templateClose = (int) $section[1];
+                break;
+            }
+            $depth--;
+        } else {
+            $depth++;
+        }
+    }
+
+    $prefix = substr($content, 0, $templateClose);
+    if ($templateClose < 1 || preg_match('~\s*(?:</div>\s*)+$~', $prefix, $closerRun, PREG_OFFSET_CAPTURE) !== 1) {
+        throw new RuntimeException("Body for {$slug} does not close the template container div before its section; the docs-body wrapper cannot be placed.");
+    }
+
+    $start = (int) $closerRun[0][1];
+    return rtrim(substr($prefix, 0, $start)) . "\n    </div>" . substr($prefix, $start) . substr($content, $templateClose);
 }
 
 function build_prefix(string $slug, string $title, string $desc, string $ogTitle, string $ogDesc): string
@@ -644,23 +806,119 @@ function build_prefix(string $slug, string $title, string $desc, string $ogTitle
         <meta property="og:type" content="website">
         <meta property="og:url" content="https://sugarcraft.github.io/lib/{$slug}.html">
         <meta name="twitter:card" content="summary_large_image">
+        <link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
         <link rel="icon" type="image/png" href="../img/icons/{$slug}.png">
         <link rel="stylesheet" href="../css/style.css">
             <link rel="stylesheet" href="../css/search.css">
         </head>
         <body>
 
-        <nav class="nav"><div class="nav-inner">
-            <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+        <a class="skip-link" href="#main">Skip to main content</a>
+
+        <!--nav:start-->
+        <nav class="nav" aria-label="Main navigation"><div class="nav-inner">
+            <a class="brand" href="/"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
             <div class="nav-links">
-                <a href="../#libraries">Libraries</a>
-                <a href="../#apps">Apps</a>
-                <a href="../#demos">Demos</a>
-                <a href="../#quickstart">Quickstart</a>
-                <a href="../compare.html">Compare</a>
-                <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a>
+                <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
+                    <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    <span>Search</span>
+                </button>
+                <ul class="nav-items">
+                    <li class="nav-item"><a href="/">Home</a></li>
+                    <li class="nav-item">
+                        <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Libraries <span class="nav-caret" aria-hidden="true">▾</span></button>
+                        <div class="nav-drop nav-drop-wide">
+                            <a class="nav-drop-all" href="/libraries.html">All libraries →</a>
+                            <a href="/lib/sugar-core.html">sugar-core</a>
+                            <a href="/lib/sugar-style.html">sugar-style</a>
+                            <a href="/lib/sugar-cellbuffer.html">sugar-cellbuffer</a>
+                            <a href="/lib/sugar-async.html">sugar-async</a>
+                            <a href="/lib/sugar-spring.html">sugar-spring</a>
+                            <a href="/lib/sugar-mouse.html">sugar-mouse</a>
+                            <a href="/lib/sugar-widgets.html">sugar-widgets</a>
+                            <a href="/lib/sugar-charts.html">sugar-charts</a>
+                            <a href="/lib/sugar-forms.html">sugar-forms</a>
+                            <a href="/lib/sugar-markdown.html">sugar-markdown</a>
+                            <a href="/lib/sugar-cli.html">sugar-cli</a>
+                            <a href="/lib/sugar-ssh-server.html">sugar-ssh-server</a>
+                            <a href="/lib/sugar-metrics.html">sugar-metrics</a>
+                            <a href="/lib/sugar-log.html">sugar-log</a>
+                            <a href="/lib/sugar-image.html">sugar-image</a>
+                            <a href="/lib/sugar-animation.html">sugar-animation</a>
+                            <a href="/lib/sugar-video.html">sugar-video</a>
+                            <a href="/lib/sugar-colorprofile.html">sugar-colorprofile</a>
+                            <a href="/lib/sugar-ansi-parser.html">sugar-ansi-parser</a>
+                            <a href="/lib/sugar-vterm.html">sugar-vterm</a>
+                            <a href="/lib/sugar-pty.html">sugar-pty</a>
+                            <a href="/lib/sugar-focus.html">sugar-focus</a>
+                            <a href="/lib/sugar-gallery.html">sugar-gallery</a>
+                            <a href="/lib/sugar-treelist.html">sugar-treelist</a>
+                            <a href="/lib/sugar-constraints.html">sugar-constraints</a>
+                            <a href="/lib/sugar-panels.html">sugar-panels</a>
+                            <a href="/lib/sugar-overlay.html">sugar-overlay</a>
+                            <a href="/lib/sugar-navstack.html">sugar-navstack</a>
+                            <a href="/lib/sugar-dashboard.html">sugar-dashboard</a>
+                            <a href="/lib/sugar-quickpick.html">sugar-quickpick</a>
+                            <a href="/lib/sugar-input.html">sugar-input</a>
+                            <a href="/lib/sugar-fuzzy.html">sugar-fuzzy</a>
+                            <a href="/lib/sugar-flexbox.html">sugar-flexbox</a>
+                            <a href="/lib/sugar-toast.html">sugar-toast</a>
+                            <a href="/lib/sugar-datepicker.html">sugar-datepicker</a>
+                            <a href="/lib/sugar-readline.html">sugar-readline</a>
+                            <a href="/lib/sugar-table.html">sugar-table</a>
+                            <a href="/lib/sugar-diff.html">sugar-diff</a>
+                            <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
+                            <a href="/lib/sugar-testing.html">sugar-testing</a>
+                        </div>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Apps <span class="nav-caret" aria-hidden="true">▾</span></button>
+                        <div class="nav-drop nav-drop-wide">
+                            <a class="nav-drop-all" href="/apps.html">All apps →</a>
+                            <a href="/lib/candy-starter.html">candy-starter</a>
+                            <a href="/lib/candy-scriptui.html">candy-scriptui</a>
+                            <a href="/lib/candy-codeshot.html">candy-codeshot</a>
+                            <a href="/lib/candy-mdview.html">candy-mdview</a>
+                            <a href="/lib/candy-ansi-inspect.html">candy-ansi-inspect</a>
+                            <a href="/lib/candy-ssh-launcher.html">candy-ssh-launcher</a>
+                            <a href="/lib/candy-kv.html">candy-kv</a>
+                            <a href="/lib/candy-mail.html">candy-mail</a>
+                            <a href="/lib/candy-git-server.html">candy-git-server</a>
+                            <a href="/lib/candy-tetris.html">candy-tetris</a>
+                            <a href="/lib/candy-files.html">candy-files</a>
+                            <a href="/lib/candy-code.html">candy-code</a>
+                            <a href="/lib/candy-code-web.html">candy-code-web</a>
+                            <a href="/lib/candy-vcr.html">candy-vcr</a>
+                            <a href="/lib/candy-git.html">candy-git</a>
+                            <a href="/lib/candy-sql.html">candy-sql</a>
+                            <a href="/lib/candy-codetime.html">candy-codetime</a>
+                            <a href="/lib/candy-minesweeper.html">candy-minesweeper</a>
+                            <a href="/lib/candy-gifview.html">candy-gifview</a>
+                            <a href="/lib/candy-image.html">candy-image</a>
+                            <a href="/lib/candy-top.html">candy-top</a>
+                            <a href="/lib/candy-flappy.html">candy-flappy</a>
+                        </div>
+                    </li>
+                    <li class="nav-item nav-item-drop-right">
+                        <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Docs <span class="nav-caret" aria-hidden="true">▾</span></button>
+                        <div class="nav-drop">
+                            <a href="/#architecture">Architecture</a>
+                            <a href="/#quickstart">Quickstart</a>
+                            <a href="/compare.html">Compare</a>
+                            <a href="/GETTING-STARTED.html">Getting Started</a>
+                            <a href="/GLOSSARY.html">Glossary</a>
+                            <a href="/KEYMAPS.html">Keymaps</a>
+                            <a href="/cookbook/index.html">Cookbook</a>
+                        </div>
+                    </li>
+                    <li class="nav-item"><a href="/#demos">Demos</a></li>
+                    <li class="nav-item"><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a></li>
+                </ul>
             </div>
         </div></nav>
+        <!--nav:end-->
+
+        <main id="main">
         HTML;
 }
 
@@ -703,6 +961,7 @@ function search_tail(): string
             </div>
         </div>
         <script src="../js/search.js" defer></script>
+        <script src="../js/nav.js" defer></script>
         </body>
         </html>
         HTML;
@@ -810,12 +1069,12 @@ function normalize_port_label(string $meta): string
 }
 
 // ---------------------------------------------------------------------------
-// index.html count patch
+// Catalogue pages count patch (index.html + libraries.html + apps.html)
 // ---------------------------------------------------------------------------
 
 /**
- * Rewrite every library/app COUNT token on the homepage from the computed
- * $nLib/$nApp so index.html can never drift from the authoritative MATCHUPS
+ * Rewrite every library/app COUNT token on one catalogue page from the computed
+ * $nLib/$nApp so the page can never drift from the authoritative MATCHUPS
  * split. The generator is the single owner of these numbers.
  *
  * Every replacement matches the count POSITION (surrounding literal text), not
@@ -942,10 +1201,18 @@ function data_slugs(string $dataDir): array
  * contract. Slugs without a MATCHUPS row are skipped, exactly as in the page
  * loop (they render no page, so they must not appear in search).
  *
+ * The rendered narrative pages in DOC_SEARCH_PAGES join after the packages.
+ * They have no _data row, so each field is parsed back out of the committed
+ * page itself — the same fields the _data-backed entries read (displayName /
+ * ogDescription), in the same priority. A page that is not in this tree is
+ * skipped rather than failed, so fixture roots that carry only _data keep
+ * working; in the real tree the pages always exist and --check pins the index
+ * to their bytes.
+ *
  * @param list<string> $slugs
  * @param array<string, string> $types
  */
-function build_search_index(array $slugs, array $types, string $dataDir): string
+function build_search_index(array $slugs, array $types, string $dataDir, string $docs): string
 {
     $entries = [];
     foreach ($slugs as $slug) {
@@ -962,10 +1229,73 @@ function build_search_index(array $slugs, array $types, string $dataDir): string
         ];
     }
 
+    foreach (DOC_SEARCH_PAGES as $page) {
+        if (!is_file("$docs/$page")) {
+            continue;
+        }
+        $html = (string) file_get_contents("$docs/$page");
+        $entries[] = [
+            'name'        => doc_page_title($html, $page),
+            'slug'        => doc_page_slug($page),
+            'category'    => 'docs',
+            'description' => doc_page_description($html, $page),
+            'url'         => $page,
+        ];
+    }
+
     $lines = [];
     foreach ($entries as $entry) {
         $lines[] = '  ' . json_encode($entry, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     }
 
     return "[\n" . implode(",\n", $lines) . "\n]\n";
+}
+
+/**
+ * The visible heading of a rendered narrative page: its first <h1>, with the
+ * heading-permalink anchor (which contributes only the literal "#") and any
+ * other markup removed. The S9 permalink lands its id on the anchor, not the
+ * h1, so this text is exactly what a reader sees as the page title.
+ */
+function doc_page_title(string $html, string $page): string
+{
+    if (preg_match('~<h1\b[^>]*>(.*?)</h1>~s', $html, $m) !== 1) {
+        fwrite(STDERR, "tools/gen-docs.php: docs/$page carries no <h1> to index\n");
+        exit(2);
+    }
+    $text = preg_replace('~<a\b[^>]*>.*?</a>~s', '', $m[1]) ?? '';
+    $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = trim((string) preg_replace('~\s+~u', ' ', $text));
+    if ($text === '') {
+        fwrite(STDERR, "tools/gen-docs.php: docs/$page has an empty <h1> to index\n");
+        exit(2);
+    }
+
+    return $text;
+}
+
+/**
+ * The index slug for a docs-relative page path: lowercased basename without
+ * .html, except directory indexes, which take their directory's name
+ * (cookbook/index.html → "cookbook").
+ */
+function doc_page_slug(string $page): string
+{
+    $name = strtolower(basename($page, '.html'));
+
+    return $name === 'index' ? strtolower(basename(dirname($page))) : $name;
+}
+
+/**
+ * The snippet of a rendered narrative page: its own og:description meta —
+ * the same field _data-backed entries prefer.
+ */
+function doc_page_description(string $html, string $page): string
+{
+    if (preg_match('~<meta\s+property="og:description"\s+content="([^"]*)"~i', $html, $m) !== 1) {
+        fwrite(STDERR, "tools/gen-docs.php: docs/$page carries no og:description to index\n");
+        exit(2);
+    }
+
+    return trim(html_entity_decode($m[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
 }

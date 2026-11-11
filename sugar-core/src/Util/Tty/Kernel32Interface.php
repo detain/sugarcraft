@@ -20,7 +20,11 @@ namespace SugarCraft\Core\Util\Tty;
  * `\FFI\CData`.  On real Windows the handle is a 32/64-bit pointer
  * address; on the test double it is a stable small integer.  This
  * avoids all `void*` CData pitfalls on Linux while preserving full
- * functional equivalence.
+ * functional equivalence.  The kernel32 cdef spells every
+ * handle-taking parameter `long long` (C5), so the real binding hands
+ * the int straight to libffi as a pointer-width value — materializing
+ * it as a `void*` CData to satisfy a `HANDLE` parameter instead faults
+ * natively inside the call.
  */
 interface Kernel32Interface
 {
@@ -186,12 +190,14 @@ interface Kernel32Interface
     // ─── Wide-string helper ─────────────────────────────────────────────────
 
     /**
-     * Convert a PHP string to a null-terminated UTF-16LE wchar_t array.
+     * Convert a PHP string to a null-terminated UTF-16LE array of 16-bit
+     * code units (unsigned short[]).
      *
-     * The caller MUST free the returned pointer via {@see FFI::free()}
-     * when no longer needed.
+     * The buffer is GC-managed — PHP releases it when the returned CData
+     * leaves scope. The caller must keep it alive until the *W call it is
+     * passed to returns, and must NOT call FFI::free() on it.
      *
-     * @return \FFI\CData&(wchar_t[])&(wchar_t[$len+1])
+     * @return \FFI\CData&(unsigned short[])&(unsigned short[$len+1])
      */
     public function toWideString(string $str): \FFI\CData;
 }

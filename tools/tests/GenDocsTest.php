@@ -89,6 +89,8 @@ final class GenDocsTest extends TestCase
         \mkdir($root . '/docs/lib', 0777, true);
         \file_put_contents($root . '/docs/MATCHUPS.md', $this->matchupsFixture());
         \file_put_contents($root . '/docs/index.html', $this->indexFixture());
+        \file_put_contents($root . '/docs/libraries.html', $this->catalogueFixture('libraries'));
+        \file_put_contents($root . '/docs/apps.html', $this->catalogueFixture('apps'));
         foreach ($dataSlugs as $slug) {
             $this->writeData($root, $slug);
         }
@@ -175,6 +177,28 @@ final class GenDocsTest extends TestCase
         <h2>Two apps built on the stack.</h2>
         </body></html>
         HTML;
+    }
+
+    /**
+     * One of the two full-catalogue pages (docs-fix L2b): a head description
+     * carrying the numeral count tokens and the section <h2> heading, arriving
+     * with every count WRONG, exactly like indexFixture(). The hero prose, the
+     * .stat spans and the "(N packages)" total live only on the homepage, so
+     * this shape also proves the patcher is a no-op where a token family is
+     * absent (it must NOT invent spans or un-parenthesise anything).
+     */
+    private function catalogueFixture(string $kind): string
+    {
+        $heading = $kind === 'apps'
+            ? '<h2>Two apps built on the stack.</h2>'
+            : '<h2>Seven libraries, one ecosystem.</h2>';
+
+        return "<!doctype html>\n"
+            . '<html lang="en"><head>' . "\n"
+            . '<meta name="description" content="SugarCraft: 7 libraries and 2 apps (9 packages). The full ' . $kind . ' catalogue.">' . "\n"
+            . '</head><body>' . "\n"
+            . $heading . "\n"
+            . "</body></html>\n";
     }
 
     private function writeData(string $root, string $slug): void
@@ -292,11 +316,11 @@ final class GenDocsTest extends TestCase
         $this->runScript($root);
 
         $this->assertStringContainsString(
-            '<a href="../#libraries">← All ' . $c['lib'] . ' libraries</a>',
+            '<a href="../libraries.html"><span aria-hidden="true">←</span> All ' . $c['lib'] . ' libraries</a>',
             $this->page($root, 'fixture-alpha')
         );
         $this->assertStringContainsString(
-            '<a href="../#apps">← All ' . $c['app'] . ' apps</a>',
+            '<a href="../apps.html"><span aria-hidden="true">←</span> All ' . $c['app'] . ' apps</a>',
             $this->page($root, 'fixture-appy')
         );
     }
@@ -331,12 +355,18 @@ final class GenDocsTest extends TestCase
         $this->assertStringContainsString('<span class="tag-chip accent">pioneering</span>', $html);
     }
 
-    /** The h2 splits a leading non-ASCII run off as the emoji. */
+    /**
+     * The h2 splits a leading non-ASCII run off as the emoji and recombines it
+     * with the display name — since MD-9 (site a11y wave) inside a decorative
+     * aria-hidden span, so assistive tech reads the package name alone. Pinning
+     * the span form keeps BOTH contracts: the split still happens and the emoji
+     * is still recombined with the name in the heading.
+     */
     public function testTheEmojiAndDisplayNameAreRecombinedInTheHeading(): void
     {
         $root = $this->makeFixtureRoot();
         $this->runScript($root);
-        $this->assertStringContainsString('<h2>🍬 FixtureName</h2>', $this->page($root, 'fixture-alpha'));
+        $this->assertStringContainsString('<h2><span aria-hidden="true">🍬</span> FixtureName</h2>', $this->page($root, 'fixture-alpha'));
     }
 
     // -----------------------------------------------------------------
@@ -377,10 +407,28 @@ final class GenDocsTest extends TestCase
         $this->assertStringNotContainsString('7 libraries and 2 apps', $index);
         $this->assertStringNotContainsString('seven libraries', $index);
 
+        // L2b: the two full-catalogue pages carry the SAME patcher duty — the
+        // head numeral tokens and their own <h2> are rewritten, and token
+        // families absent from a page (hero prose, .stat spans) are NOT invented.
+        $libraries = (string) \file_get_contents("$root/docs/libraries.html");
+        $apps = (string) \file_get_contents("$root/docs/apps.html");
+        $this->assertStringContainsString("{$c['lib']} libraries and {$c['app']} apps ({$c['total']} packages)", $libraries);
+        $this->assertStringContainsString("{$c['lib']} libraries and {$c['app']} apps ({$c['total']} packages)", $apps);
+        $this->assertStringContainsString('<h2>Twenty-three libraries, one ecosystem.</h2>', $libraries);
+        $this->assertStringNotContainsString('<h2>Four apps built on the stack.</h2>', $libraries);
+        $this->assertStringContainsString('<h2>Four apps built on the stack.</h2>', $apps);
+        $this->assertStringNotContainsString('<h2>Twenty-three libraries, one ecosystem.</h2>', $apps);
+        $this->assertStringNotContainsString('7 libraries and 2 apps', $libraries);
+        $this->assertStringNotContainsString('7 libraries and 2 apps', $apps);
+        $this->assertStringNotContainsString('<span class="num">', $libraries);
+        $this->assertStringNotContainsString('nine packages total', $apps);
+
         // Idempotent: the patch matches count POSITIONS, not values, which is
         // the property that makes --check a reliable drift guard.
         $this->runScript($root);
         $this->assertSame($index, (string) \file_get_contents("$root/docs/index.html"));
+        $this->assertSame($libraries, (string) \file_get_contents("$root/docs/libraries.html"));
+        $this->assertSame($apps, (string) \file_get_contents("$root/docs/apps.html"));
     }
 
     // -----------------------------------------------------------------
@@ -436,6 +484,31 @@ final class GenDocsTest extends TestCase
         $this->assertSame(1, $r['exit'], 'homepage count drift must fail --check');
         $this->assertStringContainsString('drift: index.html counts differ from computed 23/4', $r['output']);
         $this->assertStringNotContainsString('drift: fixture-alpha.html', $r['output']);
+    }
+
+    /**
+     * L2b: each catalogue page's count drift is its OWN named verdict — hand-
+     * editing libraries.html must name libraries.html and leave the other two
+     * counted pages out of it.
+     */
+    public function testCheckFailsNamingTheCataloguePageWhoseCountsWereHandEdited(): void
+    {
+        $root = $this->makeFixtureRoot();
+        $this->runScript($root);
+        $this->assertSame(0, $this->runScript($root, ['--check'])['exit']);
+
+        $path = "$root/docs/libraries.html";
+        \file_put_contents($path, \str_replace(
+            '<h2>Twenty-three libraries, one ecosystem.</h2>',
+            '<h2>Ninety-nine libraries, one ecosystem.</h2>',
+            (string) \file_get_contents($path)
+        ));
+
+        $r = $this->runScript($root, ['--check']);
+        $this->assertSame(1, $r['exit'], 'catalogue count drift must fail --check');
+        $this->assertStringContainsString('drift: libraries.html counts differ from computed 23/4', $r['output']);
+        $this->assertStringNotContainsString('drift: index.html counts', $r['output']);
+        $this->assertStringNotContainsString('drift: apps.html counts', $r['output']);
     }
 
     /** --check must not write. A drift guard that repairs the drift reports nothing. */
@@ -852,5 +925,168 @@ final class GenDocsTest extends TestCase
         $r = $this->runScript($this->tmpDir . '/no-such-dir');
         $this->assertSame(2, $r['exit']);
         $this->assertStringContainsString('SUGARCRAFT_GEN_DOCS_ROOT is not a valid path', $r['output']);
+    }
+
+    // -----------------------------------------------------------------
+    // Search index (site-code 11-11: narrative pages join the packages)
+    // -----------------------------------------------------------------
+
+    /**
+     * A minimal stand-in for a tools/gen-doc-pages.php rendered page: the
+     * permalink-first <h1> the S9 heading anchors produce, and the
+     * og:description meta the renderer writes beside the plain one.
+     */
+    private function docPageFixture(string $h1Inner, string $ogDescription): string
+    {
+        return "<!doctype html>\n<html lang=\"en\"><head>\n"
+            . '<meta property="og:description" content="' . $ogDescription . '">' . "\n"
+            . "</head><body>\n"
+            . "<div class=\"nav-links\">nav</div>\n"
+            . "<main id=\"main\"><article class=\"prose\">\n"
+            . "<h1>" . $h1Inner . "</h1>\n"
+            . "</article></main>\n</body></html>\n";
+    }
+
+    /**
+     * @return list<array<string,string>>
+     */
+    private function readIndex(string $root): array
+    {
+        return json_decode(
+            (string) \file_get_contents("$root/docs/js/search-index.json"),
+            true,
+            512,
+            \JSON_THROW_ON_ERROR
+        );
+    }
+
+    /**
+     * The package half of the index, unpinned before this lane: one entry per
+     * generated page in slug order, the five-key schema search.js reads,
+     * ogDescription-first descriptions, and nothing else — with no narrative
+     * pages in the tree the docs loop must stay entirely silent (the skip
+     * leg, non-vacuous: planting pages is what lights up test 2 below).
+     */
+    public function testTheSearchIndexCarriesEveryPackageEntryInSlugOrderAndNothingElse(): void
+    {
+        $root = $this->makeFixtureRoot();
+        $r = $this->runScript($root);
+        $this->assertSame(0, $r['exit'], $r['output']);
+
+        $index = $this->readIndex($root);
+        $slugs = array_column($index, 'slug');
+        $this->assertSame(['fixture-alpha', 'fixture-appy'], $slugs, 'one row per _data slug with a MATCHUPS row, in slug order');
+        foreach ($index as $entry) {
+            $this->assertSame(
+                ['name', 'slug', 'category', 'description', 'url'],
+                array_keys($entry),
+                "entry for {$entry['slug']} carries exactly search.js's five keys in contract order"
+            );
+        }
+        $this->assertSame('library', $index[0]['category']);
+        $this->assertSame('app', $index[1]['category']);
+        $this->assertSame('Fixture og description for fixture-alpha.', $index[0]['description'], 'ogDescription wins the field priority');
+        $this->assertSame('lib/fixture-alpha.html', $index[0]['url']);
+        $this->assertNotContains('docs', array_column($index, 'category'), 'absent narrative pages index nothing');
+    }
+
+    /**
+     * The narrative half: present rendered pages join AFTER the packages in
+     * DOC_SEARCH_PAGES order, named by their visible <h1> (the permalink
+     * anchor's "#" stripped, entities decoded), slugged from the path
+     * (directory indexes take their directory), snippet from their own
+     * og:description, url docs-relative.
+     */
+    public function testRenderedDocPagesJoinTheIndexInDeclaredOrderAfterThePackages(): void
+    {
+        $root = $this->makeFixtureRoot();
+        \mkdir("$root/docs/cookbook", 0777, true);
+        \file_put_contents("$root/docs/GETTING-STARTED.html", $this->docPageFixture(
+            '<a id="user-content-getting-started" href="#getting-started" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Getting started &amp; setup',
+            'Install and run the apps &amp; build your own.'
+        ));
+        \file_put_contents("$root/docs/cookbook/index.html", $this->docPageFixture(
+            '<a id="user-content-cookbook" href="#cookbook" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Composability cookbook',
+            'Runnable recipes for widgets.'
+        ));
+
+        $r = $this->runScript($root);
+        $this->assertSame(0, $r['exit'], $r['output']);
+
+        $index = $this->readIndex($root);
+        $this->assertSame(
+            ['fixture-alpha', 'fixture-appy', 'getting-started', 'cookbook'],
+            array_column($index, 'slug'),
+            'packages keep slug order and the planted doc pages follow, in declared order'
+        );
+        $docs = array_slice($index, 2);
+        $this->assertSame(['docs', 'docs'], array_column($docs, 'category'));
+        $this->assertSame(
+            'Getting started & setup',
+            $docs[0]['name'],
+            'visible h1: permalink anchor removed, entity decoded'
+        );
+        $this->assertSame('Composability cookbook', $docs[1]['name']);
+        $this->assertSame('Install and run the apps & build your own.', $docs[0]['description']);
+        $this->assertSame(['GETTING-STARTED.html', 'cookbook/index.html'], array_column($docs, 'url'), 'urls stay docs-relative verbatim paths');
+
+        // The artifact's line shape is part of the committed-bytes contract:
+        // one compact object per two-space-indented line, closing bracket bare.
+        $raw = (string) \file_get_contents("$root/docs/js/search-index.json");
+        $this->assertStringStartsWith("[\n  {\"", $raw);
+        $this->assertStringEndsWith("\n]\n", $raw);
+        $this->assertSame(1 + count($index) + 1, substr_count($raw, "\n"), 'exactly one entry per line');
+    }
+
+    /**
+     * Fail loud, name the page: a present narrative page missing either of
+     * the fields the index parses out of it is a broken source page, not a
+     * row to invent — the run dies on stderr naming docs/<page>.
+     */
+    public function testADocPageInTheIndexWithoutItsFieldsFailsLoudNamingIt(): void
+    {
+        $root = $this->makeFixtureRoot();
+        \file_put_contents("$root/docs/GLOSSARY.html", "<!doctype html>\n<html><body>no heading here</body></html>\n");
+        $r = $this->runScript($root);
+        $this->assertSame(2, $r['exit']);
+        $this->assertStringContainsString('docs/GLOSSARY.html carries no <h1> to index', $r['output']);
+
+        // Same tmp root: the h1-less GLOSSARY must go, or it keeps failing
+        // first (declared order) and the KEYMAPS leg never runs.
+        \unlink("$root/docs/GLOSSARY.html");
+        \file_put_contents("$root/docs/KEYMAPS.html", "<!doctype html>\n<html><body><h1>Keys</h1></body></html>\n");
+        $r = $this->runScript($root);
+        $this->assertSame(2, $r['exit']);
+        $this->assertStringContainsString('docs/KEYMAPS.html carries no og:description to index', $r['output']);
+    }
+
+    /**
+     * The --check half of the contract: when gen-doc-pages re-renders a
+     * narrative page with a new og:description, the committed index is
+     * stale, the check fails naming it, and a regeneration settles it.
+     * Without the doc loop this exact drift would pass green — the check
+     * only ever compared the 62 package rows.
+     */
+    public function testCheckFailsWhenAReRenderedDocPageLeavesTheIndexStale(): void
+    {
+        $root = $this->makeFixtureRoot();
+        \file_put_contents("$root/docs/KEYMAPS.html", $this->docPageFixture(
+            '<a id="x" href="#x" class="heading-permalink">#</a>Key bindings',
+            'Default bindings for every app.'
+        ));
+        $this->assertSame(0, $this->runScript($root)['exit']);
+
+        \file_put_contents("$root/docs/KEYMAPS.html", $this->docPageFixture(
+            '<a id="x" href="#x" class="heading-permalink">#</a>Key bindings',
+            'Re-rendered with a fresh snippet.'
+        ));
+        $r = $this->runScript($root, ['--check']);
+        $this->assertSame(1, $r['exit']);
+        $this->assertStringContainsString('drift: js/search-index.json differs from generated output', $r['output']);
+
+        $this->assertSame(0, $this->runScript($root)['exit']);
+        $r = $this->runScript($root, ['--check']);
+        $this->assertSame(0, $r['exit'], $r['output']);
+        $this->assertSame('Re-rendered with a fresh snippet.', $this->readIndex($root)[2]['description']);
     }
 }

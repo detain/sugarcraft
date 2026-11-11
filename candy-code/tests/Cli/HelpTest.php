@@ -16,6 +16,7 @@ use SugarCraft\Code\Tests\Support\FlushesLocaleMemoisedCataloguesTrait;
 use SugarCraft\Code\Tests\Support\MintsStampedPharTrait;
 use SugarCraft\Code\Tests\Support\SlicesDeclaredMethodsTrait;
 use SugarCraft\Code\Workspace\GitRunner;
+use SugarCraft\Core\Util\Width;
 
 final class HelpTest extends TestCase
 {
@@ -923,5 +924,469 @@ final class HelpTest extends TestCase
             Help::pretendHostArchiveForTesting(null);
             self::discardStampedPhar($named);
         }
+    }
+
+    // =========================================================================
+    // Render width resolution (wf/help)
+    // =========================================================================
+
+    /**
+     * Drive {@see Help}'s private width resolver under an armed COLUMNS,
+     * in whichever spelling the case names, and always return the process to
+     * the cleared shape tests/bootstrap.php installed — the resolver reads
+     * getenv first and the superglobals only as fallbacks, so a case that
+     * arms two spellings is testing the precedence, not the parse.
+     */
+    private static function probeHelpWidth(?string $getenv, ?string $env = null, ?string $server = null): int
+    {
+        self::clearHelpColumnsEnv();
+        if ($getenv !== null) {
+            putenv('COLUMNS=' . $getenv);
+        }
+        if ($env !== null) {
+            $_ENV['COLUMNS'] = $env;
+        }
+        if ($server !== null) {
+            $_SERVER['COLUMNS'] = $server;
+        }
+
+        try {
+            return (int) (new \ReflectionMethod(Help::class, 'helpRenderWidth'))->invoke(null);
+        } finally {
+            self::clearHelpColumnsEnv();
+        }
+    }
+
+    private static function clearHelpColumnsEnv(): void
+    {
+        putenv('COLUMNS');
+        unset($_ENV['COLUMNS'], $_SERVER['COLUMNS']);
+    }
+
+    public function testTheRenderWidthFallsBackToTheAuthoredBudgetWhenNothingIsProbed(): void
+    {
+        // The CI / piped shape: with COLUMNS cleared by the bootstrap, the
+        // resolver answers the 80-column budget the page was authored to,
+        // which is what keeps every byte-identity pin below a statement
+        // about today's screen and not about the runner's terminal.
+        $this->assertSame(80, self::probeHelpWidth(null));
+    }
+
+    /** @return array<string, array{0: string, 1: int}> */
+    public static function probedColumnValues(): array
+    {
+        return [
+            'narrower than the budget'            => ['20', 80],
+            'one under the budget'                => ['79', 80],
+            'exactly the budget'                  => ['80', 80],
+            'one over the budget'                 => ['81', 81],
+            'a common wide terminal'              => ['160', 160],
+            'exactly the ceiling'                 => ['200', 200],
+            'one over the ceiling'                => ['201', 200],
+            'absurdly wide stays clamped'         => ['5000', 200],
+            'last credible value clamps'          => ['10000', 200],
+            'beyond the credible range'           => ['10001', 80],
+            'zero is not a width'                 => ['0', 80],
+            'negative is not a width'             => ['-5', 80],
+            'a word is not a width'               => ['banana', 80],
+            'the empty form means unset'          => ['', 80],
+        ];
+    }
+
+    /**
+     * The clamp table, one arm at a time: below the authored budget the
+     * floor wins, above the layout ceiling the cap wins, and values the
+     * house probe does not trust at all (non-numeric, zero, negative,
+     * beyond 10_000) resolve to the budget exactly like an absent probe —
+     * WidthProbe parity, recorded rather than guessed.
+     *
+     * @dataProvider probedColumnValues
+     */
+    public function testTheRenderWidthClampsProbedValuesIntoTheLayoutBudget(string $probed, int $expected): void
+    {
+        $this->assertSame($expected, self::probeHelpWidth($probed), "COLUMNS={$probed} must resolve to {$expected}");
+    }
+
+    public function testTheRenderWidthReadsTheSuperglobalSpellingsOfColumns(): void
+    {
+        // getenv cleared: the resolver must still honour $_ENV, and then
+        // $_SERVER — the same two fallbacks the house probe consults, so a
+        // runner that exports through only one superglobal is not ignored.
+        $this->assertSame(140, self::probeHelpWidth(null, '140'));
+        $this->assertSame(120, self::probeHelpWidth(null, null, '120'));
+    }
+
+    public function testTheEnvironmentSpellingOutranksTheSuperglobals(): void
+    {
+        $this->assertSame(160, self::probeHelpWidth('160', '90', '90'));
+        $this->assertSame(90, self::probeHelpWidth(null, '90', '160'));
+    }
+
+    public function testTheScreenStaysTheAuthoredPageUnderANarrowerProbedWidth(): void
+    {
+        // The byte-identity law at the resolver's output, not just its
+        // arithmetic: an armed 20 columns (and an armed nonsense value —
+        // both resolve to the budget) leave --help byte-for-byte the page.
+        $en   = require self::LANG_DIR . '/en.php';
+        $page = (string) $en['cli.help.screen'];
+
+        foreach (['20', 'banana'] as $probed) {
+            putenv('COLUMNS=' . $probed);
+
+            try {
+                $this->assertSame($page, Help::screen(), "COLUMNS={$probed} must not move a single byte");
+            } finally {
+                self::clearHelpColumnsEnv();
+            }
+        }
+    }
+
+    public function testTheBudgetWidthItselfStaysByteIdentical(): void
+    {
+        // The boundary the guard clause stands on: a terminal EXACTLY at
+        // the authored budget is the verbatim page, not a re-wrap that
+        // happens to fit. COLUMNS=80 is the widest byte-identity shape.
+        $en   = require self::LANG_DIR . '/en.php';
+        $page = (string) $en['cli.help.screen'];
+
+        putenv('COLUMNS=80');
+
+        try {
+            $this->assertSame($page, Help::screen());
+        } finally {
+            self::clearHelpColumnsEnv();
+        }
+    }
+
+    /**
+     * Render the live screen with COLUMNS armed for one call, returning the
+     * process to the bootstrap's cleared shape afterwards.
+     */
+    private static function renderScreenWithColumns(string $probed): string
+    {
+        putenv('COLUMNS=' . $probed);
+
+        try {
+            return Help::screen();
+        } finally {
+            self::clearHelpColumnsEnv();
+        }
+    }
+
+    /**
+     * The Examples block's bytes, from its heading to the footer heading —
+     * the region the reflow must treat as an opaque passthrough.
+     */
+    private static function screenExamplesSliceOf(string $screen): string
+    {
+        $start = strpos($screen, "Examples:\n");
+        self::assertNotFalse($start, 'the screen has no Examples: block');
+        $end = strpos($screen, "\nFor more information", $start);
+        self::assertNotFalse($end, 'the screen has no footer heading after Examples');
+
+        return substr($screen, $start, $end - $start);
+    }
+
+    public function testAWideTerminalRendersTheAuthoredScreenInFarFewerRows(): void
+    {
+        $en     = require self::LANG_DIR . '/en.php';
+        $page   = (string) $en['cli.help.screen'];
+        $screen = self::renderScreenWithColumns('160');
+
+        $this->assertLessThan(
+            substr_count($page, "\n"),
+            substr_count($screen, "\n"),
+            'a 160-column terminal must read the screen in fewer rows than the 80-column budget',
+        );
+
+        foreach (explode("\n", $screen) as $row) {
+            if (Width::of($row) > 160) {
+                $this->fail("row exceeds the probed width: {$row}");
+            }
+        }
+
+        // Nothing was lost or invented: whitespace aside, the wide screen is
+        // the authored page byte-for-byte — no word mid-wrap breakage, no
+        // dropped row, no rewritten token.
+        $this->assertSame(
+            preg_replace('/\s+/u', '', $page),
+            preg_replace('/\s+/u', '', $screen),
+            'the reflow moved or changed words — only whitespace may differ',
+        );
+    }
+
+    public function testADoubleWidthRecordPrefixSurvivesTheReflowByteIntact(): void
+    {
+        // HELP NIT-1: the gap-column walker counted DISPLAY cells but cut the
+        // raw line with a codepoint-indexed cursor — so any record whose
+        // prefix carried a double-width (CJK) character was split at the wrong
+        // byte, cutting its first word in half. The fix keeps bytes, codepoints
+        // and width separate; ASCII pages answer byte-identically before and
+        // after, so ONLY a width-2 fixture can pin the defect.
+        $filler = str_repeat('filler ', 24);
+        $page = implode("\n", [
+            '漢字 cmd  ' . $filler . 'end of the first record description',
+            '      ' . $filler . 'first continuation tail words here',
+            'other cmd  ' . $filler . 'end of the second record description',
+            '      ' . $filler . 'second continuation tail words here',
+        ]) . "\n";
+
+        $out = \SugarCraft\Code\Cli\HelpPageReflow::reflow($page, 100);
+
+        self::assertMatchesRegularExpression(
+            '/^漢字 cmd  filler/',
+            explode("\n", $out)[0],
+            'a double-width prefix and its raw gap must ride the reflowed row byte-intact',
+        );
+        self::assertSame(
+            preg_replace('/\s+/u', '', $page),
+            preg_replace('/\s+/u', '', $out),
+            'the reflow moved or changed no words — only whitespace may differ',
+        );
+        self::assertStringContainsString('other cmd', $out, 'the ASCII record keeps its prefix too');
+    }
+
+    /** @return array<string, array{0: string}> */
+    public static function wideTerminalWidths(): array
+    {
+        return [
+            'just over budget' => ['81'],
+            'a laptop window'  => ['120'],
+            'a wide window'    => ['160'],
+            'the ceiling'      => ['200'],
+        ];
+    }
+
+    /**
+     * At every wide shape the document keeps its skeleton: no row wider
+     * than the probed terminal, whitespace-only difference from the
+     * authored page, and every section heading still rising in the authored
+     * order.
+     *
+     * @dataProvider wideTerminalWidths
+     */
+    public function testEveryWideShapeKeepsStructureOrderAndWords(string $probed): void
+    {
+        $en     = require self::LANG_DIR . '/en.php';
+        $page   = (string) $en['cli.help.screen'];
+        $screen = self::renderScreenWithColumns($probed);
+        $width  = (int) $probed;
+
+        foreach (explode("\n", $screen) as $row) {
+            $this->assertLessThanOrEqual($width, Width::of($row), "row over {$probed} columns: {$row}");
+        }
+
+        $this->assertSame(
+            preg_replace('/\s+/u', '', $page),
+            preg_replace('/\s+/u', '', $screen),
+            "the reflow at {$probed} columns changed more than whitespace",
+        );
+
+        $previous = -1;
+        foreach ([
+            'Usage:',
+            'Subcommands (',
+            'Options:',
+            'Environment variables:',
+            'Exit codes (',
+            'Examples:',
+            'For more information',
+        ] as $heading) {
+            $at = strpos($screen, $heading);
+            $this->assertNotFalse($at, "the wide screen lost the {$heading} section");
+            $this->assertGreaterThan($previous, $at, "the {$heading} section drifted out of order");
+            $previous = $at;
+        }
+    }
+
+    public function testTheWideScreenStillPresentsKeyRostersAndOpaqueBlocks(): void
+    {
+        $en     = require self::LANG_DIR . '/en.php';
+        $page   = (string) $en['cli.help.screen'];
+        $screen = self::renderScreenWithColumns('160');
+
+        // Environment entries still ENTER at their three-space column: the
+        // roster guards read that column, and so does a user.
+        $this->assertMatchesRegularExpression('/^ {3}CANDY_CODE_PROVIDER(?![A-Z0-9_])/m', $screen);
+
+        // Flag rows still start as option lines under the same anchor shape
+        // the fallback guards use.
+        $this->assertMatchesRegularExpression('/^ +(?:-[a-z], )?--prompt(?:[ =,]|$)/m', $screen);
+
+        // The exact-spaced usage alias row is raw prefix + raw gap emission:
+        // it survives a wide render byte-exact, eight spaces and all.
+        $this->assertStringContainsString(
+            'candy-code run "<prompt>"        Alias for -p "<prompt>" (one-shot mode)',
+            $screen,
+        );
+
+        // The Examples block is an opaque passthrough: every byte of it is
+        // the authored page at a wide width too — commands and shell
+        // continuations never re-flow.
+        $this->assertSame(
+            self::screenExamplesSliceOf($page),
+            self::screenExamplesSliceOf($screen),
+            'the Examples block was re-wrapped — it must stay verbatim',
+        );
+    }
+
+    public function testAnAbsurdWidthIsClampedToTheLayoutCeiling(): void
+    {
+        $this->assertSame(
+            self::renderScreenWithColumns('200'),
+            self::renderScreenWithColumns('5000'),
+            'COLUMNS beyond the ceiling must render exactly the ceiling shape, not shred the layout',
+        );
+    }
+
+    /*
+     * ------------------------------------------------------------------
+     * The live-terminal arm. The defect this file's width section now
+     * pins: an interactive terminal exports no COLUMNS — bash refreshes
+     * the variable for its own prompt without exporting it — so the old
+     * env-only probe fell back to the authored 80 on exactly the owner's
+     * 225-column shape. The resolver must now answer the window itself
+     * when the environment cannot. HelpTest arms the window through the
+     * test seam; tests/bootstrap.php pins the arm to false (cannot
+     * answer) for every other pin in the suite, so no byte-identity pin
+     * inherits the width of whatever terminal launched phpunit.
+     * ------------------------------------------------------------------
+     */
+
+    public function testTheLiveTerminalProbeSuppliesTheWidthWhenColumnsIsNotExported(): void
+    {
+        $this->assertSame(150, self::probeLiveWidth(150));
+
+        // The owner's exact shape: a 225-column window honours the layout
+        // ceiling just like an exported 225 would.
+        $this->assertSame(200, self::probeLiveWidth(225));
+    }
+
+    public function testAnExportedWidthOutranksTheLiveProbe(): void
+    {
+        // Every today-working shape keeps working: when the environment
+        // answers, the window does not get a vote.
+        $this->assertSame(160, self::probeLiveWidth(100, '160'));
+        $this->assertSame(140, self::probeLiveWidth(100, null, '140'));
+    }
+
+    public function testAnUncredibleExportedWidthFallsToTheLiveProbe(): void
+    {
+        // Junk in the environment no longer blinds the resolver: a stale
+        // word or an out-of-range value now yields the window instead of
+        // the budget...
+        $this->assertSame(137, self::probeLiveWidth(137, 'banana'));
+        $this->assertSame(120, self::probeLiveWidth(120, '10001'));
+
+        // ...while a live arm that cannot answer (false — the pinned
+        // non-terminal verdict, the CI and pipe shapes) still resolves to
+        // the authored budget. This is the fallback polarity half of the
+        // regression pin.
+        $this->assertSame(80, self::probeLiveWidth(false, 'banana'));
+        $this->assertSame(80, self::probeLiveWidth(false));
+    }
+
+    public function testTheLiveProbeReflowsTheScreenExactlyLikeTheExportedSpelling(): void
+    {
+        // The arm drives the reflow engine, not just the arithmetic: the
+        // same effective width answers the same bytes from either probe.
+        $this->assertSame(
+            self::renderScreenWithColumns('160'),
+            self::renderScreenWithTerminalProbe(160),
+        );
+
+        // And on the owner's shape the wide screen is the FEWER-ROWS
+        // screen: a 225-column window (clamped to 200) renders visibly
+        // under the authored page's row count instead of equaling it,
+        // with every row inside the ceiling.
+        $en   = require self::LANG_DIR . '/en.php';
+        $page = (string) $en['cli.help.screen'];
+
+        $wide = self::renderScreenWithTerminalProbe(225);
+
+        $this->assertLessThan(
+            substr_count($page, "\n"),
+            substr_count($wide, "\n"),
+            'a 225-column window must not render the page at the authored 80',
+        );
+        foreach (explode("\n", $wide) as $row) {
+            $this->assertLessThanOrEqual(200, Width::of($row), 'a re-flowed row exceeded the layout ceiling');
+        }
+    }
+
+    public function testTheLiveProbeIsGuardedByTerminalityOfStandardOutput(): void
+    {
+        // Structural pin on the contract every non-terminal byte-identity
+        // law rests on: inside terminalColumns() the stream_isatty guard
+        // must EXIST and PRECEDE the Tty construction. Drop or move the
+        // guard and sugar-core's /dev/tty fallback could reflow a PIPE's
+        // output behind its consumer's back whenever a controlling
+        // terminal exists — green on a pipe runner, broken for CI.
+        $source = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Cli/Help.php');
+        $body   = self::sliceTerminalColumnsBody($source);
+
+        $guardAt = strpos($body, 'stream_isatty(STDOUT)');
+        $probeAt = strpos($body, 'new Tty(');
+
+        $this->assertIsInt($guardAt, 'the live arm lost its terminality guard — pipes must never take the probe');
+        $this->assertIsInt($probeAt, 'the live arm no longer constructs the house Tty probe');
+        $this->assertLessThan($probeAt, $guardAt, 'the terminality guard must precede the probe');
+    }
+
+    /**
+     * Invoke the resolver with the live arm armed to $live (an int pretends
+     * a window of that width, false pins the cannot-answer verdict), with
+     * optional exported spellings, restoring the bootstrap's pinned false
+     * and the cleared environment afterwards.
+     */
+    private static function probeLiveWidth(int|false $live, ?string $getenv = null, ?string $env = null): int
+    {
+        self::clearHelpColumnsEnv();
+        Help::pretendTerminalColumnsForTesting($live);
+        if ($getenv !== null) {
+            putenv('COLUMNS=' . $getenv);
+        }
+        if ($env !== null) {
+            $_ENV['COLUMNS'] = $env;
+        }
+
+        try {
+            return (int) (new \ReflectionMethod(Help::class, 'helpRenderWidth'))->invoke(null);
+        } finally {
+            Help::pretendTerminalColumnsForTesting(false);
+            self::clearHelpColumnsEnv();
+        }
+    }
+
+    /**
+     * Render the live screen with the terminal arm pretending a $live-column
+     * window and nothing exported — the owner's interactive shape, taken in
+     * isolation. Restores the bootstrap's pinned verdict afterwards.
+     */
+    private static function renderScreenWithTerminalProbe(int $live): string
+    {
+        self::clearHelpColumnsEnv();
+        Help::pretendTerminalColumnsForTesting($live);
+
+        try {
+            return Help::screen();
+        } finally {
+            Help::pretendTerminalColumnsForTesting(false);
+        }
+    }
+
+    /**
+     * Slice the terminalColumns() body out of the Help.php source for the
+     * structural pin: declaration marker to the method's closing brace.
+     */
+    private static function sliceTerminalColumnsBody(string $source): string
+    {
+        $start = strpos($source, 'private static function terminalColumns()');
+        self::assertIsInt($start, 'the live arm of the help width resolver is gone from the source');
+
+        $end = strpos($source, "\n    }\n", $start);
+        self::assertIsInt($end, 'could not find the end of the live arm');
+
+        return substr($source, $start, $end - $start);
     }
 }

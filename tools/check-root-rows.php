@@ -4,7 +4,8 @@
  * tools/check-root-rows.php — standing guard for the root-doc lib rows.
  *
  * The three root surfaces (README.md library table, docs/MATCHUPS.md mapping
- * table, docs/index.html lib-card tiles) each carry one row per library. Two
+ * table, and the lib-card tiles of the two catalogue pages docs/libraries.html
+ * and docs/apps.html) each carry one row per library. Two
  * live incident classes proved them unguarded: a merge weld silently reverted
  * eleven README description cells to pre-drain text (rows read TRUE again with
  * stale prose), and several welds simply never applied their root-drain rows
@@ -21,6 +22,11 @@
  * re-pin its seed entry in the same commit (by-design reds, per the approved
  * proposal). The seed slug set is additionally held set-equal to the README
  * roster so a new library cannot skip registration.
+ *
+ * The seed file keys are historical: "index" claims since the L2b catalogue
+ * split scan the lib-card tiles of docs/libraries.html and docs/apps.html —
+ * the cards moved there out of docs/index.html, and each slug appears exactly
+ * once across that pair — while "readme" and "matchups" keep their tables.
  *
  * Fail-closed by construction: an unreadable, unparseable or structurally
  * invalid seed aborts with exit 2 rather than certifying nothing. Row
@@ -47,7 +53,11 @@ final class CheckRootRows
         $seed = self::loadSeed($seedFile);
         $readme = self::readFile($root . '/README.md');
         $matchups = self::readFile($root . '/docs/MATCHUPS.md');
-        $index = self::readFile($root . '/docs/index.html');
+        // L2b split: the lib-card tiles live on the catalogue pages now. The
+        // seed key "index" is kept for corpus compatibility; it reads the pair
+        // concatenated, where every slug's card is unique.
+        $cards = self::readFile($root . '/docs/libraries.html')
+            . "\n" . self::readFile($root . '/docs/apps.html');
 
         $findings = self::rosterFindings($readme, $seed);
         foreach ($seed['slugs'] as $slug => $entry) {
@@ -56,7 +66,7 @@ final class CheckRootRows
                 if (!isset($entry[$file])) {
                     continue;
                 }
-                $text = self::locateRow($file, (string) $slug, $readme, $matchups, $index, $findings);
+                $text = self::locateRow($file, (string) $slug, $readme, $matchups, $cards, $findings);
                 if ($text === null) {
                     continue;
                 }
@@ -107,6 +117,8 @@ final class CheckRootRows
                 self::readFile($root . '/README.md'),
                 self::readFile($root . '/docs/MATCHUPS.md'),
                 self::readFile($root . '/docs/index.html'),
+                self::readFile($root . '/docs/libraries.html'),
+                self::readFile($root . '/docs/apps.html'),
             ],
         );
 
@@ -249,12 +261,12 @@ final class CheckRootRows
     /**
      * @param list<string> $findings appended in place with missing/ambiguous rows
      */
-    private static function locateRow(string $file, string $slug, string $readme, string $matchups, string $index, array &$findings): ?string
+    private static function locateRow(string $file, string $slug, string $readme, string $matchups, string $cards, array &$findings): ?string
     {
         $hits = match ($file) {
             'readme' => self::lineHits($readme, sprintf('media/icons/%s.png', $slug)),
             'matchups' => self::prefixedLineHits($matchups, sprintf('`%s/`', $slug)),
-            default => self::cardTile($index, $slug, $findings),
+            default => self::cardTile($cards, $slug, $findings),
         };
         if ($file === 'index') {
             return $hits;
@@ -309,13 +321,15 @@ final class CheckRootRows
      * anchor — a bare href also occurs in the icon strip and the demo-card,
      * so matching on those would certify the wrong row. A second card
      * appearing before any summary paragraph is a fail-closed no-summary.
+     * Since the L2b split $cards is the libraries.html + apps.html pair; the
+     * index page itself carries no catalogue cards any more.
      *
      * @param list<string> $findings
      */
-    private static function cardTile(string $index, string $slug, array &$findings): ?string
+    private static function cardTile(string $cards, string $slug, array &$findings): ?string
     {
         $anchor = sprintf('class="lib-card" href="lib/%s.html"', $slug);
-        $hits = self::lineHits($index, $anchor);
+        $hits = self::lineHits($cards, $anchor);
         if (count($hits) === 0) {
             $findings[] = sprintf('FAIL index %s: missing: %s', $slug, $slug);
 
@@ -326,7 +340,7 @@ final class CheckRootRows
 
             return null;
         }
-        $after = substr($index, (int) strpos($index, $anchor) + strlen($anchor));
+        $after = substr($cards, (int) strpos($cards, $anchor) + strlen($anchor));
         $summaryStart = strpos($after, '<p class="summary">');
         $nextCard = strpos($after, 'class="lib-card"');
         if ($summaryStart === false || ($nextCard !== false && $nextCard < $summaryStart)) {

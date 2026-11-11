@@ -475,6 +475,15 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // session's own mode through SessionHost::permissionMode().
                 'Acp/AcpServer.php',
                 'Agents/Agent.php',
+                // a5 (cc-eval capability bank): an Agent reader BY DESIGN —
+                // the card mirrors fromPreset's native-only raise law verbatim
+                // (:119-120: a foreign preset's mode is pinned to the Default
+                // floor before the card ever stores it), re-validates the
+                // enum on fromArray, and toWire serializes its OWN field.
+                // It carries the preset-derived mode for hand-off display;
+                // honoring a mode stays in Agent, so the read can only floor,
+                // never widen, a grant.
+                'Agents/CapabilityCard.php',
                 // C-AGT-4.a: an Agent reader BY DESIGN — PrimaryAgent is the
                 // application side of the gate `fromPreset()` opens. It reads
                 // the row's (already gated) mode only to apply a STRICTER-OF

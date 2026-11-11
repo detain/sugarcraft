@@ -36,7 +36,7 @@ final class RootRowsCheckTest extends TestCase
 
     private const GREEN_README = "| <img src=\"media/icons/sugar-demo.png\" width=\"48\" alt=\"\"> | **[SugarDemo](sugar-demo/)** | Demo row wording fresh. |\n";
     private const GREEN_MATCHUPS = "| **SugarDemo** | `sugar-demo/` | port | Demo row wording fresh. |\n";
-    private const GREEN_INDEX = "<a class=\"lib-card\" href=\"lib/sugar-demo.html\"><h3>SugarDemo</h3><p class=\"summary\">Demo row wording fresh.</p></a>\n";
+    private const GREEN_CARDS = "<a class=\"lib-card\" href=\"lib/sugar-demo.html\"><h3>SugarDemo</h3><p class=\"summary\">Demo row wording fresh.</p></a>\n";
     private const STALE_WORDING = 'Demo row wording stale.';
     private const NEEDLE = 'Demo row wording fresh.';
     private const DEAD = 'Box-drawing layout engine';
@@ -63,14 +63,14 @@ final class RootRowsCheckTest extends TestCase
 
     public function testAGreenFixtureTreePasses(): void
     {
-        $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_INDEX, '{"slugs":{"sugar-demo":{"readme":{"needles":["' . self::NEEDLE . '"],"dead":[]}}}}');
+        $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_CARDS, '{"slugs":{"sugar-demo":{"readme":{"needles":["' . self::NEEDLE . '"],"dead":[]}}}}');
 
         $this->assertSame([], $this->deriveFixture());
     }
 
     public function testAnUnparseableSeedRefusesToCertify(): void
     {
-        $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_INDEX, 'this is not json');
+        $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_CARDS, 'this is not json');
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessageMatches('/not a JSON object/');
@@ -83,7 +83,7 @@ final class RootRowsCheckTest extends TestCase
         @mkdir($this->tmpDir . '/prompt_kit', 0o777, true);
         file_put_contents($this->tmpDir . '/README.md', self::GREEN_README);
         file_put_contents($this->tmpDir . '/docs/MATCHUPS.md', self::GREEN_MATCHUPS);
-        file_put_contents($this->tmpDir . '/docs/index.html', self::GREEN_INDEX);
+        file_put_contents($this->tmpDir . '/docs/libraries.html', self::GREEN_CARDS);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessageMatches('/seed file not found/');
@@ -92,7 +92,7 @@ final class RootRowsCheckTest extends TestCase
 
     public function testAnUnknownFileKeyRefusesToCertify(): void
     {
-        $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_INDEX, '{"slugs":{"sugar-demo":{"matchups2":{"needles":["' . self::NEEDLE . '"]}}}}');
+        $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_CARDS, '{"slugs":{"sugar-demo":{"matchups2":{"needles":["' . self::NEEDLE . '"]}}}}');
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessageMatches('/unknown file key/');
@@ -102,7 +102,7 @@ final class RootRowsCheckTest extends TestCase
     public function testARevertedReadmeRowNamesTheSlugAndTheMissingNeedle(): void
     {
         $reverted = str_replace(self::NEEDLE, self::STALE_WORDING, self::GREEN_README);
-        $this->writeFixture($reverted, self::GREEN_MATCHUPS, self::GREEN_INDEX, $this->seedArming(['readme']));
+        $this->writeFixture($reverted, self::GREEN_MATCHUPS, self::GREEN_CARDS, $this->seedArming(['readme']));
 
         $this->assertSame(
             ['FAIL readme sugar-demo: absent: ' . self::NEEDLE],
@@ -114,7 +114,7 @@ final class RootRowsCheckTest extends TestCase
     public function testADeadPhrasePlantedInItsOwnRowIsCaught(): void
     {
         $poisoned = str_replace(self::NEEDLE, self::NEEDLE . ' ' . self::DEAD . '.', self::GREEN_README);
-        $this->writeFixture($poisoned, self::GREEN_MATCHUPS, self::GREEN_INDEX, $this->seedArming(['readme']));
+        $this->writeFixture($poisoned, self::GREEN_MATCHUPS, self::GREEN_CARDS, $this->seedArming(['readme']));
 
         $this->assertSame(
             ['FAIL readme sugar-demo: dead-present: ' . self::DEAD],
@@ -125,7 +125,7 @@ final class RootRowsCheckTest extends TestCase
     public function testADeadPhraseOutsideItsOwnRowStaysInvisible(): void
     {
         $poisoned = self::GREEN_MATCHUPS . '| **SugarOther** | `sugar-other/` | port | ' . self::DEAD . ". |\n";
-        $this->writeFixture(self::GREEN_README, $poisoned, self::GREEN_INDEX, $this->seedArming(['matchups']));
+        $this->writeFixture(self::GREEN_README, $poisoned, self::GREEN_CARDS, $this->seedArming(['matchups']));
 
         $this->assertSame([], $this->deriveFixture(), 'dead phrases are row-scoped, never whole-file');
     }
@@ -133,7 +133,7 @@ final class RootRowsCheckTest extends TestCase
     public function testAMissingRowAndADuplicatedRowAreBothFailClosed(): void
     {
         $seed = '{"slugs":{"sugar-demo":{"readme":{"needles":["' . self::NEEDLE . '"]}},"sugar-ghost":{"readme":{"needles":["Anything."]}}}}';
-        $this->writeFixture(self::GREEN_README . self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_INDEX, $seed);
+        $this->writeFixture(self::GREEN_README . self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_CARDS, $seed);
 
         $findings = $this->deriveFixture();
 
@@ -153,7 +153,7 @@ final class RootRowsCheckTest extends TestCase
             'a bare-href decoy outside the card must not certify the wrong row',
         );
 
-        $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_INDEX, $this->seedArming(['index']));
+        $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_CARDS, $this->seedArming(['index']));
         $this->assertSame([], $this->deriveFixture(), 'the intact card must pass');
     }
 
@@ -169,7 +169,7 @@ final class RootRowsCheckTest extends TestCase
 
     public function testTheRosterIsHeldSetEqualInBothDirections(): void
     {
-        $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_INDEX, '{"slugs":{"sugar-phantom":{"readme":{"needles":["Nothing."]}}}}');
+        $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_CARDS, '{"slugs":{"sugar-phantom":{"readme":{"needles":["Nothing."]}}}}');
 
         $findings = $this->deriveFixture();
 
@@ -181,7 +181,7 @@ final class RootRowsCheckTest extends TestCase
     public function testWhitespaceReflowWithinARowIsTolerated(): void
     {
         $reflowed = str_replace('Demo row wording fresh.', 'Demo   row  wording   fresh.', self::GREEN_README);
-        $this->writeFixture($reflowed, self::GREEN_MATCHUPS, self::GREEN_INDEX, $this->seedArming(['readme']));
+        $this->writeFixture($reflowed, self::GREEN_MATCHUPS, self::GREEN_CARDS, $this->seedArming(['readme']));
 
         $findings = $this->deriveFixture();
 
@@ -195,7 +195,8 @@ final class RootRowsCheckTest extends TestCase
      * THREE LEGS, because the arm can fail in three directions. On the real tree
      * it must name the current vestigial set EXACTLY — four entries today (the
      * git-server index row plus the three panels rows), with sugar-image/matchups
-     * 'Picker facade' correctly silent because docs/index.html still prints it; a
+     * 'Picker facade' correctly silent because docs/libraries.html still prints
+     * it (the card tiles moved there in the L2b split); a
      * seed or root-doc edit that changes that set reddens this pin, which is how
      * the arm stays honest instead of decorative. On a planted fixture it must
      * NAME the vestigial phrase — deleting the loop would otherwise pass every
@@ -215,7 +216,7 @@ final class RootRowsCheckTest extends TestCase
         ], $notes, 'the vestigial dead-phrase set is a drift pin: retire the seed row or heal the wording, in this commit');
         $this->assertSame([], \CheckRootRows::derive(dirname(__DIR__, 2)), 'an advisory is never a finding');
 
-        $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_INDEX, $this->seedArming(['readme']));
+        $this->writeFixture(self::GREEN_README, self::GREEN_MATCHUPS, self::GREEN_CARDS, $this->seedArming(['readme']));
         $this->assertSame(
             ['note: readme sugar-demo: retire-dead: ' . self::DEAD],
             \CheckRootRows::advisories($this->tmpDir),
@@ -224,7 +225,7 @@ final class RootRowsCheckTest extends TestCase
         $this->assertSame([], $this->deriveFixture(), 'the vestigial arm cannot redden the run');
 
         $live = self::GREEN_MATCHUPS . '| **SugarOther** | `sugar-other/` | port | ' . self::DEAD . ". |\n";
-        $this->writeFixture(self::GREEN_README, $live, self::GREEN_INDEX, $this->seedArming(['readme']));
+        $this->writeFixture(self::GREEN_README, $live, self::GREEN_CARDS, $this->seedArming(['readme']));
         $this->assertSame(
             [],
             \CheckRootRows::advisories($this->tmpDir),
@@ -246,13 +247,15 @@ final class RootRowsCheckTest extends TestCase
     /**
      * @param array<int, string> $files
      */
-    private function writeFixture(string $readme, string $matchups, string $index, string $seed): void
+    private function writeFixture(string $readme, string $matchups, string $cards, string $seed): void
     {
         @mkdir($this->tmpDir . '/docs', 0o777, true);
         @mkdir($this->tmpDir . '/prompt_kit', 0o777, true);
         file_put_contents($this->tmpDir . '/README.md', $readme);
         file_put_contents($this->tmpDir . '/docs/MATCHUPS.md', $matchups);
-        file_put_contents($this->tmpDir . '/docs/index.html', $index);
+        file_put_contents($this->tmpDir . '/docs/index.html', '');
+        file_put_contents($this->tmpDir . '/docs/libraries.html', $cards);
+        file_put_contents($this->tmpDir . '/docs/apps.html', '');
         file_put_contents($this->tmpDir . '/prompt_kit/root-rows-seed.json', $seed);
     }
 

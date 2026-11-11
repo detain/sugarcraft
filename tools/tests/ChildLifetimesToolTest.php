@@ -75,7 +75,12 @@ final class ChildLifetimesToolTest extends TestCase
         // 2026-11-04 child-lifetime accounting lane cleared with honest
         // ACCOUNTED rows. The pin was stale-but-honest: findings count all
         // derivations, accounted or not.
-        $this->assertStringContainsString('13 findings', $out);
+        // 13 -> 11 re-derived live with the tool on 2026-11-10: fd6900382
+        // flattened the candy-git-server manifest to a single psr-4 prefix and
+        // rewrote StatelessRpc, ending the nested double-walk that had counted
+        // advertise/negotiate twice each (2+2), so those four derivations became
+        // two. Findings now equal the 11 accounted rows exactly, tool rc=0.
+        $this->assertStringContainsString('11 findings', $out);
         // Frozen literal: counts every @proc_open site tree-wide — flip it in the SAME commit that adds a site.
         // 33 -> 30 re-derived live with the tool on 2026-11-04: net -3 of tree
         // drift since 0bcc4346b (the pin predates later spawn consolidation,
@@ -83,7 +88,10 @@ final class ChildLifetimesToolTest extends TestCase
         // wave, which retired raw sites without minting new ones). The lib's
         // own census of its current 4 spawn functions lives in
         // candy-git-server/tests/ChildProcessLifetimeCensusTest::SPAWN_SITES_BY_FILE.
-        $this->assertStringContainsString('30 proc_open sites', $out);
+        // 30 -> 29 re-derived live with the tool on 2026-11-10: the Step-8
+        // StatelessRpc rewrite in fd6900382 retired one raw @proc_open site
+        // without minting a replacement.
+        $this->assertStringContainsString('29 proc_open sites', $out);
     }
 
     /**

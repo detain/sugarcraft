@@ -12,31 +12,123 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-dashboard.html">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
 <link rel="icon" type="image/png" href="../img/icons/sugar-dashboard.png">
 <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/search.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner">
-    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<!--nav:start-->
+<nav class="nav" aria-label="Main navigation"><div class="nav-inner">
+    <a class="brand" href="/"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
     <div class="nav-links">
         <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
             <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <span>Search</span>
         </button>
-        <a href="../#libraries">Libraries</a>
-        <a href="../#apps">Apps</a>
-        <a href="../#demos">Demos</a>
-        <a href="../#quickstart">Quickstart</a>
-        <a href="../compare.html">Compare</a>
-        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a>
+        <ul class="nav-items">
+            <li class="nav-item"><a href="/">Home</a></li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Libraries <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/libraries.html">All libraries →</a>
+                    <a href="/lib/sugar-core.html">sugar-core</a>
+                    <a href="/lib/sugar-style.html">sugar-style</a>
+                    <a href="/lib/sugar-cellbuffer.html">sugar-cellbuffer</a>
+                    <a href="/lib/sugar-async.html">sugar-async</a>
+                    <a href="/lib/sugar-spring.html">sugar-spring</a>
+                    <a href="/lib/sugar-mouse.html">sugar-mouse</a>
+                    <a href="/lib/sugar-widgets.html">sugar-widgets</a>
+                    <a href="/lib/sugar-charts.html">sugar-charts</a>
+                    <a href="/lib/sugar-forms.html">sugar-forms</a>
+                    <a href="/lib/sugar-markdown.html">sugar-markdown</a>
+                    <a href="/lib/sugar-cli.html">sugar-cli</a>
+                    <a href="/lib/sugar-ssh-server.html">sugar-ssh-server</a>
+                    <a href="/lib/sugar-metrics.html">sugar-metrics</a>
+                    <a href="/lib/sugar-log.html">sugar-log</a>
+                    <a href="/lib/sugar-image.html">sugar-image</a>
+                    <a href="/lib/sugar-animation.html">sugar-animation</a>
+                    <a href="/lib/sugar-video.html">sugar-video</a>
+                    <a href="/lib/sugar-colorprofile.html">sugar-colorprofile</a>
+                    <a href="/lib/sugar-ansi-parser.html">sugar-ansi-parser</a>
+                    <a href="/lib/sugar-vterm.html">sugar-vterm</a>
+                    <a href="/lib/sugar-pty.html">sugar-pty</a>
+                    <a href="/lib/sugar-focus.html">sugar-focus</a>
+                    <a href="/lib/sugar-gallery.html">sugar-gallery</a>
+                    <a href="/lib/sugar-treelist.html">sugar-treelist</a>
+                    <a href="/lib/sugar-constraints.html">sugar-constraints</a>
+                    <a href="/lib/sugar-panels.html">sugar-panels</a>
+                    <a href="/lib/sugar-overlay.html">sugar-overlay</a>
+                    <a href="/lib/sugar-navstack.html">sugar-navstack</a>
+                    <a href="/lib/sugar-dashboard.html">sugar-dashboard</a>
+                    <a href="/lib/sugar-quickpick.html">sugar-quickpick</a>
+                    <a href="/lib/sugar-input.html">sugar-input</a>
+                    <a href="/lib/sugar-fuzzy.html">sugar-fuzzy</a>
+                    <a href="/lib/sugar-flexbox.html">sugar-flexbox</a>
+                    <a href="/lib/sugar-toast.html">sugar-toast</a>
+                    <a href="/lib/sugar-datepicker.html">sugar-datepicker</a>
+                    <a href="/lib/sugar-readline.html">sugar-readline</a>
+                    <a href="/lib/sugar-table.html">sugar-table</a>
+                    <a href="/lib/sugar-diff.html">sugar-diff</a>
+                    <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
+                    <a href="/lib/sugar-testing.html">sugar-testing</a>
+                </div>
+            </li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Apps <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/apps.html">All apps →</a>
+                    <a href="/lib/candy-starter.html">candy-starter</a>
+                    <a href="/lib/candy-scriptui.html">candy-scriptui</a>
+                    <a href="/lib/candy-codeshot.html">candy-codeshot</a>
+                    <a href="/lib/candy-mdview.html">candy-mdview</a>
+                    <a href="/lib/candy-ansi-inspect.html">candy-ansi-inspect</a>
+                    <a href="/lib/candy-ssh-launcher.html">candy-ssh-launcher</a>
+                    <a href="/lib/candy-kv.html">candy-kv</a>
+                    <a href="/lib/candy-mail.html">candy-mail</a>
+                    <a href="/lib/candy-git-server.html">candy-git-server</a>
+                    <a href="/lib/candy-tetris.html">candy-tetris</a>
+                    <a href="/lib/candy-files.html">candy-files</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
+                    <a href="/lib/candy-code-web.html">candy-code-web</a>
+                    <a href="/lib/candy-vcr.html">candy-vcr</a>
+                    <a href="/lib/candy-git.html">candy-git</a>
+                    <a href="/lib/candy-sql.html">candy-sql</a>
+                    <a href="/lib/candy-codetime.html">candy-codetime</a>
+                    <a href="/lib/candy-minesweeper.html">candy-minesweeper</a>
+                    <a href="/lib/candy-gifview.html">candy-gifview</a>
+                    <a href="/lib/candy-image.html">candy-image</a>
+                    <a href="/lib/candy-top.html">candy-top</a>
+                    <a href="/lib/candy-flappy.html">candy-flappy</a>
+                </div>
+            </li>
+            <li class="nav-item nav-item-drop-right">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Docs <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop">
+                    <a href="/#architecture">Architecture</a>
+                    <a href="/#quickstart">Quickstart</a>
+                    <a href="/compare.html">Compare</a>
+                    <a href="/GETTING-STARTED.html">Getting Started</a>
+                    <a href="/GLOSSARY.html">Glossary</a>
+                    <a href="/KEYMAPS.html">Keymaps</a>
+                    <a href="/cookbook/index.html">Cookbook</a>
+                </div>
+            </li>
+            <li class="nav-item"><a href="/#demos">Demos</a></li>
+            <li class="nav-item"><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a></li>
+        </ul>
     </div>
 </div></nav>
+<!--nav:end-->
+
+<main id="main">
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries"><span aria-hidden="true">←</span> All 40 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 40 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-dashboard.png" alt="" aria-hidden="true">
@@ -51,12 +143,177 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-dashboard"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-dashboard" alt="SugarDashboard code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Build dashboard-style terminal UIs with a column grid, constraint layout, ratio grid, data grid, tree views, modals, status bars, tabs, and plot/canvas rendering. Compose complex layouts from reusable components, and extend the whole system through the module/plugin layer. All motion is frame-driven — the library renders synchronously and the host supplies every frame, so a reduced-motion presentation is always reachable by holding the frames still.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#btop-style-graphs-meters">btop-style graphs &amp; meters</a></li>
+            <li class="toc-h3"><a href="#showcase-examples">Showcase examples</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#layout-structure">Layout &amp; Structure</a></li>
+            <li class="toc-h3"><a href="#stackedgrid">StackedGrid</a></li>
+            <li class="toc-h3"><a href="#gridlayout">GridLayout</a></li>
+            <li class="toc-h3"><a href="#flexlayout">FlexLayout</a></li>
+            <li class="toc-h3"><a href="#vstack">VStack</a></li>
+            <li class="toc-h3"><a href="#hstack">HStack</a></li>
+            <li class="toc-h3"><a href="#zstack">ZStack</a></li>
+            <li class="toc-h3"><a href="#stack">Stack</a></li>
+            <li class="toc-h3"><a href="#frame">Frame</a></li>
+            <li class="toc-h3"><a href="#panel">Panel</a></li>
+            <li class="toc-h3"><a href="#card">Card</a></li>
+            <li class="toc-h3"><a href="#divider">Divider</a></li>
+            <li class="toc-h3"><a href="#boxdrawing">BoxDrawing</a></li>
+            <li class="toc-h3"><a href="#bordertext">BorderText</a></li>
+            <li class="toc-h3"><a href="#spacer">Spacer</a></li>
+            <li class="toc-h3"><a href="#split">Split</a></li>
+            <li class="toc-h3"><a href="#center">Center</a></li>
+            <li class="toc-h3"><a href="#cover">Cover</a></li>
+            <li class="toc-h3"><a href="#header">Header</a></li>
+            <li class="toc-h3"><a href="#footer">Footer</a></li>
+            <li class="toc-h3"><a href="#window">Window</a></li>
+            <li class="toc-h3"><a href="#drawer">Drawer</a></li>
+            <li class="toc-h3"><a href="#charts">Charts</a></li>
+            <li class="toc-h3"><a href="#chart">Chart</a></li>
+            <li class="toc-h3"><a href="#areachart">AreaChart</a></li>
+            <li class="toc-h3"><a href="#bar">Bar</a></li>
+            <li class="toc-h3"><a href="#donut">Donut</a></li>
+            <li class="toc-h3"><a href="#gauge">Gauge</a></li>
+            <li class="toc-h3"><a href="#gaugechart">GaugeChart</a></li>
+            <li class="toc-h3"><a href="#gaugecircle">GaugeCircle</a></li>
+            <li class="toc-h3"><a href="#heatmap">Heatmap</a></li>
+            <li class="toc-h3"><a href="#radarchart">RadarChart</a></li>
+            <li class="toc-h3"><a href="#bubble">Bubble</a></li>
+            <li class="toc-h3"><a href="#bullet">Bullet</a></li>
+            <li class="toc-h3"><a href="#sparkline">Sparkline</a></li>
+            <li class="toc-h3"><a href="#sparklinebar">SparklineBar</a></li>
+            <li class="toc-h3"><a href="#sparklinearea">SparklineArea</a></li>
+            <li class="toc-h3"><a href="#sparkarea">SparkArea</a></li>
+            <li class="toc-h3"><a href="#funnelchart">FunnelChart</a></li>
+            <li class="toc-h3"><a href="#form-input">Form &amp; Input</a></li>
+            <li class="toc-h3"><a href="#input">Input</a></li>
+            <li class="toc-h3"><a href="#textarea">Textarea</a></li>
+            <li class="toc-h3"><a href="#select">Select</a></li>
+            <li class="toc-h3"><a href="#checkbox">Checkbox</a></li>
+            <li class="toc-h3"><a href="#radio">Radio</a></li>
+            <li class="toc-h3"><a href="#slider">Slider</a></li>
+            <li class="toc-h3"><a href="#toggle">Toggle</a></li>
+            <li class="toc-h3"><a href="#switch">Switch</a></li>
+            <li class="toc-h3"><a href="#chip">Chip</a></li>
+            <li class="toc-h3"><a href="#chipgroup">ChipGroup</a></li>
+            <li class="toc-h3"><a href="#label">Label</a></li>
+            <li class="toc-h3"><a href="#combobox">ComboBox</a></li>
+            <li class="toc-h3"><a href="#datepicker">DatePicker</a></li>
+            <li class="toc-h3"><a href="#navigation">Navigation</a></li>
+            <li class="toc-h3"><a href="#tabs">Tabs</a></li>
+            <li class="toc-h3"><a href="#tabsvertical">TabsVertical</a></li>
+            <li class="toc-h3"><a href="#navbar">Navbar</a></li>
+            <li class="toc-h3"><a href="#sidebar">Sidebar</a></li>
+            <li class="toc-h3"><a href="#breadcrumb">Breadcrumb</a></li>
+            <li class="toc-h3"><a href="#menu">Menu</a></li>
+            <li class="toc-h3"><a href="#feedback">Feedback</a></li>
+            <li class="toc-h3"><a href="#alert">Alert</a></li>
+            <li class="toc-h3"><a href="#toast">Toast</a></li>
+            <li class="toc-h3"><a href="#notification">Notification</a></li>
+            <li class="toc-h3"><a href="#spinner">Spinner</a></li>
+            <li class="toc-h3"><a href="#progress">Progress</a></li>
+            <li class="toc-h3"><a href="#progressbar">ProgressBar</a></li>
+            <li class="toc-h3"><a href="#progressring">ProgressRing</a></li>
+            <li class="toc-h3"><a href="#nprogress">NProgress</a></li>
+            <li class="toc-h3"><a href="#loadingtext">LoadingText</a></li>
+            <li class="toc-h3"><a href="#data-display">Data Display</a></li>
+            <li class="toc-h3"><a href="#tablebordered">TableBordered</a></li>
+            <li class="toc-h3"><a href="#tablezebra">TableZebra</a></li>
+            <li class="toc-h3"><a href="#list">List</a></li>
+            <li class="toc-h3"><a href="#tree">Tree</a></li>
+            <li class="toc-h3"><a href="#metric">Metric</a></li>
+            <li class="toc-h3"><a href="#stat">Stat</a></li>
+            <li class="toc-h3"><a href="#stats">Stats</a></li>
+            <li class="toc-h3"><a href="#metricsgrid">MetricsGrid</a></li>
+            <li class="toc-h3"><a href="#media">Media</a></li>
+            <li class="toc-h3"><a href="#image">Image</a></li>
+            <li class="toc-h3"><a href="#picture">Picture</a></li>
+            <li class="toc-h3"><a href="#avatar">Avatar</a></li>
+            <li class="toc-h3"><a href="#avatargroup">AvatarGroup</a></li>
+            <li class="toc-h3"><a href="#icon">Icon</a></li>
+            <li class="toc-h3"><a href="#qrcode">QRCode</a></li>
+            <li class="toc-h3"><a href="#barcode">Barcode</a></li>
+            <li class="toc-h3"><a href="#video">Video</a></li>
+            <li class="toc-h3"><a href="#audio">Audio</a></li>
+            <li class="toc-h3"><a href="#text">Text</a></li>
+            <li class="toc-h3"><a href="#text-2">Text</a></li>
+            <li class="toc-h3"><a href="#paragraph">Paragraph</a></li>
+            <li class="toc-h3"><a href="#code">Code</a></li>
+            <li class="toc-h3"><a href="#kbd">Kbd</a></li>
+            <li class="toc-h3"><a href="#emoji">Emoji</a></li>
+            <li class="toc-h3"><a href="#figlettext">FigletText</a></li>
+            <li class="toc-h3"><a href="#asciibanner">ASCIIBanner</a></li>
+            <li class="toc-h3"><a href="#highlight">Highlight</a></li>
+            <li class="toc-h3"><a href="#hexdump">HexDump</a></li>
+            <li class="toc-h3"><a href="#dotmatrix">DotMatrix</a></li>
+            <li class="toc-h3"><a href="#pictogram">Pictogram</a></li>
+            <li class="toc-h3"><a href="#boxer">Boxer</a></li>
+            <li class="toc-h3"><a href="#status">Status</a></li>
+            <li class="toc-h3"><a href="#clock">Clock</a></li>
+            <li class="toc-h3"><a href="#timer">Timer</a></li>
+            <li class="toc-h3"><a href="#stopwatch">Stopwatch</a></li>
+            <li class="toc-h3"><a href="#calendar">Calendar</a></li>
+            <li class="toc-h3"><a href="#terminal">Terminal</a></li>
+            <li class="toc-h3"><a href="#logviewer">LogViewer</a></li>
+            <li class="toc-h3"><a href="#log">Log</a></li>
+            <li class="toc-h3"><a href="#console">Console</a></li>
+            <li class="toc-h3"><a href="#state">State</a></li>
+            <li class="toc-h3"><a href="#focus">Focus</a></li>
+            <li class="toc-h3"><a href="#advanced">Advanced</a></li>
+            <li class="toc-h3"><a href="#accordion">Accordion</a></li>
+            <li class="toc-h3"><a href="#activityfeed">ActivityFeed</a></li>
+            <li class="toc-h3"><a href="#badge">Badge</a></li>
+            <li class="toc-h3"><a href="#testimonial">Testimonial</a></li>
+            <li class="toc-h3"><a href="#profile">Profile</a></li>
+            <li class="toc-h3"><a href="#cta">CTA</a></li>
+            <li class="toc-h3"><a href="#jumbotron">Jumbotron</a></li>
+            <li class="toc-h3"><a href="#emptystate">EmptyState</a></li>
+            <li class="toc-h3"><a href="#skeleton">Skeleton</a></li>
+            <li class="toc-h3"><a href="#marquee">Marquee</a></li>
+            <li class="toc-h3"><a href="#scrollbar">Scrollbar</a></li>
+            <li class="toc-h3"><a href="#tooltip">Tooltip</a></li>
+            <li class="toc-h3"><a href="#popover">Popover</a></li>
+            <li class="toc-h3"><a href="#hint">Hint</a></li>
+            <li class="toc-h3"><a href="#tag">Tag</a></li>
+            <li class="toc-h3"><a href="#rating">Rating</a></li>
+            <li class="toc-h3"><a href="#leaderboard">Leaderboard</a></li>
+            <li class="toc-h3"><a href="#diff">Diff</a></li>
+            <li class="toc-h3"><a href="#editor">Editor</a></li>
+            <li class="toc-h3"><a href="#commandpalette">CommandPalette</a></li>
+            <li class="toc-h3"><a href="#modal">Modal</a></li>
+            <li class="toc-h3"><a href="#wordcloud">WordCloud</a></li>
+            <li class="toc-h3"><a href="#dashboard-examples">Dashboard Examples</a></li>
+            <li class="toc-h3"><a href="#dashboard-layout">Dashboard Layout</a></li>
+            <li class="toc-h3"><a href="#dashboard-charts">Dashboard Charts</a></li>
+            <li class="toc-h3"><a href="#dashboard-form">Dashboard Form</a></li>
+            <li class="toc-h3"><a href="#dashboard-nav">Dashboard Nav</a></li>
+            <li class="toc-h3"><a href="#dashboard-status">Dashboard Status</a></li>
+            <li class="toc-h3"><a href="#dashboard-text">Dashboard Text</a></li>
+            <li class="toc-h3"><a href="#dashboard-time">Dashboard Time</a></li>
+            <li class="toc-h3"><a href="#dashboard-ui">Dashboard UI</a></li>
+            <li class="toc-h3"><a href="#dashboard-complex">Dashboard Complex</a></li>
+            <li class="toc-h3"><a href="#dashboard-data">Dashboard Data</a></li>
+            <li class="toc-h3"><a href="#dashboard-devtools">Dashboard Devtools</a></li>
+            <li class="toc-h3"><a href="#dashboard-accordion-timeline">Dashboard Accordion Timeline</a></li>
+            <li class="toc-h3"><a href="#dashboard-media">Dashboard Media</a></li>
+            <li class="toc-h3"><a href="#dashboard-metrics">Dashboard Metrics</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Build dashboard-style terminal UIs with a column grid, constraint layout, ratio grid, data grid, tree views, modals, status bars, tabs, and plot/canvas rendering. Compose complex layouts from reusable components, and extend the whole system through the module/plugin layer. All motion is frame-driven — the library renders synchronously and the host supplies every frame, so a reduced-motion presentation is always reachable by holding the frames still.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-dashboard</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Dashboard\Layout\Grid\{StackedGrid, Options, ItemOptions};
 use SugarCraft\Dashboard\Components\Card\{Card, Text};
 
@@ -67,7 +324,7 @@ $grid-&gt;addItem(Card::titled(Text::new('3 alerts'), 'Alerts'), new ItemOptions
 $grid-&gt;setSize(100, 24);
 echo $grid-&gt;render();   // two bordered cards side by side; below 90 columns they stack</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>StackedGrid</strong><span>Column grid that splits width evenly (floor(width ÷ columns) per column) and stacks when narrow — gap and percentage sizing live in GridLayout.</span></div>
       <div class="feature"><strong>Frame</strong><span>Framed panel with border, title, and padding.</span></div>
@@ -82,7 +339,7 @@ echo $grid-&gt;render();   // two bordered cards side by side; below 90 columns 
       <div class="feature"><strong>Process rows</strong><span><code>ProcRowComposer</code> renders a btop process-list row (pid … mem, 5×1 cpu mini-graph on graph_bg, cpu%) with <code>DistanceFade</code> shading; <code>ProcGraphTracker</code> manages per-pid graphs.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">btop-style graphs &amp; meters</h3>
+    <h3 id="btop-style-graphs-meters" style="margin-top: 32px;">btop-style graphs &amp; meters</h3>
     <p>Ported from <a href="https://github.com/aristocratos/btop">aristocratos/btop</a> for candy-top; colour and quantization laws are byte-faithful to btop. Run <code>php examples/dual-sample-graph.php</code> for every family.</p>
     <pre class="code"><code class="language-php">use SugarCraft\Core\Util\Color;
 use SugarCraft\Dashboard\Plot\Braille\DualSampleGraph;
@@ -97,7 +354,7 @@ echo DualSampleGraph::new(12, 3)
 
 echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: true)-&gt;render(), "\n";</code></pre>
 
-    <h3 style="margin-top: 32px;">Showcase examples</h3>
+    <h3 id="showcase-examples" style="margin-top: 32px;">Showcase examples</h3>
     <div class="feature-grid">
       <div class="feature">
         <strong>Complex Dashboard</strong>
@@ -126,7 +383,7 @@ echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: t
       </div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-dashboard">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-dashboard/blob/master/README.md">Full README</a></li>
@@ -136,7 +393,7 @@ echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: t
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Layout\Grid\StackedGrid</td><td>__construct(Options = new Options())</td><td>Column grid; columns stack vertically below the narrow breakpoint (90 cells)</td></tr>
@@ -156,760 +413,762 @@ echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: t
 <tr><td>Plot\DistanceFade</td><td>ramp() / distance() / fadeIndex() / fadeColor() / metricPosition() / metricColor() / flatMetricColor() / metricValues()</td><td>btop proc-list distance fade</td></tr>
 <tr><td>Plot\ProcRow\ProcRowComposer</td><td>static new(width) / withColumns() / withPalette() / withProcColors() / withProcGradient() / withFamily() / row(ProcRow, row, selected, selectMax, ?graph, followed, ?profile)</td><td>One btop process-list row; <code>ProcRow</code>, <code>ProcColumns</code>, <code>ProcRowPalette</code>, <code>ProcGraphTracker</code> supply data, layout, colours and mini-graphs</td></tr>
 </table>
+    </div>
   </div>
 </section>
 
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs for the library's examples. Regenerated automatically on every push that touches the source.</p>
 
-        <h3 style="margin-top: 32px;">Layout &amp; Structure</h3>
+        <h3 id="layout-structure" style="margin-top: 32px;">Layout &amp; Structure</h3>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stacked-grid.gif" alt="StackedGrid" onerror="this.parentElement.style.display='none'">
-                <h3>StackedGrid</h3>
+                <h3 id="stackedgrid">StackedGrid</h3>
                 <span class="demo-caption">Multi-column stacked grid layout.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/grid-layout.gif" alt="GridLayout" onerror="this.parentElement.style.display='none'">
-                <h3>GridLayout</h3>
+                <h3 id="gridlayout">GridLayout</h3>
                 <span class="demo-caption">CSS Grid-style layout.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/flex-layout.gif" alt="FlexLayout" onerror="this.parentElement.style.display='none'">
-                <h3>FlexLayout</h3>
+                <h3 id="flexlayout">FlexLayout</h3>
                 <span class="demo-caption">Flexbox-style layout.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/vstack.gif" alt="VStack" onerror="this.parentElement.style.display='none'">
-                <h3>VStack</h3>
+                <h3 id="vstack">VStack</h3>
                 <span class="demo-caption">Vertical stack with alignment.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/hstack.gif" alt="HStack" onerror="this.parentElement.style.display='none'">
-                <h3>HStack</h3>
+                <h3 id="hstack">HStack</h3>
                 <span class="demo-caption">Horizontal stack with spacing.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/zstack.gif" alt="ZStack" onerror="this.parentElement.style.display='none'">
-                <h3>ZStack</h3>
+                <h3 id="zstack">ZStack</h3>
                 <span class="demo-caption">Layered stack.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stack.gif" alt="Stack" onerror="this.parentElement.style.display='none'">
-                <h3>Stack</h3>
+                <h3 id="stack">Stack</h3>
                 <span class="demo-caption">Basic vertical stack.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/frame.gif" alt="Frame" onerror="this.parentElement.style.display='none'">
-                <h3>Frame</h3>
+                <h3 id="frame">Frame</h3>
                 <span class="demo-caption">Bordered frame with title.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/panel.gif" alt="Panel" onerror="this.parentElement.style.display='none'">
-                <h3>Panel</h3>
+                <h3 id="panel">Panel</h3>
                 <span class="demo-caption">Panel with header/footer.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/card.gif" alt="Card" onerror="this.parentElement.style.display='none'">
-                <h3>Card</h3>
+                <h3 id="card">Card</h3>
                 <span class="demo-caption">Card container component.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/divider.gif" alt="Divider" onerror="this.parentElement.style.display='none'">
-                <h3>Divider</h3>
+                <h3 id="divider">Divider</h3>
                 <span class="demo-caption">Horizontal or vertical divider.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/box-drawing.gif" alt="BoxDrawing" onerror="this.parentElement.style.display='none'">
-                <h3>BoxDrawing</h3>
+                <h3 id="boxdrawing">BoxDrawing</h3>
                 <span class="demo-caption">Unicode box-drawing frame.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/border-text.gif" alt="BorderText" onerror="this.parentElement.style.display='none'">
-                <h3>BorderText</h3>
+                <h3 id="bordertext">BorderText</h3>
                 <span class="demo-caption">Text with ASCII border.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/spacer.gif" alt="Spacer" onerror="this.parentElement.style.display='none'">
-                <h3>Spacer</h3>
+                <h3 id="spacer">Spacer</h3>
                 <span class="demo-caption">Empty space filler.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/split.gif" alt="Split" onerror="this.parentElement.style.display='none'">
-                <h3>Split</h3>
+                <h3 id="split">Split</h3>
                 <span class="demo-caption">Split layout.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/center.gif" alt="Center" onerror="this.parentElement.style.display='none'">
-                <h3>Center</h3>
+                <h3 id="center">Center</h3>
                 <span class="demo-caption">Centered content.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/cover.gif" alt="Cover" onerror="this.parentElement.style.display='none'">
-                <h3>Cover</h3>
+                <h3 id="cover">Cover</h3>
                 <span class="demo-caption">Cover layout.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/header.gif" alt="Header" onerror="this.parentElement.style.display='none'">
-                <h3>Header</h3>
+                <h3 id="header">Header</h3>
                 <span class="demo-caption">Page header.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/footer.gif" alt="Footer" onerror="this.parentElement.style.display='none'">
-                <h3>Footer</h3>
+                <h3 id="footer">Footer</h3>
                 <span class="demo-caption">Page footer.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/window.gif" alt="Window" onerror="this.parentElement.style.display='none'">
-                <h3>Window</h3>
+                <h3 id="window">Window</h3>
                 <span class="demo-caption">Window frame.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/drawer.gif" alt="Drawer" onerror="this.parentElement.style.display='none'">
-                <h3>Drawer</h3>
+                <h3 id="drawer">Drawer</h3>
                 <span class="demo-caption">Drawer panel.</span>
             </div>
         </div>
 
-        <h3 style="margin-top: 32px;">Charts</h3>
+        <h3 id="charts" style="margin-top: 32px;">Charts</h3>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/chart.gif" alt="Chart" onerror="this.parentElement.style.display='none'">
-                <h3>Chart</h3>
+                <h3 id="chart">Chart</h3>
                 <span class="demo-caption">Bar/line chart with axes.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/area-chart.gif" alt="AreaChart" onerror="this.parentElement.style.display='none'">
-                <h3>AreaChart</h3>
+                <h3 id="areachart">AreaChart</h3>
                 <span class="demo-caption">Area chart for time series.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/bar.gif" alt="Bar" onerror="this.parentElement.style.display='none'">
-                <h3>Bar</h3>
+                <h3 id="bar">Bar</h3>
                 <span class="demo-caption">Horizontal status bar.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/donut.gif" alt="Donut" onerror="this.parentElement.style.display='none'">
-                <h3>Donut</h3>
+                <h3 id="donut">Donut</h3>
                 <span class="demo-caption">Donut chart.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/gauge.gif" alt="Gauge" onerror="this.parentElement.style.display='none'">
-                <h3>Gauge</h3>
+                <h3 id="gauge">Gauge</h3>
                 <span class="demo-caption">Horizontal gauge.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/gauge-chart.gif" alt="GaugeChart" onerror="this.parentElement.style.display='none'">
-                <h3>GaugeChart</h3>
+                <h3 id="gaugechart">GaugeChart</h3>
                 <span class="demo-caption">Circular gauge chart.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/gauge-circle.gif" alt="GaugeCircle" onerror="this.parentElement.style.display='none'">
-                <h3>GaugeCircle</h3>
+                <h3 id="gaugecircle">GaugeCircle</h3>
                 <span class="demo-caption">Circular gauge visualization.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/heatmap.gif" alt="Heatmap" onerror="this.parentElement.style.display='none'">
-                <h3>Heatmap</h3>
+                <h3 id="heatmap">Heatmap</h3>
                 <span class="demo-caption">Heat map visualization.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/radar-chart.gif" alt="RadarChart" onerror="this.parentElement.style.display='none'">
-                <h3>RadarChart</h3>
+                <h3 id="radarchart">RadarChart</h3>
                 <span class="demo-caption">Radar/spider chart.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/bubble.gif" alt="Bubble" onerror="this.parentElement.style.display='none'">
-                <h3>Bubble</h3>
+                <h3 id="bubble">Bubble</h3>
                 <span class="demo-caption">Bubble chart.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/bullet.gif" alt="Bullet" onerror="this.parentElement.style.display='none'">
-                <h3>Bullet</h3>
+                <h3 id="bullet">Bullet</h3>
                 <span class="demo-caption">Bullet chart.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline.gif" alt="Sparkline" onerror="this.parentElement.style.display='none'">
-                <h3>Sparkline</h3>
+                <h3 id="sparkline">Sparkline</h3>
                 <span class="demo-caption">Inline sparkline chart.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline-bar.gif" alt="SparklineBar" onerror="this.parentElement.style.display='none'">
-                <h3>SparklineBar</h3>
+                <h3 id="sparklinebar">SparklineBar</h3>
                 <span class="demo-caption">Bar-style sparkline.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sparkline-area.gif" alt="SparklineArea" onerror="this.parentElement.style.display='none'">
-                <h3>SparklineArea</h3>
+                <h3 id="sparklinearea">SparklineArea</h3>
                 <span class="demo-caption">Area-style sparkline.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/spark-area.gif" alt="SparkArea" onerror="this.parentElement.style.display='none'">
-                <h3>SparkArea</h3>
+                <h3 id="sparkarea">SparkArea</h3>
                 <span class="demo-caption">Spark area chart.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/funnel-chart.gif" alt="FunnelChart" onerror="this.parentElement.style.display='none'">
-                <h3>FunnelChart</h3>
+                <h3 id="funnelchart">FunnelChart</h3>
                 <span class="demo-caption">Funnel chart.</span>
             </div>
         </div>
 
-        <h3 style="margin-top: 32px;">Form &amp; Input</h3>
+        <h3 id="form-input" style="margin-top: 32px;">Form &amp; Input</h3>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/input.gif" alt="Input" onerror="this.parentElement.style.display='none'">
-                <h3>Input</h3>
+                <h3 id="input">Input</h3>
                 <span class="demo-caption">Text input field.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/textarea.gif" alt="Textarea" onerror="this.parentElement.style.display='none'">
-                <h3>Textarea</h3>
+                <h3 id="textarea">Textarea</h3>
                 <span class="demo-caption">Multi-line text area.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/select.gif" alt="Select" onerror="this.parentElement.style.display='none'">
-                <h3>Select</h3>
+                <h3 id="select">Select</h3>
                 <span class="demo-caption">Dropdown select.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/checkbox.gif" alt="Checkbox" onerror="this.parentElement.style.display='none'">
-                <h3>Checkbox</h3>
+                <h3 id="checkbox">Checkbox</h3>
                 <span class="demo-caption">Checkbox group.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/radio.gif" alt="Radio" onerror="this.parentElement.style.display='none'">
-                <h3>Radio</h3>
+                <h3 id="radio">Radio</h3>
                 <span class="demo-caption">Radio button.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/slider.gif" alt="Slider" onerror="this.parentElement.style.display='none'">
-                <h3>Slider</h3>
+                <h3 id="slider">Slider</h3>
                 <span class="demo-caption">Slider control.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/toggle.gif" alt="Toggle" onerror="this.parentElement.style.display='none'">
-                <h3>Toggle</h3>
+                <h3 id="toggle">Toggle</h3>
                 <span class="demo-caption">Toggle switch.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/switch-component.gif" alt="Switch" onerror="this.parentElement.style.display='none'">
-                <h3>Switch</h3>
+                <h3 id="switch">Switch</h3>
                 <span class="demo-caption">Switch component.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/chip.gif" alt="Chip" onerror="this.parentElement.style.display='none'">
-                <h3>Chip</h3>
+                <h3 id="chip">Chip</h3>
                 <span class="demo-caption">Chip/tag component.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/chip-group.gif" alt="ChipGroup" onerror="this.parentElement.style.display='none'">
-                <h3>ChipGroup</h3>
+                <h3 id="chipgroup">ChipGroup</h3>
                 <span class="demo-caption">Group of chips.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/label.gif" alt="Label" onerror="this.parentElement.style.display='none'">
-                <h3>Label</h3>
+                <h3 id="label">Label</h3>
                 <span class="demo-caption">Form label.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/combo-box.gif" alt="ComboBox" onerror="this.parentElement.style.display='none'">
-                <h3>ComboBox</h3>
+                <h3 id="combobox">ComboBox</h3>
                 <span class="demo-caption">Combo box.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/date-picker.gif" alt="DatePicker" onerror="this.parentElement.style.display='none'">
-                <h3>DatePicker</h3>
+                <h3 id="datepicker">DatePicker</h3>
                 <span class="demo-caption">Date picker.</span>
             </div>
         </div>
 
-        <h3 style="margin-top: 32px;">Navigation</h3>
+        <h3 id="navigation" style="margin-top: 32px;">Navigation</h3>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tabs.gif" alt="Tabs" onerror="this.parentElement.style.display='none'">
-                <h3>Tabs</h3>
+                <h3 id="tabs">Tabs</h3>
                 <span class="demo-caption">Tabbed interface.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tabs-vertical.gif" alt="TabsVertical" onerror="this.parentElement.style.display='none'">
-                <h3>TabsVertical</h3>
+                <h3 id="tabsvertical">TabsVertical</h3>
                 <span class="demo-caption">Vertical tab navigation.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/navbar.gif" alt="Navbar" onerror="this.parentElement.style.display='none'">
-                <h3>Navbar</h3>
+                <h3 id="navbar">Navbar</h3>
                 <span class="demo-caption">Navigation bar.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/sidebar.gif" alt="Sidebar" onerror="this.parentElement.style.display='none'">
-                <h3>Sidebar</h3>
+                <h3 id="sidebar">Sidebar</h3>
                 <span class="demo-caption">Sidebar navigation.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/breadcrumb.gif" alt="Breadcrumb" onerror="this.parentElement.style.display='none'">
-                <h3>Breadcrumb</h3>
+                <h3 id="breadcrumb">Breadcrumb</h3>
                 <span class="demo-caption">Breadcrumb navigation.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/menu.gif" alt="Menu" onerror="this.parentElement.style.display='none'">
-                <h3>Menu</h3>
+                <h3 id="menu">Menu</h3>
                 <span class="demo-caption">Menu component.</span>
             </div>
         </div>
 
-        <h3 style="margin-top: 32px;">Feedback</h3>
+        <h3 id="feedback" style="margin-top: 32px;">Feedback</h3>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/alert.gif" alt="Alert" onerror="this.parentElement.style.display='none'">
-                <h3>Alert</h3>
+                <h3 id="alert">Alert</h3>
                 <span class="demo-caption">Alert/message box.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/toast.gif" alt="Toast" onerror="this.parentElement.style.display='none'">
-                <h3>Toast</h3>
+                <h3 id="toast">Toast</h3>
                 <span class="demo-caption">Toast message.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/notification.gif" alt="Notification" onerror="this.parentElement.style.display='none'">
-                <h3>Notification</h3>
+                <h3 id="notification">Notification</h3>
                 <span class="demo-caption">Toast notification.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/spinner.gif" alt="Spinner" onerror="this.parentElement.style.display='none'">
-                <h3>Spinner</h3>
+                <h3 id="spinner">Spinner</h3>
                 <span class="demo-caption">Loading spinner.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress.gif" alt="Progress" onerror="this.parentElement.style.display='none'">
-                <h3>Progress</h3>
+                <h3 id="progress">Progress</h3>
                 <span class="demo-caption">Progress indicator.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress-bar.gif" alt="ProgressBar" onerror="this.parentElement.style.display='none'">
-                <h3>ProgressBar</h3>
+                <h3 id="progressbar">ProgressBar</h3>
                 <span class="demo-caption">Progress bar.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/progress-ring.gif" alt="ProgressRing" onerror="this.parentElement.style.display='none'">
-                <h3>ProgressRing</h3>
+                <h3 id="progressring">ProgressRing</h3>
                 <span class="demo-caption">Circular progress indicator.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/nprogress.gif" alt="NProgress" onerror="this.parentElement.style.display='none'">
-                <h3>NProgress</h3>
+                <h3 id="nprogress">NProgress</h3>
                 <span class="demo-caption">npm-style progress bar.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/loading-text.gif" alt="LoadingText" onerror="this.parentElement.style.display='none'">
-                <h3>LoadingText</h3>
+                <h3 id="loadingtext">LoadingText</h3>
                 <span class="demo-caption">Animated loading text.</span>
             </div>
         </div>
 
-        <h3 style="margin-top: 32px;">Data Display</h3>
+        <h3 id="data-display" style="margin-top: 32px;">Data Display</h3>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/table-bordered.gif" alt="TableBordered" onerror="this.parentElement.style.display='none'">
-                <h3>TableBordered</h3>
+                <h3 id="tablebordered">TableBordered</h3>
                 <span class="demo-caption">Bordered table.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/table-zebra.gif" alt="TableZebra" onerror="this.parentElement.style.display='none'">
-                <h3>TableZebra</h3>
+                <h3 id="tablezebra">TableZebra</h3>
                 <span class="demo-caption">Zebra-striped table.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/list-component.gif" alt="List" onerror="this.parentElement.style.display='none'">
-                <h3>List</h3>
+                <h3 id="list">List</h3>
                 <span class="demo-caption">List renderer.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tree.gif" alt="Tree" onerror="this.parentElement.style.display='none'">
-                <h3>Tree</h3>
+                <h3 id="tree">Tree</h3>
                 <span class="demo-caption">Tree structure.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/metric.gif" alt="Metric" onerror="this.parentElement.style.display='none'">
-                <h3>Metric</h3>
+                <h3 id="metric">Metric</h3>
                 <span class="demo-caption">Metric display.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stat.gif" alt="Stat" onerror="this.parentElement.style.display='none'">
-                <h3>Stat</h3>
+                <h3 id="stat">Stat</h3>
                 <span class="demo-caption">Single stat display.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stats.gif" alt="Stats" onerror="this.parentElement.style.display='none'">
-                <h3>Stats</h3>
+                <h3 id="stats">Stats</h3>
                 <span class="demo-caption">Statistics display.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/metrics-grid.gif" alt="MetricsGrid" onerror="this.parentElement.style.display='none'">
-                <h3>MetricsGrid</h3>
+                <h3 id="metricsgrid">MetricsGrid</h3>
                 <span class="demo-caption">Grid of metrics.</span>
             </div>
         </div>
 
-        <h3 style="margin-top: 32px;">Media</h3>
+        <h3 id="media" style="margin-top: 32px;">Media</h3>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/image.gif" alt="Image" onerror="this.parentElement.style.display='none'">
-                <h3>Image</h3>
+                <h3 id="image">Image</h3>
                 <span class="demo-caption">Image display.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/picture.gif" alt="Picture" onerror="this.parentElement.style.display='none'">
-                <h3>Picture</h3>
+                <h3 id="picture">Picture</h3>
                 <span class="demo-caption">Picture frame.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/avatar.gif" alt="Avatar" onerror="this.parentElement.style.display='none'">
-                <h3>Avatar</h3>
+                <h3 id="avatar">Avatar</h3>
                 <span class="demo-caption">User avatar.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/avatar-group.gif" alt="AvatarGroup" onerror="this.parentElement.style.display='none'">
-                <h3>AvatarGroup</h3>
+                <h3 id="avatargroup">AvatarGroup</h3>
                 <span class="demo-caption">Group of avatars.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/icon.gif" alt="Icon" onerror="this.parentElement.style.display='none'">
-                <h3>Icon</h3>
+                <h3 id="icon">Icon</h3>
                 <span class="demo-caption">Icon display.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/qr-code.gif" alt="QRCode" onerror="this.parentElement.style.display='none'">
-                <h3>QRCode</h3>
+                <h3 id="qrcode">QRCode</h3>
                 <span class="demo-caption">QR code.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/barcode.gif" alt="Barcode" onerror="this.parentElement.style.display='none'">
-                <h3>Barcode</h3>
+                <h3 id="barcode">Barcode</h3>
                 <span class="demo-caption">Barcode.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/video.gif" alt="Video" onerror="this.parentElement.style.display='none'">
-                <h3>Video</h3>
+                <h3 id="video">Video</h3>
                 <span class="demo-caption">Video player.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/audio.gif" alt="Audio" onerror="this.parentElement.style.display='none'">
-                <h3>Audio</h3>
+                <h3 id="audio">Audio</h3>
                 <span class="demo-caption">Audio player.</span>
             </div>
         </div>
 
-        <h3 style="margin-top: 32px;">Text</h3>
+        <h3 id="text" style="margin-top: 32px;">Text</h3>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/text.gif" alt="Text" onerror="this.parentElement.style.display='none'">
-                <h3>Text</h3>
+                <h3 id="text-2">Text</h3>
                 <span class="demo-caption">Word-wrapped text.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/paragraph.gif" alt="Paragraph" onerror="this.parentElement.style.display='none'">
-                <h3>Paragraph</h3>
+                <h3 id="paragraph">Paragraph</h3>
                 <span class="demo-caption">Paragraph text.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/code.gif" alt="Code" onerror="this.parentElement.style.display='none'">
-                <h3>Code</h3>
+                <h3 id="code">Code</h3>
                 <span class="demo-caption">Code block.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/kbd.gif" alt="Kbd" onerror="this.parentElement.style.display='none'">
-                <h3>Kbd</h3>
+                <h3 id="kbd">Kbd</h3>
                 <span class="demo-caption">Keyboard key display.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/emoji.gif" alt="Emoji" onerror="this.parentElement.style.display='none'">
-                <h3>Emoji</h3>
+                <h3 id="emoji">Emoji</h3>
                 <span class="demo-caption">Emoji display.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/figlet-text.gif" alt="FigletText" onerror="this.parentElement.style.display='none'">
-                <h3>FigletText</h3>
+                <h3 id="figlettext">FigletText</h3>
                 <span class="demo-caption">ASCII art text.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/ascii-banner.gif" alt="ASCIIBanner" onerror="this.parentElement.style.display='none'">
-                <h3>ASCIIBanner</h3>
+                <h3 id="asciibanner">ASCIIBanner</h3>
                 <span class="demo-caption">ASCII banner text.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/highlight.gif" alt="Highlight" onerror="this.parentElement.style.display='none'">
-                <h3>Highlight</h3>
+                <h3 id="highlight">Highlight</h3>
                 <span class="demo-caption">Syntax highlighted code.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/hex-dump.gif" alt="HexDump" onerror="this.parentElement.style.display='none'">
-                <h3>HexDump</h3>
+                <h3 id="hexdump">HexDump</h3>
                 <span class="demo-caption">Hex dump viewer.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dot-matrix.gif" alt="DotMatrix" onerror="this.parentElement.style.display='none'">
-                <h3>DotMatrix</h3>
+                <h3 id="dotmatrix">DotMatrix</h3>
                 <span class="demo-caption">Dot matrix display.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/pictogram.gif" alt="Pictogram" onerror="this.parentElement.style.display='none'">
-                <h3>Pictogram</h3>
+                <h3 id="pictogram">Pictogram</h3>
                 <span class="demo-caption">Pictogram display.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/boxer.gif" alt="Boxer" onerror="this.parentElement.style.display='none'">
-                <h3>Boxer</h3>
+                <h3 id="boxer">Boxer</h3>
                 <span class="demo-caption">Tree-based layout splitting — a region subdivided by ratio down to content leaves.</span>
             </div>
         </div>
 
-        <h3 style="margin-top: 32px;">Status</h3>
+        <h3 id="status" style="margin-top: 32px;">Status</h3>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/clock.gif" alt="Clock" onerror="this.parentElement.style.display='none'">
-                <h3>Clock</h3>
+                <h3 id="clock">Clock</h3>
                 <span class="demo-caption">Digital clock.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/timer.gif" alt="Timer" onerror="this.parentElement.style.display='none'">
-                <h3>Timer</h3>
+                <h3 id="timer">Timer</h3>
                 <span class="demo-caption">Countdown timer.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/stopwatch.gif" alt="Stopwatch" onerror="this.parentElement.style.display='none'">
-                <h3>Stopwatch</h3>
+                <h3 id="stopwatch">Stopwatch</h3>
                 <span class="demo-caption">Stopwatch.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/calendar.gif" alt="Calendar" onerror="this.parentElement.style.display='none'">
-                <h3>Calendar</h3>
+                <h3 id="calendar">Calendar</h3>
                 <span class="demo-caption">Calendar view.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/terminal.gif" alt="Terminal" onerror="this.parentElement.style.display='none'">
-                <h3>Terminal</h3>
+                <h3 id="terminal">Terminal</h3>
                 <span class="demo-caption">Terminal emulator.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/log-viewer.gif" alt="LogViewer" onerror="this.parentElement.style.display='none'">
-                <h3>LogViewer</h3>
+                <h3 id="logviewer">LogViewer</h3>
                 <span class="demo-caption">Log file viewer.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/log.gif" alt="Log" onerror="this.parentElement.style.display='none'">
-                <h3>Log</h3>
+                <h3 id="log">Log</h3>
                 <span class="demo-caption">Log entry.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/console.gif" alt="Console" onerror="this.parentElement.style.display='none'">
-                <h3>Console</h3>
+                <h3 id="console">Console</h3>
                 <span class="demo-caption">Terminal console.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/state.gif" alt="State" onerror="this.parentElement.style.display='none'">
-                <h3>State</h3>
+                <h3 id="state">State</h3>
                 <span class="demo-caption">Application state.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/focus.gif" alt="Focus" onerror="this.parentElement.style.display='none'">
-                <h3>Focus</h3>
+                <h3 id="focus">Focus</h3>
                 <span class="demo-caption">Focus state management.</span>
             </div>
         </div>
 
-        <h3 style="margin-top: 32px;">Advanced</h3>
+        <h3 id="advanced" style="margin-top: 32px;">Advanced</h3>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/accordion.gif" alt="Accordion" onerror="this.parentElement.style.display='none'">
-                <h3>Accordion</h3>
+                <h3 id="accordion">Accordion</h3>
                 <span class="demo-caption">Accordion/collapsible.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/activity-feed.gif" alt="ActivityFeed" onerror="this.parentElement.style.display='none'">
-                <h3>ActivityFeed</h3>
+                <h3 id="activityfeed">ActivityFeed</h3>
                 <span class="demo-caption">Activity feed.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/badge.gif" alt="Badge" onerror="this.parentElement.style.display='none'">
-                <h3>Badge</h3>
+                <h3 id="badge">Badge</h3>
                 <span class="demo-caption">Badge/tag component.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/testimonial.gif" alt="Testimonial" onerror="this.parentElement.style.display='none'">
-                <h3>Testimonial</h3>
+                <h3 id="testimonial">Testimonial</h3>
                 <span class="demo-caption">Testimonial quote.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/profile.gif" alt="Profile" onerror="this.parentElement.style.display='none'">
-                <h3>Profile</h3>
+                <h3 id="profile">Profile</h3>
                 <span class="demo-caption">User profile card.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/cta.gif" alt="CTA" onerror="this.parentElement.style.display='none'">
-                <h3>CTA</h3>
+                <h3 id="cta">CTA</h3>
                 <span class="demo-caption">Call-to-action.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/jumbotron.gif" alt="Jumbotron" onerror="this.parentElement.style.display='none'">
-                <h3>Jumbotron</h3>
+                <h3 id="jumbotron">Jumbotron</h3>
                 <span class="demo-caption">Jumbotron hero section.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/empty-state.gif" alt="EmptyState" onerror="this.parentElement.style.display='none'">
-                <h3>EmptyState</h3>
+                <h3 id="emptystate">EmptyState</h3>
                 <span class="demo-caption">Empty state placeholder.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/skeleton.gif" alt="Skeleton" onerror="this.parentElement.style.display='none'">
-                <h3>Skeleton</h3>
+                <h3 id="skeleton">Skeleton</h3>
                 <span class="demo-caption">Loading skeleton.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/marquee.gif" alt="Marquee" onerror="this.parentElement.style.display='none'">
-                <h3>Marquee</h3>
+                <h3 id="marquee">Marquee</h3>
                 <span class="demo-caption">Scrolling marquee text.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/scrollbar.gif" alt="Scrollbar" onerror="this.parentElement.style.display='none'">
-                <h3>Scrollbar</h3>
+                <h3 id="scrollbar">Scrollbar</h3>
                 <span class="demo-caption">Custom scrollbar.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tooltip.gif" alt="Tooltip" onerror="this.parentElement.style.display='none'">
-                <h3>Tooltip</h3>
+                <h3 id="tooltip">Tooltip</h3>
                 <span class="demo-caption">Tooltip popup.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/popover.gif" alt="Popover" onerror="this.parentElement.style.display='none'">
-                <h3>Popover</h3>
+                <h3 id="popover">Popover</h3>
                 <span class="demo-caption">Popover content.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/hint.gif" alt="Hint" onerror="this.parentElement.style.display='none'">
-                <h3>Hint</h3>
+                <h3 id="hint">Hint</h3>
                 <span class="demo-caption">Hint component.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/tag.gif" alt="Tag" onerror="this.parentElement.style.display='none'">
-                <h3>Tag</h3>
+                <h3 id="tag">Tag</h3>
                 <span class="demo-caption">Tag component.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/rating.gif" alt="Rating" onerror="this.parentElement.style.display='none'">
-                <h3>Rating</h3>
+                <h3 id="rating">Rating</h3>
                 <span class="demo-caption">Star rating display.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/leaderboard.gif" alt="Leaderboard" onerror="this.parentElement.style.display='none'">
-                <h3>Leaderboard</h3>
+                <h3 id="leaderboard">Leaderboard</h3>
                 <span class="demo-caption">Leaderboard display.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/diff.gif" alt="Diff" onerror="this.parentElement.style.display='none'">
-                <h3>Diff</h3>
+                <h3 id="diff">Diff</h3>
                 <span class="demo-caption">Diff view.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/editor.gif" alt="Editor" onerror="this.parentElement.style.display='none'">
-                <h3>Editor</h3>
+                <h3 id="editor">Editor</h3>
                 <span class="demo-caption">Text editor.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/command-palette.gif" alt="CommandPalette" onerror="this.parentElement.style.display='none'">
-                <h3>CommandPalette</h3>
+                <h3 id="commandpalette">CommandPalette</h3>
                 <span class="demo-caption">Command palette.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/modal.gif" alt="Modal" onerror="this.parentElement.style.display='none'">
-                <h3>Modal</h3>
+                <h3 id="modal">Modal</h3>
                 <span class="demo-caption">Modal dialog.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/word-cloud.gif" alt="WordCloud" onerror="this.parentElement.style.display='none'">
-                <h3>WordCloud</h3>
+                <h3 id="wordcloud">WordCloud</h3>
                 <span class="demo-caption">Word cloud visualization.</span>
             </div>
         </div>
 
-        <h3 style="margin-top: 32px;">Dashboard Examples</h3>
+        <h3 id="dashboard-examples" style="margin-top: 32px;">Dashboard Examples</h3>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-layout.gif" alt="Dashboard Layout" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard Layout</h3>
+                <h3 id="dashboard-layout">Dashboard Layout</h3>
                 <span class="demo-caption">Layout containers demo.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-charts.gif" alt="Dashboard Charts" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard Charts</h3>
+                <h3 id="dashboard-charts">Dashboard Charts</h3>
                 <span class="demo-caption">Charts demo.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-form.gif" alt="Dashboard Form" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard Form</h3>
+                <h3 id="dashboard-form">Dashboard Form</h3>
                 <span class="demo-caption">Form demo.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-nav.gif" alt="Dashboard Nav" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard Nav</h3>
+                <h3 id="dashboard-nav">Dashboard Nav</h3>
                 <span class="demo-caption">Navigation demo.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-status.gif" alt="Dashboard Status" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard Status</h3>
+                <h3 id="dashboard-status">Dashboard Status</h3>
                 <span class="demo-caption">Status indicators demo.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-text.gif" alt="Dashboard Text" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard Text</h3>
+                <h3 id="dashboard-text">Dashboard Text</h3>
                 <span class="demo-caption">Text components demo.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-time.gif" alt="Dashboard Time" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard Time</h3>
+                <h3 id="dashboard-time">Dashboard Time</h3>
                 <span class="demo-caption">Time components demo.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-ui.gif" alt="Dashboard UI" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard UI</h3>
+                <h3 id="dashboard-ui">Dashboard UI</h3>
                 <span class="demo-caption">UI components demo.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-complex.gif" alt="Dashboard Complex" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard Complex</h3>
+                <h3 id="dashboard-complex">Dashboard Complex</h3>
                 <span class="demo-caption">Complex layout demo.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-data.gif" alt="Dashboard Data" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard Data</h3>
+                <h3 id="dashboard-data">Dashboard Data</h3>
                 <span class="demo-caption">Data display demo.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-devtools.gif" alt="Dashboard Devtools" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard Devtools</h3>
+                <h3 id="dashboard-devtools">Dashboard Devtools</h3>
                 <span class="demo-caption">Devtools demo.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-accordion-timeline.gif" alt="Dashboard Accordion Timeline" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard Accordion Timeline</h3>
+                <h3 id="dashboard-accordion-timeline">Dashboard Accordion Timeline</h3>
                 <span class="demo-caption">Accordion and timeline components.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-media.gif" alt="Dashboard Media" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard Media</h3>
+                <h3 id="dashboard-media">Dashboard Media</h3>
                 <span class="demo-caption">Media components demo.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dashboard/.vhs/dashboard-metrics.gif" alt="Dashboard Metrics" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard Metrics</h3>
+                <h3 id="dashboard-metrics">Dashboard Metrics</h3>
                 <span class="demo-caption">Metrics display demo.</span>
             </div>
         </div>
     </div>
 </section>
+</main>
 
 <footer class="footer">
     <div class="container">
@@ -942,5 +1201,6 @@ echo Meter::new(0.62)-&gt;withWidth(20)-&gt;withGradient($stops, positionWise: t
     </div>
 </div>
 <script src="../js/search.js" defer></script>
+<script src="../js/nav.js" defer></script>
 </body>
 </html>

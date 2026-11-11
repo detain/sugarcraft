@@ -94,7 +94,16 @@ final class WindowsBashSmokeTest extends TestCase
         ]);
         $elapsed = microtime(true) - $started;
 
-        self::assertTrue($result->isError(), 'a timed-out run answers as an error');
+        // The message carries the FULL result because the runner-side shape is the
+        // only place this leg ever really runs (LANE-CC 2026-11-11): the first CI
+        // red said only 'false is true', hiding whether bash died early, answered
+        // exit 0 without the timeout marker, or streamed something else entirely.
+        // Every assertion below stands exactly as written; this changes what the
+        // log prints, never what the test demands.
+        self::assertTrue(
+            $result->isError(),
+            'a timed-out run answers as an error -- got: [' . $result->content() . ']',
+        );
         self::assertStringContainsString('[timed out after 2 s', $result->content());
         self::assertStringContainsString('process group were killed', $result->content());
         self::assertLessThan(

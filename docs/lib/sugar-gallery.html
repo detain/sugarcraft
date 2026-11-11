@@ -12,31 +12,123 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-gallery.html">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
 <link rel="icon" type="image/png" href="../img/icons/sugar-gallery.png">
 <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/search.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner">
-    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<!--nav:start-->
+<nav class="nav" aria-label="Main navigation"><div class="nav-inner">
+    <a class="brand" href="/"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
     <div class="nav-links">
         <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
             <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <span>Search</span>
         </button>
-        <a href="../#libraries">Libraries</a>
-        <a href="../#apps">Apps</a>
-        <a href="../#demos">Demos</a>
-        <a href="../#quickstart">Quickstart</a>
-        <a href="../compare.html">Compare</a>
-        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a>
+        <ul class="nav-items">
+            <li class="nav-item"><a href="/">Home</a></li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Libraries <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/libraries.html">All libraries →</a>
+                    <a href="/lib/sugar-core.html">sugar-core</a>
+                    <a href="/lib/sugar-style.html">sugar-style</a>
+                    <a href="/lib/sugar-cellbuffer.html">sugar-cellbuffer</a>
+                    <a href="/lib/sugar-async.html">sugar-async</a>
+                    <a href="/lib/sugar-spring.html">sugar-spring</a>
+                    <a href="/lib/sugar-mouse.html">sugar-mouse</a>
+                    <a href="/lib/sugar-widgets.html">sugar-widgets</a>
+                    <a href="/lib/sugar-charts.html">sugar-charts</a>
+                    <a href="/lib/sugar-forms.html">sugar-forms</a>
+                    <a href="/lib/sugar-markdown.html">sugar-markdown</a>
+                    <a href="/lib/sugar-cli.html">sugar-cli</a>
+                    <a href="/lib/sugar-ssh-server.html">sugar-ssh-server</a>
+                    <a href="/lib/sugar-metrics.html">sugar-metrics</a>
+                    <a href="/lib/sugar-log.html">sugar-log</a>
+                    <a href="/lib/sugar-image.html">sugar-image</a>
+                    <a href="/lib/sugar-animation.html">sugar-animation</a>
+                    <a href="/lib/sugar-video.html">sugar-video</a>
+                    <a href="/lib/sugar-colorprofile.html">sugar-colorprofile</a>
+                    <a href="/lib/sugar-ansi-parser.html">sugar-ansi-parser</a>
+                    <a href="/lib/sugar-vterm.html">sugar-vterm</a>
+                    <a href="/lib/sugar-pty.html">sugar-pty</a>
+                    <a href="/lib/sugar-focus.html">sugar-focus</a>
+                    <a href="/lib/sugar-gallery.html">sugar-gallery</a>
+                    <a href="/lib/sugar-treelist.html">sugar-treelist</a>
+                    <a href="/lib/sugar-constraints.html">sugar-constraints</a>
+                    <a href="/lib/sugar-panels.html">sugar-panels</a>
+                    <a href="/lib/sugar-overlay.html">sugar-overlay</a>
+                    <a href="/lib/sugar-navstack.html">sugar-navstack</a>
+                    <a href="/lib/sugar-dashboard.html">sugar-dashboard</a>
+                    <a href="/lib/sugar-quickpick.html">sugar-quickpick</a>
+                    <a href="/lib/sugar-input.html">sugar-input</a>
+                    <a href="/lib/sugar-fuzzy.html">sugar-fuzzy</a>
+                    <a href="/lib/sugar-flexbox.html">sugar-flexbox</a>
+                    <a href="/lib/sugar-toast.html">sugar-toast</a>
+                    <a href="/lib/sugar-datepicker.html">sugar-datepicker</a>
+                    <a href="/lib/sugar-readline.html">sugar-readline</a>
+                    <a href="/lib/sugar-table.html">sugar-table</a>
+                    <a href="/lib/sugar-diff.html">sugar-diff</a>
+                    <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
+                    <a href="/lib/sugar-testing.html">sugar-testing</a>
+                </div>
+            </li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Apps <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/apps.html">All apps →</a>
+                    <a href="/lib/candy-starter.html">candy-starter</a>
+                    <a href="/lib/candy-scriptui.html">candy-scriptui</a>
+                    <a href="/lib/candy-codeshot.html">candy-codeshot</a>
+                    <a href="/lib/candy-mdview.html">candy-mdview</a>
+                    <a href="/lib/candy-ansi-inspect.html">candy-ansi-inspect</a>
+                    <a href="/lib/candy-ssh-launcher.html">candy-ssh-launcher</a>
+                    <a href="/lib/candy-kv.html">candy-kv</a>
+                    <a href="/lib/candy-mail.html">candy-mail</a>
+                    <a href="/lib/candy-git-server.html">candy-git-server</a>
+                    <a href="/lib/candy-tetris.html">candy-tetris</a>
+                    <a href="/lib/candy-files.html">candy-files</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
+                    <a href="/lib/candy-code-web.html">candy-code-web</a>
+                    <a href="/lib/candy-vcr.html">candy-vcr</a>
+                    <a href="/lib/candy-git.html">candy-git</a>
+                    <a href="/lib/candy-sql.html">candy-sql</a>
+                    <a href="/lib/candy-codetime.html">candy-codetime</a>
+                    <a href="/lib/candy-minesweeper.html">candy-minesweeper</a>
+                    <a href="/lib/candy-gifview.html">candy-gifview</a>
+                    <a href="/lib/candy-image.html">candy-image</a>
+                    <a href="/lib/candy-top.html">candy-top</a>
+                    <a href="/lib/candy-flappy.html">candy-flappy</a>
+                </div>
+            </li>
+            <li class="nav-item nav-item-drop-right">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Docs <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop">
+                    <a href="/#architecture">Architecture</a>
+                    <a href="/#quickstart">Quickstart</a>
+                    <a href="/compare.html">Compare</a>
+                    <a href="/GETTING-STARTED.html">Getting Started</a>
+                    <a href="/GLOSSARY.html">Glossary</a>
+                    <a href="/KEYMAPS.html">Keymaps</a>
+                    <a href="/cookbook/index.html">Cookbook</a>
+                </div>
+            </li>
+            <li class="nav-item"><a href="/#demos">Demos</a></li>
+            <li class="nav-item"><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a></li>
+        </ul>
     </div>
 </div></nav>
+<!--nav:end-->
+
+<main id="main">
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries"><span aria-hidden="true">←</span> All 40 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 40 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-gallery.png" alt="" aria-hidden="true">
@@ -54,12 +146,29 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-gallery"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-gallery" alt="SugarGallery code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Browse-row widgets for media terminal UIs: a 2-D virtualized <strong>PosterGrid</strong> for large libraries, a horizontal <strong>Rail</strong> carousel for browse rows, and a single <strong>PosterCard</strong> tile. The grid is <em>sparse</em> — it knows the total item count up front but holds only the cards that have been fetched, keyed by their <strong>absolute index</strong>, so a 50,000-item library renders as cheaply as a 50-item one; missing indices draw as skeletons and only the rows inside the viewport are ever rendered. Paging is owner-driven: after every cursor move the owner reads <code>visibleRange()</code> (the absolute-index window now on screen — the terminal analogue of the web grid's <code>need-range</code> event) and splices the covering page back in with <code>withItems()</code>. The widgets are <strong>renderer-agnostic</strong>: a card holds <em>already-rendered</em> poster bytes (produce them however you like, e.g. <a href="sugar-image.html">sugar-image</a>), so this lib pulls in no image decoder. Original SugarCraft component — inspired by terminal list/viewport UX and web media-grid browsing.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#postergrid-virtualized-sparse-owner-paged">PosterGrid — virtualized, sparse, owner-paged</a></li>
+            <li class="toc-h3"><a href="#rail-horizontal-carousel">Rail — horizontal carousel</a></li>
+            <li class="toc-h3"><a href="#postercard-one-tile">PosterCard — one tile</a></li>
+            <li class="toc-h3"><a href="#behaviour">Behaviour</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#dependencies">Dependencies</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#postergrid-demo">PosterGrid demo</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Browse-row widgets for media terminal UIs: a 2-D virtualized <strong>PosterGrid</strong> for large libraries, a horizontal <strong>Rail</strong> carousel for browse rows, and a single <strong>PosterCard</strong> tile. The grid is <em>sparse</em> — it knows the total item count up front but holds only the cards that have been fetched, keyed by their <strong>absolute index</strong>, so a 50,000-item library renders as cheaply as a 50-item one; missing indices draw as skeletons and only the rows inside the viewport are ever rendered. Paging is owner-driven: after every cursor move the owner reads <code>visibleRange()</code> (the absolute-index window now on screen — the terminal analogue of the web grid's <code>need-range</code> event) and splices the covering page back in with <code>withItems()</code>. The widgets are <strong>renderer-agnostic</strong>: a card holds <em>already-rendered</em> poster bytes (produce them however you like, e.g. <a href="sugar-image.html">sugar-image</a>), so this lib pulls in no image decoder. Original SugarCraft component — inspired by terminal list/viewport UX and web media-grid browsing.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-gallery</code></pre>
 
-    <h3 style="margin-top: 32px;">PosterGrid — virtualized, sparse, owner-paged</h3>
+    <h3 id="postergrid-virtualized-sparse-owner-paged" style="margin-top: 32px;">PosterGrid — virtualized, sparse, owner-paged</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Gallery\PosterGrid;
 use SugarCraft\Gallery\PosterCard;
 
@@ -97,7 +206,7 @@ $frame = $grid->render(true, $zones);
 $clean = $zones->scan($frame);                 // strip markers, record bounds
 $zone  = $zones->anyInBounds($mouseMsg);       // → Zone|null — read $zone-&gt;id ("cell:42")</code></pre>
 
-    <h3 style="margin-top: 32px;">Rail — horizontal carousel</h3>
+    <h3 id="rail-horizontal-carousel" style="margin-top: 32px;">Rail — horizontal carousel</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Gallery\Rail;
 
 $rail = new Rail('Continue Watching', $cards);
@@ -106,7 +215,7 @@ echo $rail->render($railWidth, focused: true, cardWidth: 16, posterHeight: 9);</
 
     <p>The heading rides the same title guard a card uses (<code>AnsiGuard::stripControls()</code>) and both header lines are clamped to the rail width; the empty state is localised via <code>Lang::t('rail.empty')</code> (16-locale family in <code>lang/</code>). <code>moveCursor()</code> takes a delta — restore an arbitrary <code>(cursor, scroll)</code> pair by constructing <code>Rail</code> with its third and fourth arguments (a stale pair is clamped, not restored verbatim: scroll follows the cursor).</p>
 
-    <h3 style="margin-top: 32px;">PosterCard — one tile</h3>
+    <h3 id="postercard-one-tile" style="margin-top: 32px;">PosterCard — one tile</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Gallery\PosterCard;
 
 $card = new PosterCard(id: '42', title: 'The Matrix', posterUrl: $url);
@@ -117,7 +226,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 
     <p>Overlay posters (<code>withImage()</code>) draw as a single <code>U+E002</code>-range marker cell inside the reserved block — the image renderer paints the real graphics there, and the marker deliberately survives every text sweep (it lives outside the zone-sentinel window). Text-extraction paths (search, clipboard) therefore see an unassigned private-use glyph at that cell; sugar-core's <code>Sanitize::stripPrivateUse()</code> sweeps the whole block out of extracted text without touching the frame.</p>
 
-    <h3 style="margin-top: 32px;">Behaviour</h3>
+    <h3 id="behaviour" style="margin-top: 32px;">Behaviour</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Sparse & absolute-indexed</strong><span>The grid knows the <code>total()</code> up front but holds only fetched cards keyed by absolute index; indices with no card yet render as <code>░</code> skeleton placeholders.</span></div>
       <div class="feature"><strong>Failed is a state, not silence</strong><span>A cell whose last fetch failed is marked with <code>withFailed()</code>: it falls back to the plain skeleton and <code>hasPoster()</code> stays false, so a retry policy re-queues it. An empty grid renders nothing — <code>emptyMessage()</code> hands the owner the localised sentence to paint instead.</span></div>
@@ -130,7 +239,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
       <div class="feature"><strong>Immutable</strong><span>Every mutator returns a new grid / rail / card and leaves the receiver untouched, slotting into the immutable Model–Update–View pattern; a no-op move returns the receiver by identity.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Large media libraries</strong> — a browse grid over thousands of posters fetched lazily a page at a time.</li>
       <li><strong>Browse rows</strong> — horizontal Rail carousels (Continue Watching, per-library rows) with their own cursor and scroll.</li>
@@ -139,14 +248,14 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
       <li><strong>Mouse-clickable grids</strong> — wire sugar-mouse to resolve <code>cell:&lt;index&gt;</code> clicks back to items.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-gallery">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-gallery/blob/master/README.md">Full README</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-gallery/tree/master/tests">Test suite</a></li>
     </ul>
 
-    <h3 style="margin-top: 32px;">Dependencies</h3>
+    <h3 id="dependencies" style="margin-top: 32px;">Dependencies</h3>
     <ul>
       <li><a href="sugar-core.html">SugarCore</a> — <code>I18n\Lang</code> powers the localized notices and <code>Util\Width</code> measures every cell</li>
       <li><a href="sugar-style.html">SugarStyle</a> — <code>Layout::joinHorizontal*/joinVertical*</code> stitches cells, rows, and rails together</li>
@@ -156,7 +265,7 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>PosterGrid</td><td>static new(int $cardWidth, int $posterHeight, int $hSpacing = 2, int $vSpacing = 1): self</td><td>A new empty grid with the given card geometry</td></tr>
@@ -216,8 +325,25 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
 <tr><td>AnsiGuard</td><td>static stripSentinels(string $text): string</td><td>Surgically drop forged <code>U+E000/U+E001</code> zone sentinels (delegates to sugar-core <code>Sanitize::stripZoneSentinels()</code>) — anything handed to a zone-marking <code>Manager</code> must pass this sweep first; legitimate <code>U+E002</code>-and-up image markers survive untouched</td></tr>
 <tr><td>Lang</td><td>static t(string $key, array $params = []): string</td><td>i18n facade over the 16-locale <code>lang/</code> family — three keys today: <code>rail.empty</code> (the Rail heading's empty-state line), <code>card.failed</code> (a PosterCard in the failed-fetch state) and <code>grid.empty</code> (the empty PosterGrid message)</td></tr>
 </table>
+    </div>
   </div>
 </section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2 id="demos">Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of the flagship examples shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-gallery/.vhs/poster-grid.gif" alt="PosterGrid browsing rows" onerror="this.parentElement.style.display='none'">
+                <h3 id="postergrid-demo">PosterGrid demo</h3>
+                <span class="demo-caption">The virtualized grid paged through a large library: cursor moves, skeleton cells resolving into posters as pages splice in, and the Rail strip following the focused row.</span>
+            </div>
+        </div>
+    </div>
+</section>
+</main>
 
 <footer class="footer">
     <div class="container">
@@ -250,5 +376,6 @@ echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
     </div>
 </div>
 <script src="../js/search.js" defer></script>
+<script src="../js/nav.js" defer></script>
 </body>
 </html>

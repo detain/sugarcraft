@@ -65,6 +65,14 @@ use SugarCraft\Code\Support\FrontmatterKeyAudit;
  * {@see AgentStatusCommands::tree()}: indent marks the launcher, a vanished
  * launcher's children ride the top level flagged loudly, and forged cyclic
  * lineage cannot hang the walk. Command output only — no pane, no TUI state.
+ *
+ * A5 (RS-AGENT-A5) adds `handoff`, which runs BEFORE the manager gate like
+ * `tree` — it reads the worktree registry and asks git questions, neither
+ * of which needs a roster. The report leg answers what a finished agent's
+ * branch holds and whether merging it now would conflict; `--apply`
+ * performs the merge as pure plumbing onto a fresh `handoff/...` ref and
+ * is refused on the read-only surface. Fleet programs that today hand-
+ * merge ten finished lanes by eye get the decision data in one row set.
  */
 final class AgentsHostCommand implements HostCommand
 {
@@ -82,10 +90,12 @@ final class AgentsHostCommand implements HostCommand
         // disk, not the roster, so it answers whether or not a manager was
         // ever configured. `capabilities` (RS-AGENT-C4) is the same posture:
         // it reads and writes only the home-store manifests, and answers with
-        // an empty roster when no manager was configured. Any other word
-        // (none, `list`, a preset name) falls through to the roster arm
-        // unchanged.
-        if ($sub === 'new' || $sub === 'proposed' || $sub === 'accept' || $sub === 'tree' || $sub === 'capabilities') {
+        // an empty roster when no manager was configured. `handoff`
+        // (RS-AGENT-A5) joins them for the same reason: the worktree
+        // registry and the git legs are disk facts, not roster facts. Any
+        // other word (none, `list`, a preset name) falls through to the
+        // roster arm unchanged.
+        if ($sub === 'new' || $sub === 'proposed' || $sub === 'accept' || $sub === 'tree' || $sub === 'capabilities' || $sub === 'handoff') {
             try {
                 return match ($sub) {
                     'new' => CommandResult::reply($text, Lang::t('host.agents.new.dispatched'))
@@ -100,6 +110,7 @@ final class AgentsHostCommand implements HostCommand
                         ? CommandResult::reply($text, AgentStatusCommands::tree($context->currentSessionId()))
                         : CommandResult::failure($text, Lang::t('host.agents.usage'), 2),
                     'capabilities' => self::capabilitiesResult($context, $text, $words),
+                    'handoff' => self::handoffResult($context, $text, $words),
                     default => self::accept($context, $text, \array_slice($words, 1)),
                 };
             } catch (\Throwable $e) {
@@ -163,6 +174,47 @@ final class AgentsHostCommand implements HostCommand
             $asJson,
             !$context->readOnly,
         ));
+    }
+
+    /**
+     * `/agents handoff <id> [--apply]` (RS-AGENT-A5): the decision-support
+     * report for a finished agent's worktree, and — only on the explicit
+     * `--apply` — the plumbing merge into a fresh `handoff/<id>-<stamp>`
+     * ref. The report leg is pure reading and works on a read-only surface
+     * (it is a question); `--apply` writes git objects and a ref, so the
+     * read-only door refuses it exactly as `/agents accept` is refused.
+     * Argument discipline mirrors `capabilities`: one id, one optional
+     * flag, anything else costs the shared usage line.
+     *
+     * @param list<string> $words the whole command words, verb included
+     */
+    private static function handoffResult(CommandContext $context, string $text, array $words): CommandResult
+    {
+        $agentId = null;
+        $asApply = false;
+        foreach (\array_slice($words, 1) as $word) {
+            if ($word === '--apply') {
+                if ($asApply) {
+                    return CommandResult::failure($text, Lang::t('host.agents.usage'), 2);
+                }
+                $asApply = true;
+                continue;
+            }
+            if (str_starts_with($word, '--') || $agentId !== null) {
+                return CommandResult::failure($text, Lang::t('host.agents.usage'), 2);
+            }
+            $agentId = $word;
+        }
+
+        if ($agentId === null) {
+            return CommandResult::failure($text, Lang::t('host.agents.usage'), 2);
+        }
+
+        if ($asApply && $context->readOnly) {
+            return CommandResult::refused(Lang::t('host.command.read_only', ['name' => '/agents handoff --apply']));
+        }
+
+        return CommandResult::reply($text, AgentStatusCommands::handoff($agentId, $context->projectRoot(), $asApply));
     }
 
     /**

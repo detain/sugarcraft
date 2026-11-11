@@ -12,31 +12,123 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-constraints.html">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
 <link rel="icon" type="image/png" href="../img/icons/sugar-constraints.png">
 <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/search.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner">
-    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<!--nav:start-->
+<nav class="nav" aria-label="Main navigation"><div class="nav-inner">
+    <a class="brand" href="/"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
     <div class="nav-links">
         <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
             <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <span>Search</span>
         </button>
-        <a href="../#libraries">Libraries</a>
-        <a href="../#apps">Apps</a>
-        <a href="../#demos">Demos</a>
-        <a href="../#quickstart">Quickstart</a>
-        <a href="../compare.html">Compare</a>
-        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a>
+        <ul class="nav-items">
+            <li class="nav-item"><a href="/">Home</a></li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Libraries <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/libraries.html">All libraries →</a>
+                    <a href="/lib/sugar-core.html">sugar-core</a>
+                    <a href="/lib/sugar-style.html">sugar-style</a>
+                    <a href="/lib/sugar-cellbuffer.html">sugar-cellbuffer</a>
+                    <a href="/lib/sugar-async.html">sugar-async</a>
+                    <a href="/lib/sugar-spring.html">sugar-spring</a>
+                    <a href="/lib/sugar-mouse.html">sugar-mouse</a>
+                    <a href="/lib/sugar-widgets.html">sugar-widgets</a>
+                    <a href="/lib/sugar-charts.html">sugar-charts</a>
+                    <a href="/lib/sugar-forms.html">sugar-forms</a>
+                    <a href="/lib/sugar-markdown.html">sugar-markdown</a>
+                    <a href="/lib/sugar-cli.html">sugar-cli</a>
+                    <a href="/lib/sugar-ssh-server.html">sugar-ssh-server</a>
+                    <a href="/lib/sugar-metrics.html">sugar-metrics</a>
+                    <a href="/lib/sugar-log.html">sugar-log</a>
+                    <a href="/lib/sugar-image.html">sugar-image</a>
+                    <a href="/lib/sugar-animation.html">sugar-animation</a>
+                    <a href="/lib/sugar-video.html">sugar-video</a>
+                    <a href="/lib/sugar-colorprofile.html">sugar-colorprofile</a>
+                    <a href="/lib/sugar-ansi-parser.html">sugar-ansi-parser</a>
+                    <a href="/lib/sugar-vterm.html">sugar-vterm</a>
+                    <a href="/lib/sugar-pty.html">sugar-pty</a>
+                    <a href="/lib/sugar-focus.html">sugar-focus</a>
+                    <a href="/lib/sugar-gallery.html">sugar-gallery</a>
+                    <a href="/lib/sugar-treelist.html">sugar-treelist</a>
+                    <a href="/lib/sugar-constraints.html">sugar-constraints</a>
+                    <a href="/lib/sugar-panels.html">sugar-panels</a>
+                    <a href="/lib/sugar-overlay.html">sugar-overlay</a>
+                    <a href="/lib/sugar-navstack.html">sugar-navstack</a>
+                    <a href="/lib/sugar-dashboard.html">sugar-dashboard</a>
+                    <a href="/lib/sugar-quickpick.html">sugar-quickpick</a>
+                    <a href="/lib/sugar-input.html">sugar-input</a>
+                    <a href="/lib/sugar-fuzzy.html">sugar-fuzzy</a>
+                    <a href="/lib/sugar-flexbox.html">sugar-flexbox</a>
+                    <a href="/lib/sugar-toast.html">sugar-toast</a>
+                    <a href="/lib/sugar-datepicker.html">sugar-datepicker</a>
+                    <a href="/lib/sugar-readline.html">sugar-readline</a>
+                    <a href="/lib/sugar-table.html">sugar-table</a>
+                    <a href="/lib/sugar-diff.html">sugar-diff</a>
+                    <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
+                    <a href="/lib/sugar-testing.html">sugar-testing</a>
+                </div>
+            </li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Apps <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/apps.html">All apps →</a>
+                    <a href="/lib/candy-starter.html">candy-starter</a>
+                    <a href="/lib/candy-scriptui.html">candy-scriptui</a>
+                    <a href="/lib/candy-codeshot.html">candy-codeshot</a>
+                    <a href="/lib/candy-mdview.html">candy-mdview</a>
+                    <a href="/lib/candy-ansi-inspect.html">candy-ansi-inspect</a>
+                    <a href="/lib/candy-ssh-launcher.html">candy-ssh-launcher</a>
+                    <a href="/lib/candy-kv.html">candy-kv</a>
+                    <a href="/lib/candy-mail.html">candy-mail</a>
+                    <a href="/lib/candy-git-server.html">candy-git-server</a>
+                    <a href="/lib/candy-tetris.html">candy-tetris</a>
+                    <a href="/lib/candy-files.html">candy-files</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
+                    <a href="/lib/candy-code-web.html">candy-code-web</a>
+                    <a href="/lib/candy-vcr.html">candy-vcr</a>
+                    <a href="/lib/candy-git.html">candy-git</a>
+                    <a href="/lib/candy-sql.html">candy-sql</a>
+                    <a href="/lib/candy-codetime.html">candy-codetime</a>
+                    <a href="/lib/candy-minesweeper.html">candy-minesweeper</a>
+                    <a href="/lib/candy-gifview.html">candy-gifview</a>
+                    <a href="/lib/candy-image.html">candy-image</a>
+                    <a href="/lib/candy-top.html">candy-top</a>
+                    <a href="/lib/candy-flappy.html">candy-flappy</a>
+                </div>
+            </li>
+            <li class="nav-item nav-item-drop-right">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Docs <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop">
+                    <a href="/#architecture">Architecture</a>
+                    <a href="/#quickstart">Quickstart</a>
+                    <a href="/compare.html">Compare</a>
+                    <a href="/GETTING-STARTED.html">Getting Started</a>
+                    <a href="/GLOSSARY.html">Glossary</a>
+                    <a href="/KEYMAPS.html">Keymaps</a>
+                    <a href="/cookbook/index.html">Cookbook</a>
+                </div>
+            </li>
+            <li class="nav-item"><a href="/#demos">Demos</a></li>
+            <li class="nav-item"><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a></li>
+        </ul>
     </div>
 </div></nav>
+<!--nav:end-->
+
+<main id="main">
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries"><span aria-hidden="true">←</span> All 40 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 40 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-constraints.png" alt="" aria-hidden="true">
@@ -53,12 +145,25 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-constraints"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-constraints" alt="SugarConstraints code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">A ratatui-style constraint layout solver behind a one-method <code>LayoutSolver</code> interface: <code>GreedySolver</code> (deterministic greedy solver, extracted from sugar-style, which now delegates back through its <code>Layout\Solver</code> bridge) implements every constraint type, and the deprecated <code>CassowarySolver</code> shim delegates to it. Plus <code>DockLayout</code>, a center-plus-side-stacks pane geometry. Consumers: <code>sugar-panels</code> (compat mode), <code>candy-code</code> (the <code>Dock\*</code> surface), <code>candy-sql</code> (dashboard page); <code>sugar-forms</code> requires the package but its <code>withConstraints()</code> knob is dormant, and <code>sugar-widgets</code> does not consume it.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#solvers">Solvers</a></li>
+            <li class="toc-h3"><a href="#constraint-types">Constraint types</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">A ratatui-style constraint layout solver behind a one-method <code>LayoutSolver</code> interface: <code>GreedySolver</code> (deterministic greedy solver, extracted from sugar-style, which now delegates back through its <code>Layout\Solver</code> bridge) implements every constraint type, and the deprecated <code>CassowarySolver</code> shim delegates to it. Plus <code>DockLayout</code>, a center-plus-side-stacks pane geometry. Consumers: <code>sugar-panels</code> (compat mode), <code>candy-code</code> (the <code>Dock\*</code> surface), <code>candy-sql</code> (dashboard page); <code>sugar-forms</code> requires the package but its <code>withConstraints()</code> knob is dormant, and <code>sugar-widgets</code> does not consume it.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-constraints</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Constraints\Constraint\Constraint;
 use SugarCraft\Constraints\{Direction, GreedySolver, Region};
 
@@ -82,14 +187,14 @@ $capped = $solver-&gt;solve($region, Direction::Horizontal, [
     Constraint::fill(1),          // 65: everything Max did not take
 ]);</code></pre>
 
-    <h3 style="margin-top: 32px;">Solvers</h3>
+    <h3 id="solvers" style="margin-top: 32px;">Solvers</h3>
     <div class="feature-grid">
       <div class="feature"><strong>GreedySolver</strong><span>Deterministic greedy solver. Extracted from sugar-style, which routes its own splits back through this solver. No deps; no strength or priority vocabulary. Small and stateless. Lossless rounding: floored fractions are handed back so for a well-constrained set the regions tile the span (Fill/Max remainder to the first Fill (or the first Max when no Fill is present), Min slack residue to the first Min, a Percentage/Ratio shortfall of at most N−1 cells reclaimed earliest-first). When fixed demand exceeds the span, regions shrink proportionally and still sum to it — <code>withoutOverflowTruncation()</code> keeps full base sizes instead. Tiling assumes a positive-weight recipient: under-constrained fixed-only sets keep their gap, and a zero-weight-only Fill set leaves slack too — the README names all four carve-outs.</span></div>
       <div class="feature"><strong>CassowarySolver (deprecated)</strong><span>The original Big-M simplex prototype never converged, so <code>solve()</code> raises <code>E_USER_DEPRECATED</code> and delegates wholly to <code>GreedySolver</code> — results are identical. Kept only so existing call-sites keep working.</span></div>
       <div class="feature"><strong>DockLayout</strong><span>Center pane plus left/right weighted slot stacks. Stack heights are split in exact integer arithmetic (no float decides a boundary row); a weight set whose scaled sum would overflow is refused with <code>InvalidArgumentException</code> where it is introduced, and <code>resolve()</code> itself never throws, degrading by dropping a side on small frames.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">Constraint types</h3>
+    <h3 id="constraint-types" style="margin-top: 32px;">Constraint types</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Length</strong><span>Fixed cell count — n cells, except the documented carve-outs (the reclaim ladder inflates it in sets with no Min and no Fill, overflow truncation shrinks it, compat mode runs off-grid); the README walks them.</span></div>
       <div class="feature"><strong>Min</strong><span>Soft floor — at least n cells while slack survives every Fill and Max; clamps proportionally when demand exceeds the span; the README documents the semantics.</span></div>
@@ -99,14 +204,14 @@ $capped = $solver-&gt;solve($region, Direction::Horizontal, [
       <div class="feature"><strong>Ratio</strong><span>Fractional proportion — num/denom of the total span, reserved like a fixed size.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Extracted from sugar-style</strong> — sugar-style's <code>Layout\Solver</code> bridge now delegates back through this package.</li>
       <li><strong>Live pane splits</strong> — <code>sugar-panels</code> (compat mode), <code>candy-code</code>'s <code>Dock\*</code> surface, and the <code>candy-sql</code> dashboard; <code>sugar-forms</code> requires it but its constraint knob is dormant, and <code>sugar-widgets</code> does not consume it.</li>
       <li><strong>Swap solver without breaking call-sites</strong> — <code>LayoutSolver</code> (<code>solve()</code> alone; construction lives on the concrete classes) is the only public contract.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-constraints">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-constraints/blob/master/README.md">Full README</a></li>
@@ -117,7 +222,7 @@ $capped = $solver-&gt;solve($region, Direction::Horizontal, [
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <!-- n1: bare <tr><th> header kept - the site-wide .api-table cure (docs-review-1023 G4 seam) owns the thead/scope upgrade; do not hand-patch here. -->
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
@@ -141,8 +246,10 @@ $capped = $solver-&gt;solve($region, Direction::Horizontal, [
 <tr><td>Dock\DockGeometry</td><td>public $regions / regionFor(paneId) / dividerColumns() / isEmpty()</td><td>Resolved absolute regions in insertion order (left stack, center, right stack)</td></tr>
 <tr><td>Dock\DockSlot / Dock\Side</td><td>DockSlot::new(paneId, num, denom) / withWeight(num, denom); Side::other()</td><td>One vertical stack slot with a rational weight; opposite-side lookup</td></tr>
 </table>
+    </div>
   </div>
 </section>
+</main>
 
 <footer class="footer">
     <div class="container">
@@ -175,5 +282,6 @@ $capped = $solver-&gt;solve($region, Direction::Horizontal, [
     </div>
 </div>
 <script src="../js/search.js" defer></script>
+<script src="../js/nav.js" defer></script>
 </body>
 </html>

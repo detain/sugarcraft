@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Trust Boundary — SugarCraft</title>
+    <meta name="description" content="What the SugarCraft terminal sanitizers defend, where the boundary sits, and what remains your duty.">
+    <meta property="og:title" content="Trust Boundary — SugarCraft">
+    <meta property="og:description" content="What the SugarCraft terminal sanitizers defend, where the boundary sits, and what remains your duty.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://sugarcraft.github.io/TRUST-BOUNDARY.html">
+    <meta property="og:image" content="https://sugarcraft.github.io/img/social-preview.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://sugarcraft.github.io/img/social-preview.png">
+    <link rel="canonical" href="https://sugarcraft.github.io/TRUST-BOUNDARY.html">
+    <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
+    <link rel="icon" type="image/png" href="img/profile.png">
+    <link rel="apple-touch-icon" href="img/profile.png">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/search.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to main content</a>
+<!--nav:start-->
+<nav class="nav" aria-label="Main navigation"><div class="nav-inner">
+    <a class="brand" href="/"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
+    <div class="nav-links">
+        <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
+            <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <span>Search</span>
+        </button>
+        <ul class="nav-items">
+            <li class="nav-item"><a href="/">Home</a></li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Libraries <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/libraries.html">All libraries →</a>
+                    <a href="/lib/sugar-core.html">sugar-core</a>
+                    <a href="/lib/sugar-style.html">sugar-style</a>
+                    <a href="/lib/sugar-cellbuffer.html">sugar-cellbuffer</a>
+                    <a href="/lib/sugar-async.html">sugar-async</a>
+                    <a href="/lib/sugar-spring.html">sugar-spring</a>
+                    <a href="/lib/sugar-mouse.html">sugar-mouse</a>
+                    <a href="/lib/sugar-widgets.html">sugar-widgets</a>
+                    <a href="/lib/sugar-charts.html">sugar-charts</a>
+                    <a href="/lib/sugar-forms.html">sugar-forms</a>
+                    <a href="/lib/sugar-markdown.html">sugar-markdown</a>
+                    <a href="/lib/sugar-cli.html">sugar-cli</a>
+                    <a href="/lib/sugar-ssh-server.html">sugar-ssh-server</a>
+                    <a href="/lib/sugar-metrics.html">sugar-metrics</a>
+                    <a href="/lib/sugar-log.html">sugar-log</a>
+                    <a href="/lib/sugar-image.html">sugar-image</a>
+                    <a href="/lib/sugar-animation.html">sugar-animation</a>
+                    <a href="/lib/sugar-video.html">sugar-video</a>
+                    <a href="/lib/sugar-colorprofile.html">sugar-colorprofile</a>
+                    <a href="/lib/sugar-ansi-parser.html">sugar-ansi-parser</a>
+                    <a href="/lib/sugar-vterm.html">sugar-vterm</a>
+                    <a href="/lib/sugar-pty.html">sugar-pty</a>
+                    <a href="/lib/sugar-focus.html">sugar-focus</a>
+                    <a href="/lib/sugar-gallery.html">sugar-gallery</a>
+                    <a href="/lib/sugar-treelist.html">sugar-treelist</a>
+                    <a href="/lib/sugar-constraints.html">sugar-constraints</a>
+                    <a href="/lib/sugar-panels.html">sugar-panels</a>
+                    <a href="/lib/sugar-overlay.html">sugar-overlay</a>
+                    <a href="/lib/sugar-navstack.html">sugar-navstack</a>
+                    <a href="/lib/sugar-dashboard.html">sugar-dashboard</a>
+                    <a href="/lib/sugar-quickpick.html">sugar-quickpick</a>
+                    <a href="/lib/sugar-input.html">sugar-input</a>
+                    <a href="/lib/sugar-fuzzy.html">sugar-fuzzy</a>
+                    <a href="/lib/sugar-flexbox.html">sugar-flexbox</a>
+                    <a href="/lib/sugar-toast.html">sugar-toast</a>
+                    <a href="/lib/sugar-datepicker.html">sugar-datepicker</a>
+                    <a href="/lib/sugar-readline.html">sugar-readline</a>
+                    <a href="/lib/sugar-table.html">sugar-table</a>
+                    <a href="/lib/sugar-diff.html">sugar-diff</a>
+                    <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
+                    <a href="/lib/sugar-testing.html">sugar-testing</a>
+                </div>
+            </li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Apps <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/apps.html">All apps →</a>
+                    <a href="/lib/candy-starter.html">candy-starter</a>
+                    <a href="/lib/candy-scriptui.html">candy-scriptui</a>
+                    <a href="/lib/candy-codeshot.html">candy-codeshot</a>
+                    <a href="/lib/candy-mdview.html">candy-mdview</a>
+                    <a href="/lib/candy-ansi-inspect.html">candy-ansi-inspect</a>
+                    <a href="/lib/candy-ssh-launcher.html">candy-ssh-launcher</a>
+                    <a href="/lib/candy-kv.html">candy-kv</a>
+                    <a href="/lib/candy-mail.html">candy-mail</a>
+                    <a href="/lib/candy-git-server.html">candy-git-server</a>
+                    <a href="/lib/candy-tetris.html">candy-tetris</a>
+                    <a href="/lib/candy-files.html">candy-files</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
+                    <a href="/lib/candy-code-web.html">candy-code-web</a>
+                    <a href="/lib/candy-vcr.html">candy-vcr</a>
+                    <a href="/lib/candy-git.html">candy-git</a>
+                    <a href="/lib/candy-sql.html">candy-sql</a>
+                    <a href="/lib/candy-codetime.html">candy-codetime</a>
+                    <a href="/lib/candy-minesweeper.html">candy-minesweeper</a>
+                    <a href="/lib/candy-gifview.html">candy-gifview</a>
+                    <a href="/lib/candy-image.html">candy-image</a>
+                    <a href="/lib/candy-top.html">candy-top</a>
+                    <a href="/lib/candy-flappy.html">candy-flappy</a>
+                </div>
+            </li>
+            <li class="nav-item nav-item-drop-right">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Docs <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop">
+                    <a href="/#architecture">Architecture</a>
+                    <a href="/#quickstart">Quickstart</a>
+                    <a href="/compare.html">Compare</a>
+                    <a href="/GETTING-STARTED.html">Getting Started</a>
+                    <a href="/GLOSSARY.html">Glossary</a>
+                    <a href="/KEYMAPS.html">Keymaps</a>
+                    <a href="/cookbook/index.html">Cookbook</a>
+                </div>
+            </li>
+            <li class="nav-item"><a href="/#demos">Demos</a></li>
+            <li class="nav-item"><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a></li>
+        </ul>
+    </div>
+</div></nav>
+<!--nav:end-->
+
+<main id="main">
+
+<article class="prose">
+
+<h1><a id="trust-boundary--the-fleet-security-contract" href="#trust-boundary--the-fleet-security-contract" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Trust boundary — the fleet security contract</h1>
+<p>Every SugarCraft library that renders, spawns, or consumes data lives
+against the same handful of trust rules. This page is the single
+discoverable home for them: per-lib docblocks implement them, tests
+pin them, and a finding that violates one of them is a security
+finding, not a style nit. Report violations via
+<a href="https://github.com/detain/sugarcraft/blob/master/SECURITY.md">SECURITY.md</a>.</p>
+<h2><a id="1-the-terminal-is-a-sink--sanitise-before-you-paint" href="#1-the-terminal-is-a-sink--sanitise-before-you-paint" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>1. The terminal is a sink — sanitise before you paint</h2>
+<p>Anything a program writes to a terminal is executed as <em>control
+semantics</em>: a raw <code>ESC</code> in a filename, a tool output line, an image
+byte stream or a markdown payload is an escape-sequence injection
+primitive (rename windows, forge hyperlinks, spoof frames, smuggle
+OSC 8 targets).</p>
+<p>The contract lives in <code>SugarCraft\Core\Util\Sanitize</code>
+(<code>sugar-core/src/Util/Sanitize.php</code>). Pick by destination:</p>
+<table>
+<thead>
+<tr>
+<th>Sink</th>
+<th>Method</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Plain text into cells, titles, labels</td>
+<td><code>Sanitize::untrusted()</code> (:239)</td>
+<td>Strips ANSI (<code>Ansi::strip</code>) and removes C0 controls except TAB/LF/CR, DEL, and the UTF-8-encoded C1 range — byte-wise, so malformed UTF-8 cannot smuggle a survivor past a <code>/u</code> pattern (fail-closed).</td>
+</tr>
+<tr>
+<td>Text into a user-facing display where bidi/zero-width tricks matter</td>
+<td><code>Sanitize::untrustedForDisplay()</code> (:314)</td>
+<td>The above, plus CR/CRLF→LF mapping, plus <code>markInvisibleFormatting()</code> — invisible directional/zero-width codepoints are replaced by visible <code>&lt;U+202E&gt;</code>-style notations instead of being silently eaten.</td>
+</tr>
+<tr>
+<td>Text into a frame that already carries zone markers or image markers</td>
+<td><code>Sanitize::untrustedForMarkedFrames()</code> (:682)</td>
+<td><code>untrusted()</code> plus a surgical sweep of the two zone sentinels only (§2), preserving legitimate marker traffic.</td>
+</tr>
+<tr>
+<td>Raw paste / keyboard input from a terminal</td>
+<td><code>untrustedForMarkedFrames()</code></td>
+<td>InputReader's paste path uses it: a pasted blob is attacker-authored <em>and</em> frame-marked by the time it lands.</td>
+</tr>
+</tbody>
+</table>
+<p><code>untrusted()</code> deliberately passes the Private Use Area through — the
+PUA is our marker arena (§2), not foreign traffic. Cell-level shaping
+(<code>cellValue()</code> :171, <code>controlChars()</code> :148, <code>visibleControls()</code> :554)
+are separate documented tools; do not confuse them with the untrusted
+gate.</p>
+<h2><a id="2-the-ue000uf8ff-arena" href="#2-the-ue000uf8ff-arena" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>2. The U+E000–U+F8FF arena</h2>
+<p>SugarCraft reserves the entire BMP Private Use Area
+(<code>PUA_BMP_FIRST</code> U+E000 … <code>PUA_BMP_LAST</code> U+F8FF, Sanitize.php :74/:77)
+as its internal marker space:</p>
+<ul>
+<li><strong>Zone sentinels U+E000 / U+E001</strong> (<code>ZONE_SENTINEL_OPEN/CLOSE</code>,
+:80/:83): <code>sugar-mouse</code> <code>Mark::zone()</code> / <code>Scan</code> wrap clickable
+overlay zones in these zero-width cells. Because they are PUA
+codepoints they pass through <code>untrusted()</code> — which is exactly why
+<code>stripZoneSentinels()</code> (:641, surgical <code>str_replace</code> of the two
+sentinels only) exists and why untrusted text must be swept with
+<code>untrustedForMarkedFrames()</code> before it can enter a marked frame:
+forged sentinels could otherwise hijack a zone.</li>
+<li><strong>Image markers from U+E002 upward</strong> (<code>ImageOverlay::MARKER_BASE = 0xE002</code> (:62), <code>MAX_IMAGES = 6398</code> (:89), topping the arena at
+exactly U+F8FF — the class lives at <code>sugar-core/src/ImageOverlay.php</code>
+and consumers such as <code>sugar-gallery</code>'s <code>PosterCard</code> emit its
+markers): the marker range and the
+sentinel range are <strong>disjoint by construction</strong>. Nerd Font / icon
+glyphs live outside the reserved band.</li>
+<li><code>stripPrivateUse()</code> (:660) removes the whole BMP PUA via the
+byte-wise pattern at :96 — the safe direction is over-match, and a
+<code>/u</code> pattern would silently match nothing on malformed input, so it
+is not used.</li>
+</ul>
+<p>If your code emits or parses marked frames, you own both sides: sweep
+untrusted payloads before composition, and never let user data pick
+its own marker id.</p>
+<h2><a id="3-spawning-argv-arrays-never-shell-strings" href="#3-spawning-argv-arrays-never-shell-strings" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>3. Spawning: argv arrays, never shell strings</h2>
+<ul>
+<li><code>proc_open</code>/<code>exec</code> take an <strong>argv array</strong> whenever the command is
+machine-composed — canonical <code>sugar-mcp-client/src/StdioMcpServer.php</code>
+(:28). A shell string turns <code>/bin/sh</code> into the parent and leaves the
+real child orphaned and unkillable on teardown; it is also the
+injection door.</li>
+<li>Where a shell string is unavoidable (feature-detection of
+user-supplied options, external CLI flags), <strong>every</strong> interpolation
+goes through <code>escapeshellarg((string) ($field ?? ''))</code> — the repo
+law in <a href="https://github.com/detain/sugarcraft/blob/master/AGENTS.md">AGENTS.md</a> (&quot;Pass ALL external-CLI flags every
+invocation via escapeshellarg&quot;).</li>
+<li>Child lifetime accounting is guarded repo-wide by
+<code>tools/check-child-lifetimes.php</code> with a fail-closed roster.</li>
+</ul>
+<h2><a id="4-configuration-is-trusted-input" href="#4-configuration-is-trusted-input" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>4. Configuration is trusted input</h2>
+<p>This is the doctrine with the most surface: config files <em>name
+programs to run</em>, so whoever can write the config can execute code
+with the application's privileges. The fleet treats config as the
+operator's credential surface — analogous to <code>~/.ssh/config</code> or
+<code>authorized_keys</code> — and the security-relevant duty is <strong>loud
+documentation and isolation</strong>, not pretending config is data:</p>
+<ul>
+<li>
+<p><strong>MCP stdio servers</strong> (<code>.mcp.json</code>): a <code>command</code> entry is arbitrary
+code execution at startup. <code>candy-code</code> mitigates by <em>not</em> handing
+the stdio child its inherited credentials —
+<code>candy-code/src/MCP/McpClient.php</code> strips credential-shaped environment
+variables in <code>resolveEnv()</code> (:1734), collects them in
+<code>recordStrippedSecretEnv()</code> (:891), and answers the accessor and
+one-sentence launch notice at :501/:522; a server that needs a
+secret declares <code>${VAR}</code> in its <code>env</code> block (or is named in
+<code>secretEnvAllowlist</code>).</p>
+</li>
+<li>
+<p><strong>Git repository configuration</strong>: cloning a hostile repo is not
+executing it, but its config can be — <code>diff.external</code> and
+<code>textconv</code> drivers name programs that run when Git renders a diff.
+<code>candy-code</code> keeps read-only Git paths away from repo-supplied
+drivers (<code>src/Permissions/ReadOnlyCommands.php</code> :88/:1215/:1233,
+<code>EnvironmentBlock</code> isolation pinned by
+<code>EnvironmentBlockGitConfigIsolationTest</code>).</p>
+</li>
+<li>
+<p><strong>SSH hub options</strong> (<code>sugar-ssh-server</code>): presented key
+fingerprints are forgeable metadata — see the admin guide,
+<a href="./admin/sugar-ssh-server.md">docs/admin/sugar-ssh-server.md</a>.</p>
+</li>
+<li>
+<p><strong>SSH endpoint files</strong> (<code>candy-ssh-launcher</code>): the YAML/JSON endpoint
+config is trusted input — exactly like <code>~/.ssh/config</code> itself.
+<code>options:</code> entries reach ssh verbatim, and OpenSSH options such as
+<code>ProxyCommand</code> / <code>LocalCommand</code> execute arbitrary commands at connect
+time; keep configs <code>0600</code>/<code>0644</code>-owned and do not accept endpoint files
+from strangers. Untrusted bytes are fenced on the display path: endpoint
+fields pass through <code>Sanitize::untrustedForDisplay</code> (with a CR/LF/TAB
+fold) before printing, the filter echo strips control sequences, and no
+leading-dash value can smuggle an ssh option. The parser refuses
+malformed input loudly (quote-aware comment stripping, block-map
+conflicts, empty hosts/options) rather than guessing.</p>
+</li>
+</ul>
+<p>A change that lets an <em>untrusted repo, server, or config drop</em> reach
+these execution paths without the user's visible consent is a
+vulnerability.</p>
+<h2><a id="5-stderr-echoes-are-terminal-writes-too" href="#5-stderr-echoes-are-terminal-writes-too" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>5. stderr echoes are terminal writes too</h2>
+<p>Writing a caught exception message, a subprocess stderr tail, or an
+HTTP response fragment to STDERR is writing to the same escape-semantics
+sink as a pane title — the same escape-semantics door. Sanitise (or
+route through the launch-notice clip) anything that embeds
+attacker-influenced bytes before it reaches the error stream.</p>
+<h2><a id="6-image-and-media-bytes-are-untrusted" href="#6-image-and-media-bytes-are-untrusted" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>6. Image and media bytes are untrusted</h2>
+<p>Poster bytes, sixel/kitty/iterm2 payloads, GIF/WebP dimensions —
+parsed by decoders, then rendered as markers, dimensions, or names —
+enter the same sinks. They flow through <code>Sanitize</code> gates before
+titles/labels are composed from them, and dimension/name caps are
+fail-closed, not advisory.</p>
+<h2><a id="7-style-renderers-pass-bytes-through-untouched" href="#7-style-renderers-pass-bytes-through-untouched" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>7. Style renderers pass bytes through untouched</h2>
+<p><code>sugar-style</code> is a renderer, not a sanitiser: ESC and OSC sequences in
+styled content flow to the terminal unchanged, because its width
+arithmetic must see them to keep alignment honest. The caller owns
+ingress sanitisation (<code>Sanitize::untrusted*</code>). Two narrow doors exist
+inside the lib: <code>Style::hyperlink()</code> refuses ids containing <code>;</code> or <code>:</code>,
+and tabs are expanded per <code>tabWidth</code> (default 4) while <code>\r</code> is never
+stripped. Wrapping pre-styled content composes at the byte level — an
+inner <code>ESC[0m</code> resets the outer style from that point onward, so keep
+composition to one pass.</p>
+<h2><a id="quick-checklist-for-a-new-library" href="#quick-checklist-for-a-new-library" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Quick checklist for a new library</h2>
+<ol>
+<li>Every string that can carry foreign bytes and reach a terminal
+sink passes a <code>Sanitize::untrusted*</code> variant at the boundary
+(parse-don't-validate: once, at ingress).</li>
+<li>Marked-frame consumers use <code>untrustedForMarkedFrames()</code>.</li>
+<li>Spawns are argv arrays; shell strings escapeshellarg everything.</li>
+<li>Anything config-named that executes is documented as a trust
+decision, and credentials are not inherited by it by default.</li>
+<li>New <code>proc_open</code> sites land in the child-lifetimes roster in the
+same commit.</li>
+</ol>
+
+</article>
+
+</main>
+
+<footer class="footer">
+    <p>SugarCraft — MIT-licensed PHP terminal toolkits and apps. Built with <a href="https://www.php.net/">PHP</a>.</p>
+    <p><a href="/compare.html">Compare</a> · <a href="/404.html">404</a> · <a href="https://github.com/sugarcraft">GitHub</a></p>
+</footer>
+
+<script src="js/main.js"></script>
+
+<div class="search-modal" id="search-modal" role="dialog" aria-modal="true" aria-label="Search the site" hidden>
+    <div class="search-modal-box">
+        <input class="search-input" id="search-input" type="text" placeholder="Search libraries, tools, topics..." autocomplete="off" spellcheck="false">
+        <ul class="search-results" id="search-results" role="listbox" aria-label="Search results"></ul>
+        <div class="search-hint"><kbd>Ctrl+K</kbd> to open · <kbd>Esc</kbd> to close · <kbd>↵</kbd> to search GitHub</div>
+    </div>
+</div>
+<script src="js/search.js" defer></script>
+<script src="js/nav.js" defer></script>
+</body>
+</html>

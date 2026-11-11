@@ -216,6 +216,7 @@ return [
     'cli.completion.verb.serve' => 'Web UI用のWebSocketサーバーを実行',
     'cli.completion.verb.session' => '保存済みセッションを管理',
     'cli.completion.verb.usage' => '永続的な支出台帳を日別・モデル別に集計',
+    'cli.completion.verb.workflow' => '保存済みワークフローをヘッドレスで実行し、状態を報告し、一時停止した実行を再開します',
     'cli.completion.verb_argument' => '{verb} 引数',
     'cli.doctor.absent' => '未設定',
     'cli.doctor.bundles_dark' => '信頼できるバンドルチャンネルがありません — /channels/ 機能は停止したままです',
@@ -592,6 +593,8 @@ CandyCode — ターミナル向けAIコーディングアシスタント。
                          不能な台帳は理由を表示して exit 1;
                          価格未設定のモデルを含む集計の金額は
                          ≥ 下限値として表示し、単純合計では表示しない。
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         ワークフローをモデルなしで実行・状態確認・中断からの再開
 
 オプション:
   -p, --prompt <text>    コマンドラインでプロンプトを指定（ワンショットモード）
@@ -619,6 +622,11 @@ CandyCode — ターミナル向けAIコーディングアシスタント。
                          選択しない — プロバイダは $CANDY_CODE_PROVIDER または
                          永続化された `provider` 設定から決定され、両者は
                          独立した軸。
+      --agent <name>     セッションの主エージェントを <name> に差し替えて起動:
+                         設定済みプリセットを適用する。--agent=<name> 形式も
+                         可。裸の形式は厳格なため、名前が "-" で始まる場合は
+                         = 形式を使う。-p、--batch、サブコマンドとの併用は
+                         exit 2 で拒否: いずれもセッションを構築しない。
       --permission-mode <mode>
                          設定ファイルのモードの代わりに <mode> で実行。
                          --permission-mode=<mode> 形式も可。最優先:
@@ -670,6 +678,12 @@ CandyCode — ターミナル向けAIコーディングアシスタント。
                          -p または run 動詞でのみ有効：追加先プロンプトが
                          ない起動は exit 2 で拒否し、与えたルールを
                          黙って無視することはない。
+      --batch            --input-format stream-json の各ユーザーイベントを
+                         同一プロセスでそれぞれの連続ターンとして実行し、
+                         空の -p プロンプトを許可する。candy-code へ会話を
+                         ターン単位で供給するドライバモード。素のスイッチ:
+                         値なし・短縮形なし。入力形式が stream-json で
+                         なければ exit 2 で拒否される。
   -c, --continue         新規セッション開始ではなく、最後に使用したセッションを
                          履歴込みで再開する。このフラグなしでは
                          毎回新しいセッションが開くが、空の入力欄で
@@ -1427,6 +1441,16 @@ TXT,
     'cli.warn.untrusted_mcp' => 'プロジェクトMCP設定は信頼されていません',
     'cli.warn.untrusted_settings' => 'プロジェクト設定ファイルは設定を適用できません',
     'cli.warn.untrusted_prompt_shell' => 'MCPプロンプト本文はシェルを実行できません',
+    'cli.workflow.accepts' => 'workflow {action} が受け付ける: {flags}',
+    'cli.workflow.bad_format' => 'workflow --format は text か json を期待、受信: {format}',
+    'cli.workflow.bad_param' => 'workflow --param: {problem}',
+    'cli.workflow.flag_does_not_apply' => 'フラグ {flag} は workflow {action} に適用されません',
+    'cli.workflow.need_id' => 'workflow resume には停止中のワークフローIDが必要',
+    'cli.workflow.need_name' => 'workflow run にはワークフロー名が必要',
+    'cli.workflow.no_action' => 'workflow: アクションが指定されていません',
+    'cli.workflow.paused' => 'ワークフロー {id} はシグナルで停止しました - `candy-code workflow resume {id}` で再開',
+    'cli.workflow.unknown_action' => 'workflow: 不明なアクション: {action}',
+    'cli.workflow.usage' => '使い方: candy-code workflow run <name> [--param k=v ...] [--format text|json] | status <name> [--format text|json] | resume <id> [--format text|json]',
     'cli.worktree.bad_name' => '--worktree {name}: ワークツリー名は英数字で始まり、英数字、"."、"-"、"_" のみを含める必要があります',
     'cli.worktree.kept_announce' => 'candy-code: ワークツリー {path} をそのまま残しました — ブランチ {branch} に固有の作業があるか、明示的に命名されています。`candy-code --worktree {name}` で再開してください',
     'cli.worktree.not_git' => '--worktree には git ワークツリーが必要です; {path} はその中にありません',

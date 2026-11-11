@@ -216,6 +216,7 @@ return [
     'cli.completion.verb.serve' => '웹 UI용 WebSocket 서버 실행',
     'cli.completion.verb.session' => '저장된 세션 관리',
     'cli.completion.verb.usage' => '영구 지출 대장을 일별·모델별로 집계',
+    'cli.completion.verb.workflow' => '저장된 워크플로를 헤드리스로 실행하고 상태를 보고하거나 일시 중지된 실행을 재개합니다',
     'cli.completion.verb_argument' => '{verb} 인자',
     'cli.doctor.absent' => '없음',
     'cli.doctor.bundles_dark' => '신뢰하는 번들 채널 없음 — /channels/ 화면은 꺼진 상태입니다',
@@ -592,6 +593,8 @@ CandyCode — 터미널용 AI 코딩 어시스턴트.
                          대장은 사유를 밝히고 1로 종료;
                          미가격 모델이 포함된 폴드의 달러는
                          ≥ 하한으로만 표시되며, 단순 합산으로는 표시되지 않는다.
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         워크플로를 모델 없이 실행, 상태 확인, 중단 지점부터 재개
 
 옵션:
   -p, --prompt <text>    명령줄에서 프롬프트 제공 (원샷 모드)
@@ -619,6 +622,11 @@ CandyCode — 터미널용 AI 코딩 어시스턴트.
                          선택하는 것이 아님 — 프로바이더는 여전히 $CANDY_CODE_PROVIDER 또는
                          저장된 `provider` 설정에서 오며, 두 값은
                          독립적인 축이다.
+      --agent <name>     세션의 기본 에이전트를 <name>으로 바꿔 실행:
+                         설정된 프리셋을 적용합니다. --agent=<name> 형태도
+                         허용. 맨 형태는 엄격하므로 이름이 "-"로 시작할 때
+                         쓰세요. -p, --batch, 하위 명령과 함께면 exit 2로
+                         거부: 하나도 좁힐 세션을 만들지 않습니다.
       --permission-mode <mode>
                          설정 파일의 모드 대신 <mode>으로 실행.
                          --permission-mode=<mode>도 허용. 최우선:
@@ -670,6 +678,12 @@ CandyCode — 터미널용 AI 코딩 어시스턴트.
                          -p 또는 run 동사에서만 사용 가능: 추가할
                          프롬프트가 없는 실행은 exit 2로 거부되며,
                          지정된 규칙을 조용히 무시하지 않습니다.
+      --batch            --input-format stream-json의 각 사용자 이벤트를
+                         이 프로세스에서 각각의 순차 턴으로 실행하고
+                         빈 -p 프롬프트를 허용합니다: candy-code에 대화를
+                         턴 단위로 공급하는 드라이버 모드. 맨 스위치이며
+                         값도 짧은 형태도 없습니다. 입력 형식이 stream-json
+                         아니면 exit 2로 거부됩니다.
   -c, --continue         새 세션 대신 가장 최근 사용된 세션을
                          트랜스크립트 포함하여 다시 엽니다. 이 옵션 없이
                          매 실행마다 새 세션이 열립니다; 빈 입력창에서
@@ -1427,6 +1441,16 @@ TXT,
     'cli.warn.untrusted_mcp' => '프로젝트 MCP 설정이 신뢰되지 않음',
     'cli.warn.untrusted_settings' => '프로젝트 설정 파일은 설정을 제공할 수 없음',
     'cli.warn.untrusted_prompt_shell' => 'MCP 프롬프트 본문은 셸을 실행할 수 없음',
+    'cli.workflow.accepts' => 'workflow {action}(이)가 허용: {flags}',
+    'cli.workflow.bad_format' => 'workflow --format은 text 또는 json 필요, 받은 값: {format}',
+    'cli.workflow.bad_param' => 'workflow --param: {problem}',
+    'cli.workflow.flag_does_not_apply' => '{flag} 플래그는 workflow {action}에 적용되지 않음',
+    'cli.workflow.need_id' => 'workflow resume에는 일시 중지된 워크플로 ID가 필요합니다',
+    'cli.workflow.need_name' => 'workflow run에는 워크플로 이름이 필요합니다',
+    'cli.workflow.no_action' => 'workflow: 작업이 지정되지 않음',
+    'cli.workflow.paused' => '워크플로 {id}이(가) 신호로 일시 중지됨 - `candy-code workflow resume {id}`로 재개',
+    'cli.workflow.unknown_action' => 'workflow: 알 수 없는 작업: {action}',
+    'cli.workflow.usage' => '사용법: candy-code workflow run <name> [--param k=v ...] [--format text|json] | status <name> [--format text|json] | resume <id> [--format text|json]',
     'cli.worktree.bad_name' => '--worktree {name}: worktree 이름은 문자 또는 숫자로 시작하고 문자, 숫자, ".", "-", "_"만 포함해야 함',
     'cli.worktree.kept_announce' => 'candy-code: worktree {path} 유지 — 해당 브랜치 {branch}에 자체 작업이 있거나 이름이 지정됨; `candy-code --worktree {name}`로 다시 열기',
     'cli.worktree.not_git' => '--worktree에는 git work tree가 필요; {path}는 그 안에 있지 않음',

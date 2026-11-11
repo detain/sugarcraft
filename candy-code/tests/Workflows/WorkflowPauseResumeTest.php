@@ -460,6 +460,698 @@ final class WorkflowPauseResumeTest extends TestCase
         $this->assertSame(37, $resumed->totalTokens);
     }
 
+    /**
+     * C2: a skip is a settled fact. Stage b's `when` fails, so b never runs; the
+     * pause during c must still count b in `stagesCompleted` and persist its
+     * Skipped row, and the resume must dispatch ONLY d — b is never re-decided,
+     * because a skip re-evaluated under outputs that changed since the file was
+     * written could run a stage whose guard said no.
+     */
+    public function testASkippedStageSurvivesThePauseFileAndIsNeverReDecidedOnResume(): void
+    {
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('skips')
+                ->description('a, skipped b, c, d')
+                ->stage('a', Tasks::agent('coder')->prompt('do a'))
+                ->stage('b', Tasks::agent('coder')->prompt('do b using {{a.output}}'))
+                ->when(['stage' => 'a', 'contains' => 'NEED-B'])
+                ->stage('c', Tasks::agent('coder')->prompt('do c using {{b.output}}'))
+                ->stage('d', Tasks::agent('coder')->prompt('do d using {{c.output}}'))
+                ->build(),
+        );
+
+        $this->pauseDuring('do c', 'skips');
+        $run = $this->engine->run('skips');
+
+        $this->assertSame(WorkflowStatus::Paused, $run->status);
+        // b was never dispatched; d was never started.
+        $this->assertSame(['do a', 'do c using {{b.output}}'], $this->prompts);
+        // The paused snapshot carries the skip row settled between the runners.
+        $this->assertSame(['a', 'b', 'c'], self::stageNames($run));
+        $this->assertSame(
+            [WorkflowStatus::Completed, WorkflowStatus::Skipped, WorkflowStatus::Completed],
+            array_map(static fn ($s): WorkflowStatus => $s->status, $run->stageResults),
+        );
+
+        $file = $this->tempDir . '/workflows/.running/skips.json';
+        $this->assertFileExists($file);
+        $data = json_decode((string) file_get_contents($file), true);
+        $this->assertIsArray($data);
+        // Without the settled-prefix fix this would count only stages a and c (2).
+        $this->assertSame(3, $data['stagesCompleted']);
+        $this->assertSame(['a', 'b', 'c'], array_column($data['stageResults'], 'stageName'));
+        $this->assertSame(['completed', 'skipped', 'completed'], array_column($data['stageResults'], 'status'));
+
+        $this->prompts = [];
+        $resumed = $this->engine->resume($run->workflowId);
+
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status);
+        // Exactly one dispatch on resume: d. b never runs and is never re-decided.
+        $this->assertSame(['do d using OUT[do c using {{b.output}}]'], $this->prompts);
+        $this->assertSame(['a', 'b', 'c', 'd'], self::stageNames($resumed));
+        $this->assertSame(
+            [
+                WorkflowStatus::Completed,
+                WorkflowStatus::Skipped,
+                WorkflowStatus::Completed,
+                WorkflowStatus::Completed,
+            ],
+            array_map(static fn ($s): WorkflowStatus => $s->status, $resumed->stageResults),
+        );
+        $this->assertFileDoesNotExist($file);
+    }
+
+    // -------------------------------------------------------------------------
+    // C8: a "from:" fan-out replays its recorded list, never a fresh glob
+    // -------------------------------------------------------------------------
+
+    public function testAResumedFanOutReplaysTheRecordedListInsteadOfReGlobbing(): void
+    {
+        $envRoot = $this->tempDir . '/fanenv';
+        mkdir($envRoot, 0755, true);
+        file_put_contents($envRoot . '/a.txt', 'one');
+        file_put_contents($envRoot . '/b.txt', 'two');
+
+        $this->registerFanOut();
+        $engine = $this->fanOutEngine($envRoot);
+
+        // The wave fails mid-stage — but a live pause lands first, so the file
+        // is written while the run still holds its materialised list.
+        $this->script['fix b'] = static function (SubAgent $a) use ($engine): AgentResult {
+            $engine->pause('fan');
+
+            return new AgentResult(
+                agentId: $a->id,
+                status: AgentStatus::Failed,
+                error: new \RuntimeException('b broke'),
+                tokensUsed: 1,
+                costUsd: 0.1,
+                startedAt: new \DateTimeImmutable(),
+                completedAt: new \DateTimeImmutable(),
+            );
+        };
+
+        $run = $engine->run('fan');
+        $this->assertSame(WorkflowStatus::Failed, $run->status);
+
+        $data = $this->fanOutPauseData();
+        $this->assertSame(['a.txt', 'b.txt'], $data['dynamicWaves']['sweep']['paths'], 'the pause record carries the materialised list');
+        $this->assertSame(2, $data['dynamicWaves']['sweep']['chunk'], 'and the chunk it expanded under');
+        $this->assertSame(1, $data['stagesCompleted'], 'the failed stage must not count as completed');
+
+        // The tree changes under the record — a fresh glob could only answer
+        // differently, and answering differently would fork different work.
+        unlink($envRoot . '/a.txt');
+        file_put_contents($envRoot . '/z.txt', 'late');
+        unset($this->script['fix b']);
+        $this->prompts = [];
+
+        // C8 r2 NIT-1: pin each replayed fork's OWN recorded item, not just
+        // the prompt strings the stage-level collector already sees. The
+        // per-fork surface a dispatch can read is SubAgent->task plus
+        // SubAgent->agent->name — executeParallelStage sets that name to the
+        // recorded path on a dynamic wave (a static stage falls back to the
+        // agent type), so the pair binds the materialised list itself.
+        // Returning null lets dispatch fall through to the default success.
+        // Honest scope limit: a fork's context carries only its own item —
+        // the chunk grouping of the wave is NOT observable on SubAgent and
+        // is deliberately not claimed here.
+        $childRows = [];
+        $this->script['fix '] = static function (SubAgent $a) use (&$childRows): ?AgentResult {
+            $childRows[] = [$a->task, $a->agent->name];
+
+            return null;
+        };
+
+        $resumed = $engine->resume($run->workflowId);
+
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status, (string) $resumed->firstFailure()?->error);
+        $this->assertSame(
+            ['fix a.txt', 'fix b.txt', 'ship the sweep'],
+            $this->prompts,
+            'the failed stage re-ran from the RECORDED names — a.txt is replayed without its file, z.txt never joins',
+        );
+        $this->assertSame(
+            [['fix a.txt', 'a.txt'], ['fix b.txt', 'b.txt']],
+            $childRows,
+            'each resumed fork carried its RECORDED path as its own item name — a.txt forked without its file and z.txt never forked at all',
+        );
+    }
+
+    public function testACorruptWaveRecordIsRefusedLoudlyWithoutAnyExpansion(): void
+    {
+        $envRoot = $this->tempDir . '/fanenv-live';
+        mkdir($envRoot, 0755, true);
+        file_put_contents($envRoot . '/a.txt', 'one');
+
+        $this->registerFanOut();
+
+        $at = (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM);
+        mkdir($this->tempDir . '/workflows/.running', 0700, true);
+        file_put_contents($this->tempDir . '/workflows/.running/fan.json', (string) json_encode([
+            'workflowId' => 'fan-0badc0de',
+            'workflowPath' => 'fan',
+            'status' => 'paused',
+            'stagesCompleted' => 1,
+            'context' => ['pre.output' => 'OUT[do pre]'],
+            'stageResults' => [[
+                'stageName' => 'pre',
+                'status' => 'completed',
+                'output' => 'OUT[do pre]',
+                'error' => null,
+                'agents' => [],
+                'startedAt' => $at,
+                'completedAt' => $at,
+            ]],
+            'dynamicWaves' => ['sweep' => ['paths' => 'not-a-list']],
+            'totalTokens' => 10,
+            'totalCost' => 0.5,
+            'startedAt' => $at,
+        ]));
+
+        $resumed = $this->fanOutEngine($envRoot)->resume('fan-0badc0de');
+
+        $this->assertSame(WorkflowStatus::Failed, $resumed->status);
+        $this->assertSame('sweep', $resumed->firstFailure()?->stageName);
+        $this->assertStringContainsString('cannot replay', (string) $resumed->firstFailure()?->error);
+        $this->assertSame([], $this->prompts, 'a corrupt record is refused — the engine must not silently re-glob over it');
+        $this->assertFileDoesNotExist($this->tempDir . '/workflows/.running/fan.json');
+    }
+
+    private function registerFanOut(): void
+    {
+        // chr(42)-assembled glob: a bare wildcard literal would be harvested
+        // into the GlobDialect corpus (house law).
+        $star = chr(42);
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('fan')
+                ->stage('pre', Tasks::agent('coder')->prompt('do pre'))
+                ->parallel('sweep', [Tasks::agent('coder')->prompt('fix {{path}}')], from: ['glob' => $star . '.txt', 'chunk' => 2])
+                ->stage('tail', Tasks::agent('coder')->prompt('ship the sweep'))
+                ->build(),
+        );
+    }
+
+    private function fanOutEngine(string $envRoot): WorkflowEngine
+    {
+        $test = $this;
+        $executor = new class ($test) implements ExecutorInterface {
+            public function __construct(private readonly WorkflowPauseResumeTest $test)
+            {
+            }
+
+            public function execute(SubAgent $subAgent, CompleteRequest $request): AgentResult
+            {
+                return $this->test->dispatch($subAgent);
+            }
+
+            public function executeStream(SubAgent $subAgent, CompleteRequest $request): \Generator
+            {
+                yield $this->execute($subAgent, $request);
+            }
+
+            public function cancel(string $agentId): void
+            {
+            }
+
+            public function cancelAll(): void
+            {
+            }
+        };
+
+        return new WorkflowEngine($this->registry, new AgentWorkerPool(1, $executor), environmentRoot: $envRoot);
+    }
+
+    /** @return array<string, mixed> */
+    private function fanOutPauseData(): array
+    {
+        $file = $this->tempDir . '/workflows/.running/fan.json';
+        $this->assertFileExists($file);
+        $data = json_decode((string) file_get_contents($file), true);
+        $this->assertIsArray($data);
+
+        return $data;
+    }
+
+    public function testALoopedStageFinishesItsRoundsBeforeALivePauseIsObserved(): void
+    {
+        // C4 disclosure: the pause check sits at the stage boundary, so a
+        // live pause requested mid-loop is honoured only once the looped
+        // stage has settled its final round — rounds are not checkpointed
+        // individually, and the pause record sees the stage as one row.
+        $this->registry->register(
+            (new WorkflowBuilder())
+                ->name('three')
+                ->description('a, then a looping fix, then z')
+                ->stage('a', Tasks::agent('coder')->prompt('do a'))
+                ->stage('fix', Tasks::agent('coder')->prompt('do fix round {{round}}'))
+                ->loop(['max' => 2, 'until' => ['stage' => 'fix', 'contains' => 'ALL DONE']])
+                ->stage('z', Tasks::agent('coder')->prompt('do z using {{fix.output}}'))
+                ->build(),
+        );
+        $this->pauseDuring('do fix', 'three');
+
+        $run = $this->engine->run('three');
+
+        $this->assertSame(WorkflowStatus::Paused, $run->status);
+        $this->assertSame(
+            ['do a', 'do fix round 1', 'do fix round 2'],
+            $this->prompts,
+            'the loop ran out both rounds; the pause was observed at the next stage boundary',
+        );
+        $this->assertSame(['a', 'fix'], self::stageNames($run));
+
+        $data = $this->pauseData();
+        $this->assertSame(2, $data['stagesCompleted'], 'the looped stage is recorded whole, as one row');
+
+        $this->prompts = [];
+        $resumed = $this->engine->resume($run->workflowId);
+
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status);
+        $this->assertSame(
+            ['do z using OUT[do fix round 2]'],
+            $this->prompts,
+            'resume never re-runs a settled looped stage: whole-stage granularity, no round replay',
+        );
+        $this->assertFileDoesNotExist($this->pauseFile());
+    }
+
+    public function testATypedResultRowSurvivesThePauseFileAndInterpolatesAfterResume(): void
+    {
+        $this->registry->register((new WorkflowBuilder())
+            ->name('typed')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->stage('b', Tasks::agent('coder')->prompt('emit json')->outputSchema(['type' => 'object']))
+            ->stage('c', Tasks::agent('coder')->prompt('hold here'))
+            ->stage('d', Tasks::agent('coder')->prompt('use {{b.summary}}'))
+            ->build());
+
+        $this->script['emit'] = fn (SubAgent $subAgent): AgentResult => self::succeeded($subAgent, '{"summary":"green"}');
+        $this->script['hold'] = function (SubAgent $subAgent): ?AgentResult {
+            $this->engine->pause('typed');
+
+            return null;
+        };
+
+        $paused = $this->engine->run('typed');
+        $this->assertSame(WorkflowStatus::Paused, $paused->status);
+
+        $file = $this->tempDir . '/workflows/.running/typed.json';
+        $this->assertFileExists($file);
+        $data = json_decode((string) file_get_contents($file), true);
+        $this->assertIsArray($data);
+        $results = $data['context'][WorkflowEngine::RESULTS_CONTEXT_KEY] ?? null;
+        $this->assertIsArray($results);
+        $this->assertSame(
+            '{"summary":"green"}',
+            $results['b'] ?? null,
+            'the text row still carries the raw bytes in its own map',
+        );
+        $typed = $data['context'][WorkflowEngine::TYPED_RESULTS_CONTEXT_KEY] ?? null;
+        $this->assertIsArray($typed);
+        $this->assertSame(
+            '{"summary":"green"}',
+            $typed['b'] ?? null,
+            'the typed row rides the pause file as a plain string under its raw name — no serializer was added',
+        );
+
+        unset($this->script['hold'], $this->script['emit']);
+        $this->prompts = [];
+        $resumed = $this->engine->resume('typed');
+
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status);
+        $this->assertSame(
+            ['use green'],
+            $this->prompts,
+            'a in-flight stage that succeeded settles before the stop; resume runs only d,' .
+            ' and its pointer read resolves from the file-carried typed row',
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // C9L: the inputJoins ledger — declarations ride the pause file, and a
+    // mid-pause edit to a RECORDED join refuses the resume.
+    // -------------------------------------------------------------------------
+
+    /** @param array{from: list<string>, as: string}|null $mInput the join spec of stage m (null = no join) */
+    private function registerFanIn(string $name, ?array $mInput = null, bool $withM = true): void
+    {
+        $builder = (new WorkflowBuilder())
+            ->name($name)
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->stage('b', Tasks::agent('coder')->prompt('do b'));
+        if ($withM) {
+            $task = Tasks::agent('coder')->prompt($mInput === null ? 'merge plain' : 'merge {{input}}');
+            if ($mInput !== null) {
+                $task = $task->input($mInput);
+            }
+            $builder = $builder->stage('m', $task);
+        }
+        $this->registry->register(
+            $builder->stage('z', Tasks::agent('coder')->prompt('ship using {{m.output}}'))->build(),
+        );
+    }
+
+    /**
+     * Hand-craft the pause record a first incarnation left: a, b and m settled
+     * (m as a join stage), z never started. A null ledger writes NO inputJoins
+     * key — the pre-C9L shape; a map rides the file verbatim.
+     *
+     * @param array<string, list<array{from: list<string>, as: string}>>|null $ledger
+     */
+    private function writeJoinRecord(string $name, ?array $ledger): string
+    {
+        $at = (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM);
+        $row = static fn (string $n, string $o): array => [
+            'stageName' => $n,
+            'status' => 'completed',
+            'output' => $o,
+            'error' => null,
+            'agents' => [],
+            'startedAt' => $at,
+            'completedAt' => $at,
+        ];
+        $data = [
+            'workflowId' => $name,
+            'workflowPath' => $name,
+            'status' => 'paused',
+            'stagesCompleted' => 3,
+            'context' => [
+                'a.output' => 'OUT[do a]',
+                'b.output' => 'OUT[do b]',
+                'm.output' => 'OUT[merge recorded]',
+            ],
+            'stageResults' => [
+                $row('a', 'OUT[do a]'),
+                $row('b', 'OUT[do b]'),
+                $row('m', 'OUT[merge recorded]'),
+            ],
+            'totalTokens' => 30,
+            'totalCost' => 1.5,
+            'startedAt' => $at,
+        ];
+        if ($ledger !== null) {
+            $data['inputJoins'] = $ledger;
+        }
+        $file = $this->tempDir . '/workflows/.running/' . $name . '.json';
+        if (!is_dir(dirname($file))) {
+            mkdir(dirname($file), 0700, true);
+        }
+        file_put_contents($file, (string) json_encode($data));
+
+        return $file;
+    }
+
+    public function testTheJoinDeclarationsRideThePauseFileAndAnUneditedResumePassesTheGuard(): void
+    {
+        $this->registerFanIn('joinfan', ['from' => ['a', 'b'], 'as' => 'all']);
+        // Arm during m, not z: a pause that lands during the LAST stage never
+        // meets a boundary, the run simply completes and withdraws its record.
+        $this->pauseDuring('merge', 'joinfan');
+
+        $run = $this->engine->run('joinfan');
+        $this->assertSame(WorkflowStatus::Paused, $run->status);
+
+        $file = $this->tempDir . '/workflows/.running/joinfan.json';
+        $this->assertFileExists($file);
+        $data = json_decode((string) file_get_contents($file), true);
+        $this->assertSame(
+            ['m' => [['from' => ['a', 'b'], 'as' => 'all']]],
+            $data['inputJoins'] ?? null,
+            'the settled join stage contributes exactly its declarations, in task order',
+        );
+        $this->assertArrayNotHasKey('input', $data['context'], 'the join PAYLOAD still never rides the file');
+
+        unset($this->script['merge']);
+        $this->prompts = [];
+        $merged = '';
+        foreach ($run->stageResults as $settled) {
+            if ($settled->stageName === 'm') {
+                $merged = (string) $settled->output;
+            }
+        }
+        $resumed = $this->engine->resume('joinfan');
+
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status);
+        $this->assertSame(
+            ['ship using ' . $merged],
+            $this->prompts,
+            'the guard passes an unedited resume, which re-runs ONLY z — m is never re-decided',
+        );
+        $this->assertFileDoesNotExist($file);
+    }
+
+    public function testAJoinFreePauseFileCarriesNoLedgerKey(): void
+    {
+        $this->registry->register((new WorkflowBuilder())
+            ->name('nofan')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->stage('b', Tasks::agent('coder')->prompt('do b'))
+            ->stage('c', Tasks::agent('coder')->prompt('hold c'))
+            ->build());
+        $this->pauseDuring('do b', 'nofan');
+
+        $run = $this->engine->run('nofan');
+        $this->assertSame(WorkflowStatus::Paused, $run->status, 'the pause lands with c still pending, so the record survives');
+
+        $data = json_decode(
+            (string) file_get_contents($this->tempDir . '/workflows/.running/nofan.json'),
+            true,
+        );
+        $this->assertIsArray($data);
+        $this->assertArrayNotHasKey('inputJoins', $data, 'no settled join means NO key — never a spurious empty map');
+    }
+
+    public function testAPreLedgerPauseFileWithRecordedJoinStagesResumesAnyway(): void
+    {
+        $this->registerFanIn('legacy', ['from' => ['a', 'b'], 'as' => 'all']);
+        $this->writeJoinRecord('legacy', null);
+
+        $resumed = $this->engine->resume('legacy');
+
+        $this->assertSame(
+            WorkflowStatus::Completed,
+            $resumed->status,
+            'absence is "no claim made", not a broken one — a pre-C9L record resumes as it always did',
+        );
+        $this->assertSame(['ship using OUT[merge recorded]'], $this->prompts);
+    }
+
+    public function testEveryMidPauseJoinEditRefusesTheResumeWithThePinnedWording(): void
+    {
+        $ledger = ['m' => [['from' => ['a', 'b'], 'as' => 'all']]];
+        $wording = "Workflow '%s' cannot be resumed: stage 'm' has a recorded input join whose"
+            . " declaration no longer matches the pause record's ledger"
+            . ' — refusing to re-decide a recorded join stage against an edited workflow';
+
+        $edits = [
+            'refuse-add' => ['from' => ['a', 'b', 'q'], 'as' => 'all'],
+            'refuse-del' => ['from' => ['a'], 'as' => 'all'],
+            // ruling: from-ORDER is byte-significant in all four shapes, so a
+            // reorder of the same set re-decides different bytes and refuses.
+            'refuse-order' => ['from' => ['b', 'a'], 'as' => 'all'],
+            'refuse-as' => ['from' => ['a', 'b'], 'as' => 'first'],
+            // the join itself stripped from the definition: a removed decision
+            // is still a changed decision.
+            'refuse-none' => null,
+        ];
+        foreach ($edits as $name => $spec) {
+            $this->registerFanIn($name, $spec);
+            $file = $this->writeJoinRecord($name, $ledger);
+            try {
+                $this->engine->resume($name);
+                $this->fail("an edited join declaration must refuse the resume ({$name})");
+            } catch (\SugarCraft\Code\Workflows\WorkflowNotRunningException $e) {
+                $this->assertSame(sprintf($wording, $name), $e->getMessage(), 'pinned refusal wording');
+            }
+            $this->assertSame([], $this->prompts, "a refused resume dispatches nothing ({$name})");
+            $this->assertFileExists($file, "a refused resume must not consume the record ({$name})");
+        }
+
+        // the identical declaration spelled through the same shapes resumes.
+        $this->registerFanIn('refuse-ok', ['from' => ['a', 'b'], 'as' => 'all']);
+        $this->writeJoinRecord('refuse-ok', $ledger);
+        $resumed = $this->engine->resume('refuse-ok');
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status, 'the guard must not become a blanket refusal');
+    }
+
+    public function testARecordedJoinStageThatVanishedFromTheDefinitionRefusesTheResume(): void
+    {
+        $this->registerFanIn('gonefan', null, withM: false);
+        $this->writeJoinRecord('gonefan', ['m' => [['from' => ['a', 'b'], 'as' => 'all']]]);
+
+        $this->expectException(\SugarCraft\Code\Workflows\WorkflowNotRunningException::class);
+        $this->engine->resume('gonefan');
+    }
+
+    public function testALedgerRowForAnUnrecordedStageIsToleratedAndThatStageMayReDecide(): void
+    {
+        $this->registerFanIn('prunetol', ['from' => ['a'], 'as' => 'first']);
+        $at = (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM);
+        $row = static fn (string $n): array => [
+            'stageName' => $n,
+            'status' => 'completed',
+            'output' => "OUT[do {$n}]",
+            'error' => null,
+            'agents' => [],
+            'startedAt' => $at,
+            'completedAt' => $at,
+        ];
+        $file = $this->tempDir . '/workflows/.running/prunetol.json';
+        if (!is_dir(dirname($file))) {
+            mkdir(dirname($file), 0700, true);
+        }
+        file_put_contents($file, (string) json_encode([
+            'workflowId' => 'prunetol',
+            'workflowPath' => 'prunetol',
+            'status' => 'paused',
+            'stagesCompleted' => 2,
+            'context' => ['a.output' => 'OUT[do a]', 'b.output' => 'OUT[do b]'],
+            'stageResults' => [$row('a'), $row('b')],
+            // m's row claims the OLD join — but m is not among the recorded
+            // settlements, so the claim defends nothing: prune-tolerance.
+            'inputJoins' => ['m' => [['from' => ['a', 'b'], 'as' => 'all']]],
+            'totalTokens' => 20,
+            'totalCost' => 1.0,
+            'startedAt' => $at,
+        ]));
+
+        $resumed = $this->engine->resume('prunetol');
+
+        $this->assertSame(WorkflowStatus::Completed, $resumed->status);
+        $this->assertSame('merge OUT[do a]', $this->prompts[0], 'm re-decides under the new declaration — it was never settled');
+        $this->assertStringStartsWith('ship using OUT[merge', $this->prompts[1]);
+    }
+
+    public function testTheLedgerCapturesJoinRowsForEveryStageShapeInDeclarationOrder(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('shapes')
+            ->withVerification(
+                'v',
+                Tasks::agent('coder')->prompt('V1 {{input}}')->input(['from' => ['a'], 'as' => 'first']),
+                Tasks::agent('coder')->prompt('V2 {{input}}')->input(['from' => ['b', 'a'], 'as' => 'file-list']),
+            )
+            ->pipeline('p', [
+                Tasks::agent('coder')->prompt('P1 {{input}}')->input(['from' => ['a'], 'as' => 'all']),
+                Tasks::agent('coder')->prompt('P2 plain'),
+            ])
+            ->build();
+
+        $engine = (new \ReflectionClass(WorkflowEngine::class))->newInstanceWithoutConstructor();
+        $read = new \ReflectionMethod(WorkflowEngine::class, 'stageJoinDeclarations');
+
+        $verification = $read->invoke($engine, $workflow->stages[0], 'verification');
+        $this->assertSame(
+            [
+                ['from' => ['a'], 'as' => 'first'],
+                ['from' => ['b', 'a'], 'as' => 'file-list'],
+            ],
+            $verification,
+            'task then verifier, in declaration order — the same collection the resolver consumes',
+        );
+
+        $pipeline = $read->invoke($engine, $workflow->stages[1], 'pipeline');
+        $this->assertSame(
+            [['from' => ['a'], 'as' => 'all']],
+            $pipeline,
+            'nested join tasks contribute in walk order; the join-free nested one earns no row',
+        );
+    }
+
+    /**
+     * C9L lineage law, pinned at the WRITE side: the resume seeds the live
+     * slot's ledgers from the pause record it consumed, so a RE-pause of the
+     * resumed run must carry every row the first incarnation decided. The
+     * hash and join ledgers flow ONLY through those seed writes — deleting
+     * either seed line drops the prior rows from the second file, and a
+     * mid-pause YAML edit would then slip past the read-side guard this
+     * family defends. The wave seed is no mirror either: it is the SOLE
+     * carrier of the liveRuns wave slot across resume (:1919 seeds it,
+     * :2033 hands it to the recorded-replay consumer, :1571-1573 persist
+     * it at re-pause), and deleting it reddens
+     * testAResumedFanOutReplaysTheRecordedListInsteadOfReGlobbing and
+     * testACorruptWaveRecordIsRefusedLoudlyWithoutAnyExpansion even in
+     * isolation (NITS-r1 MAJOR-1, three measured runs). The redundancy
+     * holds only for this lineage test's own waves, which re-record.
+     */
+    public function testTheRePauseCarriesEveryLedgerFromThePriorIncarnation(): void
+    {
+        $star = chr(42);
+        $envRoot = $this->tempDir . '/lineageenv';
+        mkdir($envRoot, 0755, true);
+        file_put_contents($envRoot . '/a.txt', 'one');
+        file_put_contents($envRoot . '/b.txt', 'two');
+
+        $this->registry->register((new WorkflowBuilder())
+            ->name('lineage')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->parallel('sweep', [Tasks::agent('coder')->prompt('fix {{path}}')], from: ['glob' => $star . '.txt', 'chunk' => 2])
+            ->stage('m', Tasks::agent('coder')->prompt('merge {{input}}')->input(['from' => ['a'], 'as' => 'all']))
+            ->stage('q', Tasks::agent('coder')->prompt('queue on'))
+            ->stage('z', Tasks::agent('coder')->prompt('ship using {{m.output}}'))
+            ->build());
+
+        $engine = $this->fanOutEngine($envRoot);
+        $this->script['merge'] = static function () use ($engine): ?AgentResult {
+            $engine->pause('lineage');
+
+            return null;
+        };
+
+        $first = $engine->run('lineage');
+        $this->assertSame(WorkflowStatus::Paused, $first->status);
+        $id = $first->workflowId;
+
+        $file = $this->tempDir . '/workflows/.running/lineage.json';
+        $this->assertFileExists($file);
+        $one = json_decode((string) file_get_contents($file), true);
+        $this->assertSame(
+            ['m' => [['from' => ['a'], 'as' => 'all']]],
+            $one['inputJoins'] ?? null,
+            'incarnation one settles a, the sweep and the joined m before the boundary pause',
+        );
+
+        // The second leg runs ONLY q — a plain stage. So every ledger row in
+        // the re-pause file is pure seed carried across the resume boundary.
+        unset($this->script['merge']);
+        $this->script['queue'] = static function () use ($engine, $id): ?AgentResult {
+            $engine->pause($id);
+
+            return null;
+        };
+        $second = $engine->resume($id);
+        $this->assertSame(WorkflowStatus::Paused, $second->status, (string) $second->firstFailure()?->error);
+
+        $two = json_decode((string) file_get_contents($file), true);
+        $this->assertSame(
+            $one['inputJoins'],
+            $two['inputJoins'] ?? null,
+            'the join ledger survives the re-pause — seeded, not re-decided',
+        );
+        $this->assertSame(
+            $one['dynamicWaves'] ?? null,
+            $two['dynamicWaves'] ?? null,
+            'the materialised wave list survives the re-pause',
+        );
+        $this->assertSame(
+            ['a', 'sweep', 'm', 'q'],
+            array_keys($two['stageInputHashes'] ?? []),
+            'the hash ledger carries the prior settled stages and gains only the new one',
+        );
+
+        unset($this->script['queue']);
+        $this->prompts = [];
+        $third = $engine->resume($id);
+
+        $this->assertSame(WorkflowStatus::Completed, $third->status, (string) $third->firstFailure()?->error);
+        $this->assertCount(1, $this->prompts, 'the third incarnation runs ONLY z — every ledger row honoured');
+        $this->assertStringStartsWith('ship using OUT[merge', $this->prompts[0]);
+        $this->assertFileDoesNotExist($file);
+    }
+
     private function removeDirectory(string $dir): void
     {
         if (!is_dir($dir)) {

@@ -12,31 +12,123 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-pty.html">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
 <link rel="icon" type="image/png" href="../img/icons/sugar-pty.png">
 <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/search.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner">
-    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<!--nav:start-->
+<nav class="nav" aria-label="Main navigation"><div class="nav-inner">
+    <a class="brand" href="/"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
     <div class="nav-links">
         <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
             <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <span>Search</span>
         </button>
-        <a href="../#libraries">Libraries</a>
-        <a href="../#apps">Apps</a>
-        <a href="../#demos">Demos</a>
-        <a href="../#quickstart">Quickstart</a>
-        <a href="../compare.html">Compare</a>
-        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a>
+        <ul class="nav-items">
+            <li class="nav-item"><a href="/">Home</a></li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Libraries <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/libraries.html">All libraries →</a>
+                    <a href="/lib/sugar-core.html">sugar-core</a>
+                    <a href="/lib/sugar-style.html">sugar-style</a>
+                    <a href="/lib/sugar-cellbuffer.html">sugar-cellbuffer</a>
+                    <a href="/lib/sugar-async.html">sugar-async</a>
+                    <a href="/lib/sugar-spring.html">sugar-spring</a>
+                    <a href="/lib/sugar-mouse.html">sugar-mouse</a>
+                    <a href="/lib/sugar-widgets.html">sugar-widgets</a>
+                    <a href="/lib/sugar-charts.html">sugar-charts</a>
+                    <a href="/lib/sugar-forms.html">sugar-forms</a>
+                    <a href="/lib/sugar-markdown.html">sugar-markdown</a>
+                    <a href="/lib/sugar-cli.html">sugar-cli</a>
+                    <a href="/lib/sugar-ssh-server.html">sugar-ssh-server</a>
+                    <a href="/lib/sugar-metrics.html">sugar-metrics</a>
+                    <a href="/lib/sugar-log.html">sugar-log</a>
+                    <a href="/lib/sugar-image.html">sugar-image</a>
+                    <a href="/lib/sugar-animation.html">sugar-animation</a>
+                    <a href="/lib/sugar-video.html">sugar-video</a>
+                    <a href="/lib/sugar-colorprofile.html">sugar-colorprofile</a>
+                    <a href="/lib/sugar-ansi-parser.html">sugar-ansi-parser</a>
+                    <a href="/lib/sugar-vterm.html">sugar-vterm</a>
+                    <a href="/lib/sugar-pty.html">sugar-pty</a>
+                    <a href="/lib/sugar-focus.html">sugar-focus</a>
+                    <a href="/lib/sugar-gallery.html">sugar-gallery</a>
+                    <a href="/lib/sugar-treelist.html">sugar-treelist</a>
+                    <a href="/lib/sugar-constraints.html">sugar-constraints</a>
+                    <a href="/lib/sugar-panels.html">sugar-panels</a>
+                    <a href="/lib/sugar-overlay.html">sugar-overlay</a>
+                    <a href="/lib/sugar-navstack.html">sugar-navstack</a>
+                    <a href="/lib/sugar-dashboard.html">sugar-dashboard</a>
+                    <a href="/lib/sugar-quickpick.html">sugar-quickpick</a>
+                    <a href="/lib/sugar-input.html">sugar-input</a>
+                    <a href="/lib/sugar-fuzzy.html">sugar-fuzzy</a>
+                    <a href="/lib/sugar-flexbox.html">sugar-flexbox</a>
+                    <a href="/lib/sugar-toast.html">sugar-toast</a>
+                    <a href="/lib/sugar-datepicker.html">sugar-datepicker</a>
+                    <a href="/lib/sugar-readline.html">sugar-readline</a>
+                    <a href="/lib/sugar-table.html">sugar-table</a>
+                    <a href="/lib/sugar-diff.html">sugar-diff</a>
+                    <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
+                    <a href="/lib/sugar-testing.html">sugar-testing</a>
+                </div>
+            </li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Apps <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/apps.html">All apps →</a>
+                    <a href="/lib/candy-starter.html">candy-starter</a>
+                    <a href="/lib/candy-scriptui.html">candy-scriptui</a>
+                    <a href="/lib/candy-codeshot.html">candy-codeshot</a>
+                    <a href="/lib/candy-mdview.html">candy-mdview</a>
+                    <a href="/lib/candy-ansi-inspect.html">candy-ansi-inspect</a>
+                    <a href="/lib/candy-ssh-launcher.html">candy-ssh-launcher</a>
+                    <a href="/lib/candy-kv.html">candy-kv</a>
+                    <a href="/lib/candy-mail.html">candy-mail</a>
+                    <a href="/lib/candy-git-server.html">candy-git-server</a>
+                    <a href="/lib/candy-tetris.html">candy-tetris</a>
+                    <a href="/lib/candy-files.html">candy-files</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
+                    <a href="/lib/candy-code-web.html">candy-code-web</a>
+                    <a href="/lib/candy-vcr.html">candy-vcr</a>
+                    <a href="/lib/candy-git.html">candy-git</a>
+                    <a href="/lib/candy-sql.html">candy-sql</a>
+                    <a href="/lib/candy-codetime.html">candy-codetime</a>
+                    <a href="/lib/candy-minesweeper.html">candy-minesweeper</a>
+                    <a href="/lib/candy-gifview.html">candy-gifview</a>
+                    <a href="/lib/candy-image.html">candy-image</a>
+                    <a href="/lib/candy-top.html">candy-top</a>
+                    <a href="/lib/candy-flappy.html">candy-flappy</a>
+                </div>
+            </li>
+            <li class="nav-item nav-item-drop-right">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Docs <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop">
+                    <a href="/#architecture">Architecture</a>
+                    <a href="/#quickstart">Quickstart</a>
+                    <a href="/compare.html">Compare</a>
+                    <a href="/GETTING-STARTED.html">Getting Started</a>
+                    <a href="/GLOSSARY.html">Glossary</a>
+                    <a href="/KEYMAPS.html">Keymaps</a>
+                    <a href="/cookbook/index.html">Cookbook</a>
+                </div>
+            </li>
+            <li class="nav-item"><a href="/#demos">Demos</a></li>
+            <li class="nav-item"><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a></li>
+        </ul>
     </div>
 </div></nav>
+<!--nav:end-->
+
+<main id="main">
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries"><span aria-hidden="true">←</span> All 40 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 40 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-pty.png" alt="" aria-hidden="true">
@@ -55,13 +147,28 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-pty"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-pty" alt="SugarPty code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Open a master/slave PTY pair, spawn a child process with its stdin/stdout/stderr wired to the slave, and pump bytes / forward resizes between the host terminal and the child. Wraps the libc PTY syscalls (<code>posix_openpt</code>, <code>grantpt</code>, <code>unlockpt</code>, <code>ptsname_r</code>, <code>ioctl(TIOCSWINSZ)</code>) via ext-ffi — no shelling out to <code>/usr/bin/script</code>, no C extension to compile (where FFI cannot answer, fallbacks exist only for termios (<code>stty(1)</code>), macOS size reads (<code>stty(1)</code>), and exit detection (<code>proc_get_status</code> polling) — with <code>ffi.enable=0</code> the core open/read/write/kill path has no fallback and throws).</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#open-spawn-drain">Open + spawn + drain</a></li>
+            <li class="toc-h3"><a href="#resize-forwarding">Resize forwarding</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#controlling-terminal-ctrl-c-job-control">Controlling terminal (Ctrl+C, job control)</a></li>
+            <li class="toc-h3"><a href="#known-limitations">Known limitations</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Open a master/slave PTY pair, spawn a child process with its stdin/stdout/stderr wired to the slave, and pump bytes / forward resizes between the host terminal and the child. Wraps the libc PTY syscalls (<code>posix_openpt</code>, <code>grantpt</code>, <code>unlockpt</code>, <code>ptsname_r</code>, <code>ioctl(TIOCSWINSZ)</code>) via ext-ffi — no shelling out to <code>/usr/bin/script</code>, no C extension to compile (where FFI cannot answer, fallbacks exist only for termios (<code>stty(1)</code>), macOS size reads (<code>stty(1)</code>), and exit detection (<code>proc_get_status</code> polling) — with <code>ffi.enable=0</code> the core open/read/write/kill path has no fallback and throws).</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-pty</code></pre>
     <p style="color: var(--ink-2);">Requires PHP 8.3+ with <code>ext-ffi</code>. <code>ext-pcntl</code> is optional — the lib polls <code>waitpid()</code> when pcntl is absent and SignalForwarder degrades to a no-op. <code>ext-posix</code> is optional too — <code>kill()</code> signals through <code>Libc::kill()</code>, which uses <code>posix_kill()</code> when it is loaded and libc <code>kill(2)</code> over FFI otherwise.</p>
 
-    <h3 style="margin-top: 32px;">Open + spawn + drain</h3>
+    <h3 id="open-spawn-drain" style="margin-top: 32px;">Open + spawn + drain</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Pty\PtySystemFactory;
 
 $system = PtySystemFactory::new();
@@ -82,7 +189,7 @@ $exit = $child-&gt;wait();
 $master-&gt;close();</code></pre>
     <p style="color: var(--ink-2);">Drain until EOF instead of polling <code>exited()</code> first — a fast child's final bytes can sit in the master buffer before the reap, and an <code>exited()</code>-first loop drops them. <code>PosixPump::run()</code> implements this loop (with callbacks) if you prefer not to hand-roll it.</p>
 
-    <h3 style="margin-top: 32px;">Resize forwarding</h3>
+    <h3 id="resize-forwarding" style="margin-top: 32px;">Resize forwarding</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Pty\SignalForwarder;
 use SugarCraft\Core\Util\Tty;
 
@@ -101,7 +208,7 @@ SignalForwarder::attachSigwinchToFd(
     fn (int $cols, int $rows) =&gt; null,  // optional post-resize callback
 );</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Pty::open(cols = 80, rows = 24)</strong> <em>(deprecated facade — prefer <code>PtySystemFactory</code>)</em><span>Allocates a master/slave pair by delegating to <code>PosixPtySystem::open()</code>, so the facade shares the canonical path exactly. On macOS: <code>openpty(3)</code> first (single call), falls back to <code>posix_openpt</code> + <code>grantpt</code> + <code>unlockpt</code> + <code>ptsname_r</code> on -1. On Linux: the quartet directly (openpty lives in libutil.so.1 on most distros). The master fd is <code>FD_CLOEXEC</code> (children never inherit it, so closing it delivers the hangup) and the requested winsize is applied at open best-effort — a refused ioctl surfaces as 0×0 until the next resize rather than failing the open. Failures close the master fd before throwing — callers never get a half-open Pty.</span></div>
       <div class="feature"><strong>spawn(cmd, env, cols, rows, controllingTerminal?)</strong><span>Wires the slave path to <code>proc_open</code>'s <code>[0,1,2]</code> descriptor slots. TIOCSWINSZ is applied before the child starts (throwing, with no child, on failure) and re-asserted best-effort after it, because macOS zeroes the winsize when the child's slave descriptors open. Pass <code>controllingTerminal: true</code> to route through <code>bin/pty-shim.php</code> for Ctrl+C → SIGINT delivery (requires ext-pcntl). Returns a <code>Child</code> with <code>pid()</code> + idempotent <code>wait()</code> + non-blocking <code>exited()</code>.</span></div>
@@ -116,7 +223,7 @@ SignalForwarder::attachSigwinchToFd(
       <div class="feature"><strong>SUGARCRAFT_PTY_BACKEND</strong><span>Selects the PTY backend. Recognised values: <code>posix-ffi</code> (default on POSIX; selecting it on Windows silently resolves to <code>conpty</code> — POSIX FFI is not offered there, so you get ConPTY semantics), <code>conpty</code> (auto-resolved on Windows, throws on POSIX), <code>sidecar</code> and <code>pecl</code> (reserved — selecting them throws <code>UnsupportedPlatformException</code> in this release), <code>auto</code> (platform-resolving, same as unset). Unrecognised values throw <code>InvalidArgumentException</code>. See the <a href="https://github.com/sugarcraft/sugar-pty/blob/master/README.md#backend-selection">full backend selection table</a> in the README.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>In-process SSH session hosting</strong> — drives <a href="sugar-ssh-server.html">SugarSshServer</a> away from depending on host sshd; spawn the user's shell directly inside the SSH server process with full PTY control.</li>
       <li><strong>Recorded TUI sessions</strong> — pair with <a href="candy-vcr.html">CandyVcr</a> to capture both the input bytes (typed into the master) and the rendered output (read back from the master).</li>
@@ -124,7 +231,7 @@ SignalForwarder::attachSigwinchToFd(
       <li><strong>VHS-style demo recorders</strong> — run a script in a PTY, capture the byte stream + winsize, replay later.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Controlling terminal (Ctrl+C, job control)</h3>
+    <h3 id="controlling-terminal-ctrl-c-job-control" style="margin-top: 40px;">Controlling terminal (Ctrl+C, job control)</h3>
     <p>Pass <code>controllingTerminal: true</code> to <code>spawn()</code> when you need <code>Ctrl+C</code> typed at the master to deliver <code>SIGINT</code> to the child — required for interactive shells (<code>bash -i</code>), editors (<code>vim</code>, <code>less</code>), and anything else that uses tty-driven job control.</p>
     <pre class="code"><code class="language-php">$system = PtySystemFactory::new();
 $pair   = $system-&gt;open();
@@ -136,13 +243,13 @@ $child  = $pair-&gt;slave()-&gt;spawn(
 $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code></pre>
     <p>Routes the spawn through <code>bin/pty-shim.php</code>, which does <code>setsid()</code> + <code>ioctl(0, TIOCSCTTY, 0)</code> + <code>pcntl_exec()</code> between <code>proc_open</code> and the actual cmd. Requires <code>ext-pcntl</code>. Costs single-digit-to-low-double-digit milliseconds of shim startup per spawn (an unmeasured estimate — treat as order-of-magnitude) — opt-in because non-interactive spawns don't benefit.</p>
 
-    <h3 style="margin-top: 40px;">Known limitations</h3>
+    <h3 id="known-limitations" style="margin-top: 40px;">Known limitations</h3>
     <ul>
       <li><strong>Windows ConPTY caveats.</strong> The <code>Windows\ConPtySystem</code> backend needs Windows 10 1809+ and PHP 8.4+ with ext-ffi; the pseudo console is not a PTY — no controlling terminal, every signal collapses to one job terminate, and <code>stream()</code>/<code>fd()</code> throw, so the pumps stay POSIX-only (poll <code>read($len, $timeout)</code> instead).</li>
       <li><strong><code>ffi.enable=0</code> silently disables FFI.</strong> Many distributions ship PHP with <code>ffi.enable=0</code> in <code>php.ini</code>; FFI then refuses to load libc and sugar-pty throws <code>PtyException: Failed to load libc</code> (or, where a fallback exists, transparently uses it: stty Termios, stty macOS size reads, <code>proc_get_status</code> polling). Set <code>ffi.enable=1</code> (<code>PHP_INI_SYSTEM</code> — <code>ini_set()</code> cannot change it at runtime); PHP 8.3 accepts only <code>0</code>, <code>1</code>, <code>preload</code>, and an unrecognised string such as <code>peer</code> casts to <code>0</code>. Verify what your PHP actually answered: <code>php -r 'try { FFI::cdef("int getpid(void);"); echo "FFI cdef OK\n"; } catch (Throwable $e) { echo get_class($e), ": ", $e-&gt;getMessage(), "\n"; }'</code></li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-pty">Source on GitHub</a> (split repo; monorepo home: <a href="https://github.com/detain/sugarcraft">detain/sugarcraft</a>, <code>sugar-pty/</code>)</li>
       <li><a href="https://github.com/sugarcraft/sugar-pty/blob/master/README.md">Full README</a></li>
@@ -152,7 +259,7 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Pty <em>(deprecated facade; removed v2.0)</em></td><td>open(cols = 80, rows = 24)</td><td>Allocate master/slave PTY pair (FD_CLOEXEC master, winsize applied at open)</td></tr>
@@ -186,12 +293,14 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
 <tr><td>ReactPump</td><td>start() / stop()</td><td>The byte pump driven by the ReactPHP event loop instead of a blocking select</td></tr>
 <tr><td>MultiPump</td><td>add(master, stdoutSink, child?, opts?) / tick() / runAsync()</td><td>Multiplex many sessions on one loop (sync tick delivers keepalive; callbacks ride PosixPump/ReactPump)</td></tr>
 </table>
+    </div>
   </div>
 </section>
+</main>
 
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+ (Windows ConPTY: 8.4+)</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/sugar-pty">Packagist</a> ·
@@ -220,5 +329,6 @@ $pair-&gt;master()-&gt;write("\x03");  // Ctrl+C → SIGINT to the child</code><
     </div>
 </div>
 <script src="../js/search.js" defer></script>
+<script src="../js/nav.js" defer></script>
 </body>
 </html>

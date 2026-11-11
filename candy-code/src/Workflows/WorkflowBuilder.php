@@ -117,8 +117,12 @@ final class WorkflowBuilder
      *   - AgentWorkerPool.php: executeAll() runs agents concurrently
      *
      * @param TaskBuilder[] $tasks
+     * @param array{glob: string, chunk: int|null}|array{} $from C8 dynamic-wave
+     *        spec, empty for the static list spelling. The engine expands the
+     *        glob at run time and replaces $tasks with one built task per
+     *        match; the template in $tasks[0] is what gets fanned out.
      */
-    public function parallel(string $name, array $tasks, bool $capture = false, bool $cache = false): self
+    public function parallel(string $name, array $tasks, bool $capture = false, bool $cache = false, array $from = []): self
     {
         $builtTasks = array_map(
             static fn(TaskBuilder $t) => $t->build(),
@@ -131,7 +135,8 @@ final class WorkflowBuilder
             'tasks' => $builtTasks,
         ]
             + ($capture === true ? ['capture' => true] : [])
-            + ($cache === true ? ['cache' => true] : []);
+            + ($cache === true ? ['cache' => true] : [])
+            + ($from !== [] ? ['from' => $from] : []);
 
         return $this;
     }
@@ -223,11 +228,116 @@ final class WorkflowBuilder
     }
 
     /**
+     * Add an include-compose stage (C11): the stage's body is the whole of
+     * another registered workflow, run to completion as ONE outer stage row.
+     *
+     * `uses:` is an ARM, not a fifth stage type: the stored shape keeps
+     * `type: 'stage'` (the shared list in {@see Workflow} stays the engine's
+     * dispatch truth) and carries the included workflow's name under `uses`,
+     * optionally with `with` values interpolated in the OUTER context and
+     * injected as the inner start context. Exactly one body per stage — the
+     * loader refuses `uses:` alongside agent:/tasks:/task:/agents:/stages:/
+     * parallel:/a non-stage type:, and the engine refuses chains deeper than
+     * three nodes or that cycle, both raw English carrying the chain like
+     * `a -> b -> c -> d`.
+     *
+     * @param array<string, string> $with
+     */
+    public function uses(string $name, string $included, array $with = [], bool $capture = false, bool $cache = false): self
+    {
+        $this->stages[] = [
+            'name' => $name,
+            'type' => 'stage',
+            'uses' => $included,
+        ]
+            + ($with !== [] ? ['with' => $with] : [])
+            + ($capture === true ? ['capture' => true] : [])
+            + ($cache === true ? ['cache' => true] : []);
+
+        return $this;
+    }
+
+    /**
      * Set the per-stage timeout in seconds.
      */
     public function timeout(int $seconds): self
     {
         $this->timeout = $seconds;
+        return $this;
+    }
+
+    /**
+     * C2: attach a `when:` condition to the stage most recently added by
+     * {@see stage()}, {@see parallel()}, {@see pipeline()} or
+     * {@see withVerification()}. The clause is normalized and refused at
+     * call time by {@see StageCondition::parse()} — malformed grammar never
+     * rides into the built workflow (the same law the YAML loader enforces,
+     * and the same raw-English InvalidArgumentException shape
+     * {@see TaskBuilder::reject()} uses).
+     *
+     * @param array<string, mixed> $clause the author's `when:` map
+     *
+     * @throws \InvalidArgumentException when no stage exists to attach to,
+     *         or the clause is not the closed grammar.
+     */
+    public function when(array $clause): self
+    {
+        if ($this->stages === []) {
+            throw new \InvalidArgumentException('when() needs a stage to attach to; call it after stage(), parallel(), pipeline() or withVerification()');
+        }
+
+        $normalized = StageCondition::parse($clause);
+        $this->stages[array_key_last($this->stages)]['when'] = $normalized;
+
+        return $this;
+    }
+
+    /**
+     * C4: attach a `loop:` round policy to the stage most recently added by
+     * {@see stage()}. The map is a closed pair — `max` (whole number ≥ 1) and
+     * `until` (a C2 clause) — normalized and refused at call time, the same
+     * raw-English InvalidArgumentException shape {@see when()} rides. v1 is
+     * stage-only: {@see parallel()}, {@see pipeline()} and
+     * {@see withVerification()} rows refuse it, so a built workflow can never
+     * carry a round policy its runner would not honour.
+     *
+     * @param array<string, mixed> $loop the author's `loop:` map
+     *
+     * @throws \InvalidArgumentException when no stage exists to attach to, the
+     *         last stage is not a plain one, or the map is not the closed pair.
+     */
+    public function loop(array $loop): self
+    {
+        if ($this->stages === []) {
+            throw new \InvalidArgumentException('loop() needs a stage to attach to; call it after stage() (loop: is stage-only in v1)');
+        }
+
+        $lastKey = array_key_last($this->stages);
+        $last = $this->stages[$lastKey];
+        if ($last['type'] !== 'stage') {
+            throw new \InvalidArgumentException(
+                "loop() is stage-only in v1; the last stage '" . $last['name'] . "' is a '" . $last['type'] . "' stage"
+            );
+        }
+
+        if (!array_key_exists('max', $loop) || !array_key_exists('until', $loop)) {
+            throw new \InvalidArgumentException('loop() needs both max and until');
+        }
+
+        $max = null;
+        if (is_int($loop['max'])) {
+            $max = $loop['max'];
+        } elseif (is_string($loop['max']) && preg_match('/^-?\d+$/', trim($loop['max'])) === 1) {
+            $max = (int) trim($loop['max']);
+        }
+
+        if ($max === null || $max < 1) {
+            throw new \InvalidArgumentException('loop() needs "max" to be a whole number of at least 1');
+        }
+
+        $normalized = ['max' => $max, 'until' => StageCondition::parse($loop['until'])];
+        $this->stages[$lastKey]['loop'] = $normalized;
+
         return $this;
     }
 

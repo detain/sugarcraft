@@ -19,12 +19,15 @@ use SugarCraft\Code\Agents\EngineExecutor;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Hooks\HookContext;
+use SugarCraft\Code\Hooks\HookDispatcher;
 use SugarCraft\Code\Permissions\PermissionAction;
 use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Permissions\ToolDeclaration;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Tools\Tool;
+use SugarCraft\Code\Util\PathGlob;
 
 /**
  * Executes workflows sequentially, stage by stage.
@@ -133,6 +136,27 @@ final class WorkflowEngine implements WorkflowEngineInterface
      */
     public const RESULTS_CONTEXT_KEY = '@results';
 
+    /**
+     * The context entry holding the re-encoded JSON document of each
+     * schema'd stage's output, keyed by result name, for the
+     * `{{name.<pointer>}}` interpolation form (RFC 6901).
+     *
+     * Typed rows live in a map of their OWN — never in a suffixed slot of
+     * the {@see RESULTS_CONTEXT_KEY} map — because result names are
+     * arbitrary strings: a `from:`-template fan-out names its tasks by
+     * file relative path, so a task named `a.json` exists, and one shared
+     * map would let that task's text row impersonate or clobber task `a`'s
+     * typed row. Separate namespaces make that collision unrepresentable.
+     *
+     * Values are JSON STRINGS like the text rows, not arrays: a string
+     * survives the resume path's row filtering and the pause file's
+     * json_encode carries it, so the typed map round-trips with no extra
+     * machinery.
+     *
+     * @see jsonPointerValue() for how the rows are addressed.
+     */
+    public const TYPED_RESULTS_CONTEXT_KEY = '@typedResults';
+
     /** Scan outcome of {@see scanVerdict()}: the pattern matched — reject. */
     private const VERDICT_REJECTED = 'rejected';
     /** Scan outcome: no match — the verdict stands. */
@@ -149,6 +173,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * nothing; the stage fails once and the run stops for a human.
      */
     private const ESCALATION_PATTERN = '/^[ \t]*ESCALATE:/m';
+
+    /**
+     * The prefix every escalated-verifier failure reason carries, spelled
+     * exactly as {@see self::scanVerdict()} builds it. The CLI surface
+     * (`candy-code workflow`) keys its exit-3 mapping on this constant rather
+     * than re-spelling the sentence: a verifier escalation is a stop FOR A
+     * PERSON, not a plain stage failure, and the two must stay tellable apart from
+     * outside the engine without parsing prose.
+     */
+    public const ESCALATION_MARKER = 'escalated: ';
 
     /**
      * Finished (or interrupted) runs this engine can still pause, keyed by the
@@ -250,6 +284,23 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private array $previousSignalHandlers = [];
 
     /**
+     * Optional observer invoked by {@see installInterruptHandlers()}'s handler
+     * AFTER the cooperative pause record has been written and BEFORE the
+     * process exits, receiving the partial result and the pause file path (or
+     * null if the record could not be located) and returning the exit code.
+     *
+     * Null — the default — keeps the historical behaviour byte-identical:
+     * `exit(130/143)` straight through the load-bearing shutdown sequence.
+     * The headless `candy-code workflow` verb (W-1/D4) installs an observer
+     * so a signal-pause can emit its machine document on stdout and exit 3;
+     * nothing else in-tree sets it. Mutable-service precedent: same shape as
+     * {@see setAgentManager()} — the engine is a service the caller wires.
+     *
+     * @var (\Closure(WorkflowResult, ?string): int)|null
+     */
+    private ?\Closure $signalPauseHandler = null;
+
+    /**
      * The owner of every run currently live on this engine, innermost last —
      * the `\Fiber` it is executing in, or `null` for the main call stack.
      *
@@ -324,12 +375,20 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * Interleaving is still refused by {@see $liveRunOwners}, so at most one
      * chain of NESTED runs is ever in here.
      *
-     * @var array<int, array{key: string, workflowId: string, loadPath: ?string, snapshot: \Closure(WorkflowStatus): WorkflowResult, pauseRequested: bool}>
+     * @var array<int, array{key: string, workflowId: string, loadPath: ?string, snapshot: \Closure(WorkflowStatus): WorkflowResult, pauseRequested: bool, inputHashes: array<string, string>, dynamicWaves: array<array-key, mixed>, inputJoins: array<string, list<array{from: list<string>, as: string}>>}>
      */
     private array $liveRuns = [];
 
     /** The error a stage the cancel interrupted carries ({@see cancelledRun()}). */
     public const CANCELLED_STAGE_ERROR = 'cancelled with Esc Esc while it ran; its agents were stopped';
+
+    /**
+     * C11: how many workflows one run may span through `uses:` stages, outer
+     * included — a -> b -> c is depth 3 and legal, the fourth node refuses.
+     * The linter pre-checks the same bound statically; this is the runtime
+     * door for plans assembled at run time.
+     */
+    public const MAX_USES_DEPTH = 3;
 
     /** Source of {@see $liveRuns} keys. */
     private int $liveRunSequence = 0;
@@ -353,6 +412,21 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @var list<\WeakReference<AgentWorkerPool>>
      */
     private array $dispatchPools = [];
+
+    /**
+     * C11 include-compose: the names of the workflows whose stage loops this
+     * engine is executing right now, outermost first — the uses-chain this
+     * run is walking. {@see executeIncludedWorkflow()} refuses an include
+     * whose name is already on it (a cycle) or whose addition would exceed
+     * {@see MAX_USES_DEPTH} (depth), and sets it for the nested run so the
+     * refusal sees the whole path, not just one hop. Engine state rather
+     * than a loop parameter because a resume re-enters at a stage boundary
+     * and rebuilds the chain by walking its outer stages again — the same
+     * reason the pause-within-an-inner limitation is what it is.
+     *
+     * @var list<string>
+     */
+    private array $usesChain = [];
 
     /**
      * @param string $model    The model every stage's agent runs on. A workflow
@@ -481,6 +555,17 @@ final class WorkflowEngine implements WorkflowEngineInterface
          * declaration at all is unresolvable and refused loudly.
          */
         private readonly ?array $toolRegistry = null,
+        /**
+         * C6: the hook dispatcher this run announces stage lifecycle to
+         * ({@see HookEvent::StageStarted()} and siblings). NULL, THE DEFAULT,
+         * IS UNARMED: every announce site early-returns, so an engine built
+         * without it behaves byte-identically to one built before C6 existed
+         * — pinned, not asserted in prose. When present, the four lifecycle
+         * events are dispatched inline and synchronously on the run's own
+         * path; they are observe-only and cannot alter the run. The TUI seat
+         * hands it over after construction — {@see bindHookDispatcher()}.
+         */
+        private ?HookDispatcher $hookDispatcher = null,
     ) {}
 
     /**
@@ -554,6 +639,20 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($executor instanceof EngineExecutor) {
             $executor->bind($engine, $this->agentManager);
         }
+    }
+
+    /**
+     * Late and mutable for the same reason as {@see bindEngineBackend()}: the
+     * session build site owns the hook chain and hands it over only after the
+     * launch workspace closes, through {@see
+     * \SugarCraft\Code\Hooks\HookManager::armWorkflow()}, before the engine's
+     * first run. Null keeps the constructor's documented unarmed contract —
+     * the engine announces nothing. The CLI verb seat never calls this, so a
+     * headless run stays byte-identical to the shape it has always had.
+     */
+    public function bindHookDispatcher(?HookDispatcher $hookDispatcher): void
+    {
+        $this->hookDispatcher = $hookDispatcher;
     }
 
     /**
@@ -917,6 +1016,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $workflow = $this->registry->load($workflowPath);
         $context = self::withSanitizedResults(is_array($data['context'] ?? null) ? $data['context'] : []);
         [$stagesCompleted, $prior] = $this->priorProgress($data, $workflow, $context);
+        // C9L: a settled join is a decision already paid for. If the workflow
+        // file was edited mid-pause so any recorded join stage's declaration
+        // no longer matches the ledger the pause wrote, resuming would
+        // re-decide it against the new shape — refuse the resume, loudly.
+        $this->refuseEditedInputJoins($workflowId, $workflow, $prior);
 
         // The pause file's OWN name is the pause identity, not the string the
         // user typed: a second interrupt during this resumed run must land on the
@@ -967,7 +1071,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param array<string, mixed> $data    the decoded pause file
      * @param array<string, mixed> $context the pause file's context
-     * @return array{0: int, 1: array{stageResults: list<StageResult>, totalTokens: int, totalCost: float, startedAt: \DateTimeImmutable, stageInputHashes: array<string, string>, recordedResults: array<string, StageResult>, totalsCountRecordedRows: bool}}
+     * @return array{0: int, 1: array{stageResults: list<StageResult>, totalTokens: int, totalCost: float, startedAt: \DateTimeImmutable, stageInputHashes: array<string, string>, dynamicWaves: array<array-key, mixed>, inputJoins: array<string, list<array{from: list<string>, as: string}>>, recordedResults: array<string, StageResult>, totalsCountRecordedRows: bool}}
      */
     private function priorProgress(array $data, Workflow $workflow, array $context): array
     {
@@ -975,14 +1079,19 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $rows = is_array($data['stageResults'] ?? null) ? array_values($data['stageResults']) : [];
 
         $succeeded = [];
-        // C13: every successful recorded row, keyed by stage name, not just
-        // the positionally-skipped prefix. The skip stays positional (skipping
-        // an unrecorded stage is not recoverable); this map exists so the
-        // hash-gated cache can find a later stage's recorded answer.
+        // C13: every settled recorded row — successes and C2 skips — keyed by
+        // stage name, not just the positionally-skipped prefix. The skip stays
+        // positional (skipping an unrecorded stage is not recoverable); this
+        // map exists so the hash-gated cache can find a later stage's recorded
+        // answer (a skip row can never serve one: cachedStageResult demands
+        // a success).
         $recordedByName = [];
         foreach ($rows as $row) {
             $stage = is_array($row) ? $this->deserializeStageResult($row) : null;
-            if ($stage === null || !$stage->isSuccess()) {
+            // C2: a recorded skip is a settled fact of the prefix, not a
+            // break — the resume must neither re-dispatch nor re-decide the
+            // stage; failures and cancellations still end the walk.
+            if ($stage === null || (!$stage->isSuccess() && $stage->status !== WorkflowStatus::Skipped)) {
                 break;
             }
             $succeeded[] = $stage;
@@ -1026,6 +1135,17 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // An old record has none, and an empty map is what the resumed
             // run seeds with — absence downstream is a cache miss, by law.
             'stageInputHashes' => is_array($data['stageInputHashes'] ?? null) ? $data['stageInputHashes'] : [],
+            // C8 substrate, same law: the materialised wave lists ride the
+            // pause file verbatim. A resume replays what this map records and
+            // NEVER re-globs; a pre-C8 record carries none, which is exactly
+            // the state where a fresh (unstarted) dynamic stage may expand.
+            'dynamicWaves' => is_array($data['dynamicWaves'] ?? null) ? $data['dynamicWaves'] : [],
+            // C9L substrate, same law: the recorded join declarations verbatim.
+            // A pre-C9L record carries none — absence makes the resume-side
+            // guard proceed (a missing ledger is "no claim made", not a broken
+            // one; the join hazard predates the record, refusing old pauses
+            // would buy zero safety for zero cost paid).
+            'inputJoins' => is_array($data['inputJoins'] ?? null) ? $data['inputJoins'] : [],
             'recordedResults' => $recordedByName,
             // Whether the seed totals are the file's cumulative spend (which
             // was written in the same snapshot as the rows above, so it ALREADY
@@ -1343,12 +1463,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
-     * The stages a run has DONE — the successful prefix of its results.
+     * The stages a run has DONE — the settled prefix of its results:
+     * successes, with C2's recorded skips riding along.
      *
-     * The loop fails fast, so successes are always a prefix and the first
-     * failure ends it; stopping at the first non-success also keeps a stage
-     * that is neither out of the count, since re-running a stage on resume is
-     * recoverable and skipping one is not.
+     * The loop fails fast, so settled rows are always a prefix and the first
+     * failure ends it; a skip belongs in the prefix because its stage is a
+     * settled fact of the run — re-running a stage on resume is recoverable,
+     * but re-deciding a skip would let it run under outputs that changed
+     * since the file was written.
      *
      * @return list<StageResult>
      */
@@ -1356,7 +1478,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
     {
         $done = [];
         foreach ($result->stageResults as $stage) {
-            if (!$stage->isSuccess()) {
+            if (!$stage->isSuccess() && $stage->status !== WorkflowStatus::Skipped) {
                 break;
             }
             $done[] = $stage;
@@ -1370,10 +1492,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * a live pause, a finished-run pause, the stage loop's own stop, and the
      * SIGINT/SIGTERM handler, so the format cannot drift between them.
      *
-     * Only the successful prefix is persisted ({@see completedStages()}), and
-     * `stagesCompleted` is its length, so a resume re-runs a stage that failed
-     * instead of skipping it (AUDIT WF-2). The totals are the run's whole
-     * spend, a failed attempt's included.
+     * Only the settled prefix — successes and recorded skips ({@see
+     * completedStages()}) — is persisted, and `stagesCompleted` is its length,
+     * so a resume re-runs a stage that failed instead of skipping it (AUDIT
+     * WF-2). The totals are the run's whole spend, a failed attempt's included.
      *
      * $clean is the writer's declaration of HOW this record came to exist:
      * true when a cooperative stop (explicit pause, the stage loop's own
@@ -1442,6 +1564,21 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $hashes = $slotToken === null ? [] : ($this->liveRuns[$slotToken]['inputHashes'] ?? []);
         if ($hashes !== []) {
             $data['stageInputHashes'] = $hashes;
+        }
+        // C8 substrate, same law: the materialised wave lists. A resume
+        // replays what this map records; a run with no dynamic stage omits
+        // the key entirely.
+        $waves = $slotToken === null ? [] : ($this->liveRuns[$slotToken]['dynamicWaves'] ?? []);
+        if ($waves !== []) {
+            $data['dynamicWaves'] = $waves;
+        }
+        // C9L substrate, same law: the join DECLARATIONS (never payloads) of
+        // every settled stage that joins. A resume whose edited YAML no longer
+        // matches this ledger refuses (refuseEditedInputJoins); a run with no
+        // joined stage omits the key entirely.
+        $joins = $slotToken === null ? [] : ($this->liveRuns[$slotToken]['inputJoins'] ?? []);
+        if ($joins !== []) {
+            $data['inputJoins'] = $joins;
         }
 
         // Audit M4: the pre-fix write ignored file_put_contents' return (a
@@ -1636,7 +1773,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $this->enterRun();
 
         try {
-            return $this->runGuardedFromWorkflow(
+            $result = $this->runGuardedFromWorkflow(
                 $workflow,
                 $context,
                 $currentStageIndex,
@@ -1647,6 +1784,15 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $pauseRequested,
                 $interruptible,
             );
+            // C6: the single run terminal for every entry point. Announced
+            // here — not in a finally — so a throwing run announces nothing
+            // (a crash is not a completion), while every RETURNED result,
+            // including a pre-flight refusal, passes the natural-terminal
+            // check inside the announce method. Nested `uses:` include runs
+            // re-enter this funnel and announce their own completion.
+            $this->announceWorkflowCompleted($result);
+
+            return $result;
         } finally {
             // In a finally so a throwing run cannot strand its slot and wedge
             // the engine against every later run.
@@ -1715,37 +1861,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $interruptId = $pauseId ?? $resolvedWorkflowId;
 
         // Whole-workflow pre-flight: a stage 5 that declares a refused tool
-        // must not cost four stages of real agent work first. See
-        // firstDeclarationRefusal() for why the per-stage checks stay as well.
-        // firstRejectMisuse() rides the same channel but is gate-independent:
-        // a mis-anchored reject() is a placement bug, not a permission call,
-        // and it must refuse under every configuration (firstDeclarationRefusal
-        // abstains when there is no permission gate).
-        // Reported as that stage's failure rather than thrown, so the shape a
-        // caller sees is the same one a refusal discovered inside the stage
-        // produces -- a Failed WorkflowResult carrying the message on the
-        // stage it belongs to. Nothing ran, so there are no agents on it and
-        // no tokens or cost.
-        $refusal = $this->firstDeclarationRefusal($workflow) ?? $this->firstRejectMisuse($workflow);
-        if ($refusal !== null) {
-            [$refusedStageName, $refusalMessage] = $refusal;
+        // must not cost four stages of real agent work first. Reported as that
+        // stage's failure rather than thrown — see preflightRefusal().
+        $refusalResult = $this->preflightRefusal($workflow, $resolvedWorkflowId, $stageResults, $context, $totalTokens, $totalCost, $startedAt);
 
-            return new WorkflowResult(
-                workflowId: $resolvedWorkflowId,
-                status: WorkflowStatus::Failed,
-                stageResults: [...$stageResults, new StageResult(
-                    stageName: $refusedStageName,
-                    status: WorkflowStatus::Failed,
-                    error: $refusalMessage,
-                    startedAt: new \DateTimeImmutable(),
-                    completedAt: new \DateTimeImmutable(),
-                )],
-                context: $context,
-                totalTokens: $totalTokens,
-                totalCost: $totalCost,
-                startedAt: $startedAt,
-                completedAt: new \DateTimeImmutable(),
-            );
+        if ($refusalResult !== null) {
+            return $refusalResult;
         }
 
         $previousAsyncSignals = !$interruptible ? null : $this->installInterruptHandlers(
@@ -1782,11 +1903,6 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 completedAt: new \DateTimeImmutable(),
             );
         };
-        // C13 substrate: per-stage input-identity hashes, seeded from the
-        // record a resume consumes and extended as each stage settles.
-        // Purely additive — old records carry none, and a later cache-side
-        // consumer reads absence as a cache miss, never as corruption.
-        $inputHashes = is_array($prior['stageInputHashes'] ?? null) ? $prior['stageInputHashes'] : [];
 
         $liveToken = ++$this->liveRunSequence;
 
@@ -1797,7 +1913,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 'loadPath' => $loadPath,
                 'snapshot' => $snapshot,
                 'pauseRequested' => false,
-                'inputHashes' => $inputHashes,
+                // C13/C8 replay ledgers, seeded from the pause record; an old
+                // record has neither and absence downstream is a cache miss.
+                'inputHashes' => $prior['stageInputHashes'] ?? [],
+                'dynamicWaves' => $prior['dynamicWaves'] ?? [],
+                // C9L: seed so a RE-pause of this resumed run preserves the
+                // first incarnation's join rows (lineage law, see refuse()).
+                'inputJoins' => $prior['inputJoins'] ?? [],
             ];
 
             foreach ($workflow->stages as $stageIndex => $stage) {
@@ -1843,10 +1965,27 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     );
                 }
 
+                // C2's when-guard, extracted verbatim by C4 to fund the loop's
+                // do-head inside the DocFigure window (see skippedWhenRow).
+                $skipped = $this->skippedWhenRow($stage, $context, $stageStartedAt);
+                if ($skipped !== null) {
+                    $stageResults[] = $skipped;
+                    // C6 adjudication: a skipped stage never reached a
+                    // dispatch, so it raises ONLY StageComplete — status
+                    // carries the distinction — and no StageStarted. Round
+                    // 0 says "no round ever ran".
+                    $this->announceStageComplete($resolvedWorkflowId, $skipped->stageName, $skipped->status->value, 0);
+                    continue;
+                }
+
                 // C13 opt-in: a `cache: true` stage whose record still matches
                 // its declaration carries without dispatch — door defaults closed.
                 $cached = $this->cachedStageResult($stage, $stageType, $prior);
                 if ($cached !== null) {
+                    // C6: a cache replay announces NOTHING — no dispatch
+                    // happened this run, so neither StageStarted nor a settle
+                    // event would be true. The replayed row still rides the
+                    // workflow's own totals and its WorkflowComplete totals.
                     $context[$cached->stageName . '.output'] = ($stage['capture'] ?? false) === true
                         ? $this->captureStageOutput($interruptId, $stageIndex, $cached)
                         : $cached->output ?? '';
@@ -1858,58 +1997,113 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     continue;
                 }
 
-                // Every agent the stage ran is recorded by the executor as each
-                // settles — an executor that throws AFTER one ran still bills it.
-                $dispatched = [];
-                $heldLocks = [];
-
-                try {
-                    // O3: exclusive, sorted, bounded flocks on every declared
-                    // resource BEFORE dispatch — full law: acquireStageResources().
-                    $heldLocks = $this->acquireStageResources($stage, $stageType);
-
-                    if ($stageType === 'parallel') {
-                        $stageResult = $this->executeParallelStage($stage, $context, $workflow, $dispatched);
-                    } elseif ($stageType === 'stage') {
-                        $stageResult = $this->executeStage($stage, $context, $dispatched, $workflow->timeout);
-                    } elseif ($stageType === 'pipeline') {
-                        $stageResult = $this->executePipelineStage($stage, $context, $dispatched, $workflow->maxConcurrent, $workflow->timeout);
-                    } else {
-                        $stageResult = $this->executeVerificationStage($stage, $context, $dispatched, $workflow->timeout);
+                // C4: a `loop:` map (parse-normalized, so is_array is the
+                // whole door) re-dispatches this stage until the clause holds
+                // or max rounds ran. Non-looped stages never enter the do —
+                // their body bytes and behavior are the pre-C4 ones.
+                $loop = is_array($stage['loop'] ?? null) ? $stage['loop'] : null;
+                $round = 1;
+                do {
+                    if ($loop !== null) {
+                        $context['round'] = $round;
                     }
-                } catch (\Throwable $e) {
-                    $stageResult = new StageResult(
-                        stageName: $stage['name'] ?? 'unknown',
-                        status: WorkflowStatus::Failed,
-                        error: $e->getMessage(),
-                        agents: array_column($dispatched, 'result'),
-                        startedAt: $stageStartedAt,
-                        completedAt: new \DateTimeImmutable(),
-                    );
-                } finally {
-                    // O3: every lock this stage took goes back on every exit
-                    // path — success, failure, throw, pause-request return.
-                    $this->releaseStageResources($heldLocks);
+
+                    // C6: one StageStarted per dispatched ROUND, raised before
+                    // any resource acquisition — a looped stage announces once
+                    // per round, matching what the executor will see.
+                    $this->announceStageStarted($resolvedWorkflowId, (string) ($stage['name'] ?? 'unknown'), $round);
+
+                    // Every agent the stage ran is recorded by the executor as each
+                    // settles — an executor that throws AFTER one ran still bills it.
+                    $dispatched = [];
+                    $heldLocks = [];
+
+                    try {
+                        // O3: exclusive, sorted, bounded flocks on every declared
+                        // resource BEFORE dispatch — full law: acquireStageResources().
+                        $heldLocks = $this->acquireStageResources($stage, $stageType);
+
+                        // C11: an include-compose stage runs a named workflow as
+                        // its body; the registry already refused body+uses.
+                        // C4: inside the do-body on purpose — a looped uses
+                        // stage re-dispatches the included workflow per round.
+                        if (array_key_exists('uses', $stage)) {
+                            $stageResult = $this->executeIncludedWorkflow($stage, $context, $workflow, $stageStartedAt);
+                        } elseif ($stageType === 'parallel') {
+                            $stageResult = $this->executeParallelStage($stage, $context, $workflow, $dispatched, $this->liveRuns[$liveToken]['dynamicWaves']);
+                        } elseif ($stageType === 'stage') {
+                            $stageResult = $this->executeStage($stage, $context, $dispatched, $workflow->timeout);
+                        } elseif ($stageType === 'pipeline') {
+                            $stageResult = $this->executePipelineStage($stage, $context, $dispatched, $workflow->maxConcurrent, $workflow->timeout);
+                        } else {
+                            $stageResult = $this->executeVerificationStage($stage, $context, $dispatched, $workflow->timeout);
+                        }
+                    } catch (\Throwable $e) {
+                        $stageResult = new StageResult(
+                            stageName: $stage['name'] ?? 'unknown',
+                            status: WorkflowStatus::Failed,
+                            error: $e->getMessage(),
+                            agents: array_column($dispatched, 'result'),
+                            startedAt: $stageStartedAt,
+                            completedAt: new \DateTimeImmutable(),
+                        );
+                    } finally {
+                        // O3: every lock this stage took goes back on every exit
+                        // path — success, failure, throw, pause-request return.
+                        $this->releaseStageResources($heldLocks);
+                    }
+
+                    // This stage's output and its agents' results, for downstream
+                    // interpolation — written here, once the stage has settled, so
+                    // a live pause's snapshot never holds half a stage.
+                    //
+                    // S3: a captured stage hands downstream the capture file's
+                    // PATH plus a bounded preview, not the whole dump — the file
+                    // holds every byte for whoever needs detail, the prompt
+                    // envelope stays cache-stable, and no reader inherits a
+                    // length-truncation hazard. Uncaptured runs take the right
+                    // side of the ternary: byte-identical to before S3.
+                    $context[$stageResult->stageName . '.output'] = ($stage['capture'] ?? false) === true && !$stageResult->isFailure()
+                        ? $this->captureStageOutput($interruptId, $stageIndex, $stageResult)
+                        : $stageResult->output ?? '';
+                    $context = self::withResults($context, $dispatched);
+
+                    $totalTokens += $this->sumTokens($stageResult);
+                    $totalCost += $this->sumCost($stageResult);
+                    $round++;
+                } while ($loop !== null
+                    && $round <= $loop['max']
+                    && $this->runCancellation?->isCancelled() !== true
+                    && !StageCondition::evaluate($loop['until'], $context));
+
+                if ($loop !== null) {
+                    unset($context['round']);
                 }
 
-                // This stage's output and its agents' results, for downstream
-                // interpolation — written here, once the stage has settled, so
-                // a live pause's snapshot never holds half a stage.
-                //
-                // S3: a captured stage hands downstream the capture file's
-                // PATH plus a bounded preview, not the whole dump — the file
-                // holds every byte for whoever needs detail, the prompt
-                // envelope stays cache-stable, and no reader inherits a
-                // length-truncation hazard. Uncaptured runs take the right
-                // side of the ternary: byte-identical to before S3.
-                $context[$stageResult->stageName . '.output'] = ($stage['capture'] ?? false) === true && !$stageResult->isFailure()
-                    ? $this->captureStageOutput($interruptId, $stageIndex, $stageResult)
-                    : $stageResult->output ?? '';
-                $context = self::withResults($context, $dispatched);
-
                 $stageResults[] = $stageResult;
-                $totalTokens += $this->sumTokens($stageResult);
-                $totalCost += $this->sumCost($stageResult);
+
+                // C6: the settle event. The engine's own fail-fast predicate
+                // (StageResult::isFailure() — the same one the fail-fast door
+                // below consults) is the SOLE trigger, so every settled stage
+                // raises exactly ONE of StageFail / StageComplete, never both
+                // and never none. `round` is the round that settled it
+                // ($round has just been incremented, so rounds-run == $round-1).
+                if ($stageResult->isFailure()) {
+                    $this->announceStageFail(
+                        $resolvedWorkflowId,
+                        $stageResult->stageName,
+                        $stageResult->status->value,
+                        $round - 1,
+                        $stageResult->error ?? '',
+                    );
+                } else {
+                    $this->announceStageComplete(
+                        $resolvedWorkflowId,
+                        $stageResult->stageName,
+                        $stageResult->status->value,
+                        $round - 1,
+                    );
+                }
 
                 // C13 substrate: record WHAT THIS STAGE WAS ASKED to run —
                 // the pre-interpolation prompt template plus model and
@@ -1922,6 +2116,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // (incremental, explicit, signal) carries the same map.
                 if ($stageResult->isSuccess()) {
                     $this->liveRuns[$liveToken]['inputHashes'][$stageResult->stageName] = self::stageInputHash($stage, $stageType);
+                    $joinRows = $this->stageJoinDeclarations($stage, $stageType);
+                    if ($joinRows !== []) {
+                        $this->liveRuns[$liveToken]['inputJoins'][$stageResult->stageName] = $joinRows;
+                    }
                 }
 
                 // O1: refresh the resilience record with this stage counted.
@@ -2003,6 +2201,453 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $this->restoreInterruptHandlers($previousAsyncSignals);
             }
         }
+    }
+
+    /**
+     * C9: build a fan-in join payload and inject it into a COPY of the
+     * interpolation context for one stage task.
+     *
+     * The join never persists into the running context: pause files carry no
+     * `input` row, and a resumed run re-derives the same bytes from the same
+     * recorded rows — the whole byte-stability story across pause/resume.
+     * What the pause record DOES carry since C9L is the `inputJoins` ledger
+     * ({@see refuseEditedInputJoins()}): the join DECLARATIONS of every
+     * settled joined stage, so an edit to a declaration mid-pause REFUSES the
+     * resume instead of silently re-deciding it. The payload itself is still
+     * nothing-is-stored — always re-derived, never replayed. (The same
+     * discipline {@see withSanitizedResults()} gives the typed map by
+     * neutralizing hand-edited junk AT READ TIME; here a hand-edited
+     * declaration cannot even reach read time.) The fixed name `input`
+     * shadows a prior stage named `input` inside the joining stage's own
+     * prompt only; downstream stages and the results map that survives the
+     * stage keep the legacy meaning.
+     *
+     * Shapes ({@see \SugarCraft\Code\Workflows\TaskBuilder::trustedJoin()}
+     * gated the vocabulary at load; this helper is the runtime half):
+     * - `file-list`: present source rows joined by newlines — capture paths
+     *   ride the rows themselves per the capture shape, so a file list IS the
+     *   joined text. Every source missing degrades to a note line, NOT a
+     *   refusal: a fan-in over optional producers must be able to say
+     *   "nothing".
+     * - `first`: the first present row verbatim.
+     * - `all`: every present row under a `=== name ===` banner, declaration
+     *   order, absent sources skipped.
+     * - `results`: a JSON document keyed by source name whose members are the
+     *   decoded typed rows ({@see TYPED_RESULTS_CONTEXT_KEY}) where present,
+     *   falling back to the text row; the join's text row IS that JSON, so
+     *   `{{input.results}}` and pointer paths like `{{input.a/b}}` agree (the
+     *   dot names the row, the remainder is an RFC 6901 pointer) — mirroring
+     *   how a schema'd stage's own text row already carries its raw JSON.
+     *
+     * `first`/`all`/`results` refuse loudly when EVERY named source is
+     * missing: text conjured from nothing would let a `when:`-skipped source
+     * ({@see skippedWhenRow()} — a skipped stage writes NOTHING to the
+     * context) pass as if it had contributed. The refusal is raw English and
+     * lands as a stage failure through the dispatch catch — parse cannot know
+     * skips, only run can.
+     *
+     * @param array<array-key, mixed> $context
+     * @param array{from: list<string>, as: string}|null $spec
+     *
+     * @return array<array-key, mixed>
+     */
+    private static function resolveStageInput(array $context, ?array $spec): array
+    {
+        if ($spec === null) {
+            return $context;
+        }
+
+        /** @var array<string, string> $rows */
+        $rows = [];
+        /** @var array<string, mixed> $members */
+        $members = [];
+        $typedRows = $context[self::TYPED_RESULTS_CONTEXT_KEY] ?? null;
+        if (!is_array($typedRows)) {
+            $typedRows = [];
+        }
+
+        foreach ($spec['from'] as $name) {
+            $row = $context[$name . '.output'] ?? null;
+            if (!is_string($row)) {
+                $textMap = $context[self::RESULTS_CONTEXT_KEY] ?? null;
+                $row = is_array($textMap) ? ($textMap[$name] ?? null) : null;
+            }
+
+            if (!is_string($row)) {
+                continue;
+            }
+
+            $rows[$name] = $row;
+
+            if ($spec['as'] === 'results') {
+                $typed = $typedRows[$name] ?? null;
+                $decoded = is_string($typed) ? json_decode($typed, true) : null;
+                $members[$name] = is_array($decoded) ? $decoded : $row;
+            }
+        }
+
+        if ($rows === []) {
+            if ($spec['as'] !== 'file-list') {
+                throw new \RuntimeException(
+                    'input join: every source is missing (' . implode(', ', $spec['from'])
+                    . ') - joins read prior stages; a stage skipped by when: records nothing'
+                );
+            }
+
+            $text = '[input: no sources joined]';
+        } else {
+            $text = match ($spec['as']) {
+                'file-list' => implode("\n", $rows),
+                'first' => $rows[array_key_first($rows)],
+                'all' => implode("\n", array_map(
+                    static fn (string $name, string $row): string => "=== {$name} ===\n{$row}",
+                    array_keys($rows),
+                    $rows
+                )),
+                default => (string) json_encode($members, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+            };
+        }
+
+        $context['input'] = $text;
+
+        $textMap = $context[self::RESULTS_CONTEXT_KEY] ?? null;
+        if (!is_array($textMap)) {
+            $textMap = [];
+        }
+
+        $textMap['input'] = $text;
+        $context[self::RESULTS_CONTEXT_KEY] = $textMap;
+
+        if ($spec['as'] === 'results') {
+            $typedRows['input'] = $text;
+            $context[self::TYPED_RESULTS_CONTEXT_KEY] = $typedRows;
+        }
+
+        return $context;
+    }
+
+    /**
+     * C2: a `when:` clause that answers unsatisfied settles the stage as
+     * Skipped WITHOUT dispatch — the row is a recorded fact, neither success
+     * nor failure. Nothing is billed, no output key is written (downstream
+     * reads see the stage as absent, which is the truth), no input hash is
+     * recorded (a skip re-decides nothing), and the clause gate stands ahead
+     * of the cache door: an unrun stage has nothing to replay.
+     *
+     * Extracted verbatim from {@see runGuardedFromWorkflow()} by C4, whose
+     * loop do-head needs the window bytes; behavior is the moved code's.
+     *
+     * @param array<string, mixed> $stage
+     * @param array<string, mixed> $context
+     */
+    private function skippedWhenRow(array $stage, array $context, \DateTimeImmutable $stageStartedAt): ?StageResult
+    {
+        $when = $stage['when'] ?? null;
+        if (is_array($when) && !StageCondition::evaluate($when, $context)) {
+            return new StageResult(
+                stageName: (string) ($stage['name'] ?? ''),
+                status: WorkflowStatus::Skipped,
+                startedAt: $stageStartedAt,
+                completedAt: $stageStartedAt,
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * The whole-workflow pre-flight, extracted from
+     * {@see runGuardedFromWorkflow()}'s head: a stage that declares a refused
+     * tool must not cost four stages of real agent work first. See
+     * firstDeclarationRefusal() for why the per-stage checks stay as well.
+     * firstRejectMisuse() rides the same channel but is gate-independent:
+     * a mis-anchored reject() is a placement bug, not a permission call, and
+     * it must refuse under every configuration (firstDeclarationRefusal
+     * abstains when there is no permission gate).
+     *
+     * Reported as that stage's failure rather than thrown, so the shape a
+     * caller sees is the same one a refusal discovered inside the stage
+     * produces -- a Failed WorkflowResult carrying the message on the
+     * stage it belongs to. Nothing ran, so there are no agents on it and
+     * no tokens or cost.
+     *
+     * @param list<StageResult> $stageResults
+     * @param array<string, mixed> $context
+     */
+    private function preflightRefusal(
+        Workflow $workflow,
+        string $resolvedWorkflowId,
+        array $stageResults,
+        array $context,
+        int $totalTokens,
+        float $totalCost,
+        \DateTimeImmutable $startedAt,
+    ): ?WorkflowResult {
+        $refusal = $this->firstDeclarationRefusal($workflow) ?? $this->firstRejectMisuse($workflow);
+
+        if ($refusal === null) {
+            return null;
+        }
+
+        [$refusedStageName, $refusalMessage] = $refusal;
+
+        return new WorkflowResult(
+            workflowId: $resolvedWorkflowId,
+            status: WorkflowStatus::Failed,
+            stageResults: [...$stageResults, new StageResult(
+                stageName: $refusedStageName,
+                status: WorkflowStatus::Failed,
+                error: $refusalMessage,
+                startedAt: new \DateTimeImmutable(),
+                completedAt: new \DateTimeImmutable(),
+            )],
+            context: $context,
+            totalTokens: $totalTokens,
+            totalCost: $totalCost,
+            startedAt: $startedAt,
+            completedAt: new \DateTimeImmutable(),
+        );
+    }
+
+    /**
+     * C11 include-compose: run a named workflow as this stage's body and
+     * settle the WHOLE inner run into exactly one outer StageResult.
+     *
+     * The door order is the refusal order: cycle first (the same name on the
+     * chain being walked), then depth (one node past {@see MAX_USES_DEPTH}
+     * would start the inner run), then the load itself. Every refusal is a
+     * raw-English throw — the stage loop's existing catch turns it into this
+     * stage's Failed row carrying the message verbatim, which is the shape
+     * the linter aims to pre-empt at lint time. A chain refusal names the
+     * full attempted path (`a -> b -> c -> d`) because a two-name message
+     * cannot locate the hop a long plan went wrong at.
+     *
+     * The inner run is NESTED on this fiber deliberately: null pauseId and
+     * loadPath keep its live frame addressable only by its generated id, so
+     * a user pause() can never select it and it writes no pause file of its
+     * own; interruptible false means one signal-handler frame, the outer's.
+     * Cancellation is shared state, not a parameter — $this->runCancellation
+     * stops inner and outer alike (see its property note).
+     *
+     * THE v1 LIMIT, stated here so the fold's honesty is local: inner stage
+     * results enter the OUTER run's live state only when this method returns,
+     * so a pause landing mid-inner records the outer snapshot WITHOUT any of
+     * the inner's finished stages, and resume replays the WHOLE inner stage.
+     *
+     * @param array<string, mixed> $stage        The uses stage ('uses' string, 'with' string map).
+     * @param array<string, mixed> $context      The OUTER run context — `with:` values interpolate here.
+     * @param Workflow             $workflow     The workflow this stage belongs to (chain member).
+     * @return StageResult One row: outer stage name, inner agents for the
+     *         totals, one `name: status` line per inner stage as output.
+     */
+    private function executeIncludedWorkflow(
+        array $stage,
+        array $context,
+        Workflow $workflow,
+        \DateTimeImmutable $stageStartedAt,
+    ): StageResult {
+        /** @var string $includedName */
+        $includedName = $stage['uses'];
+        $chain = [...$this->usesChain, $workflow->name];
+
+        if (in_array($includedName, $chain, true)) {
+            throw new \RuntimeException(sprintf(
+                'Workflow "%s" is already in this run\'s uses chain (%s); includes must not cycle.',
+                $includedName,
+                implode(' -> ', [...$chain, $includedName]),
+            ));
+        }
+
+        if (count($chain) + 1 > self::MAX_USES_DEPTH) {
+            throw new \RuntimeException(sprintf(
+                'Include chain too deep: %s (maximum depth is %d).',
+                implode(' -> ', [...$chain, $includedName]),
+                self::MAX_USES_DEPTH,
+            ));
+        }
+
+        $inner = $this->registry->load($includedName);
+
+        // with: is the inner run's START context, interpolated in the OUTER
+        // scope — {{b.output}} in a `with:` value reads the outer's settled
+        // stages. Nothing flows back out: inner stage names never enter the
+        // outer context (v1; this stage's own capture carries the folded
+        // "name: status" rows only, never the inner agents' answer text).
+        $innerContext = [];
+
+        foreach (($stage['with'] ?? []) as $key => $value) {
+            $innerContext[$key] = $this->interpolateContext((string) $value, $context);
+        }
+
+        $previousChain = $this->usesChain;
+        $this->usesChain = $chain;
+        $innerPauseRequested = false;
+
+        try {
+            $innerResult = $this->runFromWorkflow(
+                $inner,
+                $innerContext,
+                0,
+                null,
+                null,
+                null,
+                [],
+                $innerPauseRequested,
+                false,
+            );
+        } finally {
+            $this->usesChain = $previousChain;
+        }
+
+        // Fold: every agent the inner run spent rides this one row, because
+        // sumTokens()/sumCost() read the row's agents — dropping them would
+        // silently under-bill the outer totals.
+        $agents = [];
+        $lines = [];
+        $failedRow = null;
+
+        foreach ($innerResult->stageResults as $innerStage) {
+            foreach ($innerStage->agents as $agent) {
+                $agents[] = $agent;
+            }
+
+            $lines[] = $innerStage->stageName . ': ' . $innerStage->status->value;
+
+            if ($failedRow === null && $innerStage->isFailure()) {
+                $failedRow = $innerStage;
+            }
+        }
+
+        $error = match ($innerResult->status) {
+            WorkflowStatus::Completed => null,
+            WorkflowStatus::Cancelled => sprintf('included workflow "%s" was cancelled', $includedName),
+            // A nested frame the user cannot name cannot be paused; if one
+            // ever comes back Paused, say so rather than folding it silently
+            // into a generic failure.
+            WorkflowStatus::Paused => sprintf('included workflow "%s" paused, which an inner run cannot do', $includedName),
+            default => $failedRow !== null && $failedRow->error !== null
+                ? sprintf('included workflow "%s" failed: %s', $includedName, $failedRow->error)
+                : sprintf('included workflow "%s" failed', $includedName),
+        };
+
+        return new StageResult(
+            stageName: $stage['name'] ?? 'unknown',
+            status: $error === null ? WorkflowStatus::Completed : WorkflowStatus::Failed,
+            output: implode("\n", $lines),
+            error: $error,
+            agents: $agents,
+            startedAt: $stageStartedAt,
+            completedAt: new \DateTimeImmutable(),
+        );
+    }
+
+    /**
+     * C8: materialise a "from:" glob against the run's environment root.
+     *
+     * The glob is matched with the same {@see PathGlob} engine the permission
+     * globs use, over paths RELATIVE to the environment root ("/" separators)
+     * — a pattern like src/*.{php,js} fans out the session project's files,
+     * never the directory the workflow YAML was loaded from. Stars keep the
+     * matcher's fnmatch answer, which includes crossing "/" for a lone `*`:
+     * `*.txt` sweeps the whole tree, so a wave that means one directory
+     * spells the prefix (`src/*.txt`). Every match is a regular file, so an
+     * empty result means nothing matched, not "a directory did".
+     *
+     * The list is sorted for determinism: the pause record names files in
+     * this exact order, so a replayed stage builds the same fan-out. Patterns
+     * that try to leave the root (absolute, or carrying a ".." segment) are
+     * refused here rather than expanded into a surprising walk; a run with no
+     * environment root, or a root that no longer exists, is refused too —
+     * there is nothing to expand against. Symlinks are never followed: a link
+     * is neither descended nor collected, and every match is re-checked
+     * against the root's realpath before it fans out, so a name that would
+     * resolve outside the root fails the expansion loudly.
+     * Refusals throw: the engine loop's catch turns them into the loudly-
+     * failed stage, never a silently-empty fan-out.
+     *
+     * @return list<string> relative paths of every matching file
+     */
+    private function expandFromGlob(string $pattern): array
+    {
+        $root = $this->environmentRoot;
+        if ($root === null || $root === '') {
+            throw new WorkflowLoadException('a from: stage needs an environment root to expand');
+        }
+
+        if ($pattern === '' || str_starts_with($pattern, '/')) {
+            throw new WorkflowLoadException(
+                "a from: glob must be a relative pattern, got \"{$pattern}\""
+            );
+        }
+
+        if (preg_match('~(?:^|/)\.\.(?:/|$)~', $pattern) === 1) {
+            throw new WorkflowLoadException(
+                "a from: glob must not traverse above the environment root, got \"{$pattern}\""
+            );
+        }
+
+        $compiled = PathGlob::compile($pattern);
+        $root = rtrim($root, '/');
+        $realRoot = realpath($root);
+
+        if ($realRoot === false) {
+            throw new WorkflowLoadException(
+                "a from: stage needs an environment root that exists, got \"{$root}\""
+            );
+        }
+
+        $matches = [];
+
+        // Iterative walk, newest directory first off the stack — order does
+        // not matter here because the result is sorted before it is returned.
+        // An unreadable directory is skipped: the run either matches what it
+        // can read or fails the "expanded no files" door loudly.
+        $stack = [''];
+
+        while ($stack !== []) {
+            $dir = array_pop($stack);
+            $entries = @scandir($root . ($dir === '' ? '' : '/' . $dir));
+
+            if ($entries === false) {
+                continue;
+            }
+
+            foreach ($entries as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
+
+                $relative = $dir === '' ? $entry : $dir . '/' . $entry;
+
+                // A link is never followed: a directory symlink would let the
+                // walk leave the root laterally (or storm it on a cycle), and
+                // a file link is not the file its name claims to be.
+                if (is_link($root . '/' . $relative)) {
+                    continue;
+                }
+
+                if (is_dir($root . '/' . $relative)) {
+                    $stack[] = $relative;
+                    continue;
+                }
+
+                if (is_file($root . '/' . $relative) && PathGlob::matchCompiled($compiled, $relative) === true) {
+                    $resolved = realpath($root . '/' . $relative);
+
+                    if ($resolved === false || !str_starts_with($resolved, $realRoot . DIRECTORY_SEPARATOR)) {
+                        throw new WorkflowLoadException(
+                            "a from: expansion reached a path outside the environment root, got \"{$relative}\""
+                        );
+                    }
+
+                    $matches[] = $relative;
+                }
+            }
+        }
+
+        sort($matches);
+
+        return $matches;
     }
 
     /**
@@ -2260,6 +2905,17 @@ final class WorkflowEngine implements WorkflowEngineInterface
     {
         $material = ['type' => $stageType, 'tasks' => []];
 
+        // C11: an include-compose stage's identity is its SUBJECT NAME and
+        // its with: templates (pre-interpolation, same policy as task
+        // prompts). The inner workflow's own content is deliberately NOT in
+        // the material — `cache: true` beside `uses:` is the author's
+        // stability assertion about the include, and inner drift on disk is
+        // invisible to this hash until the declaration itself changes.
+        if (array_key_exists('uses', $stage)) {
+            $material['uses'] = $stage['uses'];
+            $material['with'] = $stage['with'] ?? [];
+        }
+
         $push = static function (mixed $task) use (&$material): void {
             if ($task instanceof WorkflowTask) {
                 $material['tasks'][] = [
@@ -2291,6 +2947,139 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
+     * C9L: the join DECLARATIONS of one stage — one row per task that carries
+     * an `input:` spec, in task declaration order, each row the exact shape
+     * {@see resolveStageInput()} consumes ({from: list<string>, as: string}).
+     * A join-free stage yields the empty list, so it earns no ledger row.
+     *
+     * Only the declarations are ever stored: the JOIN PAYLOADS stay derived
+     * at run time (the byte-stability law of resolveStageInput's doc-block —
+     * pause files still carry no `input` row, and this ledger changes that
+     * claim not at all: it says WHICH joins were decided, never WHAT they
+     * joined to).
+     *
+     * @param array<string, mixed> $stage
+     * @return list<array{from: list<string>, as: string}>
+     */
+    private function stageJoinDeclarations(array $stage, string $stageType): array
+    {
+        $rows = [];
+        foreach ($this->collectStageTasks($stage, $stageType) as $task) {
+            if ($task->input === null) {
+                continue;
+            }
+            $rows[] = [
+                'from' => array_values($task->input['from']),
+                'as' => $task->input['as'],
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * C9L: refuse a resume whose workflow file was EDITED mid-pause in a way
+     * that changes a recorded join stage's `input:` declaration.
+     *
+     * The hazard (C9-FIX, of record): the C13 replay hash covers task/model/
+     * schema material but NOT the join list, so a stage whose settled bytes
+     * were joined from [a, b] could resume against an edited declaration
+     * joining [a, c] — silently re-deciding a decision already paid for.
+     * The pause record therefore carries an `inputJoins` ledger of every
+     * settled join stage's declarations, and this guard compares the CURRENT
+     * definition against it for every successful recorded stage.
+     *
+     * Rulings (all pinned by WorkflowPauseResumeTest):
+     * - ABSENT ledger = pre-C9L record or join-free run: PROCEED. Absence is
+     *   "no claim made", not a broken one; refusing old pauses would break
+     *   live users' runs for zero safety gain (the hazard predates the ledger;
+     *   protection begins at the first write).
+     * - REORDER refuses: from-order is byte-significant in all four shapes
+     *   (file-list joins in list order, `first` takes the first present,
+     *   `all` banners in declaration order, `results` keys in list order).
+     * - A removed join, an added join, an `as` spelling change, and a
+     *   recorded stage VANISHING from the definition all refuse (the current
+     *   declaration is the empty list, which mismatches a join-bearing row).
+     * - Ledger rows for stages that are NOT recorded (pruned from the file)
+     *   are tolerated: only recorded decisions are defended.
+     * - The refusal is the resume-level WorkflowNotRunningException — loud,
+     *   raw English, before any stage re-decides — mirroring the C8
+     *   cannot-replay law for dynamic waves. A hand-edited ledger row cannot
+     *   forge consent: any attacker who can rewrite the pause file can as
+     *   well delete the key, which is the documented legacy pass; the guard
+     *   defends YAML edits, not a compromised record.
+     *
+     * @param array{inputJoins: array<string, mixed>, recordedResults: array<string, StageResult>} $prior
+     */
+    private function refuseEditedInputJoins(string $workflowId, Workflow $workflow, array $prior): void
+    {
+        $ledger = $prior['inputJoins'];
+        if ($ledger === []) {
+            return;
+        }
+
+        $current = [];
+        foreach ($workflow->stages as $stage) {
+            $name = (string) ($stage['name'] ?? 'unknown');
+            $rows = $this->stageJoinDeclarations($stage, (string) ($stage['type'] ?? ''));
+            if ($rows !== []) {
+                $current[$name] = $rows;
+            }
+        }
+
+        foreach ($prior['recordedResults'] as $name => $row) {
+            if (!$row->isSuccess()) {
+                continue;
+            }
+            $expected = self::canonicalJoinLedgerRow($ledger[$name] ?? null);
+            $declared = $current[$name] ?? [];
+            if ($expected === [] && $declared === []) {
+                continue;
+            }
+            if ($expected !== $declared) {
+                throw new WorkflowNotRunningException(
+                    "Workflow '{$workflowId}' cannot be resumed: stage '{$name}' has a recorded"
+                    . " input join whose declaration no longer matches the pause record's ledger"
+                    . ' — refusing to re-decide a recorded join stage against an edited workflow'
+                );
+            }
+        }
+    }
+
+    /**
+     * C9L: re-shape one ledger row (from the JSON-decoded file) into exactly
+     * what stageJoinDeclarations() produces, so a strict !== comparison is
+     * fair. Anything malformed canonicalises to the empty list — which
+     * mismatches any join-bearing current declaration (fail-closed toward
+     * refusal) and matches a stage that has no joins left (nothing to
+     * re-decide).
+     *
+     * @return list<array{from: list<string>, as: string}>
+     */
+    private static function canonicalJoinLedgerRow(mixed $raw): array
+    {
+        if (!is_array($raw)) {
+            return [];
+        }
+        $rows = [];
+        foreach ($raw as $entry) {
+            if (!is_array($entry) || !is_array($entry['from'] ?? null) || !is_string($entry['as'] ?? null)) {
+                return [];
+            }
+            $from = [];
+            foreach ($entry['from'] as $source) {
+                if (!is_string($source)) {
+                    return [];
+                }
+                $from[] = $source;
+            }
+            $rows[] = ['from' => $from, 'as' => $entry['as']];
+        }
+
+        return $rows;
+    }
+
+    /**
      * Execute a 'stage' type stage and return its StageResult.
      *
      * Builds a SubAgent from each of the stage's tasks and dispatches it
@@ -2316,7 +3105,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param array $stage        Stage array from Workflow::$stages.
      * @param array $context      Current workflow context for interpolation.
-     * @param list<array{key: string, result: AgentResult}> $dispatched Out: each agent this stage ran, as it settles.
+     * @param list<array{key: string, result: AgentResult, schema: bool}> $dispatched Out: each agent this stage ran, as it settles.
      * @param int   $stageTimeout Workflow::$timeout — this stage's wall-clock budget, in seconds.
      * @return StageResult
      */
@@ -2370,7 +3159,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             }
 
             // Interpolate prompt with context
-            $interpolatedPrompt = $this->interpolateContext($task->prompt, $taskContext);
+            $interpolatedPrompt = $this->interpolateContext($task->prompt, self::resolveStageInput($taskContext, $task->input));
 
             // Build SubAgent
             $agent = new Agent(
@@ -2392,6 +3181,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 task: $interpolatedPrompt,
                 timeout: $task->timeout ?? $stageTimeout,
                 maxRetries: $task->retries ?? 0,
+                stallTimeout: $task->stallTimeout ?? 0,
+                stallRestarts: $task->restarts,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $task->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
@@ -2414,6 +3205,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $record = [
                 'key' => self::resultKey($task->name, $multi ? $stageName . '_' . ($i + 1) : $stageName),
                 'result' => $agentResult,
+                'schema' => $task->outputSchema !== null,
             ];
             $dispatched[] = $record;
 
@@ -2459,7 +3251,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param array $stage          Stage array from Workflow::$stages.
      * @param array $context        Current workflow context for interpolation.
-     * @param list<array{key: string, result: AgentResult}> $dispatched Out: each step's agent, as it settles.
+     * @param list<array{key: string, result: AgentResult, schema: bool}> $dispatched Out: each step's agent, as it settles.
      * @param ?int  $maxConcurrent The workflow's concurrency width, carried for
      *                             call-site symmetry: a pipeline's steps run one
      *                             at a time by definition, so nothing here reads
@@ -2525,7 +3317,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
             /** @var WorkflowTask $task */
             $task = $nestedTasks[0];
-            $interpolatedPrompt = $this->interpolateContext($task->prompt, $pipelineContext);
+            $interpolatedPrompt = $this->interpolateContext($task->prompt, self::resolveStageInput($pipelineContext, $task->input));
 
             // Build SubAgent for this pipeline stage
             $agent = new Agent(
@@ -2547,6 +3339,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 task: $interpolatedPrompt,
                 timeout: $task->timeout ?? $stageTimeout,
                 maxRetries: $task->retries ?? 0,
+                stallTimeout: $task->stallTimeout ?? 0,
+                stallRestarts: $task->restarts,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $task->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
@@ -2567,6 +3361,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $record = [
                 'key' => self::resultKey($task->name, $nestedStage['name'] ?? $stageName . '_' . ($stepIndex + 1)),
                 'result' => $agentResult,
+                'schema' => $task->outputSchema !== null,
             ];
             $dispatched[] = $record;
             $pipelineContext = self::withResults($pipelineContext, [$record]);
@@ -2619,7 +3414,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param array $stage        Stage array from Workflow::$stages.
      * @param array $context      Current workflow context for interpolation.
-     * @param list<array{key: string, result: AgentResult}> $dispatched Out: the task's and the verifier's agents, as each settles.
+     * @param list<array{key: string, result: AgentResult, schema: bool}> $dispatched Out: the task's and the verifier's agents, as each settles.
      * @param int   $stageTimeout Workflow::$timeout — one budget shared by the
      *                            task and its verifier.
      * @return StageResult
@@ -2662,7 +3457,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         // --- Run the task ---
-        $taskPrompt = $this->interpolateContext($task->prompt, $context);
+        // C9: the join reads this task's own input: spec against the run context;
+        // the helper returns a copy, so the persisted $context never carries it.
+        $taskPrompt = $this->interpolateContext($task->prompt, self::resolveStageInput($context, $task->input));
 
         $taskAgent = new Agent(
             name: $task->name ?? $task->agentType,
@@ -2683,6 +3480,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
             task: $taskPrompt,
             timeout: $task->timeout ?? $stageTimeout,
             maxRetries: $task->retries ?? 0,
+            stallTimeout: $task->stallTimeout ?? 0,
+            stallRestarts: $task->restarts,
             isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
             outputSchema: $task->outputSchema,
             // S2: the per-stage model ask; null keeps today's session-default dial.
@@ -2698,7 +3497,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         );
 
         $taskResult = $this->dispatchOne($taskSubAgent, $taskRequest, $this->stagePool($stageTimeout, $stageClock));
-        $taskRecord = ['key' => self::resultKey($task->name, $stageName), 'result' => $taskResult];
+        $taskRecord = ['key' => self::resultKey($task->name, $stageName), 'result' => $taskResult, 'schema' => $task->outputSchema !== null];
         $dispatched[] = $taskRecord;
 
         // If task itself fails, the whole stage fails immediately
@@ -2710,7 +3509,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $verifierContext = self::withResults($context, [$taskRecord]);
         $verifierContext['prevResult'] = $taskResult->output ?? '';
 
-        $verifierPrompt = $this->interpolateContext($verifier->prompt, $verifierContext);
+        $verifierPrompt = $this->interpolateContext($verifier->prompt, self::resolveStageInput($verifierContext, $verifier->input));
 
         $verifierAgent = new Agent(
             name: $verifier->name ?? $verifier->agentType,
@@ -2763,6 +3562,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 task: $verifierPrompt,
                 timeout: $verifier->timeout ?? $stageTimeout,
                 maxRetries: $maxRetriesForAttempt,
+                stallTimeout: $verifier->stallTimeout ?? 0,
+                stallRestarts: $verifier->restarts,
                 isolation: $verifier->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $verifier->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
@@ -2776,7 +3577,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $verifierAttempts[] = $verifierResult;
             // Same key per attempt: the last settles into the results context,
             // the documented law for pool retries carried to verdict rounds.
-            $dispatched[] = ['key' => self::resultKey($verifier->name, $stageName . '_verifier'), 'result' => $verifierResult];
+            $dispatched[] = ['key' => self::resultKey($verifier->name, $stageName . '_verifier'), 'result' => $verifierResult, 'schema' => $verifier->outputSchema !== null];
 
             if ($verifierResult->status !== AgentStatus::Completed) {
                 // A dead verifier speaks nothing: no verdict, no question —
@@ -2948,10 +3749,17 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @param array    $stage   Stage array from Workflow::$stages.
      * @param array    $context Current workflow context for interpolation.
      * @param Workflow $workflow The workflow definition (provides maxConcurrent, stopOnFirstFailure).
-     * @param list<array{key: string, result: AgentResult}> $dispatched Out: one entry per agent that settled.
+     * @param list<array{key: string, result: AgentResult, schema: bool}> $dispatched Out: one entry per agent that settled.
+     * @param ?array<array-key, mixed> $waveLedger C8 in/out: the live run's
+     *     dynamic-wave record, keyed by stage name (a numeric-string stage name
+     *     takes its native int key — PHP casts array keys, so the map is
+     *     array-key-keyed by construction). A first expansion writes
+     *     its MATERIALIZED list here (so pause writers persist it); a resume
+     *     reads the recorded list back. Null means the caller keeps no
+     *     ledger — expansion then happens fresh on every call.
      * @return StageResult
      */
-    private function executeParallelStage(array $stage, array $context, Workflow $workflow, array &$dispatched): StageResult
+    private function executeParallelStage(array $stage, array $context, Workflow $workflow, array &$dispatched, ?array &$waveLedger = null): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
@@ -2966,6 +3774,92 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 startedAt: $stageStartedAt,
                 completedAt: new \DateTimeImmutable(),
             );
+        }
+
+        // C8: a "from:" parallel stage swaps its single template task for a
+        // runtime fan-out, expanded ONCE here at stage entry against the
+        // workflow's environment root. The pause record keeps the MATERIALIZED
+        // list — a resume replays that recorded list and never re-globs,
+        // because files that changed mid-run must fail the resume loudly
+        // rather than silently fork different work from what was paused.
+        $dynamic = isset($stage['from']);
+        $chunk = null;
+        if ($dynamic) {
+            $template = $tasks[0] ?? null;
+            if (count($tasks) !== 1 || !$template instanceof WorkflowTask) {
+                return new StageResult(
+                    stageName: $stageName,
+                    status: WorkflowStatus::Failed,
+                    error: "Stage '{$stageName}' carries a from: fan-out without its single template task",
+                    startedAt: $stageStartedAt,
+                    completedAt: new \DateTimeImmutable(),
+                );
+            }
+
+            $from = $stage['from'];
+            $recorded = $waveLedger[$stageName] ?? null;
+            if ($recorded === null) {
+                $paths = $this->expandFromGlob((string) $from['glob']);
+                $chunk = $from['chunk'];
+                if ($waveLedger !== null) {
+                    $waveLedger[$stageName] = ['paths' => $paths, 'chunk' => $chunk];
+                }
+            } else {
+                $replayable = false;
+                if (is_array($recorded)) {
+                    $replayable = isset($recorded['paths'])
+                        && is_array($recorded['paths']) && array_is_list($recorded['paths'])
+                        && (!array_key_exists('chunk', $recorded)
+                            || $recorded['chunk'] === null || is_int($recorded['chunk']));
+                    if ($replayable) {
+                        foreach ($recorded['paths'] as $candidate) {
+                            if (!is_string($candidate) || $candidate === '') {
+                                $replayable = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!$replayable) {
+                    return new StageResult(
+                        stageName: $stageName,
+                        status: WorkflowStatus::Failed,
+                        error: "Stage '{$stageName}' resumed with a dynamic-wave record it cannot replay — refusing to re-glob over files that may have changed",
+                        startedAt: $stageStartedAt,
+                        completedAt: new \DateTimeImmutable(),
+                    );
+                }
+
+                $paths = $recorded['paths'];
+                $chunk = $recorded['chunk'] ?? $from['chunk'];
+            }
+
+            if ($paths === []) {
+                return new StageResult(
+                    stageName: $stageName,
+                    status: WorkflowStatus::Failed,
+                    error: "Stage '{$stageName}' expanded no files from \"{$from['glob']}\"",
+                    startedAt: $stageStartedAt,
+                    completedAt: new \DateTimeImmutable(),
+                );
+            }
+
+            $tasks = array_map(static fn (string $rel): WorkflowTask => new WorkflowTask(
+                agentType: $template->agentType,
+                prompt: $template->prompt,
+                tools: $template->tools,
+                timeout: $template->timeout,
+                retries: $template->retries,
+                isolation: $template->isolation,
+                name: $rel,
+                outputSchema: $template->outputSchema,
+                model: $template->model,
+                reject: $template->reject,
+                rejectMinOccurrences: $template->rejectMinOccurrences,
+                resource: $template->resource,
+                lockWaitSeconds: $template->lockWaitSeconds,
+            ), $paths);
         }
 
         // Every task's declaration is checked before this method builds
@@ -2990,7 +3884,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // parallel stages with non-identical prompts work correctly.
         /** @var WorkflowTask $firstTask */
         $firstTask = $tasks[0];
-        $firstInterpolated = $this->interpolateContext($firstTask->prompt, $context);
+        // C8: a fanned-out item interpolates against its own {{path}}; the
+        // static spelling keeps the workflow context exactly as it was. Note
+        // the array-plus direction: a context that already defines 'path'
+        // wins, so an author-set path variable shadows the item's own path.
+        $firstContext = $dynamic && $firstTask->name !== null
+            ? $context + ['path' => $firstTask->name]
+            : $context;
+        $firstInterpolated = $this->interpolateContext($firstTask->prompt, self::resolveStageInput($firstContext, $firstTask->input));
 
         $firstAgent = new Agent(
             name: $firstTask->name ?? $firstTask->agentType,
@@ -3015,7 +3916,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         );
 
         $subAgents = [];
-        /** @var array<string, string> $resultKeys SubAgent id => result name, in declaration order */
+        /** @var array<string, array{key: string, schema: bool}> $resultKeys SubAgent id => result name + schema flag, in declaration order */
         $resultKeys = [];
         $agentIndex = 0;
         foreach ($tasks as $task) {
@@ -3039,7 +3940,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $unreachedGrant = $this->resolveRequestTools($task->tools);
             unset($unreachedGrant);
 
-            $interpolatedPrompt = $this->interpolateContext($task->prompt, $context);
+            // C8: on a "from:" fan-out, {{path}} names the item; static
+            // stages keep the workflow context exactly as it was. Left-wins
+            // array-plus: a context 'path' variable shadows the item path.
+            $itemContext = $dynamic && $task->name !== null
+                ? $context + ['path' => $task->name]
+                : $context;
+
+            $interpolatedPrompt = $this->interpolateContext($task->prompt, self::resolveStageInput($itemContext, $task->input));
 
             $agent = new Agent(
                 name: $task->name ?? $task->agentType,
@@ -3060,6 +3968,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 task: $interpolatedPrompt,
                 timeout: $task->timeout ?? $workflow->timeout,
                 maxRetries: $task->retries ?? 0,
+                stallTimeout: $task->stallTimeout ?? 0,
+                stallRestarts: $task->restarts,
                 isolation: $task->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                 outputSchema: $task->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
@@ -3067,7 +3977,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 permissionGate: $this->permissionGate,
             );
             $subAgents[] = $subAgent;
-            $resultKeys[$subAgent->id] = self::resultKey($task->name, $stageName . '_' . $agentIndex);
+            $resultKeys[$subAgent->id] = [
+                'key' => self::resultKey($task->name, $stageName . '_' . $agentIndex),
+                'schema' => $task->outputSchema !== null,
+            ];
         }
 
         // Create a fresh pool scoped to this parallel stage so that workflow-level
@@ -3088,8 +4001,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // the SYNCHRONOUS custom executor), so a stage pool rebuilt without it
         // drops back to a self-built worker and the caller's choice of worker
         // silently applies to sequential stages only.
+        // C8: "chunk" caps this stage's in-flight window — a ceiling, never
+        // a floor: it can narrow the workflow width, never widen it.
+        $concurrency = $dynamic && $chunk !== null
+            ? ($workflow->maxConcurrent === null ? $chunk : min($workflow->maxConcurrent, $chunk))
+            : $workflow->maxConcurrent;
+
         $pool = new AgentWorkerPool(
-            maxConcurrent: $workflow->maxConcurrent,
+            maxConcurrent: $concurrency,
             executor: $this->pool->executor(),
             workerProvider: $this->pool->workerProvider(),
             forkedExecutor: $this->pool->forkedExecutor(),
@@ -3552,12 +4471,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $text = $output ?? '';
 
         if (preg_match(self::ESCALATION_PATTERN, $text, $asked, PREG_OFFSET_CAPTURE) === 1) {
-            $line = self::matchedLine($text, (int) ($asked[0][1] ?? 0));
+            $line = self::matchedLine($text, (int) $asked[0][1]);
             $after = $attemptsUsed > 1 ? " [after {$attemptsUsed} attempts]" : '';
 
             return [
                 'kind' => self::VERDICT_ESCALATED,
-                'reason' => "escalated: verifier asked for a human decision on: \"{$line}\""
+                'reason' => self::ESCALATION_MARKER . "verifier asked for a human decision on: \"{$line}\""
                     . ' [not retried — the run stops for a person; answer it, then /workflow resume'
                     . ' re-runs this stage]' . $after,
             ];
@@ -3625,12 +4544,25 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
-     * Interpolate {{variable}}, {{stageName.output}}, and {{name.results}} tokens in a string.
+     * Interpolate {{variable}}, {{name.results}}, {{name.<pointer>}}, and
+     * {{stageName.output}} tokens in a string.
      *
      * - `{{name.results}}` is replaced with one agent's output, from the
      *   {@see RESULTS_CONTEXT_KEY} map ({@see resultKey()} names its entries).
+     * - `{{name.<pointer>}}` addresses the agent's typed JSON row (the
+     *   {@see TYPED_RESULTS_CONTEXT_KEY} map) with an RFC 6901 pointer, so
+     *   `{{build.summary}}` and `{{build.items/0/id}}` reach document
+     *   leaves. The reserved tails `results` and `output` are not
+     *   pointers — they belong to the dedicated forms below and are left
+     *   for them, whichever way the run() ordering resolves.
      * - `{{stageName.output}}` is replaced with the output of a prior stage result.
      * - `{{variable}}` is replaced with $context['variable'].
+     *
+     * Substitution runs in that order, and every pass re-scans what the
+     * pass before it emitted: a typed leaf containing `{{stage.output}}`
+     * is therefore resolved by the stage pass that follows, while an
+     * emitted `{{name.results}}` (which had its pass already) survives
+     * verbatim.
      *
      * An unresolved token is left as written. So is one whose value is not a
      * string or a number: a `runFromPhp()` caller can put anything in the
@@ -3646,9 +4578,32 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $results = $context[self::RESULTS_CONTEXT_KEY] ?? [];
         $results = is_array($results) ? $results : [];
 
+        $typedRows = $context[self::TYPED_RESULTS_CONTEXT_KEY] ?? [];
+        $typedRows = is_array($typedRows) ? $typedRows : [];
+
         $text = preg_replace_callback(
             '/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\.results\}\}/',
             static fn (array $matches): string => self::interpolatable($results[$matches[1]] ?? null) ?? $matches[0],
+            $text
+        );
+
+        $text = preg_replace_callback(
+            '/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\.([A-Za-z0-9_~\/.\-]+)\}\}/',
+            static function (array $matches) use ($typedRows): string {
+                if ($matches[2] === 'results' || $matches[2] === 'output') {
+                    return $matches[0];
+                }
+                $typed = $typedRows[$matches[1]] ?? null;
+                if (!is_string($typed)) {
+                    return $matches[0];
+                }
+                $leaf = self::jsonPointerValue($typed, $matches[2]);
+                if (is_bool($leaf)) {
+                    return $leaf ? 'true' : 'false';
+                }
+
+                return self::interpolatable($leaf) ?? $matches[0];
+            },
             $text
         );
 
@@ -3690,8 +4645,19 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * {@see RESULTS_CONTEXT_KEY} map, in record order — a later record with
      * the same name overwrites an earlier one, as a later stage's does.
      *
+     * A record from a schema'd stage additionally stores its decoded
+     * payload, re-encoded as a JSON string in the separate
+     * {@see TYPED_RESULTS_CONTEXT_KEY} map keyed by the same result name,
+     * so `{{name.<pointer>}}` can address leaves of the document. The text
+     * row is written first and byte-identical either way, and the two maps
+     * never share a slot: a dotted result name (fan-out tasks are named by
+     * relative path) cannot impersonate or clobber another task's typed
+     * row. A stage whose output the schema could not constrain (no schema,
+     * or never valid JSON) simply gains no typed row, and pointer
+     * references to it stay verbatim.
+     *
      * @param array<array-key, mixed> $context
-     * @param list<array{key: string, result: AgentResult}> $records
+     * @param list<array{key: string, result: AgentResult, schema: bool}> $records
      * @return array<array-key, mixed>
      */
     private static function withResults(array $context, array $records): array
@@ -3702,12 +4668,73 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $results = $context[self::RESULTS_CONTEXT_KEY] ?? [];
         $results = is_array($results) ? $results : [];
+        $typed = $context[self::TYPED_RESULTS_CONTEXT_KEY] ?? [];
+        $typed = is_array($typed) ? $typed : [];
         foreach ($records as $record) {
-            $results[$record['key']] = $record['result']->output ?? '';
+            $text = $record['result']->output ?? '';
+            $results[$record['key']] = $text;
+            if (!$record['schema']) {
+                continue;
+            }
+            $decoded = json_decode($text, true);
+            if (!is_array($decoded)) {
+                continue;
+            }
+            $encoded = json_encode($decoded);
+            if (is_string($encoded)) {
+                $typed[$record['key']] = $encoded;
+            }
         }
         $context[self::RESULTS_CONTEXT_KEY] = $results;
+        if ($typed !== []) {
+            $context[self::TYPED_RESULTS_CONTEXT_KEY] = $typed;
+        }
 
         return $context;
+    }
+
+    /**
+     * RFC 6901 JSON pointer lookup into a {@see TYPED_RESULTS_CONTEXT_KEY} row.
+     *
+     * The pointer is split on `/` BEFORE unescaping, so `~1` protects an
+     * embedded slash as the spec requires; each reference token then
+     * unescapes `~1` to `/` first and `~0` to `~` second, in that order —
+     * reversed, `~01` would wrongly reach a key named `/`. A leading `/`
+     * is the from-root spelling and addresses the same document as the
+     * bare form. Dots carry no meaning here: `a.b` names ONE key with a
+     * dot in it, as the spec says. Returns null for any miss — a missing
+     * member, an interior object or array (only scalars interpolate), a
+     * null leaf, or a row that is not decodable JSON — so the caller
+     * leaves the `{{name.pointer}}` reference verbatim and the typo shows.
+     *
+     * @return string|int|float|bool|null the interpolatable leaf, or null on miss
+     */
+    private static function jsonPointerValue(string $typedRow, string $pointer): string|int|float|bool|null
+    {
+        $document = json_decode($typedRow, true);
+        if (!is_array($document)) {
+            return null;
+        }
+
+        $segments = explode('/', $pointer);
+        if (($segments[0] ?? '') === '') {
+            array_shift($segments);
+        }
+
+        $node = $document;
+        foreach ($segments as $segment) {
+            $name = str_replace(['~1', '~0'], ['/', '~'], $segment);
+            if (!is_array($node) || !array_key_exists($name, $node)) {
+                return null;
+            }
+            $node = $node[$name];
+        }
+
+        if (is_bool($node) || is_int($node) || is_float($node) || is_string($node)) {
+            return $node;
+        }
+
+        return null;
     }
 
     /**
@@ -3720,9 +4747,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * whose id names no agent of this stage — an executor that did not echo
      * the id it was handed — takes the first name no result has claimed.
      *
-     * @param array<string, string> $resultKeys   SubAgent id => result name, in declaration order
-     * @param list<AgentResult>     $agentResults
-     * @return list<array{key: string, result: AgentResult}>
+     * @param array<string, array{key: string, schema: bool}> $resultKeys   SubAgent id => result name + schema flag, in declaration order
+     * @param list<AgentResult> $agentResults
+     * @return list<array{key: string, result: AgentResult, schema: bool}>
      */
     private static function recordsInDeclarationOrder(array $resultKeys, array $agentResults): array
     {
@@ -3737,10 +4764,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         $records = [];
-        foreach ($resultKeys as $id => $key) {
+        foreach ($resultKeys as $id => $entry) {
             $agentResult = $byId[$id] ?? array_shift($unmatched);
             if ($agentResult !== null) {
-                $records[] = ['key' => $key, 'result' => $agentResult];
+                $records[] = ['key' => $entry['key'], 'result' => $agentResult, 'schema' => $entry['schema']];
             }
         }
 
@@ -4052,6 +5079,22 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // this comment used to credit), so this exit() still restores
             // through the single authoritative release path. See
             // installInterruptHandlers()'s doc-block.
+            $pauseFilePath = null;
+            try {
+                $pauseFilePath = $this->pauseFileFor($interruptId);
+            } catch (\Throwable) {
+                // The path is a courtesy for the observer; the record write
+                // above is what matters, and its absence must not change
+                // the exit — or block it.
+            }
+            if ($this->signalPauseHandler !== null) {
+                // A caller that owns the process lifecycle (the headless CLI
+                // verb, W-1/D4) decides the exit code — and may emit its
+                // machine document to stdout first. Plain exit() semantics
+                // below are unchanged for every other caller.
+                exit((int) ($this->signalPauseHandler)($partialResult, $pauseFilePath));
+            }
+
             exit($signo === \SIGINT ? 130 : 143);
         };
 
@@ -4059,6 +5102,19 @@ final class WorkflowEngine implements WorkflowEngineInterface
         pcntl_signal(\SIGTERM, $handler);
 
         return $previousAsyncSignals;
+    }
+
+    /**
+     * Install (or clear with null) the observer the SIGINT/SIGTERM handler
+     * consults on a cooperative pause — see {@see self::$signalPauseHandler}.
+     * Call BEFORE the run that may be signalled; the handler reads the
+     * property at signal time.
+     *
+     * @param (\Closure(WorkflowResult, ?string): int)|null $observer
+     */
+    public function setSignalPauseHandler(?\Closure $observer): void
+    {
+        $this->signalPauseHandler = $observer;
     }
 
     /**
@@ -4117,5 +5173,115 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         pcntl_async_signals($previousAsyncSignals);
+    }
+
+    /**
+     * C6 lifecycle announces. Every one early-returns UNARMED (no
+     * dispatcher), so an engine constructed without {@see $hookDispatcher}
+     * cannot differ from a pre-C6 engine by a single observable byte — the
+     * pin lives in WorkflowStageHookEventsTest. Dispatch is inline and
+     * synchronous (E646-clean: no timers, no budgets); the verdict is
+     * discarded by design — these events are observe-only, and the only
+     * consumer today (the checkpoint-commit recipe in docs/HOOKS.md) acts on
+     * the announce itself, never on a refusal.
+     *
+     * Each named helper is invoked from exactly ONE call site (the DocFigure
+     * events-table arm derives its citation census from these), so the four
+     * sites below are the whole lifecycle surface: the do-head round, the
+     * C2 skip door, the post-record settle, and the runFromWorkflow choke.
+     */
+    private function announceStageStarted(string $workflowId, string $stageName, int $round): void
+    {
+        if ($this->hookDispatcher === null) {
+            return;
+        }
+
+        $this->hookDispatcher->dispatchStageStarted(
+            $this->lifecycleHookContext($workflowId, ['stage' => $stageName, 'round' => $round]),
+        );
+    }
+
+    private function announceStageComplete(string $workflowId, string $stageName, string $status, int $round): void
+    {
+        if ($this->hookDispatcher === null) {
+            return;
+        }
+
+        $this->hookDispatcher->dispatchStageComplete(
+            $this->lifecycleHookContext($workflowId, [
+                'stage' => $stageName,
+                'status' => $status,
+                'round' => $round,
+            ]),
+        );
+    }
+
+    private function announceStageFail(string $workflowId, string $stageName, string $status, int $round, string $error): void
+    {
+        if ($this->hookDispatcher === null) {
+            return;
+        }
+
+        $this->hookDispatcher->dispatchStageFail(
+            $this->lifecycleHookContext($workflowId, [
+                'stage' => $stageName,
+                'status' => $status,
+                'round' => $round,
+                'error' => $error,
+            ]),
+        );
+    }
+
+    /**
+     * The run-terminal adjudication, pinned in both polarities: the natural
+     * terminals (`completed`, `failed` — a pre-flight refusal included, which
+     * is a terminal that dispatched nothing) announce; `paused` and
+     * `cancelled` do NOT, because both are resumable and announcing here
+     * would double-count the completion when the resumed run reaches its own
+     * natural terminal. Exceptions never reach this method — the choke calls
+     * it only with a RETURNED result, so a crashed run announces nothing.
+     */
+    private function announceWorkflowCompleted(WorkflowResult $result): void
+    {
+        if ($this->hookDispatcher === null) {
+            return;
+        }
+
+        if ($result->status !== WorkflowStatus::Completed && $result->status !== WorkflowStatus::Failed) {
+            return;
+        }
+
+        $this->hookDispatcher->dispatchWorkflowComplete(
+            $this->lifecycleHookContext($result->workflowId, [
+                'status' => $result->status->value,
+                'stages' => count($result->stageResults),
+                'totalTokens' => $result->totalTokens,
+                'totalCost' => $result->totalCost,
+            ]),
+        );
+    }
+
+    /**
+     * TaskList's board-event shape (docs/HOOKS.md, *The team events*): a
+     * fixed `toolName` token is what entry matchers filter on, the payload
+     * rides `toolArgs` and its JSON mirror in `toolInput`. `sessionId`
+     * carries the workflow run id — the same role teamId plays for boards.
+     *
+     * @param array<string,mixed> $payload
+     */
+    private function lifecycleHookContext(string $workflowId, array $payload): HookContext
+    {
+        $payload = ['workflow' => $workflowId] + $payload;
+
+        return new HookContext(
+            sessionId: $workflowId,
+            toolName: 'Workflow',
+            toolArgs: $payload,
+            toolInput: json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE),
+            toolOutput: '',
+            model: $this->model,
+            provider: $this->provider,
+            projectRoot: $this->environmentRoot ?? (getcwd() ?: ''),
+        );
     }
 }

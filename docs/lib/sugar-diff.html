@@ -12,31 +12,123 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-diff.html">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
 <link rel="icon" type="image/png" href="../img/icons/sugar-diff.png">
 <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/search.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner">
-    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<!--nav:start-->
+<nav class="nav" aria-label="Main navigation"><div class="nav-inner">
+    <a class="brand" href="/"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
     <div class="nav-links">
         <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
             <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <span>Search</span>
         </button>
-        <a href="../#libraries">Libraries</a>
-        <a href="../#apps">Apps</a>
-        <a href="../#demos">Demos</a>
-        <a href="../#quickstart">Quickstart</a>
-        <a href="../compare.html">Compare</a>
-        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a>
+        <ul class="nav-items">
+            <li class="nav-item"><a href="/">Home</a></li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Libraries <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/libraries.html">All libraries →</a>
+                    <a href="/lib/sugar-core.html">sugar-core</a>
+                    <a href="/lib/sugar-style.html">sugar-style</a>
+                    <a href="/lib/sugar-cellbuffer.html">sugar-cellbuffer</a>
+                    <a href="/lib/sugar-async.html">sugar-async</a>
+                    <a href="/lib/sugar-spring.html">sugar-spring</a>
+                    <a href="/lib/sugar-mouse.html">sugar-mouse</a>
+                    <a href="/lib/sugar-widgets.html">sugar-widgets</a>
+                    <a href="/lib/sugar-charts.html">sugar-charts</a>
+                    <a href="/lib/sugar-forms.html">sugar-forms</a>
+                    <a href="/lib/sugar-markdown.html">sugar-markdown</a>
+                    <a href="/lib/sugar-cli.html">sugar-cli</a>
+                    <a href="/lib/sugar-ssh-server.html">sugar-ssh-server</a>
+                    <a href="/lib/sugar-metrics.html">sugar-metrics</a>
+                    <a href="/lib/sugar-log.html">sugar-log</a>
+                    <a href="/lib/sugar-image.html">sugar-image</a>
+                    <a href="/lib/sugar-animation.html">sugar-animation</a>
+                    <a href="/lib/sugar-video.html">sugar-video</a>
+                    <a href="/lib/sugar-colorprofile.html">sugar-colorprofile</a>
+                    <a href="/lib/sugar-ansi-parser.html">sugar-ansi-parser</a>
+                    <a href="/lib/sugar-vterm.html">sugar-vterm</a>
+                    <a href="/lib/sugar-pty.html">sugar-pty</a>
+                    <a href="/lib/sugar-focus.html">sugar-focus</a>
+                    <a href="/lib/sugar-gallery.html">sugar-gallery</a>
+                    <a href="/lib/sugar-treelist.html">sugar-treelist</a>
+                    <a href="/lib/sugar-constraints.html">sugar-constraints</a>
+                    <a href="/lib/sugar-panels.html">sugar-panels</a>
+                    <a href="/lib/sugar-overlay.html">sugar-overlay</a>
+                    <a href="/lib/sugar-navstack.html">sugar-navstack</a>
+                    <a href="/lib/sugar-dashboard.html">sugar-dashboard</a>
+                    <a href="/lib/sugar-quickpick.html">sugar-quickpick</a>
+                    <a href="/lib/sugar-input.html">sugar-input</a>
+                    <a href="/lib/sugar-fuzzy.html">sugar-fuzzy</a>
+                    <a href="/lib/sugar-flexbox.html">sugar-flexbox</a>
+                    <a href="/lib/sugar-toast.html">sugar-toast</a>
+                    <a href="/lib/sugar-datepicker.html">sugar-datepicker</a>
+                    <a href="/lib/sugar-readline.html">sugar-readline</a>
+                    <a href="/lib/sugar-table.html">sugar-table</a>
+                    <a href="/lib/sugar-diff.html">sugar-diff</a>
+                    <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
+                    <a href="/lib/sugar-testing.html">sugar-testing</a>
+                </div>
+            </li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Apps <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/apps.html">All apps →</a>
+                    <a href="/lib/candy-starter.html">candy-starter</a>
+                    <a href="/lib/candy-scriptui.html">candy-scriptui</a>
+                    <a href="/lib/candy-codeshot.html">candy-codeshot</a>
+                    <a href="/lib/candy-mdview.html">candy-mdview</a>
+                    <a href="/lib/candy-ansi-inspect.html">candy-ansi-inspect</a>
+                    <a href="/lib/candy-ssh-launcher.html">candy-ssh-launcher</a>
+                    <a href="/lib/candy-kv.html">candy-kv</a>
+                    <a href="/lib/candy-mail.html">candy-mail</a>
+                    <a href="/lib/candy-git-server.html">candy-git-server</a>
+                    <a href="/lib/candy-tetris.html">candy-tetris</a>
+                    <a href="/lib/candy-files.html">candy-files</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
+                    <a href="/lib/candy-code-web.html">candy-code-web</a>
+                    <a href="/lib/candy-vcr.html">candy-vcr</a>
+                    <a href="/lib/candy-git.html">candy-git</a>
+                    <a href="/lib/candy-sql.html">candy-sql</a>
+                    <a href="/lib/candy-codetime.html">candy-codetime</a>
+                    <a href="/lib/candy-minesweeper.html">candy-minesweeper</a>
+                    <a href="/lib/candy-gifview.html">candy-gifview</a>
+                    <a href="/lib/candy-image.html">candy-image</a>
+                    <a href="/lib/candy-top.html">candy-top</a>
+                    <a href="/lib/candy-flappy.html">candy-flappy</a>
+                </div>
+            </li>
+            <li class="nav-item nav-item-drop-right">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Docs <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop">
+                    <a href="/#architecture">Architecture</a>
+                    <a href="/#quickstart">Quickstart</a>
+                    <a href="/compare.html">Compare</a>
+                    <a href="/GETTING-STARTED.html">Getting Started</a>
+                    <a href="/GLOSSARY.html">Glossary</a>
+                    <a href="/KEYMAPS.html">Keymaps</a>
+                    <a href="/cookbook/index.html">Cookbook</a>
+                </div>
+            </li>
+            <li class="nav-item"><a href="/#demos">Demos</a></li>
+            <li class="nav-item"><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a></li>
+        </ul>
     </div>
 </div></nav>
+<!--nav:end-->
+
+<main id="main">
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries"><span aria-hidden="true">←</span> All 40 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 40 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-diff.png" alt="" aria-hidden="true">
@@ -52,12 +144,24 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-diff"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-diff" alt="SugarDiff code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">A unified-diff engine the whole ecosystem can share: <strong>LCS line diffing, numbered context hunks, a GNU <code>diff -u</code> writer, and a scanner that numbers the rows of any patch</strong>. Extracted from candy-code's <code>BuildsUnifiedDiff</code> trait (now a delegating consumer) and the <code>DiffGutter</code> region model (D1a fold landed: the gutter's scan half delegates to <code>UnifiedScan::lines()</code>, <code>fileHeaders()</code> and <code>isHunkHeader()</code>; only the fixed-width gutter formatting stays app-side). First-party — there is no 1:1 Go counterpart.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#the-model">The model</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#source">Source</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">A unified-diff engine the whole ecosystem can share: <strong>LCS line diffing, numbered context hunks, a GNU <code>diff -u</code> writer, and a scanner that numbers the rows of any patch</strong>. Extracted from candy-code's <code>BuildsUnifiedDiff</code> trait (now a delegating consumer) and the <code>DiffGutter</code> region model (D1a fold landed: the gutter's scan half delegates to <code>UnifiedScan::lines()</code>, <code>fileHeaders()</code> and <code>isHunkHeader()</code>; only the fixed-width gutter formatting stays app-side). First-party — there is no 1:1 Go counterpart.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-diff:@dev</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Diff\Diff;
 use SugarCraft\Diff\DiffOptions;
 use SugarCraft\Diff\Reader\UnifiedScan;
@@ -98,7 +202,7 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 // is terminated by construction and hides a missing final newline (README
 // recipe).</code></pre>
 
-    <h3 style="margin-top: 32px;">The model</h3>
+    <h3 id="the-model" style="margin-top: 32px;">The model</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Diff</strong><span>compute() entry point; lines, hunks, per-side counts and final-newline facts; isEmpty/addedLines/removedLines/unified/hunkText.</span></div>
       <div class="feature"><strong>Hunk / Line / LineKind</strong><span>One @@ block; one numbered row; eq/del/ins. All immutable value objects.</span></div>
@@ -107,14 +211,14 @@ foreach (UnifiedScan::lines($patchText) as $row) {
       <div class="feature"><strong>Reader\UnifiedScan</strong><span>Walks any rendered unified diff, honouring each hunk's declared counts and classifying every row with ScanRowKind — row classification and numbering, no drawing. The public isHunkHeader() predicate is the walk's own recognition pattern, published so consumers gate boundaries without a second regex to drift.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Patch display in TUIs</strong> — numbered hunks feed gutters, diff panes, and review overlays without re-deriving line numbers; every row ships redundant non-colour channels (<code>LineKind::marker()</code>, <code>ScanRowKind</code>), so a viewer can tint with colour without ever making colour carry the change alone (WCAG 1.4.1).</li>
       <li><strong>Editing tools</strong> — the same engine candy-code's Edit, Write and ApplyPatch tools use to report changes to the model and the user.</li>
       <li><strong>Patch consumers</strong> — UnifiedScan answers "which file line is this row?" for arbitrary incoming diffs, including multi-file git output.</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source</h3>
+    <h3 id="source" style="margin-top: 40px;">Source</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-diff">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-diff/blob/master/README.md">Full README</a></li>
@@ -123,7 +227,7 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart <span aria-hidden="true">→</span></a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <caption>Public API surface</caption>
 <tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr>
@@ -142,8 +246,10 @@ foreach (UnifiedScan::lines($patchText) as $row) {
 <tr><td>UnifiedScan</td><td>fileHeaders(string|list&lt;string&gt;): list&lt;bool&gt; / rowsOf(string): list&lt;string&gt;</td><td>Which rows start a new file; the writer-compatible row split</td></tr>
 <tr><td>UnifiedScan</td><td>isHunkHeader(string): bool</td><td>Recognition of the @@ -a,b +c,d @@ boundary by the single pattern the walk itself matches — recognised even when the numbers are too large to number (they close the hunk above without counting), so a consumer gating rows on this predicate cannot drift from what lines() reports</td></tr>
 </table>
+    </div>
   </div>
 </section>
+</main>
 
 <footer class="footer">
     <div class="container">
@@ -176,5 +282,6 @@ foreach (UnifiedScan::lines($patchText) as $row) {
     </div>
 </div>
 <script src="../js/search.js" defer></script>
+<script src="../js/nav.js" defer></script>
 </body>
 </html>

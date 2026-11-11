@@ -58,9 +58,9 @@ final class ReplayCommand implements DocumentedCommand
     private readonly \Closure $ttyProbe;
 
     /**
-     * @param (callable($stream): bool)|null $ttyProbe seam used by tests to
-     *                                        force the interactive path
-     *                                        without a controlling terminal
+     * @param (callable(resource): bool)|null $ttyProbe seam used by tests to
+     *                                          force the interactive path
+     *                                          without a controlling terminal
      */
     public function __construct(?callable $ttyProbe = null)
     {

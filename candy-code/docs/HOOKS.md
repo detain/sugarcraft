@@ -277,7 +277,7 @@ already run:
 
 ## Events
 
-`src/Hooks/HookEvent.php` defines twelve:
+`src/Hooks/HookEvent.php` defines sixteen:
 
 | Event | Fires | Dispatched from |
 |---|---|---|
@@ -293,6 +293,10 @@ already run:
 | `TeammateIdle` | a teammate asked the board for its next task — the `Team` tool's `claim` with no `task` | `TeamManager::handleTeammateIdle()`, `TaskList::dispatchTeammateIdle()` |
 | `TaskCreated` | before a task joins a team's board (`Team`'s `add`) — the one that can refuse it | `TaskList::addTaskIfAbsent()` |
 | `TaskCompleted` | after a teammate completed a task (`Team`'s `complete`) | `TaskList::completeTask()` |
+| `StageStarted` | before the workflow engine dispatches one round of one stage — `round` counts from 1, always 1 without `loop:` | `WorkflowEngine::announceStageStarted()` |
+| `StageComplete` | a workflow stage settled without failing — `status` carries `completed`, or `skipped` for a `when:` clause that declined it (the ONLY event a skipped stage raises, with `round` 0) | `WorkflowEngine::announceStageComplete()` |
+| `StageFail` | a workflow stage settled as a failure — the engine's own fail-fast predicate, exactly one event per settled stage | `WorkflowEngine::announceStageFail()` |
+| `WorkflowComplete` | a workflow run reached a natural terminal (`completed` or `failed`, a pre-flight refusal included) — paused and cancelled runs raise nothing, they are resumable | `WorkflowEngine::announceWorkflowCompleted()` |
 
 The three team rows are the ones raised outside a tool call and outside a turn,
 so they do not go through `HookManager`: `TaskList` raises them through a
@@ -301,6 +305,10 @@ so they do not go through `HookManager`: `TaskList` raises them through a
 `Team` that manager builds — the `Team` tool opens one per call — passes it to
 its `TaskList`, so an entry in `hooks.yaml` reaches a team's board the same way
 a `PreToolUse` entry reaches a tool call. See *The team events* below.
+The four workflow rows are raised by `WorkflowEngine` on the same guarded-dispatch
+idiom: whatever `HookDispatcher` the engine's host hands it, the engine announces
+every stage round and every natural run terminal through it and discards the
+verdict — all four are observe-only, and an unarmed engine raises nothing.
 (`HookDispatcher` also carries a method for `Stop`, `SubagentStop` and
 `SessionEnd`; nothing calls those — the live chain dispatches all three
 through `HookManager`, see *The stop events* below.)
@@ -522,6 +530,36 @@ background teammate's own session:
   events (`teammate_name` is the claimant, `null` for a task nobody holds yet),
   `{"team_name", "teammate_name"}` for `TeammateIdle`. Hooks run in the
   launch's project root.
+
+### The workflow events
+
+The workflow engine (the `/workflow` command and the `Workflow` tool, see
+[`WORKFLOWS.md`](WORKFLOWS.md)) raises its stage-lifecycle events into the same
+chain while a run is live. All of them are observe-only: the verdict a hook
+returns on these events is discarded, so a hook can watch a run but cannot
+block or reshape one — and an engine built without a hook chain raises nothing
+at all.
+
+- **`StageStarted`** fires before each round of a stage is dispatched — round
+  one for a plain stage, the round number for each round of a `loop:`. A stage
+  skipped by its `when:` clause never raises it.
+- **`StageComplete`** fires when a stage settles without failing. It is the
+  only announcement a skipped stage gets, and on a skip the `round` reads zero:
+  no round ever ran. On a loop it fires once, after the last round settled.
+- **`StageFail`** fires exactly once when a stage settles as a failure, with
+  the reason carried in `error`.
+- **`WorkflowComplete`** fires once per run at a natural terminal: completed or
+  failed, a pre-flight refusal included. A run that pauses or cancels raises
+  nothing — the resumed run announces its own terminal when it finishes. A
+  `cache:` stage carried from a record raises nothing either: no dispatch
+  happened.
+- **Context.** `toolName` is `Workflow` (write the `matcher:` against it), the
+  session id is the run's stamped identity (the workflow's name plus the mint's
+  suffix), and `toolInput` is JSON: `{"workflow", "stage", "round"}` for
+  `StageStarted`; `StageComplete` adds `"status"` and `StageFail` adds
+  `"status"` and `"error"`; the terminal carries `{"workflow", "status",
+  "stages", "totalTokens", "totalCost"}`. Hooks run in the launch's project
+  root.
 
 ---
 

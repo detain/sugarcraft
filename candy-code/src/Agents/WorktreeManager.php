@@ -20,7 +20,8 @@ use SugarCraft\Code\Workspace\GitRunner;
  *
  * Built by the doors named in the construction census (LaunchContext for the
  * session, BackgroundSessionRunner for background runs, MainWorktree for the
- * `--worktree` door, BackgroundCommand for hosted runs) — and, since roadmap
+ * `--worktree` door, BackgroundCommand for hosted runs, and WorktreeHandoff
+ * read-only for the `agents handoff` report, RS-AGENT-A5) — and, since roadmap
  * 4.10, lazily by {@see EngineExecutor} for a workflow stage that asked for
  * one: a lazy site, built only when a stage task declares `isolation:
  * worktree` and no session pool was injected.

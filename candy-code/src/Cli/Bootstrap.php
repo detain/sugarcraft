@@ -2243,6 +2243,7 @@ final class Bootstrap
             trustedBundleCommands: self::trustedBundleCommandNames(),
             mcpPromptShell: self::mcpPromptShellServers(),
         );
+        $workspace->hooks?->armWorkflow($workspace->workflowEngine);
 
         // THE HOST SERVICES (Appendix O §4.3), registered where the workspace
         // is built so the TUI and any host built on this workspace share ONE
@@ -2449,7 +2450,7 @@ final class Bootstrap
      *        skills the same way the session's own set does — the same sharing
      *        {@see agentManager()} documents for itself. Null re-scans at $root.
      */
-    private static function workflowEngine(?string $root, PermissionGate $gate, ?SkillRegistry $skills = null): WorkflowEngine
+    public static function workflowEngine(?string $root, PermissionGate $gate, ?SkillRegistry $skills = null): WorkflowEngine
     {
         [$provider, $model] = self::selectedProviderLabel();
 

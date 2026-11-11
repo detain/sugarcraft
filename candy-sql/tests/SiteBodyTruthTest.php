@@ -40,7 +40,16 @@ final class SiteBodyTruthTest extends TestCase
         '--db-host',
         'SQLSRV',
         'Smoke Testing',
-        'blob/master',
+        // 'blob/master' was on this list since D-C6 (2026-11-03), but it is
+        // FALSE-TO-DISK as a phantom marker: the org default branch IS master
+        // (the repo's own docs-links CI guard at .github/workflows/ci.yml
+        // rejects sugarcraft blob/main hrefs under docs/), and every other
+        // docs/_data/*.body.html carries legitimate blob/master README links.
+        // D-C6 removed the page's only such link and banned the substring
+        // with it; c06739d5f restored the lawful link, which this overbroad
+        // token then blinded on. The precise fabrication shape stays pinned
+        // below: no stale blob/main, and the only blob link is the real
+        // README. (2026-11-11, LANE-CW3)
         'forFlavor',
         'SqliteHistoryStore</td><td>open(path)',
     ];
@@ -69,6 +78,26 @@ final class SiteBodyTruthTest extends TestCase
                 "fabricated site token reappeared: {$token}"
             );
         }
+
+        // The narrow truth the retired blob/master token pointed at, pinned
+        // precisely (2026-11-11, LANE-CW3): every source link on the page
+        // must resolve. No stale blob/main may return — the org default
+        // branch is master and the docs-links CI guard enforces that — and
+        // the page carries exactly one blob link: the real split-repo README.
+        self::assertStringNotContainsString(
+            'blob/main',
+            $body,
+            'stale blob/main link returned — the org default branch is master',
+        );
+        self::assertSame(
+            1,
+            substr_count($body, 'github.com/sugarcraft/candy-sql/blob/'),
+            'the site must carry exactly one blob link — the real README',
+        );
+        self::assertStringContainsString(
+            'github.com/sugarcraft/candy-sql/blob/master/README.md',
+            $body,
+        );
     }
 
     public function testEveryDocumentedApiRowResolvesInCode(): void

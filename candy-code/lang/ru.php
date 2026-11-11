@@ -216,6 +216,7 @@ return [
     'cli.completion.verb.serve' => 'Запустить WebSocket-сервер для веб-интерфейса',
     'cli.completion.verb.session' => 'Управление сохранёнными сессиями',
     'cli.completion.verb.usage' => 'Свести журнал расходов по дням и моделям',
+    'cli.completion.verb.workflow' => 'Запустить сохранённый рабочий процесс без интерфейса, сообщить его состояние или возобновить приостановленный запуск',
     'cli.completion.verb_argument' => 'аргумент {verb}',
     'cli.doctor.absent' => 'отсутствует',
     'cli.doctor.bundles_dark' => 'доверенных каналов бандла нет — поверхность /channels/ остаётся погасшей',
@@ -592,6 +593,8 @@ acp выполняет ходы для редактора, пока редакт
                          реестр сообщает причину и выходит с кодом 1;
                          доллары для сводов, включающих неценованную модель
                          печатаются как нижняя граница ≥, никогда как обычная сумма.
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         запуск workflow без модели, чтение статуса, возобновление пауз
 
 Параметры:
   -p, --prompt <text>    Задать промпт в командной строке (одноразовый режим)
@@ -619,6 +622,12 @@ acp выполняет ходы для редактора, пока редакт
                          — провайдер по-прежнему берётся из $CANDY_CODE_PROVIDER или
                          сохранённой настройки `provider`, и это
                          независимые оси.
+      --agent <name>     Запустить сессию с <name> как основным агентом:
+                         подставить настроенный пресет. Также принимает
+                         --agent=<name>; голая форма строга, поэтому она —
+                         форма для имен, начинающихся с "-". Отказывается
+                         с exit 2 рядом с -p, --batch или подкомандой:
+                         ни один такой запуск не строит сессию.
       --permission-mode <mode>
                          Работать в <mode> вместо режима из файла
                          конфигурации. Также принимает --permission-mode=<mode>. Наивысший
@@ -670,6 +679,13 @@ acp выполняет ходы для редактора, пока редакт
                          Только с -p или глаголом run: запуск без
                          промпта для добавления отклоняется с кодом 2, а не
                          молча игнорирует заданные правила.
+      --batch            Выполнить каждое пользовательское событие
+                         stream-json из --input-format как отдельный
+                         последовательный ход в этом же процессе и
+                         разрешить пустой -p: режим драйвера для подачи
+                         диалога в candy-code ход за ходом. Голый флаг:
+                         без значения и короткой формы. Отказ с exit 2,
+                         если формат ввода не stream-json.
   -c, --continue         Повторно открыть последнюю использованную сессию, транскрипт
                          и всё остальное, вместо создания новой. Без этого
                          каждый запуск открывает новую сессию; Up в пустом
@@ -1427,6 +1443,16 @@ TXT,
     'cli.warn.untrusted_mcp' => 'ни одна конфигурация MCP проекта не была доверенной',
     'cli.warn.untrusted_settings' => 'ни один файл настроек проекта не может вносить настройку',
     'cli.warn.untrusted_prompt_shell' => 'ни одно тело MCP-промпта не может запускать оболочку',
+    'cli.workflow.accepts' => 'workflow {action} допускает: {flags}',
+    'cli.workflow.bad_format' => 'workflow --format ожидает text или json, получено {format}',
+    'cli.workflow.bad_param' => 'workflow --param: {problem}',
+    'cli.workflow.flag_does_not_apply' => 'флаг {flag} не применим к workflow {action}',
+    'cli.workflow.need_id' => 'workflow resume требует id приостановленного процесса',
+    'cli.workflow.need_name' => 'workflow run требует имя процесса',
+    'cli.workflow.no_action' => 'workflow: действие не указано',
+    'cli.workflow.paused' => 'процесс {id} приостановлен сигналом — возобновите через `candy-code workflow resume {id}`',
+    'cli.workflow.unknown_action' => 'workflow: неизвестное действие: {action}',
+    'cli.workflow.usage' => 'Использование: candy-code workflow run <имя> [--param k=v ...] [--format text|json] | status <имя> [--format text|json] | resume <id> [--format text|json]',
     'cli.worktree.bad_name' => '--worktree {name}: имя worktree должно начинаться с буквы или цифры и содержать только буквы, цифры, «.», «-» и «_»',
     'cli.worktree.kept_announce' => 'candy-code: worktree {path} оставлен на месте — его ветка {branch} содержит собственную работу или была названа; откройте заново: `candy-code --worktree {name}`',
     'cli.worktree.not_git' => '--worktree требует git work tree; {path} не находится внутри него',

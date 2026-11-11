@@ -254,6 +254,7 @@ return [
     'cli.completion.verb.serve' => 'Run the WebSocket server for the web UI',
     'cli.completion.verb.session' => 'Manage stored sessions',
     'cli.completion.verb.usage' => 'Roll up the durable spend ledger by day and model',
+    'cli.completion.verb.workflow' => 'Run a saved workflow headlessly, report its status, or resume a paused run',
     'cli.completion.verb_argument' => '{verb} argument',
     'cli.doctor.absent' => 'absent',
     'cli.doctor.bundles_dark' => 'no trusted bundle channels — the /channels/ surface stays dark',
@@ -405,7 +406,9 @@ Usage:
 Subcommands (none of them opens the TUI or needs a provider, an API key or a
 terminal; each answers and exits except serve and mcp serve, which run until
 stopped — and attach, which is the exception to both: it runs the TUI on a running server's
-session; acp runs turns for an editor, until the editor disconnects):
+session; acp runs turns for an editor, until the editor disconnects; workflow run
+and resume reach the configured provider when a stage runs a model, while status
+answers from the pause records alone):
   bundles list           List the plugin bundles this directory sees: name,
                          version, tier, and the surfaces each carries —
                          including the hooks and .mcp.json candy-code
@@ -631,6 +634,10 @@ session; acp runs turns for an editor, until the editor disconnects):
                          unreadable ledger states its reason and exits 1;
                          dollars for folds that include an unpriced model
                          print as a ≥ lower bound, never as a plain sum.
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         Run a workflow headless — the engine, not the model,
+                         drives it; exit 3 when a verifier escalates or a pause
+                         lands (see docs/WORKFLOWS.md)
 
 Options:
   -p, --prompt <text>    Provide a prompt on the command line (one-shot mode)
@@ -658,6 +665,12 @@ Options:
                          — the provider still comes from $CANDY_CODE_PROVIDER or
                          the persisted `provider` setting, and the two are
                          independent axes.
+      --agent <name>     Run the session with <name> as its primary agent:
+                         swap in a configured preset. Also accepts
+                         --agent=<name>; the bare form is strict, so that is
+                         the form to use when a name begins with "-". Refused
+                         with exit 2 beside -p, --batch or a subcommand:
+                         none of those builds a session to narrow.
       --permission-mode <mode>
                          Run under <mode> instead of the mode in the config
                          file. Also accepts --permission-mode=<mode>. Highest
@@ -736,6 +749,13 @@ Options:
                          before parsing, and a run with nothing to read
                          refuses with exit 2. Requires -p or the run verb,
                          and refuses beside a subcommand.
+      --batch            Run each --input-format stream-json user event as
+                         its own sequential turn in this one process, and
+                         allow an empty -p prompt: the driver mode for
+                         feeding candy-code a conversation turn by turn.
+                         A bare switch: no value, no short form. Refused
+                         with exit 2 unless the input format is stream-json,
+                         whose event feed it consumes.
   -c, --continue         Reopen the most recently used session, transcript
                          and all, instead of starting a new one. Without it
                          every launch opens a new session; Up in an empty
@@ -1498,6 +1518,16 @@ TXT,
     'cli.warn.untrusted_mcp' => 'no project MCP config was trusted',
     'cli.warn.untrusted_prompt_shell' => 'no MCP prompt body may run a shell',
     'cli.warn.untrusted_settings' => 'no project settings file may contribute a setting',
+    'cli.workflow.accepts' => 'workflow {action} accepts: {flags}',
+    'cli.workflow.bad_format' => 'workflow --format expects text or json, got {format}',
+    'cli.workflow.bad_param' => 'workflow --param: {problem}',
+    'cli.workflow.flag_does_not_apply' => 'the {flag} flag does not apply to workflow {action}',
+    'cli.workflow.need_id' => 'workflow resume needs a paused workflow id',
+    'cli.workflow.need_name' => 'workflow run needs a workflow name',
+    'cli.workflow.no_action' => 'workflow: no action given',
+    'cli.workflow.paused' => 'workflow {id} paused by signal - resume with `candy-code workflow resume {id}`',
+    'cli.workflow.unknown_action' => 'workflow: unknown action: {action}',
+    'cli.workflow.usage' => 'Usage: candy-code workflow run <name> [--param k=v ...] [--format text|json] | status <name> [--format text|json] | resume <id> [--format text|json]',
     'cli.worktree.bad_name' => '--worktree {name}: a worktree name must begin with a letter or digit and contain only letters, digits, ".", "-" and "_"',
     'cli.worktree.kept_announce' => 'candy-code: worktree {path} left in place — its branch {branch} holds work of its own or was named; reopen it with `candy-code --worktree {name}`',
     'cli.worktree.not_git' => '--worktree needs a git work tree; {path} is not inside one',

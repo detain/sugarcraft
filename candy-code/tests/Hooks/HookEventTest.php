@@ -16,11 +16,11 @@ final class HookEventTest extends TestCase
     // Enum Value Tests
     // =========================================================================
 
-    public function testAllTwelveEventsExist(): void
+    public function testAllSixteenEventsExist(): void
     {
         $events = HookEvent::cases();
 
-        $this->assertCount(12, $events);
+        $this->assertCount(16, $events);
     }
 
     public function testPreToolUseValue(): void
@@ -81,6 +81,41 @@ final class HookEventTest extends TestCase
     public function testTaskCompletedValue(): void
     {
         $this->assertSame('TaskCompleted', HookEvent::TaskCompleted->value);
+    }
+
+    public function testStageStartedValue(): void
+    {
+        $this->assertSame('StageStarted', HookEvent::StageStarted->value);
+    }
+
+    public function testStageCompleteValue(): void
+    {
+        $this->assertSame('StageComplete', HookEvent::StageComplete->value);
+    }
+
+    public function testStageFailValue(): void
+    {
+        $this->assertSame('StageFail', HookEvent::StageFail->value);
+    }
+
+    public function testWorkflowCompleteValue(): void
+    {
+        $this->assertSame('WorkflowComplete', HookEvent::WorkflowComplete->value);
+    }
+
+    /**
+     * C6: the four lifecycle events are observe-only — every behavior flag
+     * keeps its default (false), so no exit code on them can stop an action.
+     * Pinned against future match-arm additions silently changing that.
+     */
+    public function testStageLifecycleEventsCarryNoBlockingBehavior(): void
+    {
+        foreach ([HookEvent::StageStarted, HookEvent::StageComplete, HookEvent::StageFail, HookEvent::WorkflowComplete] as $event) {
+            $this->assertFalse($event->blocksOnPreAction(), $event->value);
+            $this->assertFalse($event->usesContinueOnBlockOnBlock(), $event->value);
+            $this->assertFalse($event->discardsOnBlock(), $event->value);
+            $this->assertFalse($event->stderrToUserOnly(), $event->value);
+        }
     }
 
     // =========================================================================
@@ -189,7 +224,7 @@ final class HookEventTest extends TestCase
     }
 
     // =========================================================================
-    // Exhaustive Coverage - All 12 events tested
+    // Exhaustive Coverage - All 16 events tested
     // =========================================================================
 
     public function testAllEventsHaveValue(): void

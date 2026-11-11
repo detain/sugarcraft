@@ -1629,6 +1629,13 @@ final class ReadPathCensusTest extends TestCase
                 . 'readableUserDir(), so a link on the workflows directory relocates the pause '
                 . 'files with it. What that yields is this engine\'s own JSON, not code',
         ],
+        'Workflows/WorkflowEngine.php|scandir' => [
+            'NAMES_ONLY — expandFromGlob(): a from: fan-out lists the environment root to '
+                . 'materialise its wave list; only relative path names are matched and recorded, '
+                . 'no bytes are read through this call. RESIDUAL, stated: is_dir/is_file follow '
+                . 'links, so a linked directory inside the project root is descended for names; '
+                . 'the environment root is the session\'s own project directory',
+        ],
         'Workflows/WorkflowLinter.php|file_get_contents' => [
             'SELF_LOCATED — readPauseLedger(): `/workflow status` re-reads the engine\'s own '
                 . '`.running/<id>.json` record (identifier-sanitized name, or content-matched). '

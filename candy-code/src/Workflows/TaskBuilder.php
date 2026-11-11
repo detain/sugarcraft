@@ -32,6 +32,10 @@ final class TaskBuilder
     private int $rejectAtLeast = 1;
     private ?string $resource = null;
     private ?int $lockWaitSeconds = null;
+    private ?int $stallTimeout = null;
+    private ?int $restarts = null;
+    /** @var array{from: list<string>, as: string}|null */
+    private ?array $input = null;
 
     /**
      * Set the agent type (e.g. 'architect', 'coder', 'reviewer').
@@ -203,6 +207,134 @@ final class TaskBuilder
         return $this;
     }
 
+    /**
+     * Set the idle-stall window in seconds (C7). Values below 1 are refused
+     * at set time — an instant-expiry window is never what an author meant;
+     * omit the key to stay on wall-clock bounds alone.
+     */
+    public function stallTimeout(int $seconds): self
+    {
+        if ($seconds < 1) {
+            throw new \InvalidArgumentException(
+                "stallTimeout must be at least 1 second, got {$seconds}",
+            );
+        }
+
+        $this->stallTimeout = $seconds;
+        return $this;
+    }
+
+    /**
+     * Set the stall-restart budget (C7): re-dispatches allowed when a worker
+     * EXPIRES SILENT, counted apart from retries(). Negative caps are
+     * refused at set time; 0 is the legitimate "never restart a stall".
+     */
+    public function restarts(int $restarts): self
+    {
+        if ($restarts < 0) {
+            throw new \InvalidArgumentException(
+                "restarts cannot be negative, got {$restarts}",
+            );
+        }
+
+        $this->restarts = $restarts;
+        return $this;
+    }
+
+    /**
+     * C9 fan-in join: attach an `input:` spec — a join over PRIOR stages'
+     * recorded rows, injected under the fixed `input` handle into this
+     * task's interpolation context immediately before its prompt is
+     * assembled. The spec is validated and normalized at set time by
+     * {@see trustedJoin()}; the engine never re-checks the shape.
+     *
+     * @param array<array-key, mixed> $spec
+     */
+    public function input(array $spec): self
+    {
+        $this->input = self::trustedJoin($spec);
+        return $this;
+    }
+
+    /**
+     * C9: the builder's parse-don't-validate gate for `input:` join specs.
+     *
+     * A join is a map carrying exactly two keys:
+     *  - `from`: a non-empty LIST of prior stage names (non-empty strings,
+     *    each named at most once);
+     *  - `as`: the join shape, from the closed vocabulary
+     *    `file-list` (rows as newline-separated capture paths), `first`
+     *    (the first present row verbatim), `all` (every present row,
+     *    labelled and separated), `results` (a JSON document over the
+     *    typed payload of every present row).
+     *
+     * Everything malformed is REFUSED here, at the declaration site, with
+     * raw English — no lang keys, no coercion. Name ORDER (which declared
+     * stages are "prior") is the registry's job at end-of-file, where every
+     * stage name is visible; this gate judges SHAPE only.
+     *
+     * @param array<array-key, mixed> $spec
+     *
+     * @return array{from: list<string>, as: string}
+     */
+    public static function trustedJoin(array $spec): array
+    {
+        foreach (array_keys($spec) as $key) {
+            if ($key !== 'from' && $key !== 'as') {
+                $named = is_string($key) ? $key : (string) $key;
+                throw new \InvalidArgumentException(
+                    "has unknown key \"{$named}\"; supported keys: from, as",
+                );
+            }
+        }
+
+        if (!array_key_exists('from', $spec)) {
+            throw new \InvalidArgumentException('needs a "from" list of stage names to join');
+        }
+        if (!array_key_exists('as', $spec)) {
+            throw new \InvalidArgumentException('needs an "as" shape: file-list, first, all or results');
+        }
+
+        $from = $spec['from'];
+        if (!is_array($from) || !array_is_list($from)) {
+            throw new \InvalidArgumentException(
+                '"from" must be a list of stage names, got ' . get_debug_type($from),
+            );
+        }
+        if ($from === []) {
+            throw new \InvalidArgumentException('"from" must name at least one stage');
+        }
+
+        /** @var list<string> $names */
+        $names = [];
+        foreach ($from as $entry) {
+            if (!is_string($entry) || trim($entry) === '') {
+                throw new \InvalidArgumentException(
+                    '"from" must hold only non-empty stage-name strings, got ' . get_debug_type($entry),
+                );
+            }
+            $entry = trim($entry);
+            if (in_array($entry, $names, true)) {
+                throw new \InvalidArgumentException("\"from\" names stage \"{$entry}\" twice");
+            }
+            $names[] = $entry;
+        }
+
+        $as = $spec['as'];
+        if (!is_string($as)) {
+            throw new \InvalidArgumentException(
+                '"as" must be one of file-list, first, all, results, got ' . get_debug_type($as),
+            );
+        }
+        if (!in_array($as, ['file-list', 'first', 'all', 'results'], true)) {
+            throw new \InvalidArgumentException(
+                "\"as\" must be one of file-list, first, all, results, got \"{$as}\"",
+            );
+        }
+
+        return ['from' => $names, 'as' => $as];
+    }
+
     /** Last PCRE compile failure as readable text (shared with the engine's fail-closed scan). */
     public static function pcreErrorText(): string
     {
@@ -236,6 +368,9 @@ final class TaskBuilder
             rejectMinOccurrences: $this->rejectAtLeast,
             resource: $this->resource,
             lockWaitSeconds: $this->lockWaitSeconds,
+            stallTimeout: $this->stallTimeout,
+            restarts: $this->restarts ?? 0,
+            input: $this->input,
         );
     }
 

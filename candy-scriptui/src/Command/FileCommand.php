@@ -115,7 +115,8 @@ final class FileCommand extends Command
         if ($final->isAborted() || !$final->isSubmitted()) {
             return Command::FAILURE;
         }
-        $output->write((string) $final->selected(), true, OutputInterface::OUTPUT_RAW);
+        // LF-pinned trailer: write(..., true) emits PHP_EOL (CRLF on Windows).
+        $output->write((string) $final->selected() . "\n", false, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 }

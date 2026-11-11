@@ -216,6 +216,7 @@ return [
     'cli.completion.verb.serve' => '執行 Web UI 的 WebSocket 伺服器',
     'cli.completion.verb.session' => '管理已儲存的工作階段',
     'cli.completion.verb.usage' => '依日期與模型匯總持久支出帳本',
+    'cli.completion.verb.workflow' => '以無頭方式執行已儲存的工作流，報告其狀態，或恢復已暫停的執行',
     'cli.completion.verb_argument' => '{verb} 引數',
     'cli.doctor.absent' => '未設定',
     'cli.doctor.bundles_dark' => '沒有受信任的套件通道 — /channels/ 介面保持關閉',
@@ -592,6 +593,8 @@ CandyCode — 終端機 AI 程式碼助理。
                          帳本無法讀取時會說明原因並以 1 退出；
                          包含未定價模型的折疊，金額以 ≥ 下界
                          顯示，絕不顯示為單純加總。
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         無模型執行工作流程、讀取狀態、從暫停處繼續
 
 選項：
   -p, --prompt <text>    在命令列提供提示（單次模式）
@@ -619,6 +622,11 @@ CandyCode — 終端機 AI 程式碼助理。
                          ——供應商仍取自 $CANDY_CODE_PROVIDER 或
                          已儲存的 `provider` 設定，兩者為
                          獨立軸線。
+      --agent <name>     以 <name> 為主代理執行會話：
+                         換上配置好的預設。亦接受 --agent=<name>；
+                         裸形式嚴格，故名稱以 "-" 開頭時用它。與 -p、
+                         --batch 或子命令並用時以 exit 2 拒絕：
+                         這些啟動都不構建可收窄的會話。
       --permission-mode <mode>
                          以 <mode> 執行，取代設定檔中的模式。
                          亦接受 --permission-mode=<mode>。最高
@@ -670,6 +678,11 @@ CandyCode — 終端機 AI 程式碼助理。
                          僅搭配 -p 或 run 子命令：啟動時若無
                          可附加的提示詞，則以 exit 2 拒絕，而非
                          靜默忽略你提供的規則。
+      --batch            將 --input-format stream-json 的每個使用者事件
+                         作為本進程內各自順序執行的回合，並允許空
+                         的 -p 提示：逐回合向 candy-code 供給對話的
+                         驅動模式。裸開關：無值、無短形式。除非
+                         輸入格式為 stream-json，否則 exit 2 拒絕。
   -c, --continue         重新開啟最近使用的會話，包含記錄
                          在內的一切，而非建立新的。未使用時
                          每次啟動都開啟新會話；在空白
@@ -1427,6 +1440,16 @@ TXT,
     'cli.warn.untrusted_mcp' => '未信任任何專案 MCP 設定',
     'cli.warn.untrusted_settings' => '專案設定檔不得貢獻任何設定',
     'cli.warn.untrusted_prompt_shell' => 'MCP 提示主體不得執行 shell',
+    'cli.workflow.accepts' => 'workflow {action} 接受: {flags}',
+    'cli.workflow.bad_format' => 'workflow --format 需要 text 或 json，收到 {format}',
+    'cli.workflow.bad_param' => 'workflow --param: {problem}',
+    'cli.workflow.flag_does_not_apply' => '選項 {flag} 不適用於 workflow {action}',
+    'cli.workflow.need_id' => 'workflow resume 需要已暫停的工作流 id',
+    'cli.workflow.need_name' => 'workflow run 需要工作流名稱',
+    'cli.workflow.no_action' => 'workflow: 未給定操作',
+    'cli.workflow.paused' => '工作流 {id} 因訊號暫停 — 用 `candy-code workflow resume {id}` 恢復',
+    'cli.workflow.unknown_action' => 'workflow: 未知操作: {action}',
+    'cli.workflow.usage' => '用法: candy-code workflow run <name> [--param k=v ...] [--format text|json] | status <name> [--format text|json] | resume <id> [--format text|json]',
     'cli.worktree.bad_name' => '--worktree {name}：worktree 名稱必須以字母或數字開頭，且僅包含字母、數字、"."、"-" 和 "_"',
     'cli.worktree.kept_announce' => 'candy-code：worktree {path} 保留原位——其分支 {branch} 有獨立的工作或被命名；使用 `candy-code --worktree {name}` 重新開啟',
     'cli.worktree.not_git' => '--worktree 需要 git work tree；{path} 不在其中',

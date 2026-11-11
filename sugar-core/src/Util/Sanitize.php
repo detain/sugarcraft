@@ -401,6 +401,8 @@ final class Sanitize
      *
      * @param string $s     Input text.
      * @param int    $removed Out: how many format characters were deleted.
+     * @param-out int $removed Every path assigns an int (the null default
+     *        is input-side only), never null.
      * @return string `$s` with the neutralised format characters removed.
      */
     public static function stripInvisibleFormatting(string $s, ?int &$removed = null): string

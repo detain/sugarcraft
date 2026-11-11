@@ -180,6 +180,30 @@ final class WorkflowRetriesTest extends TestCase
         }
     }
 
+    public function testLoopRoundsAndAgentRetriesStayIndependentCounters(): void
+    {
+        // C4 x WF-1(b): retries live INSIDE one dispatch — the pool re-runs
+        // a failed agent up to the task's budget; a loop round is a fresh
+        // dispatch from the engine. One flaky first round proves the two
+        // counters never share a budget: round 1 spends both attempts of
+        // its retry, round 2 lands in a single attempt, and the recorded
+        // row is the final round's own.
+        $executor = $this->failingThenPassingExecutor(failures: 1);
+        $engine = new WorkflowEngine($this->retryRegistry(), new AgentWorkerPool(executor: $executor));
+
+        $result = $engine->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('wf1b-rounds')
+            ->stage('flaky', Tasks::agent('coder')->prompt('p')->retries(1))
+                ->loop(['max' => 2, 'until' => ['stage' => 'flaky', 'contains' => 'DONE']])
+            ->build());
+
+        self::assertSame(3, $executor->calls, 'round 1 used its retry, round 2 did not need one');
+        self::assertSame(WorkflowStatus::Completed, $result->status);
+        self::assertCount(1, $result->stageResults, 'only the final round is recorded');
+        self::assertSame(1, $result->stageResults[0]->agents[0]->attempts, 'attempts are not tallied across rounds');
+        self::assertSame(15, $result->totalTokens, 'every attempt of every round bills');
+    }
+
     private function firstTask(Workflow $workflow, int $stage): WorkflowTask
     {
         $task = $workflow->stages[$stage]['tasks'][0];

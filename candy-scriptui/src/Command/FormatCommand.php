@@ -130,7 +130,8 @@ final class FormatCommand extends Command
         // word (the refusals at the door checks, the template_unresolved
         // announce above) is written to STDERR, never here, keeping the
         // stdout stream a pipeline reads precisely the formatted bytes.
-        $output->write($rendered, true, OutputInterface::OUTPUT_RAW);
+        // LF-pinned trailer: write(..., true) emits PHP_EOL (CRLF on Windows).
+        $output->write($rendered . "\n", false, OutputInterface::OUTPUT_RAW);
         return Command::SUCCESS;
     }
 

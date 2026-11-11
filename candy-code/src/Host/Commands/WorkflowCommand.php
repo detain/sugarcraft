@@ -691,7 +691,14 @@ final class WorkflowCommand implements HostCommand
             return self::respond($inputText, Lang::t('host.workflow.error', ['error' => 'cannot-load — ' . $e->getMessage()]), true);
         }
 
-        $report = WorkflowLinter::lint($workflow, [], self::toolUniverse($context));
+        // C11: the include-compose edges resolve against the same two tiers
+        // the engine will load through at run time, so `lint` by name or by
+        // .yaml path sees the cycle/depth the run would hit. A name the
+        // registry cannot load stays silent here — load()'s run-start
+        // refusal owns that verdict, and the linter must not invent it.
+        $includeResolver = self::includeResolver($context);
+
+        $report = WorkflowLinter::lint($workflow, [], self::toolUniverse($context), $includeResolver);
 
         $lines = ["Lint of workflow `{$workflow->name}` (no agents dispatched):", '', $report->renderPlanTable()];
         if ($report->hasFindings()) {
@@ -749,6 +756,24 @@ final class WorkflowCommand implements HostCommand
             projectRoot: $configRoot,
             userHome: dirname($userConfigDir),
         );
+    }
+
+    /**
+     * C11: the `uses:` edge walker's registry view for
+     * {@see WorkflowLinter::lint()} — a name loads or it yields null, and
+     * null means "no verdict from here", never "no edge".
+     */
+    private static function includeResolver(CommandContext $context): callable
+    {
+        $registry = self::registryFor($context);
+
+        return static function (string $name) use ($registry): ?Workflow {
+            try {
+                return $registry->load($name);
+            } catch (\Throwable) {
+                return null;
+            }
+        };
     }
 
     /**

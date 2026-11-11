@@ -2591,6 +2591,11 @@ candy-code usage [7|30|all]          # the durable spend ledger folded by day an
                                      #   the same page `/usage` prints; --session <target>
                                      #   narrows to one session, --output-format json
                                      #   emits the facts map behind the page
+candy-code workflow run <name> [--param k=v]...   # run a saved workflow to completion headlessly;
+                                     #   a paused run prints its resume id and exits 3
+candy-code workflow status <name>    # live, remembered, or paused — the engine's own answer
+candy-code workflow resume <id>      # replay the recorded pause file; refuses records that
+                                     #   are live in another process
 ```
 
 Every one of these is dispatched in the same pre-flight place `--help` and
@@ -2848,7 +2853,7 @@ A permission setting that is **present but unusable stops the launch** (exit 2 �
   - Collisions resolve so that **nothing you did not write can re-point a name you already use**: the tier decides first — built-in < project < user, whatever the format — so a cloned repository's `.candy-code/skills` or `.claude/skills` copy cannot replace a skill in your `~/.candy-code/skills`, `~/.agents/skills`, `~/.claude/skills` or `~/.config/opencode/skills`, because a project's skill arrives with whatever you cloned. Inside one tier a native skill wins over an imported one, and among the foreign tools the fixed order is spec < claude < opencode (the least tool-specific convention loses). An imported `SKILL.md` that will not parse is another tool's file and not something you can fix, so it is skipped quietly rather than logged to stderr on every launch; the launch prints **one** line saying how many were skipped, and `CANDY_CODE_DEBUG_SKILLS=1` lists them (they are also readable from `SkillManager::skipped()` and, for the launch as a whole, `Bootstrap::skillSkips()`).
 - **Agents** — `Agents\*`: 6 sub-agent presets (coder/reviewer/debugger/architect/tester/devops) with their own model, tools, skills, and a streaming lifecycle, dispatched through `AgentWorkerPool` (`pcntl_fork`-based, with a synchronous fallback + warning when `pcntl` is unavailable).
 - **Teams & worktrees** — the `Team` tool over `Agents\{Team,TeamManager,Teammate,TaskList,Mailbox}`: the lead `create`s a team and `add`s tasks with dependencies, staffs it with background `Task` teammates (capped per team), and each teammate atomically `claim`s, `complete`s or `fail`s `TaskList` tasks (SQLite `flock`-backed, compare-and-swap on a revision, contention-tested) and exchanges append-only JSON-lines mailbox messages (`message` / `inbox`); see [Teams and worktrees](docs/AGENTS_AUTHORING.md#teams-and-worktrees). `Agents\{WorktreeConfig,WorktreeManager,PathJail}` give each teammate an isolated git worktree (`.worktreeinclude`-aware, swept for staleness) sandboxed by a path jail.
-- **Workflows** — `Workflows\*`: `WorkflowBuilder`/`WorkflowRegistry`/`WorkflowEngine` run multi-stage agent pipelines — sequential `stage()`, fan-out `parallel()`, chained `pipeline()`, and task-then-verifier `withVerification()` — defined as PHP DSL files or YAML (`WorkflowRegistry::loadYaml()`). SIGINT/SIGTERM during `run()` captures a real pause file for later resumption at stage granularity. Discovered from `~/.candy-code/workflows` and `<project>/.candy-code/workflows` (project wins), and driven from the chat with `/workflow run|pause|resume|status|list|lint`.
+- **Workflows** — `Workflows\*`: `WorkflowBuilder`/`WorkflowRegistry`/`WorkflowEngine` run multi-stage agent pipelines — sequential `stage()`, fan-out `parallel()`, chained `pipeline()`, task-then-verifier `withVerification()`, and include-compose `uses()`/`with:` (one workflow runs another by name as a stage body, depth- and cycle-guarded) — defined as PHP DSL files or YAML (`WorkflowRegistry::loadYaml()`). SIGINT/SIGTERM during `run()` captures a real pause file for later resumption at stage granularity. Discovered from `~/.candy-code/workflows` and `<project>/.candy-code/workflows` (project wins), and driven from the chat with `/workflow run|pause|resume|status|list|lint`.
 
   - The two tiers are **not** equally capable: a `.php` workflow is loaded by `require`ing it, so only the user tier honours one — a `.php` file in a project's directory is neither listed nor loaded, because a workflow you cloned should not be able to run its own code the moment you name it.
 
@@ -3071,7 +3076,7 @@ API and stay as-is. Boolean `is*()`/`has*()` predicates are convention-compliant
 cd candy-code && composer install && vendor/bin/phpunit
 ```
 
-**31,395 tests / 770,523 assertions, 0 failures, 8 skipped** — the whole of
+**31,472 tests / 774,128 assertions, 0 failures, 8 skipped** — the whole of
 `candy-code/tests/` (that suite only, not the monorepo) in one
 `vendor/bin/phpunit` run from the monorepo root with linked siblings, on PHP 8.3.6.
 The 22m51s serial timing was taken on the earlier 24,863-test tree (2026-10-18);

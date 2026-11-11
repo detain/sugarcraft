@@ -2574,6 +2574,11 @@ final class AgentTest extends TestCase
                 // result, not what any of them wrote, so the P3.S6
                 // disposition below still stands.
                 'attempts',
+                // C7' Option A's distinct-cause flag for the pool's stall
+                // deadline (went silent vs ran out of time). It is not a
+                // per-stage write signal, so the P3.S6 disposition below
+                // still rests untouched on the absence of one.
+                'stalled',
             ],
             array_map(
                 static fn (\ReflectionParameter $parameter): string => $parameter->getName(),

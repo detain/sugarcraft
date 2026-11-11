@@ -43,13 +43,29 @@ use SugarCraft\GitServer\LFS\LFSHandler;
 final class Server
 {
     /**
-     * A bcrypt cost-10 digest whose preimage is unknown and unrecorded:
-     * password_verify() against it always returns false, but it costs the
-     * same work as a real verify. The Basic-auth refusal paths for unknown
-     * users, wrong passwords and key-only accounts all run through it so
-     * their timing cannot be compared to enumerate accounts.
+     * A bcrypt digest whose preimage is random per process and never
+     * stored: password_verify() against it always returns false, but it
+     * costs the same work as a real verify. The Basic-auth refusal paths
+     * for unknown users, wrong passwords and key-only accounts all run
+     * through it so their timing cannot be compared to enumerate accounts.
      */
-    private const BASIC_AUTH_DECOY_HASH = '$2y$10$md6xRkDmvJOBksYf.2WY5edYmiO2shcOAfkv8PCc7whIWYG9KxVwO';
+    private static ?string $basicAuthDecoyHash = null;
+
+    /**
+     * Minted at the runtime PASSWORD_DEFAULT so the decoy burns exactly the
+     * work the bin mints real credentials with, on any PHP. Dated 2026-11-11:
+     * the previous hardcoded cost-10 digest fell out of alignment when PHP
+     * 8.4 raised the bcrypt default cost to 12 — burning a quarter of the
+     * work reopened the very enumeration oracle the decoy exists to close.
+     * The preimage is fresh random per process and discarded, so no
+     * password can ever verify; the digest is memoized so only the first
+     * refusal pays the mint.
+     */
+    private static function basicAuthDecoyHash(): string
+    {
+        return self::$basicAuthDecoyHash
+            ??= \password_hash(\bin2hex(\random_bytes(32)), \PASSWORD_DEFAULT);
+    }
 
     private Config $config;
 
@@ -866,11 +882,11 @@ final class Server
                             // password_verify() — and a bcrypt-less reply is
                             // measurably faster, so response latency alone
                             // answered "does this username exist?". Burn the
-                            // same cost-10 work against a decoy digest whose
-                            // preimage nobody knows, then refuse: unknown
-                            // names, wrong passwords and key-only accounts
-                            // all pay bcrypt and all return null.
-                            \password_verify($password, self::BASIC_AUTH_DECOY_HASH);
+                            // same default-cost work against a decoy digest
+                            // whose preimage nobody knows, then refuse:
+                            // unknown names, wrong passwords and key-only
+                            // accounts all pay bcrypt and all return null.
+                            \password_verify($password, self::basicAuthDecoyHash());
                             return null;
                         }
                         // Passwords authenticate against a stored hash only.
@@ -881,7 +897,7 @@ final class Server
                         // that refusal timing-indistinguishable too.
                         $hash = $user->passwordHash;
                         if ($hash === null || $hash === '') {
-                            \password_verify($password, self::BASIC_AUTH_DECOY_HASH);
+                            \password_verify($password, self::basicAuthDecoyHash());
                             return null;
                         }
                         if (!\password_verify($password, $hash)) {

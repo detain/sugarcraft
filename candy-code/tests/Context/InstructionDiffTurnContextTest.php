@@ -103,16 +103,22 @@ final class InstructionDiffTurnContextTest extends TestCase
         // the POINT of this assertion is that recheck() cannot have read the
         // file.)
         $mtime = filemtime($this->claude);
-        file_put_contents($this->claude, "Alpha rule\nBeta rules\n"); // 21 B, same size
+        file_put_contents($this->claude, "Alpha rule\nBela rule\n"); // 21 B, same size — 'Beta'→'Bela' moves bytes, not the tuple
         touch($this->claude, (int) $mtime);
 
+        // The recheck must answer from the DISK's stat, not from a cached one:
+        // an earlier test in the shard may already have cleared PHP's
+        // process-wide stat cache, and this file's mtime/size were read by
+        // capture. Clearing here makes the pin honest on any co-shard layout —
+        // the tuple really is unchanged, so the gate must still stay shut.
+        clearstatcache();
         $this->assertSame('', $tracker->recheck(), 'an edit hidden inside unchanged stat must not cost a re-read');
 
         // The same bytes, now with a stat that moves: the gate opened, the
         // read happened, the delta is reported — proving the assertion above
         // was silence and not vacuity.
         clearstatcache();
-        touch($this->claude);
+        touch($this->claude, time() + 2); // crossing the second is not the fixture's bet to make
         clearstatcache();
         $this->assertStringContainsString('-Beta rule', $tracker->recheck());
     }

@@ -172,6 +172,16 @@ final class ProcessContainmentPhpSetsidTest extends TestCase
      * probe's discipline: posix_getpgid answers for a reaped-pending child
      * only until proc_close takes it.
      *
+     * The leader verdict is the production answer itself: spawnAndInspect
+     * calls ProcessContainment::childLeadsOwnGroup() directly (LANE-CC
+     * macOS roundtrip #1, 2026-11-11 — a second dialect of the poll was
+     * how one run ended with the probe rejecting an arm the helper was
+     * accepting). Unverifiable is NOT rejected: a missing posix_getpgid
+     * or a Darwin ESRCH answer on an exited child accepts on the arm's
+     * exit-7 alone, which is itself proof the stub detached (it exits
+     * 127 when posix_setsid fails). Where the child is observably in a
+     * WRONG group (Linux, live child), the poll denies, teeth unchanged.
+     *
      * @param list<string> $spec
      * @return array{0:int,1:bool}
      */
@@ -189,20 +199,12 @@ final class ProcessContainmentPhpSetsidTest extends TestCase
         \fclose($pipes[1]);
         \fclose($pipes[2]);
 
-        $leader = false;
-        if (\function_exists('posix_getpgid')) {
-            $deadline = \hrtime(true) + 2_000_000_000;
-            while (true) {
-                if (@\posix_getpgid($pid) === $pid) {
-                    $leader = true;
-                    break;
-                }
-                if (\hrtime(true) >= $deadline) {
-                    break;
-                }
-                \usleep(1000);
-            }
-        }
+        // THE production predicate, not a dialect of it: probe and test ask
+        // childLeadsOwnGroup the same question with the same deadline
+        // budget, so a Darwin ESRCH answer can never ACCEPT here while the
+        // live probe REJECTS there (the roundtrip-#1 split-brain, both red
+        // shapes at once). A verifiably wrong-group child stays a denial.
+        $leader = ProcessContainment::childLeadsOwnGroup($pid, \hrtime(true) + 2_000_000_000);
 
         $status = \proc_close($proc);
 

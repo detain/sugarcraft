@@ -36,7 +36,7 @@ final class WorkflowRegistry
      * silently and quietly do less. An arm added here without its refusal
      * update is caught by {@see \SugarCraft\Code\Tests\Workflows\WorkflowYamlKeyRosterTest}.
      */
-    public const YAML_TASK_KEYS = ['agent', 'name', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds', 'timeout', 'reject', 'rejectMinOccurrences'];
+    public const YAML_TASK_KEYS = ['agent', 'name', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds', 'timeout', 'reject', 'rejectMinOccurrences', 'stallTimeout', 'restarts', 'input'];
 
     /**
      * The stage-shape vocabulary (names, flags and the nested containers the
@@ -44,10 +44,33 @@ final class WorkflowRegistry
      * {@see self::YAML_TASK_KEYS}, because a single-task stage legitimately
      * carries its task keys at stage level.
      */
-    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages'];
+    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from', 'loop'];
 
     /** @var array<string, Workflow> */
     private array $registered = [];
+
+    /**
+     * C9: fan-in join specs recorded while parsing the current workflow file,
+     * each with the joining stage's position and the source names it lists.
+     * The order law ("input joins PRIOR stages only") cannot be judged at the
+     * arm site — later stages have not been seen yet — so every `input:`
+     * declaration defers its name check to the end of the stages loop, where
+     * {@see self::parseYamlWorkflow()}'s $seenStageNames map is complete.
+     * Reset (and drained) by every file parse.
+     *
+     * @var list<array{at:string,index:int,from:list<string>}>
+     */
+    private array $pendingJoins = [];
+
+    /**
+     * C9: the stage whose body is parsing right now, or null between files.
+     * applyTaskArms() has no stage context of its own — it is shared by every
+     * task surface (stage bodies, `tasks:` lists, agents, sub-maps) — so the
+     * declaring stage's index rides here instead of through six signatures.
+     *
+     * @var array{name:string,index:int}|null
+     */
+    private ?array $joinStage = null;
 
     /**
      * Why the project tier's directory was refused the last time
@@ -1333,6 +1356,8 @@ final class WorkflowRegistry
             }
 
             $seenStageNames = [];
+            $this->pendingJoins = [];
+            $this->joinStage = null;
 
             foreach ($data['stages'] as $index => $stage) {
                 $stageName = $this->requireStageName($stage, $index, $yamlPath);
@@ -1383,6 +1408,10 @@ final class WorkflowRegistry
                 $seenStageNames[$stageName] = $index;
 
                 $where = "Workflow file {$yamlPath} stage '{$stageName}'";
+                // C9: everything parsed below belongs to this stage, so any
+                // `input:` arm reached through applyTaskArms() joins from
+                // stages before this index.
+                $this->joinStage = ['name' => $stageName, 'index' => $index];
                 // The stage map itself answers to the roster (rider): shape
                 // keys and tail task keys, one merged allowed list. Nested
                 // sub-maps are checked where they are read (readTaskMap).
@@ -1407,6 +1436,15 @@ final class WorkflowRegistry
                     );
                 }
                 $isParallel = $flaggedParallel || $stageType === 'parallel';
+                // C8: the dynamic-wave fan-out is a parallel-stage affordance.
+                // Refused here — before any type arm dispatches — so a
+                // `from:` beside tasks:, a single task, a verification pair or
+                // a pipeline list is named, never silently dropped (rider law).
+                if (!$isParallel && array_key_exists('from', $stage)) {
+                    throw new WorkflowLoadException(
+                        "{$where} carries \"from\", which only a parallel stage can fan out"
+                    );
+                }
                 // S3: the capture flag is stage-scoped like `parallel:` — a
                 // key the author wrote beside `tasks:` is legitimate, not a
                 // task key misplaced.
@@ -1414,8 +1452,57 @@ final class WorkflowRegistry
                 // C13's door rides the same stage-scoped law: strict bool,
                 // absent means off.
                 $cache = $this->requireCacheFlag($stage, $where);
+                // C2: the `when:` clause is read and grammar-checked here, at
+                // load — the engine only ever evaluates a parsed shape.
+                $when = $this->requireStageWhen($stage, $where);
+                // C4: the `loop:` map is read and grammar-checked on the same
+                // leg — shape before the builder sees it, normalization once
+                // at attach.
+                $loop = $this->requireStageLoop($stage, $where);
 
-                if ($stageType === 'verification') {
+                if (array_key_exists('with', $stage) && !array_key_exists('uses', $stage)) {
+                    // A knob that arms nothing is a silent lie on the page;
+                    // `with:` only means something beside `uses:` (C11).
+                    throw new WorkflowLoadException(
+                        "{$where} carries \"with\", which only arms a \"uses\" stage; add \"uses\" or drop it"
+                    );
+                }
+
+                if (array_key_exists('uses', $stage) && $loop !== null) {
+                    // C4 rider (NIT-1): a carried workflow keeps the plain-stage
+                    // shape, so the stage-only door below would wave it through —
+                    // but per-round re-carrying has semantics neither the include
+                    // lane nor the loop lane specified (expansion, cache rows and
+                    // fan-out capture all interact). v1 refuses the pairing at
+                    // load, the same closed-pair idiom as with-without-uses,
+                    // rather than freeze an accidental one.
+                    throw new WorkflowLoadException(
+                        "{$where} carries \"loop\" beside \"uses\"; v1 loops plain stages, not carried workflows"
+                    );
+                }
+
+                // C9: same stand-aside for the join arm. `input:` reads the
+                // recorded rows of PRIOR stages in this file; a carried
+                // workflow's stages are not visible to this parser, so v1
+                // refuses the pairing loudly rather than let the join
+                // silently join nothing.
+                if (array_key_exists('uses', $stage) && array_key_exists('input', $stage)) {
+                    throw new WorkflowLoadException(
+                        "{$where} carries \"input\" beside \"uses\"; v1 joins prior stages of the same file, not carried workflows"
+                    );
+                }
+
+                if (array_key_exists('uses', $stage)) {
+                    // C11: `uses:` arms the stage with another workflow's body;
+                    // the shape stays 'stage' and no task container may ride.
+                    $builder = $builder->uses(
+                        $stageName,
+                        $this->requireUsesArm($stage, $where, $stageType, $flaggedParallel),
+                        $this->parseUsesWithSubMap($stage, $where),
+                        capture: $capture,
+                        cache: $cache,
+                    );
+                } elseif ($stageType === 'verification') {
                     $builder = $builder->withVerification(
                         $stageName,
                         $this->parseVerificationSubMap($stage, 'task', $where),
@@ -1432,14 +1519,59 @@ final class WorkflowRegistry
                     // parallel() primitive chain spans: WorkflowEngine,
                     // WorkflowBuilder, Workflow, WorkflowRegistry, AgentWorkerPool.
                     $parsed = $this->parseYamlStage($stage, $stageName, $yamlPath, $isParallel);
-                    $builder = $builder->parallel($stageName, $parsed, capture: $capture, cache: $cache);
+                    // C8: the `from:` sub-map is validated only when the
+                    // author wrote it; absent means the static list rides on.
+                    $fromSpec = array_key_exists('from', $stage)
+                        ? $this->parseDynamicWaveSubMap($stage, $where)
+                        : [];
+                    $builder = $builder->parallel($stageName, $parsed, capture: $capture, cache: $cache, from: $fromSpec);
                 } else {
                     // $parsed is a single TaskBuilder for a regular stage, or
                     // a list of them for a `tasks:` stage run in sequence.
                     $parsed = $this->parseYamlStage($stage, $stageName, $yamlPath, $isParallel);
                     $builder = $builder->stage($stageName, $parsed, capture: $capture, cache: $cache);
                 }
+
+                // C2: the clause lands on the stage THIS iteration just added,
+                // after whichever arm shaped it — same order law as capture.
+                if ($when !== null) {
+                    $builder = $builder->when($when);
+                }
+
+                // C4: the loop rides the same attach-after-shape law. The v1
+                // scope door refuses it off a plain stage here, before the
+                // builder ever sees it, so a YAML plan can never carry a
+                // round policy its runner would not honour.
+                if ($loop !== null) {
+                    $shape = $isParallel ? 'parallel' : $stageType;
+                    if ($shape !== 'stage') {
+                        throw new WorkflowLoadException(
+                            "{$where} \"loop\" is stage-only in v1: it cannot attach to a \"{$shape}\" stage"
+                        );
+                    }
+
+                    $builder = $builder->loop($loop);
+                }
             }
+
+            // C9: the order law, judged once every stage name in this file is
+            // known. A forward reference, the joining stage itself, or a name
+            // this file never declares all refuse HERE, at load — the author
+            // sees the mistake at parse, never a join that silently misses at
+            // run time.
+            foreach ($this->pendingJoins as $join) {
+                foreach ($join['from'] as $name) {
+                    if (!isset($seenStageNames[$name]) || $seenStageNames[$name] >= $join['index']) {
+                        throw new WorkflowLoadException(
+                            "{$join['at']} \"input\" \"from\": \"{$name}\" is not a stage declared before this one;"
+                            . ' input joins prior stages only'
+                        );
+                    }
+                }
+            }
+
+            $this->pendingJoins = [];
+            $this->joinStage = null;
         }
 
         if (array_key_exists('config', $data) && !is_array($data['config'])) {
@@ -1555,6 +1687,103 @@ final class WorkflowRegistry
         }
 
         return $stage['cache'];
+    }
+
+    /**
+     * C2: read and shape-validate a stage's `when:` clause at LOAD time via
+     * {@see StageCondition::parse()}. The grammar is refused, never coerced —
+     * a malformed clause fails the file exactly like an unknown key does
+     * ("Everything malformed is refused, not coerced", docs/WORKFLOWS.md).
+     * The RAW author spelling is returned: normalization happens exactly
+     * once, when {@see WorkflowBuilder::when()} attaches the clause.
+     *
+     * @param array<array-key, mixed> $stage
+     * @return array<array-key, mixed>|null the raw clause, or null when absent
+     */
+    private function requireStageWhen(array $stage, string $where): ?array
+    {
+        if (!array_key_exists('when', $stage)) {
+            return null;
+        }
+
+        $clause = $stage['when'];
+        if (!is_array($clause)) {
+            throw new WorkflowLoadException(
+                "{$where} \"when\" must be a map carrying one of all, any, equals, contains, matches (with stage), got "
+                . get_debug_type($clause)
+            );
+        }
+
+        try {
+            StageCondition::parse($clause);
+        } catch (\InvalidArgumentException $error) {
+            throw new WorkflowLoadException("{$where} " . $error->getMessage());
+        }
+
+        return $clause;
+    }
+
+    /**
+     * C4: read and shape-validate a stage's `loop:` map at LOAD time. The
+     * grammar is a closed pair — `max` (a whole number of at least 1, the
+     * same {@see requireTaskPositiveInt()} family `timeout` rides) and
+     * `until` (a C2 {@see StageCondition} clause) — and both are required:
+     * a loop that names no exit clause would be a fixed count wearing a
+     * conditioner's coat, and the system refuses rather than guesses
+     * ("Everything malformed is refused, not coerced", docs/WORKFLOWS.md).
+     * The RAW author spelling is returned: normalization happens exactly
+     * once, when {@see WorkflowBuilder::loop()} attaches the map.
+     *
+     * @param array<array-key, mixed> $stage
+     * @return array<array-key, mixed>|null the raw map, or null when absent
+     */
+    private function requireStageLoop(array $stage, string $where): ?array
+    {
+        if (!array_key_exists('loop', $stage)) {
+            return null;
+        }
+
+        $loop = $stage['loop'];
+        if (!is_array($loop)) {
+            throw new WorkflowLoadException(
+                "{$where} \"loop\" must be a map carrying exactly max and until, got "
+                . get_debug_type($loop)
+            );
+        }
+
+        $unknown = array_diff_key($loop, array_flip(['max', 'until']));
+        if ($unknown !== []) {
+            throw new WorkflowLoadException(
+                "{$where} \"loop\" carries unknown key(s) '" . implode("', '", array_keys($unknown))
+                . "'; the grammar is max and until only"
+            );
+        }
+
+        if (!array_key_exists('max', $loop) || !array_key_exists('until', $loop)) {
+            throw new WorkflowLoadException(
+                "{$where} \"loop\" must carry both max and until"
+            );
+        }
+
+        // Validated for the refusal; the RAW spelling rides on, and the
+        // (int) normalization is the builder's once-and-only-once job.
+        $this->requireTaskPositiveInt($loop['max'], 'loop.max', $where);
+
+        $clause = $loop['until'];
+        if (!is_array($clause)) {
+            throw new WorkflowLoadException(
+                "{$where} \"loop\" \"until\" must be a map carrying one of all, any, equals, contains, matches (with stage), got "
+                . get_debug_type($clause)
+            );
+        }
+
+        try {
+            StageCondition::parse($clause);
+        } catch (\InvalidArgumentException $error) {
+            throw new WorkflowLoadException("{$where} \"loop\" \"until\" " . $error->getMessage());
+        }
+
+        return $loop;
     }
 
     /**
@@ -1744,6 +1973,32 @@ final class WorkflowRegistry
             throw new WorkflowLoadException(
                 "{$where} is parallel, so it lists \"agents\", not \"tasks\" (a \"tasks\" stage runs its tasks in sequence)"
             );
+        }
+
+        // C8: the dynamic-wave spelling. The stage carries a template task
+        // (stage-level task keys, prompt required) instead of an agents list;
+        // the engine fans the template out per glob match at run time. The
+        // parser reads the shape once and returns the template builder in a
+        // list, so parallel()'s TaskBuilder[] contract holds unchanged.
+        if ($isParallel && array_key_exists('from', $stage)) {
+            if (array_key_exists('agents', $stage)) {
+                throw new WorkflowLoadException(
+                    "{$where} carries both \"from\" and \"agents\"; the fan-out replaces the static list, one spelling at a time"
+                );
+            }
+            if (!array_key_exists('prompt', $stage)) {
+                throw new WorkflowLoadException(
+                    "{$where} fans out from a glob, so it needs a stage-level \"prompt\" for each item to run"
+                );
+            }
+
+            // The stage's own \"name\" is its label, not a task name — it is
+            // read by the caller above and must NOT leak into the template
+            // (the engine names every fanned-out item by its path).
+            $template = array_intersect_key($stage, array_flip(self::YAML_TASK_KEYS));
+            unset($template['name']);
+
+            return [$this->readTaskMap($template, "{$where} \"from\" template")];
         }
 
         if (!$isParallel && array_key_exists('tasks', $stage)) {
@@ -1982,6 +2237,18 @@ final class WorkflowRegistry
             $b = $b->timeout($this->requireTaskPositiveInt($map['timeout'], 'timeout', $at));
         }
 
+        // C7 (Option A): the idle-stall window rides the same whole-number
+        // law as `timeout` (>=1 — a window of 0 means "omit the key", never
+        // "expire instantly"), and its restart budget shares the >=0 parser
+        // family with `retries`. Both are inert when absent.
+        if (array_key_exists('stallTimeout', $map)) {
+            $b = $b->stallTimeout($this->requireTaskPositiveInt($map['stallTimeout'], 'stallTimeout', $at));
+        }
+
+        if (array_key_exists('restarts', $map)) {
+            $b = $b->restarts($this->requireTaskCount($map['restarts'], 'restarts', $at));
+        }
+
         if (array_key_exists('rejectMinOccurrences', $map) && !array_key_exists('reject', $map)) {
             throw new WorkflowLoadException(
                 "{$at} sets \"rejectMinOccurrences\" without \"reject\"; the threshold counts"
@@ -2001,6 +2268,37 @@ final class WorkflowRegistry
                 // pattern the author meant, so a bad PCRE is named, not coerced.
                 throw new WorkflowLoadException("{$at} \"reject\": {$error->getMessage()}", 0, $error);
             }
+        }
+
+        // C9: the fan-in join arm. trustedJoin() judges the SHAPE (raw
+        // English, wrapped to a load error naming the declaration site
+        // exactly like the reject pattern above); the declaring stage's
+        // index rides a pending record so the end-of-file pass in
+        // parseYamlWorkflow() can judge ORDER — a join may only name stages
+        // declared before its own. A null joinStage means a task surface was
+        // parsed outside any stage loop; index -1 then fails closed there.
+        if (array_key_exists('input', $map)) {
+            // trustedJoin is typed array: a scalar spelling must refuse loudly
+            // through the load door, never leak a TypeError past the parse.
+            if (!is_array($map['input'])) {
+                throw new WorkflowLoadException(
+                    "{$at} \"input\" must be a map carrying \"from\" and \"as\", got "
+                    . get_debug_type($map['input'])
+                );
+            }
+
+            try {
+                $spec = TaskBuilder::trustedJoin($map['input']);
+            } catch (\InvalidArgumentException $error) {
+                throw new WorkflowLoadException("{$at} \"input\": {$error->getMessage()}", 0, $error);
+            }
+
+            $b = $b->input($spec);
+            $this->pendingJoins[] = [
+                'at' => $at,
+                'index' => (int) ($this->joinStage['index'] ?? -1),
+                'from' => $spec['from'],
+            ];
         }
 
         return $b;
@@ -2028,6 +2326,132 @@ final class WorkflowRegistry
         }
 
         return $this->readTaskMap($map, "{$where} \"{$slot}\"");
+    }
+
+    /**
+     * The `uses:` value of an include-compose stage (C11): a workflow name,
+     * and exactly one body per stage.
+     *
+     * The arm IS the body, so any other body spelling — `agent:`, `tasks:`,
+     * `task:`, `agents:`, a nested `stages:` list, the `parallel: true` flag,
+     * or a `type:` other than stage — refuses at load. Raw English: the name
+     * is the author's own, and the loader never reaches the engine.
+     *
+     * @param array<array-key, mixed> $stage
+     */
+    private function requireUsesArm(array $stage, string $where, string $stageType, bool $flaggedParallel): string
+    {
+        $uses = $stage['uses'];
+        if (!is_string($uses) || trim($uses) === '') {
+            throw new WorkflowLoadException(
+                "{$where} \"uses\" must name the workflow to include, got "
+                . (is_string($uses) ? 'an empty string' : get_debug_type($uses))
+            );
+        }
+
+        foreach (['agent', 'tasks', 'task', 'agents', 'stages'] as $bodyKey) {
+            if (array_key_exists($bodyKey, $stage)) {
+                throw new WorkflowLoadException(
+                    "{$where} carries \"uses\", which is itself a stage body; it cannot accompany \"{$bodyKey}\""
+                );
+            }
+        }
+
+        if ($flaggedParallel) {
+            throw new WorkflowLoadException(
+                "{$where} carries \"uses\", which is itself a stage body; it cannot accompany \"parallel: true\""
+            );
+        }
+
+        if ($stageType !== 'stage') {
+            throw new WorkflowLoadException(
+                "{$where} carries \"uses\", which is itself a stage body; it cannot accompany \"type: {$stageType}\""
+            );
+        }
+
+        return $uses;
+    }
+
+    /**
+     * The optional `with:` sub-map of an include-compose stage (C11).
+     *
+     * Names to values; values are stringified scalars. The inner workflow
+     * receives them as plain run-context seeds, so a number or boolean rides
+     * as its string spelling and a container or null refuses instead of being
+     * silently JSON-encoded. Absent `with:` is an empty map.
+     *
+     * @param array<array-key, mixed> $stage
+     * @return array<string, string>
+     */
+    private function parseUsesWithSubMap(array $stage, string $where): array
+    {
+        if (!array_key_exists('with', $stage)) {
+            return [];
+        }
+
+        $map = $stage['with'];
+        if (!is_array($map)) {
+            throw new WorkflowLoadException("{$where} \"with\" must be a map, got " . get_debug_type($map));
+        }
+
+        $values = [];
+        foreach ($map as $key => $value) {
+            if (!is_string($key)) {
+                throw new WorkflowLoadException(
+                    "{$where} \"with\" key is not a name, got " . get_debug_type($key)
+                );
+            }
+
+            if (is_array($value) || $value === null) {
+                throw new WorkflowLoadException(
+                    "{$where} \"with\" value for \"{$key}\" must be a string or scalar, got " . get_debug_type($value)
+                );
+            }
+
+            $values[$key] = is_string($value) ? $value : (string) $value;
+        }
+
+        return $values;
+    }
+
+    /**
+     * A parallel stage's `from:` sub-map (C8): the glob the engine expands
+     * at run time, plus the optional `chunk` — a ceiling on how many of the
+     * fanned-out items run at once (a cap, never a floor).
+     *
+     * The parser refuses shapes only; expansion is the engine's job
+     * (rider law — a sub-map is checked where it is read, and this one is
+     * read to a spec, not to a materialised list, because the list can only
+     * exist while the workflow runs).
+     *
+     * @param array<array-key, mixed> $stage
+     *
+     * @return array{glob: string, chunk: int|null}
+     */
+    private function parseDynamicWaveSubMap(array $stage, string $where): array
+    {
+        $map = $stage['from'];
+        $at = "{$where} \"from\"";
+        if (!is_array($map)) {
+            throw new WorkflowLoadException("{$at} must be a map, got " . get_debug_type($map));
+        }
+
+        $this->requireNoUnknownTaskKeys($map, $at, ['glob', 'chunk']);
+
+        if (!array_key_exists('glob', $map)) {
+            throw new WorkflowLoadException("{$at} needs a \"glob\" to expand against the environment root");
+        }
+        $glob = trim($this->requireString($map, 'glob', '', $at));
+        if ($glob === '') {
+            throw new WorkflowLoadException("{$at} \"glob\" must not be empty");
+        }
+
+        $chunk = null;
+        if (array_key_exists('chunk', $map)) {
+            $chunk = $this->requireTaskPositiveInt($map['chunk'], 'chunk', $at);
+        }
+
+        return ['glob' => $glob, 'chunk' => $chunk];
     }
 
     /**
@@ -2083,6 +2507,18 @@ final class WorkflowRegistry
      */
     private function requireRetryCount(mixed $value, string $where): int
     {
+        return $this->requireTaskCount($value, 'retries', $where);
+    }
+
+    /**
+     * The whole-number-at-least-0 parse, key-parameterized — ONE parser
+     * family for `retries` and `restarts` (C7): the two budgets must never
+     * disagree about what "2" or "two" means.
+     *
+     * @throws WorkflowLoadException When the value is not a whole number >= 0.
+     */
+    private function requireTaskCount(mixed $value, string $key, string $where): int
+    {
         $int = null;
         if (is_int($value)) {
             $int = $value;
@@ -2091,11 +2527,11 @@ final class WorkflowRegistry
         }
 
         if ($int === null) {
-            throw new WorkflowLoadException("{$where} \"retries\" must be a whole number, got " . get_debug_type($value));
+            throw new WorkflowLoadException("{$where} \"{$key}\" must be a whole number, got " . get_debug_type($value));
         }
 
         if ($int < 0) {
-            throw new WorkflowLoadException("{$where} \"retries\" must be at least 0, got {$int}");
+            throw new WorkflowLoadException("{$where} \"{$key}\" must be at least 0, got {$int}");
         }
 
         return $int;
@@ -2408,10 +2844,17 @@ final class WorkflowRegistry
             if ($id === \T_NAMESPACE) {
                 return true;
             }
-            // Braces lex as plain text tokens (PHP publishes no
-            // T_OPEN_CURLY_BRACE constant), so depth rides the characters.
+            // Depth arms name every brace-opening token the scanner can meet:
+            // T_CURLY_OPEN is the "{$" opener (its text is "{", so it also
+            // rides the character arm, which covers plain literal braces —
+            // PHP publishes no T_OPEN_CURLY_BRACE constant);
+            // T_DOLLAR_OPEN_CURLY_BRACES is the "${" opener, a single token
+            // whose text is "${" and therefore invisible to the character
+            // arm. InterpolationOpenerTokenTest demands each opener be named
+            // as code: a silently-missed one loses a level and the walk then
+            // mis-reads everything after the first interpolated string.
             $text = $tokens[$i]->text;
-            if ($text === '{') {
+            if ($id === \T_CURLY_OPEN || $text === '{' || $id === \T_DOLLAR_OPEN_CURLY_BRACES) {
                 ++$depth;
                 $previous = -1;
                 continue;

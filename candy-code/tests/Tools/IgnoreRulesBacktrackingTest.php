@@ -54,7 +54,12 @@ final class IgnoreRulesBacktrackingTest extends TestCase
         $this->assertFalse($result->isError());
         $this->assertLessThan(2.0, $elapsed, sprintf('Glob took %.2fs over 2,000 files', $elapsed));
         // None of the names ends in `c`, so the rule matches none of them.
-        $this->assertStringContainsString($name . '0', $result->content());
+        // Decided with a one-name pattern, not the 2,000-file listing: the big
+        // listing rides the tool's own byte cap, and WHICH names survive that
+        // cut depends on readdir order — a co-shard shape, not a rules verdict.
+        $one = (new Glob($this->root))->execute(['id' => 'g2', 'pattern' => '**/' . $name . '0']);
+        $this->assertFalse($one->isError());
+        $this->assertStringContainsString($name . '0', $one->content());
     }
 
     public function testTheHostileRuleIsStillDecidedExactly(): void

@@ -12,9 +12,9 @@ final class WorkflowStatusTest extends TestCase
     public function testAllCasesExist(): void
     {
         $statuses = WorkflowStatus::cases();
-        $this->assertCount(9, $statuses);
+        $this->assertCount(10, $statuses);
 
-        $expectedNames = ['Draft', 'Pending', 'Running', 'Paused', 'Orphaned', 'Resuming', 'Completed', 'Failed', 'Cancelled'];
+        $expectedNames = ['Draft', 'Pending', 'Running', 'Paused', 'Orphaned', 'Resuming', 'Completed', 'Failed', 'Cancelled', 'Skipped'];
         $actualNames = array_map(fn($s) => $s->name, $statuses);
         $this->assertSame($expectedNames, $actualNames);
     }
@@ -30,6 +30,7 @@ final class WorkflowStatusTest extends TestCase
         $this->assertSame('completed', WorkflowStatus::Completed->value);
         $this->assertSame('failed', WorkflowStatus::Failed->value);
         $this->assertSame('cancelled', WorkflowStatus::Cancelled->value);
+        $this->assertSame('skipped', WorkflowStatus::Skipped->value);
     }
 
     public function testIsTerminal(): void
@@ -42,6 +43,7 @@ final class WorkflowStatusTest extends TestCase
             WorkflowStatus::Paused,
             WorkflowStatus::Orphaned,
             WorkflowStatus::Resuming,
+            WorkflowStatus::Skipped,
         ];
 
         foreach ($terminalCases as $status) {
@@ -63,6 +65,7 @@ final class WorkflowStatusTest extends TestCase
             WorkflowStatus::Completed,
             WorkflowStatus::Failed,
             WorkflowStatus::Cancelled,
+            WorkflowStatus::Skipped,
         ];
 
         foreach ($activeCases as $status) {

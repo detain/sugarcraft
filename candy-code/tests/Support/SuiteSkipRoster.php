@@ -13,6 +13,7 @@ use PHPUnit\Event\Test\Skipped;
 use PHPUnit\Event\Test\SkippedSubscriber;
 use PHPUnit\Event\TestSuite\Skipped as TestSuiteSkipped;
 use PHPUnit\Event\TestSuite\SkippedSubscriber as TestSuiteSkippedSubscriber;
+use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Tools\Sandbox\Bubblewrap;
 
 /**
@@ -252,6 +253,18 @@ final class SuiteSkipRoster
         'SugarCraft\Code\Tests\Windows\WindowsPtyRunSmokeTest::testPtyRunDrivesAReadPromptOverConPty';
 
     /**
+     * The LANE-CC macOS keys: the native-setsid preference pin can only
+     * prefer a wrapper that exists, and stock macOS ships no setsid(1) — the
+     * body calls {@see ProcessContainment::locateOnPath()} itself and skips
+     * under the same predicate, and {@see expectedForLayout()} lifts the
+     * entry exactly where that locate finds the binary (Linux, every ubuntu
+     * runner). Same shape as the jail and Windows families: the predicate IS
+     * the body gate, so the roster never licenses a silent absence elsewhere.
+     */
+    private const SETSID_PREFERENCE =
+        'SugarCraft\Code\Tests\Support\ProcessContainmentPhpSetsidTest::testARealSetsidIsStillPreferredWhenPresent';
+
+    /**
      * The tests this suite is allowed to skip, `Class::method` => why.
      *
      * The first is UNCONDITIONAL -- no environment gate, no platform check, no
@@ -366,6 +379,13 @@ final class SuiteSkipRoster
                 . 'windows-smoke CI job (PHP 8.4 + ext-ffi on windows-latest) runs the same body '
                 . 'under the same predicate, and expectedForLayout() lifts all three C-TUI-6.d '
                 . 'entries together wherever windowsSmokeRuns() is true',
+        self::SETSID_PREFERENCE
+            => 'conditional platform gate (LANE-CC macOS): rostered while no native setsid(1) is '
+                . 'located on PATH — stock macOS ships none, so the preference pin skips itself '
+                . 'there. Where ProcessContainment::locateOnPath("setsid") is non-empty (Linux, '
+                . 'including this box and the ubuntu CI legs) expectedForLayout() lifts the entry '
+                . 'and the pin asserts native-wrapper preference for real; the predicate IS the '
+                . 'body gate',
     ];
 
     private static ?self $live = null;
@@ -681,6 +701,10 @@ final class SuiteSkipRoster
             unset($effective[self::WINDOWS_BASH_VERBATIM]);
             unset($effective[self::WINDOWS_BASH_TREE_KILL]);
             unset($effective[self::WINDOWS_PTYRUN_CONPTY]);
+        }
+
+        if (ProcessContainment::locateOnPath('setsid') !== '') {
+            unset($effective[self::SETSID_PREFERENCE]);
         }
 
         return $effective;

@@ -206,6 +206,106 @@ final class WorkflowLinterTest extends TestCase
         self::assertFalse(WorkflowLinter::lint($isolated, [], self::UNIVERSE)->hasFindings());
     }
 
+    // ---- C11: the include-compose (uses: chain) leg -----------------------
+
+    public function testSelfIncludeCyclesAndNamesTheChain(): void
+    {
+        $plan = new Workflow('a', 'self-including', [
+            self::linterStage('body', [], ['uses' => 'a']),
+        ]);
+
+        $report = WorkflowLinter::lint($plan, [], self::UNIVERSE, self::includeResolver(['a' => $plan]));
+
+        self::assertTrue($report->hasErrors());
+        self::assertStringContainsString('uses-chain cycles: a -> a', $report->renderFindings());
+    }
+
+    public function testTwoHopCycleCarriesTheFullChain(): void
+    {
+        $inner = new Workflow('b', 'includes back', [
+            self::linterStage('bounce', [], ['uses' => 'a']),
+        ]);
+        $outer = new Workflow('a', 'includes out', [
+            self::linterStage('call', [], ['uses' => 'b']),
+        ]);
+
+        $report = WorkflowLinter::lint(
+            $outer,
+            [],
+            self::UNIVERSE,
+            self::includeResolver(['a' => $outer, 'b' => $inner]),
+        );
+
+        self::assertSame(1, $report->errorCount());
+        self::assertStringContainsString('uses-chain cycles: a -> b -> a', $report->renderFindings());
+    }
+
+    public function testDepthThreeChainLintsClean(): void
+    {
+        $c = new Workflow('c', 'leaf', [self::linterStage('work', [new WorkflowTask('coder', 'write')])]);
+        $b = new Workflow('b', 'mid', [self::linterStage('down', [], ['uses' => 'c'])]);
+        $a = new Workflow('a', 'top', [self::linterStage('deep', [], ['uses' => 'b'])]);
+
+        $report = WorkflowLinter::lint(
+            $a,
+            [],
+            self::UNIVERSE,
+            self::includeResolver(['a' => $a, 'b' => $b, 'c' => $c]),
+        );
+
+        self::assertFalse($report->hasFindings(), $report->renderFindings());
+    }
+
+    public function testFourthNodeReportsTooDeepAndSpellsTheChain(): void
+    {
+        $d = new Workflow('d', 'fourth', [self::linterStage('work', [new WorkflowTask('coder', 'write')])]);
+        $c = new Workflow('c', 'third', [self::linterStage('deeper', [], ['uses' => 'd'])]);
+        $b = new Workflow('b', 'second', [self::linterStage('down', [], ['uses' => 'c'])]);
+        $a = new Workflow('a', 'top', [self::linterStage('deep', [], ['uses' => 'b'])]);
+
+        $report = WorkflowLinter::lint(
+            $a,
+            [],
+            self::UNIVERSE,
+            self::includeResolver(['a' => $a, 'b' => $b, 'c' => $c, 'd' => $d]),
+        );
+
+        self::assertSame(1, $report->errorCount(), 'the walk refuses at the offending edge once');
+        self::assertStringContainsString('uses-chain too deep: a -> b -> c -> d', $report->renderFindings());
+    }
+
+    public function testUnresolvableIncludeEdgeStaysSilentForLoadTime(): void
+    {
+        $plan = new Workflow('a', 'ghost edge', [
+            self::linterStage('call', [], ['uses' => 'ghost']),
+        ]);
+
+        $report = WorkflowLinter::lint($plan, [], self::UNIVERSE, self::includeResolver([]));
+
+        self::assertFalse($report->hasFindings(), 'an unknown name is load()\'s verdict, not the linter\'s');
+    }
+
+    public function testWithoutAResolverTheIncludeLegIsSkippedEntirely(): void
+    {
+        // Legacy shape: a pre-C11 three-arg caller must get its pre-C11
+        // verdict even on a cyclic plan — the leg does not exist without a
+        // registry view. This is the byte-compatibility pin for the other
+        // (unwired) lint entry points.
+        $plan = new Workflow('a', 'self-including', [
+            self::linterStage('body', [], ['uses' => 'a']),
+        ]);
+
+        self::assertFalse(WorkflowLinter::lint($plan, [], self::UNIVERSE)->hasFindings());
+    }
+
+    /**
+     * @param array<string, Workflow> $byName
+     */
+    private static function includeResolver(array $byName): callable
+    {
+        return static fn (string $name): ?Workflow => $byName[$name] ?? null;
+    }
+
     /**
      * @param list<WorkflowTask> $tasks
      * @param array<string, mixed> $extra

@@ -68,6 +68,10 @@ jobs:
         env:
           TARGET_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # This job carries no actions/checkout, so gh cannot infer the repo
+          # from a git context and dies with "failed to determine base repo".
+          # GH_REPO gives every gh call here its target explicitly.
+          GH_REPO: detain/sugarcraft
 
   sync-libs:
     name: Split-push affected libs to sugarcraft/<lib>
@@ -335,7 +339,10 @@ jobs:
           git clone --quiet \
             "https://x-access-token:$TOKEN@github.com/sugarcraft/sugarcraft.github.io.git" \
             "$tmp/site"
-          rsync -a --delete --exclude=.git ./docs/ "$tmp/site/"
+          # docs/old and docs/research are repo working documents, not site content:
+          # drop any copy already published so --delete removes them from the site.
+          rm -rf "$tmp/site/old" "$tmp/site/research"
+          rsync -a --delete --exclude=.git --exclude=/old/ --exclude=/research/ ./docs/ "$tmp/site/"
           cd "$tmp/site"
           git config user.name  'Joe Huss'
           git config user.email 'detain@interserver.net'

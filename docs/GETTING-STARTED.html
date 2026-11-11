@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Getting Started — SugarCraft</title>
+    <meta name="description" content="Install and run SugarCraft terminal apps, and build your own with the Model-Update-View runtime.">
+    <meta property="og:title" content="Getting Started — SugarCraft">
+    <meta property="og:description" content="Install and run SugarCraft terminal apps, and build your own with the Model-Update-View runtime.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://sugarcraft.github.io/GETTING-STARTED.html">
+    <meta property="og:image" content="https://sugarcraft.github.io/img/social-preview.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://sugarcraft.github.io/img/social-preview.png">
+    <link rel="canonical" href="https://sugarcraft.github.io/GETTING-STARTED.html">
+    <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
+    <link rel="icon" type="image/png" href="img/profile.png">
+    <link rel="apple-touch-icon" href="img/profile.png">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/search.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to main content</a>
+<!--nav:start-->
+<nav class="nav" aria-label="Main navigation"><div class="nav-inner">
+    <a class="brand" href="/"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
+    <div class="nav-links">
+        <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
+            <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <span>Search</span>
+        </button>
+        <ul class="nav-items">
+            <li class="nav-item"><a href="/">Home</a></li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Libraries <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/libraries.html">All libraries →</a>
+                    <a href="/lib/sugar-core.html">sugar-core</a>
+                    <a href="/lib/sugar-style.html">sugar-style</a>
+                    <a href="/lib/sugar-cellbuffer.html">sugar-cellbuffer</a>
+                    <a href="/lib/sugar-async.html">sugar-async</a>
+                    <a href="/lib/sugar-spring.html">sugar-spring</a>
+                    <a href="/lib/sugar-mouse.html">sugar-mouse</a>
+                    <a href="/lib/sugar-widgets.html">sugar-widgets</a>
+                    <a href="/lib/sugar-charts.html">sugar-charts</a>
+                    <a href="/lib/sugar-forms.html">sugar-forms</a>
+                    <a href="/lib/sugar-markdown.html">sugar-markdown</a>
+                    <a href="/lib/sugar-cli.html">sugar-cli</a>
+                    <a href="/lib/sugar-ssh-server.html">sugar-ssh-server</a>
+                    <a href="/lib/sugar-metrics.html">sugar-metrics</a>
+                    <a href="/lib/sugar-log.html">sugar-log</a>
+                    <a href="/lib/sugar-image.html">sugar-image</a>
+                    <a href="/lib/sugar-animation.html">sugar-animation</a>
+                    <a href="/lib/sugar-video.html">sugar-video</a>
+                    <a href="/lib/sugar-colorprofile.html">sugar-colorprofile</a>
+                    <a href="/lib/sugar-ansi-parser.html">sugar-ansi-parser</a>
+                    <a href="/lib/sugar-vterm.html">sugar-vterm</a>
+                    <a href="/lib/sugar-pty.html">sugar-pty</a>
+                    <a href="/lib/sugar-focus.html">sugar-focus</a>
+                    <a href="/lib/sugar-gallery.html">sugar-gallery</a>
+                    <a href="/lib/sugar-treelist.html">sugar-treelist</a>
+                    <a href="/lib/sugar-constraints.html">sugar-constraints</a>
+                    <a href="/lib/sugar-panels.html">sugar-panels</a>
+                    <a href="/lib/sugar-overlay.html">sugar-overlay</a>
+                    <a href="/lib/sugar-navstack.html">sugar-navstack</a>
+                    <a href="/lib/sugar-dashboard.html">sugar-dashboard</a>
+                    <a href="/lib/sugar-quickpick.html">sugar-quickpick</a>
+                    <a href="/lib/sugar-input.html">sugar-input</a>
+                    <a href="/lib/sugar-fuzzy.html">sugar-fuzzy</a>
+                    <a href="/lib/sugar-flexbox.html">sugar-flexbox</a>
+                    <a href="/lib/sugar-toast.html">sugar-toast</a>
+                    <a href="/lib/sugar-datepicker.html">sugar-datepicker</a>
+                    <a href="/lib/sugar-readline.html">sugar-readline</a>
+                    <a href="/lib/sugar-table.html">sugar-table</a>
+                    <a href="/lib/sugar-diff.html">sugar-diff</a>
+                    <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
+                    <a href="/lib/sugar-testing.html">sugar-testing</a>
+                </div>
+            </li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Apps <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/apps.html">All apps →</a>
+                    <a href="/lib/candy-starter.html">candy-starter</a>
+                    <a href="/lib/candy-scriptui.html">candy-scriptui</a>
+                    <a href="/lib/candy-codeshot.html">candy-codeshot</a>
+                    <a href="/lib/candy-mdview.html">candy-mdview</a>
+                    <a href="/lib/candy-ansi-inspect.html">candy-ansi-inspect</a>
+                    <a href="/lib/candy-ssh-launcher.html">candy-ssh-launcher</a>
+                    <a href="/lib/candy-kv.html">candy-kv</a>
+                    <a href="/lib/candy-mail.html">candy-mail</a>
+                    <a href="/lib/candy-git-server.html">candy-git-server</a>
+                    <a href="/lib/candy-tetris.html">candy-tetris</a>
+                    <a href="/lib/candy-files.html">candy-files</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
+                    <a href="/lib/candy-code-web.html">candy-code-web</a>
+                    <a href="/lib/candy-vcr.html">candy-vcr</a>
+                    <a href="/lib/candy-git.html">candy-git</a>
+                    <a href="/lib/candy-sql.html">candy-sql</a>
+                    <a href="/lib/candy-codetime.html">candy-codetime</a>
+                    <a href="/lib/candy-minesweeper.html">candy-minesweeper</a>
+                    <a href="/lib/candy-gifview.html">candy-gifview</a>
+                    <a href="/lib/candy-image.html">candy-image</a>
+                    <a href="/lib/candy-top.html">candy-top</a>
+                    <a href="/lib/candy-flappy.html">candy-flappy</a>
+                </div>
+            </li>
+            <li class="nav-item nav-item-drop-right">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Docs <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop">
+                    <a href="/#architecture">Architecture</a>
+                    <a href="/#quickstart">Quickstart</a>
+                    <a href="/compare.html">Compare</a>
+                    <a href="/GETTING-STARTED.html">Getting Started</a>
+                    <a href="/GLOSSARY.html">Glossary</a>
+                    <a href="/KEYMAPS.html">Keymaps</a>
+                    <a href="/cookbook/index.html">Cookbook</a>
+                </div>
+            </li>
+            <li class="nav-item"><a href="/#demos">Demos</a></li>
+            <li class="nav-item"><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a></li>
+        </ul>
+    </div>
+</div></nav>
+<!--nav:end-->
+
+<main id="main">
+
+<article class="prose">
+
+<h1><a id="getting-started-with-sugarcraft" href="#getting-started-with-sugarcraft" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Getting started with SugarCraft</h1>
+<p>Three ways to get something on your screen in about five minutes — run a
+finished binary, scaffold an app, or taste one library. Then a router table
+for &quot;I want to X, which package is that?&quot;, and the install-path truth stated
+once. New to the vocabulary? <a href="/GLOSSARY.html">docs/GLOSSARY.md</a> defines every
+term below.</p>
+<h2><a id="route-a--run-a-finished-app-no-composer-needed" href="#route-a--run-a-finished-app-no-composer-needed" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Route A — run a finished app (no Composer needed)</h2>
+<p>Signed single-file phars ship on the <a href="https://github.com/detain/sugarcraft/releases">releases
+page</a>. Every release carries a
+SHA-256 sidecar; <code>candy-code</code>/<code>candy-top</code> builds from <code>v0.1.1</code>/<code>v0.1.0</code>
+onward also carry an Ed25519 <code>minisig</code> verified against the pinned key
+(<a href="https://github.com/detain/sugarcraft/blob/master/SECURITY.md">SECURITY.md</a>). Requirements: PHP 8.3+.</p>
+<pre><code class="language-bash">curl -LO https://github.com/detain/sugarcraft/releases/download/candy-code/v0.1.1/candy-code.phar
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-code/v0.1.1/candy-code.phar.sha256
+sha256sum -c candy-code.phar.sha256
+php candy-code.phar doctor        # checks your PHP extensions, then:
+php candy-code.phar               # the AI coding-agent TUI
+</code></pre>
+<pre><code class="language-bash">curl -LO https://github.com/detain/sugarcraft/releases/download/candy-top/v0.1.0/candy-top.phar
+curl -LO https://github.com/detain/sugarcraft/releases/download/candy-top/v0.1.0/candy-top.phar.sha256
+sha256sum -c candy-top.phar.sha256
+php candy-top.phar                # the btop-style system monitor
+</code></pre>
+<p>A tagged phar updates itself: <code>php candy-top.phar self-update --check</code>, then
+<code>self-update</code> (and <code>--rollback</code> once if you ever want the previous file
+back). <code>candy-code/v0.1.0</code> predates the signing key — install <code>v0.1.1</code>
+instead; see <a href="/lib/candy-code.html">candy-code/README.md</a> for the
+full story.</p>
+<h2><a id="route-b--build-your-first-tui" href="#route-b--build-your-first-tui" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Route B — build your first TUI</h2>
+<p>The starter is the shortest path to a running program: <code>bin/start</code> hands a
+Model to sugar-core's <code>Program</code>, which owns the event loop, raw mode, and the
+alt-screen. You only write the Model.</p>
+<pre><code class="language-bash">composer create-project sugarcraft/candy-starter my-app
+cd my-app
+./bin/start                       # a counter demo; q / Esc / Ctrl+C quits
+</code></pre>
+<p>A Model is the <a href="/lib/candy-starter.html">four-method contract</a> — this
+compiles as-is:</p>
+<pre><code class="language-php">&lt;?php
+declare(strict_types=1);
+
+namespace App;
+
+use SugarCraft\Core\{Model, Msg, Subscriptions};
+
+final class Greeter implements Model
+{
+    public function init(): ?\Closure { return null; }
+
+    /** @return array{0: Model, 1: ?\Closure} */
+    public function update(Msg $msg): array { return [$this, null]; }
+
+    public function view(): string { return 'hello'; }
+
+    public function subscriptions(): ?Subscriptions { return null; }
+}
+</code></pre>
+<p>Keys arrive as <code>Msg</code>s, timers and streams ride <code>subscriptions()</code>, and every
+effect is a <code>Cmd</code> closure — <a href="/GLOSSARY.html#runtime-vocabulary">GLOSSARY.md</a> and the <a href="/lib/sugar-core.html">sugar-core
+README</a> walk each one.</p>
+<h2><a id="route-c--taste-one-library" href="#route-c--taste-one-library" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Route C — taste one library</h2>
+<p>Charts are the smallest full dependency: add sugar-charts to any project and
+one class gives you a braille-cell sparkline on stdout.</p>
+<pre><code class="language-bash">composer require sugarcraft/sugar-charts
+</code></pre>
+<pre><code class="language-php">&lt;?php
+require __DIR__ . '/vendor/autoload.php';
+
+use SugarCraft\Charts\Sparkline\Sparkline;
+
+echo Sparkline::new([1, 3, 2, 8, 5, 4, 7, 6], 8)-&gt;view();
+// ▂▁█▅▃▇▆
+</code></pre>
+<h2><a id="i-want-to---which-package" href="#i-want-to---which-package" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>I want to … → which package?</h2>
+<table>
+<thead>
+<tr>
+<th>Goal</th>
+<th>Reach for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Run an AI coding agent in the terminal</td>
+<td><a href="/lib/candy-code.html">candy-code</a></td>
+</tr>
+<tr>
+<td>Monitor CPU/memory/disks/network like btop</td>
+<td><a href="/lib/candy-top.html">candy-top</a></td>
+</tr>
+<tr>
+<td>View an image in the terminal</td>
+<td><a href="/lib/candy-image.html">candy-image</a> (CLI) / <a href="/lib/sugar-image.html">sugar-image</a> (library)</td>
+</tr>
+<tr>
+<td>Play a GIF or <code>.ansi</code> art file</td>
+<td><a href="/lib/candy-gifview.html">candy-gifview</a></td>
+</tr>
+<tr>
+<td>Browse/edit files</td>
+<td><a href="/lib/candy-files.html">candy-files</a></td>
+</tr>
+<tr>
+<td>Query databases</td>
+<td><a href="/lib/candy-sql.html">candy-sql</a></td>
+</tr>
+<tr>
+<td>Drive git with keys</td>
+<td><a href="/lib/candy-git.html">candy-git</a></td>
+</tr>
+<tr>
+<td>Read markdown in the terminal</td>
+<td><a href="/lib/candy-mdview.html">candy-mdview</a></td>
+</tr>
+<tr>
+<td>Start your own app</td>
+<td><a href="/lib/candy-starter.html">candy-starter</a> + <a href="/lib/sugar-core.html">sugar-core</a></td>
+</tr>
+<tr>
+<td>Sparklines, bars, line charts</td>
+<td><a href="/lib/sugar-charts.html">sugar-charts</a></td>
+</tr>
+<tr>
+<td>Forms and fields</td>
+<td><a href="/lib/sugar-forms.html">sugar-forms</a></td>
+</tr>
+<tr>
+<td>Sortable/filterable tables</td>
+<td><a href="/lib/sugar-table.html">sugar-table</a></td>
+</tr>
+<tr>
+<td>Parse raw terminal byte-streams</td>
+<td><a href="/lib/sugar-ansi-parser.html">sugar-ansi-parser</a> / <a href="/lib/sugar-input.html">sugar-input</a></td>
+</tr>
+<tr>
+<td>Sprites, physics, animation</td>
+<td><a href="/lib/sugar-spring.html">sugar-spring</a>, <a href="/lib/sugar-animation.html">sugar-animation</a></td>
+</tr>
+<tr>
+<td>Record/replay a TUI session in tests</td>
+<td><a href="/lib/candy-vcr.html">candy-vcr</a>, <a href="/lib/sugar-testing.html">sugar-testing</a></td>
+</tr>
+</tbody>
+</table>
+<p>The full matrix with upstream comparisons is <a href="https://github.com/detain/sugarcraft/blob/master/docs/MATCHUPS.md">docs/MATCHUPS.md</a>;
+the site mirror is <a href="https://sugarcraft.github.io/">sugarcraft.github.io</a>.</p>
+<h2><a id="why-php" href="#why-php" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Why PHP?</h2>
+<p>Because one language can cover the whole stack: the same <code>final class</code> that
+computes your business logic also returns the exact SGR bytes that paint it,
+with no daemon, FFI boundary, or second runtime between the two. Packages
+stay composer-installable like any other PHP library, and finished apps
+still ship to people who never touch Composer — as one signed, self-updating
+<code>.phar</code> file (Route A). PHP 8.3's strict types plus ReactPHP cover the async
+event loop the interactive stack runs on.</p>
+<h2><a id="the-binary-path-truth-once-for-everything-below" href="#the-binary-path-truth-once-for-everything-below" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>The binary-path truth (once, for everything below)</h2>
+<p>Depending on how you got a package, its launcher lives in one of three
+places — READMEs use <code>vendor/bin/…</code> and <code>./bin/…</code> for different ones:</p>
+<ul>
+<li><strong>You <code>composer require</code>d it into your project</strong> → the command is
+<code>vendor/bin/candy-code</code> (any <code>candy-*</code> package with a binary).</li>
+<li><strong>You are inside a checkout of the package itself</strong> (monorepo or clone) →
+it is <code>./bin/candy-code</code>, no <code>vendor/</code> prefix.</li>
+<li><strong>You are a release user</strong> → there is no bin at all: <code>php candy-code.phar</code>.</li>
+<li><strong>You want it globally</strong> → <code>composer global require sugarcraft/candy-code</code>
+and put <code>~/.config/composer/vendor/bin</code> on your <code>PATH</code>.</li>
+</ul>
+<h2><a id="accessibility--reduced-motion" href="#accessibility--reduced-motion" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Accessibility &amp; reduced motion</h2>
+<ul>
+<li><strong><code>REDUCE_MOTION</code></strong> / <strong><code>PREFERS_REDUCED_MOTION</code></strong> — either variable reading on (anything except empty, <code>0</code>, <code>false</code>, <code>no</code>, <code>off</code>, case-insensitively) is read by <a href="https://github.com/detain/sugarcraft/blob/master/sugar-colorprofile/src/Probe.php"><code>SugarCraft\ColorProfile\Probe::reducedMotion()</code></a> and honoured by <a href="https://github.com/detain/sugarcraft/blob/master/sugar-spring/src/Spring.php"><code>sugar-spring</code></a>: spring-composed types snap straight to their target instead of animating (projectiles and easing curves are gate-yourself app-side; see the sugar-spring README).</li>
+<li><strong><code>NO_COLOR</code></strong>: color depth is detected fleet-wide by
+<a href="https://github.com/detain/sugarcraft/blob/master/sugar-core/src/Util/ColorProfile.php"><code>sugar-core</code>'s <code>ColorProfile::detect()</code></a>
+(TERM / <code>COLORTERM</code> / <code>NO_COLOR</code> / CI probes) and announced to every
+program as a <code>ColorProfileMsg</code>; the full precedence ladder is documented
+in the <a href="/lib/sugar-colorprofile.html">sugar-colorprofile
+README</a>. Applying it is app-by-app:
+sugar-style renderers honour the profile, while some apps pick their depth
+from their own config first — candy-top, for example, derives it from its
+<code>truecolor</code>/terminal-mode options and does not consume the startup message.
+If an app ignores <code>NO_COLOR</code>, that is a bug worth a report.</li>
+<li>Keyboard-only operation and per-app key tables are indexed in
+<a href="/KEYMAPS.html">docs/KEYMAPS.md</a>.</li>
+</ul>
+<h2><a id="where-to-read-more" href="#where-to-read-more" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Where to read more</h2>
+<ul>
+<li><a href="/GLOSSARY.html">docs/GLOSSARY.md</a> — every term, defined with its source file.</li>
+<li><a href="/KEYMAPS.html">docs/KEYMAPS.md</a> — fleet keymap index (pointers).</li>
+<li><a href="/lib/sugar-core.html">sugar-core README</a> — the runtime, plus the
+shared environment-variable table.</li>
+<li><a href="/TRUST-BOUNDARY.html">docs/TRUST-BOUNDARY.md</a> — what untrusted input may and
+may not do; read before rendering anything you didn't author.</li>
+<li><a href="https://github.com/detain/sugarcraft/blob/master/SECURITY.md">SECURITY.md</a> — releases, signing, supported versions.</li>
+<li><a href="https://github.com/detain/sugarcraft/blob/master/candy-code/docs/TROUBLESHOOTING.md">candy-code/docs/TROUBLESHOOTING.md</a>
+— the flagship app's failure-mode guide.</li>
+<li><a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">CONTRIBUTING.md</a> + <a href="https://github.com/detain/sugarcraft/blob/master/AGENTS.md">AGENTS.md</a> —
+conventions, the per-lib <code>composer install &amp;&amp; vendor/bin/phpunit</code> loop,
+and how path repositories work.</li>
+</ul>
+
+</article>
+
+</main>
+
+<footer class="footer">
+    <p>SugarCraft — MIT-licensed PHP terminal toolkits and apps. Built with <a href="https://www.php.net/">PHP</a>.</p>
+    <p><a href="/compare.html">Compare</a> · <a href="/404.html">404</a> · <a href="https://github.com/sugarcraft">GitHub</a></p>
+</footer>
+
+<script src="js/main.js"></script>
+
+<div class="search-modal" id="search-modal" role="dialog" aria-modal="true" aria-label="Search the site" hidden>
+    <div class="search-modal-box">
+        <input class="search-input" id="search-input" type="text" placeholder="Search libraries, tools, topics..." autocomplete="off" spellcheck="false">
+        <ul class="search-results" id="search-results" role="listbox" aria-label="Search results"></ul>
+        <div class="search-hint"><kbd>Ctrl+K</kbd> to open · <kbd>Esc</kbd> to close · <kbd>↵</kbd> to search GitHub</div>
+    </div>
+</div>
+<script src="js/search.js" defer></script>
+<script src="js/nav.js" defer></script>
+</body>
+</html>

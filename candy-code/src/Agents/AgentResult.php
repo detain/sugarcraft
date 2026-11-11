@@ -19,6 +19,12 @@ final class AgentResult
      *        agent yields ONE result, its last attempt's, and that result's
      *        $tokensUsed/$costUsd/$startedAt cover every attempt — a failed
      *        attempt's spend is real spend.
+     * @param bool $stalled Set only by {@see AgentWorkerPool}'s stall expiry:
+     *        a FORKED worker that went silent past its
+     *        {@see SubAgent::$stallTimeout} without publishing progress. It
+     *        keeps the cause apart from a wall-clock timeout so the restart
+     *        budget can be judged independently; the status stays
+     *        {@see AgentStatus::TimedOut} for every existing reader.
      */
     public function __construct(
         public readonly string $agentId,
@@ -30,6 +36,7 @@ final class AgentResult
         public readonly ?\DateTimeImmutable $startedAt = null,
         public readonly ?\DateTimeImmutable $completedAt = null,
         public readonly int $attempts = 1,
+        public readonly bool $stalled = false,
     ) {}
 
     /**

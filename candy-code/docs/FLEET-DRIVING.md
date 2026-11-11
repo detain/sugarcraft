@@ -41,7 +41,7 @@ Success shape (assembled at src/Cli/NonInteractive.php:2371):
 | `result` | always (success) | The final assistant text. |
 | `refusals` | always (success doc) | Denials recorded during the run; `[]` when there were none. |
 | `session_id` | when present | 16-hex id of the session that served the turn. |
-| `usage` | when present | Token/cost record for the turn; fields declared at src/Usage.php:140-218 (`totalTokens`, `costUsd`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheCreationTokens`, `reasoningTokens`, `delegatedTokens`, `unpricedModel`, `webSearchRequests`). |
+| `usage` | when present | Token/cost record for the turn; fields declared at src/Usage.php:140-233 (`totalTokens`, `costUsd`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheCreationTokens`, `reasoningTokens`, `delegatedTokens`, `unpricedModel`, `webSearchRequests`). |
 | `steps_truncated` / `length_stopped` / `loop_guard_stopped_by` | only when true | The stop-reason trio: a step budget cut, an output-length stop, or a loop-guard intervention. |
 | `json_schema_applied` | only when `false` | Appears only when a schema was requested and the answer rode a tool result instead — the schema was not enforced on that turn. |
 
@@ -115,7 +115,7 @@ Until that weld lands, both options exit 2 as unrecognized on shipped builds.
 ## Follow-up turns and lineage
 
 - `--resume=<session_id>` continues the same conversation and keeps the same
-  session id (flag plumbing at src/Cli/ArgvParser.php:152). A measured
+  session id (flag plumbing at src/Cli/ArgvParser.php:153 and :921-925). A measured
   follow-up turn finished in ~1.7 s against the same `session_id`.
 - Post-hoc lineage: `session show <id> --output-format json` returns the full
   record — including `parent_id` and `parent_call_id`, so delegated sub-agent
@@ -163,14 +163,14 @@ you actually want isolation; identical `HOME` for identical cache warmth.
 Measured absent: `--allowedTools` / `--disallowedTools` (tool narrowing is the
 `permissionRules` config surface), `--session-id` on shipped builds (ids are
 minted, or supplied to `--resume`; a pre-allocation variant is weld-queued
-under "Driver flags queued for merge" above), `--param` / `--values` CLI plumbing, a top-level `workflow`
-subcommand (the workflow verbs are the `/workflow` slash commands: run,
-pause, resume, status, list), and any `--auto-review` flag (`autoReview` is a
+under "Driver flags queued for merge" above), `--values` flag (params ride the native verb: `candy-code workflow run
+--param k=v`; the top-level `workflow` subcommand itself exists since W-1 —
+run, status, resume; pause and list stay `/workflow` slash commands), and any `--auto-review` flag (`autoReview` is a
 config key only — src/Config/LayeredSettings.php:589). The saved-workflow DSL
 lives at `~/.candy-code/workflows/<name>.php`; pause records live under
 `.running/` beside them.
 
-## KNOWN GAP — headless `/workflow` is model-mediated (being fixed)
+## Headless workflow execution: the native verb, and the model-mediated path
 
 Driving a saved workflow through `-p '/workflow run <name>'` is **not** a
 machine pathway today. The headless model receives the request and
@@ -183,31 +183,44 @@ run**. The escalated probe run exited 0 with "completed successfully". Until a
 native headless workflow verb lands, do **not** gate a fleet on the exit codes
 or prose of headless workflow runs: drive the stages yourself as N parallel
 `-p` lanes (Task-style invocations) with file-protocol handshakes, and keep
-`/workflow` for interactive use.
+`/workflow` for interactive use. W-1 has since landed the machine pathway:
+`candy-code workflow run <name>` executes the saved workflow through the
+engine directly — verification machinery, `ESCALATE:` scanning and
+`outputSchema` enforcement included — with gateable exit codes (0/1/2/3,
+exit 3 = stopped-for-a-person; see docs/WORKFLOWS.md "Running from the CLI
+(headless)"). The `-p '/workflow'` route above remains model-mediated by
+design.
 
-## KNOWN GAP — killing a headless workflow run loses the pause record (being fixed)
+## Killing workflow runs: the native verb pauses resumably; the model path does not
 
-A `SIGTERM` (or `SIGINT`) delivered to a headless workflow run exits 143 with
-an **empty stdout and no pause file** — `.running/` is never created, so
-`/workflow resume` has nothing to resume. The root cause is on the
-`WorkflowTool` path, which calls the engine's non-interactive entry (declared
-at src/Workflows/WorkflowEngine.php:750) with the interruptibility argument
-pinned off (src/Workflows/WorkflowEngine.php:756): signal handlers are only
-installed when the run is interruptible (src/Workflows/WorkflowEngine.php:1568),
-so the process dies on the raw signal. The interactive `/workflow run` path
-takes the interruptible default and does write pause records. Do not expect
-resume-from-kill on headless runs; budget time instead of assuming you can
-stop-and-restart mid-workflow there.
+A `SIGTERM` (or `SIGINT`) delivered to the MODEL-MEDIATED path — the
+`Workflow` tool reached through `-p '/workflow run <name>'` — exits 143 with
+an **empty stdout and no pause file**. The root cause is on the `WorkflowTool`
+path, which calls the engine's non-interactive entry
+`WorkflowEngine::runWorkflow()` with the interruptibility argument pinned off;
+`installInterruptHandlers()` runs only on interruptible paths, so the process
+dies on the raw signal. That is by design: the tool executes inside a forked
+turn whose cancellation kills the child tree wholesale.
+
+The native verb is different. `candy-code workflow run` calls
+`WorkflowEngine::run()`, which takes the interruptible default: a signal
+writes the cooperative pause record first, and the verb's pause observer
+(`setSignalPauseHandler()`) emits the machine document before exiting 3, so
+`candy-code workflow resume <id>` has a resume point. The interactive
+`/workflow run` path likewise pause-writes and keeps the raw 130/143 exit.
 
 ## Driver checklist
 
 1. Absolute bin path, per-lane `HOME` policy, per-lane `--root`.
 2. `--output-format json`; parse stdout **only**; expect one document always.
 3. Gate on exit code: `0` trust envelope; `1` read `error.type`; `2` fix the
-   launcher. Check `json_schema_applied` when you asked for a schema.
+   launcher. Check `json_schema_applied` when you asked for a schema. For
+   `candy-code workflow`, `3` = stopped for a person (escalated verification
+   or signal pause — resume with `candy-code workflow resume <id>`).
 4. `session show --output-format json` and the usage rollup for post-hoc
    lineage and spend.
 5. Fan out with plain processes; no batch-mode flag exists.
-6. Until the gaps above close: drive multi-stage work as your own parallel
-   `-p` lanes, not as headless saved-workflow runs, and never kill a headless
-   workflow run expecting a resume point.
+6. For saved-workflow fan-out prefer the native `candy-code workflow run` verb
+   over hand-rolled `-p` lanes; signal-stopping it leaves a resume point
+   (`candy-code workflow resume <id>`). The model-mediated `-p '/workflow'`
+   route still has no resume point — budget time there.

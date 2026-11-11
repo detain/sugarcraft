@@ -55,17 +55,15 @@ final class PaletteIndex
      * @param list<Color> $palette original entries, in caller order (index == key)
      * @param list<array{0: float, 1: float, 2: float}> $basis eigenvector columns, descending eigenvalue, sign-normalized
      * @param array{0: float, 1: float, 2: float} $mean palette centroid in the metric space
-     * @param list<Color> $sorted palette entries reordered by ascending leading-axis coordinate
-     * @param list<array{l: float, a: float, b: float}>|list<Color> $recheck metric-space data aligned with $sorted: Lab triples under Cie76 (fed verbatim to DeltaE::cie76, the oracle's own function), Colors under Euclidean
-     * @param list<float> $axis0 leading-axis coordinates aligned with $sorted (ascending)
-     * @param list<int> $origIndex original palette index aligned with $sorted
+     * @param list<array{l: float, a: float, b: float}>|list<Color> $recheck metric-space data in ascending leading-axis slot order: Lab triples under Cie76 (fed verbatim to DeltaE::cie76, the oracle's own function), Colors under Euclidean
+     * @param list<float> $axis0 leading-axis coordinates in that same slot order (ascending)
+     * @param list<int> $origIndex original palette index per slot
      */
     private function __construct(
         private readonly ColorDistance $metric,
         private readonly array $palette,
         private readonly array $basis,
         private readonly array $mean,
-        private readonly array $sorted,
         private readonly array $recheck,
         private readonly array $axis0,
         private readonly array $origIndex,
@@ -296,18 +294,16 @@ final class PaletteIndex
         }
         usort($slots, static fn(array $x, array $y): int => [$x[0], $x[1]] <=> [$y[0], $y[1]]);
 
-        $sorted = [];
         $recheck = [];
         $axis0 = [];
         $origIndex = [];
         foreach ($slots as [$c0, $i]) {
-            $sorted[] = $list[$i];
             $recheck[] = $recheckSource[$i];
             $axis0[] = $c0;
             $origIndex[] = $i;
         }
 
-        return new self($metric, $list, $basis, $mean, $sorted, $recheck, $axis0, $origIndex);
+        return new self($metric, $list, $basis, $mean, $recheck, $axis0, $origIndex);
     }
 
     /**

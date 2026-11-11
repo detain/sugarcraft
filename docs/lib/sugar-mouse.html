@@ -12,31 +12,123 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-mouse.html">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
 <link rel="icon" type="image/png" href="../img/icons/sugar-mouse.png">
 <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/search.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner">
-    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<!--nav:start-->
+<nav class="nav" aria-label="Main navigation"><div class="nav-inner">
+    <a class="brand" href="/"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
     <div class="nav-links">
         <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
             <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <span>Search</span>
         </button>
-        <a href="../#libraries">Libraries</a>
-        <a href="../#apps">Apps</a>
-        <a href="../#demos">Demos</a>
-        <a href="../#quickstart">Quickstart</a>
-        <a href="../compare.html">Compare</a>
-        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a>
+        <ul class="nav-items">
+            <li class="nav-item"><a href="/">Home</a></li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Libraries <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/libraries.html">All libraries →</a>
+                    <a href="/lib/sugar-core.html">sugar-core</a>
+                    <a href="/lib/sugar-style.html">sugar-style</a>
+                    <a href="/lib/sugar-cellbuffer.html">sugar-cellbuffer</a>
+                    <a href="/lib/sugar-async.html">sugar-async</a>
+                    <a href="/lib/sugar-spring.html">sugar-spring</a>
+                    <a href="/lib/sugar-mouse.html">sugar-mouse</a>
+                    <a href="/lib/sugar-widgets.html">sugar-widgets</a>
+                    <a href="/lib/sugar-charts.html">sugar-charts</a>
+                    <a href="/lib/sugar-forms.html">sugar-forms</a>
+                    <a href="/lib/sugar-markdown.html">sugar-markdown</a>
+                    <a href="/lib/sugar-cli.html">sugar-cli</a>
+                    <a href="/lib/sugar-ssh-server.html">sugar-ssh-server</a>
+                    <a href="/lib/sugar-metrics.html">sugar-metrics</a>
+                    <a href="/lib/sugar-log.html">sugar-log</a>
+                    <a href="/lib/sugar-image.html">sugar-image</a>
+                    <a href="/lib/sugar-animation.html">sugar-animation</a>
+                    <a href="/lib/sugar-video.html">sugar-video</a>
+                    <a href="/lib/sugar-colorprofile.html">sugar-colorprofile</a>
+                    <a href="/lib/sugar-ansi-parser.html">sugar-ansi-parser</a>
+                    <a href="/lib/sugar-vterm.html">sugar-vterm</a>
+                    <a href="/lib/sugar-pty.html">sugar-pty</a>
+                    <a href="/lib/sugar-focus.html">sugar-focus</a>
+                    <a href="/lib/sugar-gallery.html">sugar-gallery</a>
+                    <a href="/lib/sugar-treelist.html">sugar-treelist</a>
+                    <a href="/lib/sugar-constraints.html">sugar-constraints</a>
+                    <a href="/lib/sugar-panels.html">sugar-panels</a>
+                    <a href="/lib/sugar-overlay.html">sugar-overlay</a>
+                    <a href="/lib/sugar-navstack.html">sugar-navstack</a>
+                    <a href="/lib/sugar-dashboard.html">sugar-dashboard</a>
+                    <a href="/lib/sugar-quickpick.html">sugar-quickpick</a>
+                    <a href="/lib/sugar-input.html">sugar-input</a>
+                    <a href="/lib/sugar-fuzzy.html">sugar-fuzzy</a>
+                    <a href="/lib/sugar-flexbox.html">sugar-flexbox</a>
+                    <a href="/lib/sugar-toast.html">sugar-toast</a>
+                    <a href="/lib/sugar-datepicker.html">sugar-datepicker</a>
+                    <a href="/lib/sugar-readline.html">sugar-readline</a>
+                    <a href="/lib/sugar-table.html">sugar-table</a>
+                    <a href="/lib/sugar-diff.html">sugar-diff</a>
+                    <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
+                    <a href="/lib/sugar-testing.html">sugar-testing</a>
+                </div>
+            </li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Apps <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/apps.html">All apps →</a>
+                    <a href="/lib/candy-starter.html">candy-starter</a>
+                    <a href="/lib/candy-scriptui.html">candy-scriptui</a>
+                    <a href="/lib/candy-codeshot.html">candy-codeshot</a>
+                    <a href="/lib/candy-mdview.html">candy-mdview</a>
+                    <a href="/lib/candy-ansi-inspect.html">candy-ansi-inspect</a>
+                    <a href="/lib/candy-ssh-launcher.html">candy-ssh-launcher</a>
+                    <a href="/lib/candy-kv.html">candy-kv</a>
+                    <a href="/lib/candy-mail.html">candy-mail</a>
+                    <a href="/lib/candy-git-server.html">candy-git-server</a>
+                    <a href="/lib/candy-tetris.html">candy-tetris</a>
+                    <a href="/lib/candy-files.html">candy-files</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
+                    <a href="/lib/candy-code-web.html">candy-code-web</a>
+                    <a href="/lib/candy-vcr.html">candy-vcr</a>
+                    <a href="/lib/candy-git.html">candy-git</a>
+                    <a href="/lib/candy-sql.html">candy-sql</a>
+                    <a href="/lib/candy-codetime.html">candy-codetime</a>
+                    <a href="/lib/candy-minesweeper.html">candy-minesweeper</a>
+                    <a href="/lib/candy-gifview.html">candy-gifview</a>
+                    <a href="/lib/candy-image.html">candy-image</a>
+                    <a href="/lib/candy-top.html">candy-top</a>
+                    <a href="/lib/candy-flappy.html">candy-flappy</a>
+                </div>
+            </li>
+            <li class="nav-item nav-item-drop-right">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Docs <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop">
+                    <a href="/#architecture">Architecture</a>
+                    <a href="/#quickstart">Quickstart</a>
+                    <a href="/compare.html">Compare</a>
+                    <a href="/GETTING-STARTED.html">Getting Started</a>
+                    <a href="/GLOSSARY.html">Glossary</a>
+                    <a href="/KEYMAPS.html">Keymaps</a>
+                    <a href="/cookbook/index.html">Cookbook</a>
+                </div>
+            </li>
+            <li class="nav-item"><a href="/#demos">Demos</a></li>
+            <li class="nav-item"><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a></li>
+        </ul>
     </div>
 </div></nav>
+<!--nav:end-->
+
+<main id="main">
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries"><span aria-hidden="true">←</span> All 40 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 40 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-mouse.png" alt="" aria-hidden="true">
@@ -54,13 +146,31 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-mouse"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-mouse" alt="SugarMouse code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Own your own <code>Scanner</code> instance — no global wiring required. Wrap rendered chunks with private-use sentinel tags (zero-width to this lib's scanner; not guaranteed invisible on every host), scan to discover bounding boxes, then hit-test mouse events. <code>ZoneClickTracker</code> deduplicates Press/Release pairs so each logical click emits once. The <code>Zones\Manager</code> layer of the same package adds prefixed managers plus hover, drag, and multi-click trackers.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#what-s-in-the-box">What&#039;s in the box</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+            <li class="toc-h3"><a href="#zones-bubblezone-manager-layer">Zones (bubblezone Manager layer)</a></li>
+            <li class="toc-h3"><a href="#zones-api">Zones API</a></li>
+            <li class="toc-h3"><a href="#accessibility">Accessibility</a></li>
+            <li class="toc-h2"><a href="#demos">Demos.</a></li>
+            <li class="toc-h3"><a href="#two-clickable-buttons">Two clickable buttons</a></li>
+            <li class="toc-h3"><a href="#list-with-zones">List with zones</a></li>
+            <li class="toc-h3"><a href="#nested-components">Nested components</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Own your own <code>Scanner</code> instance — no global wiring required. Wrap rendered chunks with private-use sentinel tags (zero-width to this lib's scanner; not guaranteed invisible on every host), scan to discover bounding boxes, then hit-test mouse events. <code>ZoneClickTracker</code> deduplicates Press/Release pairs so each logical click emits once. The <code>Zones\Manager</code> layer of the same package adds prefixed managers plus hover, drag, and multi-click trackers.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-mouse</code></pre>
     <p>Requires PHP <code>^8.3</code>; the only package dependency is <code>sugarcraft/sugar-core</code>.</p>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Mouse\Mark;
 use SugarCraft\Mouse\Scanner;
 use SugarCraft\Mouse\ZoneClickTracker;
@@ -88,7 +198,7 @@ if ($click !== null) {
     echo "Clicked zone: " . $click->zone->id;
 }</code></pre>
 
-    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <h3 id="what-s-in-the-box" style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Mark sentinel wrap</strong><span><code>Mark::zone($id, $content)</code> wraps content in U+E000/U+E001 tags — zero-width to this lib's scanner, never in ANSI escape payloads; sweep untrusted text with <code>Mark::untrusted()</code> before marking it. <code>Mark::new()</code> / <code>Mark::disabled()</code> build an instance for <code>wrap()</code>; <code>Mark::isValidId()</code> is the id predicate encoder and decoder share.</span></div>
       <div class="feature"><strong>Strict scan grammar</strong><span><code>Scan::parse()</code> decodes exactly what <code>Mark</code> encodes and every tag byte is zero-width; a lone sentinel or malformed id skips only its 3 sentinel bytes, so a stray marker can never swallow the span after it. Orphan closes/unclosed opens are dropped, a zone that paints no cell yields no zone, and a duplicate id throws.</span></div>
@@ -103,7 +213,7 @@ if ($click !== null) {
       <div class="feature"><strong>Press+Release pairing (bubblezone #10)</strong><span>Press+Release agreement per zone per button — the pairing upstream tracked in <a href="https://github.com/lrstanley/bubblezone/issues/10">bubblezone issue #10</a>.</span></div>
     </div>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-mouse">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-mouse/blob/master/README.md">Full README</a></li>
@@ -114,7 +224,7 @@ if ($click !== null) {
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Mark</td><td>::zone(id, content)</td><td>Wrap content with private-use sentinel tags</td></tr>
@@ -141,7 +251,7 @@ if ($click !== null) {
 <tr><td>SelectionRange</td><td>::new(rowA, colA, rowB, colB) / ->spanOnRow(row) / ->cellContains(row, col) / ->cells() / ->extract(lines)</td><td>Normalized, inclusive selected range and its text</td></tr>
 </table>
 
-    <h3 style="margin-top: 40px;">Zones (bubblezone Manager layer)</h3>
+    <h3 id="zones-bubblezone-manager-layer" style="margin-top: 40px;">Zones (bubblezone Manager layer)</h3>
     <p class="lede" style="margin-top: 28px;">Wrap rendered chunks with named markers, let SugarMouse discover their bounding boxes, then ask zones whether a MouseMsg fell inside them. Markers are sugar-mouse's private-use sentinel tags (U+E000 / U+E001) — zero-width to the scanner — and <code>scan()</code> strips them before the frame is printed, so the printed frame matches the measured one. Sweep untrusted labels with <code>Mark::untrusted()</code> first.</p>
 
     <pre class="code"><code class="language-php">use SugarCraft\Core\MouseButton;
@@ -181,7 +291,7 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($click)) {
       <div class="feature"><strong>Motion tracking CSI</strong><span><code>Manager::setMotionTracking(true)</code> returns the all-motion pair <code>\x1b[?1003h\x1b[?1006h</code> (mode 1003 plus the SGR 1006 coordinate companion); false returns the LIFO disable. Whichever code enables a mode owns disabling it. The decimal extended-coordinate siblings of 1006 — mode 1015 (urxvt style, <code>CSI b;x;y M</code>) and mode 1016 (xterm, the SGR report shape carrying pixel coordinates) — are emitted and parsed by neither this lib nor sugar-core; decoding them is sugar-input's opt-in path, so swapping 1006 for either is a host-layer decision.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">Zones API</h3>
+    <h3 id="zones-api" style="margin-top: 32px;">Zones API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Manager</td><td>newGlobal()</td><td>Build a fresh un-prefixed manager independent of every other instance — NOT the shared default (that is <code>Zones::defaultManager()</code>)</td></tr>
@@ -214,10 +324,11 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($click)) {
 <tr><td>TripleClickMsg</td><td>zone</td><td>Zone of the third press</td></tr>
 </table>
 
-    <h3 style="margin-top: 40px;">Accessibility</h3>
+    <h3 id="accessibility" style="margin-top: 40px;">Accessibility</h3>
     <p>Zone tags are private-use-area codepoints: screen readers announce them as Dotted-Circle garbage or "unknown character" noise, and the mouse trackers (hover, drag, multi-click) are pointer-only affordances. Ship a keyboard path for every zone-driven action, print ONLY the stripped frame — at the <code>Zones\Manager</code> layer <code>scan()</code> returns it display-ready, and at the primitive layer the standalone tag remover is <code>Scan::strip()</code> — never <code>echo</code> marked bytes. Tab/Shift+Tab (or arrows) across zones with Enter to fire, focus-revealed twins for hover affordances, a select-then-choose fallback for drag, and never gate a command on tracker state alone.</p>
     <p><strong>Mode lifecycle.</strong> This lib never touches the TTY, so it cannot undo what it never wrote: whoever enables <code>1000</code>/<code>1002</code>/<code>1003</code>/<code>1006</code> owns the disable on every exit path — including crashes (a <code>register_shutdown</code> hook or the frame runner's <code>finally</code>). A leaked <code>?1003</code> streams every mouse move into the session for its remaining lifetime, a continuous byte flood that hits assistive tech hardest (Orca and brltty users cannot wave it away).</p>
     <p><strong>Interop floor.</strong> <code>1002</code>/<code>1003</code> are the xterm family — Konsole ships no 1003 and tmux re-encodes reports — so design for <code>1000</code>-only degradation when motion reports never arrive.</p>
+    </div>
 
   </div>
 </section>
@@ -225,27 +336,28 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($click)) {
 
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Demos.</h2>
+        <h2 id="demos">Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-mouse/.vhs/zones-buttons.gif" alt="Two clickable buttons" onerror="this.parentElement.style.display='none'">
-                <h3>Two clickable buttons</h3>
+                <h3 id="two-clickable-buttons">Two clickable buttons</h3>
                 <span class="demo-caption">Zone bounding boxes around rendered buttons via Manager::mark()/scan().</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-mouse/.vhs/zones-list-default.gif" alt="List with zones" onerror="this.parentElement.style.display='none'">
-                <h3>List with zones</h3>
+                <h3 id="list-with-zones">List with zones</h3>
                 <span class="demo-caption">Wrapping every list row in a Zone for click targeting.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-mouse/.vhs/zones-nested.gif" alt="Nested components" onerror="this.parentElement.style.display='none'">
-                <h3>Nested components</h3>
+                <h3 id="nested-components">Nested components</h3>
                 <span class="demo-caption">Zones composed across nested rendered components.</span>
             </div>
         </div>
     </div>
 </section>
+</main>
 
 <footer class="footer">
     <div class="container">
@@ -278,5 +390,6 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($click)) {
     </div>
 </div>
 <script src="../js/search.js" defer></script>
+<script src="../js/nav.js" defer></script>
 </body>
 </html>

@@ -101,6 +101,8 @@ stages:                          # a LIST, never a map
     resource: gpu                  # optional; exclusive host lock held for this task's stage
     lockWaitSeconds: 60            # optional; seconds to wait for that lock before the stage fails
     timeout: 60                    # optional; positive int, this ONE task's wall-clock budget
+    stallTimeout: 120              # optional; whole number >= 1; seconds a forked worker may go silent before it expires
+    restarts: 1                    # optional; whole number >= 0; re-dispatch budget for stall expiries — its own, apart from retries:
     capture: true                  # optional; publish this stage's full output to a file (downstream sees path + preview)
 
   - name: fix
@@ -157,6 +159,36 @@ Cancelling a running agent (`AgentWorkerPool::cancel()` or `cancelAll()`) kills
 the same way a timeout does: the worker and every process it started, its Bash
 commands included, die with it, and the agent settles `stopped`.
 
+### `stallTimeout:` bounds silence, and `restarts:` is its own budget
+
+A forked worker can sit out its wall-clock budget while producing nothing:
+wedged on a subprocess, waiting on a prompt that never returns. `timeout:`
+cannot see that — the clock has not run out. `stallTimeout: N` bounds the
+silence itself: if a dispatched worker's published progress has not grown for
+N whole seconds, the pool expires it the way the timeout does — the tree is
+killed, reaped, and the agent settles `timed_out` — but the record carries a
+distinct cause: the error says the agent "went silent for N s without
+publishing progress", and `AgentResult::$stalled` is set.
+
+- **Progress is speech.** The idle clock re-arms every time the pool sees new
+  progress output, so a slow-but-live agent never dies of this. The check is a
+  timestamp comparison inside the poll that already runs: no new timers, and no
+  deadline on any model call.
+- **`restarts:` is spent only by silence.** A stall-expired worker may be
+  re-dispatched up to `restarts: N` times — its own budget, default 0, which
+  leaves the failure shape exactly as it was before the key existed. The
+  budgets are separate in both directions: a stall restart never spends a
+  `retries:` attempt, and stall attempts never count against the retry gate.
+  Once `restarts:` is spent, the stage fails the way a failed stage has always
+  failed, with the distinct-cause note on the record.
+- **Forked workers only.** Progress is published only on the forked path; a
+  task run inline in the parent has no silence to observe, so it stays
+  wall-clock-bound. A `stallTimeout:` on a task that runs inline simply never
+  fires.
+- **The absolute bound still wins.** When both deadlines have fired, the
+  recorded cause is `timeout:` (or the stage's time budget): the outer bound
+  running out is the honest reason, however silent the agent was.
+
 ### `retries` re-runs a failed agent
 
 `retries: N` on a stage (or on one agent of a parallel stage), or `->retries(N)`
@@ -180,6 +212,10 @@ attempt that fails or times out. The default is 0: no retries.
 - **Fail-fast:** under `stopOnFirstFailure` only an agent's last attempt counts
   as its failure. A failure that is about to be retried does not stop the
   other agents in the stage.
+- **Separate from stall restarts:** the `restarts:` budget described above
+  counts only stall expiries. A stall restart spends no retry, and stall
+  attempts are subtracted out of the retry gate, so a silent-then-stuck agent
+  cannot starve a later model failure of its retry.
 - **The live pane:** a retried agent's tile clears and starts again with the
   new attempt.
 
@@ -189,6 +225,100 @@ agent that is safe to run twice. A reviewer or a test runner usually is; a
 fixer that edits files may apply a change twice. `AgentPoolConfig::$maxRetries`
 gives every agent of a pool at least that many retries. It defaults to 0, and
 the launch leaves it there.
+
+### `when:` makes a stage conditional
+
+`when:` on a stage — or `->when($clause)` on the PHP builder — decides whether
+the stage runs at all, from the text prior stages already produced. The clause
+is a closed mini-grammar. A **leaf** names one stage and exactly one op on its
+output:
+
+```yaml
+  - name: deploy
+    agent: coder
+    prompt: ship it
+    when:
+      stage: review
+      equals: GO
+```
+
+The ops are `equals` (whole-string identity), `contains` (substring,
+case-sensitive) and `matches` (PCRE, validated at load exactly like `reject:`).
+A **combinator** node — `all:` or `any:` — carries a non-empty list of leaves;
+one layer of nesting is legal (an `any:` of `all:`s), and a combinator inside a
+combinator past that ceiling refuses the file. Everything else — an unknown
+key, a leaf with two ops, `when: ready`, an empty list — raises
+`WorkflowLoadException` at load; the grammar refuses, never coerces.
+
+Evaluation reads a named stage's recorded output (its `{{name.output}}` value,
+falling back to the per-agent results map). A name that never ran — or never
+existed, since a misspelling fails closed like every other unknown in this
+system — carries no text, and no text satisfies any op: **the guarded stage
+skips.** A skip is a recorded fact, not a failure: the run lists the stage as
+`skipped`, it counts neither as success nor as failure, nothing is dispatched,
+nothing is spent, and the stage contributes **no `name.output` key** — a
+downstream `{{deploy.output}}` stays the raw token, honest that the answer
+never came. The gate sits ahead of the cache door, so a stage skipped today is
+not resurrected by a stale cached row. On resume a skip is settled: its row
+survives the pause file, the run prefix counts it, and the stage is never
+re-decided — re-evaluating a guard under outputs that changed since the file
+was written could run a stage its condition once refused.
+
+`when:` is stage-level in v1; there is no per-task clause inside a `tasks:`
+list. Give each conditional step its own stage.
+
+### `loop:` re-runs a stage until a clause holds
+
+`loop:` on a stage — or `->loop(['max' => N, 'until' => $clause])` on the PHP
+builder — re-dispatches the stage until its `until:` clause holds, at most
+`max:` rounds. Every round sees `{{round}}`, a 1-based number the engine
+injects into the stage's interpolation while the round is running, so a prompt
+can say what has already been tried:
+
+```yaml
+  - name: fix-tests
+    agent: coder
+    prompt: make the suite green, round {{round}}
+    loop:
+      max: 4
+      until:
+        stage: fix-tests
+        contains: PASS
+```
+
+`until:` is exactly the `when:` mini-grammar — same leaves, same combinators,
+validated the same way at load. And it refuses rather than coerces, like every
+other key here: a `loop:` that is not a map, a map with any key besides `max`
+and `until`, a missing half, a `max` that is not a whole number of at least 1,
+or a broken clause each fails the load naming the offender. `max` counts
+rounds, not seconds: it is a bounded iteration and holds no timer.
+
+The clause reads the stage's most recent round — that round's output is what
+`{{stage.output}}` holds while the stage itself is being judged, so the usual
+spelling tests the stage's own result. A round is a full dispatch: every
+`tasks:` entry runs, the hooks fire around it, tokens and cost are billed each
+time. A round that fails mid-way does not stop the loop — the clause is false
+for it — and the next round gets the stage a chance to rescue itself. If the
+final round fails too, the stage settles as its normal failure and the run's
+fail-fast law takes over.
+
+A stage that uses all `max:` rounds with the clause still unsatisfied
+**completes**: the last round's result is the stage's recorded state, nothing
+more. `loop:` means "try up to N times and move on", not "fail if it never
+happens" — the verdict of what was achieved belongs to the output and to the
+stages downstream. Only the final round is recorded: the cache door and the
+pause file see one row per stage, the last round's, and round numbers are
+never persisted. That means a resumed run re-runs a looped stage from round
+1 — whole-stage granularity, honest and disclosed — rather than replaying a
+half-loop. A cancel that lands mid-loop ends the loop immediately and the row
+settles `cancelled` like any in-flight stage's.
+
+`loop:` is stage-only in v1 in the narrow sense too: a `when:` guard can still
+skip the whole thing, a `cache:` hit short-circuits every round (the door sits
+ahead of the loop), and attaching a `loop:` to a `parallel:`, `pipeline:`, or
+verification stage refuses the load — as does a `loop:` beside a `uses:` stage,
+because v1 loops plain stages, not carried workflows. Give each repeating step
+its own plain stage.
 
 ### `outputSchema` gives a stage a structured verdict
 
@@ -215,6 +345,11 @@ unreadable path — is refused at load or build time, never coerced.
 - **And it composes:** a verification stage's accept/reject pattern and an
   `outputSchema` are independent features that stack — give the verifier a
   schema and its verdict arrives machine-readable, not pattern-matched prose.
+- **And the document stays addressable:** a schema'd stage that answers with
+  valid JSON records a typed row beside its text, so later prompts read
+  single leaves — `{{build.summary}}`, `{{build.items/0/id}}` — while
+  `{{build.output}}` and `{{build.results}}` keep showing the whole document.
+  See `Interpolation` below.
 
 ### `isolation` runs a stage agent in its own git worktree
 
@@ -406,6 +541,99 @@ putting it on a plain task parses into the DTO, and the engine's pre-flight
 refuses the run naming the misuse — the parser refuses shapes, the engine owns
 placement policy.
 
+### `uses:` / `with:` compose one workflow into another
+
+`uses:` arms a stage with the name of another workflow. The stage runs that
+workflow — all of its stages, in order — as its body, and settles as exactly
+ONE outer stage row labeled with the outer stage's own name; the inner run's
+detail rides the row's output as one `name: status` line per inner stage, and
+every agent it dispatched bills the outer run's token and cost totals.
+
+```yaml
+name: ship-notes
+stages:
+  - name: research
+    agent: coder
+    prompt: Gather notes on {{topic}}
+  - name: draft                 # one row in this run's stage list, named "draft"
+    uses: author-draft          # runs the named workflow as the stage's body
+    with:
+      notes: "{{research.output}}"   # interpolated in the OUTER scope first
+```
+
+`with:` is the inner run's START context: each value interpolates against the
+outer run's settled stages before the inner run begins, and nothing the inner
+workflow names flows back out — later outer stages read the composed body
+through `draft.output` like any other stage's output. The included name is
+resolved through the registry's ordinary tiers, the same lookup `run` performs,
+so a checked-in plan composes with a personal library exactly as it runs alone.
+
+Two placement rules hold the recursion safe, and both read the whole chain, not
+just one hop. Depth counts workflows, outer one included, up to three: `a -> b
+-> c` runs, a fourth node refuses as the stage's own failure naming the full
+attempted path — `Include chain too deep: a -> b -> c -> d (maximum depth is
+3).` A name already on the path is a cycle and refuses the same way —
+`Workflow "b" is already in this run's uses chain (a -> b -> a); includes must
+not cycle.` The linter walks the `uses:` edges for both verdicts before the run
+starts, so a plan that would refuse at dispatch is refused at lint instead of
+after four stages of real work.
+
+An inner run is driven by the same engine, on the same call stack: Esc Esc
+stops it with the run around it, and its live frame is deliberately not
+selectable by `pause()`. That carries the one honest limit of v1 composition:
+a pause during an inner run replays the WHOLE inner stage on resume (inner
+stage results land in the outer pause snapshot only at stage settle).
+
+The loader keeps one-body-per-stage honest: `uses:` cannot sit beside `agent:`,
+`tasks:`, `task:`, `agents:` or `stages:`, cannot accompany `parallel: true` or
+a `type:` of `verification` or `pipeline`, and a `with:` with no `uses:` to seed
+is refused rather than ignored. `cache: true` beside `uses:` is legal, and it
+hashes the DECLARATION — the included name plus the pre-interpolation `with:`
+templates — not the inner workflow's own content: editing the included plan
+leaves a cached include row carrying, the same author-stability law every other
+`cache:` stage follows.
+
+### `from:` fans a parallel stage out at runtime
+
+```yaml
+  - name: sweep
+    parallel: true
+    from:
+      glob: src/**/*.php         # relative to the environment root, never the YAML's directory
+      chunk: 4                   # optional; max agents of THIS stage in flight at once
+    prompt: Audit {{path}} and report findings.
+```
+
+A `parallel:` stage may carry `from:` instead of `agents:` or `tasks:` — the
+spelling is one at a time, refused at load otherwise. The stage's `prompt:` is
+the template; the engine expands the glob **once** when the stage is entered,
+against the run's environment root (the session project — not the directory the
+workflow file lives in). Every matching file becomes one task sharing the
+template's arms, named by its relative path, and `{{path}}` interpolates to
+that path per item (an unresolved `{{path}}` elsewhere is left as written, like
+any other token). `chunk` caps the stage's in-flight window — a ceiling, never
+a floor: it can narrow the workflow's `maxConcurrent` width, never widen it;
+omit it and the workflow's own width applies. The walk never follows symlinks —
+a linked file or directory is invisible to the expansion, and a name that would
+resolve outside the environment root is refused loudly rather than fanned out.
+
+The expansion is the pause record's, not the disk's: the materialised file
+list rides every pause write, and a resume replays *that recorded list* — it
+never re-globs, because files that changed mid-run would otherwise silently
+fork different work from what was paused. A stage that paused *before* it ever
+expanded has no record yet, and its resume expands normally — that is entry,
+not replay. Once a record exists it is honoured exactly: the file list stands
+as recorded, a recorded `chunk` wins over the re-read YAML, and a record
+that is malformed — a broken file list, a broken chunk — fails the stage
+loudly instead of silently re-expanding. The single fallback is a recorded
+chunk written as null: that wave expanded without a ceiling, so its replay
+takes the ceiling from the current YAML, and a ceiling can only narrow the
+concurrency, never the work itself.
+
+Static and dynamic spellings feed the same machinery, so `retries:`, the stage
+`timeout:`, `stallTimeout:`, `restarts:`, and `stopOnFirstFailure` ride a
+fan-out unchanged.
+
 ### Everything malformed is refused, not coerced
 
 `WorkflowRegistry::parseYamlWorkflow()` raises `WorkflowLoadException` for each
@@ -420,7 +648,23 @@ of these rather than loading a workflow that quietly does less:
   interpolates, so duplicates make every reference ambiguous.
 - `config:` not a map; `maxConcurrent` not a whole number >= 0 (0 means no cap);
   `timeout` not a positive integer.
+- `stallTimeout:` not a whole number of at least 1 (`stallTimeout: 0`,
+  `stallTimeout: 2.5`).
+- `restarts:` not a whole number of at least 0 (`restarts: -1`,
+  `restarts: lots`).
 - `retries:` not a whole number of at least 0 (`retries: -1`, `retries: lots`).
+- `when:` outside the closed grammar: `when:` not a map, an unknown key in a
+  condition (`gt:`), a leaf missing `stage:` or carrying more than one of
+  `equals`/`contains`/`matches`, a combinator other than `all:`/`any:` or one
+  nested past the two-layer ceiling, a list that is not non-empty, a
+  non-string value, or a broken `matches:` PCRE — each fails the load naming
+  the offender, so a half-meaningless guard never reaches a run.
+- `loop:` outside the closed pair: `loop:` not a map, a map carrying any key
+  besides `max` and `until` or missing either half, a `max:` that is not a
+  whole number of at least 1, an `until:` outside the `when:` grammar, a
+  `loop:` attached to a `parallel:`, `pipeline:`, or verification stage
+  (stage-only in v1), or a `loop:` beside a `uses:` stage (carried workflows
+  are not looped in v1) — each fails the load naming the offender.
 - `outputSchema:` is not a schema-shaped value: a sequence, a bare number,
   malformed inline JSON, or a path that names no readable file (`WorkflowLoadException`
   at load; the same refusals fire at `build()` for `->outputSchema('…')` strings),
@@ -464,11 +708,12 @@ an error.
 
 ### Interpolation
 
-Three forms, substituted in this order (`WorkflowEngine::interpolateContext()`):
+Four forms, substituted in this order (`WorkflowEngine::interpolateContext()`):
 
 | Form | Resolves to |
 |---|---|
 | `{{name.results}}` | one agent's output, by its result name (below) — any stage type |
+| `{{name.<pointer>}}` | one leaf inside a schema'd stage's JSON document (below) |
 | `{{stageName.output}}` | a prior stage's collected output (a parallel stage's is every agent's output joined by newlines) |
 | `{{variable}}` | a key from the context passed to `run()` (`/workflow run <name> key=val …`) |
 
@@ -477,6 +722,26 @@ as written, not blanked — so a typo appears verbatim in the prompt rather than
 vanishing. So is a context value that is not a string or a number (a PHP
 caller's array, say). Pipeline steps and a verifier also see `{{prevResult}}`,
 the previous step's or the task's output.
+
+#### Pointing inside a schema'd result
+
+A stage whose task carries an `outputSchema` records its JSON answer a second
+time as a typed row, and the pointer form reads one leaf of that document by
+RFC 6901: `{{build.summary}}` reaches a member, `{{build.items/0/id}}` nests
+with `/` and indexes arrays, and the leading-`/` from-root spelling
+(`{{build./items/0/id}}`) addresses the same document. Escapes decode `~1`
+to `/` first and `~0` to `~` second — so `~01` names the key `~1`, not `/`.
+Dots carry no structure: `{{build.a.b}}` names one key spelled `a.b`.
+
+Misses stay loud like every other form: an unknown stage, leaf or index, a
+`null` or interior object, and any answer a schema never shaped into JSON all
+leave the `{{…}}` as written. The tails `results` and `output` are never
+pointers — they belong to their own forms — so reaching a document member
+actually named `output` takes the from-root spelling `{{build./output}}`.
+Pass order is visible in emitted text: the pointer pass runs before the
+`{{stageName.output}}` pass (a leaf whose value is `{{c.output}}` resolves)
+and after the `{{name.results}}` one (a leaf spelling `{{b.results}}` does
+not re-resolve and survives verbatim).
 
 #### What `{{name.results}}` is named by
 
@@ -515,6 +780,59 @@ of the stages it skipped. Before, they shared the caller's namespace:
 that agent's tokens. **A context key starting with `@` is refused**:
 `run()` and `runFromPhp()` throw `InvalidArgumentException` before anything is
 dispatched, and `/workflow run` prints it as an error.
+
+### Joining prior stages with `input:`
+
+A stage's `input:` reads the **prior stages** of the same file. The join is
+built just before the stage's prompt is assembled and injected into the
+interpolation context only — it never lands in the run's context, so the pause
+file never carries it and a resumed run re-derives identical bytes from the
+recorded rows.
+
+```yaml
+- name: gather
+  prompt: "List the failing modules."
+- name: check
+  prompt: "Re-run the smoke suite."
+- name: triage
+  input:
+    from: [gather, check]
+    as: file-list
+  prompt: "Triage everything collected below."
+```
+
+The joined text is addressed by the fixed handle `input`: `{{input}}` and
+`{{input.results}}` both read it, and `as: results` additionally makes it
+pointer-traversable — `{{input.gather/summary}}` (the dot names the row, the
+rest is an RFC 6901 pointer). A stage actually named `input` is shadowed inside
+a joining stage's prompt only; its recorded rows elsewhere are untouched. The
+four `as:` shapes:
+
+| `as:` | the rows become | when every source is missing |
+|---|---|---|
+| `file-list` | rows joined by newlines | the note `[input: no sources joined]` |
+| `first` | the first present row, verbatim | the stage **fails**: every source is missing |
+| `all` | a labeled `=== name ===` block per present row | the stage **fails** |
+| `results` | a JSON document keyed by source name | the stage **fails** |
+
+- **Prior stages only.** A `from:` name must be a stage declared before the
+  joining stage: self-references, forward references and unknown names are
+  refused at parse, because the registry sees the whole file. That law is a
+  YAML-parse guarantee: a workflow composed in PHP through the builder never
+  passes the registry's name walk, so its joins rely on the shape gate and
+  the skip rules above — a forward or unknown source simply reads as missing.
+  A `uses:` stage cannot carry a join — v1 joins stages of the same file, not
+  carried workflows.
+- A source skipped by an unsatisfied `when:` clause records nothing, so it is
+  simply absent: a partial join skips it, an all-skipped `from:` list answers
+  per the table. That refusal is deliberately a run-time one — a parse cannot
+  know what will be skipped — and lands as an ordinary stage failure.
+- On a `capture:`d source the recorded row carries its `[output captured to
+  …]` header, so `file-list` reads as a manifest of capture paths and
+  previews — what a fan-in triage stage usually wants.
+- The join is a task key: on a `tasks:` list it belongs on each task (a
+  stage-level `input:` beside `tasks:` is refused), and it rides the same
+  single arm verification slots and pipeline steps read.
 
 ---
 
@@ -704,6 +1022,109 @@ the agent as denied calls it can work around. A stage with no `tools:` is not
 policed by the grant, and a malformed entry (`Bash(git *`) fails the stage
 naming why.
 
+## Running from the CLI (headless)
+
+The `workflow` subcommand executes a saved workflow through the engine
+directly — no model in the loop, no TUI, no turn machinery:
+
+```
+candy-code workflow run <name-or-path> [--param k=v]... [--format json]
+candy-code workflow status <id-or-name> [--format json]
+candy-code workflow resume <id-or-name> [--format json]
+```
+
+`run` resolves `<name-or-path>` through the same tiers `WorkflowEngine::run()`
+uses, seeds the run context with the `--param` pairs, and prints one terminal
+verdict per stage. `status` reads the engine's liveness view
+(`WorkflowEngine::status()`); `resume` continues a paused run
+(`WorkflowEngine::resume()`).
+
+### Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| 0 | The run completed; every stage's verification passed. |
+| 1 | The run failed, or the request was refused (unknown name, unreadable file, a live pause elsewhere). |
+| 2 | Usage error — bad action, misplaced flag, missing operand. |
+| 3 | Stopped for a person: a verification stage answered `ESCALATE:` (its failure carries the engine's escalation marker), or a `SIGINT`/`SIGTERM` produced a cooperative pause. |
+
+Exit 3 is the W-1/D4 row: `escalated: ` in the first failed stage's error, or
+a signal pause. On a signal pause the engine writes the pause record first
+(the same serializer a cooperative pause uses), and under `--format json` the
+verb emits one final document — `status` `paused` plus the `pause_file` path —
+before exiting 3. `candy-code workflow resume <id>` picks it up. The TUI
+`/workflow` path and the model-mediated tool path keep the historical raw
+130/143 signal exits; nothing about them changes here.
+
+### `--param` quoting
+
+Repeated `--param` flags are comma-joined at parse time (`ParsedArgs::REPEATABLE_SUBCOMMAND_FLAGS`),
+so a value containing a comma must be quoted *inside* the payload —
+`--param 'k="a,b"'` — and the verb's splitter honours `"` and `'` spans when
+breaking the joined string back into pairs. Keys are validated the same way
+the TUI slash command validates them; `@`-prefixed keys are refused because
+they collide with the engine-reserved context namespace.
+
+### Machine document
+
+With `--format json` (or the global `--output-format json`) the verb emits one
+schema-versioned document: `verb` `workflow`, the `action`, and a `result` of
+`{workflow, status, stages: [{name, status, output, error, attempts}], totals:
+{tokens, cost, duration_ms}, session_id}`. `session_id` is honestly `null`:
+this verb mints no chat session.
+
+### What the verb deliberately does not add
+
+`cache:` keeps its opt-in-only semantics with **no CLI kill-switch** — the
+`--no-cache` override is a documented owed seam (NIT-1), not silently widened
+here. The verb adds no wall-clock timeout to any path; stage and workflow
+budgets ride the existing engine families unchanged.
+
+---
+
+---
+
+## Stage lifecycle events
+
+While a run is live, the engine raises events into the hook chain (see
+[`HOOKS.md`](HOOKS.md), *The workflow events*): `StageStarted` before each
+dispatched round of a stage, `StageComplete` when a stage settles without
+failing, `StageFail` when it settles failed, and `WorkflowComplete` once when
+the run reaches a natural terminal. A stage skipped by its `when:` clause
+announces only the complete, at round zero; a `loop:` announces one
+`StageStarted` per round but settles exactly once; a `cache:` stage carried
+from a record announces nothing at all. A run that pauses or cancels raises no
+terminal — the resumed run announces its own when it finishes. These events are
+observe-only: whatever a hook answers, the engine discards, so a hook can watch
+a run but cannot steer it. An engine built without a hook chain raises nothing.
+
+**Checkpoint commits.** `autoCommit: edit` (see [`HOOKS.md`](HOOKS.md),
+*Auto-commit*) commits every file-changing tool call as it lands, but it knows
+nothing about stages. Pairing `StageComplete` with a command hook turns every
+settled stage into a commit of the whole working tree — a checkpoint a later
+stage's work can be diffed against and rolled back to, including work agents
+landed through tools the built-in never watches:
+
+```yaml
+hooks:
+  StageComplete:
+    - name: stage-checkpoint
+      command: ./hooks/stage-checkpoint.sh
+```
+
+The script reads the stage name out of `CRUSH_TOOL_INPUT` and commits in the
+launch's project root, where hooks run:
+
+```sh
+#!/bin/sh
+stage=$(sed -n 's/.*"stage":"\([^"]*\)".*/\1/p' "$CRUSH_TOOL_INPUT" | head -n1)
+git add -A && git commit -qm "workflow checkpoint: ${stage:-stage}"
+```
+
+Because the verdict on a stage event is discarded, the commit cannot block the
+run: a failing checkpoint — a dirty-tree conflict, a rejected hook of its own —
+just leaves the working tree uncommitted while the workflow marches on.
+
 ---
 
 ## Model-authored plans: the `Workflow` tool
@@ -795,16 +1216,22 @@ instruction. Your `~/.candy-code/agents/reviewer.md` preset and a stage saying
 `agent: reviewer` are unrelated objects that happen to share a string. If you
 want a preset's prompt in a stage, paste it into the stage's `prompt:`.
 
-**3. `pipeline` and verification stages are PHP-only.** `WorkflowBuilder` offers
-`pipeline()` and `withVerification()`, and the engine implements
-`executePipelineStage()` and `executeVerificationStage()` — but
-`parseYamlStage()` recognises only three stage shapes: one task, a `tasks:`
-list, and `parallel: true`. There is no YAML spelling for either. They are reachable from
-a user-tier `.php` workflow and from an embedder, not from a `.yaml` file.
-For the same reason `reject()` ([below](#reject-fails-a-stage-on-the-verifier-verdict))
-has no YAML spelling either: an unknown key in a `.yaml` task is silently
-ignored, so a stray `reject:` line there buys nothing — a `.php` workflow is
-the only place a verdict-gated verification stage can live.
+**3. `reject:` only takes effect on a verification stage's verifier.** This
+claim used to read "pipeline and verification stages are PHP-only" — that
+became false-to-disk when `d39afd83c` (C1) gave `.yaml` the same reach as the
+builder: a `type:` key spells `verification` (a `task:` sub-map and a
+`verifier:` sub-map) and `pipeline` (a `stages:` list), beside the plain task,
+`tasks:` list and `parallel:` shapes. The verdict arms `timeout`, `reject` and
+`rejectMinOccurrences` are in `WorkflowRegistry::YAML_TASK_KEYS` and parse on
+every task surface on purpose; placement is the engine's policy, not the
+parser's — the reject-misuse pre-flight refuses a `reject:` sitting anywhere
+but the verifier's own task, and a lone `rejectMinOccurrences:` (no `reject:`
+to count) is refused at parse. So the verdict-gated stage behind
+`reject()` ([below](#reject-fails-a-stage-on-the-verifier-verdict)) lives in
+`.yaml` as a `type: verification` stage whose `verifier:` task carries
+`reject:` — the same shape `WorkflowBuilder::withVerification()` builds.
+Unknown keys are never silently ignored: every parsed key answers to one
+fail-closed roster (`ae04d808c`).
 
 ---
 
@@ -837,14 +1264,17 @@ return (new WorkflowBuilder())
 
 `TaskBuilder` carries `agent()`, `prompt()`, `tools()`, `timeout()`,
 `retries()`, `isolation()`, `name()`, `outputSchema()`, `model()`, `reject()`,
-`resource()` and `lockWaitSeconds()`. `timeout` and `reject` have
+`resource()`, `lockWaitSeconds()`, `stallTimeout()` and `restarts()`. `timeout` and `reject` have
 **no
 YAML spelling**, so a YAML-declared task never carries them; `retries`,
 `outputSchema` and `isolation` are the `retries:`, `outputSchema:` and
 `isolation:` keys above. `WorkflowEngine` substitutes defaults for whatever a task
 leaves unset when it builds the `SubAgent`:
 `$task->timeout ?? config.timeout` seconds, `$task->retries ?? 0`,
-`$task->isolation ?? Isolation::None`. A task without its own `timeout()` is
+`$task->isolation ?? Isolation::None`, `$task->stallTimeout ?? 0` and
+`$task->restarts ?? 0` — the last two carry their own YAML spellings
+(`stallTimeout:`, `restarts:`) and reach the forked worker as written: zero is
+"inert", not a bound. A task without its own `timeout()` is
 therefore bounded only by its stage's budget (`config.timeout`, default of 3600
 seconds); see [`timeout` is a per-stage wall-clock budget](#timeout-is-a-per-stage-wall-clock-budget).
 

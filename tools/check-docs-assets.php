@@ -12,7 +12,8 @@ declare(strict_types=1);
  *     for every package, and CI compared the two icon directories only as a
  *     printed diff step; a missing file (candy-image.png) rendered as a broken
  *     image with nothing going red.
- *  b) dead demo GIFs — cards in `docs/index.html` and the hand-written bodies
+ *  b) dead demo GIFs — cards in `docs/index.html`, `docs/libraries.html` and
+ *     `docs/apps.html` and the hand-written bodies
  *     under `docs/_data/` point at raw.githubusercontent.com URLs for
  *     `<slug>/.vhs/*.gif`; when a tape was renamed or deleted the URL 404s.
  *  c) mis-relativised links — bodies are embedded into `docs/lib/<slug>.html`,
@@ -25,12 +26,27 @@ declare(strict_types=1);
  *     The generator guarantees this (`guarantee_demo_gif_onerror`,
  *     tools/gen-docs.php), so the leg is green by construction — its job is to
  *     catch a generator regression or a hand-edit before pages.yml publishes.
- *  f) the search affordance on chrome-bearing detail pages: a page that carries
- *     the shared nav must also carry EXACTLY ONE visible trigger
+ *  f) the search affordance on every chrome-bearing nav surface (the static
+ *     homepage/libraries/apps/compare/404 pages plus generated detail pages): a page that
+ *     carries the shared nav must also carry EXACTLY ONE visible trigger
  *     (`id="search-trigger"` — HTML ids are unique by definition, so a planted
  *     decoy outside the nav that doubles the id is broken chrome, not affordance),
- *     the modal DOM (`id="search-modal"`) and the `search.js` include. Redirect
- *     stubs (no nav) are out of scope — they render no chrome at all.
+ *     the modal DOM (`id="search-modal"`), and EXACTLY ONE include each of
+ *     `js/search.js` and `js/nav.js`. Redirect stubs (no nav) are out of scope —
+ *     they render no chrome at all.
+ *  g) nav copy identity: every surface that carries the dropdown nav must hold
+ *     exactly one `<!--nav:start-->` / `<!--nav:end-->` marker pair, and the
+ *     block between them must be byte-identical across every copy (the five
+ *     authored copies — index/libraries/apps/compare/404/gen-docs template/the two
+ *     prefixOverride pages — are maintained in lockstep; the guard is the trip
+ *     wire that keeps them there).
+ *  h) sitemap set-equality: `docs/sitemap.xml` is hand-maintained, so a page
+ *     can be published with chrome and never advertised, or a row can outlive
+ *     its page. The leg derives the published universe — every `.html` under
+ *     `docs/` that carries the nav container, except generator fragments under
+ *     `docs/_data/` and the documented non-advertised roster — and demands
+ *     exact two-way equality with the `<loc>` rows, printing both directions
+ *     of the diff on failure.
  *
  * Existence for (b)/(d) is measured on the filesystem: the CI job runs on a
  * fresh checkout, so a tracked file IS a file on disk, and this avoids
@@ -48,6 +64,21 @@ final class CheckDocsAssets
 {
     private const RAW_GIF = 'https://raw.githubusercontent.com/detain/sugarcraft/master/';
 
+    /** The published site origin every sitemap `<loc>` row must sit under. */
+    private const SITE_BASE = 'https://sugarcraft.github.io/';
+
+    /**
+     * Chrome-bearing pages deliberately OUT of the advertised universe:
+     * the key is the docs/-relative path, the value why it is not advertised.
+     * A roster entry whose file exists but no longer carries nav chrome is
+     * itself a finding — the roster must not lie about what it exempts.
+     */
+    private const SITEMAP_EXCLUSIONS = [
+        '404.html' => 'the error surface is not advertised',
+        'admin/sugar-pty.html' => 'off-nav auxiliary deep-link page, deliberately unsitemapped',
+        'dev/sugar-pty.html' => 'off-nav auxiliary deep-link page, deliberately unsitemapped',
+    ];
+
     /**
      * @return list<string> human-readable findings, empty when the tree is clean
      */
@@ -60,6 +91,8 @@ final class CheckDocsAssets
             self::vhsStat($root),
             self::demoGifCrutches($root),
             self::searchAffordance($root),
+            self::navBlockIdentity($root),
+            self::sitemapCoverage($root),
         );
     }
 
@@ -116,28 +149,193 @@ final class CheckDocsAssets
     public static function searchAffordance(string $root): array
     {
         $findings = [];
-        foreach (glob("$root/docs/lib/*.html") ?: [] as $file) {
+        foreach (self::chromePages($root) as $file) {
             $html = (string) file_get_contents($file);
-            if (!str_contains($html, '<div class="nav-links">')) {
-                continue;
-            }
             $triggers = substr_count($html, 'id="search-trigger"');
             if ($triggers !== 1) {
                 $findings[] = $triggers === 0
                     ? 'chrome: ' . self::relative($root, $file) . ' has no search trigger (id="search-trigger")'
                     : 'chrome: ' . self::relative($root, $file) . ' carries ' . $triggers . ' search trigger elements (expected exactly 1)';
             }
+            if (!str_contains($html, 'id="search-modal"')) {
+                $findings[] = 'chrome: ' . self::relative($root, $file) . ' has no search modal (id="search-modal")';
+            }
             foreach ([
-                'search modal (id="search-modal")' => 'id="search-modal"',
-                'search script (../js/search.js)'  => 'src="../js/search.js"',
-            ] as $what => $needle) {
-                if (!str_contains($html, $needle)) {
-                    $findings[] = 'chrome: ' . self::relative($root, $file) . ' has no ' . $what;
+                'search' => '~src="[^"]*js/search\.js"~',
+                'nav'    => '~src="[^"]*js/nav\.js"~',
+            ] as $what => $re) {
+                $count = preg_match_all($re, $html);
+                if ($count === 0) {
+                    $findings[] = 'chrome: ' . self::relative($root, $file) . " has no $what script";
+                } elseif ($count > 1) {
+                    $findings[] = 'chrome: ' . self::relative($root, $file) . " carries $count $what script includes (expected exactly 1)";
                 }
             }
         }
 
         return $findings;
+    }
+
+    /**
+     * Every page that renders the shared nav chrome: the static surfaces,
+     * the generated detail pages, and the rendered documentation pages.
+     * Keyed on the nav container, so chromeless redirect stubs fall out
+     * without a name-based special case.
+     *
+     * @return list<string>
+     */
+    private static function chromePages(string $root): array
+    {
+        $pages = [
+            "$root/docs/index.html",
+            "$root/docs/libraries.html",
+            "$root/docs/apps.html",
+            "$root/docs/compare.html",
+            "$root/docs/404.html",
+        ];
+        foreach (glob("$root/docs/lib/*.html") ?: [] as $page) {
+            $pages[] = $page;
+        }
+        foreach (glob("$root/docs/*.html") ?: [] as $page) {
+            $pages[] = $page;
+        }
+        $pages[] = "$root/docs/cookbook/index.html";
+
+        return array_values(array_unique(array_filter(
+            $pages,
+            static fn (string $p): bool => is_file($p) && str_contains((string) file_get_contents($p), '<div class="nav-links">'),
+        )));
+    }
+
+    /**
+     * (g) the nav is authored in five places (three static pages, the gen-docs
+     * template, and the two prefixOverride pages); the marker pair delimits
+     * the single source of truth, so every rendered page must carry it exactly
+     * once and agree byte-for-byte between the markers.
+     *
+     * @return list<string>
+     */
+    public static function navBlockIdentity(string $root): array
+    {
+        $findings = [];
+        $reference = null;
+        $referenceFile = '';
+        foreach (self::chromePages($root) as $file) {
+            $html = (string) file_get_contents($file);
+            if (!str_contains($html, '<nav class="nav"')) {
+                continue;
+            }
+            if (substr_count($html, '<!--nav:start-->') !== 1 || substr_count($html, '<!--nav:end-->') !== 1) {
+                $findings[] = 'nav: ' . self::relative($root, $file) . ' has no nav markers (<!--nav:start--> / <!--nav:end--> pair, exactly once)';
+                continue;
+            }
+            $start = strpos($html, '<!--nav:start-->');
+            $end = strpos($html, '<!--nav:end-->') + strlen('<!--nav:end-->');
+            $block = substr($html, $start, $end - $start);
+            if ($reference === null) {
+                $reference = $block;
+                $referenceFile = self::relative($root, $file);
+            } elseif ($block !== $reference) {
+                $findings[] = 'nav: ' . self::relative($root, $file) . ' nav block differs from ' . $referenceFile . ' (all nav copies must be byte-identical between markers)';
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * (h) sitemap set-equality: `docs/sitemap.xml` is hand-maintained while the
+     * page universe it describes is generated and grown by hand, so both drift
+     * directions are silent — an unadvertised chrome page costs discoverability,
+     * a stale row publishes a 404. The universe is every HTML file under docs/
+     * that carries the shared nav container (the same discriminator the chrome
+     * legs key on, so the redirect stubs and the `_data` fragments fall out
+     * without name-based special cases), minus the documented exclusion roster.
+     * Site paths compare exactly: docs/index.html is advertised as the bare
+     * base URL (the root row), every other page as its docs/-relative path —
+     * including the explicit `cookbook/index.html` spelling the sitemap uses.
+     * Both halves of the diff print, naming each offender by file and by row.
+     *
+     * @return list<string>
+     */
+    public static function sitemapCoverage(string $root): array
+    {
+        $sitemap = "$root/docs/sitemap.xml";
+        if (!is_file($sitemap)) {
+            return ['sitemap: docs/sitemap.xml is missing'];
+        }
+
+        $findings = [];
+        $rows = [];
+        preg_match_all('~<loc>([^<]*)</loc>~', (string) file_get_contents($sitemap), $m);
+        foreach ($m[1] as $loc) {
+            if (!str_starts_with($loc, self::SITE_BASE)) {
+                $findings[] = 'sitemap: <loc>' . $loc . '</loc> is outside the site base ' . self::SITE_BASE;
+                continue;
+            }
+            $sitePath = substr($loc, strlen(self::SITE_BASE));
+            if (isset($rows[$sitePath])) {
+                $findings[] = 'sitemap: <loc>' . $loc . '</loc> duplicates an earlier row';
+                continue;
+            }
+            $rows[$sitePath] = $loc;
+        }
+
+        $universe = self::sitemapUniverse($root, $findings);
+
+        $missing = array_diff_key($universe, $rows);
+        ksort($missing);
+        foreach ($missing as $sitePath => $display) {
+            $findings[] = 'sitemap: ' . $display . ' carries nav chrome but no <loc> row (expected '
+                . self::SITE_BASE . $sitePath . ')';
+        }
+
+        $extra = array_diff_key($rows, $universe);
+        foreach ($extra as $loc) {
+            $findings[] = 'sitemap: row <loc>' . $loc . '</loc> matches no chrome page in the universe';
+        }
+
+        return $findings;
+    }
+
+    /**
+     * The advertised page universe: site path => docs/-relative display path.
+     * Roster entries that exist on disk but no longer carry nav chrome are
+     * stale exemptions and append a finding through $findings.
+     *
+     * @param list<string> $findings
+     * @return array<string,string>
+     */
+    private static function sitemapUniverse(string $root, array &$findings): array
+    {
+        $universe = [];
+        $walk = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator("$root/docs", \FilesystemIterator::SKIP_DOTS),
+        );
+        foreach ($walk as $file) {
+            /** @var \SplFileInfo $file */
+            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.html')) {
+                continue;
+            }
+            $display = self::relative($root, $file->getPathname());
+            $sitePath = substr($display, strlen('docs/'));
+            if (!str_contains((string) file_get_contents($file->getPathname()), '<div class="nav-links">')) {
+                continue;
+            }
+            if (isset(self::SITEMAP_EXCLUSIONS[$sitePath])) {
+                continue;
+            }
+            $universe[$sitePath === 'index.html' ? '' : $sitePath] = $display;
+        }
+
+        foreach (self::SITEMAP_EXCLUSIONS as $sitePath => $why) {
+            $file = "$root/docs/$sitePath";
+            if (is_file($file) && !str_contains((string) file_get_contents($file), '<div class="nav-links">')) {
+                $findings[] = "sitemap: exclusion roster entry docs/$sitePath ($why) no longer carries nav chrome — the roster is stale";
+            }
+        }
+
+        return $universe;
     }
 
     /**
@@ -186,21 +384,32 @@ final class CheckDocsAssets
     }
 
     /**
-     * (c) every local href/src in the homepage and the generated detail pages
-     * must resolve, relative to the file that carries it. Remote URLs,
-     * fragments, and javascript:/mailto:/data: schemes are not assets.
+     * (c) every local href/src in the static surfaces, the generated detail
+     * pages and the rendered documentation pages must resolve, relative to
+     * the file that carries it. Remote URLs, fragments, and
+     * javascript:/mailto:/data: schemes are not assets.
      *
      * @return list<string>
      */
     public static function localLinks(string $root): array
     {
-        $targets = ["$root/docs/index.html"];
+        $targets = [
+            "$root/docs/index.html",
+            "$root/docs/libraries.html",
+            "$root/docs/apps.html",
+            "$root/docs/compare.html",
+            "$root/docs/404.html",
+        ];
         foreach ((glob("$root/docs/lib/*.html") ?: []) as $page) {
             $targets[] = $page;
         }
+        foreach ((glob("$root/docs/*.html") ?: []) as $page) {
+            $targets[] = $page;
+        }
+        $targets[] = "$root/docs/cookbook/index.html";
 
         $findings = [];
-        foreach ($targets as $file) {
+        foreach (array_unique($targets) as $file) {
             if (!is_file($file)) {
                 continue;
             }
@@ -212,7 +421,10 @@ final class CheckDocsAssets
                     continue;
                 }
                 $base = (string) dirname($file);
-                $resolved = $path === '' ? $base : "$base/$path";
+                // Root-absolute nav hrefs ('/lib/x.html') resolve against docs/
+                // itself — the site is served at the domain root, so a leading
+                // '/' means "under docs/" regardless of the carrying page's depth.
+                $resolved = $path === '' ? $base : ($path[0] === '/' ? "$root/docs$path" : "$base/$path");
                 if (!file_exists($resolved)) {
                     $findings[] = 'links: ' . self::relative($root, $file) . " points at missing '" . $raw . "'";
                 }
@@ -261,6 +473,12 @@ final class CheckDocsAssets
         if (preg_match('~^(?:[a-z]+:)?//~i', $value) === 1) {
             return null; // scheme:// or protocol-relative //host
         }
+        if ($value[0] === '/') {
+            // Root-absolute target: '/' alone (e.g. '/#apps') is the homepage.
+            $trimmed = rtrim($value, '/');
+
+            return $trimmed === '' ? '/index.html' : $trimmed;
+        }
         foreach (['mailto:', 'javascript:', 'data:'] as $scheme) {
             if (stripos($value, $scheme) === 0) {
                 return null;
@@ -278,7 +496,7 @@ final class CheckDocsAssets
      */
     private static function docsHtmlFiles(string $root): array
     {
-        $files = ["$root/docs/index.html"];
+        $files = ["$root/docs/index.html", "$root/docs/libraries.html", "$root/docs/apps.html"];
         foreach (["$root/docs/lib/*.html", "$root/docs/_data/*.html"] as $glob) {
             foreach (glob($glob) ?: [] as $file) {
                 $files[] = $file;
@@ -329,6 +547,6 @@ if (PHP_SAPI === 'cli' && realpath((string) ($argv[0] ?? '')) === realpath(__FIL
         exit(1);
     }
 
-    fwrite(STDOUT, "ok: icons, demo GIFs, local links, the VHS stat and page chrome are all in sync\n");
+    fwrite(STDOUT, "ok: icons, demo GIFs, local links, the VHS stat, page chrome and the sitemap are all in sync\n");
     exit(0);
 }

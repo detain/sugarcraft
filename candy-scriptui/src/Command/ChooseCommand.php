@@ -76,7 +76,7 @@ final class ChooseCommand extends Command
         // (this auto-pick included) pass through Sanitize::cellValue.
         // Auto-pick when exactly one option is supplied.
         if ($selectIfOne && count($options) === 1) {
-            $output->write(\SugarCraft\Core\Util\Sanitize::cellValue($options[0]), true, OutputInterface::OUTPUT_RAW);
+            $output->write(\SugarCraft\Core\Util\Sanitize::cellValue($options[0]) . "\n", false, OutputInterface::OUTPUT_RAW);
             return Command::SUCCESS;
         }
 
@@ -152,17 +152,20 @@ final class ChooseCommand extends Command
         // don't suddenly start failing.
         // Verbatim by contract: selectedAll()/selected() are the data
         // channel (see the note at the auto-pick above), so they print
-        // raw; only app-composed diagnostics are sanitised.
+        // raw; only app-composed diagnostics are sanitised. Trailers are
+        // pinned to "\n" — write(..., true) emits PHP_EOL, which is CRLF
+        // on Windows, while the raw-capture contract is LF on every
+        // platform.
         if ($final->isAborted() || !$final->isSubmitted() || ($noSelectedMessage !== null && $empty)) {
             if ($noSelectedMessage !== null) {
-                $output->write($noSelectedMessage, true, OutputInterface::OUTPUT_RAW);
+                $output->write($noSelectedMessage . "\n", false, OutputInterface::OUTPUT_RAW);
             }
             return Command::FAILURE;
         }
         if ($final->isMulti()) {
-            $output->write(implode($delim, $final->selectedAll()), true, OutputInterface::OUTPUT_RAW);
+            $output->write(implode($delim, $final->selectedAll()) . "\n", false, OutputInterface::OUTPUT_RAW);
         } else {
-            $output->write((string) $final->selected(), true, OutputInterface::OUTPUT_RAW);
+            $output->write((string) $final->selected() . "\n", false, OutputInterface::OUTPUT_RAW);
         }
         return Command::SUCCESS;
     }

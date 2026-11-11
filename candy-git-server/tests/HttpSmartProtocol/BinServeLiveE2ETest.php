@@ -20,9 +20,11 @@ use SugarCraft\GitServer\Visibility;
  * account-store hydration, repo scan with marker visibility, banner, signal
  * wiring. This file closes that gap for the whole boot path.
  *
- * Every child here is KILL-leashed (the server under `timeout -s KILL`, the
- * git fixtures synchronous) and every wait is bounded by a deadline; the
- * server handle is reaped in tearDown even when an assertion throws
+ * Every child here is KILL-leashed (the git fixtures synchronous; the server
+ * under `timeout -s KILL` except the graceful-SIGTERM pin, which must signal
+ * the php process ITSELF — see launchServer()'s $wrapLeash) and every wait is
+ * bounded by a deadline; the server handle is reaped in tearDown even when an
+ * assertion throws
  * mid-flight (TERM → bounded poll → KILL → proc_close, the escalation
  * ladder). Requires the git binary (host requirement, see README); the skip
  * is loud.
@@ -185,11 +187,18 @@ final class BinServeLiveE2ETest extends TestCase
             self::markTestSkipped('graceful-signal pin exercises the bin pcntl wiring');
         }
 
-        // The server child is wrapped by timeout(1), which forwards SIGTERM
-        // to the php process (verified GNU-coreutils behaviour); the bin's
-        // handler stops the listener and the loop, so the process exits 0
-        // and timeout propagates that 0. An unhandled TERM would surface as
-        // 143 — a KILL as 137 — neither is "graceful".
+        // The rc=0 contract belongs to the BIN, so the BIN must receive the
+        // TERM directly. 2026-11-11 CI class: on the loaded ubuntu-26.04
+        // runners this pin died with 143-vs-0 even though the handler was
+        // armed before the banner — the exit status was being surfaced
+        // through timeout(1), whose forwarded-signal exit semantics vary
+        // across coreutils versions (verified locally on 9.4: the wrapper
+        // propagates the child's 0; the runners surface 128+15 regardless).
+        // The wrapper stays everywhere else as the leak leash; here the
+        // in-test TERM→poll→KILL ladder and the tearDown reap bound it.
+        $this->reapServer();
+        $this->launchServer(wrapLeash: false);
+
         \proc_terminate($this->serverProc, 15);
         $exited = $this->pollServerExit(self::TERM_GRACE_SECONDS);
         if (!$exited) {
@@ -204,6 +213,30 @@ final class BinServeLiveE2ETest extends TestCase
         self::assertFalse($probe, 'socket still accepts connections after a clean stop: ' . $errstr);
     }
 
+    /**
+     * Structural twin of the exit-0 pin above: the readiness banner is the
+     * launchers' contract that SIGTERM will be HANDLED, so the pcntl arms must
+     * textually precede the banner write in the bin. 2026-11-11: a loaded
+     * runner could deschedule the child between the banner fwrite and
+     * pcntl_signal(), landing a TERM on the default disposition — the window
+     * was real and the reorder closed it, though CI's 143 persisted via a
+     * second, independent cause (the timeout(1) wrapper surfacing 128+15 —
+     * see the SIGTERM pin). This byte-order pin keeps the ordering from
+     * silently drifting back; it runs without spawning anything.
+     */
+    public function testSignalHandlersAreArmedBeforeTheReadinessBanner(): void
+    {
+        $bin = (string) \realpath(__DIR__ . '/../../bin/candy-git-server');
+        self::assertNotFalse($bin, 'bin/candy-git-server missing next to the lib');
+        $source = (string) \file_get_contents($bin);
+
+        $arms = \strpos($source, '\\pcntl_signal(15, $stop)');
+        $banner = \strpos($source, "Lang::t('cli.serve_http_banner'");
+        self::assertIsInt($arms, 'the SIGTERM arm vanished from bin serve --http');
+        self::assertIsInt($banner, 'the readiness banner vanished from bin serve --http');
+        self::assertLessThan($banner, $arms, 'SIGTERM must be armed BEFORE the banner proves the server is stoppable');
+    }
+
     // -------------------------------------------------------------------------
     // Launched-server plumbing
     // -------------------------------------------------------------------------
@@ -212,18 +245,27 @@ final class BinServeLiveE2ETest extends TestCase
      * Boot `serve --http` as a child and wait for its banner. A port race is
      * retried on a fresh ephemeral port, bounded; any other early death or a
      * silent boot fails LOUD with the captured stderr.
+     *
+     * $wrapLeash=false launches the php process as the DIRECT child, so a
+     * signal sent by the test lands on the bin itself and the exit status
+     * observed is the bin's own — used by the graceful-SIGTERM pin, which
+     * must not launder the contract through timeout(1)'s version-varying
+     * forwarded-signal exit semantics (see the pin's comment).
      */
-    private function launchServer(): void
+    private function launchServer(bool $wrapLeash = true): void
     {
         $bin = (string) \realpath(__DIR__ . '/../../bin/candy-git-server');
         self::assertNotFalse($bin, 'bin/candy-git-server missing next to the lib');
 
         for ($attempt = 1; $attempt <= 3; $attempt++) {
             $this->port = $this->reserveFreePort();
+            $command = $wrapLeash
+                ? ['timeout', '-s', 'KILL', (string) self::SERVER_LEASH_SECONDS, \PHP_BINARY, $bin]
+                : [\PHP_BINARY, $bin];
             $this->serverProc = \proc_open(
                 [
-                    'timeout', '-s', 'KILL', (string) self::SERVER_LEASH_SECONDS,
-                    \PHP_BINARY, $bin, 'serve', '--http',
+                    ...$command,
+                    'serve', '--http',
                     '--repo-root', $this->repoRoot,
                     '--http-port', (string) $this->port,
                     '--config', $this->configPath,

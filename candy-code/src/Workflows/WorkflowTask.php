@@ -62,5 +62,33 @@ final readonly class WorkflowTask
          * immediate loud refusal, never widen it.
          */
         public ?int $lockWaitSeconds = null,
+        /**
+         * C7 (Option A): seconds a forked agent may publish NOTHING before
+         * the pool expires it as stalled — a re-armable idle deadline beside
+         * the absolute {@see $timeout}, re-seeded every time progress bytes
+         * grow. Null (the default) arms nothing: behavior byte-identical to
+         * every pre-C7 workflow. The inline (non-forked) path never reads it
+         * — only pcntl_fork workers publish progress.
+         */
+        public ?int $stallTimeout = null,
+        /**
+         * How many times a STALLED task may be re-dispatched (C7), counted
+         * ONLY against stall expiries — {@see $retries} never shares this
+         * counter and vice versa. The default 0 disables stall restarts: a
+         * stall then settles in exactly today's plain-timeout shape.
+         */
+        public int $restarts = 0,
+        /**
+         * C9 fan-in join: a normalized `array{from: list<string>, as: string}`
+         * naming PRIOR stages whose recorded rows this task's prompt receives
+         * under the fixed `input` handle. {@see TaskBuilder::trustedJoin()}
+         * validates the shape at parse time — by the time a DTO exists the
+         * spec is trusted, and null means no join at all (behavior
+         * byte-identical to every pre-C9 workflow). The engine builds the
+         * payload from the recorded rows immediately before prompt
+         * interpolation, into a task-local copy of the context that is never
+         * persisted, so a resume re-derives byte-identical bytes.
+         */
+        public ?array $input = null,
     ) {}
 }

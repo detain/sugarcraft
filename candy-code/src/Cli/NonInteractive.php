@@ -8,6 +8,7 @@ use SugarCraft\Code\Attachments\ContextMentions;
 use SugarCraft\Code\Attachments\FileMentions;
 use SugarCraft\Code\AttachmentType;
 use SugarCraft\Code\Backend;
+use SugarCraft\Code\Backend\ObservesReasoning;
 use SugarCraft\Code\Events\SpendCapBreached;
 use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Hooks\HookEvent;
@@ -766,7 +767,15 @@ final class NonInteractive
         $batchFailed = false;
 
         try {
-            $message = $backend->complete($history, $emitter === null ? null : $onToken, $onEvent, $emitter === null ? null : $onReasoning);
+            // ObservesReasoning doctrine (see the interface docblock): a narrow
+            // userland complete() silently DROPS a surplus positional argument,
+            // so ask the backend whether it observes reasoning before passing
+            // the tracker — the capability check TurnRunner performs. The
+            // 4-arg consumers (EngineBackend, RemoteBackend) keep their path
+            // bit-for-bit; narrow backends received nothing anyway.
+            $message = $backend instanceof ObservesReasoning
+                ? $backend->complete($history, $emitter === null ? null : $onToken, $onEvent, $emitter === null ? null : $onReasoning)
+                : $backend->complete($history, $emitter === null ? null : $onToken, $onEvent);
         } catch (\Throwable $e) {
             // 1021 F-7: same choke as failUsage() — the emitter owns the
             // stderr label, the document carries the raw sentence.
@@ -789,7 +798,7 @@ final class NonInteractive
         // ABSENCE on a no-tool turn is the ordinary "the schema rode the
         // answer" case — never a hard `true` this renderer cannot itself
         // verify past the provider.
-        $schemaUnapplied = $jsonSchema !== null && ($sawToolResult || self::historyCarriesUnansweredToolResult($history));
+        $schemaUnapplied = $jsonSchema !== null && self::schemaUnappliedFor($sawToolResult, $history);
         if ($schemaUnapplied) {
             \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.json_schema_unapplied') . "\n");
         }
@@ -817,7 +826,7 @@ final class NonInteractive
         // BM-1: under --batch the session's first recorded turn is the
         // first ROW, not the argv prompt (which waits as the final row).
         $leadTurnText = $args->batch && $batchRows !== [] ? $batchRows[0] : (string) $args->prompt;
-        $persistSession = static function () use ($ownsSession, $opened, $sessionStore, $args, $history, $message, $sessionUsages, $backend, $leadTurnText): ?string {
+        $persistSession = static function () use ($ownsSession, $opened, $sessionStore, $history, $message, $sessionUsages, $backend, $leadTurnText): ?string {
             if (!$ownsSession || $opened === null || $sessionStore === null) {
                 return null;
             }
@@ -944,7 +953,10 @@ final class NonInteractive
                 $sawToolResult = false;
                 $trial = [...$history, Message::user($row)];
                 try {
-                    $answer = $backend->complete($trial, $emitter === null ? null : $onToken, $onEvent, $emitter === null ? null : $onReasoning);
+                    // Same capability check as the single-pass arm above.
+                    $answer = $backend instanceof ObservesReasoning
+                        ? $backend->complete($trial, $emitter === null ? null : $onToken, $onEvent, $emitter === null ? null : $onReasoning)
+                        : $backend->complete($trial, $emitter === null ? null : $onToken, $onEvent);
                 } catch (\Throwable $e) {
                     // 1021 F-7 law holds per row: emitter owns the label,
                     // the document carries the raw sentence.
@@ -964,7 +976,7 @@ final class NonInteractive
                 // The schema leg is re-derived per row off the same observer
                 // slots (by reference in $onEvent), so each document tells
                 // the truth about its own turn.
-                $rowSchemaUnapplied = $jsonSchema !== null && $sawToolResult;
+                $rowSchemaUnapplied = $jsonSchema !== null && self::schemaUnappliedFor($sawToolResult, $trial);
                 if ($rowSchemaUnapplied) {
                     \fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.noninteractive.json_schema_unapplied') . "\n");
                 }
@@ -1409,6 +1421,20 @@ final class NonInteractive
         }
 
         return $lastResult >= 0 && $lastResult >= $lastCall;
+    }
+
+    /**
+     * Whether one dispatched request answered WITHOUT its JSON schema riding: either
+     * the run just watched a tool result land (the observer the $onEvent closure
+     * mutates by reference — see historyCarriesUnansweredToolResult for why that is
+     * unseeable once a scope re-seeds the flag), or the request history already ends
+     * on a consumed tool round-trip the engine refused the schema for. Both arms say
+     * the same thing about the answer: the schema did not constrain it. Named so the
+     * batch loop and the single-pass arm state the predicate identically.
+     */
+    private static function schemaUnappliedFor(bool $observedToolResult, array $requestHistory): bool
+    {
+        return $observedToolResult || self::historyCarriesUnansweredToolResult($requestHistory);
     }
 
     /**

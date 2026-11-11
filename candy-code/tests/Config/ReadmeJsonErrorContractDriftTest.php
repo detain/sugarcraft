@@ -160,6 +160,30 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
     ];
 
     /**
+     * Sites this walk may not read a terminator from — with the decision
+     * written out, the same discipline as {@see self::JSONRPC_WIRE_ENVELOPES}.
+     *
+     * The `--batch` queue (25697b764, BM-1) added catch arms whose honest end
+     * is `continue`: `backend` (NonInteractive.php:953) and `encoding`
+     * (:1001) in run()'s row loop emit their document, set `$batchFailed`,
+     * and move to the next row. The only exit past them is the function-tail
+     * ternary (:1050, `$message->error || $batchFailed ? EXIT_FAILURE :
+     * EXIT_OK`) — multi-valued by design, though the arm JUST taken set
+     * `$batchFailed`, so a row that emitted this document leaves 1. The walk
+     * cannot read a `continue` through to a tail, so these two sites are
+     * tolerated — and only because the SINGLE-RUN siblings of both types are
+     * directly derivable (`return self::EXIT_FAILURE` at :777 and :898
+     * respectively); the loop refuses a tolerated site that has no sibling
+     * derivation to inherit, and the staleness arm below refuses a roster
+     * row whose site stopped needing the tolerance.
+     *
+     * @var array<string, list<string>> relative source file => tolerated types
+     */
+    private const BATCH_TAIL_TERMINATED = [
+        'src/Cli/NonInteractive.php' => ['backend', 'encoding'],
+    ];
+
+    /**
      * The exit constants a document-emitting branch can return, resolved from
      * the class rather than restated, so a renumbering moves both the
      * derivation and the expectation together.
@@ -650,6 +674,7 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
         $map = [];
         $rawLiterals = [];
         $wireSeen = [];
+        $tolerated = [];
 
         foreach ($this->shippedSourceFiles() as $relative) {
             $tokens = $this->significantTokens($this->repoFile($relative));
@@ -658,6 +683,32 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
             $indexes = array_column($sites, 'at');
 
             foreach ($sites as $site) {
+                if (in_array($site['type'], self::BATCH_TAIL_TERMINATED[$relative] ?? [], true)
+                    && $this->setsBatchFailedAfter(
+                        $tokens,
+                        $site['at'],
+                        $this->enclosingFunctionEnd($ranges, $site['at'], count($tokens)),
+                        $indexes,
+                    )
+                ) {
+                    $key = $relative . ':' . $site['type'];
+                    $tolerated[$key] = ($tolerated[$key] ?? 0) + 1;
+                    self::assertSame(
+                        1,
+                        $tolerated[$key],
+                        "{$relative}: the batch-tail tolerance for '{$site['type']}' was used twice; "
+                        . 'a second unterminated site of the same type needs its own adjudication in '
+                        . 'BATCH_TAIL_TERMINATED, written out.',
+                    );
+                    self::assertArrayHasKey(
+                        $site['type'],
+                        $map,
+                        "{$relative}: the tolerated batch-tail site for '{$site['type']}' has no "
+                        . 'sibling derivation to inherit — the tolerance rests on the single-run '
+                        . 'leg having already derived the code (see BATCH_TAIL_TERMINATED).',
+                    );
+                    continue;
+                }
                 $others = array_values(array_filter($indexes, static fn (int $i): bool => $i !== $site['at']));
                 $code = $this->exitCodeAfter(
                     $tokens,
@@ -686,6 +737,26 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
         }
 
         self::assertNotSame([], $map, 'no error-document producer found at all');
+
+        // LIVENESS of the batch-tail tolerance: every rostered (file, type)
+        // pair must have been used EXACTLY once by the scan above. A batch
+        // arm that grew its own terminator makes the row stale, and a new
+        // unterminated batch arm of the same type would have tripped the
+        // used-twice arm inside the loop.
+        $expected = [];
+        foreach (self::BATCH_TAIL_TERMINATED as $file => $types) {
+            foreach ($types as $type) {
+                $expected[$file . ':' . $type] = 1;
+            }
+        }
+        ksort($expected);
+        ksort($tolerated);
+        self::assertSame(
+            $expected,
+            $tolerated,
+            'the batch-tail tolerance roster and the sites it covered have moved apart; add or '
+            . 'remove rows only with the decision written out (see BATCH_TAIL_TERMINATED).',
+        );
 
         // Shape C carries no exit code of its own — it is the fallback for a
         // branch that already chose one — so it cannot ADD a type. It can only
@@ -718,6 +789,63 @@ final class ReadmeJsonErrorContractDriftTest extends TestCase
         ksort($map);
 
         return $map;
+    }
+
+    /**
+     * Is this producer site a BATCH-LOOP arm — `…; $batchFailed = true;
+     * continue;` — rather than a leg that closes itself? A batch arm emits a
+     * row-level error document and lets the whole run finish on the tail
+     * ternary (`$message->error || $batchFailed ? EXIT_FAILURE : EXIT_OK`),
+     * so no single terminator inside its own block carries its exit code;
+     * it inherits one from the single-run legs of the same type (see
+     * BATCH_TAIL_TERMINATED). The mechanical signature is a `$batchFailed`
+     * assignment followed by `continue` with no `return`/`exit`/`throw` in
+     * between, bounded by the next producer site or the function end; a leg
+     * that writes its own terminator is NOT this shape and must derive on
+     * its own.
+     */
+    private function setsBatchFailedAfter(array $tokens, int $at, int $until, array $indexes): bool
+    {
+        $stop = $until;
+        foreach ($indexes as $other) {
+            if ($other > $at && $other < $stop) {
+                $stop = $other;
+            }
+        }
+
+        $assignmentSeen = false;
+        $count = count($tokens);
+
+        for ($i = $at; $i < $stop; ++$i) {
+            $id = $tokens[$i]->id;
+
+            if ($id === \T_VARIABLE && $tokens[$i]->text === '$batchFailed') {
+                for ($j = $i + 1; $j < $stop; ++$j) {
+                    /* A bare `=` is not a named token — PhpToken publishes it
+                     * as the ord() of the character itself, so the assignment
+                     * is spotted by its text, never by a T_* constant. */
+                    if ($tokens[$j]->text === '=') {
+                        $assignmentSeen = true;
+                        break;
+                    }
+                    if ($tokens[$j]->id !== \T_WHITESPACE) {
+                        break;
+                    }
+                }
+
+                continue;
+            }
+
+            if ($id === \T_CONTINUE) {
+                return $assignmentSeen;
+            }
+
+            if ($id === \T_RETURN || $id === \T_EXIT || $id === \T_THROW) {
+                return false;
+            }
+        }
+
+        return false;
     }
 
     /**

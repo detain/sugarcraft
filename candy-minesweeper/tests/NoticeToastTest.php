@@ -21,20 +21,29 @@ use SugarCraft\Minesweeper\TickMsg;
  * across ticks, dismissed by the next action, coexisting with the
  * win/lose banner (never replacing it).
  *
- * HOME is sandboxed per test with the same snapshot-before-mutation idiom
- * as SaveLoadTest so the slot lives in a temp dir.
+ * HOME and XDG_CONFIG_HOME are sandboxed per test with the same
+ * snapshot-before-mutation idiom as SaveLoadTest so the slot lives in a temp
+ * dir. (Both legs: savePath() asks XDG first, so a HOME-only sandbox leaks
+ * the slot to the runner's real config dir wherever XDG_CONFIG_HOME is
+ * exported — the 26.04-runner red shape.)
  */
 final class NoticeToastTest extends TestCase
 {
     private ?string $savedHome;
+    private string|false $savedXdg;
     private string $homeDir = '';
+    private string $xdgDir = '';
 
     protected function setUp(): void
     {
         $this->savedHome = getenv('HOME');
+        $this->savedXdg = getenv('XDG_CONFIG_HOME');
         $this->homeDir = sys_get_temp_dir() . '/candy-minesweeper-toast-' . bin2hex(random_bytes(6));
         mkdir($this->homeDir, 0700, true);
+        $this->xdgDir = $this->homeDir . '/xdg-config';
+        mkdir($this->xdgDir, 0700, true);
         putenv('HOME=' . $this->homeDir);
+        putenv('XDG_CONFIG_HOME=' . $this->xdgDir);
     }
 
     protected function tearDown(): void
@@ -44,14 +53,21 @@ final class NoticeToastTest extends TestCase
         } else {
             putenv('HOME=' . $this->savedHome);
         }
-        $slotDir = $this->homeDir . '/.config/candy-minesweeper';
-        if (is_dir($slotDir)) {
-            foreach (new \FilesystemIterator($slotDir) as $residue) {
-                @unlink($residue->getPathname());
-            }
-            @rmdir($slotDir);
+        if ($this->savedXdg === false) {
+            putenv('XDG_CONFIG_HOME');
+        } else {
+            putenv('XDG_CONFIG_HOME=' . $this->savedXdg);
         }
-        @rmdir($this->homeDir . '/.config');
+        foreach ([$this->homeDir . '/.config', $this->xdgDir] as $configLeg) {
+            $slotDir = $configLeg . '/candy-minesweeper';
+            if (is_dir($slotDir)) {
+                foreach (new \FilesystemIterator($slotDir) as $residue) {
+                    @unlink($residue->getPathname());
+                }
+                @rmdir($slotDir);
+            }
+            @rmdir($configLeg);
+        }
         @rmdir($this->homeDir);
     }
 

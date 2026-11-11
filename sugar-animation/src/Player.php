@@ -443,8 +443,18 @@ final class Player implements Model
         $n = count($this->frames);
         $cumulative = $this->cumulative();
         $total = $cumulative[$n];
-        $anchor = $this->anchor ?? $now - $cumulative[($this->index + 1) % $n];
-        $pos = max(0.0, $now - $anchor);
+        $unanchored = $this->anchor === null;
+        $anchor = $unanchored ? $now - $cumulative[($this->index + 1) % $n] : $this->anchor;
+        // The first tick of an un-anchored Player lands "exactly now" by
+        // contract, so its schedule position IS the table offset — reading it
+        // from the table instead of round-tripping $now - ($now - offset)
+        // takes the clock out of the expression. The subtraction misrounds by
+        // up to half an ulp of $now, which scales with uptime: on a freshly
+        // booted CI runner (~1e1-1e2 s of hrtime) the shifted position both
+        // flips the branch lottery below and leaks ~1e-14 into the arm, so a
+        // pinned 30cs delay arrived as 0.2999999999999949 (E-04 parity pin,
+        // red on one 8.3 leg, green on an 8.4 twin of the same commit).
+        $pos = $unanchored ? $cumulative[($this->index + 1) % $n] : max(0.0, $now - $anchor);
         $cycle = (int) floor($pos / $total);
         $within = $pos - $cycle * $total;
 
@@ -467,15 +477,24 @@ final class Player implements Model
         if ($landing !== $this->index) {
             // Schedule-driven arrival: catch-up may have skipped frames.
             $changes = ['index' => $landing];
-            if ($this->anchor === null) {
+            if ($unanchored) {
                 $changes['anchor'] = $anchor;
             }
             $next = $this->mutate($changes);
-            $nextDueRel = $cycle * $total + ($landing + 1 < $n ? $cumulative[$landing + 1] : $total);
 
             // Arm from schedule-relative values: round-tripping through the
             // absolute anchor would cancel away the nanoseconds a real
-            // hrtime() carries (ulp at ~1e9 s exceeds a centisecond).
+            // hrtime() carries (ulp at ~1e9 s exceeds a centisecond). On the
+            // un-anchored first tick the landing frame is due exactly now, so
+            // its next deadline IS the landing frame's own period — taken
+            // straight from the schedule instead of the prefix-sum difference
+            // (C[2] - C[1] is not framePeriod(1) bit-for-bit in binary float,
+            // e.g. 0.31 - 0.0100000000000051 ≠ 0.3).
+            if ($unanchored) {
+                return [$next, $this->armFromRel($this->framePeriod($landing))];
+            }
+            $nextDueRel = $cycle * $total + ($landing + 1 < $n ? $cumulative[$landing + 1] : $total);
+
             return [$next, $this->armFromRel($nextDueRel - $pos)];
         }
 

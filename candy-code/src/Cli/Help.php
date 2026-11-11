@@ -9,6 +9,7 @@ use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\Version;
 use SugarCraft\Code\Workspace\GitRunner;
 use SugarCraft\Cli\HelpText;
+use SugarCraft\Core\Util\Tty;
 
 /**
  * Static factory for the one-shot (non-interactive) CLI's --help and
@@ -30,6 +31,126 @@ final class Help
      * The Composer package whose installed version IS candy-code's version.
      */
     private const PACKAGE = 'sugarcraft/candy-code';
+
+    /**
+     * The authored budget of the help page: translators align its columns to
+     * 80 cells, so a terminal at or below that width must see the page
+     * verbatim — and a probed value that is absent or not credible resolves
+     * here rather than guessing. One source with the reflow engine's own
+     * guard: {@see HelpPageReflow::MIN_WIDTH}.
+     */
+    private const HELP_MIN_WIDTH = HelpPageReflow::MIN_WIDTH;
+
+    /**
+     * Upper clamp of the render width: past it the key and description
+     * columns of a table row drift so far apart the block stops reading as
+     * a table, so the probed width is honoured up to here and capped at it
+     * above. {@see HelpPageReflow::MAX_WIDTH}.
+     */
+    private const HELP_MAX_WIDTH = HelpPageReflow::MAX_WIDTH;
+
+    /**
+     * Resolve the width the help screen renders at. Two probes, exported
+     * first: `COLUMNS` as the environment carries it
+     * ({@see envColumns()}), and — only when nothing credible was exported —
+     * the live window of a terminal STDOUT ({@see terminalColumns()}).
+     * Absent or junk on both arms resolves to the authored budget; a
+     * credible probe is clamped into [HELP_MIN_WIDTH, HELP_MAX_WIDTH].
+     */
+    private static function helpRenderWidth(): int
+    {
+        $columns = self::envColumns();
+        if ($columns === false) {
+            $columns = self::terminalColumns();
+        }
+        if ($columns === false) {
+            return self::HELP_MIN_WIDTH;
+        }
+
+        return max(self::HELP_MIN_WIDTH, min(self::HELP_MAX_WIDTH, $columns));
+    }
+
+    /**
+     * The exported arm: COLUMNS through getenv first, then the superglobal
+     * spellings, accepting only a credible integer in 1..10_000 — the parity
+     * range of sugar-cli's internal WidthProbe, whose read this replicates
+     * because that class is `@internal` and candy-code must not depend on
+     * it. Returns false when nothing credible was exported.
+     *
+     * It is probed before the live window deliberately: when a harness or an
+     * operator exports a width, that IS the answer they asked for, and every
+     * shape that works today keeps working byte-identically. What this arm
+     * cannot see is the window itself — bash refreshes COLUMNS for its own
+     * prompt without exporting it, so a plain interactive terminal usually
+     * carries no COLUMNS at all, which is exactly the hole
+     * {@see terminalColumns()} now fills.
+     */
+    private static function envColumns(): int|false
+    {
+        $raw = getenv('COLUMNS');
+        if ($raw === false || $raw === '') {
+            $raw = $_ENV['COLUMNS'] ?? $_SERVER['COLUMNS'] ?? false;
+        }
+        if (!is_string($raw) && !is_int($raw)) {
+            $raw = false;
+        }
+
+        return filter_var(
+            $raw,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1, 'max_range' => 10_000]],
+        );
+    }
+
+    /**
+     * The live arm: the kernel window size of STDOUT through the house probe
+     * — {@see Tty}, whose first arm is the TIOCGWINSZ ioctl, the ground
+     * truth an exported COLUMNS so often fails to carry. Returns false when
+     * the probe cannot answer: STDOUT is not a terminal at all (CI, pipes,
+     * redirected output), the probe threw, or the window reports no columns.
+     *
+     * The terminality guard ahead of the probe is the contract, not
+     * defensive noise: sugar-core's probe falls through to opening
+     * /dev/tty, which would let a process with a controlling terminal
+     * re-flow the output of a PIPE behind its consumer's back — while every
+     * byte-identity pin on the non-terminal shapes (CI, the spawned binary)
+     * requires the authored page verbatim there.
+     */
+    private static function terminalColumns(): int|false
+    {
+        if (self::$terminalColumnsOverride !== null) {
+            return self::$terminalColumnsOverride;
+        }
+        if (!stream_isatty(STDOUT)) {
+            return false;
+        }
+
+        try {
+            $size = (new Tty(STDOUT))->size();
+        } catch (\Throwable) {
+            return false;
+        }
+
+        $columns = (int) ($size['cols'] ?? 0);
+
+        return $columns > 0 ? $columns : false;
+    }
+
+    /**
+     * Test seam for the live arm: an int arms a pretend window, false pins
+     * the "cannot answer" verdict, null restores real probing. The suite
+     * pins false for the same reason the renderer cache is pinned there —
+     * a byte-identity pin must not inherit the width of whatever terminal
+     * happens to run phpunit. Mirrors
+     * {@see pretendHostArchiveForTesting()}.
+     */
+    public static function pretendTerminalColumnsForTesting(int|false|null $columns): void
+    {
+        self::$terminalColumnsOverride = $columns;
+    }
+
+    private static int|false|null $terminalColumnsOverride = null;
+
     /**
      * Return the --help text for the candy-code binary.
      *
@@ -49,14 +170,23 @@ final class Help
      * reaches a terminal — while renderPage's page variant keeps the
      * embedded newlines that ARE the layout above (the single-line
      * flattening in render() would collapse the whole screen onto one row).
-     * Width is left null deliberately: the page ships already aligned by
-     * its translators, so no probed terminal width may re-flow it. For the
-     * clean English page — and any locale that keeps its layout — the call
-     * is byte-identity, verified by HelpTest.
+     *
+     * The width is then probed ({@see helpRenderWidth()}): the exported
+     * COLUMNS first, then the live terminal window. A non-terminal STDOUT —
+     * CI, pipes, redirected output — and any probed width at or below the
+     * 80-column authored budget see the page BYTE-IDENTICAL, verified by
+     * HelpTest. Above
+     * the budget, {@see HelpPageReflow::reflow()} re-wraps the aligned
+     * columns into the wider window without moving a word: the translators'
+     * layout is the budget's layout, and honoring a bigger terminal means
+     * giving that layout more room, not a different document.
      */
     public static function screen(): string
     {
-        return HelpText::renderPage(Lang::t('cli.help.screen'));
+        return HelpPageReflow::reflow(
+            HelpText::renderPage(Lang::t('cli.help.screen')),
+            self::helpRenderWidth(),
+        );
     }
 
     /**

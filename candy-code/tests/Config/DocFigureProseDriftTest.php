@@ -663,7 +663,13 @@ final class DocFigureProseDriftTest extends TestCase
         );
         self::assertSame(
             3,
-            preg_match_all('/\$workflow->timeout\);/', self::bodyExcerpt($engine, 'runGuardedFromWorkflow', 9000)),
+            // C2 (wave-R, 2026-11-09) widened 9000 -> 10000: the `when:` guard
+            // block sits ahead of the three dispatch arms, shifting them ~1k
+            // bytes; C6 (2026-11-09) widened 10000 -> 10600: the stage-lifecycle
+            // announce lines inside the same dispatch region shifted the third
+            // arm's '$workflow->timeout);' to +10,066. The file carries exactly
+            // three spellings tree-wide, so no fourth can enter the window.
+            preg_match_all('/\$workflow->timeout\);/', self::bodyExcerpt($engine, 'runGuardedFromWorkflow', 10_600)),
             'runGuardedFromWorkflow() no longer hands Workflow::$timeout to the stage, pipeline and verification executors',
         );
         preg_match_all('/maxRetries: \$\w+->retries \?\? (\d+)/', $engine, $engineRetries);
@@ -719,7 +725,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/and the (eleven|twelve|thirteen|fourteen|fifteen)\s+subcommands \(([^)]*)\)/s', $arch, $m),
+            preg_match('/and the (eleven|twelve|thirteen|fourteen|fifteen|sixteen)\s+subcommands \(([^)]*)\)/s', $arch, $m),
             'the pre-flight paragraph no longer spells its subcommand word-count and list together',
         );
         preg_match_all('/`([^`]+)`/', $m[2], $listed);
@@ -738,7 +744,7 @@ final class DocFigureProseDriftTest extends TestCase
             }
             self::assertTrue($matched, "ParsedArgs::SUBCOMMANDS gained '{$name}' but the pre-flight sentence's list did not");
         }
-        $wordNumbers = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15];
+        $wordNumbers = ['one' => 1, 'two' => 2, 'three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16];
         self::assertSame(count($names), $wordNumbers[$m[1]] ?? -1, 'the spelled word no longer counts the live SUBCOMMANDS list — flip both together (census-trio lesson)');
     }
 
@@ -2318,7 +2324,7 @@ final class DocFigureProseDriftTest extends TestCase
     public function testHookEventsTableSurvivesTheLiveEnumAndDispatchSites(): void
     {
         $hooksRaw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/HOOKS.md');
-        $words = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12];
+        $words = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'sixteen' => 16];
         $cases = HookEvent::cases();
         $caseNames = array_map(static fn (HookEvent $case): string => $case->name, $cases);
 
@@ -2362,8 +2368,9 @@ final class DocFigureProseDriftTest extends TestCase
 
         // Wired rows: the cited methods are EXACTLY where each event is reached.
         // An event HookManager has no method for is reached only through a
-        // HookDispatcher (roadmap 4.6-2's team events), so its origin is the
-        // dispatcher call rather than a HookEvent case handed to the manager.
+        // HookDispatcher (roadmap 4.6-2's team events and C6's workflow
+        // quartet), so its origin is the dispatcher call rather than a
+        // HookEvent case handed to the manager.
         foreach ($citations as $event => $cited) {
             $toolScoped = str_contains($event, 'ToolUse');
             $viaDispatcher = !method_exists(\SugarCraft\Code\Hooks\HookManager::class, lcfirst($event));
@@ -2388,11 +2395,14 @@ final class DocFigureProseDriftTest extends TestCase
             self::assertEqualsCanonicalizing($cited, $found, "docs/HOOKS.md's Dispatched-from column for {$event} no longer matches where {$token} is actually called in src/");
         }
 
-        // The dispatcher paragraph (roadmap 4.6-2 wired the team events): every
-        // row is cited, the three it names are exactly the rows HookManager has
-        // no method for, and the chain they ride is the launch's — built from
+        // The dispatcher paragraph (roadmap 4.6-2 wired the team events; C6
+        // wired the workflow quartet the same way): every row is cited, the
+        // seven it names are exactly the rows HookManager has no method for,
+        // and each dispatch is guarded by a null check on its owner's
+        // dispatcher. The team chain is the launch's — built from
         // HookManager::dispatcher() inside Bootstrap::hooks() and installed on
-        // TeamManager there, nowhere else.
+        // TeamManager there, nowhere else; the workflow chain is whatever the
+        // engine's host handed it.
         $paraEnd = strpos($hooksRaw, 'What a **block**');
         self::assertIsInt($paraEnd);
         $para = self::markdownProse(substr($hooksRaw, $sectionEnd, $paraEnd - $sectionEnd));
@@ -2403,13 +2413,23 @@ final class DocFigureProseDriftTest extends TestCase
         ));
         preg_match_all('/`(\w+)`/', (string) strstr($section, '| `TeammateIdle`'), $teamRowEvents);
         self::assertSame(1, preg_match('/The three team rows are the ones raised outside a tool call/', $para), 'the team-rows sentence of the dispatcher paragraph moved');
-        self::assertCount(3, $viaDispatcherEvents, 'the paragraph says THREE events bypass HookManager');
+        self::assertSame(1, preg_match('/The four workflow rows are raised by `(\w+)` on the same guarded-dispatch/', $para, $workflowRows), 'the workflow-rows sentence of the dispatcher paragraph moved');
+        self::assertSame('WorkflowEngine', $workflowRows[1], 'the page names a different class as what raises the stage lifecycle events');
+        self::assertTrue(class_exists(\SugarCraft\Code\Workflows\WorkflowEngine::class), 'WorkflowEngine vanished — the page still says it raises the four workflow rows');
+        self::assertCount(7, $viaDispatcherEvents, 'the paragraph says SEVEN events bypass HookManager — three team rows and four workflow rows');
         foreach ($viaDispatcherEvents as $event) {
             self::assertArrayHasKey($event, $citations, "{$event} reaches only a HookDispatcher but its table row cites nothing");
-            self::assertContains($event, $teamRowEvents[1], "{$event} bypasses HookManager but is not one of the team rows the paragraph is about");
+            $fromWorkflowEngine = array_reduce(
+                $citations[$event],
+                static fn (bool $carry, string $pair): bool => $carry && str_starts_with($pair, 'WorkflowEngine::'),
+                true,
+            );
+            if (!$fromWorkflowEngine) {
+                self::assertContains($event, $teamRowEvents[1], "{$event} bypasses HookManager but is neither a team row nor a workflow row the paragraph is about");
+            }
             foreach (self::srcOccurrences('$this->hookDispatcher->dispatch' . $event . '(') as [$relative, $pos]) {
-                self::assertSame('TaskList.php', basename($relative), "{$event} is dispatched outside TaskList — the page names TaskList as what raises the team events");
-                self::assertMatchesRegularExpression('/hookDispatcher [!=]== null/', self::enclosingFunctionSlice($relative, $pos), "the {$event} dispatch lost its null-dispatcher guard — a list built without a chain must raise nothing");
+                self::assertSame($fromWorkflowEngine ? 'WorkflowEngine.php' : 'TaskList.php', basename($relative), "{$event} is dispatched from somewhere other than the class the page names as raising it");
+                self::assertMatchesRegularExpression('/hookDispatcher [!=]== null/', self::enclosingFunctionSlice($relative, $pos), "the {$event} dispatch lost its null-dispatcher guard — an owner built without a chain must raise nothing");
             }
         }
         self::assertSame(1, preg_match('/`(\w+)::(\w+)\(\)` hands\s+`HookManager::dispatcher\(\)` to `TeamManager::(\w+)\(\)`/', $para, $install), 'the install sentence of the dispatcher paragraph moved');
@@ -4070,7 +4090,7 @@ final class DocFigureProseDriftTest extends TestCase
     {
         $raw = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/MCP.md');
         $mcp = self::markdownProse($raw);
-        $wordNumbers = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16];
+        $wordNumbers = ['three' => 3, 'four' => 4, 'five' => 5, 'six' => 6, 'seven' => 7, 'eight' => 8, 'nine' => 9, 'ten' => 10, 'eleven' => 11, 'twelve' => 12, 'thirteen' => 13, 'fourteen' => 14, 'fifteen' => 15, 'sixteen' => 16, 'seventeen' => 17];
 
         self::assertSame(
             1,
@@ -4099,7 +4119,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertTrue(class_exists(ArgvParser::class), 'ArgvParser vanished — ParsedArgs has no loader without it');
         $commands = constant('SugarCraft\Code\Cli\ParsedArgs::SUBCOMMANDS');
         sort($commands);
-        self::assertCount($wordNumbers['fifteen'], $commands, 'the subcommand roster changed size — help block, page sentence and this count move together');
+        self::assertCount($wordNumbers['sixteen'], $commands, 'the subcommand roster changed size — help block, page sentence and this count move together');
 
         // The screen's ENGLISH text (15b-14-2 moved it into the catalogue):
         // the page quotes English, so the lookup pins the locale.
@@ -4108,7 +4128,7 @@ final class DocFigureProseDriftTest extends TestCase
         self::assertSame((require \dirname(__DIR__, 2) . '/lang/en.php')['cli.help.screen'], $helpSource, 'the help screen is not the cli.help.screen catalogue entry');
         self::assertSame(
             1,
-            preg_match('/lists exactly fifteen under its ' . \preg_quote($bold . 'Subcommands' . $bold, '/') . ' heading/', $mcp),
+            preg_match('/lists exactly sixteen under its ' . \preg_quote($bold . 'Subcommands' . $bold, '/') . ' heading/', $mcp),
             'the exactly-fifteen sentence reworded — the help block below must keep carrying its row per verb',
         );
         $block = (string) preg_replace('/^.*Subcommands \(/s', '', $helpSource);
@@ -4134,7 +4154,7 @@ final class DocFigureProseDriftTest extends TestCase
         // MCP one — the page says which, rather than the old "there is none".
         self::assertTrue(in_array('serve', $commands, true), 'the serve subcommand left the roster — the page still describes it');
         self::assertStringContainsString('`candy-code serve` is not one of them', $mcp, 'the serve-is-not-MCP claim left the page');
-        self::assertStringContainsString('twelve answer and exit, and `serve` runs until it is stopped', $mcp, 'the page lost the count of subcommands that exit before the one that does not');
+        self::assertStringContainsString('thirteen answer and exit, and `serve` runs until it is stopped', $mcp, 'the page lost the count of subcommands that exit before the one that does not');
         foreach (['McpServer', 'GitMcpServer', 'GitCommandHandlers', 'HttpMcpServer', 'SseMcpServer', 'StdioMcpServer'] as $class) {
             $half = 'SugarCraft\Code\MCP\\' . $class;
             self::assertTrue(interface_exists($half) || class_exists($half), "the page enumerates {$class} among the server halves and it is gone");
@@ -4142,7 +4162,7 @@ final class DocFigureProseDriftTest extends TestCase
 
         self::assertSame(
             1,
-            preg_match('/`run` is a sixteenth \(the `\$arg === .run.` arm in `Cli\\\\ArgvParser`/', $mcp),
+            preg_match('/`run` is a seventeenth \(the `\$arg === .run.` arm in `Cli\\\\ArgvParser`/', $mcp),
             'the run-is-a-sixteenth sentence no longer cites the argv arm by symbol — the drifted line-number anchor it used to carry is the reason this pin exists',
         );
         self::assertSame(0, preg_match('/ArgvParser` line \d+/', $mcp), 'a bare line-number anchor came back into the page — E686 law: symbols by name, never by line');
@@ -4154,7 +4174,7 @@ final class DocFigureProseDriftTest extends TestCase
             'the Usage block stopped labelling run as an alias for -p',
         );
         self::assertStringContainsString('it is an alias for `-p`', $mcp, 'the alias half of the page sentence drifted from the help block');
-        self::assertCount($wordNumbers['sixteen'], array_merge($commands, ['run']), 'the roster-overrun arithmetic broke against the live roster');
+        self::assertCount($wordNumbers['seventeen'], array_merge($commands, ['run']), 'the roster-overrun arithmetic broke against the live roster');
 
         // E695 in-step: the auth section's new attachment truth, bound to the
         // code that makes it true — the page may only claim what the request
@@ -8063,6 +8083,64 @@ final class DocFigureProseDriftTest extends TestCase
             $diskDirs,
             $indexedDirs,
             'a docs/ subdirectory is missing from the index (disk: ' . \implode(', ', $diskDirs) . ')'
+        );
+    }
+
+    /**
+     * WORKFLOWS.md quotes two figures the engine owns: the lock-wait fallback
+     * (the YAML example and the prose sentence both say 60; the preview
+     * sentence says "the first 2 KiB"). Every one of them is derived here from
+     * {@see \SugarCraft\Code\Workflows\WorkflowEngine}'s constants and call
+     * sites, so a retune of the defaults lands as a red instead of a silently
+     * stale page.
+     */
+    public function testLockWaitAndCapturePreviewFiguresAreLive(): void
+    {
+        $engine = self::sourceOf('Workflows/WorkflowEngine.php');
+        $workflows = (string) \file_get_contents(\dirname(__DIR__, 2) . '/docs/WORKFLOWS.md');
+        $lockDefault = (new \ReflectionClass(\SugarCraft\Code\Workflows\WorkflowEngine::class))
+            ->getConstant('DEFAULT_STAGE_LOCK_WAIT_SECONDS');
+        $previewBytes = (new \ReflectionClass(\SugarCraft\Code\Workflows\WorkflowEngine::class))
+            ->getConstant('CAPTURE_PREVIEW_BYTES');
+        self::assertSame(
+            1,
+            \preg_match('/lockWaitSeconds: (\d+)\s+# optional; seconds to wait/', $workflows, $yaml),
+            'WORKFLOWS.md no longer carries the lockWaitSeconds example with its explanatory comment'
+        );
+        self::assertSame(
+            (int) $yaml[1],
+            (int) $lockDefault,
+            'the lockWaitSeconds YAML example drifted from DEFAULT_STAGE_LOCK_WAIT_SECONDS'
+        );
+        self::assertSame(
+            1,
+            \preg_match('/`lockWaitSeconds:` \(default (\d+);/', $workflows, $prose),
+            'WORKFLOWS.md no longer states the (default N; ...) prose for lockWaitSeconds'
+        );
+        self::assertSame(
+            (int) $prose[1],
+            (int) $lockDefault,
+            'the lockWaitSeconds prose default drifted from DEFAULT_STAGE_LOCK_WAIT_SECONDS'
+        );
+        self::assertSame(
+            1,
+            \preg_match('/\$task->lockWaitSeconds \?\? self::DEFAULT_STAGE_LOCK_WAIT_SECONDS/', $engine),
+            'the engine no longer falls back through the named constant (a literal would silently outdate the page)'
+        );
+        self::assertSame(
+            1,
+            \preg_match('/preview \(the first (\d+) KiB\)/', $workflows, $preview),
+            'WORKFLOWS.md no longer states the capture preview size in KiB'
+        );
+        self::assertSame(
+            (int) $preview[1],
+            \intdiv((int) $previewBytes, 1024),
+            'the preview sentence drifted from CAPTURE_PREVIEW_BYTES'
+        );
+        self::assertSame(
+            1,
+            \preg_match('/substr\(\$output, 0, self::CAPTURE_PREVIEW_BYTES\)/', $engine),
+            'the engine no longer slices the preview through the named constant'
         );
     }
 }

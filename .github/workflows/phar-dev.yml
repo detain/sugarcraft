@@ -90,7 +90,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:
           php-version: '8.3'
           coverage: none
@@ -178,6 +178,10 @@ jobs:
         env:
           TARGET_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # This job carries no actions/checkout, so gh cannot infer the repo
+          # from a git context and dies with "failed to determine base repo".
+          # GH_REPO gives every gh call here its target explicitly.
+          GH_REPO: detain/sugarcraft
         run: |
           set -euo pipefail
           for attempt in $(seq 1 240); do
@@ -218,7 +222,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962
         with:
           php-version: '8.3'
           coverage: none

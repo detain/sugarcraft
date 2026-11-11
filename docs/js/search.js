@@ -17,9 +17,47 @@
   }
 
   /* ── Path resolution ────────────────────────────────────────────── */
+  /* Depth counts non-empty dotless pathname segments, so '/lib/x.html' and
+     '/cookbook/index.html' climb exactly once and root pages climb zero
+     times. Both the index fetch and the result hrefs climb by this number —
+     a shim keyed on '/lib/' alone silently 404s every result for any page
+     living in another directory (site-code 11-11 indexed the narrative
+     pages, one of which lives under /cookbook/). */
+  function siteDepth() {
+    return window.location.pathname
+        .split('/')
+        .filter(function (segment) { return segment !== '' && segment.indexOf('.') === -1; })
+        .length;
+  }
+
   function getIndexPath() {
-    var isLibPage = window.location.pathname.includes('/lib/');
-    return isLibPage ? '../js/search-index.json' : 'js/search-index.json';
+    // The index lives next to this script: climb one '../' per directory
+    // segment above the site root, so any page depth (root, /lib/, a future
+    // nested /cookbook/ tree) resolves the same file.
+    return '../'.repeat(siteDepth()) + 'js/search-index.json';
+  }
+
+  /* Search-index entries are root-anchored relative hrefs (lib/<slug>.html,
+     GETTING-STARTED.html, cookbook/index.html, or index.html#… for cross-page
+     anchors). Emitted raw from a page inside a directory they resolve against
+     that directory and 404 (→ /lib/lib/<slug>.html), so apply the same depth
+     climb getIndexPath() uses for the fetch. Already-escaped ('../…'),
+     absolute ('/…') or scheme-ful URLs pass through untouched. */
+  function resolveResultHref(url) {
+    if (typeof url !== 'string' || url === '') {
+      return url;
+    }
+    var hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(url);
+    var isRootAnchored = !hasScheme && !url.startsWith('/') && !url.startsWith('../');
+    return isRootAnchored ? '../'.repeat(siteDepth()) + url : url;
+  }
+
+  /* Dangerous-scheme refusal — the single source of truth consulted by BOTH
+     the href assignment and the click handler, so javascript:/data:/vbscript:
+     URLs never land in the DOM at all (middle-click / copy-link included).
+     Tested on the trimmed form because browsers trim before scheme detection. */
+  function unsafeResultHref(url) {
+    return typeof url === 'string' && /^(javascript|data|vbscript):/i.test(url.trim());
   }
 
   /* ── Fetch index once ───────────────────────────────────────────── */
@@ -114,7 +152,10 @@
       link.className = 'search-result-item';
       link.setAttribute('role', 'option');
       link.setAttribute('aria-selected', 'false');
-      link.href = item.url;
+      var resultHref = resolveResultHref(item.url);
+      /* Scheme-ful danger urls never reach href; the anchor degrades to '#'
+         and the click handler's refusal keeps it inert. */
+      link.href = unsafeResultHref(resultHref) ? '#' : resultHref;
 
       var contentDiv = document.createElement('div');
       contentDiv.className = 'search-result-content';
@@ -143,9 +184,14 @@
       link.addEventListener('click', function (e) {
         e.preventDefault();
         closeModal();
-        // Validate URL to prevent XSS via javascript: or data: URIs
-        var url = item.url;
-        if (typeof url === 'string' && /^[a-z][a-z0-9+.-]*:/i.test(url) && !/^(javascript|data|vbscript):/i.test(url)) {
+        // Navigate via the depth-resolved href (see resolveResultHref): the
+        // old arm demanded a scheme before navigating at all, which deadened
+        // every root-relative result (i.e. all of them). The XSS refusal
+        // lives in unsafeResultHref (shared with the href assignment above)
+        // — scheme-ful URLs must never be javascript:/data:/vbscript:.
+        // Relative and absolute-path URLs are inherently safe.
+        var url = resolveResultHref(item.url);
+        if (typeof url === 'string' && !unsafeResultHref(url)) {
           window.location.href = url;
         }
       });

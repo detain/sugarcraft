@@ -57,7 +57,7 @@ use SugarCraft\Code\Tests\Support\SplitsTopLevelArgumentsTrait;
  * It is also answering a narrower question than its readers have been taking
  * it to answer, and the gap is a matter of ALPHABET rather than of arithmetic:
  *
- *  1. `fwrite(STDERR, …)` — fifty-seven sites (BM-1 RS-DRIVER 2026-11-07: +4 in the `NonInteractive::run()` --batch continuation loop — per-row mirrors of the single-run failure arms, stderr alone; gc-cli-1106 2026-11-06: +4 in
+ *  1. `fwrite(STDERR, …)` — fifty-nine sites (W-1 cc-eval-1106 2026-11-09: +2 in the `candy-code workflow` refusal funnel + signal-pause mirror, stderr alone; BM-1 RS-DRIVER 2026-11-07: +4 in the `NonInteractive::run()` --batch continuation loop — per-row mirrors of the single-run failure arms, stderr alone; gc-cli-1106 2026-11-06: +4 in
  *     `Subcommands` — the gc verb family writers: the vacuum headroom notice, the
  *     live-seat lock-refusal pair and the corrupt-store funnel, each a one-shot
  *     notice printed by a detached CLI verb and Stderr alone by the same
@@ -452,7 +452,7 @@ final class StderrEmitterCensusTest extends TestCase
         // CC-QA-1 2026-11-04: +1 — sessionStoreForVerbs()' funnel notice for
         // a session.db that will not open at all; the six session verbs share
         // the one door, so the file gains one site, not six.
-        'src/Cli/Subcommands.php' => 13, // gc-cli-1106 closeout 2026-11-06: +4 raw writers in the
+        'src/Cli/Subcommands.php' => 15, // W-1 (cc-eval-1106 wf/w1) 2026-11-09: +2 raw writers — the workflow verb's refusal funnel and signal-pause mirror, stderr alone, the same detached-process decision as every sibling subcommand writer | gc-cli-1106 closeout 2026-11-06: +4 raw writers in the
             // gc verb family — the vacuum headroom notice, the two live-seat
             // lock-refusal doors (held-seat refusal and the orphan-sweep
             // announcement), and the corrupt-store funnel — each a one-shot
@@ -704,7 +704,7 @@ final class StderrEmitterCensusTest extends TestCase
         // prefix into the message {@see NonInteractive::failUsage()} carries;
         // the verb's own prose never touches stderr — preview, refusals and
         // the settle lines are all stdout echoes on the login arm's model.
-        'src/Cli/Subcommands.php' => 76, // CC-QA-1: the funnel notice literal | +21 gc-cli-1106 (2026-11-06): the gc verb family's prefixed literals across its usage refusals (the action-arg match arm's + 640KiB/128MiB/512MiB vacuum headroom + two live-seat lock-refusal + purge/vacuum decline and lock-refusal doors + the corrupt-store funnel + per-action corrupt/usage lines), the status/sessions/analyze/purge/vacuum settle-line literals, and the orphan-sweep/seat-lock/usage/preflight refusal literals the status leg now names — all one-shot CLI-verb output on the stderr channel, the same detached-process decision as every sibling subcommand writer
+        'src/Cli/Subcommands.php' => 86, // W-1 (cc-eval-1106 wf/w1) 2026-11-09: +10 the workflow verb family's prefixed literals (no-action/unknown-action/flag-does-not-apply/bad-format/need-name/need-id/bad-param usage refusals, the refusal funnel, the signal-pause line) — one-shot CLI-verb output on the stderr channel | CC-QA-1: the funnel notice literal | +21 gc-cli-1106 (2026-11-06): the gc verb family's prefixed literals across its usage refusals (the action-arg match arm's + 640KiB/128MiB/512MiB vacuum headroom + two live-seat lock-refusal + purge/vacuum decline and lock-refusal doors + the corrupt-store funnel + per-action corrupt/usage lines), the status/sessions/analyze/purge/vacuum settle-line literals, and the orphan-sweep/seat-lock/usage/preflight refusal literals the status leg now names — all one-shot CLI-verb output on the stderr channel, the same detached-process decision as every sibling subcommand writer
         // C-EXT-6.b: the three prefixed reason strings of a refused hook-log
         // write (directory not private, symlinked leaf, throwing append). All
         // three ride RuntimeNoticeSink::warn() behind a once-per-process latch
@@ -1189,7 +1189,7 @@ final class StderrEmitterCensusTest extends TestCase
         'thirty-seven' => 37, 'thirty-eight' => 38, 'thirty-nine' => 39, 'forty' => 40,
         'forty-one' => 41, 'forty-two' => 42, 'forty-three' => 43, 'forty-four' => 44, 'forty-five' => 45,
         'forty-six' => 46, 'forty-seven' => 47, 'forty-eight' => 48, 'forty-nine' => 49,
-        'fifty' => 50, 'fifty-one' => 51, 'fifty-two' => 52, 'fifty-three' => 53, 'fifty-four' => 54, 'fifty-five' => 55, 'fifty-six' => 56, 'fifty-seven' => 57,
+        'fifty' => 50, 'fifty-one' => 51, 'fifty-two' => 52, 'fifty-three' => 53, 'fifty-four' => 54, 'fifty-five' => 55, 'fifty-six' => 56, 'fifty-seven' => 57, 'fifty-eight' => 58, 'fifty-nine' => 59,
     ];
 
     public function testTheDirectFwriteStderrRosterIsUnchanged(): void
@@ -1735,6 +1735,9 @@ final class StderrEmitterCensusTest extends TestCase
         // root when no session pool was injected. That is the stage twin of
         // LaunchContext's per-session site, and it is why the seam must stay
         // live from the pool too.
+        // RS-AGENT-A5 (wf/a5): +WorktreeHandoff — the `agents handoff` report
+        // builds one per invocation to read the registry (branchOf and the
+        // path/dirty probes); it never creates, removes, or releases a worktree.
         self::assertSame(
             // W5-C (v4:F5): the runner's path changed, so ksort() lands it first.
             // W7-E (2026-10-21, S1b composition split): tools()'s body — the
@@ -1742,7 +1745,7 @@ final class StderrEmitterCensusTest extends TestCase
             // LaunchContext, so the construction site lands there now; the
             // Bootstrap::tools() public delegate keeps the doc-blocks' claim
             // about which door builds it true.
-            ['src/Agents/EngineExecutor.php' => 1, 'src/Background/BackgroundSessionRunner.php' => 1, 'src/Cli/LaunchContext.php' => 1, 'src/Cli/MainWorktree.php' => 4, 'src/Host/Commands/BackgroundCommand.php' => 1],
+            ['src/Agents/EngineExecutor.php' => 1, 'src/Agents/WorktreeHandoff.php' => 1, 'src/Background/BackgroundSessionRunner.php' => 1, 'src/Cli/LaunchContext.php' => 1, 'src/Cli/MainWorktree.php' => 4, 'src/Host/Commands/BackgroundCommand.php' => 1],
             $built,
             'the set of files that construct — or statically call — a WorktreeManager moved. Its five '
                 . 'seam sites fire wherever it is built: re-read WorktreeManager\'s class doc-block (which '

@@ -5,14 +5,21 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Agents;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\AgentMentions;
+use SugarCraft\Code\Providers\ProviderInterface;
+use SugarCraft\Code\Skills\SkillRegistry;
+use SugarCraft\Code\Tests\Support\RosterAgent;
 
 /**
  * Polarity table of the line-initial address door (RS-AGENT-C2): which
  * typed lines become '@agent:<name>' rewrites and which travel byte-
  * identical — the whole feature is this table, and every cell is pinned
  * from both sides (rewrite fires ONLY for addresses, prose survives EVERY
- * non-address shape the grammar could misfire on).
+ * non-address shape the grammar could misfire on). The two manager-wired
+ * doors at the tail (draftThrough/refusalThrough — mention-r3 NIT-1)
+ * pin the roster closure those doors build over a live AgentManager, the
+ * shape Chat::userTurnMessage() actually calls.
  */
 final class AgentMentionsTest extends TestCase
 {
@@ -244,5 +251,74 @@ final class AgentMentionsTest extends TestCase
         // rewrite ever fires is column zero; 'as@coder' would be rewritten by
         // a door that lost the '^@' anchor.
         self::assertNull(AgentMentions::draft('as@coder hi', self::roster('coder')));
+    }
+
+    /**
+     * draftThrough() (mention-r3 NIT-1): the manager-wired rewrite door.
+     * Every row above drives draft() with a hand-built closure; this pins
+     * the closure the door BUILDS over a live AgentManager — roster from
+     * get(), and the no-manager door that leaves bare '@' names as prose.
+     */
+    public function testDraftThroughRoutesTheLiveManagerRoster(): void
+    {
+        $manager = $this->managerHolding('coder');
+
+        // Held name: rewritten exactly as the closure-side rows spell it.
+        self::assertSame('@agent:coder fix X', AgentMentions::draftThrough($manager, '@coder fix X'));
+        // Not held: this door stays silent — refusalThrough() beside it
+        // owns the unknown-name answer, and a line cannot get both.
+        self::assertNull(AgentMentions::draftThrough($manager, '@ghost fix X'));
+        // Byte-exact lookup rides through the manager: get() is case-
+        // sensitive, so a capitalised near-miss is not an address either.
+        self::assertNull(AgentMentions::draftThrough($manager, '@Coder fix X'));
+        // No manager at all: nothing to delegate TO, every '@' is prose.
+        self::assertNull(AgentMentions::draftThrough(null, '@coder fix X'));
+    }
+
+    /**
+     * refusalThrough() (mention-r3 NIT-1): the refusal behind that door,
+     * pinned verbatim for both roster shapes (names-the-agents tail and
+     * the empty-roster admission), plus the three shapes that must cost
+     * NO notice: a held name, a reserved keyword head, and no manager.
+     */
+    public function testRefusalThroughAnswersTheUnknownAddressBesideTheDraftDoor(): void
+    {
+        $manager = $this->managerHolding('coder', 'researcher');
+
+        self::assertSame(
+            '@ghost reads like an agent address, and this run holds no agent named "ghost" '
+            . "— the line was not delegated and no turn was sent. The agents here are: coder, researcher. "
+            . 'A name the roster holds delegates from the front of the line; put any '
+            . "character in front of this one (a backslash works) and it travels to "
+            . 'the model as the plain prose it is.',
+            AgentMentions::refusalThrough($manager, '@ghost fix X'),
+        );
+        // Empty roster: the refusal admits there is nobody, naming none.
+        self::assertStringContainsString(
+            'This run has no agents to delegate to at all.',
+            AgentMentions::refusalThrough($this->managerHolding(), '@ghost fix X') ?? '',
+        );
+        // A HELD name never refuses — draft() owns that answer.
+        self::assertNull(AgentMentions::refusalThrough($manager, '@coder fix X'));
+        // A reserved keyword head keeps its channel meaning whatever the
+        // roster says: the keyword leg answers for it, not this door.
+        self::assertNull(AgentMentions::refusalThrough($manager, '@agent:ghost fix X'));
+        // No manager: with no roster to name, '@anything' stays prose.
+        self::assertNull(AgentMentions::refusalThrough(null, '@ghost fix X'));
+    }
+
+    /** A live manager whose roster holds exactly $names. */
+    private function managerHolding(string ...$names): AgentManager
+    {
+        $manager = new AgentManager(
+            $this->createMock(ProviderInterface::class),
+            new SkillRegistry(),
+        );
+
+        foreach ($names as $name) {
+            $manager->register(RosterAgent::named($name));
+        }
+
+        return $manager;
     }
 }

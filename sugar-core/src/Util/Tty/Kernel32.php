@@ -89,10 +89,18 @@ typedef int           BOOL;
 
 HANDLE GetStdHandle(DWORD nStdHandle);
 
-BOOL GetConsoleMode(HANDLE h, DWORD *lpMode);
-BOOL SetConsoleMode(HANDLE h, DWORD dwMode);
+/*
+ * C5: handle-taking parameters are declared long long, not HANDLE. A
+ * Windows HANDLE is a pointer-width integer, so an int64 parameter
+ * crosses libffi as the plain value. The previous shape — passing
+ * cast('void*', an int-valued CData) to a void* parameter — faults
+ * natively (CI Windows legs died mid-suite, exit 1, no PHP output) and
+ * writing its ->cdata throws on PHP 8.3. Do not reintroduce it.
+ */
+BOOL GetConsoleMode(long long h, DWORD *lpMode);
+BOOL SetConsoleMode(long long h, DWORD dwMode);
 
-BOOL GetConsoleScreenBufferInfo(HANDLE h, void *lpInfo);
+BOOL GetConsoleScreenBufferInfo(long long h, void *lpInfo);
 
 BOOL SetConsoleCP(UINT wCodePageID);
 BOOL SetConsoleOutputCP(UINT wCodePageID);
@@ -101,19 +109,25 @@ UINT GetConsoleOutputCP(void);
 
 BOOL SetConsoleCtrlHandler(void *HandlerRoutine, BOOL Add);
 
-HANDLE CreateFileW(const wchar_t *lpFileName, DWORD dwDesiredAccess,
+/* WHY `unsigned short` instead of `wchar_t`: the FFI parser on Windows
+   PHP builds does not predefine the wchar_t typedef — CI on PHP 8.3.36
+   threw 'Undefined C type "wchar_t"' at this line before a single
+   kernel32 symbol was reached. `unsigned short` is grammar-level, and
+   Windows wchar_t is exactly 16 bits, so the parameter type agrees with
+   the "unsigned short[]" buffer toWideString() allocates by construction. */
+HANDLE CreateFileW(const unsigned short *lpFileName, DWORD dwDesiredAccess,
                    DWORD dwShareMode, void *lpSecurityAttributes,
                    DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes,
                    HANDLE hTemplateFile);
 
-BOOL CloseHandle(HANDLE h);
+BOOL CloseHandle(long long h);
 DWORD GetLastError(void);
 
-DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds);
+DWORD WaitForSingleObject(long long hHandle, DWORD dwMilliseconds);
 
-BOOL PeekConsoleInputW(HANDLE hConsoleInput, void *lpBuffer,
+BOOL PeekConsoleInputW(long long hConsoleInput, void *lpBuffer,
                        DWORD nLength, DWORD *lpNumberOfEventsRead);
-BOOL ReadConsoleInputW(HANDLE hConsoleInput, void *lpBuffer,
+BOOL ReadConsoleInputW(long long hConsoleInput, void *lpBuffer,
                        DWORD nLength, DWORD *lpNumberOfEventsRead);
 
 typedef struct _INPUT_RECORD {
@@ -146,7 +160,18 @@ CPROTO
     public function getStdHandle(int $nStdHandle): int
     {
         $stdHandle = $this->ffi()->new('unsigned long');
-        \FFI::memcpy($stdHandle, [$nStdHandle], 4);
+        // WHY not \FFI::memcpy($stdHandle, [$nStdHandle], 4): a PHP array is
+        // not an accepted source on ANY shipped PHP — CI on both Windows
+        // runner minors (8.3.36 and 8.4) threw 'TypeError: FFI::memcpy():
+        // Argument #2 ($from) must be of type FFI\CData or string, array
+        // given'. Scalar CData assignment is the documented since-7.4 shape
+        // and stores with C wrap-around, so the negative pseudo-handle
+        // constants (-10/-11/-12) land in the DWORD as (HANDLE)-N's low-bit
+        // encoding exactly as the 4-byte copy intended. This DWORD value
+        // slot is the file's only remaining scalar-CData materialization;
+        // every handle-taking parameter is int64-declared (C5) and takes the
+        // plain int directly.
+        $stdHandle->cdata = $nStdHandle;
         $h = $this->ffi()->GetStdHandle($stdHandle);
 
         return (int) \FFI::cast('intptr_t', $h)->cdata;
@@ -167,8 +192,7 @@ CPROTO
      */
     public function waitForSingleObject(int $h, int $timeoutMs): int
     {
-        $handle = \FFI::cast('void*', \FFI::new('intptr_t'));
-        $handle->cdata = $h;
+        $handle = $h;
 
         return (int) $this->ffi()->WaitForSingleObject($handle, $timeoutMs);
     }
@@ -183,8 +207,7 @@ CPROTO
      */
     public function peekConsoleInput(int $h, array &$records, int $recordSize = 1): int|false
     {
-        $handle = \FFI::cast('void*', \FFI::new('intptr_t'));
-        $handle->cdata = $h;
+        $handle = $h;
 
         $buf = $this->ffi()->new("unsigned char[8][{$recordSize}]");
         $count = $this->ffi()->new('unsigned long');
@@ -219,8 +242,7 @@ CPROTO
      */
     public function readConsoleInput(int $h, int $recordSize = 1): array|false
     {
-        $handle = \FFI::cast('void*', \FFI::new('intptr_t'));
-        $handle->cdata = $h;
+        $handle = $h;
 
         $buf   = $this->ffi()->new("unsigned char[8][{$recordSize}]");
         $count = $this->ffi()->new('unsigned long');
@@ -265,16 +287,18 @@ CPROTO
 
     public function getConsoleMode(int $h): int|false
     {
-        // A-10: the handle MUST be materialized from $h before the call.
+        // A-10 + C5: the handle crosses as the plain $h value.
         // WHAT THIS USED TO SAY: nothing — the body silently passed a
         // freshly-zeroed intptr_t cast to void*, i.e. a NULL handle, so every
         // real call returned false (ERROR_INVALID_HANDLE) on Windows and
         // WindowsBackend's raw-mode saves captured mode 0 via `?? 0`, "saving"
         // a mode that would wipe ENABLE_PROCESSED_OUTPUT on restore.
-        // WHAT IS TRUE NOW: the same handle-spelling setConsoleMode() below
-        // already uses, which is the shape the live path requires.
-        $handle = \FFI::cast('void*', \FFI::new('intptr_t'));
-        $handle->cdata = $h;
+        // WHAT IS TRUE NOW (C5): the cdef declares this parameter `long long`,
+        // so the int passes straight through. A-10's cast-to-void*
+        // materialization was itself the faulting shape — passing that CData
+        // as the argument dies inside libffi on Windows (CI: silent
+        // mid-suite exit 1) and its ->cdata rejects int writes on PHP 8.3.
+        $handle = $h;
 
         $mode = $this->ffi()->new('unsigned long');
         $ok   = $this->ffi()->GetConsoleMode($handle, \FFI::addr($mode));
@@ -284,8 +308,7 @@ CPROTO
 
     public function setConsoleMode(int $h, int $dwMode): bool
     {
-        $handle = \FFI::cast('void*', \FFI::new('intptr_t'));
-        $handle->cdata = $h;
+        $handle = $h;
 
         return (bool) $this->ffi()->SetConsoleMode($handle, $dwMode);
     }
@@ -322,7 +345,7 @@ CPROTO
     {
         $info = $this->ffi()->new('unsigned char[24]');
         $ok   = $this->ffi()->GetConsoleScreenBufferInfo(
-            \FFI::cast('void*', \FFI::new('intptr_t')),
+            $h,
             \FFI::addr($info),
         );
 
@@ -375,8 +398,7 @@ CPROTO
 
     public function closeHandle(int $h): bool
     {
-        $handle = \FFI::cast('void*', \FFI::new('intptr_t'));
-        $handle->cdata = $h;
+        $handle = $h;
 
         return (bool) $this->ffi()->CloseHandle($handle);
     }
@@ -447,7 +469,9 @@ CPROTO
     // ─── Wide-string helper ──────────────────────────────────────────────────
 
     /**
-     * Convert a PHP string to a null-terminated UTF-16LE wchar_t array.
+     * Convert a PHP string to a null-terminated UTF-16LE array of 16-bit
+     * code units (unsigned short[] — the cdef spells CreateFileW's
+     * parameter that way because the Windows FFI parser has no wchar_t).
      *
      * WHAT THIS DOCBLOCK USED TO SAY: that the caller MUST free the
      * returned pointer via FFI::free(). WHAT IS TRUE: the opposite. The

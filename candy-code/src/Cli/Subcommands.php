@@ -147,6 +147,7 @@ final class Subcommands
             'import'     => self::importClaude($args),
             'completion' => self::completion($args),
             'usage'      => self::usage($args),
+            'workflow'   => self::workflow($args),
             // Unreachable: ArgvParser only ever stores a ParsedArgs::SUBCOMMANDS
             // member. Answered rather than asserted because the two lists
             // drifting apart must not be a PHP fatal on a user's terminal.
@@ -3068,6 +3069,29 @@ final class Subcommands
 
         return \str_repeat('█', $filled) . \str_repeat('░', $cells - $filled);
     }
+
+    /**
+     * Each `workflow` action and the {@see ParsedArgs::SUBCOMMAND_FLAGS} it
+     * accepts - the same verb-level door {@see self::GC_ACTION_FLAGS} is for
+     * `gc`. Only `run` takes `--param` (a fresh context); `resume` replays
+     * the paused run's recorded context and `status` answers from the pause
+     * records alone, so flags that would silently do nothing are refused.
+     *
+     * @var array<string, list<string>>
+     */
+    private const WORKFLOW_ACTION_FLAGS = [
+        'run'    => ['--param', '--format'],
+        'status' => ['--format'],
+        'resume' => ['--format'],
+    ];
+
+    /**
+     * W-1/D4 exit code: the run STOPPED for a person - a verification stage
+     * that escalated (the engine's ESCALATION_MARKER on the first failure's
+     * error), or a cooperative signal-pause completed by the W-2 observer.
+     * The table: 0 completed, 1 failed or refused, 2 usage, 3 stopped.
+     */
+    private const WORKFLOW_EXIT_STOPPED = 3;
 
     /**
      * Each `gc` action and the {@see ParsedArgs::SUBCOMMAND_FLAGS} it
@@ -6693,6 +6717,7 @@ final class Subcommands
         'serve' => 'cli.completion.verb.serve',
         'session' => 'cli.completion.verb.session',
         'usage' => 'cli.completion.verb.usage',
+        'workflow' => 'cli.completion.verb.workflow',
     ];
 
     /**
@@ -6714,6 +6739,8 @@ final class Subcommands
         'import' => ['claude'],
         'serve' => Serve::ACTIONS,
         'completion' => self::SHELLS,
+        // cc-eval w1b: the headless workflow verbs, in dispatch-arm order.
+        'workflow' => ['run', 'status', 'resume'],
     ];
 
     /**
@@ -6926,5 +6953,424 @@ final class Subcommands
         $lines[] = '';
 
         return \implode("\n", $lines);
+    }
+
+    /**
+     * `candy-code workflow run|status|resume <name|id>` - the native
+     * headless door onto the workflow engine (W-1). The engine runs on this
+     * process with NO chat session and no model in the loop for the
+     * dispatch itself, so a workflow can be executed and scripted directly.
+     * A signal-pause writes the engine's cooperative pause record and
+     * leaves through the W-2 observer at exit 3 with a valid machine
+     * document on stdout (D4).
+     */
+    private static function workflow(ParsedArgs $args): int
+    {
+        $verb = $args->subcommandArgs[0] ?? null;
+        if ($verb === null) {
+            return NonInteractive::failUsage('candy-code: ' . Lang::t('cli.workflow.no_action'), $args->outputFormat, self::workflowUsage());
+        }
+        if (!isset(self::WORKFLOW_ACTION_FLAGS[$verb])) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.workflow.unknown_action', ['action' => $verb]),
+                $args->outputFormat,
+                self::workflowUsage(),
+            );
+        }
+
+        foreach (\array_keys($args->subcommandFlags) as $flag) {
+            if (!\in_array($flag, self::WORKFLOW_ACTION_FLAGS[$verb], true)) {
+                return NonInteractive::failUsage(
+                    'candy-code: ' . Lang::t('cli.workflow.flag_does_not_apply', ['action' => $verb, 'flag' => $flag]),
+                    $args->outputFormat,
+                    Lang::t('cli.workflow.accepts', ['action' => $verb, 'flags' => \implode(', ', self::WORKFLOW_ACTION_FLAGS[$verb])]),
+                );
+            }
+        }
+
+        $spelled = isset($args->subcommandFlags['--format'])
+            ? (string) $args->subcommandFlags['--format']
+            : NonInteractive::FORMAT_TEXT;
+        if ($spelled !== NonInteractive::FORMAT_TEXT && $spelled !== NonInteractive::FORMAT_JSON) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.workflow.bad_format', ['format' => $spelled]),
+                $args->outputFormat,
+                self::workflowUsage(),
+            );
+        }
+        $asJson = $spelled === NonInteractive::FORMAT_JSON || $args->outputFormat === NonInteractive::FORMAT_JSON;
+
+        return match ($verb) {
+            'run' => self::workflowRun($args, $asJson),
+            'status' => self::workflowStatus($args, $asJson),
+            default => self::workflowResume($args, $asJson),
+        };
+    }
+
+    /**
+     * One line, for every `workflow` usage error - the gcUsage() shape.
+     */
+    private static function workflowUsage(): string
+    {
+        return Lang::t('cli.workflow.usage');
+    }
+
+    /**
+     * The engine for the verbs that DISPATCH (`run` and `resume`), with the
+     * launch's session backend bound.
+     *
+     * {@see Bootstrap::workflowEngine()} answers the same engine the TUI
+     * launches with, but the TUI's binding step runs inside `Chat`'s
+     * constructor - the headless verb has no Chat. Without this bind the
+     * pool forks a stage worker whose engine-backed executor holds no
+     * session engine, and every stage dies at the executor's "no session
+     * engine is bound" refusal without dispatching a single turn (the gap
+     * the E641 command-tier refusal used to mask one level earlier). The
+     * remedy is the step `Chat` already proves correct: hand the engine
+     * this launch's backend before dispatch, which {@see
+     * \SugarCraft\Code\Workflows\WorkflowEngine::bindEngineBackend()}
+     * applies to the pool's forking executor.
+     *
+     * A command-tier launch answers a {@see
+     * \SugarCraft\Code\Backend\CommandBackend}, the instanceof guard skips
+     * the bind, and the run fails closed at the refusing worker exactly as
+     * before - E663's posture, untouched here.
+     */
+    private static function workflowVerbEngine(?string $root): \SugarCraft\Code\Workflows\WorkflowEngine
+    {
+        $gate = Bootstrap::permissionGate();
+        $engine = Bootstrap::workflowEngine($root, $gate);
+        $backend = Bootstrap::backend($root, gate: $gate);
+        if ($backend instanceof \SugarCraft\Code\Backend\EngineBackend) {
+            $engine->bindEngineBackend($backend);
+        }
+
+        return $engine;
+    }
+
+    /**
+     * `workflow run <name> [--param k=v]...` - load by name or path through
+     * the shared engine and execute to completion here. Refusals (unknown
+     * name, malformed definition, permission door) pass the engine's raw
+     * English through untranslated - the law {@see self::gc()} follows for
+     * store errors too.
+     */
+    private static function workflowRun(ParsedArgs $args, bool $asJson): int
+    {
+        $name = $args->subcommandArgs[1] ?? null;
+        if ($name === null || $name === '') {
+            return NonInteractive::failUsage('candy-code: ' . Lang::t('cli.workflow.need_name'), $args->outputFormat, self::workflowUsage());
+        }
+
+        $pairsRaw = $args->subcommandFlags['--param'] ?? null;
+        [$context, $problems] = self::parseParamPairs(\is_string($pairsRaw) ? $pairsRaw : null);
+        if ($problems !== []) {
+            return NonInteractive::failUsage(
+                'candy-code: ' . Lang::t('cli.workflow.bad_param', ['problem' => $problems[0]]),
+                $args->outputFormat,
+                self::workflowUsage(),
+            );
+        }
+
+        $engine = self::workflowVerbEngine($args->root);
+        $engine->setSignalPauseHandler(
+            static fn (\SugarCraft\Code\Workflows\WorkflowResult $partial, ?string $pausePath): int
+                => self::workflowSignalPause($asJson, 'run', $partial, $pausePath),
+        );
+
+        try {
+            $result = $engine->run($name, $context);
+        } catch (\Throwable $e) {
+            return self::workflowRefused($asJson, 'run', $name, $e->getMessage());
+        }
+
+        return self::workflowReport($asJson, 'run', $name, $result);
+    }
+
+    /**
+     * `workflow status <name>` - the engine's own lookup (live runs,
+     * remembered results, then pause records). Never dials a model.
+     */
+    private static function workflowStatus(ParsedArgs $args, bool $asJson): int
+    {
+        $name = $args->subcommandArgs[1] ?? null;
+        if ($name === null || $name === '') {
+            return NonInteractive::failUsage('candy-code: ' . Lang::t('cli.workflow.need_name'), $args->outputFormat, self::workflowUsage());
+        }
+
+        $engine = Bootstrap::workflowEngine($args->root, Bootstrap::permissionGate());
+        try {
+            $status = $engine->status($name);
+        } catch (\Throwable $e) {
+            return self::workflowRefused($asJson, 'status', $name, $e->getMessage());
+        }
+
+        if ($asJson) {
+            self::emitDocument([
+                'verb'   => 'workflow',
+                'action' => 'status',
+                'result' => ['workflow' => $name, 'status' => $status->value, 'session_id' => null],
+            ]);
+
+            return NonInteractive::EXIT_OK;
+        }
+
+        echo 'candy-code workflow status: ', $name, ' - ', $status->value, \PHP_EOL;
+
+        return NonInteractive::EXIT_OK;
+    }
+
+    /**
+     * `workflow resume <id>` - replays the recorded context from the pause
+     * file; the engine refuses records that are live in another process and
+     * this verb passes that refusal through as a failure (exit 1).
+     */
+    private static function workflowResume(ParsedArgs $args, bool $asJson): int
+    {
+        $id = $args->subcommandArgs[1] ?? null;
+        if ($id === null || $id === '') {
+            return NonInteractive::failUsage('candy-code: ' . Lang::t('cli.workflow.need_id'), $args->outputFormat, self::workflowUsage());
+        }
+
+        $engine = self::workflowVerbEngine($args->root);
+        $engine->setSignalPauseHandler(
+            static fn (\SugarCraft\Code\Workflows\WorkflowResult $partial, ?string $pausePath): int
+                => self::workflowSignalPause($asJson, 'resume', $partial, $pausePath),
+        );
+
+        try {
+            $result = $engine->resume($id);
+        } catch (\Throwable $e) {
+            return self::workflowRefused($asJson, 'resume', $id, $e->getMessage());
+        }
+
+        return self::workflowReport($asJson, 'resume', $id, $result);
+    }
+
+    /**
+     * The W-2/D4 observer: reached only AFTER the engine wrote the
+     * cooperative pause record. Emit the stopped run's document (or the
+     * text line on STDERR), then let the process exit 3 - the CLI's answer
+     * to the raw 130/143 a TUI session still takes.
+     */
+    private static function workflowSignalPause(
+        bool $asJson,
+        string $action,
+        \SugarCraft\Code\Workflows\WorkflowResult $partial,
+        ?string $pausePath,
+    ): int {
+        if ($asJson) {
+            $doc = self::workflowResultDoc($partial->workflowId, $partial);
+            $doc['status'] = 'paused';
+            $doc['pause_file'] = $pausePath;
+            self::emitDocument(['verb' => 'workflow', 'action' => $action, 'result' => $doc]);
+        } else {
+            fwrite(\STDERR, 'candy-code: ' . Lang::t('cli.workflow.paused', ['id' => $partial->workflowId]) . \PHP_EOL);
+        }
+
+        return self::WORKFLOW_EXIT_STOPPED;
+    }
+
+    /**
+     * Text/JSON report of a finished, failed or escalated run, with its D4
+     * exit code.
+     */
+    private static function workflowReport(
+        bool $asJson,
+        string $action,
+        string $name,
+        \SugarCraft\Code\Workflows\WorkflowResult $result,
+    ): int {
+        $exit = self::workflowExitCode($result);
+
+        if ($asJson) {
+            self::emitDocument([
+                'verb'   => 'workflow',
+                'action' => $action,
+                'result' => self::workflowResultDoc($name, $result),
+            ]);
+
+            return $exit;
+        }
+
+        echo 'candy-code workflow ', $action, ': ', $name, ' - ', $result->status->value,
+            ' (', \count($result->stageResults), ' stages)', \PHP_EOL;
+        foreach ($result->stageResults as $stage) {
+            echo '  ', $stage->stageName, ': ', $stage->status->value, \PHP_EOL;
+        }
+        $failure = $result->firstFailure();
+        if ($failure !== null && $failure->error !== null) {
+            echo '  error: ', $failure->error, \PHP_EOL;
+        }
+
+        return $exit;
+    }
+
+    /**
+     * D4 exit mapping. An escalated verification rides the Failed channel
+     * with the engine's ESCALATION_MARKER prefix on the first failure's
+     * error - the one stop-mode that is NOT a workflow defect: a person
+     * answers and resumes, so it exits 3, not 1.
+     */
+    private static function workflowExitCode(\SugarCraft\Code\Workflows\WorkflowResult $result): int
+    {
+        if ($result->isSuccess()) {
+            return NonInteractive::EXIT_OK;
+        }
+
+        $failure = $result->firstFailure();
+        if ($failure !== null
+            && \str_starts_with((string) $failure->error, \SugarCraft\Code\Workflows\WorkflowEngine::ESCALATION_MARKER)) {
+            return self::WORKFLOW_EXIT_STOPPED;
+        }
+
+        return NonInteractive::EXIT_FAILURE;
+    }
+
+    /**
+     * The machine document's result body: stage rows (name, status, output,
+     * error, agent-attempt count), totals, and session_id - null, because
+     * the native verb mints NO chat session; it is the engine directly
+     * (the key ships for schema stability; disclosed seam).
+     *
+     * @return array<string, mixed>
+     */
+    private static function workflowResultDoc(
+        string $name,
+        \SugarCraft\Code\Workflows\WorkflowResult $result,
+    ): array {
+        $rows = [];
+        foreach ($result->stageResults as $stage) {
+            $rows[] = [
+                'name'     => $stage->stageName,
+                'status'   => $stage->status->value,
+                'output'   => $stage->output,
+                'error'    => $stage->error,
+                'attempts' => \count($stage->agents),
+            ];
+        }
+
+        return [
+            'workflow'   => $name,
+            'status'     => $result->status->value,
+            'stages'     => $rows,
+            'totals'     => [
+                'tokens'      => $result->totalTokens,
+                'cost'        => $result->totalCost,
+                'duration_ms' => $result->totalDurationMs(),
+            ],
+            'session_id' => null,
+        ];
+    }
+
+    /**
+     * The refusal surface: engine/registry raw English passes through
+     * untranslated (law), JSON under the schema envelope with status
+     * 'refused', text on STDERR - exit 1, never a silent 0.
+     */
+    private static function workflowRefused(bool $asJson, string $action, string $name, string $message): int
+    {
+        if ($asJson) {
+            self::emitDocument([
+                'verb'   => 'workflow',
+                'action' => $action,
+                'result' => [
+                    'workflow'   => $name,
+                    'status'     => 'refused',
+                    'refusal'    => $message,
+                    'stages'     => [],
+                    'totals'     => ['tokens' => 0, 'cost' => 0.0, 'duration_ms' => 0],
+                    'session_id' => null,
+                ],
+            ]);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        fwrite(\STDERR, 'candy-code: workflow ' . $action . ': ' . $message . \PHP_EOL);
+
+        return NonInteractive::EXIT_FAILURE;
+    }
+
+    /**
+     * Split the comma-JOINED `--param` payload ArgvParser assembled from
+     * repeated flags ('a=1,b="x,y"') into context pairs, honouring quoted
+     * spans: a comma inside quotes is DATA, not a separator (the gc
+     * `--session` list needs no quoting; parameters do, because prompt
+     * contexts carry prose). Validation mirrors the TUI slash tokenizer's
+     * rules: k=v shape, non-empty key, no '@' keys - the engine's
+     * reserved-context law. Returns [pairs, problems]; problems are
+     * human-readable, and the first one fails usage.
+     *
+     * @return array{0: array<string, string>, 1: list<string>}
+     */
+    private static function parseParamPairs(?string $raw): array
+    {
+        if ($raw === null || $raw === '') {
+            return [[], []];
+        }
+
+        $segments = [];
+        $buffer = '';
+        $quote = null;
+        $length = \strlen($raw);
+        for ($i = 0; $i < $length; ++$i) {
+            $char = $raw[$i];
+            if ($quote !== null) {
+                $buffer .= $char;
+                if ($char === $quote) {
+                    $quote = null;
+                }
+                continue;
+            }
+            if ($char === '"' || $char === "'") {
+                $quote = $char;
+                $buffer .= $char;
+                continue;
+            }
+            if ($char === ',') {
+                $segments[] = $buffer;
+                $buffer = '';
+                continue;
+            }
+            $buffer .= $char;
+        }
+
+        if ($quote !== null) {
+            return [[], ['unterminated quote in `' . $buffer . '`']];
+        }
+        $segments[] = $buffer;
+
+        $pairs = [];
+        $problems = [];
+        foreach ($segments as $segment) {
+            $segment = \trim($segment);
+            if ($segment === '') {
+                continue;
+            }
+            $equals = \strpos($segment, '=');
+            if ($equals === false) {
+                $problems[] = 'expected key=value, got `' . $segment . '`';
+                continue;
+            }
+            $key = \substr($segment, 0, $equals);
+            $value = \substr($segment, $equals + 1);
+            if ($key === '') {
+                $problems[] = 'empty key in `' . $segment . '`';
+                continue;
+            }
+            if (\str_starts_with($key, '@')) {
+                $problems[] = 'reserved key `' . $key . '` - @-prefixed context belongs to the engine';
+                continue;
+            }
+            if (\strlen($value) >= 2
+                && (($value[0] === '"' && \substr($value, -1) === '"')
+                    || ($value[0] === "'" && \substr($value, -1) === "'"))) {
+                $value = \substr($value, 1, -1);
+            }
+            $pairs[$key] = $value;
+        }
+
+        return [$pairs, $problems];
     }
 }

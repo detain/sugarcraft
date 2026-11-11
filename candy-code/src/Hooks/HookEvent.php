@@ -23,6 +23,9 @@ namespace SugarCraft\Code\Hooks;
  *   - PreCompact: the compaction is skipped; stderr only reaches the user (no agent turn to feed)
  *   - PostCompact/SessionStart: stderr only reaches the user (no agent action possible)
  *   - UserPromptSubmit: discards prompt entirely, nothing goes to the agent
+ *   - StageStarted/StageComplete/StageFail/WorkflowComplete: observe-only —
+ *     no consumer of the engine's dispatch acts on the verdict, so no exit
+ *     code changes the run (see the case docblocks below)
  *
  * @see https://github.com/charmbracelet/sugar-craft/blob/master/docs/hooks.md
  */
@@ -72,6 +75,46 @@ enum HookEvent: string
     case TeammateIdle = 'TeammateIdle';
     case TaskCreated = 'TaskCreated';
     case TaskCompleted = 'TaskCompleted';
+
+    /**
+     * Fires before the engine dispatches one round of one workflow stage
+     * (C6). Payload: `toolArgs`/`toolInput` JSON `{"workflow", "stage",
+     * "round"}` — `round` counts from 1 and is always 1 for a stage without
+     * a `loop:` clause. Observe-only: no consumer reads the verdict, so no
+     * exit code stops the dispatch ({@see WorkflowEngine::announceStageStarted()}).
+     */
+    case StageStarted = 'StageStarted';
+
+    /**
+     * Fires after a workflow stage settled WITHOUT failing (C6) — the same
+     * event covers both verdicts, and `{"workflow", "stage", "status",
+     * "round"}` carries the distinction in `status` (`completed` for a
+     * dispatched stage, `skipped` for a `when:` clause that declined it).
+     * A skipped stage raises ONLY this event: its round never reached a
+     * dispatch, so no `StageStarted` precedes it and `round` is 0 — the
+     * marker for "no round ever ran". Observe-only.
+     */
+    case StageComplete = 'StageComplete';
+
+    /**
+     * Fires after a workflow stage settled as a failure (C6) — the engine's
+     * own fail-fast predicate (`StageResult::isFailure()`) is the sole
+     * trigger, so a stage that ends the run Failed gets exactly this event
+     * and not `StageComplete`. Payload adds `"error"`. Observe-only: the
+     * stage already settled; a block cannot undo it.
+     */
+    case StageFail = 'StageFail';
+
+    /**
+     * Fires once per run when a workflow reached a NATURAL terminal (C6):
+     * status `completed` or `failed` (including a pre-flight refusal, which
+     * is a terminal failure that dispatched nothing). `Paused` and
+     * `Cancelled` runs deliberately raise nothing — they are resumable, and
+     * announcing here would double-count the completion when the resumed
+     * run finishes. Payload: `{"workflow", "status", "totalTokens",
+     * "totalCost", "stages"}`. Observe-only.
+     */
+    case WorkflowComplete = 'WorkflowComplete';
 
     /**
      * Returns true if exit code 2 (block) on this event stops the action outright.

@@ -87,7 +87,8 @@ final class MigrateFormatRefusalTest extends TestCase
     }
 
     /**
-     * @param array{0:string, 1:string} $pair
+     * @param string $name fixture file name whose extension must be refused
+     * @param string $kind upstream format label the refusal message must name
      * @dataProvider refusedExtensions
      */
     public function testForeignFormatInputIsNamedAndRefused(string $name, string $kind): void

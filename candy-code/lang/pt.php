@@ -216,6 +216,7 @@ return [
     'cli.completion.verb.serve' => 'Executar o servidor WebSocket para a interface web',
     'cli.completion.verb.session' => 'Gerir sessões armazenadas',
     'cli.completion.verb.usage' => 'Agrupar o registo de despesas por dia e modelo',
+    'cli.completion.verb.workflow' => 'Execute um fluxo guardado sem interface, informe o seu estado ou retome uma execução pausada',
     'cli.completion.verb_argument' => 'argumento {verb}',
     'cli.doctor.absent' => 'ausente',
     'cli.doctor.bundles_dark' => 'nenhum canal de bundle confiável — a superfície /channels/ permanece apagada',
@@ -592,6 +593,8 @@ de um servidor em execução; acp executa turnos para um editor, até este se de
                          página foi construída. Um livro-razão ilegível indica
                          o motivo e termina com 1; os dólares de agregações
                          com modelo sem preço: ≥ limite inferior, nunca soma simples.
+  workflow run|status|resume [NAME] [--param k=v] [--format=json]
+                         executa fluxos sem o modelo, lê o estado, retoma os pausados
 
 Opções:
   -p, --prompt <text>    Fornece um prompt na linha de comandos (modo de execução única)
@@ -619,6 +622,12 @@ Opções:
                          fornecedor — o fornecedor vem de $CANDY_CODE_PROVIDER ou
                          da definição `provider` persistida, e os dois são
                          eixos independentes.
+      --agent <name>     Executa a sessão com <name> como agente primário:
+                         troca por um preset configurado. Aceita também
+                         --agent=<name>; a forma simples é rigorosa, pelo que
+                         é a forma para nomes que começam com "-". Recusado
+                         com exit 2 junto de -p, --batch ou um subcomando:
+                         nenhum deles constrói sessão para restringir.
       --permission-mode <mode>
                          Executa com <mode> em vez do modo no ficheiro de
                          configuração. Aceita também --permission-mode=<mode>.
@@ -670,6 +679,13 @@ Opções:
                          Apenas com -p ou o verbo run: um arranque sem
                          prompt para anexar recusa com saída 2 em vez de
                          ignorar silenciosamente as regras fornecidas.
+      --batch            Executa cada evento de utilizador stream-json de
+                         --input-format como turno próprio e sequencial neste
+                         único processo, e permite um -p vazio: o modo
+                         controlador para fornecer a candy-code uma
+                         conversa turno a turno. Interruptor simples: sem
+                         valor, sem forma curta. Recusado com exit 2 salvo
+                         se o formato de entrada for stream-json.
   -c, --continue         Reabrir a sessão mais recentemente utilizada, transcrição
                          incluída, em vez de iniciar uma nova. Sem esta opção
                          cada arranque abre uma nova sessão; Up numa caixa
@@ -1427,6 +1443,16 @@ TXT,
     'cli.warn.untrusted_mcp' => 'nenhuma configuração MCP do projeto foi considerada confiável',
     'cli.warn.untrusted_settings' => 'nenhum ficheiro de definições do projeto pode contribuir com uma definição',
     'cli.warn.untrusted_prompt_shell' => 'nenhum corpo de prompt MCP pode executar uma shell',
+    'cli.workflow.accepts' => 'workflow {action} aceita: {flags}',
+    'cli.workflow.bad_format' => 'workflow --format espera text ou json, recebido {format}',
+    'cli.workflow.bad_param' => 'workflow --param: {problem}',
+    'cli.workflow.flag_does_not_apply' => 'a opção {flag} não se aplica a workflow {action}',
+    'cli.workflow.need_id' => 'workflow resume precisa de um id de fluxo pausado',
+    'cli.workflow.need_name' => 'workflow run precisa de um nome de fluxo',
+    'cli.workflow.no_action' => 'workflow: nenhuma ação indicada',
+    'cli.workflow.paused' => 'fluxo {id} pausado por sinal - retome com `candy-code workflow resume {id}`',
+    'cli.workflow.unknown_action' => 'workflow: ação desconhecida: {action}',
+    'cli.workflow.usage' => 'Uso: candy-code workflow run <nome> [--param k=v ...] [--format text|json] | status <nome> [--format text|json] | resume <id> [--format text|json]',
     'cli.worktree.bad_name' => '--worktree {name}: o nome de um worktree deve começar por uma letra ou dígito e conter apenas letras, dígitos, ".", "-" e "_"',
     'cli.worktree.kept_announce' => 'candy-code: worktree {path} mantido no local — o seu branch {branch} contém trabalho próprio ou foi nomeado; reabra-o com `candy-code --worktree {name}`',
     'cli.worktree.not_git' => '--worktree necessita de um git work tree; {path} não está dentro de um',

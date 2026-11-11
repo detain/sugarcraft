@@ -414,12 +414,26 @@ final class DatePickerStyleTest extends TestCase
         // Output contract locking the post-fix guarantee for future machines
         // whose grapheme splitter surfaces the raw bytes: every hostile cluster
         // collapses to nothing while the surrounding letters stay adjacent.
+        //
+        // The 'malformed 2-byte' probe deliberately ends in a CONTROL byte.
+        // It previously ended in '(' (0xC3 0x28), and the two splitters
+        // disagree on that string: mb_str_split (the PHP < 8.4 path, no
+        // grapheme_str_split) greedily groups a structurally-valid lead with
+        // its declared byte-count, so 0xC3 0x28 arrived as ONE undecodable
+        // cluster and the '(' fell with it; grapheme_str_split (PHP 8.4)
+        // segments invalid bytes singly, and '(' is a perfectly printable
+        // character the fail-closed guard has no licence to swallow — 8.4
+        // legs pinned 'A(B'. Neither outcome smuggles a control byte, so the
+        // pinned contract is stated where both machines agree: a malformed
+        // lead consumes no column AND its control tail is never placed, plus
+        // the splitter-independent invariant that no placed rune is ever a
+        // control, DEL, C1, or undecodable byte.
         $probes = [
             'C0 tab' => "A\tB",
             'DEL' => "A\x7fB",
             'C1 CSI' => "A\x9bB",
             'C1 NEL' => "A\x85B",
-            'malformed 2-byte' => "A\xC3\x28B",
+            'malformed 2-byte' => "A\xC3\x07B",
             'malformed ESC tail' => "A\xC2\x1bB",
             'overlong ESC' => "A\xF0\xF0\xF0\x1bB",
             'BOM mid-string' => "A\xEF\xBB\xBFB",
@@ -428,7 +442,13 @@ final class DatePickerStyleTest extends TestCase
             $buffer = $this->invokePlaceStringAt(Buffer::new(10, 1), 0, 0, $probe, null);
             $text = '';
             for ($x = 0; $x < 10; $x++) {
-                $text .= $buffer->cellAt($x, 0)->rune();
+                $rune = $buffer->cellAt($x, 0)->rune();
+                $ord = \mb_ord($rune, 'UTF-8');
+                $this->assertTrue(
+                    $ord !== false && !($ord < 0x20 || $ord === 0x7f || ($ord >= 0x80 && $ord <= 0x9f)),
+                    $name . ': a placed rune must never be a control, DEL, C1, or undecodable byte',
+                );
+                $text .= $rune;
             }
             $this->assertSame('AB' . \str_repeat(' ', 8), $text,
                 $name . ': control bytes must consume no column');

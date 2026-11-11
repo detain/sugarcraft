@@ -12,31 +12,123 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-fuzzy.html">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
 <link rel="icon" type="image/png" href="../img/icons/sugar-fuzzy.png">
 <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="../css/search.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner">
-    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<!--nav:start-->
+<nav class="nav" aria-label="Main navigation"><div class="nav-inner">
+    <a class="brand" href="/"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
     <div class="nav-links">
         <button id="search-trigger" class="search-trigger" type="button" aria-haspopup="dialog">
             <svg class="search-trigger-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <span>Search</span>
         </button>
-        <a href="../#libraries">Libraries</a>
-        <a href="../#apps">Apps</a>
-        <a href="../#demos">Demos</a>
-        <a href="../#quickstart">Quickstart</a>
-        <a href="../compare.html">Compare</a>
-        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a>
+        <ul class="nav-items">
+            <li class="nav-item"><a href="/">Home</a></li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Libraries <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/libraries.html">All libraries →</a>
+                    <a href="/lib/sugar-core.html">sugar-core</a>
+                    <a href="/lib/sugar-style.html">sugar-style</a>
+                    <a href="/lib/sugar-cellbuffer.html">sugar-cellbuffer</a>
+                    <a href="/lib/sugar-async.html">sugar-async</a>
+                    <a href="/lib/sugar-spring.html">sugar-spring</a>
+                    <a href="/lib/sugar-mouse.html">sugar-mouse</a>
+                    <a href="/lib/sugar-widgets.html">sugar-widgets</a>
+                    <a href="/lib/sugar-charts.html">sugar-charts</a>
+                    <a href="/lib/sugar-forms.html">sugar-forms</a>
+                    <a href="/lib/sugar-markdown.html">sugar-markdown</a>
+                    <a href="/lib/sugar-cli.html">sugar-cli</a>
+                    <a href="/lib/sugar-ssh-server.html">sugar-ssh-server</a>
+                    <a href="/lib/sugar-metrics.html">sugar-metrics</a>
+                    <a href="/lib/sugar-log.html">sugar-log</a>
+                    <a href="/lib/sugar-image.html">sugar-image</a>
+                    <a href="/lib/sugar-animation.html">sugar-animation</a>
+                    <a href="/lib/sugar-video.html">sugar-video</a>
+                    <a href="/lib/sugar-colorprofile.html">sugar-colorprofile</a>
+                    <a href="/lib/sugar-ansi-parser.html">sugar-ansi-parser</a>
+                    <a href="/lib/sugar-vterm.html">sugar-vterm</a>
+                    <a href="/lib/sugar-pty.html">sugar-pty</a>
+                    <a href="/lib/sugar-focus.html">sugar-focus</a>
+                    <a href="/lib/sugar-gallery.html">sugar-gallery</a>
+                    <a href="/lib/sugar-treelist.html">sugar-treelist</a>
+                    <a href="/lib/sugar-constraints.html">sugar-constraints</a>
+                    <a href="/lib/sugar-panels.html">sugar-panels</a>
+                    <a href="/lib/sugar-overlay.html">sugar-overlay</a>
+                    <a href="/lib/sugar-navstack.html">sugar-navstack</a>
+                    <a href="/lib/sugar-dashboard.html">sugar-dashboard</a>
+                    <a href="/lib/sugar-quickpick.html">sugar-quickpick</a>
+                    <a href="/lib/sugar-input.html">sugar-input</a>
+                    <a href="/lib/sugar-fuzzy.html">sugar-fuzzy</a>
+                    <a href="/lib/sugar-flexbox.html">sugar-flexbox</a>
+                    <a href="/lib/sugar-toast.html">sugar-toast</a>
+                    <a href="/lib/sugar-datepicker.html">sugar-datepicker</a>
+                    <a href="/lib/sugar-readline.html">sugar-readline</a>
+                    <a href="/lib/sugar-table.html">sugar-table</a>
+                    <a href="/lib/sugar-diff.html">sugar-diff</a>
+                    <a href="/lib/sugar-mcp-client.html">sugar-mcp-client</a>
+                    <a href="/lib/sugar-testing.html">sugar-testing</a>
+                </div>
+            </li>
+            <li class="nav-item">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Apps <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop nav-drop-wide">
+                    <a class="nav-drop-all" href="/apps.html">All apps →</a>
+                    <a href="/lib/candy-starter.html">candy-starter</a>
+                    <a href="/lib/candy-scriptui.html">candy-scriptui</a>
+                    <a href="/lib/candy-codeshot.html">candy-codeshot</a>
+                    <a href="/lib/candy-mdview.html">candy-mdview</a>
+                    <a href="/lib/candy-ansi-inspect.html">candy-ansi-inspect</a>
+                    <a href="/lib/candy-ssh-launcher.html">candy-ssh-launcher</a>
+                    <a href="/lib/candy-kv.html">candy-kv</a>
+                    <a href="/lib/candy-mail.html">candy-mail</a>
+                    <a href="/lib/candy-git-server.html">candy-git-server</a>
+                    <a href="/lib/candy-tetris.html">candy-tetris</a>
+                    <a href="/lib/candy-files.html">candy-files</a>
+                    <a href="/lib/candy-code.html">candy-code</a>
+                    <a href="/lib/candy-code-web.html">candy-code-web</a>
+                    <a href="/lib/candy-vcr.html">candy-vcr</a>
+                    <a href="/lib/candy-git.html">candy-git</a>
+                    <a href="/lib/candy-sql.html">candy-sql</a>
+                    <a href="/lib/candy-codetime.html">candy-codetime</a>
+                    <a href="/lib/candy-minesweeper.html">candy-minesweeper</a>
+                    <a href="/lib/candy-gifview.html">candy-gifview</a>
+                    <a href="/lib/candy-image.html">candy-image</a>
+                    <a href="/lib/candy-top.html">candy-top</a>
+                    <a href="/lib/candy-flappy.html">candy-flappy</a>
+                </div>
+            </li>
+            <li class="nav-item nav-item-drop-right">
+                <button class="nav-drop-toggle" type="button" aria-haspopup="true" aria-expanded="false">Docs <span class="nav-caret" aria-hidden="true">▾</span></button>
+                <div class="nav-drop">
+                    <a href="/#architecture">Architecture</a>
+                    <a href="/#quickstart">Quickstart</a>
+                    <a href="/compare.html">Compare</a>
+                    <a href="/GETTING-STARTED.html">Getting Started</a>
+                    <a href="/GLOSSARY.html">Glossary</a>
+                    <a href="/KEYMAPS.html">Keymaps</a>
+                    <a href="/cookbook/index.html">Cookbook</a>
+                </div>
+            </li>
+            <li class="nav-item"><a href="/#demos">Demos</a></li>
+            <li class="nav-item"><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub <span aria-hidden="true">→</span></a></li>
+        </ul>
     </div>
 </div></nav>
+<!--nav:end-->
+
+<main id="main">
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries"><span aria-hidden="true">←</span> All 40 libraries</a></p>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../libraries.html"><span aria-hidden="true">←</span> All 40 libraries</a></p>
 
     <div class="detail-header">
       <img class="detail-icon" src="../img/icons/sugar-fuzzy.png" alt="" aria-hidden="true">
@@ -52,12 +144,28 @@
     </div>
     <p class="detail-badge" style="margin: 16px 0 0;"><a href="https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-fuzzy"><img src="https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-fuzzy" alt="SugarFuzzy code coverage" loading="lazy"></a></p>
 
-    <p class="lede" style="margin-top: 28px;">Fuzzy string matching that returns <strong>matched character indices plus the match score</strong>. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style scoring with separator/camel-case bonuses). The matched indices enable filter-highlighting UIs that were impossible with score-only matchers. Extracted from sugar-forms; back-compat shims remain in sugar-forms and sugar-treelist for existing consumers, while new code depends on sugar-fuzzy directly.</p>
+    <nav class="doc-toc" aria-label="On this page">
+        <ul class="doc-toc-list">
+            <li class="toc-h3"><a href="#install">Install</a></li>
+            <li class="toc-h3"><a href="#quickstart">Quickstart</a></li>
+            <li class="toc-h3"><a href="#fuzzymatcher-interface">FuzzyMatcher interface</a></li>
+            <li class="toc-h3"><a href="#matchresult">MatchResult</a></li>
+            <li class="toc-h3"><a href="#algorithms">Algorithms</a></li>
+            <li class="toc-h3"><a href="#highlighter">Highlighter</a></li>
+            <li class="toc-h3"><a href="#security">Security</a></li>
+            <li class="toc-h3"><a href="#use-it-for">Use it for</a></li>
+            <li class="toc-h3"><a href="#source-demos">Source &amp; demos</a></li>
+            <li class="toc-h3"><a href="#api">API</a></li>
+        </ul>
+    </nav>
 
-    <h3 style="margin-top: 32px;">Install</h3>
+    <div class="docs-body">
+<p class="lede" style="margin-top: 28px;">Fuzzy string matching that returns <strong>matched character indices plus the match score</strong>. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style scoring with separator/camel-case bonuses). The matched indices enable filter-highlighting UIs that were impossible with score-only matchers. Extracted from sugar-forms; back-compat shims remain in sugar-forms and sugar-treelist for existing consumers, while new code depends on sugar-fuzzy directly.</p>
+
+    <h3 id="install" style="margin-top: 32px;">Install</h3>
     <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-fuzzy:@dev</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code class="language-php">use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Fuzzy\Highlighter;
 
@@ -86,13 +194,13 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
 // The highlighter is presentation-neutral: sanitize candidate text (strip
 // \x1b/control bytes) before display — see Security below</code></pre>
 
-    <h3 style="margin-top: 32px;">FuzzyMatcher interface</h3>
+    <h3 id="fuzzymatcher-interface" style="margin-top: 32px;">FuzzyMatcher interface</h3>
     <div class="feature-grid">
       <div class="feature"><strong>match(string $query, string $candidate): ?MatchResult</strong><span>Returns null when no match, MatchResult with score + indices otherwise.</span></div>
       <div class="feature"><strong>matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): list&lt;MatchResult&gt;</strong><span>Returns all matches sorted by score desc, then candidate asc as tiebreak (compared with <code>&lt;=&gt;</code>, so digit-only candidates order numerically); perfect ties keep input order (<code>usort</code> is stable as of PHP 8.0); <code>limit: 0</code> yields none, a negative limit is unlimited. <code>matchAllGenerator()</code> yields the same ranked results — it drains and sorts the whole input before the first yield (ranking is global), a streaming API rather than per-candidate laziness.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">MatchResult</h3>
+    <h3 id="matchresult" style="margin-top: 32px;">MatchResult</h3>
     <div class="feature-grid">
       <div class="feature"><strong>$score: int</strong><span>Readonly match quality score — higher is better; <code>isMatched()</code> is <code>score &gt; 0</code>.</span></div>
       <div class="feature"><strong>indices(): list&lt;int&gt;</strong><span>0-based code-point offsets into the original haystack (UTF-8 safe — indices are at character boundaries, not bytes).</span></div>
@@ -100,20 +208,20 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
       <div class="feature"><strong>$matchedIndices: array</strong><span>Readonly list of 0-based code-point offsets of the matched characters — the same data <code>indices()</code> returns.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">Algorithms</h3>
+    <h3 id="algorithms" style="margin-top: 32px;">Algorithms</h3>
     <div class="feature-grid">
       <div class="feature"><strong>SmithWatermanMatcher</strong><span>Local sequence alignment — optimal for finding best subsequence match within a candidate. Weights come from an immutable <code>ScoringProfile</code>; <code>ScoringProfile::canonical()</code> (the default — <code>default()</code> is a deprecated alias) is bit-equivalent to the original sugar-forms FuzzyMatcher for ASCII input (legacy deviations documented in the README), with <code>strict()</code> / <code>lenient()</code> presets. <code>withRequireFullQuery()</code> keeps only candidates that contain the whole query as an in-order subsequence, scoring the best alignment forced to cover every query character (floored at 1). Over-cap input is truncated, never handed to another algorithm: only the first <code>maxQueryLength</code> (128) query and <code>maxCandidateLength</code> (1000) candidate characters take part. Candidates truncate; under full-query mode an over-cap query is rejected — it never matches. <code>SahilmMatcher</code> is single-pass linear and intentionally uncapped — bound hostile-size candidates host-side.</span></div>
       <div class="feature"><strong>SahilmMatcher</strong><span>Adapts the sahilm/fuzzy scoring algorithm — separator bonus (_, -, space, ., /, \, :), camelCase bonus, first-character bonus. Good for file/path matching. Weights are injectable via the immutable <code>SahilmScoring</code>; <code>SahilmScoring::canonical()</code> mirrors the bonus-constant shape of sahilm/fuzzy — the values are this port's historical constants, pinned by the characterization suites.</span></div>
     </div>
 
-    <h3 style="margin-top: 32px;">Highlighter</h3>
+    <h3 id="highlighter" style="margin-top: 32px;">Highlighter</h3>
     <p>Takes a <code>MatchResult</code> and a styler <code>\Closure(string): string</code>, returns the candidate string with matched runs passed through the styler. Non-matched runs are returned unchanged.</p>
     <p>Highlighting is visual by default: pair color with bold/underline cues for color-blind users, and expose the <code>matchedIndices</code> + the deterministic <code>matchAll()</code> ranking for non-visual/screen-reader channels.</p>
 
-    <h3 style="margin-top: 32px;">Security</h3>
+    <h3 id="security" style="margin-top: 32px;">Security</h3>
     <p>The highlighter is presentation-neutral and forwards unmatched haystack segments verbatim. Callers <strong>must</strong> sanitize candidate text (strip <code>\x1b</code>/control bytes) before display — the styler callback receives raw matched substrings only and does not sanitize; sanitization belongs to the TUI render layer. Case folding maps malformed UTF-8 bytes to <code>?</code>, so a literal <code>?</code> in a query can forge a match against untrusted text — validate UTF-8 on either side when inputs are hostile.</p>
 
-    <h3 style="margin-top: 40px;">Use it for</h3>
+    <h3 id="use-it-for" style="margin-top: 40px;">Use it for</h3>
     <ul>
       <li><strong>Filter-as-you-type with highlighted matches</strong> — know exactly which characters triggered the match for underline/bold/color highlighting.</li>
       <li><strong>Ranked autocomplete</strong> — matchAll sorts results by relevance score, not alphabetical order.</li>
@@ -121,7 +229,7 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
       <li><strong>Foundation for sugar-quickpick</strong> — the fuzzy finder overlay uses matched indices to paint the matched characters in each ranked row (match styling opt-in; selection is the formatter's <code>$isSelected</code> flag).</li>
     </ul>
 
-    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <h3 id="source-demos" style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-fuzzy">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-fuzzy/blob/master/README.md">Full README</a></li>
@@ -130,7 +238,7 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
 
-    <h3 style="margin-top: 32px;">API</h3>
+    <h3 id="api" style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>FuzzyMatcher</td><td>match(string $query, string $candidate): ?MatchResult</td><td>Single match or null</td></tr>
@@ -151,8 +259,10 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
 <tr><td>Highlighter</td><td>highlight(MatchResult, \Closure(string): string): string</td><td>Apply styler to matched runs</td></tr>
 <tr><td>CharFold</td><td>foldSplit(string): list&lt;string&gt; / fold(string): string</td><td>Per-codepoint case fold that stays 1:1 with the original string — keeps matched code-point indices truthful where whole-string lowercase would expand (U+0130, final sigma); malformed bytes fold to <code>?</code> without desync</td></tr>
 </table>
+    </div>
   </div>
 </section>
+</main>
 
 <footer class="footer">
     <div class="container">
@@ -185,5 +295,6 @@ echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
     </div>
 </div>
 <script src="../js/search.js" defer></script>
+<script src="../js/nav.js" defer></script>
 </body>
 </html>

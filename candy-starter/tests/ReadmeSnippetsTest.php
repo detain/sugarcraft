@@ -119,10 +119,21 @@ final class ReadmeSnippetsTest extends TestCase
         $script = $this->materialise('if (stream_get_contents(STDIN, 1) !== false) { echo "ate stdin\n"; } sleep(60);');
 
         [$status, $stderr] = $this->runPhp([$script], 2);
-        $this->assertSame(
-            128 + 9,
+        // GNU timeout has two documented shapes for a ceiling that fired:
+        // 137 when the wrapper propagates the SIGKILL death (measured on
+        // coreutils 9.4, this dev box) and 124 when it reports the timeout
+        // itself (measured 2026-11-10 on the ubuntu-26.04 CI runners, job
+        // 130183809879). Both mean the stalled child died AT the deadline,
+        // which is the behavior under test. Everything else is precisely
+        // the drift this pin exists to catch: 0 = fake ceiling (the 60s
+        // sleep ran out), 255 = startup fatal (never reached the stall),
+        // 127 = the wrapper vanished from PATH. Dated disclosure of the
+        // widened expectation: LANE-CW3, 2026-11-11.
+        $this->assertContains(
             $status,
-            'a stalled snippet must die by SIGKILL at the deadline (137), not run to completion:' . $stderr,
+            [124, 137],
+            'a stalled snippet must die at the SIGKILL deadline (124/137), not run to completion: '
+                . $status . ' ' . $stderr,
         );
     }
 

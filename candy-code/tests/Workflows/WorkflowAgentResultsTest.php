@@ -203,8 +203,13 @@ final class WorkflowAgentResultsTest extends TestCase
 
         // The pool yields in completion order: the third agent first. And an
         // executor that did not echo the id it was handed still lands in the
-        // first unclaimed slot.
-        $paired = $records->invoke(null, ['id-1' => 'one', 'id-2' => 'two', 'id-3' => 'three'], [
+        // first unclaimed slot. Entries carry the stage's schema flag, which
+        // must ride through to the record.
+        $paired = $records->invoke(null, [
+            'id-1' => ['key' => 'one', 'schema' => false],
+            'id-2' => ['key' => 'two', 'schema' => true],
+            'id-3' => ['key' => 'three', 'schema' => false],
+        ], [
             $finished('id-3', 'third'),
             $finished('foreign', 'unidentified'),
             $finished('id-1', 'first'),
@@ -213,6 +218,10 @@ final class WorkflowAgentResultsTest extends TestCase
         self::assertSame(
             ['one' => 'first', 'two' => 'unidentified', 'three' => 'third'],
             array_column(array_map(static fn (array $r): array => [$r['key'], $r['result']->output], $paired), 1, 0),
+        );
+        self::assertSame(
+            ['one' => false, 'two' => true, 'three' => false],
+            array_column(array_map(static fn (array $r): array => [$r['key'], $r['schema']], $paired), 1, 0),
         );
     }
 
@@ -375,6 +384,213 @@ final class WorkflowAgentResultsTest extends TestCase
         self::assertSame(['c sees {{a.results}}'], $this->prompts);
     }
 
+    public function testASchemaStageStoresATypedRowBesideTheTextRow(): void
+    {
+        $this->script['emit'] = fn (SubAgent $agent): AgentResult => $this->typedResult($agent, '{"summary":"green","items":[{"id":7}]}');
+
+        $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('typed')
+            ->stage('build', Tasks::agent('coder')->prompt('emit json')->outputSchema(['type' => 'object']))
+            ->build());
+
+        $document = '{"summary":"green","items":[{"id":7}]}';
+
+        self::assertSame(WorkflowStatus::Completed, $result->status);
+        self::assertSame(
+            ['build' => $document],
+            $result->context[WorkflowEngine::RESULTS_CONTEXT_KEY],
+            'the text row keeps the raw bytes and nothing else joins its map',
+        );
+        self::assertSame(
+            ['build' => $document],
+            $result->context[WorkflowEngine::TYPED_RESULTS_CONTEXT_KEY] ?? null,
+            'the typed row rides in its own map, keyed by the raw result name',
+        );
+    }
+
+    public function testPointerReferencesReachTypedLeavesAndMissesStayVerbatim(): void
+    {
+        $this->script['emit'] = fn (SubAgent $agent): AgentResult => $this->typedResult(
+            $agent,
+            '{"summary":"green","items":[{"id":7}],"a":{"b":"nested"}}',
+        );
+
+        $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('typed')
+            ->stage('build', Tasks::agent('coder')->prompt('emit json')->outputSchema(['type' => 'object']))
+            ->stage(
+                'next',
+                Tasks::agent('coder')->prompt(
+                    'S={{build.summary}} I={{build.items/0/id}} L={{build./summary}}'
+                    . ' B={{build.bogus}} N={{build.items}} X={{nothere.summary}} D={{build.a.b}}',
+                ),
+            )
+            ->build());
+
+        self::assertSame(
+            'S=green I=7 L=green B={{build.bogus}} N={{build.items}} X={{nothere.summary}} D={{build.a.b}}',
+            end($this->prompts),
+            'a hit resolves, every miss — unknown leaf, interior object, unknown stage, dotted literal — stays loud',
+        );
+    }
+
+    public function testPointerEscapesFollowRfc6901Order(): void
+    {
+        // Keys: "a/b", "c~d", "~1". The last one only survives the ~1-before-~0
+        // unescape order: reversing it would route "~01" to a key named "/".
+        $this->script['encode'] = fn (SubAgent $agent): AgentResult => $this->typedResult(
+            $agent,
+            json_encode(['a/b' => 'slash', 'c~d' => 'tilde', '~1' => 'deep']),
+        );
+
+        $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('escapes')
+            ->stage('coded', Tasks::agent('coder')->prompt('encode keys')->outputSchema(['type' => 'object']))
+            ->stage('next', Tasks::agent('coder')->prompt('{{coded.a~1b}}|{{coded.c~0d}}|{{coded.~01}}'))
+            ->build());
+
+        self::assertSame('slash|tilde|deep', end($this->prompts));
+    }
+
+    public function testScalarLeavesInterpolateAndInteriorOrNullDoNot(): void
+    {
+        $this->script['shape'] = fn (SubAgent $agent): AgentResult => $this->typedResult(
+            $agent,
+            '{"ok":true,"no":false,"count":12,"nothing":null,"obj":{"x":1}}',
+        );
+
+        $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('scalars')
+            ->stage('shaped', Tasks::agent('coder')->prompt('shape out')->outputSchema(['type' => 'object']))
+            ->stage('next', Tasks::agent('coder')->prompt(
+                '{{shaped.ok}}|{{shaped.no}}|{{shaped.count}}|{{shaped.nothing}}|{{shaped.obj}}',
+            ))
+            ->build());
+
+        self::assertSame(
+            'true|false|12|{{shaped.nothing}}|{{shaped.obj}}',
+            end($this->prompts),
+            'bools spell true/false; a null leaf and an interior object miss verbatim',
+        );
+    }
+
+    public function testASchemaStageWhoseOutputIsNotJsonStaysTextOnly(): void
+    {
+        $this->script['babble'] = fn (SubAgent $agent): AgentResult => $this->typedResult($agent, 'not json at all');
+
+        $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('coercion')
+            ->stage('babbler', Tasks::agent('coder')->prompt('babble words')->outputSchema(['type' => 'object']))
+            ->stage('next', Tasks::agent('coder')->prompt('{"n":1} and {{babbler.n}}'))
+            ->build());
+
+        self::assertSame(
+            ['babbler' => 'not json at all', 'next' => 'OUT[{"n":1} and {{babbler.n}}]'],
+            $result->context[WorkflowEngine::RESULTS_CONTEXT_KEY],
+            'no typed row is invented from prose, and the pointer misses loudly',
+        );
+        self::assertArrayNotHasKey(
+            WorkflowEngine::TYPED_RESULTS_CONTEXT_KEY,
+            $result->context,
+            'a stage with a schema whose output never parses leaves the typed map unset — no half-typed state',
+        );
+    }
+
+    public function testReservedTailsBelongToTheirOwnPassesWhateverTheTypedDocumentHolds(): void
+    {
+        $document = json_encode(['results' => 'FROM-TYPED', 'output' => 'FROM-TYPED', 'inner' => 'keep']);
+        $this->script['tail'] = fn (SubAgent $agent): AgentResult => $this->typedResult($agent, (string) $document);
+
+        $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('tails')
+            ->stage('tailer', Tasks::agent('coder')->prompt('tail the token')->outputSchema(['type' => 'object']))
+            ->stage('next', Tasks::agent('coder')->prompt('{{tailer.results}}|{{tailer.output}}|{{tailer./output}}'))
+            ->build());
+
+        self::assertSame(
+            $document . '|' . $document . '|FROM-TYPED',
+            end($this->prompts),
+            'the bare results/output tails keep their dedicated rows; only the leading-slash pointer form reaches document members',
+        );
+    }
+
+    public function testThePointerPassRunsBeforeTheOutputPassAndNeverReReadsItsPredecessor(): void
+    {
+        $this->script['weave'] = fn (SubAgent $agent): AgentResult => $this->typedResult(
+            $agent,
+            '{"next":"{{c.output}}","again":"{{b.results}}","plain":"{{a.results}}"}',
+        );
+
+        $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('ordering')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->stage('b', Tasks::agent('coder')->prompt('weave tokens')->outputSchema(['type' => 'object']))
+            ->stage('c', Tasks::agent('coder')->prompt('do c'))
+            ->stage('d', Tasks::agent('coder')->prompt('{{b.next}}|{{b.again}}|{{b.plain}}'))
+            ->build());
+
+        self::assertSame(
+            'OUT[do c]|{{b.results}}|{{a.results}}',
+            end($this->prompts),
+            'an emitted {{stage.output}} is still ahead of its pass and resolves;' .
+            ' emitted .results tokens are behind theirs and stay verbatim',
+        );
+    }
+
+    public function testDottedTaskNamesNeverShareASlotWithTypedRows(): void
+    {
+        // Fan-out names tasks by relative path, so a result key may itself end
+        // in ".json" or contain dots. Text rows and typed rows live in separate
+        // maps, which makes both collision directions structurally impossible:
+        // a dotted text row impersonating a typed leaf, and a typed row
+        // clobbering a dotted text row. Both orders are pinned.
+        $green = '{"summary":"green"}';
+        $impostor = '{"summary":"IMPOSTOR"}';
+        $this->script['emit two'] = fn (SubAgent $agent): AgentResult => $this->typedResult($agent, $green);
+        $this->script['raw one'] = fn (SubAgent $agent): AgentResult => $this->typedResult($agent, $impostor);
+
+        $schemaFirst = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('both-orders')
+            ->stage('real', Tasks::agent('coder')->name('a')->prompt('emit two')->outputSchema(['type' => 'object']))
+            ->stage('dot', Tasks::agent('coder')->name('a.json')->prompt('raw one'))
+            ->stage('read', Tasks::agent('coder')->prompt('x={{a.summary}}'))
+            ->build());
+        self::assertSame(WorkflowStatus::Completed, $schemaFirst->status);
+        self::assertSame('x=green', end($this->prompts), 'the dotted text row cannot impersonate the typed leaf');
+        self::assertSame($impostor, $schemaFirst->context[WorkflowEngine::RESULTS_CONTEXT_KEY]['a.json'] ?? null);
+        self::assertSame(['a' => $green], $schemaFirst->context[WorkflowEngine::TYPED_RESULTS_CONTEXT_KEY] ?? null);
+
+        $this->prompts = [];
+        $dotFirst = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('both-orders')
+            ->stage('dot', Tasks::agent('coder')->name('a.json')->prompt('raw one'))
+            ->stage('real', Tasks::agent('coder')->name('a')->prompt('emit two')->outputSchema(['type' => 'object']))
+            ->stage('read', Tasks::agent('coder')->prompt('x={{a.summary}} y={{a.results}}'))
+            ->build());
+        self::assertSame(WorkflowStatus::Completed, $dotFirst->status);
+        self::assertSame(
+            'x=green y=' . $green,
+            end($this->prompts),
+            'the later typed store cannot clobber the dotted text row either',
+        );
+        self::assertSame($impostor, $dotFirst->context[WorkflowEngine::RESULTS_CONTEXT_KEY]['a.json'] ?? null);
+        self::assertSame($green, $dotFirst->context[WorkflowEngine::RESULTS_CONTEXT_KEY]['a'] ?? null);
+        self::assertSame(['a' => $green], $dotFirst->context[WorkflowEngine::TYPED_RESULTS_CONTEXT_KEY] ?? null);
+    }
+
+    private function typedResult(SubAgent $agent, string $output): AgentResult
+    {
+        return new AgentResult(
+            agentId: $agent->id,
+            status: AgentStatus::Completed,
+            output: $output,
+            tokensUsed: 3,
+            costUsd: 0.1,
+            startedAt: new \DateTimeImmutable(),
+            completedAt: new \DateTimeImmutable(),
+        );
+    }
+
     private function engine(): WorkflowEngine
     {
         return new WorkflowEngine($this->registry, new AgentWorkerPool(1, $this->executor()));
@@ -405,6 +621,246 @@ final class WorkflowAgentResultsTest extends TestCase
             {
             }
         };
+    }
+
+    // ------------------------------------------------------- C9 input: fan-in joins
+
+    public function testTheFourJoinShapesRenderPriorRowsThroughTheHandles(): void
+    {
+        $expected = [
+            'first' => 'M OUT[do a]',
+            'file-list' => "M OUT[do a]\nOUT[do b]",
+            'all' => "M === a ===\nOUT[do a]\n=== b ===\nOUT[do b]",
+            'results' => 'M {"a":"OUT[do a]","b":"OUT[do b]"}',
+        ];
+
+        foreach ($expected as $as => $want) {
+            $this->prompts = [];
+            $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+                ->name('shape-' . $as)
+                ->stage('a', Tasks::agent('coder')->prompt('do a'))
+                ->stage('b', Tasks::agent('coder')->prompt('do b'))
+                ->stage('m', Tasks::agent('coder')->prompt('M {{input}}')->input(['from' => ['a', 'b'], 'as' => $as]))
+                ->build());
+
+            self::assertSame(WorkflowStatus::Completed, $result->status, $as);
+            self::assertSame($want, end($this->prompts), "as: {$as} joins prior rows under the fixed handle");
+        }
+
+        $this->prompts = [];
+        $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('shape-handles')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->stage('m', Tasks::agent('coder')->prompt('R={{input.results}} D={{input.output}}')
+                ->input(['from' => ['a'], 'as' => 'first']))
+            ->build());
+
+        self::assertSame(
+            'R=OUT[do a] D={{input.output}}',
+            end($this->prompts),
+            'the results handle reads the same local row; .output is not a join spelling and stays loud',
+        );
+    }
+
+    public function testAPointerReachesInsideTheJoinedResultsDocument(): void
+    {
+        $this->script['emit'] = fn (SubAgent $agent): AgentResult => $this->typedResult($agent, '{"summary":"green"}');
+
+        $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('typed-join')
+            ->stage('build', Tasks::agent('coder')->prompt('emit json')->outputSchema(['type' => 'object']))
+            ->stage('ship', Tasks::agent('coder')->prompt('S={{input.build/summary}} D={{input.build}}')
+                ->input(['from' => ['build'], 'as' => 'results']))
+            ->build());
+
+        self::assertSame(
+            'S=green D={{input.build}}',
+            end($this->prompts),
+            'as: results injects a typed row so C3 pointers traverse the joined document (slash-pointer law: the '
+            . 'dot only names the row); an interior object leaf stays verbatim exactly as the pointer law spells it',
+        );
+    }
+
+    public function testFileListDegradesToTheNoteAndTheOtherShapesRefuseWhenEverySourceIsSkipped(): void
+    {
+        $clauses = static fn (): array => ['stage' => 'gate', 'equals' => 'NEVER'];
+
+        $this->prompts = [];
+        $degrade = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('skip-file-list')
+            ->stage('gate', Tasks::agent('coder')->prompt('do gate'))
+            ->stage('b', Tasks::agent('coder')->prompt('do b'))->when($clauses())
+            ->stage('m', Tasks::agent('coder')->prompt('M {{input}}')->input(['from' => ['b'], 'as' => 'file-list']))
+            ->build());
+        self::assertSame(WorkflowStatus::Completed, $degrade->status);
+        self::assertSame('M [input: no sources joined]', end($this->prompts), 'file-list is a manifest: empty is honest');
+
+        foreach (['first', 'all', 'results'] as $as) {
+            $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+                ->name('skip-' . $as)
+                ->stage('gate', Tasks::agent('coder')->prompt('do gate'))
+                ->stage('b', Tasks::agent('coder')->prompt('do b'))->when($clauses())
+                ->stage('m', Tasks::agent('coder')->prompt('M {{input}}')->input(['from' => ['b'], 'as' => $as]))
+                ->build());
+
+            self::assertSame(WorkflowStatus::Failed, $result->status, $as);
+            self::assertStringContainsString('every source is missing', (string) $result->firstFailure()?->error);
+        }
+    }
+
+    public function testASkippedSourceVanishesFromAnOtherwiseLiveJoin(): void
+    {
+        $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('half-skip')
+            ->stage('gate', Tasks::agent('coder')->prompt('do gate'))
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->stage('b', Tasks::agent('coder')->prompt('do b'))->when(['stage' => 'a', 'equals' => 'NEVER'])
+            ->stage('m', Tasks::agent('coder')->prompt('M {{input}}')->input(['from' => ['a', 'b'], 'as' => 'all']))
+            ->build());
+
+        self::assertSame(WorkflowStatus::Completed, $result->status);
+        self::assertSame("M === a ===\nOUT[do a]", end($this->prompts), 'absent sources are skipped, not mourned');
+    }
+
+    public function testTheJoinReDerivesByteIdenticalAcrossPauseAndResume(): void
+    {
+        foreach (['first', 'results'] as $as) {
+            $name = 'pause-' . $as;
+            $this->registry->register((new WorkflowBuilder())
+                ->name($name)
+                ->stage('a', Tasks::agent('coder')->prompt('do a'))
+                ->stage('b', Tasks::agent('coder')->prompt('do b'))
+                ->stage('m', Tasks::agent('coder')->prompt('M {{input}} R={{input.results}}')
+                    ->input(['from' => ['a', 'b'], 'as' => $as]))
+                ->build());
+
+            $engine = $this->engine();
+            $this->script['do b'] = static function () use ($engine, $name): ?AgentResult {
+                $engine->pause($name);
+
+                return null;
+            };
+
+            $paused = $engine->run($name);
+            self::assertSame(WorkflowStatus::Paused, $paused->status);
+
+            $raw = (string) file_get_contents($this->tempDir . '/workflows/.running/' . $name . '.json');
+            self::assertStringNotContainsString(
+                '"input"',
+                $raw,
+                'the pause record never carries a join row — the join is re-derived from recorded rows, not replayed',
+            );
+
+            unset($this->script['do b']);
+            $this->prompts = [];
+            $resumed = $this->engine()->resume($name);
+            self::assertSame(WorkflowStatus::Completed, $resumed->status);
+
+            $joinPrompts = array_values(array_filter(
+                $this->prompts,
+                static fn (string $prompt): bool => str_starts_with($prompt, 'M '),
+            ));
+            self::assertCount(1, $joinPrompts, 'the joining stage dispatches exactly once, after the resume');
+
+            $joined = $as === 'first'
+                ? 'OUT[do a]'
+                : '{"a":"OUT[do a]","b":"OUT[do b]"}';
+            self::assertSame(
+                'M ' . $joined . ' R=' . $joined,
+                $joinPrompts[0],
+                'resumed join bytes equal what a live run would have built from the same rows',
+            );
+        }
+    }
+
+    public function testTheJoinReachesTheVerificationTaskPrompt(): void
+    {
+        $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('verify-task-join')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->withVerification(
+                'v',
+                Tasks::agent('coder')->prompt('V {{input}}')->input(['from' => ['a'], 'as' => 'first']),
+                // chr(63) spelling: a bare 'ok?' is a glob-shaped literal ('?' wildcard)
+                // and would drift the GlobDialect corpus figure.
+                Tasks::agent('coder')->prompt('ok' . chr(63)),
+            )
+            ->build());
+
+        self::assertSame(WorkflowStatus::Completed, $result->status);
+        self::assertSame('V OUT[do a]', $this->prompts[1], 'the verification task prompt carries the join');
+    }
+
+    public function testTheJoinReachesTheVerifierPrompt(): void
+    {
+        $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('verify-verifier-join')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->withVerification(
+                'v2',
+                Tasks::agent('coder')->prompt('work v2'),
+                Tasks::agent('coder')->prompt('OK? {{input}}')->input(['from' => ['a'], 'as' => 'first']),
+            )
+            ->build());
+
+        self::assertSame(WorkflowStatus::Completed, $result->status);
+        // chr(63) spelling for the same GlobDialect reason as above.
+        $marker = 'OK' . chr(63);
+        $verifierPrompts = array_values(array_filter(
+            $this->prompts,
+            static fn (string $prompt): bool => str_starts_with($prompt, $marker),
+        ));
+        self::assertSame(['OK? OUT[do a]'], $verifierPrompts, 'the verifier prompt carries the join too');
+    }
+
+    public function testTheJoinReachesEveryParallelTaskPrompt(): void
+    {
+        $result = $this->engine()->runFromPhp(static fn (): Workflow => (new WorkflowBuilder())
+            ->name('parallel-join')
+            ->stage('a', Tasks::agent('coder')->prompt('do a'))
+            ->parallel('p', [
+                Tasks::agent('coder')->prompt('P1 {{input}}')->input(['from' => ['a'], 'as' => 'first']),
+                Tasks::agent('coder')->prompt('P2 {{input}}')->input(['from' => ['a'], 'as' => 'first']),
+            ])
+            ->build());
+
+        self::assertSame(WorkflowStatus::Completed, $result->status);
+        self::assertContains('P1 OUT[do a]', $this->prompts, 'task zero dispatches its own resolved prompt');
+        self::assertContains('P2 OUT[do a]', $this->prompts, 'and so does every task after it');
+    }
+
+    public function testEveryPromptInterpolationCarriesTheJoin(): void
+    {
+        // Structural census over the engine source: every prompt that travels
+        // through interpolateContext either resolves the join first, or is the
+        // uses-carry surface where no task of the carried stage is in scope.
+        // This is also the discriminator for the parallel-first leg, whose
+        // interpolation seeds request metadata while the dispatched content
+        // rides the per-task line the parallel pin above proves.
+        $enginePath = (string) (new \ReflectionClass(WorkflowEngine::class))->getFileName();
+        $needle = '$this->interpolateContext(';
+        $joined = 0;
+        $carried = 0;
+
+        foreach (explode("\n", (string) file_get_contents($enginePath)) as $line) {
+            if (strpos($line, $needle) === false) {
+                continue;
+            }
+
+            if (str_contains($line, 'self::resolveStageInput(')) {
+                ++$joined;
+                continue;
+            }
+
+            self::assertTrue(
+                str_contains($line, '$innerContext['),
+                'a prompt interpolation that skips the join must be the uses-carry surface: ' . trim($line),
+            );
+            ++$carried;
+        }
+
+        self::assertSame(6, $joined, 'six prompt paths resolve the join before interpolating');
+        self::assertSame(1, $carried, 'exactly one surface is join-less by design');
     }
 
     private function removeDirectory(string $dir): void
