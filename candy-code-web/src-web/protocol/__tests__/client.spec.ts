@@ -318,4 +318,42 @@ describe('malformed hello (CW-3)', () => {
     expect(client.status).toBe('connected')
     client.stop()
   })
+
+  // M-19 agreement family: the guard's presence-only check on `resumed` is a
+  // deliberate contract with the connection store (absent map = nothing resumed,
+  // every follower heals via a fresh resubscribe — pinned end-to-end in
+  // stores/__tests__/helloSpineIsolation.spec.ts), not an oversight. These two
+  // pins lock both halves so the layers cannot silently disagree again.
+  it('accepts a hello that omits the resumed map entirely (M-19)', async () => {
+    const { client, socket } = harness()
+    client.start()
+    await flush()
+    socket().open()
+    let announced = 0
+    client.onHello(() => {
+      announced += 1
+    })
+    // JSON round-trip physically drops the key: a true wire-shape hello without it.
+    const frame = JSON.parse(JSON.stringify({ ...helloResult(), resumed: undefined }))
+    expect(() => socket().answer(frame, 'hello')).not.toThrow()
+    await flush()
+    expect(client.status).toBe('connected')
+    expect(announced).toBe(1)
+    expect(socket().closedWith).toBeNull()
+    expect(client.lastError).toBeNull()
+    client.stop()
+  })
+
+  it('closes a hello whose resumed map is present but not an object (M-19)', async () => {
+    const { client, socket } = harness()
+    client.start()
+    await flush()
+    socket().open()
+    expect(() => socket().answer(helloResult({ resumed: null }), 'hello')).not.toThrow()
+    await flush()
+    expect(socket().closedWith?.code).toBe(4000)
+    expect(socket().closedWith?.reason).toBe('hello malformed')
+    expect(client.lastError).toContain('hello malformed')
+    client.stop()
+  })
 })

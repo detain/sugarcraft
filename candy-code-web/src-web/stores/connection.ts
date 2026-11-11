@@ -210,9 +210,30 @@ export const useConnectionStore = defineStore('connection', () => {
       // stream; apply them first so a follower's cursor is current.
       flush()
       shutdown.value = null
-      const resumed = result.resumed as Record<string, Subscription | { error: string }>
-      for (const [id, follower] of followers) follower.resumed(resumed[id])
-      for (const listener of helloListeners) listener(result)
+      // M-19 (cc-review-1111): the blind cast used to throw a TypeError on a
+      // hello without the map, mid-callback, stranding every follower behind
+      // it and silencing all helloListeners — the sessions index, approvals
+      // and the viewing re-announce — for the whole connect cycle, invisibly
+      // inside the client's own per-listener catch. An absent map means
+      // nothing was resumed: each follower receives undefined and heals with
+      // a fresh resubscribe. Isolation mirrors flush() above; the absence
+      // agreement with the wire guard is pinned by helloSpineIsolation.spec.ts
+      // and the client.spec.ts M-19 family.
+      const resumed = (result.resumed ?? {}) as Record<string, Subscription | { error: string }>
+      for (const [id, follower] of followers) {
+        try {
+          follower.resumed(resumed[id])
+        } catch {
+          // one consumer's crash is not the spine's
+        }
+      }
+      for (const listener of helloListeners) {
+        try {
+          listener(result)
+        } catch {
+          // one consumer's crash is not the spine's
+        }
+      }
     })
     client = created
     return created

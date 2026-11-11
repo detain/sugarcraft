@@ -271,9 +271,19 @@ export class CandyCodeClient {
 
   /**
    * CW-3: exactly the fields this client and the connection store dereference
-   * at hello time — server.version, principal.scopes, limits, and (when
-   * present) resumed. Everything else on the wire is read behind optional
-   * chaining and stays unguarded on purpose.
+   * at hello time — server.version, principal.scopes, limits, and resumed.
+   * Everything else on the wire is read behind optional chaining and stays
+   * unguarded on purpose.
+   *
+   * M-19: the generated contract types `resumed` REQUIRED (candy-code
+   * MethodSchemas.php carries it in the server.hello required list;
+   * ServerMethods.php always emits a map). The presence-only check above is a
+   * deliberate agreement, not an oversight: a server or proxy that omits the
+   * map stays connectable, and the connection store reads absence as
+   * nothing-resumed — every follower heals through a fresh resubscribe.
+   * helloSpineIsolation.spec.ts and the client.spec.ts M-19 family pin both
+   * halves (absent tolerated end-to-end, present-but-not-an-object malformed
+   * close/retry) so the layers cannot silently disagree again.
    */
   private static helloIsWellFormed(hello: unknown): boolean {
     if (typeof hello !== 'object' || hello === null) return false
