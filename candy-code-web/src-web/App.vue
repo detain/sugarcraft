@@ -109,6 +109,25 @@ function onPageShow(event: PageTransitionEvent): void {
 }
 
 /**
+ * UX-A F4: at ≤760px the sidebar rides over the content as a drawer, and it
+ * used to answer only the ☰ button. Escape now closes it the way the approvals
+ * drawer answers the key — a plain window listener, because focus may sit
+ * anywhere while the drawer is open. Two precedence guards keep it honest: an
+ * event already preventDefault-ed belongs to whatever overlay answered first
+ * (help/About on the capture leg, the useDialog spine on their panels), and a
+ * key pressed inside a [role=dialog]/[role=menu] is the sidebar's own inner
+ * surface closing itself — taking the drawer down with it would be a
+ * double-close. The scrim under the drawer carries the click-away half.
+ */
+function onDrawerKey(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || event.defaultPrevented) return
+  if (!layout.sidebarOpen) return
+  const node = event.target
+  if (node instanceof Element && node.closest('[role="dialog"], [role="menu"]') !== null) return
+  layout.toggleSidebar(false)
+}
+
+/**
  * CW-6: a notification click that found this window already open arrives as
  * a client message from the service worker (see sw.ts `notificationclick`).
  * The href was validated once in the worker; it is re-validated here because
@@ -126,6 +145,7 @@ onMounted(async () => {
   window.addEventListener('pagehide', onPageHide)
   window.addEventListener('pageshow', onPageShow)
   window.addEventListener('keydown', onHelpKey, true)
+  window.addEventListener('keydown', onDrawerKey)
   window.addEventListener('message', onPushNavigate)
   // CW-DBA-8: a stored ON is a promise, not a live subscription.
   if (push.consent) void push.reconcile()
@@ -145,6 +165,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('pagehide', onPageHide)
   window.removeEventListener('pageshow', onPageShow)
   window.removeEventListener('keydown', onHelpKey, true)
+  window.removeEventListener('keydown', onDrawerKey)
   window.removeEventListener('message', onPushNavigate)
   stopAttention()
   stopPasteNotice()
@@ -180,6 +201,13 @@ async function signOut(): Promise<void> {
     <SessionTools v-if="!onLogin" :active-id="activeId" />
     <div class="body">
       <SessionSidebar v-if="!onLogin" class="side" :active-id="activeId" />
+      <div
+        v-if="!onLogin && layout.sidebarOpen"
+        class="drawer-scrim"
+        aria-hidden="true"
+        data-testid="drawer-scrim"
+        @click="layout.toggleSidebar(false)"
+      />
       <main class="content">
         <SessionTabs v-if="!onLogin" />
         <RouterView />
@@ -280,6 +308,12 @@ async function signOut(): Promise<void> {
   border-right: 1px solid var(--line);
   background: var(--panel);
 }
+/* UX-A F4: the drawer's click-away catcher. Hidden at desktop widths where
+   the sidebar is a static column — same base-then-media shape as .menu above.
+   The scrim itself only rides the ≤760 media rule below. */
+.drawer-scrim {
+  display: none;
+}
 .content {
   min-width: 0;
   min-height: 0;
@@ -341,6 +375,15 @@ async function signOut(): Promise<void> {
   .drawer-open .side {
     transform: none;
     box-shadow: 0 0 1rem rgb(0 0 0 / 0.4);
+  }
+  /* UX-A F4: one rung under the drawer (its 10) in the same .body stacking
+     context — the same tone the approvals drawer carries its shadow in. */
+  .drawer-open .drawer-scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 9;
+    background: rgb(0 0 0 / 0.35);
   }
 }
 </style>
