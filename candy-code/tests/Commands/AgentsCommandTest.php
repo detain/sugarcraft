@@ -447,6 +447,140 @@ final class AgentsCommandTest extends TestCase
         );
     }
 
+    // =========================================================================
+    // M-15: foreign preset text crosses the terminal-injection choke
+    // =========================================================================
+
+    /**
+     * A project-tier preset arrives through `git clone` with no trust door
+     * (only its permissionMode is policed at construction), so every printed
+     * field carries attacker-chosen bytes. This fixture is the hostile shape:
+     * an OSC-0 title rewrite with printable garbage, an OSC-52 clipboard
+     * payload, an OSC-8 hyperlink, a CSI screen erase, raw CR/LF/NUL/BEL line
+     * forgery, and a forged private-use arena marker (the U+E000 zone the
+     * image overlay and prompt fence sentinels live in).
+     */
+    private static function poisonedPresetName(): string
+    {
+        return "evil\x1b]0;PWNED\x07name";
+    }
+
+    private function managerCarryingPoisonedPreset(): AgentManager
+    {
+        return $this->createAgentManagerWithAgents([new Agent(
+            name: self::poisonedPresetName(),
+            description: "first\nsecond\r\x00third\x07 tail\u{e000}7\u{e001}",
+            prompt: 'x',
+            model: "\x1b]52;c;QUVDVElPTlRPS0VO\x07opus",
+            provider: "anth\x1b[2Jropic",
+            tools: ["read\rwrite"],
+            skillNames: ['php-pro', "sk\u{e000}ill"],
+            hooks: ["pre\x07commit"],
+            isActive: true,
+            sourcePath: "/tmp\x1b]8;;http://evil.example\x07x.md",
+        )]);
+    }
+
+    public function testAPoisonedPresetReachesNeitherSurfaceWithRawControlBytes(): void
+    {
+        $manager = $this->managerCarryingPoisonedPreset();
+
+        // Surface one, the headless/CLI render path: the command's own stdout.
+        ob_start();
+        $exitCode = (new AgentsCommand($manager))->execute(new Chat([]), []);
+        $listing = (string) ob_get_clean();
+        $this->assertSame(0, $exitCode);
+
+        // Surface two, the real TUI path: the host command's captured row.
+        $result = (new AgentsHostCommand())->run(
+            CommandContext::new(agentManager: $manager),
+            '/agents ' . self::poisonedPresetName(),
+        );
+        $detail = $result->rows[\count($result->rows) - 1]->content;
+
+        foreach ([$listing, $detail] as $index => $text) {
+            $surface = $index === 0 ? 'the roster listing' : 'the detail row';
+            $this->assertStringNotContainsString("\x1b", $text, $surface . ' leaked a raw escape introducer — an OSC title/clipboard/hyperlink payload or a CSI erase reaches the terminal');
+            $this->assertStringNotContainsString("\x07", $text, $surface . ' leaked BEL — an OSC-terminated sequence is half-emitted');
+            $this->assertStringNotContainsString("\x00", $text, $surface . ' leaked NUL');
+            $this->assertStringNotContainsString("\r", $text, $surface . ' leaked CR — a field can rewind and repaint the row');
+            $this->assertStringNotContainsString('PWNED', $text, $surface . ' kept the printable payload of a swept OSC sequence');
+            $this->assertStringNotContainsString("\u{e000}", $text, $surface . ' kept a forged private-use arena marker');
+        }
+
+        // What survives the sweep is the visible text, joined where the
+        // forgery was — pinned so the choke cannot be replaced by a blank-eater.
+        $this->assertStringContainsString(
+            Lang::t('cmd.agents.detail.agent', ['name' => 'evilname']),
+            $detail,
+        );
+        $this->assertStringContainsString(
+            Lang::t('cmd.agents.detail.description', ['description' => 'first second third tail7']),
+            $detail,
+        );
+        $this->assertStringContainsString(Lang::t('cmd.agents.detail.model', ['model' => 'opus']), $detail);
+        $this->assertStringContainsString(Lang::t('cmd.agents.detail.provider', ['provider' => 'anthropic']), $detail);
+        $this->assertStringContainsString(Lang::t('cmd.agents.detail.path', ['path' => '/tmpx.md']), $detail);
+        $this->assertStringContainsString(Lang::t('cmd.agents.detail.skills', ['skills' => 'php-pro, skill']), $detail);
+        $this->assertStringContainsString(Lang::t('cmd.agents.detail.tools', ['tools' => 'read write']), $detail);
+        $this->assertStringContainsString(Lang::t('cmd.agents.detail.hooks', ['hooks' => 'precommit']), $detail);
+    }
+
+    public function testTheUnknownAgentRowSweepsTheTypedNameAsWell(): void
+    {
+        // Self-inflicted is still injected: the same emitter must not carry
+        // escape bytes from argv either.
+        $command = new AgentsCommand($this->createAgentManagerWithAgents([]));
+
+        ob_start();
+        $exitCode = $command->execute(new Chat([]), ["\x1b]0;t\x07ghost\x00"]);
+        $output = (string) ob_get_clean();
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString(Lang::t('cmd.agents.unknown', ['name' => 'ghost']), $output);
+        $this->assertStringNotContainsString("\x1b", $output);
+        $this->assertStringNotContainsString("\x00", $output);
+    }
+
+    public function testABenignRosterCrossesTheChokeByteIdentical(): void
+    {
+        // The zero-golden control: ordinary preset text must cost the ordinary
+        // case nothing. The whole detail page is compared, byte for byte.
+        $agent = new Agent(
+            name: 'code-reviewer',
+            description: 'Reviews code for bugs',
+            prompt: 'You are a reviewer.',
+            model: 'claude-sonnet-4-6',
+            provider: 'anthropic',
+            tools: ['read', 'write'],
+            skillNames: ['php-pro', 'code-philosophy'],
+            hooks: ['pre-commit'],
+            isActive: true,
+        );
+        $command = new AgentsCommand($this->createAgentManagerWithAgents([$agent]));
+
+        ob_start();
+        $exitCode = $command->execute(new Chat([]), ['code-reviewer']);
+        $output = (string) ob_get_clean();
+
+        $this->assertSame(0, $exitCode);
+        $this->assertSame(
+            "\n  " . Lang::t('cmd.agents.detail.agent', ['name' => 'code-reviewer']) . "\n"
+            . "  " . str_repeat('─', 50) . "\n"
+            . '  ' . Lang::t('cmd.agents.detail.description', ['description' => 'Reviews code for bugs']) . "\n"
+            . '  ' . Lang::t('cmd.agents.detail.model', ['model' => 'claude-sonnet-4-6']) . "\n"
+            . '  ' . Lang::t('cmd.agents.detail.provider', ['provider' => 'anthropic']) . "\n"
+            . '  ' . Lang::t('cmd.agents.detail.source', ['source' => 'native']) . "\n"
+            . '  ' . Lang::t('cmd.agents.detail.status', ['status' => Lang::t('cmd.agents.status.active')]) . "\n"
+            . '  ' . Lang::t('cmd.agents.detail.skills', ['skills' => 'php-pro, code-philosophy']) . "\n"
+            . '  ' . Lang::t('cmd.agents.detail.tools', ['tools' => 'read, write']) . "\n"
+            . '  ' . Lang::t('cmd.agents.detail.hooks', ['hooks' => 'pre-commit']) . "\n"
+            . "\n",
+            $output,
+            'benign roster text crossed the sweep choke byte-identical (or the fixture spells the emitter page wrong — compare against the live row set)',
+        );
+    }
+
     private function runAgents(string $text): \SugarCraft\Code\Host\Commands\CommandResult
     {
         $agentManager = $this->createAgentManagerWithAgents([
