@@ -143,16 +143,19 @@ use SugarCraft\Code\Usage;
  * ({@see EngineBackend::honoursReasoningEffort()}), and is left off with the
  * same kind of note where it would be silently dropped.
  *
- * THE PERMISSION MODE NARROWS, NEVER WIDENS (roadmap 4.1-2). The session's
- * gate governs every call the sub-agent makes, exactly as it governs the
- * caller's own, and the preset's `tools:` grant narrows it. A preset's
- * `permissionMode:` narrows it further when it is the stricter of the two:
- * the sub-agent's own gate ({@see AgentManager::createSubAgent()}, built for
- * the stricter mode) is put to every call as a second gate through
- * {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook} — so a `plan`
- * reviewer cannot write under a `default` session — while a WIDER preset mode
- * (`bypass-permissions` under `default`) changes nothing. A delegation can
- * therefore never do more than the session that asked for it could.
+ * THE PERMISSION MODE NARROWS, NEVER WIDENS (roadmap 4.1-2), AND THE CHANNEL
+ * SCOPE RIDES THE DELEGATION (D6). Every call the sub-agent makes is judged
+ * by its OWN gate ({@see AgentManager::createSubAgent()}, minted for the
+ * stricter of the preset's `permissionMode:` and the session's) — so a
+ * `plan` reviewer cannot write under a `default` session, while a WIDER
+ * preset mode (`bypass-permissions` under `default`) changes nothing. The
+ * session's channel tool scope is applied to that same gate, restriction
+ * only: a tool the group denies (or never allowed) stays refused for every
+ * delegated call, and a refusing-all admission refuses all of them. The
+ * preset's `tools:` grant narrows the admitted set further, enforced as a
+ * second gate through {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook}.
+ * A delegation can therefore never do more than the session that asked for
+ * it could.
  *
  * SEVERAL TASK CALLS IN ONE MESSAGE RUN CONCURRENTLY. Bound, this tool is
  * {@see ParallelSafe}, which the interface's rule 1 would forbid for a tool
@@ -995,13 +998,15 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
         }
 
         try {
-            // 4.1-2: the agent's own mode, narrowed to the session's — see
-            // AgentManager::createSubAgent().
+            // 4.1-2: the agent's own mode, narrowed to the session's — and
+            // D6: the session's channel scope, so a per-group/channel policy
+            // binds the delegation too. AgentManager::createSubAgent().
             $subAgent = $this->agentManager->createSubAgent(
                 $agentName,
                 $prompt,
                 $this->agentManager->get($agentName)?->permissionMode,
                 $this->engine?->permissionGate()?->mode(),
+                $this->engine?->permissionGate()?->channelScope(),
             );
         } catch (\RuntimeException|\LogicException $refusal) {
             return $this->refusal($toolCallId, $refusal->getMessage());
@@ -1348,6 +1353,7 @@ final readonly class TaskTool implements Tool, ParallelSafe, ExemptFromParallelD
                 $task,
                 $preset->permissionMode,
                 $this->engine->permissionGate()?->mode(),
+                $this->engine->permissionGate()?->channelScope(),
             );
         } catch (\RuntimeException | \LogicException $e) {
             return $this->refusal($toolCallId, $e->getMessage());
