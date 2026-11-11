@@ -7660,7 +7660,7 @@ public static function useMaxCost(?string $maxCost): void
         // user typed deserves an answer; a default the product chose does not
         // announce its own failure on every launch).
         $reviewer = null;
-        $autoReview = self::readUserConfig()['autoReview'] ?? null;
+        $autoReview = EnvBool::isSet(\getenv('CANDY_CODE_DISABLE_AUTO_REVIEW')) ? false : (self::readUserConfig()['autoReview'] ?? null); // C-M17 env kill
         $autoReviewImplicit = $autoReview === null;
         if ($autoReview !== null && !is_bool($autoReview)) {
             self::warnPermissionConfigOnce(Lang::t('cli.warn.auto_review_not_bool'));

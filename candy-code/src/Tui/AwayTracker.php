@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Tui;
 
+use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Config\Settings\UiSettings;
+use SugarCraft\Code\Support\EnvBool;
 
 /**
  * The away stamp behind the focus recap (C-TUI-3.g, GAP-UI-N4) — the
@@ -89,11 +91,28 @@ final class AwayTracker
 
     /**
      * Whether the automatic recap may speak at all. The schema's read point
-     * for {@see SETTING_KEY}.
+     * for {@see SETTING_KEY}. C-M17: CANDY_CODE_DISABLE_AWAY_RECAP is the
+     * shell's word over every file, and the user tier alone decides — a
+     * project may switch this off, never on (same form as
+     * {@see \SugarCraft\Code\Permissions\ReadOnlyCommands::autoAllowEnabled()}).
      */
     public static function recapEnabled(): bool
     {
-        return UiSettings::bool(self::SETTING_KEY);
+        if (EnvBool::isSet(\getenv('CANDY_CODE_DISABLE_AWAY_RECAP'))) {
+            return false;
+        }
+
+        if (!UiSettings::bool(self::SETTING_KEY)) {
+            return false;
+        }
+
+        try {
+            $userTier = Bootstrap::readUserConfigWithoutProjectTier()[self::SETTING_KEY] ?? true;
+        } catch (\Throwable) {
+            $userTier = true;
+        }
+
+        return $userTier !== false;
     }
 
     /** Drop a held stamp. Test seam; the regain path already consumes. */

@@ -414,11 +414,18 @@ final class TitleService
      * unnamed until `/rename` — which still asks the title model on demand
      * ({@see regenerateCall()} is not gated). Read per turn through
      * {@see \SugarCraft\Code\Config\Settings\UiSettings}, so a save
-     * applies to the next session that would have been titled.
+     * applies to the next session that would have been titled. C-M17 adds
+     * `CANDY_CODE_DISABLE_AUTO_TITLE` as the shell's word over every file,
+     * and the user tier alone decides: a project may switch this off, never
+     * on ({@see userTierAllows()}).
      */
     public static function autoTitleEnabled(): bool
     {
-        return \SugarCraft\Code\Config\Settings\UiSettings::bool(self::AUTO_TITLE_SETTING);
+        if (\SugarCraft\Code\Support\EnvBool::isSet(\getenv('CANDY_CODE_DISABLE_AUTO_TITLE'))) {
+            return false;
+        }
+
+        return self::userTierAllows(self::AUTO_TITLE_SETTING);
     }
 
     /**
@@ -427,12 +434,69 @@ final class TitleService
      * settings say, and the `promptSuggestions` setting (default on) turns them
      * off without it. Neither turns them back on over the other — and a host
      * with no input box still switches them off on top
-     * ({@see withPromptSuggestions()}).
+     * ({@see withPromptSuggestions()}). Since C-M17 the setting's user tier
+     * decides it the same way the shell does: a project file may switch this
+     * off, never on ({@see userTierAllows()}).
      */
     public static function promptSuggestionsEnabled(): bool
     {
         return !\SugarCraft\Code\Support\EnvBool::isSet(\getenv('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS'))
-            && \SugarCraft\Code\Config\Settings\UiSettings::bool(self::PROMPT_SUGGESTIONS_SETTING);
+            && self::userTierAllows(self::PROMPT_SUGGESTIONS_SETTING);
+    }
+
+    /**
+     * The paid side calls this launch will make, as rows for the once-per-
+     * session launch notice (C-M17, piece c). The autoReview row rides only
+     * while the engagement is IMPLICIT — an explicit true or false is already
+     * the operator's own word, and the implicit announce is owner-ruled
+     * territory (t212) reproduced verbatim, never reworded here. The
+     * defaults row rides when any of the three default-on dials (autoTitle,
+     * prompt suggestions, away recap) is effectively on. Rows fold into
+     * {@see \SugarCraft\Code\Cli\Bootstrap}'s existing notice channel —
+     * nothing in this method starts a call.
+     *
+     * @return list<string>
+     */
+    public static function launchPaidSideNotices(bool $autoReviewImplicit): array
+    {
+        $notices = [];
+
+        if ($autoReviewImplicit) {
+            $notices[] = \SugarCraft\Code\Lang::t('appLaunch.notice.auto_review_default');
+        }
+
+        if (self::autoTitleEnabled() || self::promptSuggestionsEnabled()
+            || \SugarCraft\Code\Tui\AwayTracker::recapEnabled()) {
+            $notices[] = \SugarCraft\Code\Lang::t('appLaunch.notice.paid_side_defaults');
+        }
+
+        return $notices;
+    }
+
+    /**
+     * The user tier decides a paid side call (C-M17): a project file may
+     * switch the dial OFF — narrowing a cost is its business — but never
+     * ON. Merge precedence (`LayeredSettings::merge()`, highest layer wins
+     * per key) has always made that true in effect; this makes it the
+     * reader's shape too, in the same form as
+     * {@see \SugarCraft\Code\Permissions\ReadOnlyCommands::autoAllowEnabled()}:
+     * the merged value AND the value without the project tier must both be
+     * on. A settings read that cannot be taken at all falls to the default
+     * (on), exactly as the merged read would.
+     */
+    private static function userTierAllows(string $key): bool
+    {
+        if (!\SugarCraft\Code\Config\Settings\UiSettings::bool($key)) {
+            return false;
+        }
+
+        try {
+            $userTier = \SugarCraft\Code\Cli\Bootstrap::readUserConfigWithoutProjectTier()[$key] ?? true;
+        } catch (\Throwable) {
+            $userTier = true;
+        }
+
+        return $userTier !== false;
     }
 
     /**

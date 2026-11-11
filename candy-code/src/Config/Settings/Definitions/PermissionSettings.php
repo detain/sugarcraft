@@ -68,10 +68,19 @@ final class PermissionSettings implements SettingDefinitionSet
             // model exists, announcing once per session. This literal is what a
             // config editor displays as the value's type-default; the gate is
             // what decides engagement. false is a real opt-out and never engages.
+            //
+            // C-M17: CANDY_CODE_DISABLE_AUTO_REVIEW is the fourth paid dial’s
+            // shell-word, and it can only switch the reviewer OFF. The C-SEC-7.d
+            // ruling below bans an env var on autoReviewScope/autoReviewModel
+            // because "a stray spelling in a shared shell profile must not start
+            // a paid review loop" — that ban governs the ENABLE direction; a
+            // DISABLE-direction kill cannot start spend, and with the variable
+            // unset the launch is byte-identical to the t212 shape above.
             SettingDefinition::new('autoReview', SettingType::Bool, false)
                 ->withCategory(SettingCategory::Permissions)
                 ->withRiskClass(RiskClass::Spend)
                 ->withLayered()
+                ->withEnvVar('CANDY_CODE_DISABLE_AUTO_REVIEW')
                 ->withLabel(Lang::t('settings.autoReview.label'))
                 ->withHelp(Lang::t('settings.autoReview.help'))
                 // The stored `false` alone reads as "off until switched on";

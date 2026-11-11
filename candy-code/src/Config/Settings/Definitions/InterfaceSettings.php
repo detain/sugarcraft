@@ -246,7 +246,10 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withReaderSymbol(Bootstrap::class . '::sessionRetentionDays')
                 ->withReadBy('`Bootstrap::sessionStore()` at launch → `sessionRetentionDays()`'),
             // The title model's two side-calls (roadmap N-P4g). Switching
-            // either off only saves calls, so a project may (Narrowing); how
+            // either off only saves calls, so a project may switch them OFF —
+            // and never ON (C-M17: a checkout must not be able to start paid
+            // calls; the writer refuses an ON project write and the readers
+            // AND the user tier); how
             // much history a suggestion is shown is input tokens on every
             // turn, so that one is the operator's alone.
             SettingDefinition::new(TitleService::AUTO_TITLE_SETTING, SettingType::Bool, true)
@@ -255,6 +258,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
+                ->withEnvVar('CANDY_CODE_DISABLE_AUTO_TITLE')
                 ->withLabel(Lang::t('settings.sessions.autoTitle.label'))
                 ->withHelp(Lang::t('settings.sessions.autoTitle.help'))
                 ->withReaderSymbol(TitleService::class . '::autoTitleEnabled')
@@ -282,7 +286,8 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withReadBy('`TitleService::suggestionCall()` → `promptSuggestionHistory()`'),
             // C-TUI-3.g (GAP-UI-N4): the away recap's third title-model
             // side-call. Switching it off only saves calls, so a project
-            // may (Narrowing) — and unlike the two above it defaults ON for
+            // may switch it OFF — and never ON (C-M17, as with the two
+            // above) — and unlike the two above it defaults ON for
             // the Claude Code parity the design names, because the return
             // row is a feature, not a cost the user expects to opt into.
             SettingDefinition::new(AwayTracker::SETTING_KEY, SettingType::Bool, true)
@@ -291,6 +296,7 @@ final class InterfaceSettings implements SettingDefinitionSet
                 ->withLayered()
                 ->withProjectSettable()
                 ->withApplyMode(ApplyMode::Live)
+                ->withEnvVar('CANDY_CODE_DISABLE_AWAY_RECAP')
                 ->withLabel(Lang::t('settings.sessions.awayRecap.label'))
                 ->withHelp(Lang::t('settings.sessions.awayRecap.help'))
                 ->withReaderSymbol(AwayTracker::class . '::recapEnabled')

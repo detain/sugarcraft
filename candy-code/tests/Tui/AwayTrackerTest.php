@@ -37,6 +37,31 @@ final class AwayTrackerTest extends TestCase
         self::assertSame('sessions.awayRecap', AwayTracker::SETTING_KEY);
     }
 
+    /**
+     * C-M17: CANDY_CODE_DISABLE_AWAY_RECAP is the shell's word over every
+     * file; unset, the shipped default-on shape is byte-identical.
+     */
+    public function testTheRecapEnvKillIsTheShellsWord(): void
+    {
+        self::assertTrue(AwayTracker::recapEnabled(), 'on with nothing in the environment');
+
+        putenv('CANDY_CODE_DISABLE_AWAY_RECAP=1');
+        try {
+            self::assertFalse(AwayTracker::recapEnabled());
+        } finally {
+            putenv('CANDY_CODE_DISABLE_AWAY_RECAP');
+        }
+
+        putenv('CANDY_CODE_DISABLE_AWAY_RECAP=0');
+        try {
+            self::assertTrue(AwayTracker::recapEnabled(), '`0` is not set, same law as the other flags');
+        } finally {
+            putenv('CANDY_CODE_DISABLE_AWAY_RECAP');
+        }
+
+        self::assertTrue(AwayTracker::recapEnabled(), 'the kill is gone when the variable is');
+    }
+
     public function testARegainWithNoStampClosesNothing(): void
     {
         self::assertNull(AwayTracker::focusGained(self::T0 + 10));

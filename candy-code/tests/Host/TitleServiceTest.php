@@ -194,6 +194,59 @@ final class TitleServiceTest extends TestCase
         self::assertNotNull(TitleService::new()->suggestionCall($titler, $settled, 1, 's', false));
     }
 
+    /**
+     * C-M17: every paid side dial gets the shell's word. The two new kills
+     * join CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS; with nothing in the
+     * environment the launch is as it was.
+     */
+    public function testThePaidSideDialEnvKillsAreTheShellsWord(): void
+    {
+        self::assertTrue(TitleService::autoTitleEnabled(), 'on with nothing in the environment');
+        self::assertTrue(TitleService::promptSuggestionsEnabled());
+
+        putenv('CANDY_CODE_DISABLE_AUTO_TITLE=1');
+        try {
+            self::assertFalse(TitleService::autoTitleEnabled());
+            self::assertTrue(TitleService::promptSuggestionsEnabled(), 'the kills do not cross');
+        } finally {
+            putenv('CANDY_CODE_DISABLE_AUTO_TITLE');
+        }
+
+        putenv('CANDY_CODE_DISABLE_AUTO_TITLE=0');
+        try {
+            self::assertTrue(TitleService::autoTitleEnabled(), '`0` is not set, same law as the other flags');
+        } finally {
+            putenv('CANDY_CODE_DISABLE_AUTO_TITLE');
+        }
+
+        self::assertTrue(TitleService::autoTitleEnabled(), 'the kill is gone when the variable is');
+    }
+
+    public function testLaunchPaidSideNoticesCarriesEachRowUnderItsOwnPolarity(): void
+    {
+        $implicit = TitleService::launchPaidSideNotices(true);
+        self::assertContains(\SugarCraft\Code\Lang::t('appLaunch.notice.auto_review_default'), $implicit, 'the t212 row rides verbatim');
+        self::assertContains(\SugarCraft\Code\Lang::t('appLaunch.notice.paid_side_defaults'), $implicit, 'the dials default on');
+
+        $explicit = TitleService::launchPaidSideNotices(false);
+        self::assertNotContains(\SugarCraft\Code\Lang::t('appLaunch.notice.auto_review_default'), $explicit, 'an explicit opt-out never re-announces');
+
+        putenv('CANDY_CODE_DISABLE_AUTO_TITLE=1');
+        putenv('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS=1');
+        putenv('CANDY_CODE_DISABLE_AWAY_RECAP=1');
+        try {
+            self::assertNotContains(
+                \SugarCraft\Code\Lang::t('appLaunch.notice.paid_side_defaults'),
+                TitleService::launchPaidSideNotices(false),
+                'nothing on, nothing announced',
+            );
+        } finally {
+            putenv('CANDY_CODE_DISABLE_AUTO_TITLE');
+            putenv('CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS');
+            putenv('CANDY_CODE_DISABLE_AWAY_RECAP');
+        }
+    }
+
     public function testWithPromptSuggestionsIsImmutable(): void
     {
         $on = TitleService::new();
