@@ -20,7 +20,11 @@ namespace SugarCraft\Core\Util\Tty;
  * `\FFI\CData`.  On real Windows the handle is a 32/64-bit pointer
  * address; on the test double it is a stable small integer.  This
  * avoids all `void*` CData pitfalls on Linux while preserving full
- * functional equivalence.
+ * functional equivalence.  The kernel32 cdef spells every
+ * handle-taking parameter `long long` (C5), so the real binding hands
+ * the int straight to libffi as a pointer-width value — materializing
+ * it as a `void*` CData to satisfy a `HANDLE` parameter instead faults
+ * natively inside the call.
  */
 interface Kernel32Interface
 {

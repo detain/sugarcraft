@@ -317,6 +317,46 @@ final class ProcessContainment
      *
      * @param list<string> $candidate
      */
+    /**
+     * Is this child leading (or unverifiably not contradicting) its own
+     * process group? THE single leadership predicate, shared by the
+     * detached-arm probe below and by ProcessContainmentPhpSetsidTest —
+     * production and its test must not run two dialects of the same poll
+     * (the macOS roundtrip of 2026-11-11 proved one dialect can be the
+     * wrong one: Darwin's posix_getpgid answers FALSE for an exited child
+     * even unreaped, where Linux answers the zombie's real pgid).
+     *
+     * The class doctrine — unverifiable is NOT rejected — extends to the
+     * ESRCH answer exactly as it does to the missing function. Accepting
+     * unobservability forfeits nothing the probe does not already prove:
+     * the helper arm reaches exit(7) only after posix_setsid() succeeded
+     * (it exits 127 otherwise), and a child that is OBSERVABLY in the
+     * wrong group answers the poll with its real pgid on both platforms
+     * while it lives, so it stays a denial for the full deadline.
+     *
+     * @param int $deadlineNs absolute hrtime(true) deadline for the poll
+     */
+    public static function childLeadsOwnGroup(int $pid, int $deadlineNs): bool
+    {
+        if (!\function_exists('posix_getpgid')) {
+            return true;
+        }
+
+        while (true) {
+            $pgid = @\posix_getpgid($pid);
+            if ($pgid === $pid || $pgid === false) {
+                // Confirmed leadership, or nothing left to observe.
+                return true;
+            }
+
+            if (\hrtime(true) >= $deadlineNs) {
+                return false;
+            }
+
+            \usleep(1000);
+        }
+    }
+
     private static function probeDetachedCandidate(array $candidate): bool
     {
         $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
@@ -350,27 +390,17 @@ final class ProcessContainment
         \fclose($pipes[1]);
         \fclose($pipes[2]);
 
-        $leader = true;
-        if (\function_exists('posix_getpgid')) {
-            $leader = false;
-            while (true) {
-                if (@\posix_getpgid($pid) === $pid) {
-                    $leader = true;
-                    break;
-                }
-                if (\hrtime(true) >= $deadline) {
-                    break;
-                }
-                \usleep(1000);
-            }
-            if (!$leader) {
-                \proc_terminate($probe, \SIGKILL);
-            }
+        // THE shared predicate (childLeadsOwnGroup): a poll the OS cannot
+        // contradict is not a poll against the arm. When it verifiably
+        // denies, the candidate is unproven — reap, terminate, refuse.
+        if (!self::childLeadsOwnGroup($pid, $deadline)) {
+            \proc_terminate($probe, \SIGKILL);
+            \proc_close($probe);
+
+            return false;
         }
 
-        $status = \proc_close($probe);
-
-        return $leader && $status === 7;
+        return \proc_close($probe) === 7;
     }
 
     /**

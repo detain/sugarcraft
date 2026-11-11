@@ -31,6 +31,34 @@ use SugarCraft\Pty\PtySystemFactory;
 final class PtyBackend
 {
     /**
+     * The platform system a call opens through: the injected scripted system
+     * when a test hands one over, else the factory's OS pick — consulted
+     * FRESH on every call, exactly as the pre-seam one-liner did. A memoised
+     * instance would launder a later environment override into a stale
+     * system and void the factory-path pins in PtyBackendTest; the factory's
+     * pick is deterministic per environment, so the capability question and
+     * the allocation answer still agree.
+     */
+    public static function system(?PtySystem $injected = null): PtySystem
+    {
+        return $injected ?? PtySystemFactory::new();
+    }
+
+    /**
+     * Whether the chosen system can honour a controlling-terminal request.
+     *
+     * The POSIX map carries no `controllingTerminal` key at all — absence
+     * means the historical `true` stands. ConPTY reports the key `false`
+     * and THROWS on a true request (ConPtySlavePty::spawn), so openers
+     * that hard-wired `true` refused every pty-backed run on Windows
+     * (LANE-CC win smoke red, 2026-11-11). Ask the system, not the habit.
+     */
+    public static function honoursControllingTerminal(): bool
+    {
+        return self::system()->capabilities()['controllingTerminal'] ?? true;
+    }
+
+    /**
      * Allocate a pseudo-terminal of the requested size on whichever system
      * this host answers to.
      *
@@ -45,6 +73,6 @@ final class PtyBackend
      */
     public static function open(int $cols = 80, int $rows = 24, ?PtySystem $system = null): PtyPair
     {
-        return ($system ?? PtySystemFactory::new())->open($cols, $rows);
+        return self::system($system)->open($cols, $rows);
     }
 }
