@@ -1,5 +1,6 @@
 import { watch } from 'vue'
 import { oneLine } from '../../lib/format'
+import { t } from '../../lib/i18n'
 import type { SessionSummary } from '../../protocol/generated'
 import { useApprovalsStore, type SessionAsk } from '../../stores/approvals'
 import { useLayoutStore } from '../../stores/layout'
@@ -67,7 +68,7 @@ export function useAttention(options: AttentionOptions = {}): () => void {
   const stopAsks = approvals.onNew((ask: SessionAsk) => {
     if (onScreen(ask.sessionId)) return
     const where = sessionLabel(sessions.byId[ask.sessionId], ask.sessionId)
-    notify(`${ask.tool} is waiting for an answer`, ask.reason ? `${where}: ${ask.reason}` : where, ask.askId)
+    notify(t('web.chrome.push.ask_title', { tool: ask.tool }), ask.reason ? t('web.chrome.push.ask_body_reason', { where, reason: ask.reason }) : where, ask.askId)
   })
 
   // A turn that ends where nobody is looking.
@@ -78,7 +79,7 @@ export function useAttention(options: AttentionOptions = {}): () => void {
       const before = seen.get(id)
       seen.set(id, status)
       if (before === undefined || !WORKING.has(before) || status !== 'idle' || onScreen(id)) continue
-      notify(`${sessionLabel(sessions.byId[id], id)} finished`, 'The turn is done.', `done:${id}`)
+      notify(t('web.chrome.push.done_title', { session: sessionLabel(sessions.byId[id], id) }), t('web.chrome.push.done_body'), `done:${id}`)
     }
   })
 
