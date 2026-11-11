@@ -134,4 +134,34 @@ describe('composer prompt suggestion (C-CTX-2.d)', () => {
     await wrapper.find(INPUT).trigger('keydown', { key: 'ArrowRight' })
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
   })
+
+  it('the offer arrives in an assistive-tech announcement, not only the placeholder', async () => {
+    const ANNOUNCE = '[data-testid="composer-suggestion-announcement"]'
+    await liveSession('sA')
+    const wrapper = await mountAt('sA')
+    await flushPromises()
+
+    // No offer, no announcement: the Tab/→ capture only exists while a
+    // suggestion is live, so only then must it be spoken.
+    expect(wrapper.find(ANNOUNCE).exists()).toBe(false)
+
+    wire.event('sA', 'prompt.suggested', { text: 'Ship the release', generation: 1 }, false)
+    await flushPromises()
+    await wrapper.vm.$nextTick()
+
+    // UXB-F8: the placeholder carried the offer and nothing else did —
+    // placeholder text is announced inconsistently across screen readers.
+    // A polite status region speaks the SAME server-served text the moment
+    // it arrives. Zero new prose: the content is the offer itself.
+    const region = wrapper.find(ANNOUNCE)
+    expect(region.exists()).toBe(true)
+    expect(region.attributes('aria-live')).toBe('polite')
+    expect(region.attributes('role')).toBe('status')
+    expect(region.text()).toBe('Ship the release')
+
+    // Accepting the offer retires the region with it — no stale announcement.
+    await wrapper.find(INPUT).trigger('keydown', { key: 'Tab' })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find(ANNOUNCE).exists()).toBe(false)
+  })
 })

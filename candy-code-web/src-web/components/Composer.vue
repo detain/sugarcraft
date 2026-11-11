@@ -1223,6 +1223,20 @@ defineExpose({ focus: () => input.value?.focus() });
                 @keydown="onKeydown"
                 @paste="onPaste"
             />
+            <!-- UXB-F8: while an offer is live the textarea swallows Tab and → to
+                 accept it, and the placeholder was the only signal — placeholder
+                 text is announced inconsistently across screen readers. A polite
+                 status region speaks the server-served offer the moment it
+                 arrives. No new prose: the content is the offer itself. -->
+            <div
+                v-if="suggestion !== null"
+                class="sr-only"
+                role="status"
+                aria-live="polite"
+                data-testid="composer-suggestion-announcement"
+            >
+                {{ suggestion }}
+            </div>
             <div v-if="interim !== ''" class="dictation-hint" data-testid="composer-dictation-hint">
                 {{ interim }}
             </div>
