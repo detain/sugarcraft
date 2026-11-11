@@ -92,6 +92,60 @@ describe('CandyCodeClient', () => {
     expect(seen[0]?.type).toBe('session.status')
   })
 
+  it('fans one event to every listener without touching the error state', async () => {
+    const { client, socket, handshake } = harness()
+    const first: EventEnvelope[] = []
+    const second: EventEnvelope[] = []
+    client.onEvent((event) => first.push(event))
+    client.onEvent((event) => second.push(event))
+    client.start()
+    await flush()
+    handshake()
+    socket().event({ sessionId: 's', seq: 1, type: 'session.status', ts: 1, durable: true, data: { status: 'busy' } })
+    expect(first).toHaveLength(1)
+    expect(second).toHaveLength(1)
+    expect(client.lastError).toBeNull()
+    expect(client.malformedFrames).toBe(0)
+  })
+
+  it('isolates a throwing event listener and names its crash on the visible error state', async () => {
+    const { client, socket, handshake } = harness()
+    const boom = `event-listener-crash-${Math.random().toString(36).slice(2, 10)}`
+    const seen: EventEnvelope[] = []
+    let changes = 0
+    client.onChange(() => {
+      changes += 1
+    })
+    client.onEvent(() => {
+      throw new Error(boom)
+    })
+    client.onEvent((event) => seen.push(event))
+    client.start()
+    await flush()
+    handshake()
+    const changesAfterHello = changes
+    socket().event({ sessionId: 's', seq: 1, type: 'session.status', ts: 1, durable: true, data: { status: 'busy' } })
+    expect(seen).toHaveLength(1)
+    expect(client.lastError).toBe(boom)
+    expect(changes).toBeGreaterThan(changesAfterHello)
+  })
+
+  it('counts frames that fail to parse and keeps the connection usable', async () => {
+    const { client, socket, handshake } = harness()
+    const seen: EventEnvelope[] = []
+    client.onEvent((event) => seen.push(event))
+    client.start()
+    await flush()
+    handshake()
+    expect(client.malformedFrames).toBe(0)
+    socket().onmessage?.({ data: '{not json' })
+    expect(client.malformedFrames).toBe(1)
+    expect(client.lastError).toBeNull()
+    socket().event({ sessionId: 's', seq: 1, type: 'session.status', ts: 1, durable: true, data: { status: 'busy' } })
+    expect(seen).toHaveLength(1)
+    expect(client.malformedFrames).toBe(1)
+  })
+
   it('reconnects on the backoff with a fresh ticket, refusing reads in flight and resending writes once with the same key', async () => {
     const { client, sockets, socket, timers, handshake } = harness()
     client.start()

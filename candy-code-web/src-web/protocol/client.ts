@@ -96,6 +96,13 @@ export class CandyCodeClient {
   retryAt: number | null = null
   lastError: string | null = null
   /**
+   * B-43 (cc-review-1111): frames that arrive on the wire and fail to parse
+   * are dropped — there is nothing safe to dispatch — but a drop with no
+   * trace was the failure class. The count rides the client's public state,
+   * readable wherever the client itself is.
+   */
+  malformedFrames = 0
+  /**
    * The reconnect ladder ran out (ISS-052): a killed or recycled server is
    * named as such rather than retried in silence forever. {@see start()} —
    * the banner's retry — spends a fresh ladder.
@@ -237,6 +244,7 @@ export class CandyCodeClient {
       try {
         frame = JSON.parse(String(message.data))
       } catch {
+        this.malformedFrames += 1
         return
       }
       if (isResponse(frame) && frame.id === HELLO_ID) {
@@ -244,7 +252,20 @@ export class CandyCodeClient {
       } else if (isResponse(frame)) {
         this.answered(frame)
       } else if (isEvent(frame)) {
-        for (const listener of this.eventListeners) listener(frame.params)
+        // B-43 (cc-review-1111): the hello spine isolates every listener
+        // (see helloAnswered); the event fan-out was the one dispatch loop
+        // that did not, so one crashing consumer silenced all the listeners
+        // behind it for the frame. Here the crash is additionally named on
+        // lastError and the change listeners re-run — the store's visible
+        // error state carries it instead of swallowing it.
+        for (const listener of this.eventListeners) {
+          try {
+            listener(frame.params)
+          } catch (error) {
+            this.lastError = error instanceof Error ? error.message : String(error)
+            this.emitChange()
+          }
+        }
       }
     }
     socket.onerror = () => {
