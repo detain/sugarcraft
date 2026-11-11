@@ -38,12 +38,6 @@ const ROOT = resolve(process.cwd(), 'src-web')
 
 /** Frozen offenders: `file|shape|flattened text`, sorted. */
 const KNOWN_RAWS = [
-  "src-web/components/CanvasCard.vue|attr|Canvas artifact",
-  "src-web/components/CanvasCard.vue|script|No session to link this canvas from.",
-  "src-web/components/CanvasCard.vue|script|The canvas link could not be minted.",
-  "src-web/components/CanvasCard.vue|text|Show canvas",
-  "src-web/components/approvals/attention.ts|ts|The turn is done.",
-  "src-web/components/approvals/attention.ts|ts|is waiting for an answer",
   "src-web/components/panels/BackgroundPanel.vue|text|Permission mode : nothing will ask a human before this run acts.",
   "src-web/components/panels/ChangesPanel.vue|text|is untracked — no diff for it in the workspace.",
   "src-web/components/panels/ContextPanel.vue|script|The file on disk no longer holds the bytes this listing measured — reopen Edit to save against the current file.",
@@ -171,7 +165,11 @@ function derivedRaws(): string[] {
 describe('raw-copy census (MA-17)', () => {
   test('the roster is sorted, unique, and at its measured floor', () => {
     expect(KNOWN_RAWS).toEqual([...new Set(KNOWN_RAWS)].sort())
-    expect(KNOWN_RAWS.length).toBeGreaterThanOrEqual(60)
+    // F-w1 2026-11-11: the web i18n leak wave took the roster 64 -> 58
+    // (CanvasCard, attention.ts and the Composer/StatusBar/Banner copy all moved
+    // behind web.* keys). The floor is the MEASURED figure, re-derived — the
+    // set-equality leg above stays exact, so this tightens the ratchet, never loosens it.
+    expect(KNOWN_RAWS.length).toBeGreaterThanOrEqual(58)
   })
 
   test('the shipped tree matches the frozen offender roster exactly', () => {

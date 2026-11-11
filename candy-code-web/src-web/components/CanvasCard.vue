@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { AuthError, canvasLink } from '../protocol/auth'
 import type { MediaRef } from '../protocol/generated'
+import { t } from '../lib/i18n'
 
 /**
  * One HTML artifact a finished `Canvas` tool produced (C-TOOL-6.g): the ref
@@ -36,7 +37,7 @@ const url = ref('')
 async function show(): Promise<void> {
   if (props.sessionId === undefined || props.sessionId === '') {
     phase.value = 'error'
-    problem.value = 'No session to link this canvas from.'
+    problem.value = t('web.canvas.no_session')
     return
   }
   phase.value = 'loading'
@@ -44,7 +45,7 @@ async function show(): Promise<void> {
     url.value = await canvasLink(props.sessionId, props.media.artifactId)
     phase.value = 'ready'
   } catch (error) {
-    problem.value = error instanceof AuthError ? error.message : 'The canvas link could not be minted.'
+    problem.value = error instanceof AuthError ? error.message : t('web.canvas.mint_failed')
     phase.value = 'error'
   }
 }
@@ -60,22 +61,22 @@ function hide(): void {
 <template>
   <figure class="canvas-card" :data-phase="phase" data-testid="canvas-card">
     <figcaption>
-      <span class="badge" data-testid="canvas-badge">canvas</span>
+      <span class="badge" data-testid="canvas-badge">{{ t('web.canvas.badge') }}</span>
       <span class="artifact">{{ media.artifactId }}</span>
     </figcaption>
-    <p v-if="phase === 'loading'" class="state" data-testid="canvas-loading">linking…</p>
+    <p v-if="phase === 'loading'" class="state" data-testid="canvas-loading">{{ t('web.canvas.linking') }}</p>
     <p v-else-if="phase === 'error'" class="state error" role="alert" data-testid="canvas-error">{{ problem }}</p>
-    <button v-else-if="phase === 'idle'" type="button" class="show" data-testid="canvas-show" @click="void show()">Show canvas</button>
+    <button v-else-if="phase === 'idle'" type="button" class="show" data-testid="canvas-show" @click="void show()">{{ t('web.canvas.show') }}</button>
     <div v-else class="frame">
       <iframe
         sandbox="allow-scripts"
         referrerpolicy="no-referrer"
         :src="url"
-        title="Canvas artifact"
+        :title="t('web.canvas.frame_title')"
         class="page"
         data-testid="canvas-frame"
       />
-      <button type="button" class="fold" data-testid="canvas-hide" @click="hide">hide</button>
+      <button type="button" class="fold" data-testid="canvas-hide" @click="hide">{{ t('web.canvas.hide') }}</button>
     </div>
   </figure>
 </template>
