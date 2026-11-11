@@ -71,13 +71,25 @@ final class SessionMap
         $this->db = $db;
     }
 
+    /**
+     * Bind (or re-bind) a key to a session. When the re-bind SWITCHES
+     * sessions the cursor resets to 0: `last_seq` records what this
+     * binding has seen of the session it watches, and a fresh session
+     * starts its own seq space — carrying the old session's high
+     * cursor across would make the router's durable gate swallow the
+     * new session's first events (cc-review-1111 M-7 deafness). A
+     * same-session re-bind keeps the cursor: it never moves backwards.
+     */
     public function bind(string $key, string $sessionId, ?string $peerId = null): void
     {
         $now = \time();
         $stmt = $this->db->prepare(
             'INSERT INTO bindings (key, session_id, last_seq, peer_id, created_at, updated_at)
              VALUES (:key, :session, 0, :peer, :now, :now)
-             ON CONFLICT(key) DO UPDATE SET session_id = excluded.session_id, updated_at = excluded.updated_at',
+             ON CONFLICT(key) DO UPDATE SET session_id = excluded.session_id,
+                 last_seq = CASE WHEN bindings.session_id = excluded.session_id
+                                 THEN bindings.last_seq ELSE 0 END,
+                 updated_at = excluded.updated_at',
         );
         $stmt->execute(['key' => $key, 'session' => $sessionId, 'peer' => $peerId, 'now' => $now]);
     }
