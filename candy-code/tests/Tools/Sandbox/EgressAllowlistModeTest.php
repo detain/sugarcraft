@@ -434,14 +434,26 @@ echo $code === '200' ? "LIVE-OK-ALLOW\n" : "LIVE-ALLOW-GOT($code)\n";
 }
 
 // TEST-NET-2 is not in the grant: EgressPolicy refuses at grant-matching,
-// before resolving, so nothing leaves this box.
-$denied = proc_open(
-    $sb->wrap('curl -s -m 15 -o /dev/null -w "%{http_code}" http://198.51.100.23/deny', $root, false),
-    [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-    $dp,
-);
+// before resolving, so nothing leaves this box. The proxy's accept loop can
+// still be waking when the no-hairpin path reaches this as the FIRST dial
+// through it — the hairpin path used to soak twenty-five seconds in the
+// allow-leg accept before the deny leg ever spoke (rt2 CI datum 2026-11-11:
+// the instant first dial answered EMPTY, not the proxy's 403). Retry the
+// denial while its answer is empty, bounded: a wrong-allow still answers
+// non-403 and stays the red it is meant to be.
 $denyCode = '';
-if ($denied !== false) {
+for ($attempt = 0; $attempt < 6 && $denyCode === ''; $attempt++) {
+    if ($attempt > 0) {
+        usleep(1_000_000);
+    }
+    $denied = proc_open(
+        $sb->wrap('curl -s -m 15 -o /dev/null -w "%{http_code}" http://198.51.100.23/deny', $root, false),
+        [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+        $dp,
+    );
+    if ($denied === false) {
+        break;
+    }
     $denyCode = trim((string) stream_get_contents($dp[1]));
     fclose($dp[1]);
     fclose($dp[2]);
