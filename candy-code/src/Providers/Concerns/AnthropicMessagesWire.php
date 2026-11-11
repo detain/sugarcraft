@@ -85,7 +85,7 @@ trait AnthropicMessagesWire
      * channel; base64 bloat inside a prompt prefix is a MODEL cost, so the
      * model budget is the smaller number. An image between the two caps rides
      * to the human as always and stays caption-only text on this wire — the
-     * caption states its own visibility, so nothing is silently lost.
+     * caption states the visibility condition, so nothing is silently lost.
      */
     public const TOOL_RESULT_IMAGE_MAX_BYTES = 256 * 1024;
 
@@ -103,7 +103,7 @@ trait AnthropicMessagesWire
      * the repeat cost bounded. Pinned below the user cap by test. A PDF over
      * this budget answers with caption text only, never truncated bytes — a
      * cut PDF is not a PDF, the same doctrine as the image leg — and the
-     * caption states its own visibility, so nothing is silently lost.
+     * caption states the visibility condition, so nothing is silently lost.
      */
     public const TOOL_RESULT_DOCUMENT_MAX_BYTES = 1024 * 1024;
 

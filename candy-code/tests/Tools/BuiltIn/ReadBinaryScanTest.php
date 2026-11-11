@@ -30,8 +30,7 @@ use SugarCraft\Code\Tools\ReadLedger;
  * SHL-3 T3 pins asserted a PDF answered with the document NOTICE pointing at
  * roads the model cannot walk (@-mentions are user input). The result is now
  * the carried document itself — documentBytes/documentName ride the same
- * codecs the image trio rides, and the caption states its own visibility
- * condition. These legs inject `pdfTextAvailable: false` to pin the carry
+ * codecs the image trio rides, and the caption states the visibility condition. These legs inject `pdfTextAvailable: false` to pin the carry
  * door deterministically on any host (the extractor door, and its fall-back
  * through the same fixtures, belong to ReadPdfTextTest); the magic-before-NUL
  * arm order stays pinned right here.

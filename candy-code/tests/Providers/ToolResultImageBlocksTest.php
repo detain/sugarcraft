@@ -249,6 +249,36 @@ final class ToolResultImageBlocksTest extends TestCase
         $this->assertIsArray($this->toolResultBlock($captured)['content'], 'the budget refuses past it, not at it');
     }
 
+    public function testTheOverBudgetLegKeepsReadsConditionalCaptionIntact(): void
+    {
+        // The wire docblock's "nothing is silently lost" claim is a PAIRING
+        // claim: the string the over-budget leg keeps is Read's caption, and
+        // what makes it honest is that the caption states the visibility
+        // CONDITION (pixels enter context only on a vision-capable wire
+        // within budget) rather than either polarity as fact. The synthetic
+        // caption above pins the branch; this pins the survivor to the real
+        // contract — the verbatim conditional caption passes the gate
+        // untouched, so the model's only signal still says how to read it.
+        $caption = 'Binary image (image/png), 262,152 bytes at /tmp/shot.png — the image itself rides '
+            . 'this result to the human-visible tool-result channel, and on a vision-capable wire within '
+            . 'the model budget its pixels enter your context too. If you can see the image, describe '
+            . 'what it shows; if you cannot, reason from its path and name, or ask the user.';
+
+        $captured = [];
+        $provider = $this->nativeProvider(self::VISION_MODEL, $captured);
+        $provider->complete($this->request(self::VISION_MODEL, new ToolResultMessage(
+            toolCallId: 'tu_1',
+            content: $caption,
+            imageBytes: "\x89PNG\r\n\x1a\n" . str_repeat('a', AnthropicProvider::TOOL_RESULT_IMAGE_MAX_BYTES),
+            imageProtocol: 'sixel',
+        )));
+
+        $block = $this->toolResultBlock($captured)['content'];
+        $this->assertSame($caption, $block, 'the over-budget leg must not reword the caption — it is the model\'s only signal');
+        $this->assertStringContainsString('If you can see the image', $block, 'first conditional half of the visibility contract survives serialization');
+        $this->assertStringContainsString('if you cannot', $block, 'second conditional half of the visibility contract survives serialization');
+    }
+
     public function testBytesThatNoLongerSniffAsAnImageStayCaptionText(): void
     {
         // The wire re-sniffs instead of trusting the carrier: rotted or forged
