@@ -1,5 +1,5 @@
 import { defineStore, getActivePinia } from 'pinia'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { SeqCursor } from '../protocol/cursor'
 import type { EventEnvelope, MethodResult, PermissionMode, Subscription } from '../protocol/generated'
 import { ProtocolError } from '../protocol/jsonrpc'
@@ -179,6 +179,22 @@ function setup(sessionId: string) {
     }
     if (phase.value === 'idle' && connection.connected) void subscribe()
   }
+
+  // B-75 (n48): the store owns its own wake-up. A retain while disconnected
+  // used to bump holders and rely on each mounted view's connection watch
+  // (SessionView, SessionTile) to subscribe when the link came back —
+  // call-site discipline, not store authority. The same rule now lives here,
+  // guarded by holders so a released store never reconnects behind its grace
+  // timer. Watching `connected` (not phase) keeps a failed subscribe from
+  // retry-looping: the catch path lands on phase 'idle' with connected
+  // unchanged. No immediate run — a retain while already connected goes
+  // through retain()'s own leg above.
+  watch(
+    () => connection.connected,
+    (connected) => {
+      if (connected && phase.value === 'idle' && holders > 0) void subscribe()
+    },
+  )
 
   function release(): void {
     holders = Math.max(0, holders - 1)

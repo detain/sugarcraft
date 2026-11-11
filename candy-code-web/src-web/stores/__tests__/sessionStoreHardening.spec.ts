@@ -264,3 +264,104 @@ describe('a poison durable event re-follows fresh (CW-1)', () => {
     expect(session.phase).toBe('live')
   })
 })
+
+/**
+ * CW-QUAL-A MINOR1 (m28): spend is authoritative in the snapshot — the
+ * transcript walk, spentUsd and every billed turn already in it. The
+ * turn-cost carrier (state.turnUsage) is live-turn state: before this fix it
+ * survived the RESET boundary, so a turn.completed replayed out of `early[]`
+ * folded the same cost a SECOND time onto the snapshot's own spentUsd. The
+ * badge over-displayed briefly until the next usage frame. Two shields now,
+ * both pinned: the snapshot clears the carrier, and the fold consumes it —
+ * a late or duplicate turn.completed can never re-add.
+ */
+describe('a RESET replay never re-folds the old turn carrier (CW-QUAL-A MINOR1)', () => {
+  it('a turn.completed held across a reset subscribe does not double-count', async () => {
+    await connect()
+    const session = useSessionStore('s1')
+    const first = session.subscribe()
+    answer('session.subscribe', SNAPSHOT)
+    await first
+
+    event('usage.updated', { turnUsage: { totalTokens: 10, costUsd: 0.5 } })
+    event('turn.completed', { stopReason: 'end_turn' })
+    await flush()
+    expect(session.state.spentUsd).toBe(0.5)
+
+    // Force a fresh (reset) subscribe and strand a turn.completed in the
+    // held queue: it arrives while phase is 'subscribing'.
+    const second = session.subscribe(true, true)
+    await flush()
+    event('turn.completed', { stopReason: 'end_turn' })
+    answer('session.subscribe', {
+      reset: true,
+      throughSeq: 9,
+      pendingAsks: [],
+      snapshot: {
+        sessionId: 's1',
+        status: 'idle',
+        lastSeq: 9,
+        pendingAsks: [],
+        queue: [],
+        messages: [],
+        spentUsd: 0.5,
+      },
+    })
+    await second
+    await flush()
+
+    // Base: the replayed fold re-added the surviving carrier → 1.0.
+    // Fixed: the snapshot cleared it → the snapshot's 0.5 stands.
+    expect(session.state.spentUsd).toBe(0.5)
+  })
+
+  it('a duplicate turn.completed on a live feed cannot re-add the cost', async () => {
+    await connect()
+    const session = useSessionStore('s1')
+    const first = session.subscribe()
+    answer('session.subscribe', SNAPSHOT)
+    await first
+
+    event('usage.updated', { turnUsage: { totalTokens: 10, costUsd: 0.5 } })
+    event('turn.completed', { stopReason: 'end_turn' })
+    event('turn.completed', { stopReason: 'end_turn' })
+    await flush()
+
+    // Base: the second fold saw the same un-consumed carrier → 1.0.
+    // Fixed: the fold consumes the carrier (mirroring the null-at-turn-open
+    // in turn.started) → 0.5.
+    expect(session.state.spentUsd).toBe(0.5)
+  })
+})
+
+/**
+ * B-75 (n48): retain-while-disconnected used to bump holders and rely on
+ * every mounted .vue watch (SessionView, SessionTile) to subscribe when the
+ * link came back — call-site discipline, not store authority. A session
+ * store with holders but no view-side watch (or a watch ordering gap) sat
+ * 'idle' forever. The store now owns the recovery itself: the same rule the
+ * views watch, in the store's setup, guarded by holders so a released store
+ * never reconnects behind its grace timer. Watching `connected` (not phase)
+ * keeps a failed subscribe from retry-looping — the catch path lands on
+ * phase 'idle' with connected unchanged.
+ */
+describe('a retain while disconnected reconnects from the store (B-75)', () => {
+  it('the held store subscribes on its own when the link comes up', async () => {
+    const session = useSessionStore('s1')
+    session.retain()
+    await flush()
+    // Nothing exists to speak on yet: the disconnected retain only holds.
+    expect(sockets).toHaveLength(0)
+
+    await connect()
+    await flush()
+
+    // Base: zero frames — only a mounted view's watch could revive it.
+    // Fixed: the store's own connection watch fires the subscribe.
+    expect(sent('session.subscribe')).toHaveLength(1)
+
+    answer('session.subscribe', SNAPSHOT)
+    await flush()
+    expect(session.phase).toBe('live')
+  })
+})

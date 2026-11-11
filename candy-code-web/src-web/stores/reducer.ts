@@ -301,6 +301,11 @@ export function applySnapshot(state: SessionState, snapshot: SessionSnapshot): v
   state.reasoning = null
   // C-CTX-2.d: the suggestion is live-only — a snapshot never carries one.
   state.suggestedPrompt = null
+  // CW-QUAL-A MINOR1 (m28): the turn-cost carrier is live-turn state on the
+  // same law — the snapshot already bills its spend into spentUsd. A carrier
+  // that survived the RESET boundary let a replayed turn.completed fold the
+  // same cost a second time onto the snapshot's figure.
+  state.turnUsage = null
   state.subagents = {}
   for (const raw of snapshot.subagents ?? []) {
     const agent = raw as unknown as SubAgent
@@ -778,6 +783,10 @@ export function applyEvent(state: SessionState, envelope: EventEnvelope): void {
         })
       }
       if (state.turnUsage?.costUsd) state.spentUsd += state.turnUsage.costUsd
+      // CW-QUAL-A MINOR1 (m28): the fold CONSUMES the carrier — mirroring
+      // the null-at-turn-open in turn.started — so a late or duplicate
+      // turn.completed can never add the same cost twice.
+      state.turnUsage = null
       state.turnId = null
       // C-WEB-4.d: the turn is over; the timer hides with it.
       state.turnStartedAt = null
