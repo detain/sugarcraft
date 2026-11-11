@@ -1294,9 +1294,9 @@ defineExpose({ focus: () => input.value?.focus() });
                 :aria-label="t('web.composer.delivery_aria')"
                 data-testid="composer-delivery"
             >
-                <option value="queue">queue</option>
-                <option value="steer">steer</option>
-                <option value="interrupt">interrupt</option>
+                <option value="queue">{{ t("web.composer.send_delivery_queue") }}</option>
+                <option value="steer">{{ t("web.composer.send_delivery_steer") }}</option>
+                <option value="interrupt">{{ t("web.composer.send_delivery_interrupt") }}</option>
             </select>
             <button
                 type="button"
