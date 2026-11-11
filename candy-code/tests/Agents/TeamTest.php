@@ -464,6 +464,74 @@ final class TeamTest extends TestCase
         );
     }
 
+    /**
+     * Row n15: the rebuild sink must mirror the create-time guard set. A
+     * slash-only id carries no '..' — {@see TeamManager::createTeam()} has
+     * refused it since its guard landed, yet a registry row written before
+     * that (or hand-tampered) streams through {@see TeamManager::build()}
+     * into the constructor, where the base-era single arm let it nest a
+     * directory under teams/.
+     */
+    public function testTeamIdWithSlashThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('slashes, or backslashes');
+
+        new Team(
+            id: 'alpha/beta',
+            name: 'Nested Team',
+            leadAgentId: 'lead-nested',
+            createdAt: new \DateTimeImmutable(),
+        );
+    }
+
+    /** Backslash twin of {@see testTeamIdWithSlashThrows()}: the n14 arm set, at the rebuild sink. */
+    public function testTeamIdWithBackslashThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('slashes, or backslashes');
+
+        new Team(
+            id: 'alpha\\beta',
+            name: 'Winsep Team',
+            leadAgentId: 'lead-winsep',
+            createdAt: new \DateTimeImmutable(),
+        );
+    }
+
+    /** Windows traversal shape (n14's create-side twin): caught at the sink too. */
+    public function testTeamIdWithWindowsTraversalThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('path traversal sequences, slashes, or backslashes');
+
+        new Team(
+            id: '..\\evil',
+            name: 'Escaping Team',
+            leadAgentId: 'lead-escape',
+            createdAt: new \DateTimeImmutable(),
+        );
+    }
+
+    /**
+     * Legit-passes polarity: the widened set refuses separators only — an
+     * ordinary id (the shape createTeam admits) must still construct and
+     * persist under the sandbox HOME, or the guard has grown past its set.
+     */
+    public function testOrdinaryTeamIdConstructsQuietly(): void
+    {
+        $id = $this->teamId('plain_team-1');
+        $team = new Team(
+            id: $id,
+            name: 'Plain Team',
+            leadAgentId: 'lead-plain',
+            createdAt: new \DateTimeImmutable(),
+        );
+
+        $this->assertSame($id, $team->id);
+        $this->assertFileExists($this->sandboxDir . '/home/.candy-code/teams/' . $id . '/tasks.sqlite');
+    }
+
     // -------------------------------------------------------------------------
     // claimTask()
     // -------------------------------------------------------------------------

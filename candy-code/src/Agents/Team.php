@@ -229,12 +229,20 @@ final class Team
      */
     public function getMailbox(): Mailbox { return $this->mailbox(); }
 
+    /**
+     * Rebuild-path choke for every persisted Team ID.
+     *
+     * Registry rows can predate the create-time guards (or be hand-tampered),
+     * so this sink re-faces the same separator set {@see TeamManager::createTeam()}
+     * checks — a bare '..' test alone let a stored 'a/b' key mint nested
+     * directories under the teams root instead of beside the other teams.
+     */
     private function basePath(): string
     {
         $base = HomeDirectory::path();
 
-        if (str_contains($this->id, '..')) {
-            throw new \InvalidArgumentException('Team ID must not contain path traversal sequences.');
+        if (str_contains($this->id, '..') || str_contains($this->id, '/') || str_contains($this->id, '\\')) {
+            throw new \InvalidArgumentException('Team ID must not contain path traversal sequences, slashes, or backslashes.');
         }
 
         return $base . '/.candy-code/teams/' . $this->id;
