@@ -430,6 +430,33 @@ final class DescriptorSinkArgumentCensusTest extends TestCase
             'NOT A LIBC CALL, a literal, `?`, `*` or `**` advance in step(). IgnoreRules::close() is a private static helper of the gitignore glob automaton (audit F-T5): it adds an NFA state and its epsilon-reachable successors to a state SET passed by reference. Its first argument is an array, not a descriptor; it shares only the word close with libc close(2).',
         ],
 
+        // ---- candy-discord Gateway websocket-close family ---------------
+        // Landed with the code-chat merge (2026-11-11, master aa2a5b93c);
+        // first judged here because the macOS/Windows per-lib matrices only
+        // began running at that head. Every `->close(NNNN)` below is
+        // Ratchet\Client\WebSocket::close(int $code, string $reason = '') —
+        // a WebSocket CLOSE-FRAME status code sent over an already open TCP
+        // connection, never a descriptor and never the libc symbol. The
+        // digits are RFC 6455 / Discord application codes: 1000 normal
+        // closure, 4000 the library's "reconnect" reason.
+
+        'candy-discord/src/Discord/Gateway.php::->close(1000)' => [
+            DescriptorSinkScanner::LITERAL_INT,
+            'NOT A LIBC CALL, the graceful websocket close in disconnect(): $socket?->close(1000) on Ratchet\Client\WebSocket sends a CLOSE frame with status code 1000 (normal closure). The integer is a wire protocol code, not a descriptor.',
+        ],
+        'candy-discord/src/Discord/Gateway.php::->close(4000)' => [
+            DescriptorSinkScanner::LITERAL_INT,
+            'NOT A LIBC CALL, the websocket close on OP_RECONNECT (op 1): Discord asked for a reconnect, so the handler detaches the socket and sends CLOSE code 4000 before dialling the resume URL. A frame code, not a descriptor.',
+        ],
+        'candy-discord/src/Discord/Gateway.php::->close(4000) #2' => [
+            DescriptorSinkScanner::LITERAL_INT,
+            'NOT A LIBC CALL, the websocket close on a non-resumable OP_INVALID_SESSION retry timer: CLOSE code 4000 on the detached husk before re-dialling the default gateway. A frame code, not a descriptor.',
+        ],
+        'candy-discord/src/Discord/Gateway.php::->close(4000) #3' => [
+            DescriptorSinkScanner::LITERAL_INT,
+            'NOT A LIBC CALL, the websocket close in the heartbeat zombie reset: a missed ACK means the socket is a husk, so it gets CLOSE code 4000 before reconnecting to the resume URL. A frame code, not a descriptor.',
+        ],
+
         // ---- candy-code Ws/Protocol/Server session-close family ---------
         // Imported into sugar-core's scan path by the candy-code merges
         // (campaign re-verify 2026-10-08). Every `->close(...)` below is a
