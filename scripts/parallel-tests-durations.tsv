@@ -61,6 +61,7 @@ candy-code/tests/Sessions/BackgroundShellRegistryTest.php	10.845	29
 candy-code/tests/Renderer/FrameWidthClipTest.php	10.632	328
 candy-code/tests/MouseModalGuardTest.php	10.581	22
 candy-code/tests/RuntimeTest.php	10.109	156
+candy-code/tests/Commands/CmdMediaLangCatalogueTest.php	10.105	5
 candy-code/tests/Workspace/AutoCommitterTest.php	9.707	15
 candy-code/tests/Session/EnhancedSessionStoreTest.php	9.629	17
 candy-code/tests/Session/CheckpointStorageTest.php	9.274	23
