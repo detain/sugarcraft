@@ -172,13 +172,15 @@ final class ProcessContainmentPhpSetsidTest extends TestCase
      * probe's discipline: posix_getpgid answers for a reaped-pending child
      * only until proc_close takes it.
      *
-     * The leader verdict mirrors ProcessContainment::probeDetachedCandidate()
-     * EXACTLY (LANE-CC macOS red 2026-11-11): unverifiable is NOT rejected —
-     * where posix_getpgid does not exist (Darwin PHP builds omit it), the
-     * production probe accepts the arm on its exit-7 alone, so the helper
-     * must not silently fail-open-to-false and contradict the contract the
-     * probe actually ships. Where the call exists (Linux), the poll decides,
-     * teeth unchanged.
+     * The leader verdict is the production answer itself: spawnAndInspect
+     * calls ProcessContainment::childLeadsOwnGroup() directly (LANE-CC
+     * macOS roundtrip #1, 2026-11-11 — a second dialect of the poll was
+     * how one run ended with the probe rejecting an arm the helper was
+     * accepting). Unverifiable is NOT rejected: a missing posix_getpgid
+     * or a Darwin ESRCH answer on an exited child accepts on the arm's
+     * exit-7 alone, which is itself proof the stub detached (it exits
+     * 127 when posix_setsid fails). Where the child is observably in a
+     * WRONG group (Linux, live child), the poll denies, teeth unchanged.
      *
      * @param list<string> $spec
      * @return array{0:int,1:bool}
@@ -197,32 +199,12 @@ final class ProcessContainmentPhpSetsidTest extends TestCase
         \fclose($pipes[1]);
         \fclose($pipes[2]);
 
-        // Mirrors ProcessContainment::probeDetachedCandidate(): a leader
-        // verdict the OS cannot contradict is not a verdict against us.
-        // Darwin (and any unreaped-exit race) answers the poll with no
-        // information — false/absent — which must NOT be laundered into a
-        // denial, because the stub child only reaches exit(7) AFTER
-        // posix_setsid() succeeded; the status leg carries the real proof,
-        // this poll only corroborates. A child that is observably in the
-        // WRONG group stays a denial for the full deadline.
-        $leader = true;
-        if (\function_exists('posix_getpgid')) {
-            $leader = false;
-            $deadline = \hrtime(true) + 2_000_000_000;
-            while (true) {
-                $pgid = @\posix_getpgid($pid);
-                if ($pgid === $pid || $pgid === false) {
-                    // Either confirmed leadership, or the child left nothing
-                    // observable — both accept, per the probe's discipline.
-                    $leader = true;
-                    break;
-                }
-                if (\hrtime(true) >= $deadline) {
-                    break;
-                }
-                \usleep(1000);
-            }
-        }
+        // THE production predicate, not a dialect of it: probe and test ask
+        // childLeadsOwnGroup the same question with the same deadline
+        // budget, so a Darwin ESRCH answer can never ACCEPT here while the
+        // live probe REJECTS there (the roundtrip-#1 split-brain, both red
+        // shapes at once). A verifiably wrong-group child stays a denial.
+        $leader = ProcessContainment::childLeadsOwnGroup($pid, \hrtime(true) + 2_000_000_000);
 
         $status = \proc_close($proc);
 
