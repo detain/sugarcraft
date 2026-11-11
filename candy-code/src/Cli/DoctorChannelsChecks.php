@@ -58,9 +58,9 @@ final class DoctorChannelsChecks
             return ['status' => 'FAIL', 'detail' => Lang::t('cli.doctor.file_loose_mode', ['path' => $path, 'mode' => $mode])];
         }
 
-        // The ONLY content read in this class. ChannelsStore::read() answers a
-        // broken file with [] and no sound at all, so the diagnosis is made
-        // here from raw bytes instead of inherited silence.
+        // The ONLY content read in this class. ChannelsStore::read() now throws
+        // on these same bytes (M-1 made the swallow loud), so the doctor still
+        // reads raw bytes here to DIAGNOSE the broken record, not re-throw it.
         $raw = (string) @file_get_contents($path);
         if (trim($raw) === '') {
             return ['status' => 'FAIL', 'detail' => Lang::t('cli.doctor.channels_store_empty', ['path' => $path])];
