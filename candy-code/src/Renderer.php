@@ -5659,12 +5659,16 @@ final class Renderer
      * corrupt screenshot must cost one line of the transcript, not the
      * session.
      *
-     * Both the decode and the encode are memoized in {@see $imageCache} because
-     * this runs on every frame; only the (cheap) {@see ImageLayer::place()}
-     * registration is redone per frame, since placement ids are positional to
-     * the frame being built. The header probe is memoized too - one digest-keyed
+     * Successful encodes are memoized in {@see $imageCache} because this runs
+     * on every frame; only the (cheap) {@see ImageLayer::place()} registration
+     * is redone per frame, since placement ids are positional to the frame
+     * being built. The header probe is memoized too - one digest-keyed
      * {@see imageDimensions()} lookup per picture (B-41), reused for the cache
-     * key and both dimensions legs - so a repaint parses nothing.
+     * key and both dimensions legs - so a repaint parses nothing. A failure is
+     * deliberately NOT stored (B-63): a transient decode fault (an ext-gd blip,
+     * a momentary ladder glitch) must not pin the degraded line for the
+     * entry's cache lifetime, and re-rendering the note is cheap - bad bytes
+     * throw at the decode step, never at the encode the memo exists to absorb.
      *
      * @param int $imageRows tallest box to encode at. The height derived from
      *                       the aspect ratio is clamped to it so one tall source
@@ -5710,9 +5714,15 @@ final class Renderer
                     ->render('🖼 ' . Lang::t('tui.tool.image_unavailable', ['error' => self::oneLine($e->getMessage())]))];
             }
 
-            self::$imageCache[$key] = $hit;
-            if (\count(self::$imageCache) > self::IMAGE_CACHE_MAX) {
-                array_shift(self::$imageCache);
+            if ($hit['ok']) {
+                // B-63: only successes memoize. Caching the degraded line
+                // would pin a transient failure to this picture until the
+                // entry rotates out of the LRU; the retry is cheap and lets
+                // the next frame recover on its own.
+                self::$imageCache[$key] = $hit;
+                if (\count(self::$imageCache) > self::IMAGE_CACHE_MAX) {
+                    array_shift(self::$imageCache);
+                }
             }
         }
 

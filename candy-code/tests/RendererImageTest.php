@@ -249,6 +249,70 @@ final class RendererImageTest extends TestCase
         }
     }
 
+    /**
+     * B-63: a failed picture render must not settle into the encode memo. The
+     * degraded row itself is honest - swept, dimmed, no inline image - but
+     * storing it pins a transient decode fault (an ext-gd blip, a momentary
+     * ladder glitch) over that picture until the entry rotates out of the LRU.
+     * State-probe pin in the house style of testRepeatedRendersReuse: the
+     * junk key is forced cold first (an earlier test may have cached its
+     * failure and tearDown never resets the static), then two failed frames
+     * must grow the memo by zero keys. The success legs guard against
+     * over-pruning - the memo this file exists to pin must still memoize.
+     */
+    public function testFailedImageRenderIsNotMemoizedSoATransientFaultCanRecover(): void
+    {
+        $cache = new \ReflectionProperty(Renderer::class, 'imageCache');
+        $cache->setAccessible(true);
+        $raw = $cache->getValue();
+        $pruned = array_filter($raw, static fn (array $row): bool => $row['ok']);
+
+        try {
+            $cache->setValue(null, $pruned);
+            $coldKeys = array_keys($pruned);
+
+            $chat = $this->chatWithImage(Mosaic::sixel(), 'definitely-not-a-png');
+
+            $first = Renderer::renderView($chat);
+            $this->assertStringContainsString('image unavailable', $first->body);
+            $this->assertSame([], $first->images);
+            $this->assertSame(
+                [],
+                array_diff(array_keys($cache->getValue()), $coldKeys),
+                'the failed frame memoized its degraded line - a transient fault is now pinned '
+                . 'to this picture until the LRU evicts the key'
+            );
+
+            $second = Renderer::renderView($chat);
+            $this->assertStringContainsString('image unavailable', $second->body);
+            $this->assertSame(
+                [],
+                array_diff(array_keys($cache->getValue()), $coldKeys),
+                'the retry frame memoized its degraded line too'
+            );
+
+            $good = $this->chatWithImage(Mosaic::sixel(), $this->pngBytes(21, 11));
+
+            $third = Renderer::renderView($good);
+            $warmKeys = array_diff(array_keys($cache->getValue()), $coldKeys);
+            if ($warmKeys === []) {
+                $this->markTestSkipped('this build cannot encode the fixture picture');
+            }
+            $this->assertCount(1, $third->images);
+            $this->assertCount(1, $warmKeys, 'a successful encode must still memoize by key');
+
+            $fourth = Renderer::renderView($good);
+            $this->assertCount(1, $fourth->images);
+            $this->assertSame(
+                $warmKeys,
+                array_diff(array_keys($cache->getValue()), $coldKeys),
+                'the warm frame re-memoized instead of replaying the stored encode'
+            );
+        } finally {
+            $cache->setValue(null, $raw);
+        }
+    }
+
     /** A result with no image is untouched by any of this. */
     public function testTextOnlyToolResultProducesNoImageLayer(): void
     {
