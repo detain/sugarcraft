@@ -20,6 +20,8 @@ use CandyCode\Bundles\MsTeams\Tests\Fixture\FakeTeamsApi;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\Loop;
+use React\EventLoop\TimerInterface;
+use SugarCraft\Code\Backend\PendingAsk;
 
 /**
  * The account face driven through its public intake with fixture activities
@@ -187,6 +189,70 @@ final class MsTeamsAccountTest extends TestCase
         self::assertArrayNotHasKey('actions', $retired, 'a retired card cannot be clicked again');
     }
 
+    public function testATtlBeyondTheCoreCeilingArmsTheCeilingAndLogsLoudly(): void
+    {
+        $lines = [];
+        $this->buildFace(['approvals' => ['ttlMinutes' => 120]], new Log(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }));
+        $this->face->promptApproval(['serviceUrl' => $this->serviceUrl(), 'conversationId' => 'conv-1'], 'sess_1',
+            ['askId' => 'ask_clamp', 'tool' => 'Bash', 'arguments' => []]);
+        $this->settle();
+        // The card can only keep the ask alive as long as the core honors it:
+        // a 120-minute posture must arm the 1800-second ceiling, not 7200.
+        self::assertSame((float) PendingAsk::EXPIRY_SECONDS, $this->armedApprovalInterval('ask_clamp'));
+        $clamped = \array_values(\array_filter($lines, static fn (string $line): bool =>
+            \str_contains($line, '"event":"approval_ttl_clamped"')));
+        self::assertCount(1, $clamped, 'the clamp announces itself exactly once');
+        self::assertStringContainsString('"configuredMinutes":120', $clamped[0]);
+        self::assertStringContainsString('"armedSeconds":' . PendingAsk::EXPIRY_SECONDS, $clamped[0]);
+        // Clamping the window must NOT retire the live card early: the ask is
+        // answerable until the armed (clamped) timer fires.
+        self::assertNull($this->api->lastCallFor('/v3/conversations/conv-1/activities/act_out_1', 'PUT'));
+    }
+
+    public function testTheDefaultTtlArmsTheCoreWindowQuietly(): void
+    {
+        $lines = [];
+        $this->buildFace([], new Log(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }));
+        $this->face->promptApproval(['serviceUrl' => $this->serviceUrl(), 'conversationId' => 'conv-1'], 'sess_1',
+            ['askId' => 'ask_default', 'tool' => 'Bash', 'arguments' => []]);
+        $this->settle();
+        self::assertSame((float) PendingAsk::EXPIRY_SECONDS, $this->armedApprovalInterval('ask_default'));
+        self::assertSame([], \array_filter($lines, static fn (string $line): bool =>
+            \str_contains($line, 'approval_ttl_clamped')), 'the default pair needs no announcement');
+    }
+
+    public function testTheSixtySecondFloorStillBindsBelowTheCeiling(): void
+    {
+        $lines = [];
+        $this->buildFace(['approvals' => ['ttlMinutes' => 1]], new Log(static function (string $line) use (&$lines): void {
+            $lines[] = $line;
+        }));
+        $this->face->promptApproval(['serviceUrl' => $this->serviceUrl(), 'conversationId' => 'conv-1'], 'sess_1',
+            ['askId' => 'ask_floor', 'tool' => 'Bash', 'arguments' => []]);
+        $this->settle();
+        self::assertSame(60.0, $this->armedApprovalInterval('ask_floor'));
+        self::assertSame([], \array_filter($lines, static fn (string $line): bool =>
+            \str_contains($line, 'approval_ttl_clamped')));
+    }
+
+    /**
+     * The interval the ask's retirement timer was armed with, read straight
+     * off the timer — pinned at arm time, no waiting on wall clock.
+     */
+    private function armedApprovalInterval(string $askId): float
+    {
+        $timers = new \ReflectionProperty(MsTeamsAccount::class, 'approvalTimers');
+        $timers->setAccessible(true);
+        $timer = $timers->getValue($this->face)[$askId] ?? null;
+        self::assertInstanceOf(TimerInterface::class, $timer);
+
+        return $timer->getInterval();
+    }
+
     public function testTheClockRetiresAnUnansweredCard(): void
     {
         $this->buildFace(['approvals' => ['ttlMinutes' => 1]]);
@@ -298,7 +364,7 @@ final class MsTeamsAccountTest extends TestCase
 
     // ── harness ──
 
-    private function buildFace(array $cfg): void
+    private function buildFace(array $cfg, ?Log $faceLog = null): void
     {
         $rest = new Rest(new TokenBroker(
             ['appId' => self::APP_ID, 'appPassword' => 'p', 'tenantId' => 't'],
@@ -312,7 +378,7 @@ final class MsTeamsAccountTest extends TestCase
             $this->safety,
             $this->loop,
         );
-        $this->face = new MsTeamsAccount('default', self::APP_ID, $rest, $router, $cfg, Log::silent(),
+        $this->face = new MsTeamsAccount('default', self::APP_ID, $rest, $router, $cfg, $faceLog ?? Log::silent(),
             $this->pairing, $this->safety, $this->loop);
         $router->addChannel($this->face, 'default');
     }

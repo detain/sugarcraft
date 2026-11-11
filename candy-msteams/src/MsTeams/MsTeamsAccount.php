@@ -13,6 +13,7 @@ use CandyCode\Bundles\MsTeams\Support\TextSafety;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\Promise\PromiseInterface;
+use SugarCraft\Code\Backend\PendingAsk;
 
 /**
  * One Teams account's face: webhook activities in, serviceUrl REST out
@@ -167,8 +168,10 @@ final class MsTeamsAccount implements PlatformFace
      * the approver roster, and the C-1 per-ask nonce in every action data —
      * the WALL is the router's answerApproval (roster + nonce + conversation
      * binding), re-checked on the invoke path below behind the account's
-     * access floor. The 30-minute posture arms an
-     * expiry timer that RETIRES the card clock-triggered, and the same
+     * access floor. The configured ttl posture arms an expiry timer that
+     * RETIRES the card clock-triggered, self-clamped to the core expiry
+     * ceiling (see approvalTtlSeconds(), co-TTL code-chat §11.6) so the
+     * card never advertises a window the core will not honor, and the same
      * retirement runs when an answer lands: card replace with no actions
      * at all. The universal same-chat `/approve` fallback needs no card —
      * it is parsed by the pipeline before the model, always.
@@ -193,9 +196,8 @@ final class MsTeamsAccount implements PlatformFace
                     'conversationId' => $conversationId,
                     'activityId' => (string) ($sent['id'] ?? ''),
                 ];
-                $minutes = (int) $this->nested('approvals', 'ttlMinutes', 30);
                 $this->approvalTimers[$askId] = $this->loop->addTimer(
-                    \max(60, $minutes * 60),
+                    $this->approvalTtlSeconds(),
                     function () use ($askId): void {
                         unset($this->approvalTimers[$askId]);
                         $this->retireApproval($askId, "\u{231B} Approval expired; answer with /approve <askId> once|always|deny while the ask is still open.");
@@ -204,6 +206,35 @@ final class MsTeamsAccount implements PlatformFace
             },
             fn (\Throwable $e) => $this->log->warn('approval_prompt_failed', ['error' => $e->getMessage()]),
         );
+    }
+
+    /**
+     * The card-side window of the co-TTL pair (code-chat §11.6): the core
+     * refuses the ask at PendingAsk::EXPIRY_SECONDS no matter what this
+     * card promises, so the advertised window self-clamps to that ceiling
+     * and says so LOUDLY — a longer configured ttlMinutes must never leave
+     * a live card sitting over a dead ask. Short windows keep the
+     * 60-second floor. Reading the constant (rather than repeating its
+     * value) is what makes the docblock's "must move with it" law
+     * structural: the card follows the core, silently in the safe
+     * direction, noisily in the lying direction.
+     */
+    private function approvalTtlSeconds(): int
+    {
+        $minutes = (int) $this->nested('approvals', 'ttlMinutes', 30);
+        $seconds = \max(60, $minutes * 60);
+        $ceiling = PendingAsk::EXPIRY_SECONDS;
+        if ($seconds > $ceiling) {
+            $this->log->warn('approval_ttl_clamped', [
+                'configuredMinutes' => $minutes,
+                'requestedSeconds' => $seconds,
+                'armedSeconds' => $ceiling,
+            ]);
+
+            return $ceiling;
+        }
+
+        return $seconds;
     }
 
     public function retireApproval(string $askId, string $line): void
