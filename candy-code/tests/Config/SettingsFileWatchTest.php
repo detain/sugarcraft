@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\Config;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Config\LayeredSettings;
 use SugarCraft\Code\Config\Settings\SessionSettings;
 use SugarCraft\Code\Config\SettingsFileWatch;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
@@ -49,6 +50,7 @@ final class SettingsFileWatchTest extends TestCase
     {
         SettingsFileWatch::resetForTesting();
         SessionSettings::reset();
+        Bootstrap::useProjectRootForSettings(null);
         Bootstrap::useConfigPath(null);
         $this->restoreHomeSandbox();
         exec('rm -rf ' . escapeshellarg($this->home));
@@ -231,6 +233,130 @@ final class SettingsFileWatchTest extends TestCase
 
         SettingsFileWatch::resetForTesting();
         self::assertSame([], SettingsFileWatch::changedKeys(), 'after a reset the next look is a fresh seed');
+    }
+
+    public function testAPermissionRulesEditInSettingsJsonIsReported(): void
+    {
+        // m02 (F-m02): the pair the gate reads strictly is invisible to the
+        // tolerant layered merge, so without the overlay rung a hand-added
+        // deny rule moved the hash, re-derived a view that carried nothing,
+        // and answered none — the stale-ALLOW disclosure gap.
+        $this->writeWatched(['scrollWheelLines' => 4]);
+        $this->writePermissionLayer([
+            'permissionRules' => [['pattern' => 'Bash', 'action' => 'deny']],
+        ]);
+        SettingsFileWatch::changedKeys();
+
+        $this->writePermissionLayer([
+            'permissionRules' => [
+                ['pattern' => 'Bash', 'action' => 'allow'],
+                ['pattern' => 'Edit', 'action' => 'deny'],
+            ],
+        ]);
+
+        self::assertSame(['permissionRules'], SettingsFileWatch::changedKeys(), 'the rules the next launch would carry are a changed key');
+        self::assertSame([], SettingsFileWatch::changedKeys(), 'reported exactly once, then baselined');
+    }
+
+    public function testAPermissionModeEditInSettingsJsonIsReported(): void
+    {
+        $this->writeWatched(['scrollWheelLines' => 4]);
+        $this->writePermissionLayer(['permissionMode' => 'plan']);
+        SettingsFileWatch::changedKeys();
+
+        $this->writePermissionLayer(['permissionMode' => 'default']);
+
+        self::assertSame(['permissionMode'], SettingsFileWatch::changedKeys());
+    }
+
+    public function testASettingsLayerEditShadowedByConfigJsonAnswersNothing(): void
+    {
+        // The precedence half of the overlay: `config.json` wins exactly as it
+        // wins for the gate, so churn under a real shadow is NOT a change of
+        // what the next launch would enforce. An overlay that wrote the
+        // settings value over a real carried value fails this leg.
+        $this->writeWatched([
+            'permissionRules' => [['pattern' => 'Bash', 'action' => 'deny']],
+        ]);
+        $this->writePermissionLayer([
+            'permissionRules' => [['pattern' => 'Bash', 'action' => 'allow']],
+        ]);
+        SettingsFileWatch::changedKeys();
+
+        $this->writePermissionLayer([
+            'permissionRules' => [['pattern' => 'Read', 'action' => 'ask']],
+        ]);
+
+        self::assertSame([], SettingsFileWatch::changedKeys(), 'a value the gate never reaches is not a change it would adopt');
+    }
+
+    public function testAnEmptyConfigOverrideLetsTheSettingsLayerSpeak(): void
+    {
+        // `withoutEmptyPermissionOverrides()` refuses to let a null/'' carry
+        // displace the layer beneath it; the view mirrors that, so the real
+        // effective rules live in `settings.json` and move-report there.
+        $this->writeWatched(['permissionRules' => null]);
+        $this->writePermissionLayer([
+            'permissionRules' => [['pattern' => 'Bash', 'action' => 'deny']],
+        ]);
+        SettingsFileWatch::changedKeys();
+
+        $this->writePermissionLayer([
+            'permissionRules' => [['pattern' => 'Bash', 'action' => 'allow']],
+        ]);
+
+        self::assertSame(['permissionRules'], SettingsFileWatch::changedKeys());
+    }
+
+    public function testChurnInsideACorruptSettingsFileAnswersNothingAndNeverThrows(): void
+    {
+        // A refused policy file has nothing to overlay: the running gate froze
+        // at the last good launch and the NEXT one refuses loudly through the
+        // same strict reader. The watch itself must stay silent — and must
+        // not let the strict reader's exception escape a settle path.
+        $this->writeWatched(['scrollWheelLines' => 4]);
+        $this->writePermissionLayer(['noLayeredKeyAtAll' => 1]);
+        SettingsFileWatch::changedKeys();
+
+        $dir = Bootstrap::userSettingsDirOrNull();
+        self::assertNotNull($dir);
+        file_put_contents(\rtrim((string) $dir, '/') . '/' . LayeredSettings::USER_FILE, '{not json at all');
+
+        self::assertSame([], SettingsFileWatch::changedKeys(), 'garbage after garbage moves no effective value');
+    }
+
+    public function testATrustedProjectsNarrowingRulesEditIsReported(): void
+    {
+        // The project leg is ADDITIVE: narrowing rules ride before the user's
+        // list in the gate's merged set, so a team policy swap changes what
+        // the next launch enforces no matter what the user tier carries —
+        // including the case here where the user tier says nothing at all.
+        $rootPath = $this->home . '/repo';
+        mkdir($rootPath . '/' . LayeredSettings::dir(), 0o700, true);
+        $root = (string) realpath($rootPath);
+
+        $this->writeWatched([LayeredSettings::PROJECT_SETTINGS_TRUST_KEY => [$root]]);
+        Bootstrap::useProjectRootForSettings($root);
+        file_put_contents($root . '/' . LayeredSettings::SHARED_PATH, json_encode([
+            'permissionRules' => [['pattern' => 'Bash', 'action' => 'deny']],
+        ]));
+        SettingsFileWatch::changedKeys();
+
+        file_put_contents($root . '/' . LayeredSettings::SHARED_PATH, json_encode([
+            'permissionRules' => [['pattern' => 'Edit', 'action' => 'deny']],
+        ]));
+
+        self::assertSame(['permissionRules'], SettingsFileWatch::changedKeys(), 'the team deny list the next launch would carry is a changed key');
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function writePermissionLayer(array $data): void
+    {
+        $dir = Bootstrap::userSettingsDirOrNull();
+        self::assertNotNull($dir, 'fixture: a trusted user settings dir in the sandbox');
+        file_put_contents(\rtrim((string) $dir, '/') . '/' . LayeredSettings::USER_FILE, json_encode($data));
     }
 
     private function writeWatched(array $data): void

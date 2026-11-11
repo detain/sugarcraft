@@ -8110,7 +8110,7 @@ public static function useMaxCost(?string $maxCost): void
      *
      * @throws PermissionConfigException when the file exists and cannot be used
      */
-    private static function permissionSettingsLayer(string $path): array
+    public static function permissionSettingsLayer(string $path): array
     {
         $data = self::readPolicyFile($path);
 

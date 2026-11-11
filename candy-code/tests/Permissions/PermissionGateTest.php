@@ -417,6 +417,33 @@ final class PermissionGateTest extends TestCase
         $this->assertSame(PermissionDecision::Ask, $decision);
     }
 
+    public function testSwitchingModeCarriesTheLaunchRulesUntouched(): void
+    {
+        // m02 (F-m02) contract pin: the running gate's RULES are launch-frozen;
+        // a mode switch carries them verbatim (Chat::swapPermissionGate rides
+        // this method). The disclosure for edited rules is the Restart toast —
+        // silently re-reading them here would split the engine's decisions
+        // from the one-gate-for-the-whole-launch invariant.
+        $gate = new PermissionGate(
+            PermissionMode::Default,
+            rules: [
+                new PermissionRule(pattern: 'Bash*', action: PermissionAction::Deny),
+            ],
+        );
+
+        $toggled = $gate->withMode(PermissionMode::Plan);
+
+        $this->assertSame(
+            [['Bash*', 'deny']],
+            array_map(static fn ($rule): array => [$rule->pattern, $rule->action->value], $toggled->rules()),
+            'the mode switch must carry the rules verbatim',
+        );
+        $this->assertSame(
+            PermissionDecision::Deny,
+            $toggled->evaluate(new ToolCall(name: 'Bash', arguments: ['command' => 'composer install'])),
+        );
+    }
+
     // =========================================================================
     // P2B.S8 Plan Cases
     // =========================================================================

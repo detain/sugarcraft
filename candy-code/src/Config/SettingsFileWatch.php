@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Config;
 
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\LaunchContext;
+use SugarCraft\Code\Cli\PermissionConfigException;
 
 /**
  * Process-global fingerprint of the settings files the session reads, so a
@@ -27,13 +28,28 @@ use SugarCraft\Code\Cli\LaunchContext;
  * to `5` within the recorded second leaves both fields untouched, and the
  * fingerprint would stay blind to that edit forever, not just until the next
  * touch. Existence is a hash too: a file that is not there hashes as ''.
- * Only a moved hash triggers the expensive rung: re-derive the merged view
- * exactly as the launch does ({@see Bootstrap::readUserConfig()}) and diff it
- * key by key against the previously observed merge. Churn that does not move
- * the merge — an editor that touches a file without changing it, a `git
- * checkout` that rewrites identical bytes, a non-layered key edited, a
+ * Only a moved hash triggers the expensive rung: re-derive the merged view as
+ * the launch reads it ({@see Bootstrap::readUserConfig()}, plus the
+ * permission-pair overlay below) and diff it key by key against the
+ * previously observed merge. Churn that does not move the merge — an editor
+ * that touches a file without changing it, a `git
+ * checkout` that rewrites identical bytes, a key neither view carries, a
  * project file the trust gate refuses — is caught at the hash rung and still
  * answers none.
+ *
+ * One pair of keys needs its own overlay rung: the permission policy
+ * (`permissionMode`, `permissionRules`) is deliberately NOT part of the
+ * tolerant layered merge — the gate owns those keys through its strict side
+ * ({@see Bootstrap::permissionSettingsLayer()}, the same reader
+ * {@see Bootstrap::permissionGate()} builds with), and a trusted project's
+ * shared file contributes narrowing rules that ride ADDITIVE on the user
+ * tier, never shadowed into it. A watch blind to both would let exactly the
+ * edits a user most expects to be announced — a hand-added deny rule, a
+ * tightened mode, a team policy file swapped — sit silent while the gate
+ * keeps launching-time answers. {@see self::mergeView()} carries the pair so
+ * a move of what the gate would next launch with IS a move of the view; the
+ * report that follows is still the honest one: `applySettings()` restarts
+ * these keys, it never re-gates the running session mid-flight.
  *
  * Two deliberate behaviours protect the running session:
  *
@@ -111,7 +127,7 @@ final class SettingsFileWatch
             return [];
         }
 
-        $merged = Bootstrap::readUserConfig();
+        $merged = self::mergeView();
         $changed = [];
         foreach ($merged as $key => $value) {
             $key = (string) $key;
@@ -204,7 +220,97 @@ final class SettingsFileWatch
             $fingerprint[$path] = self::hashOf($path);
         }
         self::$fingerprint = $fingerprint;
-        self::$mergedSnapshot = Bootstrap::readUserConfig();
+        self::$mergedSnapshot = self::mergeView();
+    }
+
+    /**
+     * The diff view: the tolerant launch merge, plus the permission pair the
+     * gate reads on its strict side (the pair's settings.json leg and a
+     * trusted project's narrowing rules — neither survives the layered
+     * filter, so {@see Bootstrap::readUserConfig()} alone cannot see them move).
+     *
+     * The precedence mirrors the gate exactly. The user pair is shadowed:
+     * `settings.json` sits UNDER the merge's own layers (which carry
+     * `config.json` raw), and an empty carried value never displaces a real
+     * one beneath it — the same rule
+     * {@see Bootstrap::permissionConfigLayers()} applies via
+     * `withoutEmptyPermissionOverrides()`. The project leg is ADDITIVE:
+     * narrowing rules ride before the user's list in the gate's merged set,
+     * so any move of them changes what the next launch enforces no matter
+     * what the user tier carries — the view shows both segments apart for
+     * exactly that reason.
+     *
+     * A corrupt `settings.json` overlays nothing: its strict reader refuses,
+     * and the refusal is the disclosure — the running gate froze at the last
+     * good launch and the next one fails loudly through the same reader.
+     * Churn inside an already-refused file must not manufacture a "change"
+     * the gate could never have adopted anyway.
+     *
+     * @return array<string, mixed>
+     */
+    private static function mergeView(): array
+    {
+        $view = Bootstrap::readUserConfig();
+
+        $userDir = Bootstrap::userSettingsDirOrNull();
+        if ($userDir !== null) {
+            try {
+                $pair = Bootstrap::permissionSettingsLayer(\rtrim($userDir, '/') . '/' . LayeredSettings::USER_FILE);
+            } catch (PermissionConfigException) {
+                $pair = [];
+            }
+            foreach ($pair as $key => $value) {
+                $key = (string) $key;
+                if ($value === null || $value === '') {
+                    continue;
+                }
+                $carried = $view[$key] ?? null;
+                if ($carried === null || $carried === '') {
+                    $view[$key] = $value;
+                }
+            }
+        }
+
+        [$narrowed, $narrowingRules] = self::projectNarrowingSegment();
+        if ($narrowed) {
+            // Bootstrap::PERMISSION_RULES_CONFIG_KEY (private) — the one key
+            // the project tier contributes, deny/ask entries only.
+            $view['permissionRules'] = ['user' => $view['permissionRules'] ?? null, 'project' => $narrowingRules];
+        }
+
+        return $view;
+    }
+
+    /**
+     * Does the trusted project's shared settings file carry a `permissionRules`
+     * key, and with what raw value? Found-first so a present-but-null key
+     * still moves the view (the strict side has opinions about it; equality
+     * over raw values is all this rung needs — over-reporting a cosmetic
+     * rules edit leans safe, under-reporting is the defect this class exists
+     * for). The containment walk is {@see LayeredSettings::projectFiles()}'s
+     * own, the same call {@see watchedFiles()} hashes the paths from, so a
+     * symlinked `.candy-code` stays invisible here exactly as it does there.
+     *
+     * @return array{0: bool, 1: mixed}
+     */
+    private static function projectNarrowingSegment(): array
+    {
+        $root = LaunchContext::projectRootForSettings();
+        if ($root === null || \trim($root) === '' || !Bootstrap::projectSettingsTrusted($root)) {
+            return [false, null];
+        }
+
+        foreach (LayeredSettings::projectFiles($root, true) as $path => $contents) {
+            if (!\str_ends_with((string) $path, '/' . LayeredSettings::SHARED_PATH)) {
+                continue;
+            }
+
+            return \is_array($contents) && \array_key_exists('permissionRules', $contents)
+                ? [true, $contents['permissionRules']]
+                : [false, null];
+        }
+
+        return [false, null];
     }
 
     /**
