@@ -26,6 +26,16 @@ export interface SessionAsks {
  * them by `askId`. `permission.pending` seeds the set on every handshake and
  * re-reads it on every `server.tick` — a backstop for anything a dropped
  * socket missed, no longer how a question first shows.
+ *
+ * Ageing out is the one exit that fires no event: the server decides expiry
+ * at consume time — no timer (E646) — so an idle question that ages out of
+ * its 30-minute window keeps counting in the badge until the very next
+ * `server.tick` read retires it, because `permission.pending` never presents
+ * an aged row. That is the whole lag, and it self-heals on that tick. Answer
+ * the stale card instead and the server settles it as an expired rejection
+ * itself, so the `permission.settled` broadcast removes it the same tick; a
+ * `respond()` that races the stamp and lands `ask_expired` is refused, but
+ * that same broadcast is already on the wire for it.
  */
 export const useApprovalsStore = defineStore('approvals', () => {
   const connection = useConnectionStore()
