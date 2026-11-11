@@ -5021,7 +5021,6 @@ TXT,
     'media.voice.no_audio' => 'Die Aufnahme enthält kein Audio; nichts wurde gesendet.',
     'media.voice.no_backend' => 'Spracheingabe nicht verfügbar: Kein Aufnahme-Binary auf PATH gefunden (`arecord` oder `sox`).',
     'media.voice.no_home' => 'Spracheingabe nicht verfügbar: Kein eigenes Home-Verzeichnis zum Speichern der Aufnahme.',
-    'media.voice.not_recording' => 'Keine Aufnahme aktiv.',
     'media.voice.off' => 'Spracheingabe deaktiviert: Zuerst `voice.baseUrl` (user tier) setzen.',
     // --- end media.voice ---
 ];

@@ -5022,7 +5022,6 @@ TXT,
     'media.voice.no_audio' => 'La prise n\'a capté aucun audio ; rien n\'a été envoyé.',
     'media.voice.no_backend' => 'Saisie vocale indisponible : aucun binaire d\'enregistrement trouvé dans PATH (`arecord` ou `sox`).',
     'media.voice.no_home' => 'Saisie vocale indisponible : aucun répertoire personnel possédé pour stocker l\'enregistrement.',
-    'media.voice.not_recording' => 'Aucun enregistrement actif.',
     'media.voice.off' => 'Saisie vocale désactivée : définissez d\'abord `voice.baseUrl` (niveau utilisateur).',
     // --- end media.voice ---
 ];

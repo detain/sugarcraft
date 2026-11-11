@@ -5019,7 +5019,6 @@ TXT,
     'media.voice.no_audio' => '録音に音声が含まれていなかったため、送信されませんでした。',
     'media.voice.no_backend' => '音声入力は利用不可: PATH上にレコーダーバイナリが見つかりません (`arecord` または `sox`)。',
     'media.voice.no_home' => '音声入力は利用不可: 録音を保存できる所有権のあるホームディレクトリがありません。',
-    'media.voice.not_recording' => 'アクティブな録音はありません。',
     'media.voice.off' => '音声入力オフ: まず `voice.baseUrl` (ユーザーティア) を設定してください。',
     // --- end media.voice ---
 ];

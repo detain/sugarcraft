@@ -5017,7 +5017,6 @@ TXT,
     'media.voice.no_audio' => '錄音未擷取到音訊；未發送任何內容。',
     'media.voice.no_backend' => '語音輸入不可用：PATH 中未找到錄音程式（`arecord` 或 `sox`）。',
     'media.voice.no_home' => '語音輸入不可用：沒有可存放錄音的自有家目錄。',
-    'media.voice.not_recording' => '目前沒有進行中的錄音。',
     'media.voice.off' => '語音輸入已關閉：請先設定 `voice.baseUrl`（user tier）。',
     // --- end media.voice ---
 ];

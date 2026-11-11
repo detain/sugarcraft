@@ -5022,7 +5022,6 @@ TXT,
     'media.voice.no_audio' => 'La registrazione non ha catturato audio; nulla è stato inviato.',
     'media.voice.no_backend' => 'Input vocale non disponibile: nessun binario di registrazione trovato nel PATH (`arecord` o `sox`).',
     'media.voice.no_home' => 'Input vocale non disponibile: nessuna directory home di proprietà in cui salvare la registrazione.',
-    'media.voice.not_recording' => 'Nessuna registrazione attiva.',
     'media.voice.off' => 'Input vocale disattivato: imposta prima `voice.baseUrl` (user tier).',
     // --- end media.voice ---
 ];

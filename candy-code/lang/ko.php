@@ -5019,7 +5019,6 @@ TXT,
     'media.voice.no_audio' => '녹음에 오디오가 캡처되지 않았습니다; 아무것도 전송되지 않았습니다.',
     'media.voice.no_backend' => '음성 입력 사용 불가: PATH에서 녹음 바이너리를 찾을 수 없습니다 (`arecord` 또는 `sox`).',
     'media.voice.no_home' => '음성 입력 사용 불가: 녹음을 저장할 소유 홈 디렉터리가 없습니다.',
-    'media.voice.not_recording' => '활성 녹음이 없습니다.',
     'media.voice.off' => '음성 입력이 꺼져 있습니다: 먼저 `voice.baseUrl` (user tier)을 설정하세요.',
     // --- end media.voice ---
 ];

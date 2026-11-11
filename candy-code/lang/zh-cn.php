@@ -5017,7 +5017,6 @@ TXT,
     'media.voice.no_audio' => '本次录制未捕获音频；未发送任何内容。',
     'media.voice.no_backend' => '语音输入不可用：PATH 中未找到录音程序（`arecord` 或 `sox`）。',
     'media.voice.no_home' => '语音输入不可用：没有可写入录音的自有主目录。',
-    'media.voice.not_recording' => '当前没有活跃的录音。',
     'media.voice.off' => '语音输入已关闭：请先设置 `voice.baseUrl`（用户层级）。',
     // --- end media.voice ---
 ];

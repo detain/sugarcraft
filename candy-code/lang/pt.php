@@ -5021,7 +5021,6 @@ TXT,
     'media.voice.no_audio' => 'A tomada não captou áudio; nada foi enviado.',
     'media.voice.no_backend' => 'Entrada de voz indisponível: não foi encontrado nenhum binário de gravação no PATH (`arecord` ou `sox`).',
     'media.voice.no_home' => 'Entrada de voz indisponível: não existe diretório pessoal pertencente ao utilizador para guardar a gravação.',
-    'media.voice.not_recording' => 'Não há nenhuma gravação ativa.',
     'media.voice.off' => 'Entrada de voz desativada: defina `voice.baseUrl` (nível de utilizador) primeiro.',
     // --- end media.voice ---
 ];

@@ -5096,7 +5096,6 @@ TXT,
     'media.voice.no_audio' => 'The take captured no audio; nothing was sent.',
     'media.voice.no_backend' => 'Voice input is unavailable: no recorder binary was found on PATH (`arecord` or `sox`).',
     'media.voice.no_home' => 'Voice input is unavailable: no owned home directory to keep the recording in.',
-    'media.voice.not_recording' => 'No recording is active.',
     'media.voice.off' => 'Voice input is off: set `voice.baseUrl` (user tier) first.',
     // --- end media.voice ---
 ];
