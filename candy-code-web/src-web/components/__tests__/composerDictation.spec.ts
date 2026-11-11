@@ -190,4 +190,33 @@ describe('Composer dictation (C-TUI-6.k)', () => {
     expect(wrapper.find('[data-testid="composer-mic"]').attributes('aria-pressed')).toBe('false')
     expect(wrapper.find('[data-testid="composer-dictation-notice"]').text()).toContain('already running')
   })
+
+  it('mounts the live-region announcers empty, before any dictation content (UXB-F10)', async () => {
+    // UXB-F10 (n56): a region that appears WITH content announces
+    // inconsistently across screen readers. The announced copy lives in
+    // always-mounted sr-only twins; the visible chips stay conditional and
+    // carry no live role themselves.
+    plantDictation()
+    const wrapper = mountComposer()
+    const hint = wrapper.find('[data-testid="composer-announce-hint"]')
+    const notice = wrapper.find('[data-testid="composer-announce-notice"]')
+    const voice = wrapper.find('[data-testid="composer-announce-voice"]')
+    expect(hint.exists()).toBe(true)
+    expect(hint.attributes('aria-live')).toBe('polite')
+    expect(hint.text()).toBe('')
+    expect(notice.exists()).toBe(true)
+    expect(voice.exists()).toBe(true)
+
+    // Content lands in the announcer as well as in the visible chip — and the
+    // now-mounted chip itself carries no live role (the announcer does).
+    await wrapper.find('[data-testid="composer-mic"]').trigger('click')
+    FakeRecognition.last!.speak('typing with my voi', false)
+    await wrapper.vm.$nextTick()
+    expect(hint.text()).toBe('typing with my voi')
+    expect(wrapper.find('[data-testid="composer-dictation-hint"]').attributes('aria-live')).toBeUndefined()
+    FakeRecognition.last!.fail('not-allowed')
+    await wrapper.vm.$nextTick()
+    expect(notice.text()).toContain('microphone')
+    expect(wrapper.find('[data-testid="composer-dictation-notice"]').attributes('aria-live')).toBeUndefined()
+  })
 })

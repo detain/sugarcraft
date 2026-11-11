@@ -1223,36 +1223,28 @@ defineExpose({ focus: () => input.value?.focus() });
                 @keydown="onKeydown"
                 @paste="onPaste"
             />
-            <div
-                v-if="interim !== ''"
-                class="dictation-hint"
-                aria-live="polite"
-                data-testid="composer-dictation-hint"
-            >
+            <div v-if="interim !== ''" class="dictation-hint" data-testid="composer-dictation-hint">
                 {{ interim }}
             </div>
-            <div
-                v-if="dictationNotice !== ''"
-                class="dictation-notice"
-                aria-live="polite"
-                data-testid="composer-dictation-notice"
-            >
+            <!-- UXB-F10 (n56): a live region inserted WITH content announces
+                 inconsistently across screen readers. The announced copy lives
+                 in these always-mounted sr-only twins (the house pattern of
+                 the question/reply announcements); the visible chips stay
+                 conditional and carry no live role themselves. -->
+            <p class="sr-only" role="status" aria-live="polite" data-testid="composer-announce-hint">{{ interim }}</p>
+            <div v-if="dictationNotice !== ''" class="dictation-notice" data-testid="composer-dictation-notice">
                 {{ dictationNotice }}
             </div>
-            <div
-                v-if="voiceState === 'transcribing'"
-                class="dictation-hint"
-                aria-live="polite"
-                data-testid="composer-voice-transcribing"
-            >
+            <p class="sr-only" role="status" aria-live="polite" data-testid="composer-announce-notice">
+                {{ dictationNotice }}
+            </p>
+            <div v-if="voiceState === 'transcribing'" class="dictation-hint" data-testid="composer-voice-transcribing">
                 {{ t("web.composer.voice.transcribing") }}
             </div>
-            <div
-                v-if="quickAdd !== null"
-                class="quick-add"
-                aria-live="polite"
-                data-testid="composer-quick-add"
-            >
+            <p class="sr-only" role="status" aria-live="polite" data-testid="composer-announce-voice">
+                {{ voiceState === "transcribing" ? t("web.composer.voice.transcribing") : "" }}
+            </p>
+            <div v-if="quickAdd !== null" class="quick-add" data-testid="composer-quick-add">
                 <span class="quick-add-note"
                     >{{ t("web.composer.quick_add_note", { line: quickAdd.line.trim() }) }}</span
                 >
@@ -1279,6 +1271,9 @@ defineExpose({ focus: () => input.value?.focus() });
                     >{{ quickAddError }}</span
                 >
             </div>
+            <p class="sr-only" role="status" aria-live="polite" data-testid="composer-announce-quick-add">
+                {{ quickAdd ? t("web.composer.quick_add_note", { line: quickAdd.line.trim() }) : "" }}
+            </p>
         </div>
         <div class="controls">
             <button

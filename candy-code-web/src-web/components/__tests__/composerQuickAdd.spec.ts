@@ -216,4 +216,22 @@ describe('composer # quick-add (C-CTX-3.c)', () => {
     expect(wrapper.find(CHIP_ERROR).text()).toContain('no write scope')
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
   })
+
+  it('the quick-add announcer region exists before the chip and carries its text (UXB-F10)', async () => {
+    // UXB-F10 (n56): the quick-add note announced through an always-mounted
+    // live region, not through the chip div that appears with content.
+    await wire.connect()
+    const wrapper = await mountAt('s1')
+    const announce = wrapper.find('[data-testid="composer-announce-quick-add"]')
+    expect(announce.exists()).toBe(true)
+    expect(announce.attributes('aria-live')).toBe('polite')
+    expect(announce.text()).toBe('')
+
+    await wrapper.setProps({ modelValue: '# keep secrets out of the logs' })
+    await wrapper.find(INPUT).trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(wrapper.find(CHIP).exists()).toBe(true)
+    expect(wrapper.find(CHIP).attributes('aria-live')).toBeUndefined()
+    expect(announce.text()).toContain('- keep secrets out of the logs')
+  })
 })
