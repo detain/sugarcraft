@@ -47,12 +47,15 @@ use SugarCraft\Code\Tools\ToolResult;
  * one line per bridge call, `name hint → verdict` — so the model (and the
  * person reading the transcript) sees exactly what the script did.
  *
- * Deliberately NOT wired this step (disclosed seams, plan §7 follow-up
+ * Deliberately NOT wired this step (disclosed seam, plan §7 follow-up
  * list): inner calls stay dark in the live UI until the child settles
- * (an `AcceptsToolProgress` carry is the follow-up); `--restricted` does
- * not drop Script (the drop list lives in Bootstrap, this step's ownership
- * does not reach it, and Script without its jail or without bound
- * dispatch refuses anyway).
+ * (an `AcceptsToolProgress` carry is the follow-up). The `--restricted`
+ * drop IS wired — `Script` sits in
+ * {@see \SugarCraft\Code\Cli\Bootstrap::RESTRICTED_TOOL_NAMES}, the one
+ * roster {@see \SugarCraft\Code\Cli\Bootstrap::filterToolSet()} shrinks
+ * the model-facing set by under {@see \SugarCraft\Code\Cli\Bootstrap::restricted()},
+ * so a restricted launch never sees this tool at all. Independently,
+ * Script without its jail or without bound dispatch refuses anyway.
  */
 #[BuiltInTool(
     name: self::NAME,
