@@ -20,8 +20,10 @@ use SugarCraft\Code\Support\ContainedPath;
  * Same two laws as the roster, harder: READ-ONLY — these legs call no writer
  * (never ChannelsStore::recordEntrypoint(), never BundleChannelLoader::load(),
  * never ChannelInboundLog::rows()), require no files, and open no handles
- * beyond the one channels.json byte read that exists to diagnose the silent
- * JSON swallow in ChannelsStore::read(). NO NETWORK — trust-state inspection
+ * beyond the one channels.json byte read that diagnoses a corrupt record
+ * INLINE — ChannelsStore::read() now throws on those same bytes (M-1 made the
+ * swallow loud), and the doctor must REPORT the broken state to the operator,
+ * not re-throw it. NO NETWORK — trust-state inspection
  * only; a Discord/Teams dial would prove the creds work, not that the state
  * is sound, and doctor answers the second question only.
  *

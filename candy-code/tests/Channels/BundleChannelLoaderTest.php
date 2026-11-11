@@ -244,7 +244,7 @@ final class BundleChannelLoaderTest extends TestCase
         file_put_contents($configDir . '/' . ChannelsStore::FILE_NAME, '{not json at all');
         $store = ChannelsStore::create(static fn (): string => $configDir);
         $buckets = BundleChannelLoader::load([$bundle], [$this->trusted('garbage')], $store);
-        self::assertSame([], $buckets['loaded'], 'a corrupt ledger reads as empty — which QUARANTINES, the safe direction');
+        self::assertSame([], $buckets['loaded'], 'the corrupt record fails CLOSED — the quarantine treats every entrypoint as first-sighted and nothing loads');
         self::assertCount(1, $buckets['quarantined']);
     }
 

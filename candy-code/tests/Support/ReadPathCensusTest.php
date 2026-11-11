@@ -841,9 +841,11 @@ final class ReadPathCensusTest extends TestCase
         ],
         'Cli/DoctorChannelsChecks.php|file_get_contents' => [
             'CALLER_SUPPLIED — the `channels store` doctor row reads the channels.json bytes '
-                . 'for the LOUD corruption diagnosis ChannelsStore::read() swallows silently; '
-                . 'production hands Bootstrap::trustedConfigDirPath(), tests hand a temp fixture '
-                . 'dir, and the row never echoes the bytes it read (secrets ride this file)',
+                . 'to report corruption and mode inline; ChannelsStore::read() now throws on the '
+                . 'same bytes (M-1 fail-closed), but the doctor must DIAGNOSE the broken record, '
+                . 'not re-throw it, and production hands Bootstrap::trustedConfigDirPath() while '
+                . 'tests hand a temp fixture dir — the row never echoes the bytes it read '
+                . '(secrets ride this file)',
         ],
         'Cli/DoctorChannelsChecks.php|scandir' => [
             'NAMES_ONLY — the `inbound log` doctor row counts corral-prefixed siblings by name '
@@ -1667,12 +1669,10 @@ final class ReadPathCensusTest extends TestCase
                 . 'world-writable or foreign-owned bytes, and quarantines a first-sighted file '
                 . 'out of this launch.',
         ],
-        'Channels/ChannelsStore.php|file_get_contents' => [
-            'CALLER_SUPPLIED — `read()` resolves the store path through the caller\'s $configDir '
-                . 'callable; production hands it Bootstrap\'s trusted config dir (the home-OWNED '
-                . '~/.candy-code), and a missing or malformed record degrades to the empty ledger '
-                . '— never a crash path.',
-        ],
+        // M-1: ChannelsStore's hand-rolled `@file_get_contents` + json_decode swallow
+        // is retired — read() goes through AtomicJsonFile's loud contract, so no
+        // raw read site remains in this file (a corrupt record throws; it never
+        // silently degrades to the empty ledger).
         // Step 3.G: the session's auto-commit record, `<git dir>/candy-code/auto-commits.jsonl`,
         // located by `git rev-parse --git-path` and written by this class alone.
         'Workspace/AutoCommitter.php|file' => [

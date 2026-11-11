@@ -35,6 +35,10 @@ use SugarCraft\Code\Permissions\ChannelToolScope;
  * parsed is treated as a broken policy (fail closed): an identity we cannot
  * resolve is exactly the case a policy must not wave through.
  *
+ * An unreadable WHOLE record takes the same door (M-1): the store throws on a
+ * corrupt channels.json, and scopeFor folds that throw into a refusingAll
+ * scope naming the file — broken configuration restricts, never releases.
+ *
  * Storage (ruling D6 scope law — everything channel grows INTO channels.json):
  *
  *     {"channels": {"candy-discord|discord": {
@@ -104,7 +108,18 @@ final class ChannelToolPolicyService
 
         [$channel, $kind, $id] = $parsed;
 
-        $entry = $this->entryFor($channel);
+        try {
+            $entry = $this->entryFor($channel);
+        } catch (\Throwable $e) {
+            // M-1: the WHOLE record failed to read (a corrupt channels.json).
+            // The store answers loudly now; honouring ChannelToolScope's law
+            // here means every channel session gets refusingAll until the
+            // operator repairs the file — the old silent `[]` fell through to
+            // "no policy speaks" and UNRESTRICTED every channel. The
+            // diagnostic rides the refusal text so it is operator-visible.
+            return ChannelToolScope::refusingAll($channel . ' channel', $kind, 'the stored policy is unreadable: ' . $e->getMessage());
+        }
+
         if (false === $entry) {
             return ChannelToolScope::refusingAll($channel . ' channel', $kind, 'the stored policy for it is not a readable object');
         }

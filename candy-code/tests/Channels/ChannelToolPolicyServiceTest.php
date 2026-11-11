@@ -28,6 +28,24 @@ final class ChannelToolPolicyServiceTest extends TestCase
         return chr(42);
     }
 
+    public function testARecordThatCannotBeReadScopesEveryChannelToRefusingAll(): void
+    {
+        $svc = (self::service())(static fn (): array => throw new \RuntimeException('channels.json at /home/op/.candy-code/channels.json is unreadable: Syntax error'));
+        $scope = $svc->scopeFor('agent:main:discord:group:g1');
+
+        self::assertNotNull($scope, 'an unreadable record must never answer "no policy speaks" — that null IS the fail-open hole M-1 cures');
+        self::assertTrue($scope->blocksEverything(), 'ChannelToolScope\'s written law: broken configuration refuses, it does not wave through');
+        self::assertStringContainsString('unreadable', (string) $scope->verdict('Read'), 'the operator-visible diagnostic rides the refusal text');
+        self::assertStringContainsString('Syntax error', (string) $scope->verdict('Read'));
+    }
+
+    public function testNonChannelNamesStillGetNoScopeWhenTheRecordIsUnreadable(): void
+    {
+        $svc = (self::service())(static fn (): array => throw new \RuntimeException('channels.json is unreadable'));
+
+        self::assertNull($svc->scopeFor('local-tui'), 'the corruption arm binds channel sessions only — main-chat admissions are byte-identical to before');
+    }
+
     public function testNamesThatAreNotChannelGrammarGetNoScopeAtAll(): void
     {
         $svc = (self::service())(static fn (): array => ['channels' => ['candy-discord|discord' => ['tools' => ['allow' => ['Read']]]]]);
