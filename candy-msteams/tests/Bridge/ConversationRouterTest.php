@@ -259,7 +259,7 @@ final class ConversationRouterTest extends TestCase
         $this->inboundOn('msteams:default:19:team-42@thread.v2', 'hello channel');
 
         self::assertSame(1, $this->serve->createSeen);
-        self::assertSame('agent:main:msteams:group:19:team-42@thread.v2', $this->serve->createName, 'M-5: D6 policy resolves identity off the name field — Teams must stamp it too');
+        self::assertSame('agent:main:msteams:group:19%3Ateam-42@thread.v2', $this->serve->createName, 'M-5: the Teams conversation id rides colon-encoded so the name stays inside the five-segment policy grammar (an embedded colon would push it into refusingAll)');
     }
 
     public function testAPerPeerDmIsCreatedUnderTheDmGrammarWithThePeerTail(): void

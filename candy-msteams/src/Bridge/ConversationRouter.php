@@ -643,7 +643,15 @@ final class ConversationRouter
             return 'agent:main:msteams:dm:' . $segments[\count($segments) - 1];
         }
 
-        return 'agent:main:msteams:group:' . $rest;
+        // Teams conversation ids carry their own colons ('19:<topic>@thread.v2').
+        // The policy grammar reads exactly five segments (a colon inside the id
+        // would push the name past ChannelToolPolicyService::parse()'s ceiling
+        // and land the session in its fail-closed refusingAll bucket), so the
+        // id rides colon-encoded: '%3A' for ':'. Per-group and per-sender
+        // overrides in channels.json spell the id in this same encoded form;
+        // the channel-level entry that makes D6 live on Teams reads the
+        // 'msteams' segment regardless.
+        return 'agent:main:msteams:group:' . \str_replace(':', '%3A', $rest);
     }
 
     private function followNow(string $sessionId, string $key): void
