@@ -1196,7 +1196,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * @param string $workflowId The run ID or the workflow name.
      * @return WorkflowStatus
-     * @throws WorkflowNotRunningException When this engine has no live or remembered run and no pause file exists.
+     * @throws WorkflowNotRunningException When this engine has no live or remembered run and no pause file exists,
+     *                                     or when a pause file exists but is corrupt (missing, non-string, or
+     *                                     unrecognized status value).
      */
     public function status(string $workflowId): WorkflowStatus
     {
@@ -1225,6 +1227,21 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($statusValue === null) {
             throw new WorkflowNotRunningException(
                 "Pause file for '{$workflowId}' is corrupt: missing 'status' field"
+            );
+        }
+
+        // m10: the enum is string-backed and WorkflowStatus::from() narrows its
+        // parameter to string, so a status written as any other JSON type (an
+        // array, a bool, a number) raises a TypeError inside from(). A TypeError
+        // is NOT a ValueError, so it would sail straight past the catch below
+        // and crash the caller instead of being handled. Refuse it with the
+        // same loud WorkflowNotRunningException contract every other corrupt
+        // shape on this path already carries — a narrow type check, so genuine
+        // engine Errors keep propagating untouched.
+        if (!is_string($statusValue)) {
+            throw new WorkflowNotRunningException(
+                "Pause file for '{$workflowId}' is corrupt: status value is "
+                . get_debug_type($statusValue) . ', expected string'
             );
         }
 

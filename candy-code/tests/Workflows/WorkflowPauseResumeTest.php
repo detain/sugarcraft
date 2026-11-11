@@ -406,6 +406,58 @@ final class WorkflowPauseResumeTest extends TestCase
         $this->engine->getStatus('never-ran');
     }
 
+    /**
+     * m10: a pause file whose `status` is a well-formed JSON value of the WRONG
+     * TYPE (array, bool, number) used to raise a TypeError inside
+     * WorkflowStatus::from() — and a TypeError is not a ValueError, so it
+     * escaped the corrupt-file catch and crashed the run instead of being
+     * refused. Every corrupt shape on this path must surface the loud
+     * WorkflowNotRunningException contract, never a raw engine Error.
+     */
+    public function testAPauseFileWithANonStringStatusIsRefusedLoudlyNotCrashed(): void
+    {
+        mkdir(dirname($this->pauseFile()), 0700, true);
+
+        $shapes = [
+            'array' => ['status' => ['paused']],
+            'bool' => ['status' => true],
+            'float' => ['status' => 1.5],
+            'int' => ['status' => 7],
+            'nested' => ['status' => ['a', 'b' => ['c']]],
+        ];
+        foreach ($shapes as $type => $payload) {
+            file_put_contents($this->pauseFile(), (string) json_encode($payload + ['workflowPath' => 'three']));
+
+            try {
+                $this->engine->status('three');
+                $this->fail("a pause file with a {$type} status must be refused, not run");
+            } catch (WorkflowNotRunningException $refused) {
+                $this->assertStringContainsString('is corrupt', $refused->getMessage());
+            }
+        }
+
+        // A document that is not a JSON object keeps its existing shape: the
+        // guarded decode folds it to [] and the missing-field arm refuses it.
+        file_put_contents($this->pauseFile(), (string) json_encode('hello'));
+        try {
+            $this->engine->status('three');
+            $this->fail('a pause file that is not a JSON object must be refused');
+        } catch (WorkflowNotRunningException $refused) {
+            $this->assertStringContainsString("missing 'status' field", $refused->getMessage());
+        }
+    }
+
+    /** A string status that names no enum case keeps its existing invalid-value wording. */
+    public function testAPauseFileWithAnUnrecognizedStringStatusStillReportsInvalidValue(): void
+    {
+        mkdir(dirname($this->pauseFile()), 0700, true);
+        file_put_contents($this->pauseFile(), (string) json_encode(['status' => 'sideways', 'workflowPath' => 'three']));
+
+        $this->expectException(WorkflowNotRunningException::class);
+        $this->expectExceptionMessage("invalid status value 'sideways'");
+        $this->engine->status('three');
+    }
+
     /** Pausing a completed run stays legal; resuming it runs nothing and consumes the file. */
     public function testPausingACompletedRunRecordsItAndResumingItRunsNothing(): void
     {
