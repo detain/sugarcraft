@@ -459,25 +459,42 @@ final class Canvas
      * caller then emits the full render inline). Memoized per process:
      * hot frames repeat the same style/rune pair thousands of times.
      *
-     * @var array<string, string|null>
+     * The memo is keyed by the Style OBJECT via WeakMap, never by
+     * spl_object_id() in a plain array. PHP recycles object ids the
+     * moment a Style is freed, so an (id, rune) key can hand a LATER,
+     * entirely different Style the earlier one's SGR prefix. Under a
+     * pcov-instrumented full-suite run that collision reallocated heat
+     * cells with stale default-palette bytes over withColors() values
+     * (HeatmapTest crosstalk, LANE-HM 2026-11-11). A WeakMap cannot
+     * false-hit — it is indexed by the live object itself — and it
+     * prunes entries when their Style dies, so the memo is also bounded
+     * rather than growing monotonically for the process lifetime.
+     *
+     * @var \WeakMap<Style, array<string, string|null>>|null
      */
-    private static array $styleOpenMemo = [];
+    private static ?\WeakMap $styleOpenMemo = null;
 
     private static function styleOpen(Style $style, string $rune): ?string
     {
-        $key = spl_object_id($style) . '|' . $rune;
-        if (array_key_exists($key, self::$styleOpenMemo)) {
-            return self::$styleOpenMemo[$key];
+        $memo = self::$styleOpenMemo ??= new \WeakMap();
+        $perRune = $memo[$style] ?? [];
+        if (array_key_exists($rune, $perRune)) {
+            return $perRune[$rune];
         }
         $wrapped = $style->render($rune);
         $runePos = strrpos($wrapped, $rune);
         if ($runePos === false) {
-            return self::$styleOpenMemo[$key] = null;
+            $result = null;
+        } else {
+            $tail = substr($wrapped, $runePos + strlen($rune));
+            $result = ($tail !== '' && $tail !== Ansi::reset())
+                ? null
+                : substr($wrapped, 0, $runePos);
         }
-        $tail = substr($wrapped, $runePos + strlen($rune));
-        if ($tail !== '' && $tail !== Ansi::reset()) {
-            return self::$styleOpenMemo[$key] = null;
-        }
-        return self::$styleOpenMemo[$key] = substr($wrapped, 0, $runePos);
+        // WeakMap::offsetGet copies the value array, so the whole
+        // (rune => prefix) map must be re-assigned to persist.
+        $perRune[$rune] = $result;
+        $memo[$style] = $perRune;
+        return $result;
     }
 }

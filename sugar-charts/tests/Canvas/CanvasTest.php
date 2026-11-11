@@ -331,4 +331,74 @@ final class CanvasTest extends TestCase
         self::assertNull($c->cellStyle(0, 0));
         self::assertEquals($c->getCell(9, 9), $c->cell(9, 9));
     }
+
+    /**
+     * The styleOpen SGR memo must key on the live Style object (WeakMap),
+     * never on spl_object_id() inside a plain array. PHP recycles object
+     * ids once a Style is freed, so a (id, rune) key hands a later,
+     * different Style the earlier one's cached prefix — the exact defect
+     * behind the coverage-flagged HeatmapTest palette crosstalk (LANE-HM
+     * 2026-11-11). This leg reddens deterministically (no coverage run
+     * needed) if the array-with-recycled-ids shape ever returns.
+     */
+    public function testStyleOpenMemoIsIdentityKeyedNotHandleKeyed(): void
+    {
+        $c = new Canvas(1, 1);
+        $c->setCell(0, 0, 'X', Style::new()->foreground(Color::rgb(7, 8, 9)));
+        $c->view(); // guarantees the memo has been populated at least once
+
+        $property = new \ReflectionProperty(Canvas::class, 'styleOpenMemo');
+        $memo = $property->getValue();
+        self::assertInstanceOf(
+            \WeakMap::class,
+            $memo,
+            'styleOpen memo must be a WeakMap: an array keyed by spl_object_id() serves stale SGR prefixes after id recycling.',
+        );
+    }
+
+    /**
+     * WeakMap half of the fix: entries must disappear with their Style,
+     * bounding the memo instead of growing monotonically for the process
+     * lifetime. Under the retired array shape the count never shrinks.
+     */
+    public function testStyleOpenMemoPrunesWhenItsStyleDies(): void
+    {
+        $property = new \ReflectionProperty(Canvas::class, 'styleOpenMemo');
+        $memo = $property->getValue();
+        self::assertInstanceOf(\WeakMap::class, $memo);
+
+        $before = count($memo);
+        $temp = Style::new()->foreground(Color::rgb(1, 2, 3));
+        $c = new Canvas(1, 1);
+        $c->setCell(0, 0, 'X', $temp);
+        $c->view();
+        self::assertArrayHasKey(
+            'X',
+            $memo[$temp] ?? [],
+            'the render must have memoized this style/rune pair.',
+        );
+        self::assertGreaterThan($before, count($memo));
+
+        unset($temp, $c);
+        gc_collect_cycles();
+        self::assertLessThanOrEqual(
+            $before,
+            count($memo),
+            'a dead Style must take its memo entry with it (WeakMap pruning).',
+        );
+    }
+
+    /**
+     * Positive correctness leg for the identity keying: two live styles
+     * sharing one rune must keep distinct SGR prefixes in one frame.
+     */
+    public function testTwoLiveStylesSameRuneKeepDistinctPrefixes(): void
+    {
+        $c = new Canvas(2, 1);
+        $c->setCell(0, 0, 'X', Style::new()->foreground(Color::rgb(1, 2, 3)));
+        $c->setCell(1, 0, 'X', Style::new()->foreground(Color::rgb(4, 5, 6)));
+        $frame = $c->view();
+        self::assertStringContainsString('38;2;1;2;3', $frame);
+        self::assertStringContainsString('38;2;4;5;6', $frame);
+    }
 }
