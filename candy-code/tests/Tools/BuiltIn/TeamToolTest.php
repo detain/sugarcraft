@@ -81,14 +81,17 @@ final class TeamToolTest extends TestCase
 
     public function testATeamCreatedInOneManagerIsFoundByAnother(): void
     {
-        $this->ok($this->tool()->execute(['action' => 'create', 'team' => 'shared']));
+        $tool = $this->tool();
+        $this->ok($tool->execute(['action' => 'create', 'team' => 'shared']));
 
         // A second tool, as a separate process would hold it: it reads the
         // registry the first one wrote rather than an in-memory copy.
         $other = new TeamManager($this->tempDir . '/teams');
         self::assertTrue($other->hasTeam('shared'));
 
-        $other->createTeam('second', 'second', 'lead');
+        // M-3 (cc-review-1111): `list` is workspace-scoped now, so the seed
+        // carries this tool's scope and keeps proving registry sharing.
+        $other->createTeam('second', 'second', 'lead', null, $tool->scope());
         self::assertStringContainsString('second', $this->ok($this->tool()->execute(['action' => 'list'])));
         self::assertStringContainsString('shared', $this->ok($this->tool()->execute(['action' => 'list'])));
     }
