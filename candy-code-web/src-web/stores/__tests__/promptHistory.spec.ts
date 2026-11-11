@@ -198,6 +198,71 @@ describe('prompt history entry bound and write truth (CW-DBA-4)', () => {
 })
 
 /**
+ * F-NIT-1 (cc-review-1111): the head dedupe compared the RAW prompt against
+ * heads that are stored CLAMPED — an oversized re-send could never equal the
+ * 16 KiB head it duplicated, so every repeat pasted a byte-identical entry at
+ * the head and, at cap, each one evicted a tail entry the ring kept. The
+ * compare now runs on clamp forms on BOTH sides (a legacy row may predate the
+ * clamp, and the incoming prompt may exceed it). Two prompts that diverge
+ * only beyond the bound are STORED identically, so their clamped heads — and
+ * only those — are the dedupe subject.
+ */
+describe('prompt history dedupes on clamped heads (F-NIT-1)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('re-sending the same oversized prompt does not paste a duplicate at the head', () => {
+    const big = 'A'.repeat(PROMPT_HISTORY_MAX_ENTRY_CHARS + 5_000)
+    let ring = pushPromptHistory([], big)
+    expect(ring).toHaveLength(1)
+    ring = pushPromptHistory(ring, big)
+    expect(ring).toHaveLength(1)
+    expect(loadPromptHistory()).toHaveLength(1)
+  })
+
+  it('an oversized re-send at the cap costs no tail entry', () => {
+    let ring: string[] = []
+    for (let i = 0; i < PROMPT_HISTORY_CAP; i++) ring = pushPromptHistory(ring, `filler ${i}`)
+    const big = 'B'.repeat(PROMPT_HISTORY_MAX_ENTRY_CHARS + 5_000)
+    ring = pushPromptHistory(ring, big)
+    expect(ring).toHaveLength(PROMPT_HISTORY_CAP)
+    expect(ring[0]).toBe(big.slice(0, PROMPT_HISTORY_MAX_ENTRY_CHARS))
+    expect(ring.at(-1)).toBe('filler 1')
+    ring = pushPromptHistory(ring, big)
+    expect(ring).toHaveLength(PROMPT_HISTORY_CAP)
+    expect(ring.at(-1)).toBe('filler 1')
+  })
+
+  it('the bound edge: exactly-16KiB dedupes unchanged; bound+1 dedupes on the clamped form', () => {
+    const exact = 'e'.repeat(PROMPT_HISTORY_MAX_ENTRY_CHARS)
+    const exactRing = pushPromptHistory([], exact)
+    expect(pushPromptHistory(exactRing, exact)).toHaveLength(1)
+    const over = 'e'.repeat(PROMPT_HISTORY_MAX_ENTRY_CHARS + 1)
+    let ring = pushPromptHistory([], over)
+    expect(ring).toHaveLength(1)
+    ring = pushPromptHistory(ring, over)
+    expect(ring).toHaveLength(1)
+  })
+
+  it('a prompt matching a legacy un-clamped stored head dedupes too', () => {
+    const legacy = 'L'.repeat(PROMPT_HISTORY_MAX_ENTRY_CHARS + 5_000)
+    writeJson('promptHistory', [legacy, 'older'])
+    const ring = pushPromptHistory([], legacy.slice(0, PROMPT_HISTORY_MAX_ENTRY_CHARS))
+    expect(ring).toEqual([legacy, 'older'])
+    expect(loadPromptHistory()).toEqual(ring)
+  })
+
+  it('two long prompts that diverge EARLY are both kept', () => {
+    const tail = 'y'.repeat(PROMPT_HISTORY_MAX_ENTRY_CHARS)
+    const ring = pushPromptHistory(pushPromptHistory([], `1-${tail}`), `2-${tail}`)
+    expect(ring).toHaveLength(2)
+    expect(ring[0]).toBe(`2-${tail}`.slice(0, PROMPT_HISTORY_MAX_ENTRY_CHARS))
+    expect(loadPromptHistory()).toHaveLength(2)
+  })
+})
+
+/**
  * L-DBA MAJOR-1 (reviews-1103): the cross-tab clear once matched a physical
  * name snapshotted at MODULE IMPORT — pre-login, so every scope rotation the
  * ring later lived under was an unknown key to the watcher, and the cleared

@@ -53,14 +53,26 @@ export function loadPromptHistory(): string[] {
  * storage is consulted fresh, so a prompt another tab pushed mid-flight
  * rides the result instead of being clobbered by this tab's stale memory.
  * The head-only dedupe law is kept on the stored view too: when the stored
- * head already IS $prompt, nothing new is written and the caller adopts
- * storage's ring.
+ * head already IS the clamped form of $prompt, nothing new is written and the
+ * caller adopts storage's ring.
+ *
+ * F-NIT-1: the head compares run on CLAMPED forms, before the store is
+ * touched. Entries persist clamped (and legacy rows may predate the clamp),
+ * so a raw >16 KiB text could never match the head it duplicates — every
+ * re-send of one oversized prompt pasted a byte-identical entry at the head,
+ * and at cap each one evicted a tail entry the ring should have kept.
+ * Clamping the compare side first makes the dedupe see what the ring holds.
+ * Two prompts that diverge only beyond 16 KiB are stored identically, so
+ * comparing their stored forms is exactly the dedupe law the entries obey.
  */
 export function pushPromptHistory(history: string[], prompt: string): string[] {
   const text = prompt.trim()
-  if (text === '' || history[0] === text) return history
+  const head = clampEntry(text)
+  const prior = history[0]
+  if (text === '' || (prior !== undefined && clampEntry(prior) === head)) return history
   const stored = loadPromptHistory()
-  if (stored[0] === text) return stored
+  const storedHead = stored[0]
+  if (storedHead !== undefined && clampEntry(storedHead) === head) return stored
   const next = [text, ...stored].map(clampEntry).slice(0, PROMPT_HISTORY_CAP)
   if (writeJson(KEY, next)) storageDegraded.value = false
   else storageDegraded.value = true
