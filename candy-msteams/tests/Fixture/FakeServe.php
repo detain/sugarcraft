@@ -78,12 +78,6 @@ final class FakeServe
      */
     public bool $discardOnly = false;
 
-    /**
-     * Test-only dial: false makes the default replay path answer the cursor
-     * but stream ZERO event frames.
-     */
-    public bool $defaultReplay = true;
-
     public ?string $lastIdempotencyKey = null;
 
     public string $seenText = '';
@@ -332,13 +326,11 @@ final class FakeServe
                     'jsonrpc' => '2.0', 'id' => $rpcId,
                     'result' => (object) ['fromSeq' => (int) $after + 1, 'throughSeq' => 7, 'pendingAsks' => []],
                 ]);
-                if ($this->defaultReplay) {
-                    for ($seq = (int) $after + 1; $seq <= 7; $seq++) {
-                        $this->pushEvent([
-                            'sessionId' => 'sess_fixture_1', 'seq' => $seq, 'type' => 'tool.started',
-                            'ts' => 1, 'durable' => true, 'data' => (object) ['tool' => 'Bash', 'replayed' => true],
-                        ]);
-                    }
+                for ($seq = (int) $after + 1; $seq <= 7; $seq++) {
+                    $this->pushEvent([
+                        'sessionId' => 'sess_fixture_1', 'seq' => $seq, 'type' => 'tool.started',
+                        'ts' => 1, 'durable' => true, 'data' => (object) ['tool' => 'Bash', 'replayed' => true],
+                    ]);
                 }
                 break;
             case 'session.send':
