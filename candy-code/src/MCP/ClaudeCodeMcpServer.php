@@ -102,6 +102,25 @@ final class ClaudeCodeMcpServer implements McpServer
     private array $tools = [];
 
     /**
+     * The tool list {@see $schemaIndex} was built from, kept whole so the
+     * rebuild test is array identity: {@see McpTool} is final readonly, so a
+     * definition can only change by reassigning {@see $tools} — and a fresh
+     * start() builds fresh instances, which never compare identical. While
+     * nothing was reassigned the two properties share one array, and the
+     * check is an O(1) pointer compare.
+     */
+    private array $schemaIndexSource = [];
+
+    /**
+     * name => inputSchema, first occurrence of a name wins (the exact answer
+     * the replaced linear scan returned). Rebuilt by {@see inputSchemaOf()}
+     * on the next lookup after {@see $tools} is reassigned.
+     *
+     * @var array<string,array<array-key,mixed>>
+     */
+    private array $schemaIndex = [];
+
+    /**
      * @param list<string> $spawnArgs the argv as gated — for the operator-facing
      *        truth that the factory honours the default and the override
      */
@@ -372,13 +391,19 @@ final class ClaudeCodeMcpServer implements McpServer
      */
     private function inputSchemaOf(string $toolName): array
     {
-        foreach ($this->tools as $tool) {
-            if ($tool->name === $toolName) {
-                return $tool->inputSchema;
+        if ($this->schemaIndexSource !== $this->tools) {
+            $indexed = [];
+            foreach ($this->tools as $tool) {
+                if (!array_key_exists($tool->name, $indexed)) {
+                    $indexed[$tool->name] = $tool->inputSchema;
+                }
             }
+
+            $this->schemaIndex = $indexed;
+            $this->schemaIndexSource = $this->tools;
         }
 
-        return [];
+        return $this->schemaIndex[$toolName] ?? [];
     }
 
     /** E698 law, same as the stdio sibling: connected AND the child is running. */

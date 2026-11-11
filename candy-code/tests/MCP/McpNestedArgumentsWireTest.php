@@ -45,6 +45,16 @@ final class McpNestedArgumentsWireTest extends TestCase
 
     private const EXPECTED_WIRE = '{"filter":{},"tags":[],"options":{"headers":{}}}';
 
+    /** Two shapes only an index that tracks the live tool list can tell apart. */
+    private const INDEX_SCHEMA_ONE = ['type' => 'object', 'properties' => ['filter' => ['type' => 'object']]];
+
+    private const INDEX_SCHEMA_TWO = ['type' => 'object', 'properties' => ['filter' => ['type' => 'array']]];
+
+    private const META_ONLY_SCHEMA = [
+        'type' => 'object',
+        'properties' => ['info' => ['type' => 'object', 'properties' => []]],
+    ];
+
     private string $workDir = '';
 
     protected function tearDown(): void
@@ -137,5 +147,154 @@ final class McpNestedArgumentsWireTest extends TestCase
         }
 
         self::assertSame(self::EXPECTED_WIRE, $result['content'][0]['text'] ?? null);
+    }
+
+    /**
+     * n32 (cc-review-1111, LIB-CORE-B N2): the schema lookup rode a linear
+     * scan of {@see $tools} per call on all three transports. The cure is a
+     * per-server name => schema index rebuilt iff the tool list is
+     * REASSIGNED — so these legs pin the two properties the old scan never
+     * exercised: invalidation on refresh (new McpTool instances arriving is
+     * exactly what a second start() does) and first-row-wins on a duplicated
+     * name, the answer the scan's break-on-first-match returned.
+     */
+    public function testTheSchemaIndexRebuildsWhenTheToolListIsReassigned(): void
+    {
+        $server = $this->bareHttpServer();
+        $tools = new \ReflectionProperty($server, 'tools');
+        $source = new \ReflectionProperty($server, 'schemaIndexSource');
+        $lookup = new \ReflectionMethod($server, 'inputSchemaOf');
+
+        $tools->setValue($server, [self::schemaTool('search', self::INDEX_SCHEMA_ONE)]);
+        self::assertSame(self::INDEX_SCHEMA_ONE, $lookup->invoke($server, 'search'));
+        // The index keeps the very array it was built from; while nothing is
+        // reassigned the identity check is a pointer compare, not a walk.
+        self::assertSame($tools->getValue($server), $source->getValue($server));
+
+        $tools->setValue($server, [self::schemaTool('search', self::INDEX_SCHEMA_TWO)]);
+        self::assertSame(self::INDEX_SCHEMA_TWO, $lookup->invoke($server, 'search'));
+        self::assertSame([], $lookup->invoke($server, 'never-advertised'));
+    }
+
+    public function testTheSchemaIndexKeepsTheFirstRowForADuplicatedName(): void
+    {
+        $server = $this->bareHttpServer();
+        $tools = new \ReflectionProperty($server, 'tools');
+        $tools->setValue($server, [
+            self::schemaTool('search', self::INDEX_SCHEMA_ONE),
+            self::schemaTool('search', self::INDEX_SCHEMA_TWO),
+        ]);
+
+        self::assertSame(
+            self::INDEX_SCHEMA_ONE,
+            (new \ReflectionMethod($server, 'inputSchemaOf'))->invoke($server, 'search'),
+            'a duplicated tool name must answer with the first row, exactly as the scan did',
+        );
+    }
+
+    /**
+     * The wire-shaped leg: the SECOND tool named answers from the index built
+     * at the first call, and neither lookup can serve the other's schema —
+     * a single-slot or insertion-order-blind cache reddens one leg or the
+     * other while both transports still hand-crank the same conform path
+     * {@see testHttpToolsCallBodyCarriesNestedEmptyObjectsAsObjects()} pins.
+     */
+    public function testTheWireAnswersEveryToolNameFromOneIndexBuild(): void
+    {
+        $history = [];
+        $stack = HandlerStack::create(new MockHandler([
+            new Response(200, [], (string) json_encode(['result' => ['capabilities' => new \stdClass()]])),
+            new Response(202),
+            new Response(200, [], (string) json_encode(['result' => ['tools' => [
+                ['name' => 'search', 'description' => 'nested', 'inputSchema' => self::INPUT_SCHEMA],
+                ['name' => 'meta', 'description' => 'meta', 'inputSchema' => self::META_ONLY_SCHEMA],
+            ]]])),
+            new Response(200, [], (string) json_encode(['result' => ['content' => []]])),
+            new Response(200, [], (string) json_encode(['result' => ['content' => []]])),
+        ]));
+        $stack->push(Middleware::history($history));
+
+        $server = new HttpMcpServer(
+            name: 'index-http',
+            url: 'http://localhost:8080/mcp',
+            headers: [],
+            httpClient: new Client(['handler' => $stack]),
+        );
+        $server->start();
+
+        self::assertSame(['content' => []], $server->callTool('meta', ['info' => []]));
+        self::assertSame(['content' => []], $server->callTool('search', self::ARGUMENTS));
+
+        $bodies = [];
+        foreach ($history as $transaction) {
+            $body = (string) $transaction['request']->getBody();
+            $method = json_decode($body)->method ?? null;
+            if ($method === 'tools/call') {
+                $bodies[(string) json_decode($body)->params->name] = $body;
+            }
+        }
+
+        self::assertStringContainsString('"arguments":{"info":{}}', $bodies['meta'] ?? '');
+        self::assertStringContainsString('"arguments":' . self::EXPECTED_WIRE, $bodies['search'] ?? '');
+    }
+
+    /**
+     * Structural arm of the same finding: all three transports must carry the
+     * ONE lookup shape. A future fourth copy, or one sibling quietly keeping
+     * the scan, reddens here — the triplication was the finding's symptom.
+     */
+    public function testEveryServerSchemaLookupIsTheMemoisedIndex(): void
+    {
+        $files = [
+            'HttpMcpServer.php',
+            'SseMcpServer.php',
+            'ClaudeCodeMcpServer.php',
+        ];
+        $root = dirname(__DIR__, 2) . '/src/MCP/';
+
+        foreach ($files as $file) {
+            $body = self::methodBody(file_get_contents($root . $file) ?: '', 'inputSchemaOf');
+            self::assertStringContainsString('$this->schemaIndexSource !== $this->tools', $body, $file);
+            self::assertStringNotContainsString('return $tool->inputSchema;', $body, $file);
+        }
+    }
+
+    private function bareHttpServer(): HttpMcpServer
+    {
+        return new HttpMcpServer(
+            name: 'bare-index-http',
+            url: 'http://localhost:8080/mcp',
+            headers: [],
+            httpClient: new Client(['handler' => HandlerStack::create(new MockHandler([]))]),
+        );
+    }
+
+    /** @param array<array-key,mixed> $schema */
+    private static function schemaTool(string $name, array $schema): \SugarCraft\Code\MCP\McpTool
+    {
+        return new \SugarCraft\Code\MCP\McpTool($name, 'row', $schema, 'srv');
+    }
+
+    /** Slice one method's body out of a class file by brace walk from its declaration. */
+    private static function methodBody(string $source, string $method): string
+    {
+        $at = strpos($source, 'function ' . $method . '(');
+        self::assertNotFalse($at, 'declaration of ' . $method . ' vanished from the source');
+        $open = strpos($source, '{', $at);
+        self::assertNotFalse($open);
+        $depth = 0;
+        $length = \strlen($source);
+        for ($i = $open; $i < $length; ++$i) {
+            if ($source[$i] === '{') {
+                ++$depth;
+            } elseif ($source[$i] === '}') {
+                --$depth;
+                if ($depth === 0) {
+                    return substr($source, $open, $i - $open + 1);
+                }
+            }
+        }
+
+        self::fail('unbalanced braces scanning ' . $method);
     }
 }
