@@ -28,6 +28,14 @@ const emit = defineEmits<{ setMode: [mode: PermissionMode]; runCommand: [text: s
  * second source of truth about what is selected (the session summary is).
  */
 const socket = useConnectionStore()
+
+/**
+ * m23: session.setMode is write-scoped server-side (Dispatcher::requireScope).
+ * The switcher disappears only when the server has explicitly announced a
+ * principal without the write scope (a viewer grant); before the hello
+ * handshake nothing is known yet, so the chrome keeps its prior shape.
+ */
+const canSetMode = computed(() => !socket.hello || socket.scopes.includes('write'))
 // C-SEC-4: the trust prompts can arrive before any panel measured; the shelf
 // in the context store keeps them, and the badge sends the user to the panel
 // that answers them. C-SEC-5.b: the shelf is a list — the badge COUNTS the
@@ -251,12 +259,18 @@ const prLinkable = computed(() => /^https?:\/\//i.test(props.summary?.pr?.url ??
       :disabled="state.status === 'busy'"
       @click="emit('runCommand', '/compact')"
     >{{ t('web.chrome.status.compact') }}</button>
-    <label class="item">
+    <label v-if="canSetMode" class="item">
       <span class="sr-only">{{ t('web.chrome.status.mode_aria') }}</span>
       <select :value="state.permissionMode ?? 'default'" data-testid="mode-select" @change="emit('setMode', ($event.target as HTMLSelectElement).value as PermissionMode)">
         <option v-for="mode in MODES" :key="mode" :value="mode">{{ t('web.chrome.status.mode', { mode }) }}</option>
       </select>
     </label>
+    <!-- m23: without the write scope the server honestly refuses the change, so the
+         switcher is not offered — a plain read-out of the current mode stands in,
+         mirroring the model/provider chrome above. -->
+    <span v-else class="item mode" data-testid="mode-state">{{
+      t('web.chrome.status.mode', { mode: state.permissionMode ?? 'default' })
+    }}</span>
     <span class="item conn">{{ connection }}</span>
   </footer>
 </template>
