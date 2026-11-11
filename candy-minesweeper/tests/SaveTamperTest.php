@@ -24,20 +24,26 @@ use SugarCraft\Minesweeper\Stats\DifficultyStats;
  * refuses a non-array data section and negative/incoherent counters that
  * would otherwise silently clobber the real tally on the next save.
  *
- * HOME is sandboxed per test exactly as in SaveLoadTest (snapshotted BEFORE
- * any mutation, both restore forms handled).
+ * HOME and XDG_CONFIG_HOME are sandboxed per test exactly as in SaveLoadTest
+ * (both snapshotted BEFORE any mutation, both restore forms handled —
+ * savePath() asks XDG first, so a HOME-only sandbox leaks the slot wherever
+ * XDG_CONFIG_HOME is exported).
  */
 final class SaveTamperTest extends TestCase
 {
     private ?string $savedHome;
+    private string|false $savedXdg;
     private string $homeDir = '';
 
     protected function setUp(): void
     {
         $this->savedHome = getenv('HOME');
+        $this->savedXdg = getenv('XDG_CONFIG_HOME');
         $this->homeDir = sys_get_temp_dir() . '/candy-minesweeper-tamper-' . bin2hex(random_bytes(6));
         mkdir($this->homeDir, 0700, true);
         putenv('HOME=' . $this->homeDir);
+        putenv('XDG_CONFIG_HOME=' . $this->homeDir . '/xdg-config');
+        mkdir($this->homeDir . '/xdg-config', 0700, true);
     }
 
     protected function tearDown(): void
@@ -46,6 +52,11 @@ final class SaveTamperTest extends TestCase
             putenv('HOME');
         } else {
             putenv('HOME=' . $this->savedHome);
+        }
+        if ($this->savedXdg === false) {
+            putenv('XDG_CONFIG_HOME');
+        } else {
+            putenv('XDG_CONFIG_HOME=' . $this->savedXdg);
         }
         if (is_dir($this->homeDir)) {
             foreach (new \RecursiveIteratorIterator(
