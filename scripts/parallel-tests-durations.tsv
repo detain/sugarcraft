@@ -1836,6 +1836,7 @@ candy-code/tests/Tools/Sandbox/SandboxFactoryTest.php	0.002	7
 candy-code/tests/Permissions/PermissionModeTest.php	0.002	9
 candy-code/tests/Backend/ForkChannelEofIsUnansweredTest.php	0.002	3
 candy-code/tests/Tui/AwayTrackerTest.php	0.002	10
+candy-code/tests/Channels/ChannelPolicyAdmissionInterlockTest.php	0.001	5
 candy-code/tests/Cli/NonInteractiveMcpToolsHeadlessTest.php	0.001	4
 candy-code/tests/Agents/MemoryScopeTest.php	0.001	12
 candy-code/tests/Context/Pruning/ContextProjectorTest.php	0.001	6
