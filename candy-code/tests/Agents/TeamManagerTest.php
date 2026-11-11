@@ -109,7 +109,7 @@ final class TeamManagerTest extends TestCase
         $tm = $this->createTeamManager();
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('must not contain path traversal sequences or slashes');
+        $this->expectExceptionMessage('must not contain path traversal sequences or path separators');
 
         $tm->createTeam(
             teamId: '../etc/passwd',
@@ -123,10 +123,51 @@ final class TeamManagerTest extends TestCase
         $tm = $this->createTeamManager();
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('must not contain path traversal sequences or slashes');
+        $this->expectExceptionMessage('must not contain path traversal sequences or path separators');
 
         $tm->createTeam(
             teamId: 'team/slash',
+            name: 'Bad Team',
+            leadAgentId: 'lead-1',
+        );
+    }
+
+    /**
+     * cc-review-1111 n14: '\' is the Windows path separator and mkdir
+     * recursion honors it there, so the store's create path must refuse it
+     * exactly like '/'. The ID reaches the filesystem as a directory name at
+     * the store root — the AgentManager forwarder carries no charset gate,
+     * only TeamTool's own ID_PATTERN does.
+     */
+    public function testCreateTeamBackslashBlocked(): void
+    {
+        $tm = $this->createTeamManager();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must not contain path traversal sequences or path separators');
+
+        $tm->createTeam(
+            teamId: 'team\slash',
+            name: 'Bad Team',
+            leadAgentId: 'lead-1',
+        );
+    }
+
+    /**
+     * The Windows spelling of the escape: '..' joined by a backslash. The
+     * old guard still raised through its '..' arm, but on the wrong answer —
+     * pinning the separator wording here keeps the refusal truthful for the
+     * platform class it guards.
+     */
+    public function testCreateTeamWindowsTraversalBlocked(): void
+    {
+        $tm = $this->createTeamManager();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must not contain path traversal sequences or path separators');
+
+        $tm->createTeam(
+            teamId: '..\evil',
             name: 'Bad Team',
             leadAgentId: 'lead-1',
         );

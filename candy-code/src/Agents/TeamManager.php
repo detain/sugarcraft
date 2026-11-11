@@ -123,8 +123,14 @@ final class TeamManager
             throw new \InvalidArgumentException(sprintf('Team "%s" already exists.', $teamId));
         }
 
-        if (str_contains($teamId, '..') || str_contains($teamId, '/')) {
-            throw new \InvalidArgumentException('Team ID must not contain path traversal sequences or slashes.');
+        // The teams directory is joined with this id as a plain path segment,
+        // so BOTH separators must be refused: '/' is the escape class on
+        // POSIX, '\' is the same class on Windows (cc-review-1111 n14 — the
+        // guard checked only '/' and '..'). The '..' arm stays for the
+        // parent-walk class the separator arms would otherwise miss
+        // ('..'+separator is traversal; '..' alone in a name is too).
+        if (str_contains($teamId, '..') || str_contains($teamId, '/') || str_contains($teamId, '\\')) {
+            throw new \InvalidArgumentException('Team ID must not contain path traversal sequences or path separators.');
         }
 
         $config ??= new TeamConfig();
