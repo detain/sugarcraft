@@ -556,6 +556,40 @@ final class Renderer
     private static ?\WeakReference $markdownMemoTheme = null;
 
     /**
+     * Bound for the settled diff render memo. Entries are whole rendered diff
+     * blocks rather than transcript lines — one expanded tool row can be tens
+     * of KB — and settled diffs do not recur across a session the way turns
+     * do, so this bound keeps the worst case modest instead of transcript-sized.
+     */
+    private const DIFF_MEMO_MAX = 256;
+
+    /**
+     * Rendered settled tool-row diff blocks, keyed by the diff bytes plus every
+     * ambient state the render reads, least recently used first (M-12).
+     *
+     * {@see renderDiff()} is a pure function of (diff, width, theme) and the
+     * ambient reads named in the key below, but it re-walked the entire diff on
+     * every painted frame while a tool row was expanded — gutter parse, file
+     * headers, per-row language classification, per-row sanitise/truncate/
+     * highlight, and the box render — a flat per-frame cost measured against
+     * the diff size (rollup M-12). A settled diff does not change, so repeats
+     * are served from here, exactly as settled markdown is.
+     *
+     * The ambient state is folded into the key, never trusted: the row cap and
+     * the unified/split style come from UiSettings, screen-reader mode changes
+     * the box border, and the overflow trailer is locale-dependent through
+     * `Lang::t`. The theme is NOT in the key: the memo belongs to one
+     * {@see Theme} object, {@see $diffMemoTheme}, and is emptied when a frame
+     * renders with a different one. A theme switch costs one cold frame.
+     *
+     * @var array<string, string>
+     */
+    private static array $diffMemo = [];
+
+    /** @var \WeakReference<Theme>|null the theme {@see $diffMemo} was filled with */
+    private static ?\WeakReference $diffMemoTheme = null;
+
+    /**
      * The streaming partial's incremental render state (audit 15b-10).
      *
      * A streaming reply only grows, and re-parsing all of it on every token
@@ -5690,6 +5724,31 @@ final class Renderer
      */
     private static function renderDiff(string $diff, Theme $theme, int $width): string
     {
+        // M-12: the settled render is content-addressed. The theme guard runs
+        // first so a theme swap drops the stale renders before anything reads
+        // them; everything ambient this body reads below is folded into the key.
+        if (self::$diffMemoTheme?->get() !== $theme) {
+            self::$diffMemo = [];
+            self::$diffMemoTheme = \WeakReference::create($theme);
+        }
+
+        // Length plus a 128-bit hash for the bytes (the markdown memo's key
+        // discipline: a key costs O(1) memory per settled diff), then width,
+        // the UiSettings row cap and style, the screen-reader border flag and
+        // the Lang::t trailer locale — the complete ambient census of the body
+        // below, so no setting change can ever serve a stale frame.
+        $key = $width . ':' . strlen($diff) . ':' . hash('xxh128', $diff)
+            . ':' . self::diffStyle() . ':' . self::diffPreviewRows()
+            . ':' . (ScreenReaderMode::enabled() ? '1' : '0')
+            . ':' . \SugarCraft\Core\I18n\T::locale();
+
+        if (isset(self::$diffMemo[$key])) {
+            $hit = self::$diffMemo[$key];
+            // Move to the most-recently-used end.
+            unset(self::$diffMemo[$key]);
+            return self::$diffMemo[$key] = $hit;
+        }
+
         // Border (2 cols) + padding(0, 1) (2 cols) sit outside the text.
         // Floored at 1, not 8: with an 8-cell floor the box was 12 cells wide
         // in any pane narrower than that, and fitToPane() then wrapped its
@@ -5775,11 +5834,17 @@ final class Renderer
             $painted[] = $gutterStyle->render($blankPrefix . $trailer);
         }
 
-        return Style::new()
+        $rendered = self::$diffMemo[$key] = Style::new()
             ->border(ScreenReaderMode::border(Border::normal()))
             ->borderForeground($theme->border)
             ->padding(0, 1)
             ->render(implode("\n", $painted));
+
+        if (\count(self::$diffMemo) > self::DIFF_MEMO_MAX) {
+            unset(self::$diffMemo[array_key_first(self::$diffMemo)]);
+        }
+
+        return $rendered;
     }
 
     /**
