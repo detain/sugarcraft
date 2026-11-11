@@ -681,6 +681,46 @@ final class Renderer
      */
     private static array $hiddenBodyMemo = [];
 
+    /** Which plain arm {@see settledHistoryBlock()} renders; keys the memo. */
+    private const HISTORY_KIND_USER = 0;
+
+    /** @see HISTORY_KIND_USER — a uiOnly notice row (empty recall titles). */
+    private const HISTORY_KIND_NOTICE = 1;
+
+    /** @see HISTORY_KIND_USER — a plain (non-uiOnly) system row. */
+    private const HISTORY_KIND_SYSTEM = 2;
+
+    /**
+     * Rendered settled plain transcript rows — user prompts, notices and
+     * system lines — keyed by the row bytes plus every ambient state the arm
+     * reads, least recently used first (M-10).
+     *
+     * {@see renderHistory()} rebuilt every row of the whole transcript on
+     * every painted frame. The heavy legs were already content-addressed —
+     * settled markdown by {@see $markdownMemo}, tool diffs by
+     * {@see $diffMemo} — but the plain arms re-sanitised and re-chipped each
+     * settled user and system row per frame, a per-frame cost that grows with
+     * the session (rollup M-10). A settled plain row does not change, so
+     * repeats are served from here, exactly as settled diffs are.
+     *
+     * The arm list is deliberately narrow: boundary, section, tool, pending,
+     * recall and assistant rows stay rebuilt every frame, because their bytes
+     * read live context ({@see $expanded}, {@see $frame}, the ledger) that
+     * this key does not carry. The ambient state the plain arms DO read —
+     * pane width, the compacted-above-boundary flag, attachments on the user
+     * row, the locale behind every `Lang::t` label — is folded into the key,
+     * never trusted. The theme is NOT in the key: the memo belongs to one
+     * {@see Theme} object, {@see $historyBlockMemoTheme}, and is emptied when
+     * a frame renders with a different one. A theme switch costs one cold
+     * frame.
+     *
+     * @var array<string, string>
+     */
+    private static array $historyBlockMemo = [];
+
+    /** @var \WeakReference<Theme>|null the theme {@see $historyBlockMemo} was filled with */
+    private static ?\WeakReference $historyBlockMemoTheme = null;
+
     /**
      * Inner width of the permission modal, in cells. Wider than the palette's
      * 50 because a prompt body is prose (a hook's question plus the tool
@@ -4581,8 +4621,10 @@ final class Renderer
                 continue;
             }
             $blocks[] = match ($msg->role) {
-                Role::User      => ($condensed ? $condensedUserLabel : $userLabel) . " " . self::untrusted($msg->content)
-                    . self::attachmentChip($msg, $theme, $width),
+                Role::User      => self::settledHistoryBlock(
+                    self::HISTORY_KIND_USER, $msg, $theme, $width, $condensed,
+                    $condensed ? $condensedUserLabel : $userLabel
+                ),
                 Role::Assistant => match (true) {
                     // Flag-driven (withError at the producer), never text-sniffed:
                     // an assistant reply that merely discusses errors is not one.
@@ -4597,11 +4639,81 @@ final class Renderer
                         // recall frame whose titles all shed at the bound)
                         // keeps the pre-change arm byte-identical.
                         ? self::renderRecallRow($msg, $theme, $expanded, $frame)
-                        : self::notice($theme)->render(Lang::t(self::NOTICE_ROW_LABEL) . ' ' . self::untrusted($msg->content)))
-                    : self::dim($theme)->render(Lang::t('tui.chat.system_label') . ' ' . self::untrusted($msg->content)),
+                        : self::settledHistoryBlock(self::HISTORY_KIND_NOTICE, $msg, $theme, $width, $condensed))
+                    : self::settledHistoryBlock(self::HISTORY_KIND_SYSTEM, $msg, $theme, $width, $condensed),
             };
         }
         return implode("\n\n", $blocks);
+    }
+
+    /**
+     * A settled plain transcript row — user prompt, notice or system line —
+     * rendered at most once per distinct (kind, bytes, ambient), served from
+     * {@see $historyBlockMemo} thereafter (M-10).
+     *
+     * $label is the frame's already-built user label for the user arm; the
+     * notice and system arms take their labels from `Lang::t` inside this
+     * call, whose bytes the locale leg of the key pins. Width, the
+     * compacted flag and (for the user arm) the attachment digest join it.
+     */
+    private static function settledHistoryBlock(int $kind, Message $msg, Theme $theme, int $width, bool $condensed, string $label = ''): string
+    {
+        if (self::$historyBlockMemoTheme?->get() !== $theme) {
+            self::$historyBlockMemo = [];
+            self::$historyBlockMemoTheme = \WeakReference::create($theme);
+        }
+
+        // Length plus a 128-bit hash of the content, so a key costs O(1)
+        // memory however long the row is, exactly as the settled diff memo
+        // does it. The condensed bit keys row position context; it changes
+        // only when a compaction boundary moves, and costs one cold frame.
+        $key = $kind . ':' . $width . ':' . ($condensed ? '1' : '0') . ':'
+            . strlen($msg->content) . ':' . hash('xxh128', $msg->content)
+            . ($kind === self::HISTORY_KIND_USER ? ':' . self::attachmentDigest($msg) : '')
+            . ':' . \SugarCraft\Core\I18n\T::locale();
+        if (isset(self::$historyBlockMemo[$key])) {
+            $hit = self::$historyBlockMemo[$key];
+            // Move to the most-recently-used end.
+            unset(self::$historyBlockMemo[$key]);
+
+            return self::$historyBlockMemo[$key] = $hit;
+        }
+
+        $block = match ($kind) {
+            self::HISTORY_KIND_USER => $label . ' ' . self::untrusted($msg->content)
+                . self::attachmentChip($msg, $theme, $width),
+            self::HISTORY_KIND_NOTICE => self::notice($theme)
+                ->render(Lang::t(self::NOTICE_ROW_LABEL) . ' ' . self::untrusted($msg->content)),
+            default => self::dim($theme)
+                ->render(Lang::t('tui.chat.system_label') . ' ' . self::untrusted($msg->content)),
+        };
+
+        self::$historyBlockMemo[$key] = $block;
+        if (\count(self::$historyBlockMemo) > self::MARKDOWN_MEMO_MAX) {
+            unset(self::$historyBlockMemo[array_key_first(self::$historyBlockMemo)]);
+        }
+
+        return $block;
+    }
+
+    /**
+     * Digest of everything {@see attachmentChip()} renders from a row's
+     * attachments: their count, types, skill labels and name bytes. Entries
+     * that are not attachments contribute nothing to the chip — that method
+     * filters them out — so they do not enter the digest.
+     */
+    private static function attachmentDigest(Message $msg): string
+    {
+        $parts = [];
+        foreach ($msg->attachments as $attachment) {
+            if (!$attachment instanceof \SugarCraft\Code\Attachment) {
+                continue;
+            }
+
+            $parts[] = $attachment->type->name . '|' . ($attachment->skill ?? '') . '|' . $attachment->name();
+        }
+
+        return \count($parts) . ':' . hash('xxh128', implode("\0", $parts));
     }
 
     /**

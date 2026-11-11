@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Renderer;
 
 use PHPUnit\Framework\TestCase;
+use ReflectionClassConstant;
 use ReflectionMethod;
 use ReflectionProperty;
+use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\SgrState;
 use SugarCraft\Core\Util\Parser;
 use SugarCraft\Core\Util\Sanitize;
+use SugarCraft\Code\Attachment;
+use SugarCraft\Code\AttachmentType;
 use SugarCraft\Code\Chat;
+use SugarCraft\Code\Role;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Renderer;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
@@ -428,12 +433,220 @@ final class RenderMemoTest extends TestCase
     }
 
     // =====================================================================
+    // M-10 settled plain rows (user prompts, notices, system lines)
+    // =====================================================================
+
+    private static function plainRowChat(int $cols = 120, int $rows = 40): Chat
+    {
+        return (new Chat(history: [
+            Message::user('hello there'),
+            Message::assistant('a settled reply'),
+            Message::system('a note'),
+            Message::notice('a notice'),
+        ]))->withSize($cols, $rows);
+    }
+
+    public function testASettledPlainRowIsRenderedOnceAndServedFromTheMemo(): void
+    {
+        $chat = self::plainRowChat();
+
+        $first = Renderer::render($chat);
+        self::assertSame($first, Renderer::render($chat), 'a warm frame is byte-identical');
+
+        $memo = new ReflectionProperty(Renderer::class, 'historyBlockMemo');
+        $entries = $memo->getValue();
+        self::assertCount(3, $entries, 'one entry per plain row; the assistant reply stays out');
+        $kinds = array_map(static fn(string $key): string => explode(':', $key)[0], array_keys($entries));
+        sort($kinds);
+        self::assertSame(['0', '1', '2'], array_values(array_unique($kinds)), 'user, notice and system kinds are each keyed');
+
+        // Poisoned: if the next frame re-rendered any plain row instead of
+        // reading it back, its bytes would show the sanitizer's output, not
+        // the marker.
+        $i = 0;
+        foreach ($entries as $key => $_) {
+            $entries[$key] = 'PLAIN-HIT-' . $i++;
+        }
+        $memo->setValue(null, $entries);
+
+        $warm = Renderer::render($chat);
+        foreach ([0, 1, 2] as $n) {
+            self::assertStringContainsString('PLAIN-HIT-' . $n, $warm, 'plain row ' . $n . ' was served, not re-rendered');
+        }
+        self::assertCount(3, $memo->getValue(), 'a warm frame renders no plain row again');
+        self::assertStringContainsString('a settled reply', $warm, 'the assistant row still renders every frame');
+    }
+
+    public function testThePlainMemoBustsOnThemeObjectIdentity(): void
+    {
+        $chat = self::plainRowChat();
+        Renderer::render($chat);
+
+        $memo = new ReflectionProperty(Renderer::class, 'historyBlockMemo');
+        $entries = $memo->getValue();
+        self::assertCount(3, $entries);
+        foreach ($entries as $key => $_) {
+            $entries[$key] = 'PLAIN-HIT';
+        }
+        $memo->setValue(null, $entries);
+
+        $frame = Renderer::render($chat->withThemeName('dracula'));
+        self::assertStringNotContainsString('PLAIN-HIT', $frame, 'a theme switch must not serve the old theme rows');
+        self::assertCount(3, $memo->getValue(), 'the memo was emptied and refilled for the new theme');
+        self::assertStringNotContainsString('PLAIN-HIT', Renderer::render($chat));
+    }
+
+    public function testThePlainMemoKeyCarriesThePaneWidth(): void
+    {
+        Renderer::render(self::plainRowChat(120, 40));
+        Renderer::render(self::plainRowChat(44, 40));
+
+        $keys = array_keys((new ReflectionProperty(Renderer::class, 'historyBlockMemo'))->getValue());
+        self::assertCount(3, array_filter($keys, static fn(string $k): bool => str_contains($k, ':120:')));
+        self::assertCount(3, array_filter($keys, static fn(string $k): bool => str_contains($k, ':44:')),
+            'a resize costs fresh keys instead of serving another width\'s bytes');
+    }
+
+    public function testThePlainMemoKeyCarriesTheCompactedFlag(): void
+    {
+        $block = new ReflectionMethod(Renderer::class, 'settledHistoryBlock');
+        $theme = Theme::byName('dark');
+        $msg = Message::user('above the boundary');
+
+        $block->invoke(null, 0, $msg, $theme, 120, false, 'you');
+        $condensed = $block->invoke(null, 0, $msg, $theme, 120, true, 'YOU-COMPACTED');
+
+        self::assertStringContainsString('YOU-COMPACTED', $condensed,
+            'a row that crosses a compaction boundary re-renders under the condensed label');
+        $keys = array_keys((new ReflectionProperty(Renderer::class, 'historyBlockMemo'))->getValue());
+        self::assertCount(2, $keys, 'the flag keeps its own entry');
+        $bits = array_map(static fn(string $k): string => explode(':', $k)[2], $keys);
+        sort($bits);
+        self::assertSame(['0', '1'], $bits);
+    }
+
+    public function testThePlainMemoKeyCarriesTheLocale(): void
+    {
+        $en = T::locale();
+        try {
+            Renderer::render(self::plainRowChat());
+            T::setLocale('de');
+            Renderer::render(self::plainRowChat());
+        } finally {
+            T::setLocale($en);
+        }
+
+        $keys = array_keys((new ReflectionProperty(Renderer::class, 'historyBlockMemo'))->getValue());
+        self::assertCount(3, array_filter($keys, static fn(string $k): bool => str_ends_with($k, ':de')),
+            'the re-labelled rows cost their own entries');
+        self::assertCount(6, $keys, 'the English entries stay, but are never served under another locale');
+    }
+
+    public function testAUserRowKeysApartByItsAttachments(): void
+    {
+        $png = new Message(Role::User, 'ship it', 1700000000, [new Attachment('/tmp/deep/a.png', AttachmentType::Image)]);
+        $doc = new Message(Role::User, 'ship it', 1700000001, [new Attachment('/tmp/deep/b.txt', AttachmentType::File)]);
+        $none = Message::user('ship it');
+        $chat = (new Chat(history: [$png, $doc, $none]))->withSize(120, 40);
+
+        $frame = Renderer::render($chat);
+        self::assertStringContainsString('🖼 a.png', $frame);
+        self::assertStringContainsString('b.txt', $frame);
+        $memo = (new ReflectionProperty(Renderer::class, 'historyBlockMemo'))->getValue();
+        self::assertCount(3, $memo, 'same bytes, three digests: two chips and a bare row');
+
+        // A warm frame keeps each row's own chip - a collapsed key would
+        // serve the first attachment's chip on every row.
+        self::assertSame($frame, Renderer::render($chat));
+    }
+
+    public function testContextRowsNeverEnterThePlainMemo(): void
+    {
+        $chat = self::mixedChat(120, 24);
+        $cold = Renderer::render($chat);
+        self::assertSame($cold, Renderer::render($chat));
+
+        $memo = new ReflectionProperty(Renderer::class, 'historyBlockMemo');
+        $entries = $memo->getValue();
+        // mixedChat repeats one user prompt and one system note four times
+        // each: two settled keys. Its assistant, tool and diff rows stay
+        // rebuilt every frame.
+        self::assertCount(2, $entries);
+        $kinds = array_map(static fn(string $key): string => explode(':', $key)[0], array_keys($entries));
+        sort($kinds);
+        self::assertSame(['0', '2'], $kinds, 'only the user and system kinds appear');
+        self::assertSame($cold, Renderer::render($chat), 'a warm mixed frame is byte-identical');
+        self::assertCount(2, $memo->getValue(), 'a warm frame never grew the memo with tool rows');
+    }
+
+    public function testARepeatedPlainRowIsServedFromTheOneEntry(): void
+    {
+        $chat = (new Chat(history: [
+            Message::user('same prompt'),
+            Message::system('same note'),
+            Message::user('same prompt'),
+            Message::system('same note'),
+        ]))->withSize(120, 40);
+
+        Renderer::render($chat);
+        $memo = new ReflectionProperty(Renderer::class, 'historyBlockMemo');
+        $entries = $memo->getValue();
+        self::assertCount(2, $entries, 'identical repeats share one entry each');
+
+        $keys = array_keys($entries);
+        $entries[$keys[0]] = 'PLAIN-A';
+        $entries[$keys[1]] = 'PLAIN-B';
+        $memo->setValue(null, $entries);
+
+        $warm = Renderer::render($chat);
+        self::assertSame(2, substr_count($warm, 'PLAIN-A'), 'both repeats are served from the one entry');
+        self::assertSame(2, substr_count($warm, 'PLAIN-B'));
+        self::assertCount(2, $memo->getValue());
+    }
+
+    public function testThePlainMemoStaysBounded(): void
+    {
+        $cap = (new ReflectionClassConstant(Renderer::class, 'MARKDOWN_MEMO_MAX'))->getValue();
+        $block = new ReflectionMethod(Renderer::class, 'settledHistoryBlock');
+        $theme = Theme::byName('dark');
+        $memo = new ReflectionProperty(Renderer::class, 'historyBlockMemo');
+
+        // Warm the theme reference first, so the injected junk is not emptied
+        // by the guard on the next call.
+        $block->invoke(null, 2, Message::system('warm the theme ref'), $theme, 120, false);
+        $junk = [];
+        for ($i = 0; $i < $cap; $i++) {
+            $junk['junk-' . $i] = 'x';
+        }
+        $memo->setValue(null, $junk);
+
+        $block->invoke(null, 2, Message::system('one past the cap'), $theme, 120, false);
+        self::assertCount($cap, $memo->getValue(), 'storing past the bound evicts least-recently-used first');
+        self::assertArrayNotHasKey('junk-0', $memo->getValue(), 'the oldest entry made room');
+    }
+
+    public function testThePlainArmsReadNothingLive(): void
+    {
+        // Structural census behind the narrow-memo claim: the settled helper's
+        // own body must never read live context state. The ambient reads it
+        // DOES make (Lang::t, T::locale, the attachment digest) are all
+        // pinned into the key.
+        $source = (string) file_get_contents(dirname(__DIR__, 2) . '/src/Renderer.php');
+        $start = strpos($source, 'private static function settledHistoryBlock(');
+        self::assertIsInt($start);
+        $body = substr($source, $start, (int) strpos($source, "\n    }\n", $start) - $start);
+        foreach (['getenv', 'ScreenReaderMode', '$expanded', '$frame', '$ledger', '$agents', '$images', '$mosaic', 'UiSettings'] as $live) {
+            self::assertStringNotContainsString($live, $body, 'the settled plain arm must stay context-free: ' . $live);
+        }
+    }
+
+    // =====================================================================
     // Helpers
     // =====================================================================
 
     private static function clearMemos(): void
     {
-        foreach (['markdownMemo' => [], 'markdownMemoTheme' => null, 'streamMemo' => null, 'styleTokenMemo' => [], 'hiddenBodyMemo' => []] as $name => $empty) {
+        foreach (['markdownMemo' => [], 'markdownMemoTheme' => null, 'streamMemo' => null, 'styleTokenMemo' => [], 'hiddenBodyMemo' => [], 'historyBlockMemo' => [], 'historyBlockMemoTheme' => null] as $name => $empty) {
             (new ReflectionProperty(Renderer::class, $name))->setValue(null, $empty);
         }
     }
