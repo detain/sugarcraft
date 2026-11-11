@@ -136,12 +136,13 @@ final class ProcessContainmentPhpSetsidTest extends TestCase
 
     public function testTheProbeRefusesAnExitForwarderThatLeadsNothing(): void
     {
-        // The leadership leg's whole purpose: `/bin/sh -c 'exit 7'` forwards
+        // The witness leg's whole purpose: `/bin/sh -c 'exit 7'` forwards
         // the exit code perfectly while the child stays in the PARENT's
         // group. Accepted on the exit leg alone, every wrapped spawn would
-        // claim a group that terminate() could then kill nobody in. Costs
-        // this pin the 2 s deadline once — the bounded-reject path, itself
-        // worth exercising.
+        // claim a group that terminate() could then kill nobody in. The
+        // forwarder never runs the probe payload, so it reports no group
+        // and the witness leg refuses it at once — no deadline spent
+        // (LANE-CC witness rewrite, 2026-11-11).
         ProcessContainment::setDetachedSpawnCandidatesForTesting([['/bin/sh', '-c', 'exit 7']]);
 
         self::assertSame([], ProcessContainment::detachedSpawnPrefix());
@@ -172,15 +173,17 @@ final class ProcessContainmentPhpSetsidTest extends TestCase
      * probe's discipline: posix_getpgid answers for a reaped-pending child
      * only until proc_close takes it.
      *
-     * The leader verdict is the production answer itself: spawnAndInspect
-     * calls ProcessContainment::childLeadsOwnGroup() directly (LANE-CC
-     * macOS roundtrip #1, 2026-11-11 — a second dialect of the poll was
-     * how one run ended with the probe rejecting an arm the helper was
-     * accepting). Unverifiable is NOT rejected: a missing posix_getpgid
-     * or a Darwin ESRCH answer on an exited child accepts on the arm's
-     * exit-7 alone, which is itself proof the stub detached (it exits
-     * 127 when posix_setsid fails). Where the child is observably in a
-     * WRONG group (Linux, live child), the poll denies, teeth unchanged.
+     * The leader verdict is an EXTERNAL cross-check: the test polls
+     * childLeadsOwnGroup() itself, without trusting any self-report —
+     * deliberately the OTHER proof from production's in-child witness
+     * (LANE-CC macOS roundtrip #2, 2026-11-11, retired the
+     * shared-dialect design: one outside poll cannot tell a dead helper
+     * from a dead forwarder on Darwin). A wrap passes only when an
+     * inside declaration and an outside observation agree. Unverifiable
+     * is NOT rejected here: the arms this checks are leader arms whose
+     * detach the exit-7 leg independently proves (the stub exits 127
+     * when posix_setsid fails). Where the child is observably in a WRONG
+     * group (Linux, live child), the poll denies, teeth unchanged.
      *
      * @param list<string> $spec
      * @return array{0:int,1:bool}
@@ -199,11 +202,11 @@ final class ProcessContainmentPhpSetsidTest extends TestCase
         \fclose($pipes[1]);
         \fclose($pipes[2]);
 
-        // THE production predicate, not a dialect of it: probe and test ask
-        // childLeadsOwnGroup the same question with the same deadline
-        // budget, so a Darwin ESRCH answer can never ACCEPT here while the
-        // live probe REJECTS there (the roundtrip-#1 split-brain, both red
-        // shapes at once). A verifiably wrong-group child stays a denial.
+        // The external half of the two-proof design: production's probe
+        // no longer consults this predicate (roundtrip #2 moved the check
+        // inside the child), so leadership must be true — or
+        // uncontradictable, made sound by the exit leg — from out here.
+        // A verifiably wrong-group child stays a denial.
         $leader = ProcessContainment::childLeadsOwnGroup($pid, \hrtime(true) + 2_000_000_000);
 
         $status = \proc_close($proc);

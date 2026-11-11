@@ -318,7 +318,7 @@ final class FilePicker implements Model
             if ($hidden && !$this->showHidden) {
                 continue;
             }
-            $full   = rtrim($this->cwd, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $name;
+            $full   = Entry::join($this->cwd, $name);
             $isDir  = is_dir($full);
             if (!$isDir && $this->allowedExtensions !== []) {
                 $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));

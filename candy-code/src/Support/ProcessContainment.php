@@ -209,8 +209,9 @@ final class ProcessContainment
      * Candidates are probed IN ORDER through one short-lived proc_open
      * each: the located `setsid -w --` first (the cheap native wrapper),
      * then {@see PHP_SETSID_STUB} as `php -r <stub> --`. A candidate passes
-     * only when `/bin/sh -c 'exit 7'` comes back 7 AND the probe's child is
-     * observed as its own group leader. The exit leg catches the two real
+     * only when the child runs the payload, comes back 7 AND REPORTS its own
+     * process group as the recorded pid — the in-child witness below, not
+     * an outside glance. The exit leg catches the two real
      * silent failure modes of a wrapper — one predating `-w` (or a busybox
      * lacking it) execs, exits 0 immediately, and every wrapped spawn on
      * the box would report success for commands that failed; a pcntl-less
@@ -293,21 +294,26 @@ final class ProcessContainment
     }
 
     /**
-     * Does this pid lead (or uncontradictably fail to contradict) its own
-     * process group? THE single leadership predicate, shared by the
-     * detached-arm probe below and by ProcessContainmentPhpSetsidTest —
-     * production and its test must not run two dialects of the same poll
-     * (the macOS roundtrip of 2026-11-11 proved one dialect can be the
-     * wrong one: Darwin's posix_getpgid answers FALSE for an exited child
-     * even unreaped, where Linux answers the zombie's real pgid).
+     * External leadership POLL: does this pid lead, or at least fail to
+     * contradict, its own process group — judged from OUTSIDE the child?
+     *
+     * This is the TEST's cross-check half. Production proves leadership
+     * from the other side: the probe child reports its own group from
+     * inside itself ({@see DETACHED_PROBE_COMMAND}), and the two proofs
+     * are independent by design. The macOS roundtrip of 2026-11-11 (#2)
+     * retired the earlier shared-dialect plan — one outside poll cannot
+     * tell a dead helper from a dead forwarder on Darwin, where
+     * posix_getpgid answers FALSE for an exited child even unreaped while
+     * Linux answers the zombie's real pgid.
      *
      * The class doctrine — unverifiable is NOT rejected — extends to the
      * ESRCH answer exactly as it does to the missing function. Accepting
-     * unobservability forfeits nothing the probe does not already prove:
-     * the helper arm reaches exit(7) only after posix_setsid() succeeded
-     * (it exits 127 otherwise), and a child that is OBSERVABLY in the
-     * wrong group answers the poll with its real pgid on both platforms
-     * while it lives, so it stays a denial for the full deadline.
+     * unobservability forfeits nothing here: the arms this poll checks
+     * are leader arms whose detach the exit-7 leg independently proves
+     * (the stub exits 127 when posix_setsid() fails), and a child
+     * OBSERVABLY in the wrong group answers the poll with its real pgid
+     * on both platforms while it lives, so it stays a denial for the
+     * full deadline.
      *
      * @param int $deadlineNs absolute hrtime(true) deadline for the poll
      */
@@ -333,27 +339,53 @@ final class ProcessContainment
     }
 
     /**
+     * The witness payload the detach probe runs under each candidate: the
+     * child reports its own process group from INSIDE itself, then exits
+     * 7. An exec-ing wrapper (setsid -w in place, or the PHP helper arm's
+     * pcntl_exec) reports the DETACHED group \u2014 the very pid proc_open
+     * recorded. A candidate that never runs the payload reports NOTHING,
+     * which is the refusal the outside poll could not make durable on
+     * Darwin (macOS roundtrip #2, 2026-11-11): by the time the parent
+     * polls, the forwarder is gone and its ESRCH answer is
+     * indistinguishable from the helper's death. Single-quoted: the ${p}
+     * below is expanded by the child's shell, never by PHP.
+     */
+    private const DETACHED_PROBE_COMMAND = 'p=$(ps -o pgid= -p $$ 2>/dev/null | tr -d " \r"); echo "PGID:${p}"; exit 7';
+
+    /**
      * Run ONE candidate's claim through one short-lived proc_open closed by
-     * the single proc_close below: forwards `exit 7`, and its child leads
-     * its own group.
+     * the single proc_close below: the child must run the witness payload,
+     * report its own group as the recorded pid, and come back 7.
      *
-     * The pipes are DRAINED before they close, up to the probe deadline: an
-     * output stream closed unread can kill the child on SIGPIPE while it
-     * writes its own error, and proc_close then reports a corrupted status
-     * (measured: the helper arm's missing-binary probe answers 125
-     * undrained, 127 drained) — the drain is what keeps the exit-code leg
-     * honest. Drained chunks are DISCARDED, nothing reaches the parent's
-     * streams (ChildStderrCaptureTest's census relies on the silence).
+     * Leadership is WITNESSED from inside the child, not polled from
+     * outside it. The macOS roundtrip of 2026-11-11 (#2) retired the
+     * outside poll for this leg: Darwin's posix_getpgid answers FALSE for
+     * an exited child even unreaped, so a dead exit-forwarder and a dead
+     * detached helper were indistinguishable to the parent once the child
+     * was done \u2014 the probe accepted a candidate that leads nothing. An
+     * exec-ing wrapper reports the detached group because $$ inside the
+     * child is the exec'd command's pid, exactly what proc_open recorded;
+     * a candidate that does not exec reports its parent's group (wrong),
+     * and one that never runs the payload reports nothing (refused). The
+     * host's ps is assumed present (procps spells -o pgid= the same on
+     * Linux and Darwin); where it is missing, no report arrives, every
+     * candidate is refused, and the package fail-closes to the bare
+     * command \u2014 containment lost, never forged.
      *
-     * The pid is read from proc_get_status() EXACTLY ONCE, at launch: the
-     * child cannot have exited that early, and any later call reaps it —
-     * erasing the zombie whose pgid {@see childLeadsOwnGroup()} reads (the
-     * kernel keeps a reaped-pending task's group answerable until
-     * proc_close takes it). Leadership is POLLED, not sampled, because the
-     * PHP arm detaches only once its interpreter reaches posix_setsid(). A
-     * candidate that neither drains to EOF nor detaches inside the deadline
-     * is terminated and rejected, so a broken arm costs one bounded probe —
-     * never the process's remaining life.
+     * The pipes are DRAINED before they close, up to the probe deadline:
+     * an output stream closed unread can kill the child on SIGPIPE while
+     * it writes its own error, and proc_close then reports a corrupted
+     * status (measured: the helper arm's missing-binary probe answers 125
+     * undrained, 127 drained) \u2014 the drain is what keeps the exit-code
+     * leg honest. Drained bytes become the witness report and nothing
+     * else; nothing reaches the parent's streams
+     * (ChildStderrCaptureTest's census relies on the silence).
+     *
+     * The pid is read from proc_get_status() EXACTLY ONCE, at launch: any
+     * later call reaps the child \u2014 erasing the zombie whose exit status
+     * the last leg reads. A candidate that neither reports nor exits
+     * inside the deadline is terminated and rejected, so a broken arm
+     * costs one bounded probe \u2014 never the process's remaining life.
      *
      * @param list<string> $candidate
      */
@@ -361,7 +393,11 @@ final class ProcessContainment
     {
         $descriptors = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
         $pipes = [];
-        $probe = @\proc_open([...$candidate, '/bin/sh', '-c', 'exit 7'], $descriptors, $pipes);
+        $probe = @\proc_open(
+            [...$candidate, '/bin/sh', '-c', self::DETACHED_PROBE_COMMAND],
+            $descriptors,
+            $pipes
+        );
         if (!\is_resource($probe)) {
             return false;
         }
@@ -369,31 +405,62 @@ final class ProcessContainment
         $pid = \proc_get_status($probe)['pid'];
         $deadline = \hrtime(true) + 2_000_000_000;
 
-        $readable = [$pipes[1], $pipes[2]];
-        while ($readable !== []) {
+        $report = '';
+        $open = [1 => $pipes[1], 2 => $pipes[2]];
+        while ($open !== []) {
             $now = \hrtime(true);
             if ($now >= $deadline) {
                 break;
             }
+
+            /*
+             * stream_select REWRITES the array it is handed down to the
+             * streams that became ready \u2014 a pass with no data empties
+             * it. $open is the master list and every selection runs on a
+             * fresh copy of it; handed the master directly, the first
+             * no-data timeout would end the drain with the witness still
+             * in flight (LANE-CC roundtrip #2, caught by the Linux gate
+             * refusing every correctly wrapped arm).
+             */
+            $readable = $open;
             $write = $except = null;
             $micros = (int) min(50_000, ($deadline - $now) / 1000);
+
             if (@\stream_select($readable, $write, $except, 0, $micros) === false) {
                 break;
             }
-            foreach ($readable as $key => $stream) {
-                if (@\fread($stream, 4096) === '' && \feof($stream)) {
-                    unset($readable[$key]);
+
+            foreach ($readable as $stream) {
+                $chunk = @\fread($stream, 4096);
+
+                if ($chunk === false) {
+                    continue;
+                }
+
+                $report .= $chunk;
+
+                if (\strlen($report) >= 4_096) {
+                    break 2;
+                }
+            }
+
+            foreach ($open as $key => $stream) {
+                if (@\feof($stream)) {
+                    unset($open[$key]);
                 }
             }
         }
+
         \fclose($pipes[0]);
         \fclose($pipes[1]);
         \fclose($pipes[2]);
 
-        // THE shared predicate (childLeadsOwnGroup): a poll the OS cannot
-        // contradict is not a poll against the arm. When it verifiably
-        // denies, the candidate is unproven — reap, terminate, refuse.
-        if (!self::childLeadsOwnGroup($pid, $deadline)) {
+        // The witness leg: the report must NAME the recorded pid as the
+        // child's own group. No report, a malformed report, or a report
+        // naming somebody else's group \u2014 the candidate never detached
+        // its child into a group terminate() could reach. Bounded reap,
+        // refuse.
+        if (\preg_match('/PGID:(\d+)/', $report, $witness) !== 1 || (int) $witness[1] !== $pid) {
             \proc_terminate($probe, \SIGKILL);
             \proc_close($probe);
 
