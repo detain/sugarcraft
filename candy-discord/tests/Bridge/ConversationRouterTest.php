@@ -323,6 +323,31 @@ final class ConversationRouterTest extends TestCase
         self::assertSame('agent:main:discord:channel:main', $this->serve->createName, 'a folded multi-sender session names no sender — policy falls to the channel level');
     }
 
+    public function testNewKeepsTheChannelPolicyGrammarOnTheReplacementSession(): void
+    {
+        $this->boot();
+        $this->inboundDm('bind me', false, 'm-1');
+
+        $this->router->runCommand('discord', self::DM_KEY, ['channelId' => 'chan-9'], ['name' => 'new', 'args' => []]);
+        self::runFor($this->loop, 300);
+
+        self::assertSame(2, $this->serve->createSeen, '/new must mint its own session, not reuse the bound one');
+        self::assertSame('agent:main:discord:dm:peer-1', $this->serve->createName, 'M-4: the grammar survives the /new turn so the D6 policy still resolves');
+        self::assertStringContainsString('New session', $this->face->delivered[count($this->face->delivered) - 1]);
+    }
+
+    public function testANamedNewArgumentNeverBecomesTheSessionName(): void
+    {
+        $this->boot();
+        $this->inboundDm('bind me', false, 'm-1');
+
+        $this->router->runCommand('discord', self::DM_KEY, ['channelId' => 'chan-9'], ['name' => 'new', 'args' => ['agent:squatter:victim']]);
+        self::runFor($this->loop, 300);
+
+        self::assertSame(2, $this->serve->createSeen);
+        self::assertSame('agent:main:discord:dm:peer-1', $this->serve->createName, 'M-4: a chat-typed title can neither drop the binding nor squat reserved grammar');
+    }
+
     /** @param array<string,mixed> $policy */
     private function boot(array $policy = []): void
     {

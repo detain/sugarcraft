@@ -219,7 +219,13 @@ final class ConversationRouter
 
         switch ($name) {
             case 'new':
-                $this->serve->createSession($args[0] ?? null)
+                // M-4: the replacement session carries the SAME channel-policy
+                // grammar as the auto-bound one — a free-text argument here
+                // used to land as the session name, silently dropping the
+                // conversation out of its D6 policy binding (and, worse, a
+                // title typed 'agent:...' would have tripped the core's
+                // fail-closed refusingAll). Positional args are advisory.
+                $this->serve->createSession(self::grammarName($key))
                     ->then(function (array $created) use ($key, $ref, $channel): void {
                         $sessionId = (string) ($created['id'] ?? '');
                         if ($sessionId === '') {
