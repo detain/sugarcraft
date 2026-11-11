@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Bundles\Bundle;
 use SugarCraft\Code\Channels\BundleChannelLoader;
 use SugarCraft\Code\Channels\ChannelsStore;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tests\Skills\TemporaryDirectoryTrait;
 
 /**
@@ -184,6 +185,22 @@ final class BundleChannelLoaderTest extends TestCase
         self::assertFileExists($calmEntry['marker'], 'the good bytes ran');
         self::assertFileExists($boom['marker'], 'honest shape: the thrower ran until it threw');
         self::assertTrue($store->seenEntrypoint($boom['path']), 'an attempted file stays on the ledger, matching the class-check refusal');
+
+        // m04lang: the row above is silent unless the serve boot seat voices it.
+        // ServeStartup::reportChannelBuckets localises the refusal summary through
+        // `bundles.channels.refused` with exactly these two params, so the
+        // operator-facing line is pinned against the REAL row here — pinned under
+        // `en` because the wording, not the translation, is the claim (Lang::t
+        // would otherwise follow the process locale). The family phrase is a
+        // wording guard: it exists because the loader mints `require-failed`
+        // above, and it goes red if the parenthetical drops that family.
+        $announcement = Lang::inLocale('en', static fn (): string => Lang::t('bundles.channels.refused', [
+            'names' => \implode(', ', \array_map(static fn (array $row): string => (string) ($row['class'] ?? '?'), $buckets['refusals'])),
+            'count' => \count($buckets['refusals']),
+        ]));
+        self::assertStringContainsString('refused to load 1 channel', $announcement, 'the count placeholder reaches the launch line');
+        self::assertStringContainsString((string) $boom['class'], $announcement, 'the launch line names the entrypoint the loader refused');
+        self::assertStringContainsString('entrypoint threw at load', $announcement, 'the load-time-throw family is in the summary the operator reads');
     }
 
     public function testAnEntrypointWithNoDeclaredClassRefusesAfterExecution(): void
