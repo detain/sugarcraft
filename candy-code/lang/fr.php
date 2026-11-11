@@ -3172,6 +3172,8 @@ TXT,
     'host.workflow.usage.status' => 'Usage : /workflow status <workflowId>',
     // --- mcp: elicitation questions put to the human mid-call (C-MCP-3.b) ---
     'mcp.elicitation.ask' => 'Le serveur MCP `{server}` demande : {question}',
+    // --- mcp: n24: le seuil paresseux a reporté des serveurs ce lancement ---
+    'mcp.lazy_schema_demoted' => 'Reportés : {count} serveur(s) MCP ont publié des schémas au-dessus du seuil `mcp.lazySchemaTokens` lors de ce lancement et passent par `mcp_list`/`mcp_call` au lieu de ponts de première classe : {servers}. Relevez le seuil ou mettez `mcp.lazySchemaTokens` à 0 pour garder tous les schémas en première classe.',
     // --- mcp: the C-MCP-3.d background hand-off of a long call ---
     'mcp.background.running' => 'L\'outil MCP `{tool}` sur le serveur `{server}` tourne encore en tâche de fond MCP `{id}` ; le résultat arrivera sous forme de message.',
     'mcp.background.lost' => 'L\'appel MCP en arrière-plan de l\'outil `{tool}` sur le serveur `{server}` s\'est terminé sans publier de résultat ; aucun n\'arrivera.',

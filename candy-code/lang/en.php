@@ -3248,6 +3248,8 @@ TXT,
     'host.workflow.usage.status' => 'Usage: /workflow status <workflowId>',
     // --- mcp: elicitation questions put to the human mid-call (C-MCP-3.b) ---
     'mcp.elicitation.ask' => 'MCP server `{server}` asks: {question}',
+    // --- mcp: n24: the lazy schema floor deferred servers this launch ---
+    'mcp.lazy_schema_demoted' => 'Deferred: {count} MCP server(s) advertised schemas over the `mcp.lazySchemaTokens` floor this launch and ride `mcp_list`/`mcp_call` instead of first-class bridges: {servers}. Raise the floor, or set `mcp.lazySchemaTokens` to 0, to keep every schema first-class.',
     // --- mcp: the C-MCP-3.d background hand-off of a long call ---
     'mcp.background.running' => 'MCP tool `{tool}` on server `{server}` is still running as background MCP job `{id}`; the result will arrive as a message.',
     'mcp.background.lost' => 'The background MCP call of tool `{tool}` on server `{server}` exited without publishing a result; none will arrive.',

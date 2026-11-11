@@ -3171,6 +3171,8 @@ TXT,
     'host.workflow.usage.status' => 'Использование: /workflow status <workflowId>',
     // --- mcp: elicitation questions put to the human mid-call (C-MCP-3.b) ---
     'mcp.elicitation.ask' => 'MCP-сервер `{server}` спрашивает: {question}',
+    // --- mcp: n24: ленивый порог схем отложил серверы на этом запуске ---
+    'mcp.lazy_schema_demoted' => 'Отложено: на этом запуске {count} серверов MCP заявили схемы выше порога `mcp.lazySchemaTokens` и доступны через `mcp_list`/`mcp_call` вместо полноправных мостов: {servers}. Поднимите порог или установите `mcp.lazySchemaTokens` в 0, чтобы все схемы остались полноправными.',
     // --- mcp: the C-MCP-3.d background hand-off of a long call ---
     'mcp.background.running' => 'Инструмент MCP `{tool}` на сервере `{server}` всё ещё выполняется как фоновая задача MCP `{id}`; результат придёт сообщением.',
     'mcp.background.lost' => 'Фоновый вызов MCP инструмента `{tool}` на сервере `{server}` завершился без публикации результата; он не придёт.',

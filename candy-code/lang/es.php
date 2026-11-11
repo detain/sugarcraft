@@ -3171,6 +3171,8 @@ TXT,
     'host.workflow.usage.status' => 'Uso: /workflow status <workflowId>',
     // --- mcp: elicitation questions put to the human mid-call (C-MCP-3.b) ---
     'mcp.elicitation.ask' => 'El servidor MCP `{server}` pregunta: {question}',
+    // --- mcp: n24: el suelo perezoso difirió servidores en este arranque ---
+    'mcp.lazy_schema_demoted' => 'Diferidos: {count} servidor(es) MCP ofrecieron esquemas por encima del límite `mcp.lazySchemaTokens` en este arranque y viajan por `mcp_list`/`mcp_call` en lugar de puentes de primera clase: {servers}. Suba el límite o ajuste `mcp.lazySchemaTokens` a 0 para mantener todos los esquemas de primera clase.',
     // --- mcp: the C-MCP-3.d background hand-off of a long call ---
     'mcp.background.running' => 'La herramienta MCP `{tool}` en el servidor `{server}` sigue ejecutándose como trabajo MCP en segundo plano `{id}`; el resultado llegará como un mensaje.',
     'mcp.background.lost' => 'La llamada MCP en segundo plano de la herramienta `{tool}` en el servidor `{server}` terminó sin publicar un resultado; no llegará ninguno.',

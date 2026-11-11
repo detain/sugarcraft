@@ -288,16 +288,16 @@ final class Bootstrap
      * sum stops fitting under this cap — so the next source cannot spend the
      * headroom silently.
      *
-     * 55 is that sum — 54 after the C-M17 paid-side disclosure row joined
-     * (permissionGate’s second), on top of the FIX-3 hooks aggregate joined the
+     * 56 is that sum — 55 after the n24 lazy-schema demotion row (mcpToolShape,
+     * one row whatever the fan-out) joined on top of the C-M17 paid-side disclosure
+     * row (permissionGate’s second), on top of the FIX-3 hooks aggregate
+     * (registerTrustedBundleHooks, one row whatever the fan-out) joined the
      * roster on top of the §7-closeout user-tool skip aggregate
      * (userScriptTools, one row whatever the directory) joined the roster
      * on top of the C-SEC-7.b launch-switch pair
      * (useRestricted, useSafeMode) joined the roster on top of the C-SEC-6.b
-     * project-narrowing row
-     * joined the roster on top of the C-EXT-4.d launch-recommendation
-     * aggregate row, which joined on top of the C-PRV-1.b
-     * unshaped-launch-tier row, which joined on top of the v1:F-1
+     * project-narrowing row joined the roster on top of the C-EXT-4.d launch-recommendation
+     * aggregate row, which joined on top of the C-PRV-1.b unshaped-launch-tier row, itself on top of the v1:F-1
      * Claude-settings skip drain, the v1:m-1 home stand-in row and the
      * v2:a11y-F3 terminal-guidance row, which joined the roster on top of the PLG-1
      * bundles discovery seam and the ISS-047
@@ -308,7 +308,7 @@ final class Bootstrap
      * row, because a silently truncated warning list is the defect this seam
      * exists to end.
      */
-    public const LAUNCH_NOTICE_LIMIT = 55;
+    public const LAUNCH_NOTICE_LIMIT = 56;
 
     /**
      * Roadmap N-P4d: the setting that replaces {@see LAUNCH_NOTICE_LIMIT} (its
@@ -379,6 +379,7 @@ final class Bootstrap
         'reportTuiErrorLogFallback' => 1,
         'drainNarrowedGrantWarnings' => 2,
         'mcpClient' => 2,
+        'mcpToolShape' => 1,
         'reportIgnoredFrontmatter' => 4,
         'lspClient' => 1,
         'permissionGate' => 2,
@@ -9497,14 +9498,13 @@ public static function useMaxCost(?string $maxCost): void
             return null;
         }
 
-        $shape = McpToolShape::derive(
-            $client,
-            $client->listTools(),
-            $client->configEntries(),
-            \SugarCraft\Code\Config\Settings\UiSettings::int(self::MCP_LAZY_SETTING),
-        );
+        $floorTokens = \SugarCraft\Code\Config\Settings\UiSettings::int(self::MCP_LAZY_SETTING);
+        $shape = McpToolShape::derive($client, $client->listTools(), $client->configEntries(), $floorTokens);
         LaunchContext::rememberMcpToolShape($pid, $memoKey, $shape);
-
+        $demotion = $shape->lazyDemotionNotice();
+        if ($demotion !== '') {
+            self::warnLaunchRows([$demotion]);
+        }
         return $shape;
     }
 

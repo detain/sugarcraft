@@ -3169,6 +3169,8 @@ TXT,
     'host.workflow.usage.status' => '使い方: /workflow status <workflowId>',
     // --- mcp: elicitation questions put to the human mid-call (C-MCP-3.b) ---
     'mcp.elicitation.ask' => 'MCP サーバー `{server}` の質問: {question}',
+    // --- mcp: n24: 遅延スキーマ上限が今回の起動でサーバーを延期した ---
+    'mcp.lazy_schema_demoted' => '延期: 今回の起動で {count} 個の MCP サーバーがスキーマを `mcp.lazySchemaTokens` の上限を超えていたため、第一級ブリッジではなく `mcp_list`/`mcp_call` 経由になりました: {servers}。上限を上げるか、`mcp.lazySchemaTokens` を 0 に設定するとすべてのスキーマが第一級のままになります。',
     // --- mcp: the C-MCP-3.d background hand-off of a long call ---
     'mcp.background.running' => 'MCPツール `{tool}`（サーバー `{server}`）はバックグラウンドMCPジョブ `{id}` として実行中です。結果はメッセージとして届きます。',
     'mcp.background.lost' => 'ツール `{tool}` のサーバー `{server}` へのバックグラウンド MCP 呼び出しが結果を公開せずに終了しました。結果は届きません。',

@@ -3171,6 +3171,8 @@ TXT,
     'host.workflow.usage.status' => 'Verwendung: /workflow status <workflowId>',
     // --- mcp: elicitation questions put to the human mid-call (C-MCP-3.b) ---
     'mcp.elicitation.ask' => 'MCP-Server `{server}` fragt: {question}',
+    // --- mcp: n24: die trägen Schema-Grenze stellte Server dieser Sitzung zurück ---
+    'mcp.lazy_schema_demoted' => 'Zurückgestellt: {count} MCP-Server(s) haben in dieser Sitzung Schemata über der Grenze `mcp.lazySchemaTokens` angeboten und laufen über `mcp_list`/`mcp_call` statt als erstklassige Bridges: {servers}. Erhöhen Sie die Grenze oder setzen Sie `mcp.lazySchemaTokens` auf 0, damit alle Schemata erstklassig bleiben.',
     // --- mcp: the C-MCP-3.d background hand-off of a long call ---
     'mcp.background.running' => 'MCP-Tool `{tool}` auf Server `{server}` läuft noch als Hintergrund-MCP-Job `{id}`; das Ergebnis kommt als Nachricht an.',
     'mcp.background.lost' => 'Der Hintergrund-MCP-Aufruf von Tool `{tool}` auf Server `{server}` wurde beendet, ohne ein Ergebnis zu veröffentlichen; es wird keines ankommen.',

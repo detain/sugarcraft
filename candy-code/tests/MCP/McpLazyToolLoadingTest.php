@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tests\MCP;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
 use SugarCraft\Code\Tests\Support\McpLaunchEnabledTrait;
 use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
@@ -254,5 +255,59 @@ final class McpLazyToolLoadingTest extends TestCase
         $this->assertSame($first, $again, 'the shape object itself must be the frozen one — a re-derive would return a NEW object even when values agree');
         $this->assertSame($namesBefore, $this->toolNames(), 'and the launch tool set must not have blinked');
         $this->assertFalse($again->lazy, 'the late fat server is not adopted: the frozen shape never saw it');
+    }
+    // ---- n24: the split announces through the launch drain ------------------
+
+    public function testTheDeferredSplitRaisesExactlyOneLaunchNoticeRow(): void
+    {
+        Bootstrap::writeUserConfig([Bootstrap::MCP_LAZY_SETTING => 2000]);
+        $this->writeUserMcpJson([
+            'small' => $this->serverEntry('ping'),
+            'big' => $this->serverEntry('wide', 12000),
+        ]);
+        LaunchNotices::reset();
+
+        try {
+            $shape = Bootstrap::mcpToolShape($this->repo);
+            $this->assertNotNull($shape);
+            $expected = $shape->lazyDemotionNotice();
+            $this->assertNotSame('', $expected);
+            $this->assertSame([$expected], self::demotionRows(), 'exactly one row — the demotion is no longer silent, and it is not spam');
+            $this->assertStringContainsString('big', $expected, 'the wire tier names the real server');
+
+            Bootstrap::mcpToolShape($this->repo);
+            $this->assertCount(1, self::demotionRows(), 'the memo hit must not re-raise the row');
+        } finally {
+            LaunchNotices::reset();
+        }
+    }
+
+    public function testTheUnderBudgetLaunchRaisesNoRowAtAll(): void
+    {
+        Bootstrap::writeUserConfig([Bootstrap::MCP_LAZY_SETTING => 0]);
+        $this->writeUserMcpJson(['big' => $this->serverEntry('wide', 12000)]);
+        LaunchNotices::reset();
+
+        try {
+            $names = $this->toolNames();
+            $this->assertContains(McpToolBridge::wireNameFor('big', 'wide'), $names, 'floor 0: the fat server stayed first-class');
+            $this->assertSame([], self::demotionRows(), 'nothing deferred — no row reaches the drain');
+        } finally {
+            LaunchNotices::reset();
+        }
+    }
+    /**
+     * n24: only the demotion rows from the launch drain — the environment
+     * fact lines (stripped secret credentials) ride the same seam and would
+     * make an exact-list assert process-dependent.
+     *
+     * @return list<string>
+     */
+    private static function demotionRows(): array
+    {
+        return array_values(array_filter(
+            Bootstrap::launchNotices(),
+            static fn (string $row): bool => str_contains($row, 'mcp.lazySchemaTokens'),
+        ));
     }
 }

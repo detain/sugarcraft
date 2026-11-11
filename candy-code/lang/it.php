@@ -3172,6 +3172,8 @@ TXT,
     'host.workflow.usage.status' => 'Uso: /workflow status <workflowId>',
     // --- mcp: elicitation questions put to the human mid-call (C-MCP-3.b) ---
     'mcp.elicitation.ask' => 'Il server MCP `{server}` chiede: {question}',
+    // --- mcp: n24: la soglia pigra ha differito server in questo avvio ---
+    'mcp.lazy_schema_demoted' => 'Differiti: {count} server MCP hanno dichiarato schemi oltre la soglia `mcp.lazySchemaTokens` in questo avvio e passano da `mcp_list`/`mcp_call` invece che da bridge di prima classe: {servers}. Alzare la soglia o impostare `mcp.lazySchemaTokens` a 0 per mantenere tutti gli schemi di prima classe.',
     // --- mcp: the C-MCP-3.d background hand-off of a long call ---
     'mcp.background.running' => 'Il tool MCP `{tool}` sul server `{server}` è ancora in esecuzione come job MCP in background `{id}`; il risultato arriverà come messaggio.',
     'mcp.background.lost' => 'La chiamata MCP in background del tool `{tool}` sul server `{server}` è terminata senza pubblicare un risultato; non ne arriverà nessuno.',

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\MCP;
 
 use SugarCraft\Code\Agents\AgentPreset;
+use SugarCraft\Code\Lang;
 use SugarCraft\Code\Tools\BuiltIn\McpCallTool;
 use SugarCraft\Code\Tools\BuiltIn\McpListTool;
 use SugarCraft\Code\Tools\McpToolBridge;
@@ -43,12 +44,14 @@ final class McpToolShape
     /**
      * @param list<McpTool> $eagerDescriptors descriptors that keep first-class bridges
      * @param list<McpTool> $dispatchedDescriptors descriptors reachable only through mcp_call
+     * @param list<string> $demotedServers servers whose schemas crossed the lazy floor — n24: the names the launch row carries
      */
     private function __construct(
         public readonly McpClient $client,
         public readonly bool $lazy,
         public readonly array $eagerDescriptors,
         public readonly array $dispatchedDescriptors,
+        public readonly array $demotedServers = [],
     ) {}
 
     /**
@@ -94,10 +97,14 @@ final class McpToolShape
 
         $eager = [];
         $dispatched = [];
+        $demoted = [];
         foreach ($order as $server) {
             $entry = $entries[$server] ?? null;
             $forcesBridge = is_array($entry) && self::entryIsEager($entry);
             $underBudget = $floorTokens <= 0 || $perServer[$server] < $floorTokens;
+            if (!$forcesBridge && !$underBudget) {
+                $demoted[] = $server;
+            }
             foreach ($byServer[$server] as $descriptor) {
                 if ($forcesBridge || $underBudget) {
                     $eager[] = $descriptor;
@@ -107,7 +114,27 @@ final class McpToolShape
             }
         }
 
-        return new self($client, $dispatched !== [], $eager, $dispatched);
+        return new self($client, $dispatched !== [], $eager, $dispatched, $demoted);
+    }
+
+    /**
+     * n24: the one row that tells the operator which servers crossed the lazy
+     * schema floor this launch — the split was silent before, so a missing
+     * `mcp__server__tool` bridge read as a broken server rather than a budget
+     * decision. Empty string when nothing was deferred (the silent negative
+     * half); the launch drain names the count, the servers, and the key that
+     * raises or disables the floor, mirroring McpClient's sandbox opt-out row.
+     */
+    public function lazyDemotionNotice(): string
+    {
+        if ($this->demotedServers === []) {
+            return '';
+        }
+
+        return Lang::t('mcp.lazy_schema_demoted', [
+            'count' => (string) count($this->demotedServers),
+            'servers' => implode(', ', $this->demotedServers),
+        ]);
     }
 
     /**
@@ -153,7 +180,7 @@ final class McpToolShape
             }
         }
 
-        return new self($client, $this->lazy, $this->eagerDescriptors, $dispatched);
+        return new self($client, $this->lazy, $this->eagerDescriptors, $dispatched, $this->demotedServers);
     }
 
     /**

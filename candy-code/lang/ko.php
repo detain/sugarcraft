@@ -3169,6 +3169,8 @@ TXT,
     'host.workflow.usage.status' => '사용법: /workflow status <workflowId>',
     // --- mcp: elicitation questions put to the human mid-call (C-MCP-3.b) ---
     'mcp.elicitation.ask' => 'MCP 서버 `{server}` 질문: {question}',
+    // --- mcp: n24: 지연 스키마 한도가 이번 실행에서 서버를 미뤘다 ---
+    'mcp.lazy_schema_demoted' => '연기됨: 이번 실행에서 {count}개 MCP 서버의 스키마가 `mcp.lazySchemaTokens` 한도를 초과하여 1급 브리지 대신 `mcp_list`/`mcp_call`을 통해 로드됩니다: {servers}. 한도를 높이거나 `mcp.lazySchemaTokens`를 0으로 설정하면 모든 스키마가 1급으로 유지됩니다.',
     // --- mcp: the C-MCP-3.d background hand-off of a long call ---
     'mcp.background.running' => 'MCP tool `{tool}` on server `{server}` is still running as background MCP job `{id}`; the result will arrive as a message.',
     'mcp.background.lost' => 'The background MCP call of tool `{tool}` on server `{server}` exited without publishing a result; none will arrive.',

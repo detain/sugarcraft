@@ -3167,6 +3167,8 @@ TXT,
     'host.workflow.usage.status' => '用法：/workflow status <workflowId>',
     // --- mcp: elicitation questions put to the human mid-call (C-MCP-3.b) ---
     'mcp.elicitation.ask' => 'MCP 服务器 `{server}` 询问：{question}',
+    // --- mcp: n24: 惰性架构上限在本次启动延后了服务器 ---
+    'mcp.lazy_schema_demoted' => '已延后：本次启动有 {count} 个 MCP 服务器的架构令牌数超过 `mcp.lazySchemaTokens` 上限，改由 `mcp_list`/`mcp_call` 调度而非一等桥接: {servers}。提高上限或将 `mcp.lazySchemaTokens` 设为 0 可让所有架构保持一等。',
     // --- mcp: the C-MCP-3.d background hand-off of a long call ---
     'mcp.background.running' => 'MCP 工具 `{tool}`（服务器 `{server}`）仍作为后台 MCP 任务 `{id}` 运行；结果将以消息形式送达。',
     'mcp.background.lost' => '工具 `{tool}`（服务器 `{server}`）的后台 MCP 调用已退出且未发布结果；不会收到结果。',

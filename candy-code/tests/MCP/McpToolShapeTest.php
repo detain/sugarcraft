@@ -267,4 +267,55 @@ final class McpToolShapeTest extends TestCase
         $this->assertSame($shape->dispatchedDescriptors, $scoped->dispatchedDescriptors, 'no restriction configured is not restrict to nothing');
         $this->assertNotSame($shape->client, $scoped->client);
     }
+    // ---- n24: the demotion row the launch drain carries ---------------------
+
+    public function testTheDemotionNoticeNamesTheDeferredServerAndCarriesThePointer(): void
+    {
+        $big = $this->shapeServer();
+        $eager = $this->shapeServer();
+        $small = $this->shapeServer();
+
+        $fat = $this->descriptor($big, 'heavy', 2000);
+        $loud = $this->descriptor($eager, 'loud', 2000);
+        $light = $this->descriptor($small, 'ping');
+        $priceBig = TokenEstimate::ofToolSchema(
+            McpToolBridge::wireNameFor($big, $fat->name),
+            $fat->description,
+            $fat->inputSchema,
+        );
+        $priceSmall = TokenEstimate::ofToolSchema(
+            McpToolBridge::wireNameFor($small, $light->name),
+            $light->description,
+            $light->inputSchema,
+        );
+
+        $shape = McpToolShape::derive(
+            new McpClient('/nonexistent/n24-shape/.mcp.json'),
+            [$fat, $light, $loud],
+            [$eager => ['eager' => true]],
+            (int) (($priceBig + $priceSmall) >> 1),
+        );
+
+        $notice = $shape->lazyDemotionNotice();
+        $this->assertNotSame('', $notice, 'the fat server crossed the floor: the launch must say so');
+        $this->assertMatchesRegularExpression('/1 MCP server\(s\)/', $notice, 'the count is the demoted half, not the config total');
+        $this->assertStringContainsString($big, $notice, 'the deferred server is named');
+        $this->assertStringNotContainsString($small, $notice, 'the bridged neighbour is not blamed for it');
+        $this->assertStringNotContainsString($eager, $notice, 'an eager opt-in was never demoted, so it must not appear');
+        $this->assertStringContainsString('mcp.lazySchemaTokens', $notice, 'the row points at the key that raises or disables the floor');
+        $this->assertStringContainsString('mcp_list', $notice, 'and at where the deferred tools actually live now');
+    }
+
+    public function testTheDemotionNoticeIsEmptyWhenNothingCrossedTheFloor(): void
+    {
+        $big = $this->shapeServer();
+        $shape = McpToolShape::derive(
+            new McpClient('/nonexistent/n24-shape/.mcp.json'),
+            [$this->descriptor($big, 'heavy', 2000)],
+            [],
+            0,
+        );
+
+        $this->assertSame('', $shape->lazyDemotionNotice(), 'floor 0 never defers: there is nothing to announce');
+    }
 }
