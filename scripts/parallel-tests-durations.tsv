@@ -1347,6 +1347,7 @@ candy-code/tests/Tui/AgentViewPaneTest.php	0.014	9
 candy-code/tests/Renderer/RunningToolTailTest.php	0.014	10
 candy-code/tests/Host/SessionHostSurfaceCensusTest.php	0.014	5
 candy-code/tests/Agents/CapabilityCardTest.php	0.014	38
+candy-code/tests/Agents/SubAgentChannelScopeTest.php	0.014	4
 candy-code/tests/Media/Voice/TranscriberTest.php	0.013	12
 candy-code/tests/Providers/CustomProviderTest.php	0.013	41
 candy-code/tests/Chat/UiOnlyCompactionInputTest.php	0.013	4
