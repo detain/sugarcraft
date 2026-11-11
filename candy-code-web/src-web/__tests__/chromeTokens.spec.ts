@@ -48,3 +48,32 @@ describe('chrome-reserve token consumption (UX-11)', () => {
     expect(opener).not.toMatch(/3\.4rem/)
   })
 })
+
+/**
+ * N53/m48: the transcript's jump pill. Its seat was a float:right riding on a
+ * position:sticky box — a combination engines resolve differently, which is
+ * exactly what made the review read it as an overlap hazard for long pre
+ * lines. The fix parks the pill with an INTENTIONAL right seat (max-content
+ * width + auto left margin, clamped by the sticky constraint the Chromium
+ * measurement in e2e/transcript-jump.spec.ts already pins) and retires the
+ * float. m48's "unnamed" half was cured earlier by the visible-text label; the
+ * companion pin keeps the button content-named, since a content button that
+ * loses its text loses its accessible name.
+ */
+describe('transcript jump pill (N53, m48)', () => {
+  const transcript = read('src-web/components/Transcript.vue')
+  const jump = ruleBody(transcript, /\.jump\s*\{([^}]*)\}/)
+
+  it('the pill seats through an explicit right seat, never a float on the sticky box', () => {
+    expect(jump).toContain('position: sticky')
+    expect(jump).toContain('bottom: 0.75rem')
+    expect(jump).toContain('margin-right: 1rem')
+    expect(jump).toContain('width: max-content')
+    expect(jump).toContain('margin-left: auto')
+    expect(jump).not.toMatch(/float\s*:/)
+  })
+
+  it('the pill stays named by its visible label text (m48 landed)', () => {
+    expect(transcript).toMatch(/class="jump"[^>]*>\{\{ t\('web\.transcript\.jump_latest'\) \}\}/)
+  })
+})

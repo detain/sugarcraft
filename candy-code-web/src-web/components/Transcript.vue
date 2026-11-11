@@ -238,7 +238,8 @@ defineExpose({ jumpToEnd })
   bottom: 0.75rem;
   left: 100%;
   margin-right: 1rem;
-  float: right;
+  width: max-content;
+  margin-left: auto;
 }
 /* CW-UX-10: a sticky bar with no paint is a window — rows scrolled through the
    toggles. It must occlude what passes beneath it. */

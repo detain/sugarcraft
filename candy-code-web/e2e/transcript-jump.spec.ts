@@ -3,15 +3,17 @@ import { expect, newSession, openApp, send, test } from './fixtures/server'
 /**
  * UX-20 regression pin: the "Jump to latest" pill.
  *
- * The scroller carries `overflow-x: hidden` while `.jump` positions itself with
- * `position: sticky; bottom: 0.75rem; left: 100%; margin-right: 1rem; float: right`
- * (Transcript.vue). The review read that as a clipping hazard (CANNOT-CONFIRM);
- * measured here in Chromium, the sticky constraint is clamped inside the
- * containing block's padding box, so `left: 100%` parks the pill's right edge
- * exactly `margin-right` (16px) inside the scroller's right edge at desktop and
- * narrow widths — `float` is spec-ignored for sticky and does no work. The pill
- * is visible, hit-testable and clickable; clicking it returns the reader to the
- * bottom and the pill retires.
+ * The scroller carries `overflow-x: hidden` while `.jump` seats itself with
+ * `position: sticky; bottom: 0.75rem; left: 100%; margin-right: 1rem; width:
+ * max-content; margin-left: auto` (Transcript.vue). N53 flagged the earlier
+ * bytes — a `float: right` riding on the sticky box, an engine-divergent
+ * combination — as an overlap hazard for long pre lines; the explicit
+ * max-content/auto seat removes the ambiguity without moving a pixel: measured
+ * here in Chromium, the sticky constraint is clamped inside the containing
+ * block's padding box, so `left: 100%` parks the pill's right edge exactly
+ * `margin-right` (16px) inside the scroller's right edge at desktop and narrow
+ * widths. The pill is visible, hit-testable and clickable; clicking it returns
+ * the reader to the bottom and the pill retires.
  *
  * These assertions pin the measured geometry so a future edit that turns the
  * clipping theory back into fact (dropping the sticky clamp for a raw offset,
