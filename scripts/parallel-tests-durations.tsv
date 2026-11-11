@@ -707,6 +707,7 @@ candy-code/tests/Support/DanglingPlanCitationTest.php	0.300	4
 candy-code/tests/Tui/AssistantBodyContrastTest.php	0.300	10
 candy-code/tests/Tui/MenuBarCompactStripTest.php	0.297	7
 candy-code/tests/Chat/CompactModelSummaryTest.php	0.296	38
+candy-code/tests/Renderer/SettledDiffMemoTest.php	0.295	14
 candy-code/tests/RepoMap/PhpSymbolExtractorTest.php	0.295	9
 candy-code/tests/Server/Pairing/QrEncoderTest.php	0.295	25
 candy-code/tests/Tools/BuiltIn/GrepOptionInjectionTest.php	0.294	32
