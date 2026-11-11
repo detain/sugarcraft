@@ -183,7 +183,14 @@ final class EnvBlockTest extends TestCase
         $snapshot = EnvBlock::fromProcess();
 
         self::assertNotEmpty($snapshot, 'getenv() returned nothing on this host');
-        self::assertArrayHasKey('PATH', $snapshot);
+
+        // Windows environment names are case-insensitive and getenv() hands back
+        // the spelling the OS stored — 'Path' on every stock Windows box, 'PATH'
+        // on POSIX. fromProcess() deliberately preserves the host spelling (the
+        // snapshot is a faithful starting point, per its docblock), so the law
+        // "carries the inherited PATH" is a case-insensitive one.
+        $names = \array_map('strtoupper', \array_keys($snapshot));
+        self::assertContains('PATH', $names, 'the snapshot should carry the inherited PATH, case-insensitively');
 
         $block = EnvBlock::encode($snapshot);
 

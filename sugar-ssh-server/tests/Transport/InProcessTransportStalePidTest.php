@@ -98,7 +98,7 @@ final class InProcessTransportStalePidTest extends TestCase
         $slave = new class ($child) implements SlavePty {
             public function __construct(private Child $child) {}
             public function path(): string { return '/dev/null'; }
-            public function spawn(array $cmd, ?array $env = null, int $cols = 80, int $rows = 24, bool $controllingTerminal = false): Child
+            public function spawn(array $cmd, ?array $env = null, ?int $cols = null, ?int $rows = null, bool $controllingTerminal = false): Child
             {
                 return $this->child;
             }

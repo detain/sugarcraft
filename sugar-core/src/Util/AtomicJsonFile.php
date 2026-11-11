@@ -305,7 +305,12 @@ final class AtomicJsonFile
         fclose($handle);
     }
 
-    /** @param resource|\ClosedResource|null $lockHandle */
+    /**
+     * @param resource|null $lockHandle A handle already closed by an
+     *        earlier release (the \ClosedResource stub on PHP 8.4+, a
+     *        dead resource before it) fails the same is_resource arm,
+     *        which is why the guard below is defensive.
+     */
     private function releaseWriteLock($lockHandle): void
     {
         if (\is_resource($lockHandle)) {
