@@ -253,6 +253,10 @@ final class ReadPathCensusTest extends TestCase
         'Agents/TeamManager.php|file_get_contents' => [
             'SELF_LOCATED — the team registry this manager writes under `~/.candy-code`',
         ],
+        'Agents/TeamManager.php|scandir' => [
+            'SELF_LOCATED — destroyTeam()\'s sweep over the team directory this manager created; names '
+                . 'only, and each entry is unlinked only after SafeDelete::deletable has refused escapes',
+        ],
         'Agents/WorktreeConfig.php|file_get_contents' => [
             'CONTAINED — `.candy-code/config.json`, behind the directory + file pair',
         ],

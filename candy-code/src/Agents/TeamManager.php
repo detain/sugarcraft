@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Agents;
 use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Code\Hooks\HookDispatcher;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\SafeDelete;
 
 /**
  * Creates and manages Team aggregate roots.
@@ -362,6 +363,7 @@ final class TeamManager
      *
      * This does NOT delete the team's persisted data (tasks, messages).
      * Use this when a session ends but team history should be preserved.
+     * To delete the directory as well, use {@see destroyTeam()}.
      *
      * Returns null if the team does not exist.
      */
@@ -377,6 +379,111 @@ final class TeamManager
         $this->saveRegistry();
 
         return $team;
+    }
+
+    /**
+     * Unregister a team AND delete its persisted data (tasks, mailboxes).
+     *
+     * The GC counterpart to {@see removeTeam()}, which by design preserves
+     * history. A team's on-disk tree is the residue the audit named: the
+     * mailbox files carry whole unredacted tool payloads and the inboxes are
+     * append-only with no rotation (audit MINOR-4, cc-review-1111/CC-TEAM-A),
+     * so the bytes are reclaimable nowhere except here, at an explicit call.
+     *
+     * Returns false when the team is not registered. An id that is not a
+     * single plain path component is refused BEFORE any I/O — this is the
+     * manager's destructive verb, and a hostile id must never reach a unlink.
+     * A deletion that could not be completed is LOUD: the registry entry
+     * stands (the disk is still the truth) and the failure is thrown, never
+     * traded for an unregister-that-hides-the-residue.
+     *
+     * @throws \InvalidArgumentException When $teamId is not a single path component.
+     * @throws \RuntimeException When the team's data directory could not be removed.
+     */
+    public function destroyTeam(string $teamId): bool
+    {
+        if (
+            $teamId === '' || $teamId === '.' || $teamId === '..'
+            || str_contains($teamId, '/') || str_contains($teamId, '\\')
+        ) {
+            // Stricter than createTeam's guard (that id-shaped hole is its own
+            // audit row, m06's neighbour n14): a backslash splits a Windows
+            // path, and this call UNLINKS, so it does not inherit the doubt.
+            throw new \InvalidArgumentException(
+                'Team ID must be a single path component to destroy a team.',
+            );
+        }
+
+        $this->refresh();
+        if (!isset($this->meta[$teamId])) {
+            return false;
+        }
+
+        $dir = $this->expandPath($this->basePath) . '/' . $teamId;
+        if (is_dir($dir) && !$this->removeTeamDirectory($dir)) {
+            throw new \RuntimeException(sprintf(
+                'Team "%s" was not destroyed: data remains under "%s".',
+                $teamId,
+                $dir,
+            ));
+        }
+
+        unset($this->teams[$teamId], $this->meta[$teamId], $this->teamConfigs[$teamId]);
+        $this->saveRegistry();
+
+        return true;
+    }
+
+    /**
+     * Recursively delete one team's directory, refusing to part out a name.
+     *
+     * Same shape as {@see \SugarCraft\Code\Agents\WorktreeManager::removeDirectory()}
+     * — the house answer — answering through SafeDelete rather than re-spelling
+     * its guards: a symlink is unlinked as the name it is (never walked, and
+     * only deletable when its resolved target stays inside the tree being
+     * deleted), and depth is capped so a planted spiral cannot out-run the
+     * walk. {@see SafeDelete::baseIsSane()} re-checks the directory itself at
+     * every frame, so a team path that was swapped for a root-level mount
+     * yields a reported false instead of a recursive-delete accident.
+     */
+    private function removeTeamDirectory(string $path, int $depth = SafeDelete::MAX_DEPTH): bool
+    {
+        if (!is_dir($path) || is_link($path)) {
+            // Nothing to walk: already gone, or a link whose removal belongs
+            // to its parent's listing.
+            return !file_exists($path) && !is_link($path);
+        }
+
+        if ($depth <= 0 || !SafeDelete::baseIsSane($path)) {
+            return false;
+        }
+
+        $entries = @scandir($path);
+        if ($entries === false) {
+            return false;
+        }
+
+        $emptied = true;
+        foreach (array_diff($entries, ['.', '..']) as $entry) {
+            $itemPath = $path . '/' . $entry;
+            if (is_dir($itemPath) && !is_link($itemPath)) {
+                // Recurse first, AND after — every child gets its attempt,
+                // so a retry starts from the shallowest surviving residue.
+                $emptied = $this->removeTeamDirectory($itemPath, $depth - 1) && $emptied;
+
+                continue;
+            }
+
+            if (!SafeDelete::deletable($itemPath, $path) || !@unlink($itemPath)) {
+                $emptied = false;
+            }
+        }
+
+        if (!$emptied) {
+            return false;
+        }
+
+        return @rmdir($path);
     }
 
     /**

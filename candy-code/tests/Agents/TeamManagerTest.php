@@ -625,6 +625,101 @@ final class TeamManagerTest extends TestCase
         );
     }
 
+    /**
+     * Audit MINOR-4 (cc-review-1111/CC-TEAM-A): removeTeam documents NON-
+     * deletion, and nothing used to be able to reclaim a team's on-disk tree
+     * at all — the mailbox files carry whole unredacted tool payloads and the
+     * inboxes append forever. destroyTeam is that GC verb: it deletes the
+     * registry entry AND the team's whole data directory.
+     */
+    public function testDestroyTeamDeletesDataDirectoryAndUnregisters(): void
+    {
+        $teamId = 'destroy-' . bin2hex(random_bytes(6));
+        $manager = $this->createTeamManager();
+        $root = $this->tempDir . '/teams';
+        $dir = $root . '/' . $teamId;
+
+        $manager->createTeam(teamId: $teamId, name: 'Doomed', leadAgentId: 'lead-1');
+        // The realistic residue: task state plus a teammate's append-only
+        // inbox and its read markers, nested one level under mailbox/.
+        mkdir($dir . '/mailbox/teammate-a', 0700, true);
+        file_put_contents($dir . '/mailbox/teammate-a/inbox.jsonl', '{"payload":"whole tool output"}' . "\n");
+        touch($dir . '/.read_markers');
+
+        self::assertTrue($manager->destroyTeam($teamId));
+        self::assertFalse($manager->hasTeam($teamId), 'destroyTeam must unregister the team');
+        self::assertDirectoryDoesNotExist($dir, 'destroyTeam must delete the whole tree, nested files included');
+
+        // The deletion is published, not just instance-local: the disk registry
+        // is the truth, so a fresh manager must not see the id either.
+        self::assertFalse((new TeamManager($root))->hasTeam($teamId));
+    }
+
+    public function testDestroyTeamOfUnknownIdReturnsFalseWithoutThrowing(): void
+    {
+        $manager = $this->createTeamManager();
+        self::assertFalse($manager->destroyTeam('never-registered'));
+    }
+
+    /**
+     * The GC verb is the most destructive write this manager makes, so an id
+     * that is not a single plain path component is refused BEFORE any I/O —
+     * not merely unregistered after the fact — and nothing on disk moves.
+     */
+    public function testDestroyTeamRefusesTraversalShapedIdsAndDeletesNothing(): void
+    {
+        $manager = $this->createTeamManager();
+        $root = $this->tempDir . '/teams';
+        $manager->createTeam(teamId: 'keeper', name: 'Keeper', leadAgentId: 'lead-1');
+        mkdir($root . '/outside', 0700, true);
+        file_put_contents($root . '/outside/data', 'must survive');
+
+        foreach (['../outside', 'a/b', 'a\\b', '.', '..'] as $hostile) {
+            try {
+                $manager->destroyTeam($hostile);
+                self::fail(sprintf('destroyTeam accepted the traversal-shaped id "%s".', $hostile));
+            } catch (\InvalidArgumentException) {
+                // The only acceptable answer, per iteration.
+            }
+        }
+
+        self::assertDirectoryExists($root . '/outside');
+        self::assertFileExists($root . '/outside/data');
+        self::assertTrue($manager->hasTeam('keeper'), 'a refusal must not unregister anything');
+        self::assertDirectoryExists($root . '/keeper');
+    }
+
+    /**
+     * removeTeam and destroyTeam pinned as the pair they are: one preserves
+     * history, the other reclaims it.
+     */
+    public function testRemoveTeamPreservesDataAndDestroyTeamReclaimsIt(): void
+    {
+        $teamId = 'pair-' . bin2hex(random_bytes(6));
+        $manager = $this->createTeamManager();
+        $root = $this->tempDir . '/teams';
+        $dir = $root . '/' . $teamId;
+
+        $manager->createTeam(teamId: $teamId, name: 'Pair', leadAgentId: 'lead-1');
+        // Seed the residue the audit names: whole unredacted payloads riding the
+        // append-only inbox, so the destroy leg must delete FILES, not just an
+        // empty directory a neutered unlink would still pass on.
+        mkdir($dir . '/mailbox/teammate-a', 0700, true);
+        file_put_contents($dir . '/mailbox/teammate-a/inbox.jsonl', '{"payload":"secret tool output"}' . "\n");
+        file_put_contents($dir . '/.read_markers', 'm1');
+        $manager->removeTeam($teamId);
+        self::assertDirectoryExists($dir, 'removeTeam documents NON-deletion — that stays true');
+        self::assertFileExists($dir . '/mailbox/teammate-a/inbox.jsonl');
+
+        // The destroyed path also heals the residue removeTeam left: the id
+        // may be re-created and then destroyed, and destroyTeam on a plain
+        // orphan (directory without a registry entry) is not what this leg
+        // pins — the same-id re-create is the user-visible sequence.
+        $manager->createTeam(teamId: $teamId, name: 'Pair Again', leadAgentId: 'lead-1');
+        self::assertTrue($manager->destroyTeam($teamId));
+        self::assertDirectoryDoesNotExist($dir);
+    }
+
     // -------------------------------------------------------------------------
     // Helper methods
     // -------------------------------------------------------------------------
