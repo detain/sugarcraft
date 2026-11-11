@@ -29,7 +29,10 @@ function reload(): void {
   </div>
   <div v-else-if="connection.status === 'reconnecting'" class="banner warn" role="status" data-testid="banner-reconnecting">
     {{ t('web.chrome.banner.lost') }}<template v-if="connection.lastError">{{ t('web.chrome.banner.lost_error', { lastError: connection.lastError }) }}</template>.
-    <template v-if="retryIn !== null">{{ t('web.chrome.banner.retrying', { n: retryIn }) }}</template>
+    <!-- m50: this region is an implicit aria-live=polite queue; the countdown
+         ticks every second, so its node is aria-hidden decoration (house
+         idiom) — sighted users still read the seconds, AT is not re-fired. -->
+    <template v-if="retryIn !== null"><span data-testid="banner-retry-countdown" aria-hidden="true">{{ t('web.chrome.banner.retrying', { n: retryIn }) }}</span></template>
     <button type="button" @click="connection.retryNow()">{{ t('web.chrome.banner.retry_now') }}</button>
   </div>
   <div v-else-if="connection.exhausted" class="banner error" role="alert" data-testid="banner-offline">

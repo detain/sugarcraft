@@ -82,3 +82,44 @@ describe('ConnectionBanner · the exhausted ladder (ISS-052)', () => {
     expect(banner.text()).toContain('Disconnected: HTTP 401')
   })
 })
+
+describe('ConnectionBanner · the ticking countdown (m50)', () => {
+  it('paints the per-second countdown aria-hidden so it cannot crowd the polite announcement queue', async () => {
+    const connection = useConnectionStore()
+    connection.configure(
+      {
+        connectUrl: async () => 'ws://x/ws?ticket=t',
+        socket: (url, protocols) => {
+          const created = new FakeSocket(url, protocols)
+          sockets.push(created)
+          return created
+        },
+        timers,
+        backoff: new Backoff({ random: () => 0.5 }),
+      },
+      (fn) => fn(),
+    )
+    connection.start()
+    await flush()
+    socket().open()
+    socket().answer(helloResult(), 'hello')
+
+    const wrapper = mount(ConnectionBanner)
+    socket().drop()
+    await flush()
+
+    const banner = wrapper.find('[data-testid="banner-reconnecting"]')
+    expect(banner.exists()).toBe(true)
+    // role="status" is an implicit aria-live=polite (and aria-atomic) region:
+    // every mutation of its accessible text is re-announced by AT.
+    expect(banner.attributes('role')).toBe('status')
+
+    const countdown = wrapper.find('[data-testid="banner-retry-countdown"]')
+    // The seconds still paint for sighted users...
+    expect(countdown.exists()).toBe(true)
+    expect(countdown.text()).toContain('Retrying in')
+    // ...but the ticking node sits outside the announcement queue, so the
+    // region's accessible text stays stable and never re-fires per second.
+    expect(countdown.attributes('aria-hidden')).toBe('true')
+  })
+})
