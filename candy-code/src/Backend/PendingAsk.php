@@ -51,9 +51,12 @@ final class PendingAsk
      * this stamp travels with the ask and survives every restart. The
      * candy-discord bridge's `approvals.ttlMinutes` default (30) is the
      * co-TTL on the card side: the card retires its UI at the same horizon
-     * this refuses the answer; change one and the other must move with it
-     * (they sit across a package boundary, so no test can pin the pair —
-     * this sentence is the pin). The shape mirrors candy-discord's
+     * this refuses the answer; change one and the other must move with it.
+     * Both bridge bundles now READ this constant when arming their card
+     * timers and self-clamp a longer configured ttlMinutes to it (a loud
+     * `approval_ttl_clamped` log names both numbers), so the pair cannot
+     * silently diverge upward; this sentence still pins the default. The
+     * shape mirrors candy-discord's
      * PairingCodes: lazy stamp-compare, expiry AT equality, and a row with
      * no stamp ages closed ({@see hasExpired()}). An aged question is never
      * honored silently: {@see \SugarCraft\Code\Protocol\Methods\PermissionMethods::respond()}
