@@ -322,4 +322,66 @@ final class ImageSourceTest extends TestCase
             }
         }
     }
+
+    /**
+     * n33: the in-memory route was the one byte intake without a ceiling —
+     * fromFile() bounds the read and guardFetchedBytes() bounds the URL body,
+     * but a caller handing an over-ceiling buffer straight to fromString()
+     * went unpunished. The cap rides the same self::MAX_BYTES and the refusal
+     * the same 'exceeding the maximum of' wording family as its siblings.
+     */
+    public function testBytesPastTheCeilingAreRefusedByNameNotByDecode(): void
+    {
+        $over = str_repeat('x', ImageSource::MAX_BYTES + 1);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/exceeding the maximum of 67108864 bytes/');
+
+        ImageSource::fromString($over);
+    }
+
+    /**
+     * Exactly MAX_BYTES of undecodable filler must wave through the size
+     * guard and still come back as a FORMAT refusal — the companion arm to
+     * the surplus-byte pin above, so an off-by-one (>=) or a swallowed cap
+     * mutation flips this test even where the over-cap arm stays green.
+     */
+    public function testTheStringCeilingIsInclusiveAtItsCap(): void
+    {
+        $atCap = str_repeat('x', ImageSource::MAX_BYTES);
+
+        try {
+            ImageSource::fromString($atCap);
+            self::fail('at-cap filler must not decode');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('Unsupported image format: [memory-bytes]', $e->getMessage());
+            self::assertStringNotContainsString('exceeding the maximum', $e->getMessage());
+        }
+    }
+
+    /**
+     * Structural ordering pin, per the house source-slice precedent (see
+     * testTheFileRouteSniffsAndDecodesFromTheValidatedBytes and
+     * testBothByteRoutesReGuardDecodedDimensionsBeforeConstruction): the
+     * strlen guard must sit ahead of BOTH GD seams inside fromString(), so
+     * no input size buys a sniff or an allocation before the refusal.
+     */
+    public function testTheStringCeilingIsCheckedBeforeAnyDecodeSeam(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../src/ImageSource.php');
+        $start = strpos($src, 'public static function fromString(');
+        self::assertIsInt($start, 'the string intake route vanished');
+        $end = strpos($src, "\n    }\n", $start);
+        self::assertIsInt($end, 'the string intake body did not terminate');
+        $slice = substr($src, $start, $end - $start);
+
+        $ceiling = strpos($slice, 'strlen($bytes) > self::MAX_BYTES');
+        $sniff   = strpos($slice, '@getimagesizefromstring($bytes)');
+        $decode  = strpos($slice, '@imagecreatefromstring($bytes)');
+        self::assertIsInt($ceiling, 'the byte ceiling guard vanished from the string route');
+        self::assertIsInt($sniff, 'the header sniff seam vanished from the string route');
+        self::assertIsInt($decode, 'the GD allocation seam vanished from the string route');
+        self::assertLessThan($sniff, $ceiling, 'fromString: ceiling must precede the header sniff');
+        self::assertLessThan($decode, $ceiling, 'fromString: ceiling must precede the GD allocation');
+    }
 }

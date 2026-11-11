@@ -159,7 +159,7 @@ Decoding untrusted images is budgeted — the caps are constants on
 
 | Budget | Value | What it stops |
 |---|---|---|
-| `ImageSource::MAX_BYTES` | 64 MiB | the file, animated-file and URL reads — oversized payloads are refused before GD ever sees them (`fromString()` enforces no length ceiling on bytes you already hold; there the format-signature and pixel budgets below are the guards) |
+| `ImageSource::MAX_BYTES` | 64 MiB | the file, animated-file, URL and `fromString()` reads — oversized payloads are refused before GD ever sees them (the in-memory route measures its buffer up front, so every byte-intake path shares one ceiling; the format-signature and pixel budgets below still guard what fits) |
 | `ImageSource::MAX_PIXELS` | 50,000,000 px | per-decode pixel budget — `fromFile()`, `fromAnimatedFile()` and `fromString()` check it against declared dimensions, every renderer re-checks it on the decoded frame, and `withMaxPixels()` tunes it per source |
 | `FLIP_FRAME_CAP` (private) | 256 frames | animated-GIF frame list: walks beyond the cap are sliced away rather than decoded (a silent truncation, not a refusal) |
 | `FLIP_MAX_CELLS` (private) | 100,000 cells | per-frame ceiling for animated GIFs: one frame wider than `width × height` allows is refused with a mosaic-owned message before sugar-animation's decoder sees it (the sibling's own `Decoder::MAX_CELLS` mirror) |

@@ -249,11 +249,26 @@ final class ImageSource
      * read dimensions — avoids the temp-file overhead of the previous
      * implementation which wrote bytes to disk and re-read via fromFile().
      *
-     * @throws \InvalidArgumentException  if the bytes are not a supported image
+     * The same {@see self::MAX_BYTES} ceiling that bounds the fromFile()
+     * read and the URL body bounds these in-memory bytes too, so no intake
+     * route hands GD an over-ceiling buffer.
+     *
+     * @throws \InvalidArgumentException  if the bytes exceed MAX_BYTES or
+     *                                     are not a supported image
      * @throws \RuntimeException          if ext-gd is not available
      */
     public static function fromString(string $bytes, int $maxPixels = self::MAX_PIXELS): self
     {
+        if (strlen($bytes) > self::MAX_BYTES) {
+            // Measured before anything else touches the buffer: the header
+            // sniff and the GD decode below are exactly what this ceiling
+            // exists to keep an over-size payload away from.
+            throw new \InvalidArgumentException(Lang::t('image_source.string_too_large', [
+                'size' => strlen($bytes),
+                'max'  => self::MAX_BYTES,
+            ]));
+        }
+
         if (!extension_loaded('gd')) {
             throw new \RuntimeException(Lang::t('image_source.no_gd'));
         }

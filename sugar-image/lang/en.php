@@ -26,6 +26,7 @@ return [
     'image_source.too_large'         => 'Image dimensions {width}×{height} exceed the maximum of {max} pixels',
     'image_source.file_too_large'    => 'Image file is {size} bytes, exceeding the maximum of {max} bytes',
     'image_source.url_too_large'     => 'Image downloaded from {url} exceeds the maximum of {max} bytes',
+    'image_source.string_too_large'  => 'Image bytes are {size} bytes, exceeding the maximum of {max} bytes',
     'image_source.redirect_no_location' => 'Redirect response from {url} is missing a Location header',
     'image_source.too_many_redirects'   => 'Too many redirects while fetching image from URL: {url}',
     'image_source.url_host_blocked'     => 'URL host {host} resolves to a blocked private/reserved address ({ip})',
