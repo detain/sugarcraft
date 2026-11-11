@@ -1307,12 +1307,12 @@ project-settable.
 | `repoMap.maxBytes` | Context & Compaction | int | `8192` | U C | — | next turn | spend |
 | `env.gitDiffAfterWrites` | Context & Compaction | bool | `true` | P U C | — | next turn | narrowing |
 | `env.diffMaxBytes` | Context & Compaction | int | `8192` | U C | — | next turn | spend |
-| `notices.transcriptLimit` | Context & Compaction | int | `54` | C | — | restart | tuning |
+| `notices.transcriptLimit` | Context & Compaction | int | `55` | C | — | restart | tuning |
 | `contextWindow` | Context & Compaction | JSON | unset | U C | — | restart | tuning |
 | `contextPruning.mode` | Context & Compaction | enum | `auto` | C | `CANDY_CODE_CONTEXT_PRUNING` | next turn | tuning |
 | `permissionMode` | Permissions | enum | `default` (TUI, `-p`); `bypass-permissions` (daemon) | U C | `CANDY_CODE_PERMISSION_MODE`, `--permission-mode` | restart | security |
 | `permissionRules` | Permissions | JSON | `[]` | U C | — | restart | security |
-| `autoReview` | Permissions | bool | `false` stored; UNSET still engages whenever a reviewable model exists (every review is a paid call) — an explicit `false` is the opt-out | U C | — | restart | spend |
+| `autoReview` | Permissions | bool | `false` stored; UNSET still engages whenever a reviewable model exists (every review is a paid call) — an explicit `false` is the opt-out | U C | `CANDY_CODE_DISABLE_AUTO_REVIEW` | restart | spend |
 | `autoReviewScope` | Permissions | enum | `shell` | U C | — | live | spend |
 | `autoReviewModel` | Permissions | string | `` | U C | — | restart | spend |
 | `permissions.autoStrikeLimit` | Permissions | int | `3` | U C | — | next turn | security |
@@ -1418,10 +1418,10 @@ project-settable.
 | `diffStyle` | Interface | enum | `auto` | P U C | — | live | cosmetic |
 | `toolOutputPreviewLines` | Interface | int | `10` | P U C | — | live | cosmetic |
 | `sessionRetentionDays` | Interface | int | `0` | U C | `CANDY_CODE_SESSION_RETENTION_DAYS` | restart | tuning |
-| `sessions.autoTitle` | Interface | bool | `true` | P U C | — | live | narrowing |
+| `sessions.autoTitle` | Interface | bool | `true` | P U C | `CANDY_CODE_DISABLE_AUTO_TITLE` | live | narrowing |
 | `promptSuggestions` | Interface | bool | `true` | P U C | `CANDY_CODE_DISABLE_PROMPT_SUGGESTIONS` | live | narrowing |
 | `promptSuggestionHistory` | Interface | int | `12` | U C | — | live | spend |
-| `sessions.awayRecap` | Interface | bool | `true` | P U C | — | live | narrowing |
+| `sessions.awayRecap` | Interface | bool | `true` | P U C | `CANDY_CODE_DISABLE_AWAY_RECAP` | live | narrowing |
 | `expandToolOutput` | Interface | bool | `false` | P U C | — | live | cosmetic |
 | `maxCheckpoints` | Interface | int | `100` | U C | — | live | tuning |
 | `keybindings` | Interface | object | `{}` | U C | — | reload | tuning |
@@ -1890,15 +1890,16 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
 - [`ENVIRONMENT.md`](ENVIRONMENT.md) — the environment variables that sit above
   this stack.
   <!-- settings:env-split:begin -->
-  They do not cover it: only twenty-four of the one hundred and fifty-three
+  They do not cover it: only twenty-seven of the one hundred and fifty-three
   layered keys have an env override (`provider`, `models`, `titleModel`,
   `summaryModel`, `advisorModel`, `serviceTier`, `promptCache`,
-  `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxCostUsd`,
+  `parallelToolCalls`, `parallelToolDeadlineSeconds`, `maxCostUsd`, `autoReview`,
   `webSearchEndpoint`, `sd.baseUrl`, `ui.imageRenderMode`, `terminalBackground`,
-  `mouse`, `mouseClicks`, `sessionRetentionDays`, `promptSuggestions`,
-  `mcp.enabled`, `connectTimeoutSeconds`, `debug.skills`, `debug.commands`,
-  `debug.rules`, `debug.stream`). `providers`, `maxOutputTokens`, `modelPrices`,
-  `extraBody`, `thinkingBudget`, `reasoningEffort`, `maxToolSteps`,
+  `mouse`, `mouseClicks`, `sessionRetentionDays`, `sessions.autoTitle`,
+  `promptSuggestions`, `sessions.awayRecap`, `mcp.enabled`,
+  `connectTimeoutSeconds`, `debug.skills`, `debug.commands`, `debug.rules`,
+  `debug.stream`). `providers`, `maxOutputTokens`, `modelPrices`, `extraBody`,
+  `thinkingBudget`, `reasoningEffort`, `maxToolSteps`,
   `compaction.reminderPercent`, `compaction.autoPercent`,
   `compaction.blockPercent`, `compaction.keepRecent`,
   `compaction.summaryUserChars`, `compaction.summaryAssistantChars`,
@@ -1909,8 +1910,8 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `contextPruning.minContextTokens`, `contextPruning.maxContextTokens`,
   `contextPruning.nudgeFrequency`, `contextPruning.iterationNudgeThreshold`,
   `repoMap.enabled`, `repoMap.maxBytes`, `env.gitDiffAfterWrites`,
-  `env.diffMaxBytes`, `contextWindow`, `autoReview`, `autoReviewScope`,
-  `autoReviewModel`, `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`,
+  `env.diffMaxBytes`, `contextWindow`, `autoReviewScope`, `autoReviewModel`,
+  `permissions.autoStrikeLimit`, `permissions.autoTotalLimit`,
   `permissions.autoAllowReadOnly`, `redactToolOutput`, `secretEnvAllowlist`,
   `allowedTools`, `disabledTools`, `references`, `bashSandbox`,
   `bashSandboxNestedUserns`, `sandboxScope`, `sandboxAllowedDomains`,
@@ -1931,12 +1932,11 @@ launch that refuses. See [`PERMISSIONS.md`](PERMISSIONS.md) and
   `attribution`, `lsp`, `lspAutoDetect`, `autoCommit`, `theme`, `statusLine`,
   `layout`, `notify`, `watchFiles`, `queueMode`, `scrollWheelLines`,
   `doubleEscSeconds`, `resumeCostWarnUsd`, `paletteMru`, `diffPreviewRows`,
-  `diffStyle`, `toolOutputPreviewLines`, `sessions.autoTitle`,
-  `promptSuggestionHistory`, `sessions.awayRecap`, `expandToolOutput`,
-  `maxCheckpoints`, `keybindings`, `vimMode`, `screenReader`, `transcriptJsonl`,
-  `lintCommands`, `formatCommands`, `formatAuto`, `disabledMcpServers`,
-  `mcp.lazySchemaTokens`, `providerRetryAttempts` and `providerRetryBaseBackoffMs`
-  have none.
+  `diffStyle`, `toolOutputPreviewLines`, `promptSuggestionHistory`,
+  `expandToolOutput`, `maxCheckpoints`, `keybindings`, `vimMode`, `screenReader`,
+  `transcriptJsonl`, `lintCommands`, `formatCommands`, `formatAuto`,
+  `disabledMcpServers`, `mcp.lazySchemaTokens`, `providerRetryAttempts` and
+  `providerRetryBaseBackoffMs` have none.
   <!-- settings:env-split:end -->
   (`statusLine` was missing from this list when it joined the stack — P6.S4
   counted the keys rather than copying the sentence, which is what found it.
