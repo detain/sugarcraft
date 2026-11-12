@@ -146,6 +146,25 @@ final class WorkflowToolForkTest extends TestCase
         }
     }
 
+    /**
+     * The executor hands the agent's own `tools:` grant to the judgement, so a
+     * scoped grant the session allows outright forks, while the same stage
+     * under a broader grant (bare `Bash`) stays inline.
+     */
+    public function testAScopedGrantTheSessionAllowsForks(): void
+    {
+        $gate = new PermissionGate(PermissionMode::Default, [new PermissionRule('Bash(vendor/bin/phpunit *)', PermissionAction::Allow)]);
+
+        $scoped = $this->tool(['Read', 'Bash'], gate: $gate)->execute(['plan' => self::plan(2, '[Read, "Bash(vendor/bin/phpunit *)"]')]);
+        $this->assertFalse($scoped->isError(), $scoped->content());
+        $row = WorkflowToolTest::document($scoped->content())['stages'][0];
+        $this->assertSame('parallel: forked (2 ask-free agents)', $row['dispatch']);
+
+        $bare = $this->tool(['Read', 'Bash'], gate: $gate)->execute(['plan' => self::plan(2, '[Read, Bash]')]);
+        $row = WorkflowToolTest::document($bare->content())['stages'][0];
+        $this->assertStringStartsWith('parallel: inline', $row['dispatch']);
+    }
+
     public function testASequentialStageCarriesNoDispatchKey(): void
     {
         $result = $this->tool(['Read'])->execute(['plan' => "stages:\n  - name: one\n    prompt: go\n    tools: [Read]\n"]);

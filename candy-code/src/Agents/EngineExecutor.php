@@ -158,7 +158,7 @@ final class EngineExecutor implements ForksAskFreeAgents
             $tools[] = new StructuredOutputTool($agent->outputSchema);
         }
 
-        return AskFreeGrant::askRisk($tools, [$this->engine->permissionGate(), $agent->permissionGate]);
+        return AskFreeGrant::askRisk($tools, [$this->engine->permissionGate(), $agent->permissionGate], $agent->agent->tools);
     }
 
     public function recordDispatch(SubAgent $agent, bool $forked, ?string $why): void
