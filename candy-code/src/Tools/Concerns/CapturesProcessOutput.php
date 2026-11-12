@@ -176,10 +176,13 @@ trait CapturesProcessOutput
      *     groupKilled: bool,
      * }
      */
-    private function runCaptured(string|array $command, ?string $cwd = null, ?int $maxBytes = null, ?float $timeoutSeconds = null, array $envOverrides = [], ?\Closure $onWait = null, ?\Closure $onChunk = null): array
+    private function runCaptured(string|array $command, ?string $cwd = null, ?int $maxBytes = null, ?float $timeoutSeconds = null, array $envOverrides = [], ?\Closure $onWait = null, ?\Closure $onChunk = null, ?string $stdinFile = null, array $envUnset = []): array
     {
+        // $stdinFile feeds the child from a file (git's --stdin readers) without
+        // a shell `<` redirect; $envUnset removes inherited names before the
+        // overrides land, which is what a shell's `unset` did before `VAR=val`.
         $descriptors = [
-            0 => ['pipe', 'r'],
+            0 => $stdinFile === null ? ['pipe', 'r'] : ['file', $stdinFile, 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
@@ -198,7 +201,7 @@ trait CapturesProcessOutput
         // paths: detach is the half that needs a binary, fail-fast env needs
         // none.
         $spawnSpec = ProcessContainment::spawnSpec($command);
-        $env = ProcessContainment::scrubbedEnv($envOverrides);
+        $env = ProcessContainment::scrubbedEnv($envOverrides, $envUnset);
         // Clear the last error before the @-suppressed call so error_get_last()
         // below can only describe THIS spawn, never a stale diagnostic from
         // earlier in the process; proc_open() failure always pairs with a
@@ -208,7 +211,8 @@ trait CapturesProcessOutput
         $process = @proc_open($spawnSpec, $descriptors, $pipes, $cwd, $env);
         if (!is_resource($process)) {
             $cause = error_get_last()['message'] ?? null;
-            $shown = strlen($command) > 120 ? substr($command, 0, 117) . '...' : $command;
+            $text = \is_array($command) ? implode(' ', $command) : $command;
+            $shown = strlen($text) > 120 ? substr($text, 0, 117) . '...' : $text;
             return [
                 'stdout' => '',
                 'stderr' => 'Could not start the command ' . $shown . ' — proc_open() failed'
@@ -235,7 +239,9 @@ trait CapturesProcessOutput
 
         // Close stdin immediately: a command that reads from it (and nothing
         // supplies input) would otherwise block the agent forever.
-        fclose($pipes[0]);
+        if ($stdinFile === null) {
+            fclose($pipes[0]);
+        }
 
         // Non-blocking reads on both pipes. Draining only stdout first can
         // deadlock: a command producing more stderr than the pipe buffer holds

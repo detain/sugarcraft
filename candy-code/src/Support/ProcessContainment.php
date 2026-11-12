@@ -567,13 +567,18 @@ final class ProcessContainment
      * @param array<string, string> $overrides
      * @return array<string, string>
      */
-    public static function scrubbedEnv(array $overrides = []): array
+    public static function scrubbedEnv(array $overrides = [], array $unset = []): array
     {
         $env = self::env();
         foreach (\array_keys($env) as $name) {
             if (self::isSecretEnvName((string) $name) && !self::secretEnvAllowed((string) $name)) {
                 unset($env[$name]);
             }
+        }
+        // Removal lands before the overrides, so a name both removed and
+        // overridden ends set — the order a shell's `unset; VAR=val` gave.
+        foreach ($unset as $name) {
+            unset($env[$name]);
         }
 
         return \array_merge($env, $overrides);
