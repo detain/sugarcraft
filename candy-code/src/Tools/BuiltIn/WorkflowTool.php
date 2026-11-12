@@ -37,15 +37,26 @@ use SugarCraft\Code\Workflows\WorkflowTask;
  * runs apart: two calls never share the one-run-at-a-time gate or a result
  * slot.
  *
- * THE STAGES RUN INLINE, IN THE TURN'S OWN PROCESS. The pool is given the
- * {@see EngineExecutor} as its INJECTED executor, which the pool runs
- * synchronously, rather than as the forked one the TUI's `/workflow` uses. The
- * turn already runs off the TUI process, so there is no frame to keep alive,
- * and staying in this process is what keeps the turn's permission approver
- * working: it answers only in the process that built it, so a stage agent
- * forked below this one could only have every `Ask` refused. The cost is that
- * a `parallel: true` stage's agents take turns. Every stage agent beats the
- * turn's heartbeat, so a long run is never taken for a hung turn.
+ * THE STAGES RUN INLINE, IN THE TURN'S OWN PROCESS — UNLESS THEY CANNOT ASK.
+ * The pool is given the {@see EngineExecutor} as its INJECTED executor, which
+ * the pool runs synchronously, rather than as the forked one the TUI's
+ * `/workflow` uses. The turn already runs off the TUI process, so there is no
+ * frame to keep alive, and staying in this process is what keeps the turn's
+ * permission approver working: it answers only in the process that built it,
+ * so a stage agent forked below this one could only have every `Ask` refused.
+ *
+ * P2-1: that reason does not apply to an agent whose effective tools cannot
+ * put a question ({@see \SugarCraft\Code\Agents\AskFreeGrant}: every tool
+ * read-class, no `Ask` rule naming one), so the executor clears exactly those
+ * agents of a `parallel: true` stage for the pool's forking path
+ * ({@see \SugarCraft\Code\Agents\ForksAskFreeAgents}) and they run
+ * concurrently; any agent that might ask still runs inline, one at a time.
+ * Every parallel stage's JSON row says which happened (`dispatch`). Inline
+ * agents beat the turn's heartbeat themselves; while forked ones run, the
+ * pool beats it from its idle poll, so a long run is never taken for a hung
+ * turn. A cancelled turn's tree kill takes the forked agents with it, and
+ * each one also stops at its next step once its parent is gone
+ * ({@see \SugarCraft\Code\Support\ParentProcessGuard}).
  *
  * WHAT A STAGE AGENT MAY DO: this session's tool loop — same hooks,
  * permission gate, approver and root — narrowed to the tools its stage
@@ -109,9 +120,11 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             . 'before anything runs: lint errors refuse the run (nothing is dispatched) and come back in the '
             . 'result, lint warnings ride the result\'s header. `dryRun: true` lints and returns the stage rows '
             . 'without dispatching. The result is a one-line headline plus a ```json block '
-            . '`{status, runId, stages:[{name, status, error, attempts, tokens, cost, data?, output?, capture?}]}`: '
+            . '`{status, runId, stages:[{name, status, error, attempts, tokens, cost, data?, output?, capture?, dispatch?}]}`: '
             . '`data` is a schema\'d stage\'s decoded JSON, never clipped; `output` is prose, its middle elided '
             . 'past ' . self::STAGE_OUTPUT_MAX_BYTES . ' bytes, and the elision marker says where the full text is. '
+            . 'A parallel stage\'s agents run concurrently only when every tool they have is read-only (they cannot '
+            . 'ask permission); an agent that might ask runs inline, one at a time, and `dispatch` says which happened. '
             . 'Load the `workflow-authoring` skill before authoring a non-trivial plan.';
     }
 
@@ -196,9 +209,10 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             );
         }
 
+        $executor = new EngineExecutor($engine, heartbeat: $this->heartbeat, forkAskFree: true);
         $workflows = new WorkflowEngine(
             $registry,
-            new AgentWorkerPool(executor: new EngineExecutor($engine, heartbeat: $this->heartbeat)),
+            new AgentWorkerPool(executor: $executor),
             model: $engine->model(),
             provider: $engine->provider()->name(),
             permissionGate: $engine->permissionGate(),
@@ -217,7 +231,50 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             return new ToolResult($toolCallId, 'Error: the workflow could not run. ' . $e->getMessage(), true);
         }
 
-        return new ToolResult($toolCallId, self::report($workflow, $result, $lint), !$result->isSuccess());
+        return new ToolResult($toolCallId, self::report($workflow, $result, $lint, $executor->dispatchLog()), !$result->isSuccess());
+    }
+
+    /**
+     * How a parallel stage's agents were dispatched (P2-1), from the
+     * executor's log of the pool's per-agent decisions — null for a stage
+     * none of whose agents went through that decision (a sequential stage,
+     * which is always inline).
+     *
+     * @param array<string, array{agent: string, forked: bool, why: ?string}> $log
+     */
+    public static function dispatchSummary(StageResult $stage, array $log): ?string
+    {
+        $forked = 0;
+        $inline = [];
+        foreach ($stage->agents as $agent) {
+            $entry = $log[$agent->agentId] ?? null;
+            if ($entry === null) {
+                continue;
+            }
+            if ($entry['forked']) {
+                $forked++;
+            } else {
+                $inline[] = $entry;
+            }
+        }
+
+        if ($forked === 0 && $inline === []) {
+            return null;
+        }
+        if ($inline === []) {
+            return sprintf('parallel: forked (%d read-only agent%s)', $forked, $forked === 1 ? '' : 's');
+        }
+
+        $first = $inline[0];
+        $reason = $first['why'] ?? 'ran inline';
+        $why = sprintf(str_starts_with($reason, 'may ask') ? 'agent "%s" %s' : 'agent "%s": %s', $first['agent'], $reason);
+        if (count($inline) > 1) {
+            $why .= sprintf('; %d more inline', count($inline) - 1);
+        }
+
+        return $forked === 0
+            ? sprintf('parallel: inline (%s)', $why)
+            : sprintf('parallel: %d forked, %d inline (%s)', $forked, count($inline), $why);
     }
 
     /**
@@ -298,7 +355,10 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
      * then a fenced JSON document a model can branch on next turn without
      * re-parsing prose.
      */
-    private static function report(Workflow $workflow, WorkflowResult $result, WorkflowLinter $lint): string
+    /**
+     * @param array<string, array{agent: string, forked: bool, why: ?string}> $dispatchLog
+     */
+    private static function report(Workflow $workflow, WorkflowResult $result, WorkflowLinter $lint, array $dispatchLog = []): string
     {
         $stageCount = count($workflow->stages);
         $succeeded = count(array_filter($result->stageResults, static fn (StageResult $s): bool => $s->isSuccess()));
@@ -340,7 +400,12 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
 
         $stages = [];
         foreach ($result->stageResults as $stage) {
-            $stages[] = self::stageRow($stage, $declared[$stage->stageName] ?? null, $result->context);
+            $row = self::stageRow($stage, $declared[$stage->stageName] ?? null, $result->context);
+            $dispatch = self::dispatchSummary($stage, $dispatchLog);
+            if ($dispatch !== null) {
+                $row['dispatch'] = $dispatch;
+            }
+            $stages[] = $row;
         }
 
         $document = [

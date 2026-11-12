@@ -1398,6 +1398,12 @@ final class AgentWorkerPool
      * `execute()`. The blocking is the defect; publishing is not the fix for
      * it, and an asynchronous in-parent executor is its own change.
      *
+     * ONE INJECTED EXCEPTION (workflow-update P2-1): an injected executor
+     * implementing {@see ForksAskFreeAgents} is asked per agent, and an agent
+     * it clears takes the `pcntl_fork()` path exactly as a non-injected pool's
+     * would — live progress included. The `Workflow` tool's EngineExecutor
+     * clears the agents whose tools cannot put a permission question.
+     *
      * USER-FACING because the README tells you to inject an
      * `ExecutorInterface` to reach a real model — which silently opts you out
      * of the live pane. Stated under *Limitations* there too, so the person
@@ -1420,15 +1426,25 @@ final class AgentWorkerPool
         // If a custom executor was injected, run synchronously.
         // PHPUnit mocks do not survive pcntl_fork across process boundaries.
         // The agent stays in $this->active until waitForCompletion extracts its result.
+        //
+        // P2-1: unless the injected executor clears THIS agent for forking
+        // ({@see ForksAskFreeAgents}); then it takes the forking path below,
+        // bookkeeping and all, and is told which dispatch it actually got.
+        $askFree = $this->customExecutor && $executor instanceof ForksAskFreeAgents ? $executor : null;
         if ($this->customExecutor) {
-            $result = $this->executeInline($executor, $agent, $request, $this->runDeadlineNs);
-            $this->storeResult($agent->id, $result);
-            // Do NOT unset from active here — waitForCompletion handles removal
-            return;
-        }
-
-        // Using the default ProcessExecutor — fork for true parallelism
-        if (!$this->pcntlForkAvailable()) {
+            $why = $askFree === null ? 'an injected executor runs inline' : $askFree->forkRefusal($agent, $request);
+            if ($why === null && !$this->pcntlForkAvailable()) {
+                $why = 'pcntl_fork() is unavailable in this process';
+            }
+            if ($why !== null) {
+                $askFree?->recordDispatch($agent, false, $why);
+                $result = $this->executeInline($executor, $agent, $request, $this->runDeadlineNs);
+                $this->storeResult($agent->id, $result);
+                // Do NOT unset from active here — waitForCompletion handles removal
+                return;
+            }
+        } elseif (!$this->pcntlForkAvailable()) {
+            // Using the default ProcessExecutor without pcntl — sequential.
             $this->warnSequentialFallback();
             $result = $this->executeInline($executor, $agent, $request, $this->runDeadlineNs);
             $this->storeResult($agent->id, $result);
@@ -1441,61 +1457,80 @@ final class AgentWorkerPool
             return;
         }
 
+        // Fork for true parallelism.
         $pid = $this->forkProcess();
         if ($pid === -1) {
             // Fork failed — execute synchronously. Same reasoning as above:
             // leave the agent in $active for waitForCompletion() to reap.
             $this->warnForkFailed();
+            $askFree?->recordDispatch($agent, false, 'pcntl_fork() failed');
             $result = $this->executeInline($executor, $agent, $request, $this->runDeadlineNs);
             $this->storeResult($agent->id, $result);
             return;
         }
 
         if ($pid === 0) {
-            // Child process: execute, store the result, and leave. Three
-            // things bear on HOW it leaves (E295).
-            //
-            // 1. RAW TTY. An inherited raw-mode Tty's destructor clobbering
-            //    the real terminal on the way out is fixed at the ROOT in
-            //    sugar-core's PosixBackend::restore() (PID-aware; see #1406).
-            // 2. EXIT STATUS. waitForCompletion() reports an agent from the
-            //    reap when no result file arrived, so the status IS read by
-            //    the parent — which is why a clean exit(0) after
-            //    storeResult() beats ForkedChild::exitNow()'s self-SIGKILL
-            //    here: the signal would describe a death on the success
-            //    path. (This comment used to claim the parent never reads
-            //    the exit code AND that the path was unreachable from
-            //    bin/candy-code; both halves went stale — the parent reaps,
-            //    and the pool fork path is wired. The old claim's own
-            //    lesson: a justification that names a reader which does not
-            //    exist, or denies one that does, prices the next fix wrong.)
-            // 3. OUTPUT BUFFERS. The child inherits the parent's ob_*
-            //    stack. At a normal exit(), shutdown FLUSHES those buffers —
-            //    and the child shares the parent's stdout, so a level still
-            //    holding the parent's un-emitted bytes would print them
-            //    again from the wrong process: the class of accident E229
-            //    closed for the runner. Drain the levels without flushing
-            //    (the BackgroundSessionRunner exitWorker() shape) before
-            //    exiting clean.
-            //
-            // Nothing here catches: ProcessExecutor::checkBackpressure() throws
-            // at >=80% machine memory used (PHPD-01) and spawnWorker() throws when proc_open() fails,
-            // both BEFORE any result is written. The child then fatals on the
-            // uncaught exception and this agent's only completion evidence is
-            // its exit status — no signal, no crash, just a child that ends
-            // without a result file. That is the 100%-reproducible shape of the
-            // hang waitForCompletion() now closes by settling on the reap:
-            // whatever the child fails to say for itself, the parent reports
-            // from the exit status.
-            $this->storeResult($agent->id, $this->runStreaming($executor, $agent, $request));
-
-            while (\ob_get_level() > 0) {
-                \ob_end_clean();
-            }
-
-            exit(0);
+            $this->runForkedChild($agent, $request, $executor);
         }
 
+        $this->trackForkedChild($agent, $pid);
+        $askFree?->recordDispatch($agent, true, null);
+    }
+
+    /**
+     * The forked child's whole life: run the agent, store its result, leave.
+     */
+    private function runForkedChild(SubAgent $agent, CompleteRequest $request, ExecutorInterface $executor): never
+    {
+        // Child process: execute, store the result, and leave. Three
+        // things bear on HOW it leaves (E295).
+        //
+        // 1. RAW TTY. An inherited raw-mode Tty's destructor clobbering
+        //    the real terminal on the way out is fixed at the ROOT in
+        //    sugar-core's PosixBackend::restore() (PID-aware; see #1406).
+        // 2. EXIT STATUS. waitForCompletion() reports an agent from the
+        //    reap when no result file arrived, so the status IS read by
+        //    the parent — which is why a clean exit(0) after
+        //    storeResult() beats ForkedChild::exitNow()'s self-SIGKILL
+        //    here: the signal would describe a death on the success
+        //    path. (This comment used to claim the parent never reads
+        //    the exit code AND that the path was unreachable from
+        //    bin/candy-code; both halves went stale — the parent reaps,
+        //    and the pool fork path is wired. The old claim's own
+        //    lesson: a justification that names a reader which does not
+        //    exist, or denies one that does, prices the next fix wrong.)
+        // 3. OUTPUT BUFFERS. The child inherits the parent's ob_*
+        //    stack. At a normal exit(), shutdown FLUSHES those buffers —
+        //    and the child shares the parent's stdout, so a level still
+        //    holding the parent's un-emitted bytes would print them
+        //    again from the wrong process: the class of accident E229
+        //    closed for the runner. Drain the levels without flushing
+        //    (the BackgroundSessionRunner exitWorker() shape) before
+        //    exiting clean.
+        //
+        // Nothing here catches: ProcessExecutor::checkBackpressure() throws
+        // at >=80% machine memory used (PHPD-01) and spawnWorker() throws when proc_open() fails,
+        // both BEFORE any result is written. The child then fatals on the
+        // uncaught exception and this agent's only completion evidence is
+        // its exit status — no signal, no crash, just a child that ends
+        // without a result file. That is the 100%-reproducible shape of the
+        // hang waitForCompletion() now closes by settling on the reap:
+        // whatever the child fails to say for itself, the parent reports
+        // from the exit status.
+        $this->storeResult($agent->id, $this->runStreaming($executor, $agent, $request));
+
+        while (\ob_get_level() > 0) {
+            \ob_end_clean();
+        }
+
+        exit(0);
+    }
+
+    /**
+     * The parent's half of a fork: own the child's pid, arm its deadline.
+     */
+    private function trackForkedChild(SubAgent $agent, int $pid): void
+    {
         // Parent: remember which child owns this agent so waitForCompletion()
         // can reap exactly that PID. The agent already occupies its single
         // $active slot (added by executeAll() before dispatch) — adding a
@@ -1695,6 +1730,12 @@ final class AgentWorkerPool
      */
     protected function idle(): void
     {
+        // P2-1: the parent is waiting on children that cannot beat the
+        // caller's heartbeat themselves (it is pid-bound), so it beats here.
+        if ($this->activePids !== [] && $this->executor instanceof ForksAskFreeAgents) {
+            $this->executor->whileForkedAgentsRun();
+        }
+
         if (\Fiber::getCurrent() !== null) {
             $this->armLoopProbe();
             \Fiber::suspend();

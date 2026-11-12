@@ -51,7 +51,7 @@ use SugarCraft\Code\Usage;
  * backend every time a Chat is built, the same place it links the AgentManager.
  * An unbound executor refuses every agent with the reason, never fabricates.
  */
-final class EngineExecutor implements ExecutorInterface
+final class EngineExecutor implements ForksAskFreeAgents
 {
     /**
      * Step cap for an agent that declares no `maxTurns`.
@@ -120,13 +120,86 @@ final class EngineExecutor implements ExecutorInterface
      *        `isolation: worktree` stage borrows (G2); null builds one lazily
      *        for the stage's own environment root, exactly as TaskTool's
      *        session does for a delegated run.
+     * @param bool $forkAskFree P2-1: when this executor is INJECTED into a
+     *        pool (the `Workflow` tool's inline topology), clear the agents
+     *        whose effective tools cannot put a permission question
+     *        ({@see AskFreeGrant}) for the pool's forking path, so a
+     *        read-only fan-out runs concurrently. False (the default) keeps
+     *        every injected dispatch inline, byte-identical to before.
      */
     public function __construct(
         private ?EngineBackend $engine = null,
         private ?AgentManager $grantManager = null,
         private ?\Closure $heartbeat = null,
         private ?WorktreeManager $worktreeManager = null,
+        private readonly bool $forkAskFree = false,
     ) {}
+
+    /**
+     * How each agent of a pool that consulted {@see forkRefusal()} was
+     * actually dispatched, keyed by agent id (a retry overwrites its entry).
+     * Empty unless {@see $forkAskFree} is on.
+     *
+     * @var array<string, array{agent: string, forked: bool, why: ?string}>
+     */
+    private array $dispatchLog = [];
+
+    public function forkRefusal(SubAgent $agent, CompleteRequest $request): ?string
+    {
+        if (!$this->forkAskFree) {
+            return 'this executor runs every agent inline';
+        }
+        if ($this->engine === null) {
+            return 'no session engine is bound';
+        }
+
+        $tools = self::runTools($request->tools ?? $this->engine->tools());
+        if ($agent->outputSchema !== null) {
+            $tools[] = new StructuredOutputTool($agent->outputSchema);
+        }
+
+        return AskFreeGrant::askRisk($tools, [$this->engine->permissionGate(), $agent->permissionGate]);
+    }
+
+    public function recordDispatch(SubAgent $agent, bool $forked, ?string $why): void
+    {
+        if (!$this->forkAskFree) {
+            return;
+        }
+
+        $this->dispatchLog[$agent->id] = ['agent' => $agent->agent->name, 'forked' => $forked, 'why' => $why];
+    }
+
+    public function whileForkedAgentsRun(): void
+    {
+        if ($this->heartbeat !== null) {
+            ($this->heartbeat)();
+        }
+    }
+
+    /**
+     * @return array<string, array{agent: string, forked: bool, why: ?string}>
+     */
+    public function dispatchLog(): array
+    {
+        return $this->dispatchLog;
+    }
+
+    /**
+     * The tools a run actually gets from $tools: every delegation withheld
+     * (see the R4-m1 note in {@see run()}). One copy, so the fork test and
+     * the run judge the same set.
+     *
+     * @param array<Tool> $tools
+     * @return list<Tool>
+     */
+    private static function runTools(array $tools): array
+    {
+        return array_values(array_filter(
+            $tools,
+            static fn (Tool $tool): bool => !$tool instanceof DelegatesToEngine,
+        ));
+    }
 
     /**
      * Bind the session's current engine and, when given, the session's
@@ -302,10 +375,7 @@ final class EngineExecutor implements ExecutorInterface
         // toolset. Their body is itself a delegated turn, and inside this
         // child the parent's emitter is a pid-bound no-op — a nested
         // delegation here would report progress nowhere.
-        $tools = array_values(array_filter(
-            $request->tools ?? $this->engine->tools(),
-            static fn (Tool $tool): bool => !$tool instanceof DelegatesToEngine,
-        ));
+        $tools = self::runTools($request->tools ?? $this->engine->tools());
 
         // P0-2: the run's own answer channel, minted per run (it holds the
         // accepted answer). A same-named tool from the request is dropped so
