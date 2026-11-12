@@ -620,6 +620,7 @@ candy-code/tests/Support/StartupSummaryTest.php	0.446	18
 candy-code/tests/Cli/SubcommandsMcpServeTest.php	0.445	2
 candy-code/tests/Server/HelloMediaFlagsTest.php	0.443	5
 candy-code/tests/Workflows/WorkflowStallRestartTest.php	0.443	8
+candy-code/tests/Tui/DiffReview/SettledDiffReviewMemoTest.php	0.439	11
 candy-code/tests/Chat/SessionChangeResetsTest.php	0.435	4
 candy-code/tests/Tools/IgnoreRulesBacktrackingTest.php	0.434	112
 candy-code/tests/Renderer/InputWrapTest.php	0.431	6
@@ -819,6 +820,7 @@ candy-code/tests/Chat/MentionFilePopupTest.php	0.158	12
 candy-code/tests/Permissions/McpDispatchParityTest.php	0.157	11
 candy-code/tests/Chat/PaletteSupersetDispatchTest.php	0.156	7
 candy-code/tests/Backend/SessionPromptMemoPrimeTest.php	0.156	3
+candy-code/tests/Renderer/SettledToolBodyMemoTest.php	0.155	14
 candy-code/tests/Commands/CommandDocsDriftTest.php	0.155	6
 candy-code/tests/Permissions/McpReadOnlyHintTest.php	0.152	21
 candy-code/tests/ChatInputCursorTest.php	0.151	31
