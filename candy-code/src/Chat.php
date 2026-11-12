@@ -13941,8 +13941,10 @@ final class Chat implements Model
             return $this->runHostCommand(new \SugarCraft\Code\Host\Commands\WorkflowCommand(), $inputText);
         }
 
+        // D1/P0-4: the command context lets start() lint the plan before the
+        // first dispatch — errors refuse the run, warnings ride its report.
         return $this->applyCommandResult(
-            \SugarCraft\Code\Host\Commands\WorkflowCommand::start($this->workflowEngine, $inputText, $args),
+            \SugarCraft\Code\Host\Commands\WorkflowCommand::start($this->workflowEngine, $inputText, $args, $this->commandContext()),
         );
     }
 
