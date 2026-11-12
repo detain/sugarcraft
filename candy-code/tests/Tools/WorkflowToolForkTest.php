@@ -58,7 +58,7 @@ final class WorkflowToolForkTest extends TestCase
 
         $this->assertFalse($result->isError(), $result->content());
         $row = WorkflowToolTest::document($result->content())['stages'][0];
-        $this->assertSame('parallel: forked (3 read-only agents)', $row['dispatch']);
+        $this->assertSame('parallel: forked (3 ask-free agents)', $row['dispatch']);
 
         $pids = self::pids($row['output']);
         $this->assertCount(3, $pids, $row['output']);
@@ -123,8 +123,27 @@ final class WorkflowToolForkTest extends TestCase
         $result = $this->tool(['Read'], gate: $gate)->execute(['plan' => self::plan(2, '[Read]')]);
 
         $row = WorkflowToolTest::document($result->content())['stages'][0];
-        $this->assertStringStartsWith('parallel: inline (agent "a0" may ask: an Ask rule "Read(*.env)" covers Read', $row['dispatch']);
+        $this->assertStringStartsWith('parallel: inline (agent "a0" may ask: an Ask rule "Read(*.env)" covers some Read calls', $row['dispatch']);
         $this->assertSame([(int) getmypid(), (int) getmypid()], self::pids($row['output']));
+    }
+
+    /**
+     * B3: the test is the gate's own "could this ask?" — a write tool the
+     * session already allows outright cannot ask, so its agents fork too.
+     */
+    public function testAWriteToolTheSessionAllowsOutrightForks(): void
+    {
+        foreach ([
+            'allow rule' => new PermissionGate(PermissionMode::Default, [new PermissionRule('Bash', PermissionAction::Allow)]),
+            'bypass' => new PermissionGate(PermissionMode::BypassPermissions),
+        ] as $label => $gate) {
+            $result = $this->tool(['Read', 'Bash'], gate: $gate)->execute(['plan' => self::plan(2, '[Read, Bash]')]);
+
+            $this->assertFalse($result->isError(), $result->content());
+            $row = WorkflowToolTest::document($result->content())['stages'][0];
+            $this->assertSame('parallel: forked (2 ask-free agents)', $row['dispatch'], $label);
+            $this->assertNotContains((int) getmypid(), self::pids($row['output']), $label);
+        }
     }
 
     public function testASequentialStageCarriesNoDispatchKey(): void

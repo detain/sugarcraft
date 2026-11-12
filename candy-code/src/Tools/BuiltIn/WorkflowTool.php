@@ -46,8 +46,11 @@ use SugarCraft\Code\Workflows\WorkflowTask;
  * so a stage agent forked below this one could only have every `Ask` refused.
  *
  * P2-1: that reason does not apply to an agent whose effective tools cannot
- * put a question ({@see \SugarCraft\Code\Agents\AskFreeGrant}: every tool
- * read-class, no `Ask` rule naming one), so the executor clears exactly those
+ * put a question ({@see \SugarCraft\Code\Agents\AskFreeGrant}: no judging
+ * gate could answer `Ask` for any of them under its mode, rules and grants —
+ * {@see \SugarCraft\Code\Permissions\PermissionGate::wouldAsk()} — so a
+ * read-only agent, a `Bash` the session allows outright, or any agent under
+ * `bypass-permissions` qualifies), so the executor clears exactly those
  * agents of a `parallel: true` stage for the pool's forking path
  * ({@see \SugarCraft\Code\Agents\ForksAskFreeAgents}) and they run
  * concurrently; any agent that might ask still runs inline, one at a time.
@@ -123,8 +126,8 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             . '`{status, runId, stages:[{name, status, error, attempts, tokens, cost, data?, output?, capture?, dispatch?}]}`: '
             . '`data` is a schema\'d stage\'s decoded JSON, never clipped; `output` is prose, its middle elided '
             . 'past ' . self::STAGE_OUTPUT_MAX_BYTES . ' bytes, and the elision marker says where the full text is. '
-            . 'A parallel stage\'s agents run concurrently only when every tool they have is read-only (they cannot '
-            . 'ask permission); an agent that might ask runs inline, one at a time, and `dispatch` says which happened. '
+            . 'A parallel stage\'s agents run concurrently only when none of their tools could ask permission under '
+            . 'this session\'s mode and rules; an agent that might ask runs inline, one at a time, and `dispatch` says which happened. '
             . 'Load the `workflow-authoring` skill before authoring a non-trivial plan.';
     }
 
@@ -262,7 +265,7 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             return null;
         }
         if ($inline === []) {
-            return sprintf('parallel: forked (%d read-only agent%s)', $forked, $forked === 1 ? '' : 's');
+            return sprintf('parallel: forked (%d ask-free agent%s)', $forked, $forked === 1 ? '' : 's');
         }
 
         $first = $inline[0];
