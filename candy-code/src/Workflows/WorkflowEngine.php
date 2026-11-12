@@ -2176,6 +2176,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     // settles — an executor that throws AFTER one ran still bills it.
                     $dispatched = [];
                     $heldLocks = [];
+                    $failedNames = null;
 
                     try {
                         // O3: exclusive, sorted, bounded flocks on every declared
@@ -2189,7 +2190,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                         if (array_key_exists('uses', $stage)) {
                             $stageResult = $this->executeIncludedWorkflow($stage, $context, $workflow, $stageStartedAt);
                         } elseif ($stageType === 'parallel') {
-                            $stageResult = $this->executeParallelStage($stage, $context, $workflow, $dispatched, $this->liveRuns[$liveToken]['dynamicWaves']);
+                            $stageResult = $this->executeParallelStage($stage, $context, $workflow, $dispatched, $this->liveRuns[$liveToken]['dynamicWaves'], $failedNames);
                         } elseif ($stageType === 'stage') {
                             $stageResult = $this->executeStage($stage, $context, $dispatched, $workflow->timeout);
                         } elseif ($stageType === 'pipeline') {
@@ -2226,6 +2227,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
                         ? $this->captureStageOutput($interruptId, $stageIndex, $stageResult)
                         : $stageResult->output ?? '';
                     $context = self::withResults($context, $dispatched);
+                    // P1-3: a minSuccess stage records its casualties for
+                    // `{{<stage>.failed}}` — a JSON list (empty when none
+                    // failed) under the `<stage>.failed` context key, beside
+                    // `<stage>.output`, so it rides the pause record's
+                    // context verbatim like the output does.
+                    if ($failedNames !== null) {
+                        $context[$stageResult->stageName . '.failed'] = json_encode($failedNames, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+                    }
                     // P0-3: every dispatch was reserved once up front; the
                     // retries and stall restarts the pool ran on top of that
                     // are counted as they settle, so the NEXT dispatch past
@@ -3963,9 +3972,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *     its MATERIALIZED list here (so pause writers persist it); a resume
      *     reads the recorded list back. Null means the caller keeps no
      *     ledger — expansion then happens fresh on every call.
+     * @param ?list<string> $failedNames P1-3 out: on a `minSuccess:` stage,
+     *     the result names of every casualty in declaration order (empty when
+     *     none failed); untouched on a stage without the key.
      * @return StageResult
      */
-    private function executeParallelStage(array $stage, array $context, Workflow $workflow, array &$dispatched, ?array &$waveLedger = null): StageResult
+    private function executeParallelStage(array $stage, array $context, Workflow $workflow, array &$dispatched, ?array &$waveLedger = null, ?array &$failedNames = null): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
@@ -4263,7 +4275,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
             workerProvider: $this->pool->workerProvider(),
             forkedExecutor: $this->pool->forkedExecutor(),
         );
-        if ($workflow->stopOnFirstFailure) {
+        // P1-3: a `minSuccess:` stage is exempt from stopOnFirstFailure —
+        // cancelling every sibling on the first casualty would defeat the
+        // tolerance the stage itself declares.
+        $minSuccess = is_array($stage['minSuccess'] ?? null) ? $stage['minSuccess'] : null;
+        if ($workflow->stopOnFirstFailure && $minSuccess === null) {
             $pool = $pool->withStopOnFirstFailure(true);
         }
         // The retry floor is pool state the constructor cannot carry, like
@@ -4311,12 +4327,52 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $status = $anyFailure ? WorkflowStatus::Failed : WorkflowStatus::Completed;
         $firstResult = $agentResults[0] ?? null;
+        $error = $anyFailure ? ($firstResult?->error?->getMessage() ?? 'One or more parallel tasks failed') : null;
+        $casualtyLine = '';
+
+        // P1-3: judge the stage by its declared tolerance instead of "any
+        // failure fails it". Zero casualties leaves every byte as it was.
+        if ($minSuccess !== null) {
+            $casualties = [];
+            foreach (self::declaredOutcomes($resultKeys, $agentResults) as [$key, $outcome]) {
+                if ($outcome === null) {
+                    $casualties[] = [$key, 'cancelled'];
+                } elseif ($outcome->status === AgentStatus::Failed || $outcome->status === AgentStatus::TimedOut) {
+                    $casualties[] = [$key, $outcome->status->value];
+                }
+            }
+            $failedNames = array_column($casualties, 0);
+
+            if ($casualties !== []) {
+                $total = count($subAgents);
+                $required = WorkflowBuilder::requiredSuccesses($minSuccess, $total);
+                $succeeded = $total - count($casualties);
+                $listed = implode(', ', array_map(static fn (array $c): string => "{$c[0]} ({$c[1]})", $casualties));
+                $casualtyLine = sprintf("\n[%d of %d agents failed: %s]", count($casualties), $total, $listed);
+
+                if ($succeeded >= $required) {
+                    $status = WorkflowStatus::Completed;
+                    $error = null;
+                } else {
+                    $status = WorkflowStatus::Failed;
+                    $error = sprintf(
+                        'minSuccess %s not met: %d of %d agents succeeded and %d %s needed; failed: %s',
+                        WorkflowBuilder::minSuccessLabel($minSuccess),
+                        $succeeded,
+                        $total,
+                        $required,
+                        $required === 1 ? 'was' : 'were',
+                        $listed,
+                    );
+                }
+            }
+        }
 
         return new StageResult(
             stageName: $stageName,
             status: $status,
-            output: $fromNotice[0] . implode("\n", $allOutputs) . $fromNotice[1],
-            error: $anyFailure ? ($firstResult?->error?->getMessage() ?? 'One or more parallel tasks failed') : null,
+            output: $fromNotice[0] . implode("\n", $allOutputs) . $casualtyLine . $fromNotice[1],
+            error: $error,
             agents: $agentResults,
             startedAt: $firstResult?->startedAt ?? $stageStartedAt,
             completedAt: $firstResult?->completedAt ?? new \DateTimeImmutable(),
@@ -4907,9 +4963,15 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $text = preg_replace_callback(
             '/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\.([A-Za-z0-9_~\/.\-]+)\}\}/',
-            static function (array $matches) use ($typedRows): string {
+            static function (array $matches) use ($typedRows, $context): string {
                 if ($matches[2] === 'results' || $matches[2] === 'output') {
                     return $matches[0];
+                }
+                // P1-3: `{{<stage>.failed}}` reads a minSuccess stage's
+                // casualty list; only a stage that recorded one claims the
+                // tail, so a typed row's own `failed` leaf still resolves.
+                if ($matches[2] === 'failed' && is_string($context[$matches[1] . '.failed'] ?? null)) {
+                    return $context[$matches[1] . '.failed'];
                 }
                 $typed = $typedRows[$matches[1]] ?? null;
                 if (!is_string($typed)) {
@@ -5090,6 +5152,36 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         return $records;
+    }
+
+    /**
+     * P1-3: every DECLARED agent of a parallel stage paired with its result,
+     * or null when the pool never produced one (cancelled before it ran) —
+     * matched by SubAgent id exactly as {@see recordsInDeclarationOrder()}
+     * matches, so a casualty is named the way `{{name.results}}` names it.
+     *
+     * @param array<string, array{key: string, schema: bool}> $resultKeys
+     * @param list<AgentResult> $agentResults
+     * @return list<array{0: string, 1: ?AgentResult}>
+     */
+    private static function declaredOutcomes(array $resultKeys, array $agentResults): array
+    {
+        $byId = [];
+        $unmatched = [];
+        foreach ($agentResults as $agentResult) {
+            if (isset($resultKeys[$agentResult->agentId]) && !isset($byId[$agentResult->agentId])) {
+                $byId[$agentResult->agentId] = $agentResult;
+            } else {
+                $unmatched[] = $agentResult;
+            }
+        }
+
+        $outcomes = [];
+        foreach ($resultKeys as $id => $entry) {
+            $outcomes[] = [$entry['key'], $byId[$id] ?? array_shift($unmatched)];
+        }
+
+        return $outcomes;
     }
 
     /**

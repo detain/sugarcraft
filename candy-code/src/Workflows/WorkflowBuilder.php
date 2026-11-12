@@ -421,6 +421,119 @@ final class WorkflowBuilder
     }
 
     /**
+     * P1-3: attach a `minSuccess:` partial-failure tolerance to the stage
+     * most recently added by {@see parallel()}. The threshold is a whole
+     * number of agents (>= 1) or a `"NN%"` string (1-100%) of the stage's
+     * agents, rounded UP. Absent (the default) means all must succeed —
+     * byte-identical to every pre-P1-3 stage. When met despite failures the
+     * stage COMPLETES, its output ends with a `[k of n agents failed: name
+     * (status), …]` casualty line, and `{{<stage>.failed}}` interpolates the
+     * JSON list of failed result names. A minSuccess stage is exempt from
+     * {@see stopOnFirstFailure()}: cancelling siblings on the first casualty
+     * would defeat the tolerance the stage declares.
+     *
+     * v1 is parallel-only: a plain, pipeline, verification or `uses:` stage
+     * refuses it. A static agent list is checked here too — a count above
+     * the list's length could never be met.
+     *
+     * @throws \InvalidArgumentException when no parallel stage was added
+     *         last, or the threshold is not one of the two spellings.
+     */
+    public function minSuccess(int|string $threshold): self
+    {
+        if ($this->stages === []) {
+            throw new \InvalidArgumentException('minSuccess() needs a stage to attach to; call it after parallel()');
+        }
+
+        $lastKey = array_key_last($this->stages);
+        $last = $this->stages[$lastKey];
+        if ($last['type'] !== 'parallel') {
+            throw new \InvalidArgumentException(
+                "minSuccess() is parallel-only in v1; the last stage '" . $last['name'] . "' is a '" . $last['type'] . "' stage"
+            );
+        }
+
+        $normalized = self::parseMinSuccess($threshold);
+        $agents = count($last['tasks'] ?? []);
+        if (!isset($last['from']) && isset($normalized['count']) && $normalized['count'] > $agents) {
+            throw new \InvalidArgumentException(
+                "minSuccess {$normalized['count']} exceeds the {$agents} agent" . ($agents === 1 ? '' : 's')
+                . " stage '" . $last['name'] . "' declares; it could never be met"
+            );
+        }
+
+        $this->stages[$lastKey]['minSuccess'] = $normalized;
+
+        return $this;
+    }
+
+    /**
+     * The ONE `minSuccess:` parser, shared by {@see minSuccess()} and the
+     * YAML loader: an int (or quoted whole number) >= 1 normalizes to
+     * `['count' => n]`, an `"NN%"` string with NN in 1..100 to
+     * `['percent' => NN]`. Floats, fractions and anything else are refused.
+     *
+     * @return array{count: int}|array{percent: int}
+     *
+     * @throws \InvalidArgumentException naming the accepted spellings.
+     */
+    public static function parseMinSuccess(mixed $threshold): array
+    {
+        if (is_string($threshold)) {
+            $text = trim($threshold);
+            if (preg_match('/^(\d+)\s*%$/', $text, $m) === 1) {
+                $percent = (int) $m[1];
+                if ($percent < 1 || $percent > 100) {
+                    throw new \InvalidArgumentException("minSuccess percentage must be from 1% to 100%, got {$text}");
+                }
+
+                return ['percent' => $percent];
+            }
+            if (preg_match('/^-?\d+$/', $text) === 1) {
+                $threshold = (int) $text;
+            }
+        }
+
+        if (!is_int($threshold)) {
+            throw new \InvalidArgumentException(
+                'minSuccess must be a whole number of agents or a "NN%" percentage, got '
+                . (is_string($threshold) ? "\"{$threshold}\"" : get_debug_type($threshold))
+            );
+        }
+
+        if ($threshold < 1) {
+            throw new \InvalidArgumentException("minSuccess must be at least 1, got {$threshold}");
+        }
+
+        return ['count' => $threshold];
+    }
+
+    /**
+     * How many of $agents must succeed under a normalized threshold: the
+     * count as written, or the percentage of $agents rounded UP (never 0).
+     *
+     * @param array{count?: int, percent?: int} $minSuccess
+     */
+    public static function requiredSuccesses(array $minSuccess, int $agents): int
+    {
+        if (isset($minSuccess['percent'])) {
+            return max(1, (int) ceil($agents * $minSuccess['percent'] / 100));
+        }
+
+        return (int) ($minSuccess['count'] ?? $agents);
+    }
+
+    /**
+     * The author's spelling of a normalized threshold, for diagnostics.
+     *
+     * @param array{count?: int, percent?: int} $minSuccess
+     */
+    public static function minSuccessLabel(array $minSuccess): string
+    {
+        return isset($minSuccess['percent']) ? $minSuccess['percent'] . '%' : (string) ($minSuccess['count'] ?? '?');
+    }
+
+    /**
      * Configure whether a parallel stage stops immediately on the first agent failure.
      *
      * When true (fail-fast), all queued agents are cancelled as soon as any agent

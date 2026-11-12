@@ -477,7 +477,7 @@ final class WorkflowYamlKeyRosterTest extends TestCase
         self::assertSame(
             ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks',
                 'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from',
-                'loop'],
+                'loop', 'minSuccess'],
             $registry->getConstant('YAML_STAGE_KEYS'),
             'the stage-shape vocabulary is one pinned list'
         );

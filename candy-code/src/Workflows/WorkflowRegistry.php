@@ -44,7 +44,7 @@ final class WorkflowRegistry
      * {@see self::YAML_TASK_KEYS}, because a single-task stage legitimately
      * carries its task keys at stage level.
      */
-    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from', 'loop'];
+    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from', 'loop', 'minSuccess'];
 
     /**
      * The keys a parallel stage's `from:` sub-map may carry (C8 + P0-3
@@ -1465,6 +1465,14 @@ final class WorkflowRegistry
                         "{$where} carries \"from\", which only a parallel stage can fan out"
                     );
                 }
+                // P1-3: partial-failure tolerance is a fan-out affordance —
+                // v1 reads it on parallel stages only (and never beside
+                // `uses:`, whose body is another workflow's stages).
+                if (array_key_exists('minSuccess', $stage) && (!$isParallel || array_key_exists('uses', $stage))) {
+                    throw new WorkflowLoadException(
+                        "{$where} carries \"minSuccess\", which only a parallel stage can tolerate failures with"
+                    );
+                }
                 // S3: the capture flag is stage-scoped like `parallel:` — a
                 // key the author wrote beside `tasks:` is legitimate, not a
                 // task key misplaced.
@@ -1550,6 +1558,23 @@ final class WorkflowRegistry
                     // a list of them for a `tasks:` stage run in sequence.
                     $parsed = $this->parseYamlStage($stage, $stageName, $yamlPath, $isParallel);
                     $builder = $builder->stage($stageName, $parsed, capture: $capture, cache: $cache);
+                }
+
+                // P1-3: the tolerance attaches to the parallel stage this
+                // iteration just added; the builder's parser is the ONE
+                // spelling law, its refusal re-raised naming the stage.
+                if (array_key_exists('minSuccess', $stage)) {
+                    $threshold = $stage['minSuccess'];
+                    if (!is_int($threshold) && !is_string($threshold)) {
+                        throw new WorkflowLoadException(
+                            "{$where} minSuccess must be a whole number of agents or a \"NN%\" percentage, got " . get_debug_type($threshold)
+                        );
+                    }
+                    try {
+                        $builder = $builder->minSuccess($threshold);
+                    } catch (\InvalidArgumentException $e) {
+                        throw new WorkflowLoadException("{$where} {$e->getMessage()}", 0, $e);
+                    }
                 }
 
                 // C2: the clause lands on the stage THIS iteration just added,

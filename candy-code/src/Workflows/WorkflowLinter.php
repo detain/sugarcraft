@@ -81,6 +81,7 @@ final class WorkflowLinter
         self::checkWorkflowLevel($workflow, $findings);
 
         $producers = [];   // resultKey => 1-based stage ordinal (the @results fold's keys)
+        $failedProducers = [];   // P1-3: minSuccess stage name => 1-based stage ordinal (`{{X.failed}}` writers)
         $outputs   = [];   // stage/step name => 1-based stage ordinal (`.output` producers only)
 
         $ordinal = 0;
@@ -101,6 +102,9 @@ final class WorkflowLinter
             // Past the type guard, $stage is necessarily an array: a non-array
             // yields '' here, which SUPPORTED_TYPES rejects with a continue.
             self::collectProducers($type, $stageName, $stage, $ordinal, $producers, $outputs, $findings);
+            if (self::checkMinSuccess($type, $stageName, $stage, $workflow, $findings)) {
+                $failedProducers[$stageName] = $ordinal;
+            }
             self::notePlanRow($type, $stageName, $stage, $workflow->timeout, $planRows);
         }
 
@@ -116,6 +120,7 @@ final class WorkflowLinter
             self::checkFanOutShape($type, $stageName, $stage, $findings);
             foreach (self::tasksOf($type, $stage) as [$slot, $task]) {
                 self::checkTask($stageName, $slot, $task, $ordinal, $producers, $outputs, $seedContext, $toolNames, $findings);
+                self::checkFailedRefs($stageName, $task, $ordinal, $failedProducers, $producers, $findings);
             }
         }
 
@@ -649,6 +654,73 @@ final class WorkflowLinter
         }
 
         return $pairs;
+    }
+
+    /**
+     * P1-3 mirror of the `minSuccess:` law {@see WorkflowBuilder::minSuccess()}
+     * and the YAML loader enforce, for a hand-built stage neither door saw:
+     * parallel-only, one of the two normalized spellings, and a count a
+     * static agent list can meet. Plus one warning the loader cannot give:
+     * the workflow-wide stopOnFirstFailure does not apply to this stage.
+     *
+     * @param array<array-key, mixed> $stage
+     * @return bool whether the stage records `{{<stage>.failed}}`
+     */
+    private static function checkMinSuccess(string $type, string $stageName, array $stage, Workflow $workflow, array &$findings): bool
+    {
+        if (!array_key_exists('minSuccess', $stage)) {
+            return false;
+        }
+        if ($type !== 'parallel' || array_key_exists('uses', $stage)) {
+            self::add($findings, 'error', $stageName, "minSuccess on a '{$type}' stage is never read; only a parallel stage tolerates failures.");
+
+            return false;
+        }
+
+        $spec = $stage['minSuccess'];
+        $count = is_array($spec) && is_int($spec['count'] ?? null) && count($spec) === 1 ? $spec['count'] : null;
+        $percent = is_array($spec) && is_int($spec['percent'] ?? null) && count($spec) === 1 ? $spec['percent'] : null;
+        if (($count === null || $count < 1) && ($percent === null || $percent < 1 || $percent > 100)) {
+            self::add($findings, 'error', $stageName, 'minSuccess ' . json_encode($spec) . ' is not {count: n >= 1} or {percent: 1..100}; the engine cannot judge the stage by it.');
+
+            return false;
+        }
+
+        $agents = count(self::taskList($stage));
+        if ($count !== null && !array_key_exists('from', $stage) && $count > $agents) {
+            self::add($findings, 'error', $stageName, "minSuccess {$count} exceeds the {$agents} agents this stage declares; the stage can never complete.");
+        }
+        if ($workflow->stopOnFirstFailure) {
+            self::add($findings, 'warning', $stageName, 'stopOnFirstFailure does not apply to this minSuccess stage: its agents all run so the tolerance can be judged.');
+        }
+
+        return true;
+    }
+
+    /**
+     * P1-3: `{{X.failed}}` interpolates only once a minSuccess stage named X
+     * has settled; any other X leaves the token verbatim in the prompt —
+     * unless X names a RESULT, whose typed row may carry a `failed` leaf the
+     * pointer form reads (that is the C10 pointer surface, not ours).
+     *
+     * @param array<string, int> $failedProducers
+     * @param array<string, int> $producers
+     */
+    private static function checkFailedRefs(string $stageName, WorkflowTask $task, int $ordinal, array $failedProducers, array $producers, array &$findings): void
+    {
+        if (preg_match_all('/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\.failed\}\}/', $task->prompt, $m) < 1) {
+            return;
+        }
+        foreach (array_unique($m[1]) as $name) {
+            if (!isset($failedProducers[$name])) {
+                if (isset($producers[$name])) {
+                    continue;
+                }
+                self::add($findings, 'warning', $stageName, "{{{$name}.failed}} names no minSuccess parallel stage; only one records a casualty list, so the token may stay verbatim.");
+            } elseif ($failedProducers[$name] >= $ordinal) {
+                self::add($findings, 'error', $stageName, "{{{$name}.failed}} reads a casualty list recorded at stage #{$failedProducers[$name]} — not earlier than this stage #{$ordinal}, so the token stays verbatim.");
+            }
+        }
     }
 
     /**
