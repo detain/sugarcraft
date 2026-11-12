@@ -12,6 +12,8 @@ use SugarCraft\Code\Support\WindowsShell;
 use SugarCraft\Code\Tools\AcceptsHeartbeat;
 use SugarCraft\Code\Tools\AcceptsShellOwner;
 use SugarCraft\Code\Tools\AcceptsToolProgress;
+use SugarCraft\Code\Tools\ParallelSafeCall;
+use SugarCraft\Code\Tools\ReadOnlyBashClassifier;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 use SugarCraft\Code\Tools\PromptGuidance;
@@ -53,7 +55,7 @@ use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
  * PreToolUse hook that denies commands referencing paths outside `$root`.
  */
 #[BuiltInTool(name: 'Bash', permission: ToolPermissionClass::Write, position: 1)]
-final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, AcceptsHeartbeat, AcceptsShellOwner, BuildsFromCatalog, TakesToolCallId, AcceptsToolProgress, CarriesSessionState
+final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, AcceptsHeartbeat, AcceptsShellOwner, BuildsFromCatalog, TakesToolCallId, AcceptsToolProgress, CarriesSessionState, ParallelSafeCall
 {
     use CapturesProcessOutput;
     use RebindsWorktreeJail;
@@ -466,6 +468,17 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 'minimum' => 1,
                 'maximum' => $this->maxTimeoutSeconds,
             ],
+            'lifetime_seconds' => [
+                'type' => 'integer',
+                'description' => sprintf(
+                    'With run_in_background: seconds the background shell may live before it and its whole process group are killed, whether or not anything reads it. Default %d (30 minutes); clamped to %d-%d. Ignored without run_in_background.',
+                    BackgroundShellRegistry::MAX_LIFETIME_SECONDS,
+                    BackgroundShellRegistry::MIN_LIFETIME_SECONDS,
+                    BackgroundShellRegistry::MAX_LIFETIME_CEILING_SECONDS,
+                ),
+                'minimum' => BackgroundShellRegistry::MIN_LIFETIME_SECONDS,
+                'maximum' => BackgroundShellRegistry::MAX_LIFETIME_CEILING_SECONDS,
+            ],
             // SHL-1: the background opt-in. Off (the default, and the shape a
             // caller that never heard of it sends) is the synchronous capture
             // path, byte for byte; on returns a shell id the same launch's
@@ -585,6 +598,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         $timeout = $this->timeoutSeconds($args['timeout'] ?? null);
         $interactive = ($args['interactive'] ?? false) === true;
         $background = ($args['run_in_background'] ?? false) === true;
+        $lifetime = self::lifetimeArgument($args['lifetime_seconds'] ?? null);
 
         // SHL-1 chose the mechanisms; C-TOOL-6.k wired the combination the
         // flags always spelled. `run_in_background` with `interactive` is no
@@ -693,6 +707,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                     BackgroundShellRegistry::INTERACTIVE_ROWS,
                     [],
                     $this->shellOwner,
+                    BackgroundShellRegistry::clampLifetime($lifetime),
                 ), interactive: true);
             }
 
@@ -706,6 +721,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 (string) ($args['description'] ?? ''),
                 [],
                 $this->shellOwner,
+                BackgroundShellRegistry::clampLifetime($lifetime),
             ));
         }
 
@@ -774,6 +790,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
         }
         $shell = $started['shell'];
         $id = (string) ($shell['id'] ?? '');
+        $wall = (int) ($shell['lifetimeSeconds'] ?? BackgroundShellRegistry::MAX_LIFETIME_SECONDS);
 
         if ($interactive) {
             // C-TOOL-6.k: the typed channel replaces the read-first framing;
@@ -788,7 +805,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                     $id,
                     $id,
                     $id,
-                    BackgroundShellRegistry::MAX_LIFETIME_SECONDS,
+                    $wall,
                 ),
                 isError: false,
             );
@@ -801,7 +818,7 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
                 $id,
                 $id,
                 $id,
-                BackgroundShellRegistry::MAX_LIFETIME_SECONDS,
+                $wall,
                 \intdiv(BackgroundShellRegistry::OUTPUT_LIMIT_BYTES, 1048576),
             ),
         );
@@ -858,6 +875,48 @@ final readonly class Bash implements Tool, AcceptsWorktreeJail, PromptGuidance, 
 
     /** The tool name this call streams under ({@see self::name()}). */
     public const NAME = 'Bash';
+
+    /**
+     * A call is parallel-safe only when it is a plain foreground read: a
+     * background or interactive run spawns a registry row that outlives the
+     * call, and anything the classifier cannot prove read-only is a barrier.
+     *
+     * @param array<string, mixed> $args
+     */
+    public function isParallelSafeFor(array $args): bool
+    {
+        foreach (['run_in_background', 'interactive'] as $flag) {
+            if (array_key_exists($flag, $args) && $args[$flag] !== false && $args[$flag] !== null) {
+                return false;
+            }
+        }
+
+        return is_string($args['command'] ?? null) && ReadOnlyBashClassifier::isReadOnly($args['command']);
+    }
+
+    /**
+     * The `lifetime_seconds` argument as a wall: null when absent or not a
+     * number (the registry's default applies), otherwise rounded and clamped
+     * by {@see BackgroundShellRegistry::clampLifetime()} at the spawn.
+     */
+    private static function lifetimeArgument(mixed $raw): ?int
+    {
+        if (is_string($raw) && preg_match('/^\s*\d+(\.\d+)?\s*$/', $raw) === 1) {
+            $raw = (float) $raw;
+        }
+        if (!is_int($raw) && !is_float($raw)) {
+            return null;
+        }
+        if (is_nan((float) $raw)) {
+            return null;
+        }
+        if (is_infinite((float) $raw)) {
+            return $raw > 0 ? BackgroundShellRegistry::MAX_LIFETIME_CEILING_SECONDS : BackgroundShellRegistry::MIN_LIFETIME_SECONDS;
+        }
+
+        // Clamped as a float first: a huge figure must not overflow the cast.
+        return (int) max(BackgroundShellRegistry::MIN_LIFETIME_SECONDS, min(BackgroundShellRegistry::MAX_LIFETIME_CEILING_SECONDS, round((float) $raw)));
+    }
 
     /**
      * The model's `timeout` as the seconds this call may run: a positive
