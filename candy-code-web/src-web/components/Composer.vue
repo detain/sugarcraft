@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, toRef, watch } from "vue";
 import { useRoute } from "vue-router";
 import HistorySearch from "./HistorySearch.vue";
 import { t } from "../lib/i18n";
+import { useMentionSearch, type McpMention } from "../lib/mentions";
 import type { CommandInfo, Delivery } from "../stores/session";
 import { useSessionStore } from "../stores/session";
 import { useConnectionStore } from "../stores/connection";
@@ -40,13 +41,6 @@ import {
     type ActiveTake,
     type Take,
 } from "../lib/recorder";
-
-/**
- * C-MCP-2.c: one row of the `@mcp:` popup. Accepting inserts the keyword
- * form `@mcp:<server>:<uri>` the server already resolves; the roster fetch
- * and its cache live in `SessionView`, which owns the connection.
- */
-export type McpMention = { server: string; uri: string; name: string };
 
 const props = defineProps<{
     modelValue: string;
@@ -137,182 +131,19 @@ const images = ref<PastedImage[]>([]);
 const documents = ref<PastedDocument[]>([]);
 /** The hidden `<input type=file>` behind the Attach button (C-WEB-4.e). */
 const fileInput = ref<HTMLInputElement | null>(null);
-/** Ranked `fs.search` matches for the trailing `@partial`, capped to one popup. */
-const files = ref<string[]>([]);
-/** Ranked `mcp.resources` rows for a trailing `@mcp:` partial (C-MCP-2.c). */
-const mcpMentions = ref<McpMention[]>([]);
-const agentMentions = ref<string[]>([]);
-let fileSeq = 0;
-
-/** C-MCP-2.c: an `@mcp:` partial opens the resource popup, not the file one. */
-const MCP_MENTION_PREFIX = "mcp:";
-
-/** C-AGT-4.d: an `@agent:` partial opens the roster popup, the same trick. */
-const AGENT_MENTION_PREFIX = "agent:";
-
-/**
- * The `@` completion rides the same keyboard as `/`: a trailing `@partial`
- * opens the file popup — unless the slash popup already owns the line.
- */
-const mentionPartial = computed(() => {
-    if (suggestions.value.length > 0) return null;
-    const match = /(?:^|\s)@([^\s@]*)$/.exec(props.modelValue);
-    return match ? (match[1] ?? "") : null;
-});
-
-/**
- * WEB-5-P3 (client half): the `@` popup used to fire a synchronous `fs.search`
- * on the shared serve loop for every keystroke after `@`. This is a leading +
- * trailing debounce: a partial arriving more than MENTION_SEARCH_DEBOUNCE_MS
- * after the last search runs at once — the first `@` still opens instantly —
- * while partials inside the window collapse to one trailing search carrying
- * the newest partial. A null partial cancels the pending timer and resets the
- * window. The `fileSeq` latch (a late answer never overwrites a newer one)
- * stays; the timer is cleared on unmount.
- */
-const MENTION_SEARCH_DEBOUNCE_MS = 120;
-let mentionTimer: ReturnType<typeof setTimeout> | undefined;
-let lastSearchAt = Number.NEGATIVE_INFINITY;
-
-function searchMentionedFiles(partial: string): void {
-    const seq = ++fileSeq;
-    mcpMentions.value = []; // the file popup has taken the line back
-    agentMentions.value = [];
-    lastSearchAt = Date.now();
-    void props
-        .searchFiles!(partial)
-        .then((found) => {
-            if (seq === fileSeq) files.value = found.slice(0, 8);
-        })
-        .catch(() => {
-            if (seq === fileSeq) files.value = [];
-        });
-}
-
-/**
- * C-MCP-2.c: the `@mcp:` popup. Rows come from the session-cached
- * `mcp.resources` roster, filtered by the caller. No rows — `not-started`,
- * no servers, a failed fetch — hands the line to the file search the
- * partial would have run before this feature existed.
- */
-function searchMcpMentions(partial: string): void {
-    const seq = ++fileSeq;
-    files.value = [];
-    lastSearchAt = Date.now();
-    void props
-        .searchMcpResources!(partial.slice(MCP_MENTION_PREFIX.length))
-        .then((rows) => {
-            if (seq !== fileSeq) return;
-            mcpMentions.value = rows.slice(0, 8);
-            if (mcpMentions.value.length === 0 && props.searchFiles)
-                searchMentionedFiles(partial);
-        })
-        .catch(() => {
-            if (seq !== fileSeq) return;
-            mcpMentions.value = [];
-            if (props.searchFiles) searchMentionedFiles(partial);
-        });
-}
-
-/**
- * C-AGT-4.d (client-only): the `@agent:` popup. The names are the agents
- * store's launch roster the StatusBar already fetched — no second wire call
- * per keystroke — filtered and sorted right here. Empty rows — before the
- * catalogue lands, or a roster with no match — hand the line back to the
- * file search, exactly as the `@mcp:` popup does.
- */
-function searchAgentMentions(partial: string): void {
-    ++fileSeq; // no async leg to guard here, but the bump discards any in-flight search's continuation
-    files.value = [];
-    mcpMentions.value = [];
-    lastSearchAt = Date.now();
-    const query = partial.slice(AGENT_MENTION_PREFIX.length).toLowerCase();
-    const names = (props.agentRoster?.() ?? [])
-        .filter((name) => name.toLowerCase().includes(query))
-        .sort()
-        .slice(0, 8);
-    agentMentions.value = names;
-    if (names.length === 0 && props.searchFiles) searchMentionedFiles(partial);
-}
-
-/** Route a partial to an `@agent:`/`@mcp:` roster popup or the `fs.search` file popup. */
-function runMentionSearch(partial: string): void {
-    if (partial.startsWith(AGENT_MENTION_PREFIX) && props.agentRoster)
-        searchAgentMentions(partial);
-    else if (partial.startsWith(MCP_MENTION_PREFIX) && props.searchMcpResources)
-        searchMcpMentions(partial);
-    else if (props.searchFiles) searchMentionedFiles(partial);
-}
-
-watch(
-    mentionPartial,
-    (partial) => {
-        if (mentionTimer !== undefined) {
-            clearTimeout(mentionTimer);
-            mentionTimer = undefined;
-        }
-        if (
-            partial === null ||
-            (!props.searchFiles &&
-                !props.searchMcpResources &&
-                !props.agentRoster)
-        ) {
-            files.value = [];
-            mcpMentions.value = [];
-            agentMentions.value = [];
-            lastSearchAt = Number.NEGATIVE_INFINITY; // the next `@` opens at once
-            return;
-        }
-        if (Date.now() - lastSearchAt >= MENTION_SEARCH_DEBOUNCE_MS) {
-            runMentionSearch(partial);
-            return;
-        }
-        mentionTimer = setTimeout(() => {
-            mentionTimer = undefined;
-            runMentionSearch(partial);
-        }, MENTION_SEARCH_DEBOUNCE_MS);
-    },
-    { immediate: true },
-);
-onBeforeUnmount(() => {
-    if (mentionTimer !== undefined) clearTimeout(mentionTimer);
-});
+const { files, mcpMentions, agentMentions, mentionPartial, completeFile, completeMcp, completeAgent } =
+    useMentionSearch({
+        modelValue: toRef(props, "modelValue"),
+        slashCount: computed(() => suggestions.value.length),
+        searchFiles: toRef(props, "searchFiles"),
+        searchMcpResources: toRef(props, "searchMcpResources"),
+        agentRoster: toRef(props, "agentRoster"),
+        emit,
+        focusInput: () => input.value?.focus(),
+    });
 watch([files, mcpMentions, agentMentions], () => {
     selected.value = 0;
 });
-
-function completeFile(path: string): void {
-    const at = props.modelValue.lastIndexOf("@");
-    if (at < 0) return;
-    emit("update:modelValue", `${props.modelValue.slice(0, at)}@${path} `);
-    input.value?.focus();
-}
-
-/** C-MCP-2.c: accepting an `@mcp:` row inserts the server-resolvable keyword. */
-function completeMcp(mention: McpMention): void {
-    const at = props.modelValue.lastIndexOf("@");
-    if (at < 0) return;
-    emit(
-        "update:modelValue",
-        `${props.modelValue.slice(0, at)}@mcp:${mention.server}:${mention.uri} `,
-    );
-    input.value?.focus();
-}
-
-/**
- * C-AGT-4.d: accepting an agent row inserts the keyword the server's mention
- * scanner reserves — the same `@agent:<name>` text a TUI user completes, so
- * the one resolver decides the name in every front end.
- */
-function completeAgent(name: string): void {
-    const at = props.modelValue.lastIndexOf("@");
-    if (at < 0) return;
-    emit(
-        "update:modelValue",
-        `${props.modelValue.slice(0, at)}@agent:${name} `,
-    );
-    input.value?.focus();
-}
 
 /**
  * File of the long text pastes this draft has collapsed to chips

@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Wire } from '../grid/__tests__/harness'
 import { useSessionStore } from '../../stores/session'
 import SessionView from '../../views/SessionView.vue'
-import Composer, { type McpMention } from '../Composer.vue'
+import Composer from '../Composer.vue'
+import type { McpMention } from '../../lib/mentions'
 
 /**
  * C-MCP-2.c: the composer's `@mcp:` resource popup. A trailing partial that

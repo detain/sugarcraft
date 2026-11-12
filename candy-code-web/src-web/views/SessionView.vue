@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import Composer, { type McpMention } from '../components/Composer.vue'
+import Composer from '../components/Composer.vue'
+import type { McpMention } from '../lib/mentions'
 import RunningAgentsLine from '../components/agents/RunningAgentsLine.vue'
 import { useAgentsStore } from '../stores/agents/agents'
 import { t } from '../lib/i18n'
