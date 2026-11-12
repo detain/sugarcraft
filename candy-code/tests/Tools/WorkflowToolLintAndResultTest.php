@@ -184,15 +184,18 @@ final class WorkflowToolLintAndResultTest extends TestCase
         @unlink($row['capture']);
     }
 
-    public function testTheResultDocumentShapeAndTheRunIdSeam(): void
+    public function testTheResultDocumentShapeAndTheRunId(): void
     {
         $result = $this->tool(new ScriptedProvider([new CompleteResponse(content: 'ok')]))->execute(['plan' => "stages:\n  - name: a\n    prompt: x\n"]);
 
         $document = WorkflowToolTest::document($result->content());
         $this->assertSame('completed', $document['status']);
         $this->assertArrayHasKey('runId', $document);
-        $this->assertNull($document['runId'], 'null until tool runs leave a resumable record');
-        $this->assertSame(['name', 'status', 'error', 'attempts', 'tokens', 'cost', 'output'], array_keys($document['stages'][0]));
+        $this->assertMatchesRegularExpression('/\Aplan-[0-9a-f]{8}-\d+\z/', $document['runId'], 'P1-8: every run leaves a resumable record');
+        $this->assertSame(0, $document['carried']);
+        $this->assertNull($document['budget']);
+        $this->assertSame([], $document['announcements']);
+        $this->assertSame(['name', 'status', 'error', 'attempts', 'tokens', 'cost', 'capture', 'output'], array_keys($document['stages'][0]));
         $this->assertNull($document['stages'][0]['error']);
     }
 

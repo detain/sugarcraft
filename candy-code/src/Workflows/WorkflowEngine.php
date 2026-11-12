@@ -499,6 +499,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
      */
     private ?array $agentRoster = null;
 
+    /** @var ?\Closure(): iterable<Agent> C5: the deferred roster ({@see setAgentRosterSource()}). */
+    private ?\Closure $agentRosterSource = null;
+
     /** @var array<string, StagePreset> P1-6: presets resolved so far, by name */
     private array $stagePresets = [];
 
@@ -838,6 +841,95 @@ final class WorkflowEngine implements WorkflowEngineInterface
     public function setAgentRoster(?iterable $roster): void
     {
         $this->agentRoster = $roster === null ? null : array_values(is_array($roster) ? $roster : iterator_to_array($roster, false));
+        $this->agentRosterSource = null;
+    }
+
+    /**
+     * P1-6 / C5: {@see setAgentRoster()}, deferred — $source is called (once)
+     * the first time a preset has to be resolved or named, so a host can wire
+     * the session's roster (which reads preset files from disk) without
+     * paying for it on a run that names no preset. A source that throws
+     * leaves the engine with no roster, which refuses a preset run loudly.
+     *
+     * @param ?\Closure(): iterable<Agent> $source
+     */
+    public function setAgentRosterSource(?\Closure $source): void
+    {
+        $this->agentRosterSource = $source;
+        $this->stagePresets = [];
+    }
+
+    /**
+     * C5: the preset names a `preset:` may name on this engine — for
+     * {@see WorkflowLinter::lint()}'s `$presetNames` — or null when the
+     * engine has no roster at all (the lint then leaves the engine's
+     * pre-flight to refuse). Sorted.
+     *
+     * @return ?list<string>
+     */
+    public function presetNames(): ?array
+    {
+        $roster = $this->presetRoster();
+        if ($roster === null) {
+            return null;
+        }
+
+        $names = [];
+        foreach ($roster instanceof AgentManager ? $roster->all() : $roster as $agent) {
+            if ($agent instanceof Agent) {
+                $names[] = $agent->name;
+            }
+        }
+        $names = array_values(array_unique($names));
+        sort($names);
+
+        return $names;
+    }
+
+    /**
+     * C5: every preset name $workflow's tasks name, at any depth (stage,
+     * agents, pipeline steps, verification, map steps) — empty when none
+     * does, so a caller asks the roster only when it must.
+     *
+     * @return list<string>
+     */
+    public static function presetsNamedBy(Workflow $workflow): array
+    {
+        $names = [];
+        $walk = static function (mixed $node) use (&$walk, &$names): void {
+            if ($node instanceof WorkflowTask) {
+                if ($node->preset !== null) {
+                    $names[$node->preset] = true;
+                }
+
+                return;
+            }
+            if (is_array($node)) {
+                foreach ($node as $child) {
+                    $walk($child);
+                }
+            }
+        };
+        $walk($workflow->stages);
+
+        return array_keys($names);
+    }
+
+    /** @return AgentManager|list<Agent>|null the roster presets resolve against, the deferred source called once */
+    private function presetRoster(): AgentManager|array|null
+    {
+        if ($this->agentRoster === null && $this->agentRosterSource !== null) {
+            $source = $this->agentRosterSource;
+            $this->agentRosterSource = null;
+            try {
+                $roster = $source();
+                $this->agentRoster = array_values(is_array($roster) ? $roster : iterator_to_array($roster, false));
+            } catch (\Throwable) {
+                $this->agentRoster = null;
+            }
+        }
+
+        return $this->agentRoster ?? $this->agentManager;
     }
 
     /**
@@ -915,7 +1007,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             return $this->stagePresets[$name];
         }
 
-        $roster = $this->agentRoster ?? $this->agentManager;
+        $roster = $this->presetRoster();
         if ($roster === null) {
             throw new \InvalidArgumentException(
                 'this engine has no agent roster to resolve presets against (the host that runs it must hand one over)'
@@ -1424,15 +1516,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         $planFile = $this->planFilePath($runId);
-        $stored = is_file($planFile) ? json_decode((string) @file_get_contents($planFile), true) : null;
+        $stored = self::readOwnJson($planFile);
         $recordFile = $this->getPauseFilePath($runId);
-        $data = is_file($recordFile) ? json_decode((string) @file_get_contents($recordFile), true) : null;
-        $data = is_array($data) ? $data : null;
+        $data = self::readOwnJson($recordFile);
 
         if ($data !== null && ($data['planRun'] ?? null) !== true) {
             throw new WorkflowNotRunningException("'{$runId}' is a saved workflow's run, not a Workflow-tool run; resume it with /workflow resume. Nothing was dispatched");
         }
-        if (!is_array($stored) || !is_string($stored['plan'] ?? null)) {
+        if ($stored === null || !is_string($stored['plan'] ?? null)) {
             throw new WorkflowNotRunningException("No Workflow-tool run found with ID '{$runId}' (no stored plan under " . \dirname($planFile) . '); nothing was dispatched');
         }
         if ($data !== null && self::recordNeedsLivenessJudgement($data) && !self::crashRecordIsOrphaned($data, $recordFile)) {
@@ -1580,6 +1671,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
         return (string) json_encode($sort($value), JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION);
     }
 
+    /**
+     * P1-8: the directory this engine keeps run records in (`.running/` under
+     * the registry's user tier) — capture files live in `<runId>.stages/`
+     * under it ({@see stageCapturePath()}).
+     */
+    public function runRecordDirectory(): string
+    {
+        return $this->registry->workflowsPath() . '/' . self::PAUSE_DIR;
+    }
+
     /** P1-8: where a plan run's stored plan lives — beside its record. */
     private function planFilePath(string $runId): string
     {
@@ -1661,14 +1762,30 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 continue;
             }
             $record = $directory . '/' . $runId . '.json';
-            $data = is_file($record) ? json_decode((string) @file_get_contents($record), true) : null;
-            if (is_array($data) && self::recordNeedsLivenessJudgement($data) && !self::crashRecordIsOrphaned($data, $record)) {
+            $data = self::readOwnJson($record);
+            if ($data !== null && self::recordNeedsLivenessJudgement($data) && !self::crashRecordIsOrphaned($data, $record)) {
                 continue;
             }
             @unlink($record);
             @unlink($plan);
             self::removeCaptureDir($directory . '/' . $runId . '.stages');
         }
+    }
+
+    /**
+     * P1-8: one of this engine's own `.running/` files (a run record or a
+     * stored plan) decoded, or null when it is absent or not a JSON object.
+     *
+     * @return ?array<string, mixed>
+     */
+    private static function readOwnJson(string $file): ?array
+    {
+        if (!is_file($file)) {
+            return null;
+        }
+        $data = json_decode((string) @file_get_contents($file), true);
+
+        return is_array($data) ? $data : null;
     }
 
     private static function removeCaptureDir(string $directory): void

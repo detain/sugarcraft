@@ -93,6 +93,54 @@ final class WorkflowGrammarGlossary
         'effort' => '`low` | `medium` | `high` | `xhigh` | `max`: the reasoning effort the agent asks for (`low` for mechanical stages, high tiers only for the hardest judges); usually leave it unset',
     ];
 
+    /**
+     * How each {@see Workflow::STAGE_TYPES} entry is SPELLED, for the
+     * `Workflow` tool's compact `plan` schema description
+     * ({@see planDescription()}); drift-pinned set-equal to the roster.
+     *
+     * @var array<string, string>
+     */
+    public const STAGE_SHAPES = [
+        'stage' => 'a plain task (`prompt`, `tools`, … on the stage) or a `tasks:` list run in order',
+        'parallel' => '`parallel: true` with `agents:` or a `from:` fan-out (`{glob}`, `{stage, pointer}` or `{context}`)',
+        'pipeline' => '`type: pipeline` with nested `stages:`',
+        'map' => '`type: map` with `from:` and a per-item `steps:` chain',
+        'verification' => '`type: verification` with `task:` + `verifier:`',
+    ];
+
+    /**
+     * Stage keys that SPELL a shape (or name it) rather than modify one; every
+     * other stage key is listed as a modifier by {@see planDescription()}.
+     */
+    public const SHAPE_STAGE_KEYS = ['name', 'type', 'parallel', 'agents', 'tasks', 'task', 'verifier', 'stages', 'steps', 'from', 'uses', 'with'];
+
+    /**
+     * The `Workflow` tool's `plan` schema description, generated from the
+     * same rosters as {@see grammar()}: every stage shape, every modifier key
+     * and every task key, so a key the loader learns reaches the schema too.
+     *
+     * @param ?list<string> $stageKeys the registry's stage-key roster, print order
+     */
+    public static function planDescription(?array $stageKeys = null): string
+    {
+        $stageKeys ??= array_keys(self::STAGE_KEYS);
+
+        $shapes = [];
+        foreach (Workflow::STAGE_TYPES as $type) {
+            $shapes[] = self::STAGE_SHAPES[$type] ?? "`type: {$type}`";
+        }
+        $modifiers = array_values(array_diff($stageKeys, self::SHAPE_STAGE_KEYS));
+
+        return 'The workflow as YAML: `stages:` (required) plus optional `name`, `description`, `schemas:` and '
+            . '`config: {timeout, maxConcurrent, maxAgents, maxTokens, maxCost}`. Each stage is one shape: '
+            . implode('; ', $shapes)
+            . '; or `uses: <saved workflow>` with `with:`. Stage modifiers: '
+            . implode(', ', array_map(static fn (string $k): string => "`{$k}`", $modifiers))
+            . '. Task keys: '
+            . implode(', ', array_map(static fn (string $k): string => "`{$k}`", WorkflowRegistry::YAML_TASK_KEYS))
+            . '.';
+    }
+
     /** @var array<string, string> interpolation form => what it resolves to */
     public const INTERPOLATION = [
         '{{key}}' => 'a `context` value (arrays and objects render as compact JSON)',

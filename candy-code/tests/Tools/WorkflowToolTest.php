@@ -272,7 +272,8 @@ final class WorkflowToolTest extends TestCase
 
         $this->assertStringStartsWith('START-', $output);
         $this->assertStringEndsWith('THE-END', $output);
-        $this->assertMatchesRegularExpression('/\[… \d+ bytes elided; re-run with capture: true on this stage to keep the full output …\]/', $output);
+        // P0-4: every tool-run stage is captured, so the marker names the file.
+        $this->assertMatchesRegularExpression('/\[… \d+ bytes elided; the full output is in \S+\/0-a\.txt …\]/', $output);
         $this->assertTrue(mb_check_encoding($output, 'UTF-8'), 'the cut never splits a character');
         $this->assertLessThan(WorkflowTool::STAGE_OUTPUT_MAX_BYTES + 200, strlen($output));
     }

@@ -7,6 +7,8 @@ namespace SugarCraft\Code\Tools\BuiltIn;
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\EngineExecutor;
 use SugarCraft\Code\Backend\EngineBackend;
+use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
@@ -21,8 +23,11 @@ use SugarCraft\Code\Workflows\WorkflowEngine;
 use SugarCraft\Code\Workflows\WorkflowGrammarGlossary;
 use SugarCraft\Code\Workflows\WorkflowLinter;
 use SugarCraft\Code\Workflows\WorkflowLoadException;
+use SugarCraft\Code\Workflows\WorkflowNarration;
+use SugarCraft\Code\Workflows\WorkflowNotRunningException;
 use SugarCraft\Code\Workflows\WorkflowRegistry;
 use SugarCraft\Code\Workflows\WorkflowResult;
+use SugarCraft\Code\Workflows\WorkflowStatus;
 use SugarCraft\Code\Workflows\WorkflowTask;
 
 /**
@@ -68,6 +73,28 @@ use SugarCraft\Code\Workflows\WorkflowTask;
  * (so `Bash(git *)` admits only git). `Task` and `Workflow` themselves are
  * withheld from it ({@see EngineExecutor}), so a plan cannot recurse.
  *
+ * RESUMABLE RUNS (P1-8): every run is a {@see WorkflowEngine::runPlan()} run
+ * with the ID `plan-<sha8 of the plan>-<n>`, a crash-safe record under the
+ * user workflows directory's `.running/` and the plan stored beside it; the
+ * record is kept at every terminal (newest {@see WorkflowEngine::PLAN_RUN_RETENTION}).
+ * `resumeFrom: <runId>` resumes it with the (possibly edited) plan: the
+ * longest unchanged prefix of stages is carried at no cost, the first changed
+ * stage and everything after it run live ({@see WorkflowEngine::resumePlan()}).
+ * `/workflow status|resume <runId>` reach the same record.
+ *
+ * EVERY STAGE IS CAPTURED (P0-4): after the run, each stage's full output is
+ * written to its capture file (`<runId>.stages/<n>-<stage>.txt`, the engine's
+ * own path rule) and its JSON row names it, so an elided byte is never lost.
+ * This is a REPORT-side capture: unlike an explicit `capture: true`, it does
+ * not change what later stages read — `{{stage.output}}` and `when:` still see
+ * the full text — because a default that silently turned `equals: PASS` into
+ * a comparison against a capture envelope would break plans.
+ *
+ * NARRATION (P2-2): the run's announcements (`announce:` lines, truncations,
+ * `minSuccess` casualties, budget stops, the agent ceiling) stream as they are
+ * made onto the live line under this call's row (a {@see SubAgentActivity}
+ * on the delegation emitter) and come back in the JSON as `announcements`.
+ *
  * Not {@see \SugarCraft\Code\Tools\ParallelSafe}: a run is stateful,
  * long, and asks permission questions. {@see ExemptFromParallelDeadline} is
  * declared for the reason Task declares it — the tool bounds itself, by each
@@ -84,24 +111,60 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
     /** How error messages name the plan, in the loader's "Workflow file <source>" shape. */
     private const PLAN_SOURCE = '(Workflow tool plan)';
 
+    /** The user workflows directory when none is resolved (the registry's own default). */
+    private const DEFAULT_WORKFLOWS_PATH = '~/.candy-code/workflows/';
+
     /**
      * @param \Closure(): void|null $heartbeat the turn's liveness sink ({@see DelegatesToEngine})
+     * @param \Closure(SubAgentActivity): void|null $subAgentEmitter the turn's delegation channel; narration rides it
+     * @param ?string $workflowsPath the user workflows directory: `uses:` loads from it and run records live
+     *        under its `.running/` — the directory `/workflow` reads, so status/resume find tool runs
+     * @param \Closure(): iterable<\SugarCraft\Code\Agents\Agent>|null $agentRoster the session's agent roster,
+     *        resolved only when a plan names a `preset:`; null builds the launch's own ({@see Bootstrap::agentRoster()})
      */
     public function __construct(
         private ?string $root = null,
         private ?EngineBackend $engine = null,
         private ?\Closure $heartbeat = null,
+        private ?\Closure $subAgentEmitter = null,
+        private ?string $workflowsPath = null,
+        private ?\Closure $agentRoster = null,
     ) {
     }
 
     public static function fromCatalog(ToolBuildContext $context): self
     {
-        return new self($context->root);
+        // The same user tier Bootstrap::workflowEngine() hands /workflow, so
+        // a tool run's record is the one `/workflow status <runId>` reads. A
+        // launch whose home cannot be established keeps the registry default.
+        try {
+            $workflowsPath = Bootstrap::trustedConfigDirPath() . '/workflows';
+        } catch (\Throwable) {
+            $workflowsPath = null;
+        }
+
+        return new self($context->root, workflowsPath: $workflowsPath);
     }
 
     public function withEngine(EngineBackend $engine, ?\Closure $heartbeat = null, ?\Closure $subAgentEmitter = null): self
     {
-        return new self($this->root, $engine, $heartbeat);
+        return new self($this->root, $engine, $heartbeat, $subAgentEmitter, $this->workflowsPath, $this->agentRoster);
+    }
+
+    /** This tool keeping its run records (and loading `uses:`) under $workflowsPath. */
+    public function withWorkflowsPath(string $workflowsPath): self
+    {
+        return new self($this->root, $this->engine, $this->heartbeat, $this->subAgentEmitter, $workflowsPath, $this->agentRoster);
+    }
+
+    /**
+     * This tool resolving `preset:` against $roster's agents.
+     *
+     * @param \Closure(): iterable<\SugarCraft\Code\Agents\Agent> $roster
+     */
+    public function withAgentRoster(\Closure $roster): self
+    {
+        return new self($this->root, $this->engine, $this->heartbeat, $this->subAgentEmitter, $this->workflowsPath, $roster);
     }
 
     public function name(): string
@@ -123,9 +186,13 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             . 'before anything runs: lint errors refuse the run (nothing is dispatched) and come back in the '
             . 'result, lint warnings ride the result\'s header. `dryRun: true` lints and returns the stage rows '
             . 'without dispatching. The result is a one-line headline plus a ```json block '
-            . '`{status, runId, stages:[{name, status, error, attempts, tokens, cost, data?, output?, capture?, dispatch?}]}`: '
+            . '`{status, runId, carried, budget, announcements, stages:[{name, status, error, attempts, tokens, cost, carried?, data?, output?, capture?, dispatch?}]}`: '
             . '`data` is a schema\'d stage\'s decoded JSON, never clipped; `output` is prose, its middle elided '
-            . 'past ' . self::STAGE_OUTPUT_MAX_BYTES . ' bytes, and the elision marker says where the full text is. '
+            . 'past ' . self::STAGE_OUTPUT_MAX_BYTES . ' bytes, and the elision marker names the `capture` file that holds every stage\'s full output. '
+            . '`budget: N` caps this call\'s token spend (the tighter of it and `config.maxTokens` wins; a dispatch past it pauses the run). '
+            . 'Every run returns a `runId`; to iterate, edit the plan and call again with `resumeFrom: <runId>`: the longest unchanged '
+            . 'prefix of stages is carried from the record at no cost, the first changed stage and everything after it run live '
+            . '(a changed `context` carries nothing; omit `context` to reuse the run\'s). '
             . 'A parallel stage\'s agents run concurrently only when none of their tools could ask permission under '
             . 'this session\'s mode and rules; an agent that might ask runs inline, one at a time, and `dispatch` says which happened. '
             . 'Load the `workflow-authoring` skill before authoring a non-trivial plan.';
@@ -138,11 +205,7 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             'properties' => [
                 'plan' => [
                     'type' => 'string',
-                    'description' => 'The workflow as YAML: `stages:` (required) plus optional `name`, `description` and '
-                        . '`config: {timeout, maxConcurrent}`. Each stage is one shape: a plain task (`prompt`, `tools`, … '
-                        . 'on the stage), a `tasks:` list run in order, `parallel: true` with `agents:` or a `from:` fan-out '
-                        . '(`{glob}`, `{stage, pointer}` or `{context}`), `type: pipeline` with nested `stages:`, `type: verification` with `task:` + `verifier:`, '
-                        . 'or `uses: <saved workflow>` with `with:`. Stage modifiers: `when`, `loop`, `capture`, `cache`.',
+                    'description' => WorkflowGrammarGlossary::planDescription(),
                 ],
                 'context' => [
                     'type' => 'object',
@@ -154,6 +217,17 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
                 'dryRun' => [
                     'type' => 'boolean',
                     'description' => 'true: lint the plan and return its stage rows and findings without dispatching any agent.',
+                ],
+                'budget' => [
+                    'type' => 'integer',
+                    'minimum' => 1,
+                    'description' => 'A token budget for this call (e.g. 500000 for a user\'s "+500k"): a dispatch at or past it does not '
+                        . 'start and the run pauses, resumable with a larger budget. The tighter of it and the plan\'s `config.maxTokens` wins.',
+                ],
+                'resumeFrom' => [
+                    'type' => 'string',
+                    'description' => 'A `runId` an earlier Workflow call returned: resume that run with this (possibly edited) plan. '
+                        . 'Unchanged leading stages are carried at no cost; the first changed stage and every later one run live.',
                 ],
             ],
             'required' => ['plan'],
@@ -178,6 +252,19 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             return new ToolResult($toolCallId, 'Error: "dryRun" must be true or false.', true);
         }
 
+        $budget = $args['budget'] ?? null;
+        if ($budget !== null && (!is_int($budget) || $budget < 1)) {
+            return new ToolResult($toolCallId, 'Error: "budget" must be a whole number of tokens, at least 1.', true);
+        }
+
+        $resumeFrom = $args['resumeFrom'] ?? null;
+        if ($resumeFrom !== null && (!is_string($resumeFrom) || trim($resumeFrom) === '')) {
+            return new ToolResult($toolCallId, 'Error: "resumeFrom" must be a runId string an earlier Workflow call returned.', true);
+        }
+        $resumeFrom = $resumeFrom === null ? null : trim($resumeFrom);
+
+        // A resume with no `context` reuses the one the run was started with.
+        $contextGiven = array_key_exists('context', $args) && $args['context'] !== null;
         $context = $args['context'] ?? [];
         if (!is_array($context) || ($context !== [] && array_is_list($context))) {
             return new ToolResult($toolCallId, 'Error: "context" must be an object of placeholder values.', true);
@@ -195,7 +282,7 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             }
         }
 
-        $registry = new WorkflowRegistry();
+        $registry = new WorkflowRegistry($this->workflowsPath ?? self::DEFAULT_WORKFLOWS_PATH);
         try {
             $workflow = $registry->fromYamlString($plan, self::PLAN_SOURCE);
         } catch (WorkflowLoadException $e) {
@@ -203,24 +290,6 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
         }
 
         $engine = $this->engine;
-
-        // P0-4: lint BEFORE the first dispatch. The engine's own pre-flights
-        // catch tools and reject placement only; an unresolved `{{token}}`
-        // would otherwise reach the agent verbatim and be billed for.
-        $lint = WorkflowLinter::lint($workflow, $context, self::toolNamesOf($engine), self::includeResolver($registry));
-
-        if ($dryRun) {
-            return new ToolResult($toolCallId, self::dryRunReport($workflow, $lint), $lint->hasErrors());
-        }
-
-        if ($lint->hasErrors()) {
-            return new ToolResult(
-                $toolCallId,
-                sprintf("Error: the plan was not run: lint found %s (nothing was dispatched).\n", self::lintCounts($lint)) . $lint->renderFindings(),
-                true,
-            );
-        }
-
         $executor = new EngineExecutor($engine, heartbeat: $this->heartbeat, forkAskFree: true);
         $workflows = new WorkflowEngine(
             $registry,
@@ -236,14 +305,109 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             // HookManager — an unarmed engine is byte-identical to a pre-C6 one.
             hookDispatcher: $engine->hookDispatcher(),
         );
+        // P1-6: `preset:` resolves against the session's roster — built only
+        // when the plan names one, since it reads preset files from disk.
+        $root = $this->root;
+        $workflows->setAgentRosterSource($this->agentRoster ?? static fn (): array => Bootstrap::agentRoster(
+            $root ?? (getcwd() ?: '.'),
+            $engine->provider()->name(),
+            $engine->model(),
+        ));
 
-        try {
-            $result = $workflows->runWorkflow($workflow, $context);
-        } catch (\Throwable $e) {
-            return new ToolResult($toolCallId, 'Error: the workflow could not run. ' . $e->getMessage(), true);
+        // P0-4: lint BEFORE the first dispatch. The engine's own pre-flights
+        // catch tools and reject placement only; an unresolved `{{token}}`
+        // would otherwise reach the agent verbatim and be billed for.
+        $presetNames = WorkflowEngine::presetsNamedBy($workflow) === [] ? null : $workflows->presetNames();
+        $lint = WorkflowLinter::lint($workflow, $context, self::toolNamesOf($engine), self::includeResolver($registry), $presetNames);
+
+        if ($dryRun) {
+            return new ToolResult($toolCallId, self::dryRunReport($workflow, $lint), $lint->hasErrors());
         }
 
-        return new ToolResult($toolCallId, self::report($workflow, $result, $lint, $executor->dispatchLog()), !$result->isSuccess());
+        if ($lint->hasErrors()) {
+            return new ToolResult(
+                $toolCallId,
+                sprintf("Error: the plan was not run: lint found %s (nothing was dispatched).\n", self::lintCounts($lint)) . $lint->renderFindings(),
+                true,
+            );
+        }
+
+        $narration = new WorkflowNarration($this->subAgentEmitter, $toolCallId, $workflow->name);
+        $workflows->setAnnouncementSink($narration->sink());
+        $narration->started();
+
+        try {
+            $result = $resumeFrom === null
+                ? $workflows->runPlan($workflow, $plan, $context, null, $budget)
+                : $workflows->resumePlan($resumeFrom, $workflow, $plan, $contextGiven ? $context : null, null, $budget);
+        } catch (WorkflowNotRunningException $e) {
+            $narration->finished(SubAgentActivity::OUTCOME_FAILED, $e->getMessage());
+
+            return new ToolResult($toolCallId, 'Error: the plan was not resumed: ' . $e->getMessage(), true);
+        } catch (\Throwable $e) {
+            $narration->finished(SubAgentActivity::OUTCOME_FAILED, $e->getMessage());
+
+            return new ToolResult($toolCallId, 'Error: the workflow could not run. ' . $e->getMessage(), true);
+        }
+        $narration->finished(match ($result->status) {
+            WorkflowStatus::Completed => SubAgentActivity::OUTCOME_COMPLETE,
+            WorkflowStatus::Cancelled => SubAgentActivity::OUTCOME_CANCELLED,
+            WorkflowStatus::Paused => SubAgentActivity::OUTCOME_EMPTY,
+            default => SubAgentActivity::OUTCOME_FAILED,
+        }, $result->firstFailure()?->error);
+
+        $captures = self::captureEveryStage($workflows->runRecordDirectory(), $workflow, $result);
+
+        return new ToolResult(
+            $toolCallId,
+            self::report($workflow, $result, $lint, $executor->dispatchLog(), $captures, $budget, $workflow->maxTokens),
+            !$result->isSuccess(),
+        );
+    }
+
+    /**
+     * P0-4: every stage's full output in its capture file, so every byte the
+     * report elides is recoverable — written by the tool after the run, at
+     * the engine's own path rule ({@see WorkflowEngine::stageCapturePath()}),
+     * WITHOUT touching the run's context (see the class doc). A stage that
+     * declared `capture: true` already has its file (the engine's, read back
+     * from the context); one with no output gets none. A failed write leaves
+     * the stage's row without a `capture` key — the marker then says so.
+     *
+     * @return array<string, string> stage name => capture path
+     */
+    private static function captureEveryStage(string $recordDirectory, Workflow $workflow, WorkflowResult $result): array
+    {
+        $captures = [];
+        foreach (array_values($result->stageResults) as $index => $stage) {
+            $declared = self::capturePathOf($result->context, $stage->stageName);
+            if ($declared !== null) {
+                $captures[$stage->stageName] = $declared;
+                continue;
+            }
+            $output = (string) $stage->output;
+            if (trim($output) === '') {
+                continue;
+            }
+            $file = WorkflowEngine::stageCapturePath($recordDirectory, $result->workflowId, $index, $stage->stageName);
+            try {
+                \SugarCraft\Code\Support\PrivateDir::ensure(\dirname($file), 'workflow stage captures');
+                $partial = $file . '.partial';
+                if (@file_put_contents($partial, $output) === false) {
+                    continue;
+                }
+                @chmod($partial, 0600);
+                if (!@rename($partial, $file)) {
+                    @unlink($partial);
+                    continue;
+                }
+            } catch (\Throwable) {
+                continue;
+            }
+            $captures[$stage->stageName] = $file;
+        }
+
+        return $captures;
     }
 
     /**
@@ -366,24 +530,41 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
      * The run as the model reads it: a one-line headline a human can read,
      * then a fenced JSON document a model can branch on next turn without
      * re-parsing prose.
-     */
-    /**
+     *
+     * The headline keeps its `Workflow '<name>' <status>:` lead (the
+     * protocol's run listing parses it) and adds the spend against the
+     * effective token budget, how many stages a resume carried, and the
+     * runId to resume with.
+     *
      * @param array<string, array{agent: string, forked: bool, why: ?string}> $dispatchLog
+     * @param array<string, string> $captures stage name => capture path
      */
-    private static function report(Workflow $workflow, WorkflowResult $result, WorkflowLinter $lint, array $dispatchLog = []): string
+    private static function report(Workflow $workflow, WorkflowResult $result, WorkflowLinter $lint, array $dispatchLog = [], array $captures = [], ?int $budget = null, ?int $maxTokens = null): string
     {
         $stageCount = count($workflow->stages);
         $succeeded = count(array_filter($result->stageResults, static fn (StageResult $s): bool => $s->isSuccess()));
-        $lines = [sprintf(
-            "Workflow '%s' %s: %d of %d stage%s succeeded, %d tokens, $%.4f.",
+        $ceiling = $budget === null ? $maxTokens : ($maxTokens === null ? $budget : min($budget, $maxTokens));
+        $headline = sprintf(
+            "Workflow '%s' %s: %d of %d stage%s succeeded, %d tokens%s, $%.4f.",
             $workflow->name,
             $result->status->value,
             $succeeded,
             $stageCount,
             $stageCount === 1 ? '' : 's',
             $result->totalTokens,
+            $ceiling === null ? '' : sprintf(' of a %d-token budget', $ceiling),
             $result->totalCost,
-        )];
+        );
+        if ($result->stagesCarried > 0) {
+            $headline .= sprintf(' %d stage%s carried from the record at no cost.', $result->stagesCarried, $result->stagesCarried === 1 ? '' : 's');
+        }
+        if ($result->workflowId !== '') {
+            $headline .= sprintf(' Run ID %s (resumeFrom).', $result->workflowId);
+        }
+        $lines = [$headline];
+        if ($result->status === WorkflowStatus::Paused) {
+            $lines[] = sprintf('The run is paused; call again with resumeFrom: %s (and a larger budget when a budget stopped it).', $result->workflowId);
+        }
 
         $warnings = self::lintWarningHeader($lint);
         if ($warnings !== '') {
@@ -411,8 +592,11 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
         }
 
         $stages = [];
-        foreach ($result->stageResults as $stage) {
-            $row = self::stageRow($stage, $declared[$stage->stageName] ?? null, $result->context);
+        foreach (array_values($result->stageResults) as $index => $stage) {
+            $row = self::stageRow($stage, $declared[$stage->stageName] ?? null, $captures[$stage->stageName] ?? null);
+            if ($index < $result->stagesCarried) {
+                $row['carried'] = true;
+            }
             $dispatch = self::dispatchSummary($stage, $dispatchLog);
             if ($dispatch !== null) {
                 $row['dispatch'] = $dispatch;
@@ -422,10 +606,11 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
 
         $document = [
             'status' => $result->status->value,
-            // Seam: null until tool runs leave a resumable record (a later
-            // track adds tool-run records and `resumeFrom`). The key is in the
-            // shape now so a consumer written against it never changes.
-            'runId' => null,
+            // P1-8: the record's ID — pass it back as `resumeFrom`.
+            'runId' => $result->workflowId,
+            'carried' => $result->stagesCarried,
+            'budget' => $ceiling === null ? null : ['tokens' => $ceiling, 'spent' => $result->totalTokens],
+            'announcements' => $result->announcements,
             'stages' => $stages,
         ];
 
@@ -442,10 +627,10 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
      * names how to get the elided bytes back.
      *
      * @param ?array<string, mixed> $declared the stage as the Workflow DTO holds it
-     * @param array<string, mixed>  $context  the run's final context (capture paths ride `<stage>.output`)
+     * @param ?string              $capture  the file holding the stage's full output, when one was written
      * @return array<string, mixed>
      */
-    private static function stageRow(StageResult $stage, ?array $declared, array $context): array
+    private static function stageRow(StageResult $stage, ?array $declared, ?string $capture): array
     {
         $attempts = 0;
         $tokens = 0;
@@ -467,7 +652,6 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             'cost' => round($cost, 6),
         ];
 
-        $capture = ($declared['capture'] ?? false) === true ? self::capturePathOf($context, $stage->stageName) : null;
         if ($capture !== null) {
             $row['capture'] = $capture;
         }
@@ -560,7 +744,7 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
         $tail = mb_strcut($text, strlen($text) - $half, null, 'UTF-8');
         $recover = $capture !== null
             ? 'the full output is in ' . $capture
-            : 're-run with capture: true on this stage to keep the full output';
+            : 'its capture file could not be written; re-run with capture: true on this stage to keep the full output';
 
         return $head . sprintf("\n[… %d bytes elided; %s …]\n", strlen($text) - strlen($head) - strlen($tail), $recover) . $tail;
     }

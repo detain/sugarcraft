@@ -86,6 +86,37 @@ final class WorkflowToolDescriptionDriftTest extends TestCase
         }
     }
 
+    /**
+     * E1/C5: the plan schema is generated from the rosters too — every stage
+     * type has a shape spelling, and every modifier stage key and task key
+     * the loader knows is named.
+     */
+    public function testThePlanSchemaDescriptionIsGeneratedFromTheRosters(): void
+    {
+        $this->assertEqualsCanonicalizing(Workflow::STAGE_TYPES, array_keys(WorkflowGrammarGlossary::STAGE_SHAPES));
+        $this->assertSame([], array_diff(WorkflowGrammarGlossary::SHAPE_STAGE_KEYS, self::registryStageKeys()), 'a shape key the loader does not know');
+
+        $plan = (new WorkflowTool())->inputSchema()['properties']['plan']['description'];
+        foreach (['type: map', 'steps:', 'minSuccess', 'announce'] as $shape) {
+            $this->assertStringContainsString($shape, $plan);
+        }
+        foreach (array_diff(self::registryStageKeys(), WorkflowGrammarGlossary::SHAPE_STAGE_KEYS) as $modifier) {
+            $this->assertStringContainsString('`' . $modifier . '`', $plan);
+        }
+        foreach (WorkflowRegistry::YAML_TASK_KEYS as $key) {
+            $this->assertStringContainsString('`' . $key . '`', $plan);
+        }
+    }
+
+    public function testBudgetAndResumeFromAreInTheInputSchema(): void
+    {
+        $schema = (new WorkflowTool())->inputSchema();
+
+        $this->assertSame('integer', $schema['properties']['budget']['type']);
+        $this->assertSame(1, $schema['properties']['budget']['minimum']);
+        $this->assertSame('string', $schema['properties']['resumeFrom']['type']);
+    }
+
     public function testDryRunIsInTheInputSchema(): void
     {
         $schema = (new WorkflowTool())->inputSchema();
