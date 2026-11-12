@@ -160,6 +160,10 @@ final class BuiltInToolCorpus
         // registry to read).
         ClientToolProxy::class => \SugarCraft\Code\Tests\Host\ClientTools\ClientToolProxyTest::class
             . '::testTheBoundCallerAnswersTheCallWithContentAndFlag',
+        // workflow-update P0-2: a schema-declaring sub-agent's answer channel —
+        // minted per run by `Agents\EngineExecutor`, never by `Bootstrap::tools()`.
+        \SugarCraft\Code\Agents\StructuredOutputTool::class => \SugarCraft\Code\Tests\Agents\EngineExecutorStructuredOutputTest::class
+            . '::testTheToolRidesTheWireWithTheSchemaAndNoJsonModeIsRequested',
     ];
 
     /**

@@ -3957,8 +3957,11 @@ DOC;
         // it no-ask — the page write lands in MediaStore beside the renders),
         // and `Advisor` joined the name list on the same pass as a CURE of
         // the catalog-classification drift the sweep test records above.
+        // `StructuredOutput` (workflow-update P0-2) is no catalog built-in at
+        // all — it is minted per schema run and `Runtime::gate()` lets it
+        // through by instance, so the catalog has no class to give it.
         $this->assertSame(
-            ['Advisor', 'AskUser', 'BoardPost', 'Canvas', 'Compress', 'GenerateImage', 'GenerateVideo', 'InterruptAgent', 'Memory', 'PlanExit', 'Prune', 'Recall', 'SendMessage', 'Subagents', 'Team', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
+            ['Advisor', 'AskUser', 'BoardPost', 'Canvas', 'Compress', 'GenerateImage', 'GenerateVideo', 'InterruptAgent', 'Memory', 'PlanExit', 'Prune', 'Recall', 'SendMessage', 'StructuredOutput', 'Subagents', 'Team', 'Todo', 'WebFetch', 'WebSearch', 'doctor'],
             $onlyOurs,
             'the divergence between this classifier\'s read-only list and PermissionGate::isReadOnlyTool() '
             . 'changed. It is DELIBERATE - see that method\'s doc-block - so the repair is to update the '
@@ -4213,7 +4216,10 @@ DOC;
         // family) and needs no argument of its own beyond the truth test
         // below, which decides the classification exactly as it does for the
         // names above.
-        return ['mcp_list', 'Read', 'Grep', 'Glob', 'Ls', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent', 'BoardRead', 'BoardPost', 'GenerateImage', 'GenerateVideo', 'ShellOutput', 'skills_search', 'Canvas', 'Advisor'];
+        // `StructuredOutput` (workflow-update P0-2) writes nothing — it
+        // validates its arguments and holds the run's answer on the per-run
+        // object.
+        return ['mcp_list', 'Read', 'Grep', 'Glob', 'Ls', 'Lsp', 'WebFetch', 'WebSearch', 'Skill', 'doctor', 'Memory', 'RepoMap', 'Prune', 'Todo', 'Compress', 'Recall', 'Team', 'AskUser', 'PlanExit', 'SendMessage', 'Subagents', 'InterruptAgent', 'BoardRead', 'BoardPost', 'GenerateImage', 'GenerateVideo', 'ShellOutput', 'skills_search', 'Canvas', 'Advisor', 'StructuredOutput'];
     }
 
     /**
