@@ -805,6 +805,7 @@ candy-code/tests/Renderer/PermissionModalHeightTest.php	0.209	8
 candy-code/tests/Backend/EngineBackendServedModelTest.php	0.208	5
 candy-code/tests/Tools/Sandbox/ServerJailTest.php	0.204	9
 candy-code/tests/Cli/DoctorChecksTest.php	0.201	9
+candy-code/tests/Cli/DoctorConfigModeTest.php	0.010	3
 candy-code/tests/Renderer/CarriageReturnFrameTest.php	0.198	82
 candy-code/tests/Tui/Components/SessionsPaneTest.php	0.198	10
 candy-code/tests/Chat/ShellOptInListsSurviveKeystrokeClonesTest.php	0.196	1
@@ -1962,3 +1963,4 @@ candy-code/tests/Context/Pruning/Strategies/SupersededTurnContextStrategyTest.ph
 candy-code/tests/Windows/WindowsBashSmokeTest.php	0.000	2
 candy-code/tests/AssistantMsgTest.php	0.000	2
 candy-code/tests/Windows/WindowsPtyRunSmokeTest.php	0.000	1
+candy-code/tests/Windows/WindowsBootSmokeTest.php	0.010	2
