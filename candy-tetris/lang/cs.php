@@ -72,5 +72,6 @@ Použití: candy-tetris [volby]
   -v, --vs   Režim proti počítači
   -h, --help Zobrazí tuto nápovědu
   --version  Vytiskne verzi
-'
+',
+    'cli.no_tty' => 'candy-tetris potřebuje interaktivní terminál: spusťte ho z TTY (ne z roury ani přesměrování) a s TERM jiným než dumb.',
 ];

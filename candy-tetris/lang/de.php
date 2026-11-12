@@ -72,5 +72,6 @@ Aufruf: candy-tetris [Optionen]
   -v, --vs   Gegen den Computer
   -h, --help Diese Hilfe anzeigen
   --version  Version ausgeben
-'
+',
+    'cli.no_tty' => 'candy-tetris braucht ein interaktives Terminal: Starte es in einem TTY (nicht über eine Pipe oder Umleitung) mit einem TERM ungleich dumb.',
 ];

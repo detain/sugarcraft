@@ -126,12 +126,25 @@ $game = match ($mode) {
 };
 
 // One capability profile, probed once at launch, drives BOTH the
-// alt-screen contract and the model's colour posture. A NoTty terminal
-// (pipe, TERM=dumb) never gets raw alt-screen/SGR bytes it cannot parse —
-// the renderer answers with a plain refusal instead — and ColorProfile::detect()
-// already folds NO_COLOR/CLICOLOR into Ascii, which Program delivers to the
-// model as ColorProfileMsg so the view drops every escape as well.
-$profile = ColorProfile::detect();
+// alt-screen contract and the model's colour posture. STDOUT is passed so
+// detect() can see a pipe or redirect: without the handle its isatty rung
+// never runs and a redirected launch was classified by TERM alone, painting
+// the alt-screen and full frames into the file. ColorProfile::detect() also
+// folds NO_COLOR/CLICOLOR into Ascii, which Program delivers to the model as
+// ColorProfileMsg so the view drops every escape as well.
+$profile = ColorProfile::detect(null, STDOUT);
+
+// A game nobody can see or steer is refused before the Program starts,
+// with plain text on stderr and exit 1. The loop's gravity timer never lets
+// it end on its own, so a keyless launch (stdin a pipe or /dev/null) or a
+// NoTty screen (stdout redirected, TERM=dumb) used to run until killed.
+// A truthy CLICOLOR_FORCE/FORCE_COLOR still lets stdout be a pipe (detect()
+// answers a real profile then); stdin must be a terminal regardless.
+if (!stream_isatty(STDIN) || $profile === ColorProfile::NoTty) {
+    fwrite(STDERR, \SugarCraft\Tetris\Lang::t('cli.no_tty') . "\n");
+    exit(1);
+}
+
 $options = new ProgramOptions(
     useAltScreen: $profile !== ColorProfile::NoTty,
     colorProfile: $profile,

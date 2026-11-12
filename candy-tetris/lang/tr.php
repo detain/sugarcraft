@@ -72,5 +72,6 @@ Kullanım: candy-tetris [seçenekler]
   -v, --vs   Bilgisayara karşı mod
   -h, --help Bu yardımı göster
   --version  Sürümü yazdır
-'
+',
+    'cli.no_tty' => 'candy-tetris etkileşimli bir terminal gerektirir: onu bir boru veya yönlendirme yerine bir TTY\'den, TERM değeri dumb dışında olacak şekilde çalıştırın.',
 ];

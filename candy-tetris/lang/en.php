@@ -65,4 +65,5 @@ quit',
         . "  -v, --vs     Start VS Computer mode\n"
         . "  -h, --help   Show this help\n"
         . "  --version    Print the version\n",
+    'cli.no_tty' => 'candy-tetris needs an interactive terminal: run it from a TTY (not a pipe or redirect) with TERM set to something other than dumb.',
 ];
