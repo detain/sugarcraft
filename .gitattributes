@@ -16,3 +16,9 @@
 # the Phase 2 close (3d7c7e420), which OVERWROTE this file instead of
 # appending and so deleted every rule above it; restored 2026-08-29.
 candy-code/tests/fixtures/prompt/** whitespace=-trailing-space
+
+# The launcher and the container entrypoint are executed by POSIX shells and
+# must keep LF endings even on a Windows checkout with core.autocrlf=true,
+# where a CRLF shebang line would fail with "no such file or directory".
+candy-code/bin/candy-code text eol=lf
+candy-code/docker/entrypoint.sh text eol=lf
