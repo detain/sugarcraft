@@ -90,5 +90,41 @@ final readonly class WorkflowTask
          * persisted, so a resume re-derives byte-identical bytes.
          */
         public ?array $input = null,
+        /**
+         * P1-4 verifier panel: how many INDEPENDENT dispatches of this
+         * verifier judge the task (concurrently, sharing the stage budget).
+         * 1 (the default) is the single-verifier path, byte-identical to
+         * every pre-P1-4 stage. Verifier slot only — the engine refuses any
+         * other placement before anything runs, like {@see $reject}.
+         */
+        public int $votes = 1,
+        /**
+         * P1-4: one lens name per vote (`count === votes`), interpolated as
+         * `{{lens}}` into that vote's prompt. Null = no lenses (`{{lens}}`
+         * stays verbatim). {@see TaskBuilder::verifierPanel()} holds the
+         * shape law.
+         */
+        public ?array $lenses = null,
+        /**
+         * P1-4: how many votes must NOT reject for the verdict to pass,
+         * 1..votes. Null = the majority, {@see TaskBuilder::defaultQuorum()}.
+         */
+        public ?int $quorum = null,
     ) {}
+
+    /**
+     * P1-4: whether this task declares a verifier panel at all — any of
+     * votes/lenses/quorum away from its default. Only a declared panel
+     * takes the panel path; an undeclared verifier stays byte-identical.
+     */
+    public function declaresPanel(): bool
+    {
+        return $this->votes !== 1 || $this->lenses !== null || $this->quorum !== null;
+    }
+
+    /** P1-4: the quorum this panel is judged by (the declared one, or the majority). */
+    public function effectiveQuorum(): int
+    {
+        return $this->quorum ?? TaskBuilder::defaultQuorum($this->votes);
+    }
 }

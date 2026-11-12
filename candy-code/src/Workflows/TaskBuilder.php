@@ -36,6 +36,10 @@ final class TaskBuilder
     private ?int $restarts = null;
     /** @var array{from: list<string>, as: string}|null */
     private ?array $input = null;
+    private int $votes = 1;
+    /** @var list<string>|null */
+    private ?array $lenses = null;
+    private ?int $quorum = null;
 
     /**
      * Set the agent type (e.g. 'architect', 'coder', 'reviewer').
@@ -257,6 +261,111 @@ final class TaskBuilder
     }
 
     /**
+     * P1-4: convene a verifier PANEL of $votes independent dispatches of
+     * this verifier, run concurrently on the stage's budget. The verdict
+     * passes when at least {@see quorum()} votes do not reject. Verifier
+     * slot only (the engine refuses any other placement before dispatch).
+     * 1, the default, is the single-verifier path, byte-identical.
+     */
+    public function votes(int $votes): self
+    {
+        if ($votes < 1) {
+            throw new \InvalidArgumentException("votes must be a whole number of at least 1, got {$votes}");
+        }
+
+        $this->votes = $votes;
+        return $this;
+    }
+
+    /**
+     * P1-4: one lens per vote — `{{lens}}` in the verifier prompt becomes
+     * that vote's lens, so the panel judges from diverse perspectives
+     * (correctness, security, does-it-reproduce) instead of N identical
+     * ones. The list's length must equal {@see votes()} (checked at build).
+     *
+     * @param list<string> $lenses
+     */
+    public function lenses(array $lenses): self
+    {
+        $this->lenses = self::trustedLenses($lenses);
+        return $this;
+    }
+
+    /**
+     * P1-4: how many votes must NOT reject for the verdict to pass,
+     * 1..votes (checked at build). Unset = the majority, floor(votes/2)+1.
+     */
+    public function quorum(int $quorum): self
+    {
+        if ($quorum < 1) {
+            throw new \InvalidArgumentException("quorum must be at least 1, got {$quorum}");
+        }
+
+        $this->quorum = $quorum;
+        return $this;
+    }
+
+    /** P1-4: the default quorum of a $votes panel — a strict majority, floor(votes/2)+1. */
+    public static function defaultQuorum(int $votes): int
+    {
+        return intdiv(max(1, $votes), 2) + 1;
+    }
+
+    /**
+     * P1-4: the lens-list shape law, shared by {@see lenses()} and the YAML
+     * loader: a non-empty list of non-empty strings (trimmed).
+     *
+     * @param array<array-key, mixed> $lenses
+     * @return list<string>
+     */
+    public static function trustedLenses(array $lenses): array
+    {
+        if ($lenses === [] || !array_is_list($lenses)) {
+            throw new \InvalidArgumentException(
+                'lenses must be a non-empty list of lens names, one per vote, got ' . ($lenses === [] ? 'an empty list' : 'a map')
+            );
+        }
+
+        $trusted = [];
+        foreach ($lenses as $i => $lens) {
+            if (!is_string($lens) || trim($lens) === '') {
+                throw new \InvalidArgumentException(
+                    'lenses entry #' . ($i + 1) . ' must be a non-empty string, got '
+                    . (is_string($lens) ? 'an empty string' : get_debug_type($lens))
+                );
+            }
+            $trusted[] = trim($lens);
+        }
+
+        return $trusted;
+    }
+
+    /**
+     * P1-4: the cross-key law of a verifier panel, judged once all three
+     * keys are known (builder build() and the YAML loader): lenses, when
+     * present, name exactly one lens per vote, and a quorum can be met by
+     * the votes there are.
+     *
+     * @param list<string>|null $lenses
+     *
+     * @throws \InvalidArgumentException naming the mismatch.
+     */
+    public static function verifierPanel(int $votes, ?array $lenses, ?int $quorum): void
+    {
+        if ($lenses !== null && count($lenses) !== $votes) {
+            throw new \InvalidArgumentException(sprintf(
+                'lenses lists %d lens%s but votes is %d; give exactly one lens per vote',
+                count($lenses),
+                count($lenses) === 1 ? '' : 'es',
+                $votes,
+            ));
+        }
+        if ($quorum !== null && $quorum > $votes) {
+            throw new \InvalidArgumentException("quorum {$quorum} exceeds votes {$votes}; at most {$votes} vote" . ($votes === 1 ? '' : 's') . ' can pass');
+        }
+    }
+
+    /**
      * C9: the builder's parse-don't-validate gate for `input:` join specs.
      *
      * A join is a map carrying exactly two keys:
@@ -354,6 +463,8 @@ final class TaskBuilder
      */
     public function build(): WorkflowTask
     {
+        self::verifierPanel($this->votes, $this->lenses, $this->quorum);
+
         return new WorkflowTask(
             agentType: $this->agentType,
             prompt: $this->prompt,
@@ -371,6 +482,9 @@ final class TaskBuilder
             stallTimeout: $this->stallTimeout,
             restarts: $this->restarts ?? 0,
             input: $this->input,
+            votes: $this->votes,
+            lenses: $this->lenses,
+            quorum: $this->quorum,
         );
     }
 

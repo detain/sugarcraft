@@ -36,7 +36,7 @@ final class WorkflowRegistry
      * silently and quietly do less. An arm added here without its refusal
      * update is caught by {@see \SugarCraft\Code\Tests\Workflows\WorkflowYamlKeyRosterTest}.
      */
-    public const YAML_TASK_KEYS = ['agent', 'name', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds', 'timeout', 'reject', 'rejectMinOccurrences', 'stallTimeout', 'restarts', 'input'];
+    public const YAML_TASK_KEYS = ['agent', 'name', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds', 'timeout', 'reject', 'rejectMinOccurrences', 'stallTimeout', 'restarts', 'input', 'votes', 'lenses', 'quorum'];
 
     /**
      * The stage-shape vocabulary (names, flags and the nested containers the
@@ -2351,6 +2351,40 @@ final class WorkflowRegistry
                 // pattern the author meant, so a bad PCRE is named, not coerced.
                 throw new WorkflowLoadException("{$at} \"reject\": {$error->getMessage()}", 0, $error);
             }
+        }
+
+        // P1-4: the verifier-panel arms. Like `reject` they parse on EVERY
+        // task surface and their placement is the engine's pre-flight law
+        // (verifier slot only); the parser judges shapes and the cross-key
+        // law (one lens per vote, a quorum the votes can meet).
+        $votes = 1;
+        $lenses = null;
+        $quorum = null;
+        if (array_key_exists('votes', $map)) {
+            $votes = $this->requireTaskPositiveInt($map['votes'], 'votes', $at);
+            $b = $b->votes($votes);
+        }
+        if (array_key_exists('lenses', $map)) {
+            if (!is_array($map['lenses'])) {
+                throw new WorkflowLoadException(
+                    "{$at} \"lenses\" must be a list of lens names, one per vote, got " . get_debug_type($map['lenses'])
+                );
+            }
+            try {
+                $lenses = TaskBuilder::trustedLenses($map['lenses']);
+            } catch (\InvalidArgumentException $error) {
+                throw new WorkflowLoadException("{$at} {$error->getMessage()}", 0, $error);
+            }
+            $b = $b->lenses($lenses);
+        }
+        if (array_key_exists('quorum', $map)) {
+            $quorum = $this->requireTaskPositiveInt($map['quorum'], 'quorum', $at);
+            $b = $b->quorum($quorum);
+        }
+        try {
+            TaskBuilder::verifierPanel($votes, $lenses, $quorum);
+        } catch (\InvalidArgumentException $error) {
+            throw new WorkflowLoadException("{$at} {$error->getMessage()}", 0, $error);
         }
 
         // C9: the fan-in join arm. trustedJoin() judges the SHAPE (raw

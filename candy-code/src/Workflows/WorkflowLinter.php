@@ -782,6 +782,9 @@ final class WorkflowLinter
             || ($type === 'stage' && $position > 0)) {
             $tokens['prevResult'] = true;
         }
+        if (self::isVerifierSlot($slot) && $task->lenses !== null) {
+            $tokens['lens'] = true;
+        }
 
         return $tokens;
     }
@@ -1025,7 +1028,7 @@ final class WorkflowLinter
 
         $reject = $task->reject;
         if ($reject !== null) {
-            if ($slot !== 'verifier') {
+            if (!self::isVerifierSlot($slot)) {
                 self::add($findings, 'error', $where, 'reject() rejects a verifier VERDICT and belongs on the verifier slot of a verification stage — the engine refuses the run on this plan.');
             }
             if (@preg_match($reject, '') === false) {
@@ -1034,6 +1037,30 @@ final class WorkflowLinter
             if ($task->rejectMinOccurrences < 1) {
                 self::add($findings, 'warning', $where, "rejectMinOccurrences {$task->rejectMinOccurrences} can never be satisfied as written; the scan fails the rule CLOSED, so the verdict is always rejected.");
             }
+        }
+
+        // P1-4 mirror: the verifier-panel keys' placement (the engine's
+        // pre-flight refusal) and the shape law the builder and loader hold.
+        if ($task->declaresPanel()) {
+            if (!self::isVerifierSlot($slot)) {
+                self::add($findings, 'error', $where, 'votes, lenses and quorum convene a verifier panel and belong on the verifier slot of a verification stage — the engine refuses the run on this plan.');
+            }
+            if ($task->votes < 1) {
+                self::add($findings, 'error', $where, "votes {$task->votes} is not positive; a panel needs at least one vote.");
+            }
+            if ($task->lenses !== null && count($task->lenses) !== $task->votes) {
+                self::add($findings, 'error', $where, 'lenses lists ' . count($task->lenses) . " lens(es) but votes is {$task->votes}; the panel needs exactly one lens per vote.");
+            }
+            if ($task->quorum !== null && ($task->quorum < 1 || $task->quorum > $task->votes)) {
+                self::add($findings, 'error', $where, "quorum {$task->quorum} is outside 1..{$task->votes}; the verdict can never pass (or always passes) as written.");
+            }
+            if (self::isVerifierSlot($slot) && $task->reject === null && $task->votes > 1) {
+                self::add($findings, 'warning', $where, 'This verifier panel has no reject pattern, so only a vote that fails or times out counts against the quorum; add reject to make a vote\'s words a verdict.');
+            }
+        }
+        if (str_contains($task->prompt, '{{lens}}') && !(self::isVerifierSlot($slot) && $task->lenses !== null)) {
+            self::add($findings, 'warning', $where, '{{lens}} is interpolated only inside a verifier panel that declares lenses; here it stays verbatim in the prompt.');
+            $seedContext['lens'] = true;
         }
 
         foreach ($task->tools as $declaration) {
@@ -1065,6 +1092,12 @@ final class WorkflowLinter
         if ($prompt !== '') {
             self::checkInterpolation($prompt, $where, $ordinal, $producers, $outputs, $seedContext, $findings);
         }
+    }
+
+    /** A verification stage's verifier slot, top-level (`verifier`) or a map step's (`<step>/verifier`). */
+    private static function isVerifierSlot(string $slot): bool
+    {
+        return $slot === 'verifier' || str_ends_with($slot, '/verifier');
     }
 
     /**

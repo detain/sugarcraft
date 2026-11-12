@@ -2227,6 +2227,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     $dispatched = [];
                     $heldLocks = [];
                     $failedNames = null;
+                    $votes = null;
 
                     try {
                         // O3: exclusive, sorted, bounded flocks on every declared
@@ -2246,7 +2247,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                         } elseif ($stageType === 'pipeline') {
                             $stageResult = $this->executePipelineStage($stage, $context, $dispatched, $workflow->maxConcurrent, $workflow->timeout);
                         } else {
-                            $stageResult = $this->executeVerificationStage($stage, $context, $dispatched, $workflow->timeout);
+                            $stageResult = $this->executeVerificationStage($stage, $context, $dispatched, $workflow->timeout, null, $votes);
                         }
                     } catch (\Throwable $e) {
                         $stageResult = new StageResult(
@@ -2292,6 +2293,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     // context verbatim like the output does.
                     if ($failedNames !== null) {
                         $context[$stageResult->stageName . '.failed'] = json_encode($failedNames, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+                    }
+                    // P1-4: a verifier panel's votes ride beside it the same
+                    // way, as `{{<stage>.votes}}`.
+                    if ($votes !== null) {
+                        $context[$stageResult->stageName . '.votes'] = self::compactJson($votes);
                     }
                     // P0-3: every dispatch was reserved once up front; the
                     // retries and stall restarts the pool ran on top of that
@@ -3693,11 +3699,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *                            task and its verifier.
      * @return StageResult
      */
-    private function executeVerificationStage(array $stage, array $context, array &$dispatched, int $stageTimeout): StageResult
+    private function executeVerificationStage(array $stage, array $context, array &$dispatched, int $stageTimeout, ?int $stageClock = null, ?array &$votesOut = null): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
-        $stageClock = hrtime(true);
+        // P1-2: a map step shares its map stage's clock (one budget for the
+        // whole stage); a top-level verification stage starts its own.
+        $stageClock ??= hrtime(true);
 
         $task = $stage['task'] ?? null;
         $verifier = $stage['verifier'] ?? null;
@@ -3725,6 +3733,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 stageName: $stageName,
                 status: WorkflowStatus::Failed,
                 error: self::rejectMisuseMessage("Verification stage '{$stageName}' task slot"),
+                startedAt: $stageStartedAt,
+                completedAt: new \DateTimeImmutable(),
+            );
+        }
+        // P1-4: the same belt for a panel declared on the task slot.
+        if ($task->declaresPanel()) {
+            return new StageResult(
+                stageName: $stageName,
+                status: WorkflowStatus::Failed,
+                error: self::panelMisuseMessage("Verification stage '{$stageName}' task slot"),
                 startedAt: $stageStartedAt,
                 completedAt: new \DateTimeImmutable(),
             );
@@ -3785,6 +3803,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // --- Run the verifier, injecting task output as {{prevResult}} ---
         $verifierContext = self::withResults($context, [$taskRecord]);
         $verifierContext['prevResult'] = $taskResult->output ?? '';
+
+        // P1-4: a declared panel judges by quorum over N concurrent votes;
+        // an undeclared verifier takes the single-verifier path below,
+        // byte-identical to every pre-P1-4 stage.
+        if ($verifier->declaresPanel()) {
+            return $this->runVerifierPanel($stageName, $taskResult, $verifier, $verifierContext, $dispatched, $stageTimeout, $stageClock, $stageStartedAt, $votesOut);
+        }
 
         $verifierPrompt = $this->interpolateContext($verifier->prompt, self::resolveStageInput($verifierContext, $verifier->input));
 
@@ -3950,6 +3975,227 @@ final class WorkflowEngine implements WorkflowEngineInterface
             startedAt: $taskResult->startedAt ?? $stageStartedAt,
             completedAt: $verifierResult->completedAt ?? new \DateTimeImmutable(),
         );
+    }
+
+    /**
+     * P1-4: judge a verification task by a PANEL of independent verifier
+     * votes instead of one verifier.
+     *
+     * All `votes` dispatches run concurrently on one pool, on what is left
+     * of the stage budget; they are reserved against `config.maxAgents` as
+     * one wave before any of them forks. Vote k interpolates `{{lens}}` as
+     * `lenses[k]` when lenses are declared (otherwise the token stays
+     * verbatim). Each vote is scanned like a single verifier
+     * ({@see scanVerdict()}), and then:
+     *
+     * - an `ESCALATE:` line in ANY vote outranks everything — the stage
+     *   fails for a human, the quorum is not consulted and no retry runs;
+     * - a reject pattern that cannot compile fails the stage CLOSED;
+     * - a vote REJECTS when its output matches `reject`, and also when it
+     *   failed, timed out or never produced a result: a vote that could
+     *   not attest the claim never counts toward the quorum;
+     * - the verdict passes iff at least `quorum` votes did not reject.
+     *
+     * `retries` re-runs the WHOLE panel after a missed quorum (each vote
+     * itself is dispatched with no retries of its own); the rejection reason
+     * quotes every rejecting vote. `$votesOut` receives the last round's
+     * `[{lens, rejected, output|data}]` for `{{<stage>.votes}}` — `data`
+     * (the decoded document) when the verifier declares an outputSchema and
+     * the vote's output decodes, `output` (its text) otherwise.
+     *
+     * @param array<array-key, mixed> $verifierContext the task-folded context, `prevResult` set
+     * @param list<array{key: string, result: AgentResult, schema: bool}> $dispatched
+     * @param ?list<array<string, mixed>> $votesOut
+     */
+    private function runVerifierPanel(
+        string $stageName,
+        AgentResult $taskResult,
+        WorkflowTask $verifier,
+        array $verifierContext,
+        array &$dispatched,
+        int $stageTimeout,
+        int $stageClock,
+        \DateTimeImmutable $stageStartedAt,
+        ?array &$votesOut,
+    ): StageResult {
+        $votes = $verifier->votes;
+        $quorum = $verifier->effectiveQuorum();
+        $rounds = 1 + ($verifier->retries ?? 0);
+        $baseKey = self::resultKey($verifier->name, $stageName . '_verifier');
+        $label = static fn (int $k): string => 'vote ' . ($k + 1) . ($verifier->lenses !== null ? ' (' . $verifier->lenses[$k] . ')' : '');
+        $allAttempts = [];
+
+        for ($round = 1; $round <= $rounds; $round++) {
+            $subAgents = [];
+            $resultKeys = [];
+            $defaultRequest = null;
+            for ($k = 0; $k < $votes; $k++) {
+                $voteContext = $verifierContext;
+                if ($verifier->lenses !== null) {
+                    $voteContext['lens'] = $verifier->lenses[$k];
+                }
+                $prompt = $this->interpolateContext($verifier->prompt, self::resolveStageInput($voteContext, $verifier->input));
+                $agent = new Agent(
+                    name: $verifier->name ?? $verifier->agentType,
+                    description: $prompt,
+                    prompt: '',
+                    model: $this->model,
+                    provider: $this->provider,
+                    tools: $verifier->tools,
+                    skillNames: [],
+                    hooks: [],
+                    isActive: true,
+                    environmentRoot: $this->environmentRoot,
+                );
+                $defaultRequest ??= new CompleteRequest(
+                    model: $agent->model,
+                    messages: [['role' => 'user', 'content' => $prompt]],
+                    tools: $this->resolveRequestTools($verifier->tools),
+                    systemPrompt: $this->renderStagePrompt($agent),
+                );
+                $subAgent = new SubAgent(
+                    id: $stageName . '-vote' . ($k + 1) . '-' . uniqid(getmypid() . '_', true),
+                    agent: $agent,
+                    task: $prompt,
+                    timeout: $verifier->timeout ?? $stageTimeout,
+                    // The panel is the retry unit: `retries` re-runs all of it.
+                    maxRetries: 0,
+                    stallTimeout: $verifier->stallTimeout ?? 0,
+                    stallRestarts: $verifier->restarts,
+                    isolation: $verifier->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
+                    outputSchema: $verifier->outputSchema,
+                    model: $verifier->model,
+                    permissionGate: $this->permissionGate,
+                );
+                $subAgents[] = $subAgent;
+                $resultKeys[$subAgent->id] = ['key' => $baseKey . '_' . ($k + 1), 'schema' => $verifier->outputSchema !== null];
+            }
+
+            $outcomes = $this->dispatchWave($subAgents, $resultKeys, $defaultRequest, $votes, $stageTimeout, $stageClock, $dispatched);
+
+            $passes = 0;
+            $rejections = [];
+            $escalation = null;
+            $invalid = null;
+            $voteRows = [];
+            $outputs = [];
+            foreach ($outcomes as $k => [$key, $result]) {
+                if ($result !== null) {
+                    $allAttempts[] = $result;
+                }
+                $text = $result?->output ?? '';
+                $outputs[] = $text;
+                $rejected = true;
+                if ($result === null) {
+                    $rejections[] = $label($k) . ' was cancelled before it produced a result';
+                } elseif ($result->status !== AgentStatus::Completed) {
+                    $rejections[] = $label($k) . ' ' . ($result->status === AgentStatus::TimedOut ? 'timed out' : 'failed')
+                        . ($result->error !== null ? ': ' . self::oneLine($result->error->getMessage()) : '');
+                } else {
+                    $scan = self::scanVerdict($verifier->reject, $text, 1, $verifier->rejectMinOccurrences);
+                    if ($scan['kind'] === self::VERDICT_ESCALATED) {
+                        $escalation ??= str_replace('verifier asked', 'verifier ' . $label($k) . ' asked', $scan['reason']);
+                        $rejected = false;
+                    } elseif ($scan['kind'] === self::VERDICT_INVALID) {
+                        $invalid ??= $scan['reason'];
+                    } elseif ($scan['kind'] === self::VERDICT_REJECTED) {
+                        $rejections[] = $label($k) . ' ' . preg_replace('/^verdict rejected: verifier output /', '', $scan['reason']);
+                    } else {
+                        $rejected = false;
+                    }
+                }
+                if (!$rejected) {
+                    $passes++;
+                }
+                $row = ['lens' => $verifier->lenses[$k] ?? null, 'rejected' => $rejected];
+                $decoded = $verifier->outputSchema !== null ? json_decode($text, true) : null;
+                $voteRows[] = is_array($decoded) ? $row + ['data' => $decoded] : $row + ['output' => $text];
+            }
+            $votesOut = $voteRows;
+            $joined = implode("\n", $outputs);
+            $settle = fn (WorkflowStatus $status, ?string $error, string $output): StageResult => new StageResult(
+                stageName: $stageName,
+                status: $status,
+                output: $output,
+                error: $error,
+                agents: [$taskResult, ...$allAttempts],
+                startedAt: $taskResult->startedAt ?? $stageStartedAt,
+                completedAt: new \DateTimeImmutable(),
+            );
+
+            // A question outranks every verdict and is never retried.
+            if ($escalation !== null) {
+                return $settle(WorkflowStatus::Failed, $escalation . ($round > 1 ? " [panel round {$round}]" : ''), $joined);
+            }
+            if ($invalid !== null) {
+                return $settle(WorkflowStatus::Failed, $invalid, $joined);
+            }
+            if ($passes >= $quorum) {
+                return $settle(WorkflowStatus::Completed, null, trim(($taskResult->output ?? '') . "\n" . $joined));
+            }
+            if ($round === $rounds) {
+                return $settle(WorkflowStatus::Failed, sprintf(
+                    'verdict rejected by the panel: %d of %d votes passed and the quorum is %d; %s%s',
+                    $passes,
+                    $votes,
+                    $quorum,
+                    implode('; ', $rejections),
+                    $rounds > 1 ? " [failed on all {$rounds} panel rounds]" : '',
+                ), $joined);
+            }
+        }
+
+        // Unreachable: the last round always returns.
+        throw new \LogicException('verifier panel settled no round');
+    }
+
+    /** A message as one control-free line, clipped like a matched verdict line. */
+    private static function oneLine(string $text): string
+    {
+        $line = trim((string) preg_replace('/[\x00-\x1F\x7F]+/', ' ', $text));
+
+        return mb_strlen($line) > 160 ? mb_substr($line, 0, 157) . '...' : $line;
+    }
+
+    /**
+     * One concurrent wave of agents on a fresh pool sized $width, bounded by
+     * what is left of the stage budget — the shape a parallel stage
+     * dispatches with (stage pool, the shared pool's executor, worker
+     * provider, forked executor and retry floor), reserved against
+     * `config.maxAgents` as one block before anything forks. Each settled
+     * agent is appended to $dispatched in DECLARATION order; the return
+     * pairs every declared agent with its result (null: never produced one).
+     *
+     * @param list<SubAgent> $subAgents
+     * @param array<string, array{key: string, schema: bool}> $resultKeys
+     * @param list<array{key: string, result: AgentResult, schema: bool}> $dispatched
+     * @return list<array{0: string, 1: ?AgentResult}>
+     */
+    private function dispatchWave(array $subAgents, array $resultKeys, CompleteRequest $defaultRequest, ?int $width, int $stageTimeout, int $stageClock, array &$dispatched): array
+    {
+        $pool = new AgentWorkerPool(
+            maxConcurrent: $width,
+            executor: $this->pool->executor(),
+            workerProvider: $this->pool->workerProvider(),
+            forkedExecutor: $this->pool->forkedExecutor(),
+        );
+        $pool = $pool->withMaxRetries($this->pool->maxRetries());
+        $pool = $this->dispatching($pool->withTimeBudget(self::remainingBudget($stageTimeout, $stageClock)));
+
+        $this->reserveAgents(count($subAgents));
+
+        $results = $this->agentManager !== null
+            ? $this->agentManager->executeAll($subAgents, $defaultRequest, $pool)
+            : $pool->executeAll($subAgents, $defaultRequest);
+
+        $agentResults = [];
+        foreach ($results as $agentResult) {
+            $agentResults[] = $agentResult;
+            $this->foldStageWriteSignal($agentResult);
+        }
+        $dispatched = [...$dispatched, ...self::recordsInDeclarationOrder($resultKeys, $agentResults)];
+
+        return self::declaredOutcomes($resultKeys, $agentResults);
     }
 
     /**
@@ -5260,6 +5506,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 if ($task instanceof WorkflowTask && $task->reject !== null) {
                     return [$stageName, self::rejectMisuseMessage("Verification stage '{$stageName}' task slot")];
                 }
+                if ($task instanceof WorkflowTask && $task->declaresPanel()) {
+                    return [$stageName, self::panelMisuseMessage("Verification stage '{$stageName}' task slot")];
+                }
 
                 continue;
             }
@@ -5279,10 +5528,19 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 if ($task instanceof WorkflowTask && $task->reject !== null) {
                     return [$stageName, self::rejectMisuseMessage("Stage '{$stageName}' (type '{$stageType}')")];
                 }
+                if ($task instanceof WorkflowTask && $task->declaresPanel()) {
+                    return [$stageName, self::panelMisuseMessage("Stage '{$stageName}' (type '{$stageType}')")];
+                }
             }
         }
 
         return null;
+    }
+
+    /** P1-4: one refusal sentence for every illegal votes/lenses/quorum anchor. */
+    private static function panelMisuseMessage(string $label): string
+    {
+        return "{$label}: votes, lenses and quorum convene a verifier panel and belong on the verifier slot of a verification stage";
     }
 
     /** One refusal sentence for every illegal reject() anchor. */
@@ -5494,6 +5752,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // tail, so a typed row's own `failed` leaf still resolves.
                 if ($matches[2] === 'failed' && is_string($context[$matches[1] . '.failed'] ?? null)) {
                     return $context[$matches[1] . '.failed'];
+                }
+                // P1-4: `{{<stage>.votes}}` reads a verifier panel's votes
+                // the same way — only a stage that convened one claims it.
+                if ($matches[2] === 'votes' && is_string($context[$matches[1] . '.votes'] ?? null)) {
+                    return $context[$matches[1] . '.votes'];
                 }
                 $typed = $typedRows[$matches[1]] ?? null;
                 if (!is_string($typed)) {

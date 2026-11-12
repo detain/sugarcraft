@@ -42,7 +42,7 @@ final class WorkflowGrammarGlossary
         'stage' => 'the default: one task (task keys on the stage itself) or a `tasks:` list run in order, each later task seeing `{{prevResult}}`',
         'parallel' => '`parallel: true` (or `type: parallel`) with an `agents:` list, or `from:` plus a template `prompt`; every agent runs, then the stage settles',
         'pipeline' => '`type: pipeline` with a nested `stages:` list of steps run in order for one item, each step seeing `{{prevResult}}`',
-        'verification' => '`type: verification` with a `task:` map and a `verifier:` map that judges the task\'s output (`{{prevResult}}`); `reject` on the verifier fails the stage, and a line starting `ESCALATE:` stops the run for a human',
+        'verification' => '`type: verification` with a `task:` map and a `verifier:` map that judges the task\'s output (`{{prevResult}}`); `reject` on the verifier fails the stage, `votes`/`lenses`/`quorum` turn the verifier into a panel judged by quorum, and a line starting `ESCALATE:` stops the run for a human',
     ];
 
     /** @var array<string, string> keyed by every registry stage key, in print order */
@@ -83,6 +83,9 @@ final class WorkflowGrammarGlossary
         'stallTimeout' => 'expire a worker that publishes no progress for N seconds',
         'restarts' => 're-dispatch budget for stalled workers, separate from `retries`',
         'input' => '`{from: [stageA, stageB], as: file-list|first|all|results}` joins prior stages into `{{input}}`',
+        'votes' => 'verifier only: N independent verifier dispatches run concurrently on the stage budget (default 1); a vote rejects when its output matches `reject` or it fails/times out, an `ESCALATE:` line in any vote stops the run, and `retries` re-runs the whole panel',
+        'lenses' => 'verifier only: one lens name per vote (length must equal `votes`), interpolated as `{{lens}}` into that vote\'s prompt',
+        'quorum' => 'verifier only: how many votes must NOT reject for the verdict to pass, 1..votes (default the majority, floor(votes/2)+1)',
     ];
 
     /** @var array<string, string> interpolation form => what it resolves to */
@@ -101,6 +104,8 @@ final class WorkflowGrammarGlossary
         '{{seen}}' => 'inside a `loop:` with `accumulate`: the JSON list of every dedup key collected so far',
         '{{fresh}}' => 'inside a `loop:` with `accumulate`: the JSON list of the items the previous round added',
         '{{stage.failed}}' => 'the JSON list of a `minSuccess` stage\'s failed agent names',
+        '{{lens}}' => 'inside a verifier vote: that vote\'s entry of `lenses` (verbatim when the verifier declares no lenses)',
+        '{{stage.votes}}' => 'a verifier panel\'s votes as JSON, `[{lens, rejected, output|data}]` (`data` when the verifier has an outputSchema)',
     ];
 
     /**

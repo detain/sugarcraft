@@ -859,7 +859,7 @@ final class WorkflowAgentResultsTest extends TestCase
             ++$carried;
         }
 
-        self::assertSame(6, $joined, 'six prompt paths resolve the join before interpolating');
+        self::assertSame(7, $joined, 'seven prompt paths resolve the join before interpolating (P1-4 adds the verifier-panel vote)');
         self::assertSame(1, $carried, 'exactly one surface is join-less by design');
     }
 
