@@ -69,6 +69,15 @@ final class WorkflowRegistry
     private array $pendingJoins = [];
 
     /**
+     * P2-4: the current file's top-level `schemas:` map, name => schema,
+     * read BEFORE its stages so every `outputSchema: {$ref: <name>}` on any
+     * task surface resolves at load. Reset by every file parse.
+     *
+     * @var array<string, array<mixed>>
+     */
+    private array $namedSchemas = [];
+
+    /**
      * C9: the stage whose body is parsing right now, or null between files.
      * applyTaskArms() has no stage context of its own — it is shared by every
      * task surface (stage bodies, `tasks:` lists, agents, sub-maps) — so the
@@ -1336,6 +1345,10 @@ final class WorkflowRegistry
         if ($description !== '') {
             $builder = $builder->description($description);
         }
+
+        // P2-4: named schemas first — the stage arms below resolve their
+        // `outputSchema: {$ref: …}` against this map as they parse.
+        $this->namedSchemas = $this->parseNamedSchemas($data, $yamlPath);
 
         // A `stages:` that is present but not a list is REPORTED, not skipped.
         // `stages: nope` used to load as a workflow with zero stages, and
@@ -2608,7 +2621,7 @@ final class WorkflowRegistry
                 );
             }
 
-            return $value;
+            return $this->resolveSchemaRef($value, $where);
         }
 
         if (is_string($value)) {
@@ -2624,13 +2637,118 @@ final class WorkflowRegistry
                 throw new WorkflowLoadException("{$where} \"outputSchema\" must not be empty");
             }
 
-            return $decoded;
+            return $this->resolveSchemaRef($decoded, $where);
         }
 
         throw new WorkflowLoadException(
             "{$where} \"outputSchema\" must be a schema map or a string (inline JSON or a file path), got "
             . get_debug_type($value)
         );
+    }
+
+    /**
+     * P2-4: the top-level `schemas:` map — named JSON Schemas a task reuses
+     * as `outputSchema: {$ref: <name>}` instead of repeating the document per
+     * shard. Absent means none. Each name is an identifier
+     * (`[A-Za-z_][A-Za-z0-9_-]*`) and each value an object-rooted schema
+     * map (`type: object`) whose `required`, when written beside
+     * `properties`, names only declared properties — a schema the
+     * StructuredOutput contract could never satisfy is refused at load, not
+     * discovered after an agent has been billed for it.
+     *
+     * @param array<array-key, mixed> $data
+     * @return array<string, array<mixed>>
+     */
+    private function parseNamedSchemas(array $data, string $yamlPath): array
+    {
+        if (!array_key_exists('schemas', $data)) {
+            return [];
+        }
+
+        $map = $data['schemas'];
+        if (!is_array($map) || ($map !== [] && array_is_list($map))) {
+            throw new WorkflowLoadException(
+                "Workflow file {$yamlPath} \"schemas\" must be a map of name => schema, got "
+                . (is_array($map) ? 'a list' : get_debug_type($map))
+            );
+        }
+
+        $schemas = [];
+        foreach ($map as $name => $schema) {
+            $at = "Workflow file {$yamlPath} schema \"{$name}\"";
+            if (!is_string($name) || preg_match('/^[A-Za-z_][A-Za-z0-9_-]*$/', $name) !== 1) {
+                throw new WorkflowLoadException(
+                    "Workflow file {$yamlPath} \"schemas\" key \"{$name}\" is not a usable name; use letters, digits, _ and -, not starting with a digit"
+                );
+            }
+            if (!is_array($schema) || array_is_list($schema)) {
+                throw new WorkflowLoadException("{$at} must be a schema map, got " . (is_array($schema) ? 'a list' : get_debug_type($schema)));
+            }
+            if (($schema['type'] ?? null) !== 'object') {
+                throw new WorkflowLoadException("{$at} must be object-rooted (\"type: object\" at its root)");
+            }
+            if (array_key_exists('required', $schema)) {
+                $required = $schema['required'];
+                if (!is_array($required) || !array_is_list($required)) {
+                    throw new WorkflowLoadException("{$at} \"required\" must be a list of property names");
+                }
+                $properties = is_array($schema['properties'] ?? null) ? $schema['properties'] : [];
+                foreach ($required as $property) {
+                    if (!is_string($property) || !array_key_exists($property, $properties)) {
+                        throw new WorkflowLoadException(
+                            "{$at} \"required\" names \"" . (is_scalar($property) ? (string) $property : get_debug_type($property))
+                            . "\", which is not one of its \"properties\""
+                        );
+                    }
+                }
+            }
+            $schemas[$name] = $schema;
+        }
+
+        return $schemas;
+    }
+
+    /**
+     * P2-4: `outputSchema: {$ref: <name>}` — a map whose ONLY key is `$ref`
+     * — resolved against the file's `schemas:` map. The RESOLVED document is
+     * what the task carries, so the engine's stage identity hash digests the
+     * schema itself, not its name: editing a shared schema invalidates every
+     * `cache:` row that used it. Any other map passes through untouched (a
+     * `$ref` NESTED inside a schema is JSON Schema's own and not ours), and
+     * `$ref` beside other root keys is refused rather than guessed at.
+     *
+     * @param array<mixed> $schema
+     * @return array<mixed>
+     */
+    private function resolveSchemaRef(array $schema, string $where): array
+    {
+        if (!array_key_exists('$ref', $schema)) {
+            return $schema;
+        }
+
+        if (count($schema) !== 1) {
+            throw new WorkflowLoadException(
+                "{$where} \"outputSchema\" carries \"\$ref\" beside other keys; a reference is the one key {\$ref: <name>}"
+            );
+        }
+
+        $name = $schema['$ref'];
+        if (!is_string($name) || $name === '') {
+            throw new WorkflowLoadException(
+                "{$where} \"outputSchema\" \"\$ref\" must name a schema, got " . get_debug_type($name)
+            );
+        }
+
+        if (!array_key_exists($name, $this->namedSchemas)) {
+            throw new WorkflowLoadException(
+                "{$where} \"outputSchema\" \"\$ref\" names unknown schema \"{$name}\"; "
+                . ($this->namedSchemas === []
+                    ? 'this file declares no top-level "schemas:" map'
+                    : 'declared schemas: ' . implode(', ', array_keys($this->namedSchemas)))
+            );
+        }
+
+        return $this->namedSchemas[$name];
     }
 
     /**

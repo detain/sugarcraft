@@ -789,6 +789,14 @@ final class WorkflowLinter
         if ($task->model !== null && $task->model === '') {
             self::add($findings, 'error', $where, 'The model ask is present but not a non-empty string.');
         }
+        // P2-4 mirror: the YAML loader resolves `{$ref: <name>}` against the
+        // file's `schemas:` map, so a ref that survives into the DTO was
+        // hand-built and never resolved — the agent would be held to a
+        // schema that only names another one.
+        if (is_array($task->outputSchema) && count($task->outputSchema) === 1 && array_key_exists('$ref', $task->outputSchema)) {
+            $ref = $task->outputSchema['$ref'];
+            self::add($findings, 'error', $where, 'outputSchema is an unresolved {$ref: ' . (is_string($ref) ? $ref : get_debug_type($ref)) . '}; only a YAML plan\'s top-level "schemas:" map resolves a reference — inline the schema document.');
+        }
 
         $prompt = $task->prompt;
         if ($prompt === '') {
