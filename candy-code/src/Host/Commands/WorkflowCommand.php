@@ -14,6 +14,7 @@ use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Tools\BuiltIn\WorkflowTool;
 use SugarCraft\Code\Workflows\StageResult;
 use SugarCraft\Code\Workflows\Workflow;
 use SugarCraft\Code\Workflows\WorkflowEngineInterface;
@@ -59,7 +60,7 @@ final class WorkflowCommand implements HostCommand
         }
 
         return match ($command) {
-            'run' => self::start($engine, $inputText, $args),
+            'run' => self::start($engine, $inputText, $args, $context),
             'pause' => self::pause($engine, $inputText, $args),
             'resume' => self::resume($engine, $inputText, $args),
             'status' => self::status($engine, $inputText, $args, $context),
@@ -185,7 +186,7 @@ final class WorkflowCommand implements HostCommand
      * fiber from its Cmd channel and a headless host from its loop, both
      * through {@see drive()}.
      */
-    public static function start(WorkflowEngineInterface $engine, string $inputText, string $args): CommandResult
+    public static function start(WorkflowEngineInterface $engine, string $inputText, string $args, ?CommandContext $commandContext = null): CommandResult
     {
         [$workflowName, $context, $problems] = self::parseRunArguments($args);
 
@@ -206,6 +207,27 @@ final class WorkflowCommand implements HostCommand
             return self::help($inputText, Lang::t('host.workflow.usage.run'));
         }
 
+        // P0-4: lint before the first dispatch. Errors refuse the run with
+        // nothing spent; warnings ride the report under its heading.
+        $lintWarnings = '';
+        $lint = $commandContext === null ? null : self::preRunLint($workflowName, $context, $commandContext);
+        if ($lint !== null) {
+            if ($lint->hasErrors()) {
+                return self::respond(
+                    $inputText,
+                    Lang::t('host.workflow.error', ['error' => sprintf(
+                        "workflow `%s` was not run: lint found %d error(s), %d warning(s) (nothing was dispatched).\n%s",
+                        $workflowName,
+                        $lint->errorCount(),
+                        $lint->warningCount(),
+                        $lint->renderFindings(),
+                    )]),
+                    true,
+                );
+            }
+            $lintWarnings = WorkflowTool::lintWarningHeader($lint);
+        }
+
         // The run's Esc Esc: held as this turn's inFlightCancellation, so the
         // double-Escape arm's existing cancel() reaches the engine, which
         // kills the stage's agents and stops the run (see drive()).
@@ -213,9 +235,9 @@ final class WorkflowCommand implements HostCommand
 
         // Built here, started by the driver's FIRST timer tick. Everything
         // inside runs off the main stack.
-        $fiber = new \Fiber(static function () use ($engine, $workflowName, $context, $cancellation) {
+        $fiber = new \Fiber(static function () use ($engine, $workflowName, $context, $cancellation, $lintWarnings) {
             try {
-                return self::describeWorkflowResult($workflowName, $engine->run($workflowName, $context, $cancellation));
+                return self::withLintWarnings(self::describeWorkflowResult($workflowName, $engine->run($workflowName, $context, $cancellation)), $lintWarnings);
             } catch (\Throwable $e) {
                 // One catch, where there used to be three arms
                 // ({@see \SugarCraft\Code\Workflows\WorkflowNotFoundException}, {@see \SugarCraft\Code\Workflows\WorkflowLoadException},
@@ -234,6 +256,40 @@ final class WorkflowCommand implements HostCommand
         return CommandResult::echo($inputText)->withEffect(
             CommandEffect::occupyTurn(static fn (): PromiseInterface => self::drive($fiber), $cancellation),
         );
+    }
+
+    /**
+     * P0-4: the pre-run lint of a named workflow, through the same registry
+     * tiers, tool universe and `uses:` resolver `/workflow lint` uses, seeded
+     * with the run's own context so a `{{key}}` the user passed is not
+     * reported. Null when the name does not load here: the engine's own
+     * load refusal owns that verdict, and the lint must not invent one.
+     *
+     * @param array<string, string> $runContext
+     */
+    private static function preRunLint(string $workflowName, array $runContext, CommandContext $context): ?WorkflowLinter
+    {
+        try {
+            $workflow = self::registryFor($context)->load($workflowName);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return WorkflowLinter::lint($workflow, $runContext, self::toolUniverse($context), self::includeResolver($context));
+    }
+
+    /** $report with the lint-warning block placed under its heading line. */
+    private static function withLintWarnings(string $report, string $warnings): string
+    {
+        if ($warnings === '') {
+            return $report;
+        }
+
+        $split = strpos($report, "\n\n");
+
+        return $split === false
+            ? $report . "\n\n" . rtrim($warnings)
+            : substr($report, 0, $split + 2) . $warnings . substr($report, $split + 2);
     }
 
     /**
@@ -791,11 +847,6 @@ final class WorkflowCommand implements HostCommand
             return null;
         }
 
-        $names = [];
-        foreach ($backend->tools() as $tool) {
-            $names[] = $tool->name();
-        }
-
-        return $names;
+        return WorkflowTool::toolNamesOf($backend);
     }
 }
