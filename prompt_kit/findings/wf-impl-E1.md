@@ -98,4 +98,4 @@ HOOKS/PERMISSIONS/ARCHITECTURE/FLEET-DRIVING/AGENTS.md — except:
 - `ProjectTierRefusalInventoryTest` row for Subcommands' `.candy-code/workflows` (owner of tests/Cli).
 
 ## 4. Commits
-- see `git log -- candy-code/docs/WORKFLOWS.md` (E1 docs truth pass commit)
+- `f0a9c5b20` docs truth pass + DocFigureProseDriftTest re-pin
