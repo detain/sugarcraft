@@ -7457,9 +7457,11 @@ final class Subcommands
      * contexts carry prose). Validation mirrors the TUI slash tokenizer's
      * rules: k=v shape, non-empty key, no '@' keys - the engine's
      * reserved-context law. Returns [pairs, problems]; problems are
-     * human-readable, and the first one fails usage.
+     * human-readable, and the first one fails usage. C6: `key:=<json>`
+     * decodes its value as JSON (a list for `from: {context: key}`, a
+     * number, an object); a comma nested in its brackets is data.
      *
-     * @return array{0: array<string, string>, 1: list<string>}
+     * @return array{0: array<string, mixed>, 1: list<string>}
      */
     private static function parseParamPairs(?string $raw): array
     {
@@ -7470,11 +7472,21 @@ final class Subcommands
         $segments = [];
         $buffer = '';
         $quote = null;
+        // C6: inside a `key:=<json>` segment a comma nested in [] or {} is
+        // the JSON's own, not a pair separator, and `\"` inside a JSON
+        // string does not close it. A plain `key=value` segment keeps the
+        // old rules exactly.
+        $depth = 0;
+        $json = false;
         $length = \strlen($raw);
         for ($i = 0; $i < $length; ++$i) {
             $char = $raw[$i];
             if ($quote !== null) {
                 $buffer .= $char;
+                if ($json && $char === '\\' && $i + 1 < $length) {
+                    $buffer .= $raw[++$i];
+                    continue;
+                }
                 if ($char === $quote) {
                     $quote = null;
                 }
@@ -7485,9 +7497,18 @@ final class Subcommands
                 $buffer .= $char;
                 continue;
             }
-            if ($char === ',') {
+            if ($char === '=' && !$json && !\str_contains($buffer, '=') && \str_ends_with($buffer, ':')) {
+                $json = true;
+            }
+            if ($json && ($char === '[' || $char === '{')) {
+                ++$depth;
+            } elseif ($json && ($char === ']' || $char === '}') && $depth > 0) {
+                --$depth;
+            }
+            if ($char === ',' && $depth === 0) {
                 $segments[] = $buffer;
                 $buffer = '';
+                $json = false;
                 continue;
             }
             $buffer .= $char;
@@ -7505,19 +7526,33 @@ final class Subcommands
             if ($segment === '') {
                 continue;
             }
-            $equals = \strpos($segment, '=');
-            if ($equals === false) {
+            $split = \SugarCraft\Code\Workflows\RunContextValue::split($segment);
+            if ($split === null) {
                 $problems[] = 'expected key=value, got `' . $segment . '`';
                 continue;
             }
-            $key = \substr($segment, 0, $equals);
-            $value = \substr($segment, $equals + 1);
+            [$key, $value, $isJson] = $split;
             if ($key === '') {
                 $problems[] = 'empty key in `' . $segment . '`';
                 continue;
             }
             if (\str_starts_with($key, '@')) {
                 $problems[] = 'reserved key `' . $key . '` - @-prefixed context belongs to the engine';
+                continue;
+            }
+            if ($isJson) {
+                // C6: the value is JSON. Single quotes the shell let through
+                // are a wrapper (JSON never starts with one); double quotes
+                // are the JSON's own string syntax and stay.
+                $value = \trim($value);
+                if (\strlen($value) >= 2 && $value[0] === "'" && \substr($value, -1) === "'") {
+                    $value = \substr($value, 1, -1);
+                }
+                try {
+                    $pairs[$key] = \SugarCraft\Code\Workflows\RunContextValue::decode($key, $value);
+                } catch (\InvalidArgumentException $e) {
+                    $problems[] = $e->getMessage();
+                }
                 continue;
             }
             if (\strlen($value) >= 2

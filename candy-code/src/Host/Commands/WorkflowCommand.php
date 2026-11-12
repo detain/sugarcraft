@@ -15,6 +15,7 @@ use SugarCraft\Code\Cli\LaunchContext;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Message;
 use SugarCraft\Code\Tools\BuiltIn\WorkflowTool;
+use SugarCraft\Code\Workflows\RunContextValue;
 use SugarCraft\Code\Workflows\StageResult;
 use SugarCraft\Code\Workflows\Workflow;
 use SugarCraft\Code\Workflows\WorkflowEngine;
@@ -336,7 +337,11 @@ final class WorkflowCommand implements HostCommand
      * refused here as well, mirroring WorkflowEngine's own run-entry rule: the
      * engine rejects them, so accepting them at the keyboard is a lie.
      *
-     * @return array{0: string, 1: array<string, string>, 2: list<string>}
+     * C6: `key:=<json>` (httpie's spelling) decodes its value as JSON, so a
+     * list-reading stage (`from: {context: files}`) can run from here;
+     * malformed JSON is reported naming the key. `key=value` stays a string.
+     *
+     * @return array{0: string, 1: array<string, mixed>, 2: list<string>}
      */
     public static function parseRunArguments(string $args): array
     {
@@ -386,12 +391,12 @@ final class WorkflowCommand implements HostCommand
         $problems = [];
 
         foreach (array_slice($tokens, 1) as $pair) {
-            $at = strpos($pair, '=');
-            if ($at === false) {
+            $split = RunContextValue::split($pair);
+            if ($split === null) {
                 $problems[] = 'expected key=value, got `' . $pair . '`';
                 continue;
             }
-            $key = substr($pair, 0, $at);
+            [$key, $raw, $isJson] = $split;
             if ($key === '') {
                 $problems[] = 'empty key in `' . $pair . '`';
                 continue;
@@ -400,7 +405,18 @@ final class WorkflowCommand implements HostCommand
                 $problems[] = '`' . $key . '` is a reserved run-context key — the engine refuses \'@\'' . "-prefixed names at run entry";
                 continue;
             }
-            $context[$key] = substr($pair, $at + 1);
+            if (!$isJson) {
+                $context[$key] = $raw;
+                continue;
+            }
+            // C6: `key:=<json>` carries a typed value — a list for
+            // `from: {context: key}`, a number, an object. Quote it so the
+            // JSON's own quotes survive: files:='["a.php","b.php"]'.
+            try {
+                $context[$key] = RunContextValue::decode($key, $raw);
+            } catch (\InvalidArgumentException $e) {
+                $problems[] = $e->getMessage();
+            }
         }
 
         return [$name, $context, $problems];

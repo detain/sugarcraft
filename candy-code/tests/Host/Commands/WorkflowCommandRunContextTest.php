@@ -98,6 +98,36 @@ final class WorkflowCommandRunContextTest extends TestCase
         self::assertSame(['a' => '1', 'b' => '2'], $context);
     }
 
+    public function testAColonEqualsPairCarriesAJsonValue(): void
+    {
+        [$name, $context, $problems] = WorkflowCommand::parseRunArguments(
+            "fix-wave files:='[\"src/A.php\",\"src/B.php\"]' spec=docs/brief.md n:=3 o:='{\"k\": true}'",
+        );
+
+        self::assertSame([], $problems);
+        self::assertSame('fix-wave', $name);
+        self::assertSame(['files' => ['src/A.php', 'src/B.php'], 'spec' => 'docs/brief.md', 'n' => 3, 'o' => ['k' => true]], $context);
+    }
+
+    public function testMalformedJsonIsRefusedNamingTheKey(): void
+    {
+        [, $context, $problems] = WorkflowCommand::parseRunArguments("plan files:='[a' x=1");
+
+        self::assertCount(1, $problems);
+        self::assertStringContainsString('`files:=` needs a JSON value', $problems[0]);
+        self::assertSame(['x' => '1'], $context);
+    }
+
+    public function testUnquotedJsonLosesItsQuotesToTheTokenizerAndIsRefused(): void
+    {
+        // The shell-like tokenizer strips the double quotes, leaving [a,b]:
+        // not JSON, so it is refused rather than run on a mangled value.
+        [, , $problems] = WorkflowCommand::parseRunArguments('plan files:=["a","b"]');
+
+        self::assertCount(1, $problems);
+        self::assertStringContainsString('files:=', $problems[0]);
+    }
+
     public function testEmptyArgumentsNameNothingAndComplainNothing(): void
     {
         self::assertSame(['', [], []], WorkflowCommand::parseRunArguments(''));

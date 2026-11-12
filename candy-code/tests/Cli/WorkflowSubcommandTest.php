@@ -387,6 +387,18 @@ final class WorkflowSubcommandTest extends TestCase
             'empty key' => ['=v', [], 1],
             'reserved key' => ['@k=1', [], 1],
             'unterminated quote' => ['k="x', [], 1],
+            // C6: `key:=<json>` carries a typed value; its nested commas are data.
+            'json list' => ['files:=["src/A.php","src/B.php"]', ['files' => ['src/A.php', 'src/B.php']], 0],
+            'json list beside a string (repeated flags)' => ['files:=["a","b"],spec=docs/brief.md', ['files' => ['a', 'b'], 'spec' => 'docs/brief.md'], 0],
+            'json object' => ['o:={"k":[1,2],"j":true}', ['o' => ['k' => [1, 2], 'j' => true]], 0],
+            'json scalars' => ['n:=3,b:=false,z:=null', ['n' => 3, 'b' => false, 'z' => null], 0],
+            'json string keeps its quotes' => ['s:="a,b"', ['s' => 'a,b'], 0],
+            'json escaped quote' => ['s:="a\\"b,c"', ['s' => 'a"b,c'], 0],
+            'single-quoted json' => ["files:='[\"x\"]'", ['files' => ['x']], 0],
+            'malformed json' => ['files:=[a,b', [], 1],
+            'bare word is not json' => ['files:=src/A.php', [], 1],
+            'reserved json key' => ['@k:=1', [], 1],
+            'colon in a plain key' => ['a:b=1', ['a:b' => '1'], 0],
         ];
     }
 
@@ -394,7 +406,7 @@ final class WorkflowSubcommandTest extends TestCase
     public function testTheParamSplitterHonoursQuotes(?string $raw, array $pairs, int $problemCount): void
     {
         $method = new \ReflectionMethod(Subcommands::class, 'parseParamPairs');
-        /** @var array{0: array<string,string>, 1: list<string>} $got */
+        /** @var array{0: array<string,mixed>, 1: list<string>} $got */
         $got = $method->invoke(null, $raw);
 
         self::assertSame($pairs, $got[0], 'pair extraction drifted for ' . \var_export($raw, true));

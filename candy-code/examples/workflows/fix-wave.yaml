@@ -6,21 +6,22 @@
 # workflow-authoring skill, "Quality patterns".
 #
 # Parameters:
-#   - files: a JSON LIST of paths, e.g. ["src/A.php", "src/B.php"]. A
-#            comma-separated string is not a list: the stage fails before
-#            dispatching anything ("... from context 'files', which is a
-#            string, not an array").
+#   - files: a JSON LIST of paths, e.g. ["src/A.php", "src/B.php"]. Pass it
+#            with := (the value is parsed as JSON); a plain files=... is a
+#            STRING, and the stage fails before dispatching anything
+#            ("... from context 'files', which is a string, not an array").
 #   - spec:  path to the brief describing the fix. The job's prose lives in
 #            that FILE so every agent reads the same text.
 #
 # Run it:
+#   /workflow run fix-wave files:='["src/A.php","src/B.php"]' spec=docs/brief.md
+#   candy-code workflow run fix-wave --param files:='["src/A.php","src/B.php"]' --param spec=docs/brief.md
 #   Workflow tool (context takes real JSON, so the list goes in as a list):
 #     {"plan": "<this file's YAML>",
-#      "context": {"files": ["src/A.php", "src/B.php"], "spec": "docs/briefs/fix.md"}}
-#   PHP: $engine->run('fix-wave', ['files' => ['src/A.php', 'src/B.php'], 'spec' => 'docs/briefs/fix.md']);
-#   /workflow run fix-wave ... and `candy-code workflow run fix-wave --param ...`
-#   hand every value over as a STRING today, so from those doors "files"
-#   arrives as text and the wave stage refuses it as described above.
+#      "context": {"files": ["src/A.php", "src/B.php"], "spec": "docs/brief.md"}}
+#   PHP: $engine->run('fix-wave', ['files' => ['src/A.php', 'src/B.php'], 'spec' => 'docs/brief.md']);
+#   key:=<json> is the typed spelling on both command lines; single-quote
+#   the JSON so its own double quotes survive.
 #
 # How it works:
 #   - "wave" fans out one agent per list entry. key: "" (the whole item is
