@@ -18,8 +18,11 @@ namespace SugarCraft\Code\Tools;
  *     cancelled turn — the teardown's tree kill is Linux-/proc-only, and even
  *     there a member's in-flight side effect may already have landed) an
  *     orphaned call must be unable to leave the workspace in a state the user
- *     did not ask for. This is why `Bash`/`Edit` are absent and why any `mcp__*` tool,
+ *     did not ask for. This is why `Edit` is absent and why any `mcp__*` tool,
  *     whose capability is server-defined and unknowable here, is absent too.
+ *     `Bash` is neither always-safe nor never-safe: whether one command is a
+ *     plain read is decided per call by {@see ParallelSafeCall}, which answers
+ *     from the arguments and says false for anything it cannot prove read-only.
  *
  *  2. Any session-scoped state it DOES mutate survives the fork, either
  *     because there is none or because the tool also implements

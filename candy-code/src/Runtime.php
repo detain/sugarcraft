@@ -43,6 +43,7 @@ use SugarCraft\Code\Tools\CarriesSessionState;
 use SugarCraft\Code\Tools\ExemptFromParallelDeadline;
 use SugarCraft\Code\Tools\McpToolBridge;
 use SugarCraft\Code\Tools\ParallelSafe;
+use SugarCraft\Code\Tools\ParallelSafeCall;
 use SugarCraft\Code\Tools\PromptGuidance;
 use SugarCraft\Code\Tools\StreamsActivity;
 use SugarCraft\Code\Tools\SharesSiblingSpend;
@@ -82,6 +83,18 @@ final class Runtime
      * operator's is missing or nonsense — one default, named once.
      */
     public const PARALLEL_TOOL_DEADLINE_SECONDS = 90;
+
+    /**
+     * A sibling whose beat file was touched within this many seconds is still
+     * making progress, so the group deadline spares it — up to the turn's
+     * own ceiling (see {@see \SugarCraft\Code\Backend\EngineBackend::COMPLETE_TIMEOUT_SECONDS}),
+     * which the parent's beat would otherwise be measured against. A sibling
+     * that has gone quiet for longer than this is killed like any other.
+     */
+    private const PARALLEL_BEAT_FRESH_SECONDS = 10;
+
+    /** How often a deadline that spared a sibling is re-examined. */
+    private const PARALLEL_DEADLINE_RECHECK_SECONDS = 1.0;
 
     /**
      * Poll interval while waiting on a concurrent group. This loop is inside
@@ -2486,9 +2499,12 @@ final class Runtime
     /**
      * Whether THIS call may join a concurrent group.
      *
-     * Opt-in and per-instance: a tool that does not implement
-     * {@see \SugarCraft\Code\Tools\ParallelSafe} — every user-supplied tool,
-     * every `mcp__*` tool, `Bash`, `Edit` — is a barrier. An unknown tool name
+     * Opt-in and per-instance: a tool that implements neither
+     * {@see \SugarCraft\Code\Tools\ParallelSafe} nor
+     * {@see \SugarCraft\Code\Tools\ParallelSafeCall} — every user-supplied
+     * tool, every `mcp__*` tool, `Edit` — is a barrier. A
+     * {@see \SugarCraft\Code\Tools\ParallelSafeCall} tool (`Bash`) decides
+     * per call from its arguments. An unknown tool name
      * is a barrier too, so its "Tool not found" failure keeps being produced
      * by the same branch that has always produced it.
      */
@@ -2499,6 +2515,12 @@ final class Runtime
         }
 
         $tool = $this->findTool($toolCall->name(), $app);
+
+        if ($tool instanceof ParallelSafeCall) {
+            // A call that did not decode is a barrier: its refusal is produced
+            // by the sequential path, and nothing about its arguments is known.
+            return $toolCall->argumentsError() === null && $tool->isParallelSafeFor($toolCall->arguments());
+        }
 
         return $tool instanceof ParallelSafe && $tool->isParallelSafe();
     }
@@ -2887,6 +2909,13 @@ final class Runtime
                 $asks = $onPermissionRequest !== null && $tool instanceof \SugarCraft\Code\Tools\RelaysPermissionAsks
                     ? \SugarCraft\Code\Support\PermissionAskRelay::open()
                     : null;
+                // A tool that beats while it works gets a file the child touches
+                // and the parent reads the mtime of, so a slow-but-live sibling
+                // is not killed as if it were hung. Exempt members are not
+                // deadline-bound at all, so they need none.
+                $beat = $tool instanceof \SugarCraft\Code\Tools\AcceptsHeartbeat && !$tool instanceof ExemptFromParallelDeadline
+                    ? ToolIpcFiles::reserve(ToolIpcFiles::RUNTIME_PREFIX, 'beat')
+                    : null;
                 $pid = pcntl_fork();
 
                 if ($pid === -1) {
@@ -2950,10 +2979,12 @@ final class Runtime
                     if ($tool instanceof StreamsActivity) {
                         \SugarCraft\Code\Support\AgentCancelRequests::armGracefulStop($job['call']->id());
                     }
-                    $this->runToolInChild($file, $tool, $job['call'], $job['args']);
+                    $this->runToolInChild($file, $tool, $job['call'], $job['args'], $beat);
                 }
 
                 $jobs[$index]['pid'] = $pid;
+                $jobs[$index]['beat'] = $beat;
+                $jobs[$index]['startedAt'] = microtime(true);
                 if ($relay !== null) {
                     $relay->becomeReader();
                     $jobs[$index]['relay'] = $relay;
@@ -2991,7 +3022,9 @@ final class Runtime
 
             // @region poll
             // Phase 3 — reap, then release in provider order.
-            $deadline = microtime(true) + $this->parallelToolDeadlineSeconds;
+            $groupStart = microtime(true);
+            $deadline = $groupStart + $this->parallelToolDeadlineSeconds;
+            $extensionCeiling = $groupStart + \SugarCraft\Code\Backend\EngineBackend::COMPLETE_TIMEOUT_SECONDS;
             $lastBeat = microtime(true);
 
             while ($next < $total) {
@@ -3195,12 +3228,29 @@ final class Runtime
                 }
 
                 if (microtime(true) >= $deadline) {
+                    $now = microtime(true);
                     $killed = false;
+                    $extended = false;
                     foreach ($jobs as $index => $job) {
                         // An ExemptFromParallelDeadline job (a delegated Task)
                         // is an agentic run, not a seconds-scale tool, and is
                         // left to bound itself; its siblings keep the deadline.
                         if ($job['settled'] || $job['pid'] === null || $job['tool'] instanceof ExemptFromParallelDeadline) {
+                            continue;
+                        }
+                        // A sibling that finished between the poll above and
+                        // now is released with its own payload, never killed.
+                        if (self::parallelJobHasExited($job['pid'])) {
+                            $jobs[$index]['settled'] = true;
+                            $killed = true;
+
+                            continue;
+                        }
+                        // Still beating and still inside the turn's ceiling:
+                        // progress, not a hang, so the deadline spares it.
+                        if ($now < $extensionCeiling && self::beatIsFresh($job['beat'] ?? null, $now)) {
+                            $extended = true;
+
                             continue;
                         }
                         // A tool that never returns would otherwise wedge the turn
@@ -3209,10 +3259,15 @@ final class Runtime
                         // B2/F-E2: killTree, not a bare SIGKILL of the job
                         // pid — the job's own commands are setsid'd into
                         // their own groups and would outlive it otherwise.
+                        $jobs[$index]['ranFor'] = $now - (float) ($job['startedAt'] ?? $now);
                         ProcessContainment::killTree($job['pid']);
                         self::reapKilled($job['pid']);
                         $jobs[$index]['settled'] = true;
                         $killed = true;
+                    }
+
+                    if ($extended) {
+                        $deadline = min($extensionCeiling, $now + self::PARALLEL_DEADLINE_RECHECK_SECONDS);
                     }
 
                     // Only re-poll at once when the kill settled something to
@@ -3301,6 +3356,11 @@ final class Runtime
             }
 
             foreach ($jobs as $job) {
+                // A beat file is only a progress signal; a child still running
+                // may touch it once more, which the sweeper reaps.
+                if (isset($job['beat'])) {
+                    ToolIpcFiles::discard((string) $job['beat']);
+                }
                 if (isset($job['relay'])) {
                     $job['relay']->close();
                 }
@@ -4039,9 +4099,11 @@ final class Runtime
      *
      * @param array<string, mixed> $args
      */
-    private function runToolInChild(string $file, Tool $tool, ToolCall $toolCall, array $args): never
+    private function runToolInChild(string $file, Tool $tool, ToolCall $toolCall, array $args, ?string $beat = null): never
     {
-        $result = $this->executeGuarded($tool, $toolCall, $args);
+        $result = $beat !== null
+            ? $this->executeBeating($tool, $toolCall, $args, $beat)
+            : $this->executeGuarded($tool, $toolCall, $args);
 
         $payload = [
             'result' => self::encodeResult($result),
@@ -4095,8 +4157,10 @@ final class Runtime
             return new ToolResult(
                 toolCallId: $job['call']->id(),
                 content: sprintf(
-                    'Error: %s produced no result: killed at the %ds parallel-tool deadline, or it died before finishing',
+                    'Error: %s (call %s) produced no result after running for %.1fs: killed at the %ds parallel-tool deadline, or it died before finishing',
                     $job['call']->name(),
+                    $job['call']->id(),
+                    $job['ranFor'] ?? (isset($job['startedAt']) ? microtime(true) - (float) $job['startedAt'] : 0.0),
                     $this->parallelToolDeadlineSeconds,
                 ),
                 isError: true,
@@ -4299,6 +4363,53 @@ final class Runtime
      *
      * @param array<string, mixed> $args
      */
+    /**
+     * {@see executeGuarded()} for a child that reports progress: the tool's
+     * wait loop touches $beat (throttled to a second, and only from this
+     * process) so the parent can tell a slow call from a hung one.
+     *
+     * @param array<string, mixed> $args
+     */
+    private function executeBeating(Tool $tool, ToolCall $toolCall, array $args, string $beat): ToolResult
+    {
+        if (!$tool instanceof \SugarCraft\Code\Tools\AcceptsHeartbeat) {
+            return $this->executeGuarded($tool, $toolCall, $args);
+        }
+
+        $pid = getmypid();
+        $lastBeat = 0.0;
+        $heartbeat = static function () use ($beat, $pid, &$lastBeat): void {
+            $now = microtime(true);
+            if ($now - $lastBeat < 1.0 || getmypid() !== $pid) {
+                return;
+            }
+            $lastBeat = $now;
+            @touch($beat);
+        };
+
+        try {
+            return $tool->executeWithHeartbeat(self::argumentsFor($tool, $toolCall, $args), $heartbeat);
+        } catch (\Throwable $e) {
+            return self::executionFailure($tool, $toolCall, $e);
+        }
+    }
+
+    /**
+     * Whether a sibling's beat file was touched recently enough to count as
+     * progress. A missing file is no progress; the stat cache is cleared
+     * because the file is rewritten by another process.
+     */
+    private static function beatIsFresh(?string $beat, float $now): bool
+    {
+        if ($beat === null) {
+            return false;
+        }
+        clearstatcache(true, $beat);
+        $mtime = @filemtime($beat);
+
+        return $mtime !== false && $now - $mtime <= self::PARALLEL_BEAT_FRESH_SECONDS;
+    }
+
     private function executeGuarded(Tool $tool, ToolCall $toolCall, array $args): ToolResult
     {
         try {
