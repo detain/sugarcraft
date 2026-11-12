@@ -2568,7 +2568,7 @@ final class Runtime
             return $this->failure($toolCall, $context, $onEvent, DenialKind::Hook);
         }
 
-        [$args, $denial, $context, $preContext, $denialKind] = $this->gate($toolCall, $context, $onPermissionRequest);
+        [$args, $denial, $context, $preContext, $denialKind] = $this->gate($toolCall, $context, $onPermissionRequest, $tool);
         if ($denial !== null) {
             return $this->failure($toolCall, $denial, $onEvent, $denialKind);
         }
@@ -2758,7 +2758,7 @@ final class Runtime
                 continue;
             }
 
-            [$args, $denial, $context, $preContext, $denialKind] = $this->gate($toolCall, $context, $onPermissionRequest);
+            [$args, $denial, $context, $preContext, $denialKind] = $this->gate($toolCall, $context, $onPermissionRequest, $tool);
 
             $jobs[] = [
                 'call' => $toolCall,
@@ -3452,8 +3452,21 @@ final class Runtime
      *     actually run, the pre-hook model-visible note (empty unless permitted),
      *     the denial kind]
      */
-    private function gate(ToolCall $toolCall, HookContext $context, ?callable $onPermissionRequest): array
+    private function gate(ToolCall $toolCall, HookContext $context, ?callable $onPermissionRequest, ?Tool $tool = null): array
     {
+        // workflow-update P0-2: a schema-declaring sub-agent's StructuredOutput
+        // call IS its final answer — the structured twin of a closing text
+        // reply, which no hook or gate judges either. It touches nothing but
+        // the per-run object that holds the answer, so a permission question
+        // about it protects nothing, and in Default/Plan/DontAsk modes (where
+        // an unlisted tool asks or is refused) it would strand every
+        // non-interactive stage before it could report. Matched by INSTANCE,
+        // never by name: a user or MCP tool that happens to be called
+        // `StructuredOutput` is gated like any other tool.
+        if ($tool instanceof \SugarCraft\Code\Agents\StructuredOutputTool) {
+            return [$toolCall->arguments(), null, $context, '', null];
+        }
+
         $hookResult = $this->hookManager->preToolUse($context);
 
         // WHICH OF THE THREE THIS IS HAS TO BE DECIDED HERE, BEFORE settleAsk()
@@ -4197,7 +4210,7 @@ final class Runtime
             );
         }
 
-        [$args, $denial, $context, $preContext, $denialKind] = $this->gate($toolCall, $context, $onPermissionRequest);
+        [$args, $denial, $context, $preContext, $denialKind] = $this->gate($toolCall, $context, $onPermissionRequest, $tool);
         if ($denial !== null) {
             return new ToolResult(
                 toolCallId: $toolCall->id(),

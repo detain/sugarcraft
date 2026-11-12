@@ -1835,11 +1835,19 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
      * reports it with the run's partial output and the resume id (4.7-1) —
      * resuming it is the hand-off.
      *
+     * `$stopRequested` is {@see runTurn()}'s step-boundary stop, exposed for
+     * a caller that knows the run is DONE before the model says so:
+     * {@see \SugarCraft\Code\Agents\EngineExecutor} ends a schema-declaring
+     * run the moment its StructuredOutput call is accepted (workflow-update
+     * P0-2), instead of paying for one more provider call to hear "done".
+     * Null (every other caller) keeps the turn exactly as before.
+     *
      * @param list<TypedMessage> $messages
+     * @param ?\Closure(): bool $stopRequested
      *
      * @throws TurnInterrupted
      */
-    public function completeTranscript(array $messages, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onHeartbeat = null, ?callable $onToken = null, ?callable $onStep = null): TranscriptTurn
+    public function completeTranscript(array $messages, ?callable $onEvent = null, ?callable $onReasoning = null, ?callable $onHeartbeat = null, ?callable $onToken = null, ?callable $onStep = null, ?\Closure $stopRequested = null): TranscriptTurn
     {
         $transcript = $messages;
         // C-PRV-4.a: same per-turn rebind as complete()'s entry (a resumed
@@ -1849,7 +1857,7 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
 
         try {
             // P-D1: a delegated run's mailbox, when TaskTool bound one.
-            $reply = $engine->runTurn($messages, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript, $onStep, inbox: $this->turnInbox);
+            $reply = $engine->runTurn($messages, $onToken, $onEvent, $onReasoning, $onHeartbeat, $transcript, $onStep, $stopRequested, inbox: $this->turnInbox);
         } catch (\Throwable $failure) {
             throw new TurnInterrupted($transcript, $failure);
         }

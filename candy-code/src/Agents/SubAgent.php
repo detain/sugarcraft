@@ -178,6 +178,12 @@ final class SubAgent
         public readonly ?string $model = null,
         public readonly int $stallTimeout = 0,
         public readonly int $stallRestarts = 0,
+        // P1-6 (wf-impl): the reasoning effort THIS run asks for — a workflow
+        // stage's `effort:` (or its preset's). {@see EngineExecutor} sends it
+        // as the request's reasoning effort, the way an active skill's
+        // `effort` rides App::$reasoningEffort. Null leaves the request's
+        // effort untouched, so every existing construction is byte-identical.
+        public readonly ?Effort $effort = null,
     ) {
         $this->isolation = $isolation ?? $agent->isolation ?? Isolation::None;
         $this->status = self::STATUS_PENDING;
@@ -285,6 +291,7 @@ final class SubAgent
             'model' => $this->model,
             'stall_timeout' => $this->stallTimeout,
             'stall_restarts' => $this->stallRestarts,
+            'effort' => $this->effort?->value,
         ];
     }
 }

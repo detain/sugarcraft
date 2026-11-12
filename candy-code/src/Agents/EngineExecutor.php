@@ -250,19 +250,22 @@ final class EngineExecutor implements ExecutorInterface
             );
         }
 
-        // G3: a stage that declares outputSchema needs its terminal answer
-        // CONSTRAINED — the headless `-p --json-schema` gate mirrored: an
-        // unsupported provider refuses the run rather than degrading to a
-        // free-text report dressed up as a schema verdict, because the whole
-        // point of the schema is a machine-readable result for drivers.
-        if ($agent->outputSchema !== null && !$this->engine->provider()->supportsJsonSchema()) {
+        // G3 / P0-2: a stage that declares outputSchema answers through the
+        // StructuredOutput tool call (see below), so its provider must be able
+        // to make tool calls at all. One that cannot is refused before a
+        // billable call, rather than degrading to a free-text report dressed
+        // up as a schema verdict — the whole point of the schema is a
+        // machine-readable result for drivers. Native JSON-schema support is
+        // no longer the requirement: the tool path does not use it.
+        if ($agent->outputSchema !== null && !$this->engine->provider()->supportsFunctionCalling()) {
             return self::failed(
                 $agent,
                 $startedAt,
                 sprintf(
-                    'agent "%s" declares an outputSchema, but its provider (%s) cannot constrain the answer to a schema, so the run was not started',
+                    'agent "%s" declares an outputSchema, but its provider (%s) cannot make tool calls, so it cannot constrain the answer to a schema (the answer is enforced through the %s tool call); the run was not started',
                     $agent->agent->name,
                     $this->engine->provider()->name(),
+                    StructuredOutputTool::NAME,
                 ),
             );
         }
@@ -303,6 +306,17 @@ final class EngineExecutor implements ExecutorInterface
             $request->tools ?? $this->engine->tools(),
             static fn (Tool $tool): bool => !$tool instanceof DelegatesToEngine,
         ));
+
+        // P0-2: the run's own answer channel, minted per run (it holds the
+        // accepted answer). A same-named tool from the request is dropped so
+        // the model sees exactly one StructuredOutput — ours.
+        $structured = $agent->outputSchema !== null ? new StructuredOutputTool($agent->outputSchema) : null;
+        if ($structured !== null) {
+            $tools = array_values(array_filter(
+                $tools,
+                static fn (Tool $tool): bool => $tool->name() !== StructuredOutputTool::NAME,
+            ));
+        }
         $maxTurns = max(1, $agent->agent->maxTurns ?? self::defaultMaxTurns());
 
         $guard = ParentProcessGuard::capture('workflow that dispatched it');
@@ -333,6 +347,10 @@ final class EngineExecutor implements ExecutorInterface
         // tool steps, so drivers must know the schema may not have pinned the
         // reply. Bound by reference into the event sink below.
         $sawTool = false;
+        // Notes that would ride the tail of a prose report; a schema run's
+        // output must stay a bare JSON document, so there they go to the
+        // live activity stream instead.
+        $runNotes = [];
         $onProgress = static function () use ($guard, $checkDeadline, $heartbeat): void {
             $guard();
             $checkDeadline();
@@ -346,7 +364,9 @@ final class EngineExecutor implements ExecutorInterface
             if ($heartbeat !== null) {
                 $heartbeat();
             }
-            if ($event instanceof ToolFinished) {
+            // The StructuredOutput answer writes nothing, so it is not the
+            // tool round M-11's requestedWrite reports.
+            if ($event instanceof ToolFinished && $event->toolName !== StructuredOutputTool::NAME) {
                 $sawTool = true;
             }
             if ($onToolStarted !== null && $event instanceof ToolStarted) {
@@ -354,7 +374,7 @@ final class EngineExecutor implements ExecutorInterface
             }
         };
 
-        $messages = self::messages($agent, $request);
+        $messages = self::messages($agent, $request, $structured !== null);
 
         // G2 (wf-g2g3): an `isolation: worktree` stage runs in its OWN git
         // worktree, through the same WorktreeIsolation machinery a delegated
@@ -404,6 +424,23 @@ final class EngineExecutor implements ExecutorInterface
             $agent->runModel = $engine->model();
         }
 
+        // P1-6: the stage's reasoning effort rides the request the way an
+        // active skill's `effort` does (Runtime stamps it onto App::$reasoningEffort
+        // through the backend) — sent as declared. Only some providers read
+        // the field; on one that does not, the run still runs and says so in
+        // a bracketed note (the output tail, or the live stream for a schema
+        // run) instead of pretending. Null: never touched.
+        if ($agent->effort !== null) {
+            $engine = $engine->withReasoningEffort($agent->effort->value);
+            if (!$engine->honoursReasoningEffort()) {
+                $runNotes[] = sprintf(
+                    '[effort: %s sent, but provider "%s" ignores reasoning effort]',
+                    $agent->effort->value,
+                    $engine->provider()->name(),
+                );
+            }
+        }
+
         // G2: re-jail the engine's tool set onto the stage's worktree —
         // withWorktreeRoot maps every current tool through its own worktree
         // jail (path jail + Bash escape deny) exactly as TaskTool's chain
@@ -412,13 +449,17 @@ final class EngineExecutor implements ExecutorInterface
             $engine = $engine->withWorktreeRoot($worktree['path']);
         }
 
-        // G3: the decoded document rides the SAME leg as the headless
-        // `--json-schema` flag — EngineBackend stamps it onto requests and
-        // Runtime's terminal-turn gate (jsonSchemaFor) lets it apply only once
-        // no tool round is outstanding. Untouched (never called) when absent,
-        // so a legacy stage's wire shape is byte-identical.
-        if ($agent->outputSchema !== null) {
-            $engine = $engine->withJsonSchema($agent->outputSchema);
+        // P0-2: the schema is enforced through the StructuredOutput call, not
+        // the provider's JSON mode. withJsonSchema() is deliberately NOT
+        // applied here any more: Runtime::jsonSchemaFor() stamps it on a
+        // self-finishing request, and a constrained reply cannot carry tool
+        // calls — so on the opening request it would forbid the very call the
+        // run must end with (and every read before it). Headless `-p
+        // --json-schema` keeps that leg; this is the sub-agent path only.
+        // Appended AFTER the worktree re-jail so the instance Runtime::gate()
+        // recognises is the one the run carries.
+        if ($structured !== null) {
+            $engine = $engine->withTools([...$engine->tools(), $structured]);
         }
 
         $engine = $engine->withSubAgentGrant(new SubAgentGrantHook(
@@ -437,6 +478,8 @@ final class EngineExecutor implements ExecutorInterface
         $blankUsages = [];
         /** @var list<Message> $attemptMessages */
         $attemptMessages = $messages;
+        $schemaNudged = false;
+        $stopRequested = $structured === null ? null : static fn (): bool => $structured->accepted();
 
         while (true) {
             try {
@@ -454,6 +497,7 @@ final class EngineExecutor implements ExecutorInterface
                         onReasoning: $onProgress,
                         onHeartbeat: $heartbeat,
                         onToken: $onToken,
+                        stopRequested: $stopRequested,
                     ),
                 );
             } catch (TurnInterrupted $failure) {
@@ -484,6 +528,53 @@ final class EngineExecutor implements ExecutorInterface
             }
 
             $output = trim($turn->reply->content);
+
+            // P0-2: a schema run ends on its accepted StructuredOutput call;
+            // a reply that is itself exactly a valid document is accepted
+            // too. Anything else gets ONE re-prompt inside the remaining step
+            // budget, then fails — never prose passed off as the answer. The
+            // re-prompt stands in for blank-return resume on this path: a
+            // blank reply is just another reply without the call.
+            if ($structured !== null) {
+                $answer = $structured->answer() ?? $structured->answerFromText($output);
+                if ($answer !== null) {
+                    $output = $answer;
+
+                    break;
+                }
+
+                if ($schemaNudged) {
+                    [$treeNote,] = WorktreeIsolation::leave($manager, $worktree, $agent->agent->name);
+
+                    return self::failed(
+                        $agent,
+                        $startedAt,
+                        sprintf(
+                            'agent "%s" declares an outputSchema but ended without an accepted %s call, even after being told to make one, so it produced no structured result%s',
+                            $agent->agent->name,
+                            StructuredOutputTool::NAME,
+                            $output === '' ? '' : sprintf(' (its last reply began: "%s")', self::excerpt($output)),
+                        ) . $treeNote,
+                        Usage::sum([...$blankUsages, $turn->reply->usage]),
+                    );
+                }
+
+                $schemaNudged = true;
+                $blankUsages[] = $turn->reply->usage;
+                $stepsUsed = 0;
+                foreach (\array_slice($turn->transcript, \count($attemptMessages)) as $row) {
+                    if ($row instanceof AssistantMessage) {
+                        $stepsUsed++;
+                    }
+                }
+                // The SAME budget, not a fresh one: what the first attempt
+                // left. At least one step, so a run that spent its whole
+                // budget can still deliver the answer it has.
+                $engine = $engine->withMaxSteps(max(1, $maxTurns - $stepsUsed));
+                $attemptMessages = [...$turn->transcript, new UserMessage(StructuredOutputTool::NUDGE)];
+
+                continue;
+            }
 
             if (!BlankReturnResume::isBlank($output)) {
                 $blankResume->nonBlank();
@@ -519,19 +610,22 @@ final class EngineExecutor implements ExecutorInterface
         // failure text when the run reported nothing).
         [$treeNote,] = WorktreeIsolation::leave($manager, $worktree, $agent->agent->name);
 
-        $output .= $treeNote;
+        // A report that rode on resumes says so, in the bracketed tail
+        // discipline; zero resumes, zero bytes.
+        $tail = $treeNote . $blankResume->resumedNote()
+            . ($runNotes === [] ? '' : "\n\n" . implode("\n", $runNotes));
 
-        // A report that rode on resumes says so, in the same bracketed tail
-        // discipline as the schema disclosure below; zero resumes, zero bytes.
-        $output .= $blankResume->resumedNote();
-
-        // G3 honesty mirror of headless json_schema_unapplied: the stage
-        // channel has no stderr for the driver, so the disclosure rides the
-        // tail of the very text the driver reads — a schema-declared stage
-        // whose model ran tools may not have its reply constrained, and a
-        // consumer that JSON-parses it must learn that before it fails to.
-        if ($agent->outputSchema !== null && $sawTool) {
-            $output .= "\n\n[the reply was not constrained to the output schema because the model ran tools before answering]";
+        // P0-2: a schema run's output IS the validated JSON document, byte for
+        // byte what {{name.output}} readers parse — so its notes (a kept
+        // worktree, an ignored effort) go to the live activity stream rather
+        // than corrupting the document. The old "[the reply was not
+        // constrained…]" disclosure is gone: the answer is now enforced.
+        if ($structured !== null) {
+            if ($tail !== '' && $onToken !== null) {
+                $onToken(trim($tail) . "\n");
+            }
+        } else {
+            $output .= $tail;
         }
 
         // Banked blank attempts bill alongside the reporting one; with no
@@ -584,10 +678,15 @@ final class EngineExecutor implements ExecutorInterface
      *
      * @return list<Message>
      */
-    private static function messages(SubAgent $agent, CompleteRequest $request): array
+    private static function messages(SubAgent $agent, CompleteRequest $request, bool $structuredOutput = false): array
     {
         $messages = [];
         $systemPrompt = trim((string) $request->systemPrompt);
+        // P0-2: the run is told how it ends; appended so the stage's own
+        // system prompt stays first and verbatim.
+        if ($structuredOutput) {
+            $systemPrompt = ltrim($systemPrompt . "\n\n" . StructuredOutputTool::INSTRUCTION);
+        }
         if ($systemPrompt !== '') {
             $messages[] = new SystemMessage($systemPrompt);
         }
@@ -615,6 +714,14 @@ final class EngineExecutor implements ExecutorInterface
         }
 
         return $messages;
+    }
+
+    /** The head of a reply, one line, for a failure message. */
+    private static function excerpt(string $text): string
+    {
+        $line = trim((string) preg_replace('/\s+/', ' ', $text));
+
+        return mb_strlen($line) > self::TOOL_LINE_MAX ? mb_substr($line, 0, self::TOOL_LINE_MAX - 1) . '…' : $line;
     }
 
     /**
