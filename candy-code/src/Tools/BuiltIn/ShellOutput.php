@@ -240,6 +240,12 @@ final class ShellOutput implements Tool, AcceptsShellOwner, BuildsFromCatalog, T
         if ($interactive) {
             $notes[] = sprintf('interactive pty %dx%d, display text ANSI-stripped', (int) ($row['cols'] ?? 0), (int) ($row['rows'] ?? 0));
         }
+        // The wall is the one thing a running shell's reader cannot otherwise
+        // see coming: a `lifetime_seconds` figure the caller chose, or the
+        // default, counted down from the spawn.
+        if ($row !== null && ($row['state'] ?? null) === 'running' && isset($row['lifetimeRemainingSeconds'])) {
+            $notes[] = sprintf('killed with its group in %d s if still running (lifetime wall)', (int) $row['lifetimeRemainingSeconds']);
+        }
 
         // The human-hand sentence (C-TOOL-6.k): a delta once this window has
         // read the shell at least once, the honest total before that — a

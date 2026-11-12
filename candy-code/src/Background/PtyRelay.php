@@ -327,7 +327,7 @@ final class PtyRelay
 
         $written = (int) (@\filesize($paths['stdout']) ?: 0);
         $startedAt = \microtime(true);
-        $wallAt = $startedAt + BackgroundShellRegistry::MAX_LIFETIME_SECONDS;
+        $wallAt = $startedAt + BackgroundShellRegistry::clampLifetime(isset($argv[6]) ? (int) $argv[6] : null);
         $capped = false;
         $wallFired = false;
         $killSent = false;

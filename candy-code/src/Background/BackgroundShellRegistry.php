@@ -179,6 +179,37 @@ final class BackgroundShellRegistry
      */
     public const MAX_LIFETIME_SECONDS = 1800;
 
+    /** Shortest wall a caller may ask for with `lifetime_seconds`. */
+    public const MIN_LIFETIME_SECONDS = 60;
+
+    /** Longest wall a caller may ask for with `lifetime_seconds` (six hours). */
+    public const MAX_LIFETIME_CEILING_SECONDS = 21600;
+
+    /**
+     * The wall a shell gets: the caller's `lifetime_seconds` clamped to
+     * [{@see MIN_LIFETIME_SECONDS}, {@see MAX_LIFETIME_CEILING_SECONDS}], or
+     * {@see MAX_LIFETIME_SECONDS} when none was asked for.
+     */
+    public static function clampLifetime(?int $seconds): int
+    {
+        if ($seconds === null) {
+            return self::MAX_LIFETIME_SECONDS;
+        }
+
+        return \max(self::MIN_LIFETIME_SECONDS, \min(self::MAX_LIFETIME_CEILING_SECONDS, $seconds));
+    }
+
+    /**
+     * The wall a row was started with. A row that predates the field, or a
+     * forged one that omits it, gets the default wall it always had.
+     *
+     * @param array<string, mixed> $row
+     */
+    private static function lifetimeOf(array $row): int
+    {
+        return self::clampLifetime(\is_int($row['lifetimeSeconds'] ?? null) ? $row['lifetimeSeconds'] : null);
+    }
+
     /** Grace between the TERM and the KILL rung of the stop ladder, and the confirmation budget after it. */
     public const TERM_GRACE_SECONDS = 2.0;
 
@@ -329,8 +360,9 @@ final class BackgroundShellRegistry
      *
      * @return array{ok: bool, error?: string, shell?: array<string, mixed>}
      */
-    public function start(string $command, string $label, array $envOverrides = [], ?string $owner = null): array
+    public function start(string $command, string $label, array $envOverrides = [], ?string $owner = null, ?int $lifetimeSeconds = null): array
     {
+        $lifetime = self::clampLifetime($lifetimeSeconds);
         // The fork door, with adoption: a child that spawns through this
         // copy owns its own handles, and its parent's inherited duplicates
         // must already be gone before the new row joins the map.
@@ -374,7 +406,7 @@ final class BackgroundShellRegistry
         // of start(): its filemtime() checks leave entries in PHP's stat
         // cache, and a sink this launch is about to serve reads from must
         // never be among the files it stats.
-        $wrapped = self::buildWrapper($command);
+        $wrapped = self::buildWrapper($command, $lifetime);
         // Stdin sink: the null device of the KERNEL the spawn lands on, read
         // from the path separator, NOT from the family — a Windows-family
         // spawn executed by the injected-family tests runs on a POSIX runner
@@ -431,6 +463,7 @@ final class BackgroundShellRegistry
             'stderrPath' => $paths['stderr'],
             'exitPath' => $paths['exit'],
             'spawnedAt' => \microtime(true),
+            'lifetimeSeconds' => $lifetime,
             'exitCode' => null,
             'exitNote' => null,
             'stopped' => false,
@@ -483,8 +516,9 @@ final class BackgroundShellRegistry
      *
      * @param array<string, string> $envOverrides
      */
-    public function startInteractive(string $command, string $label, int $cols = self::INTERACTIVE_COLS, int $rows = self::INTERACTIVE_ROWS, array $envOverrides = [], ?string $owner = null): array
+    public function startInteractive(string $command, string $label, int $cols = self::INTERACTIVE_COLS, int $rows = self::INTERACTIVE_ROWS, array $envOverrides = [], ?string $owner = null, ?int $lifetimeSeconds = null): array
     {
+        $lifetime = self::clampLifetime($lifetimeSeconds);
         $this->dropForkInheritedHandles(true);
         if (count($this->rows) >= self::MAX_SHELLS) {
             return ['ok' => false, 'error' => sprintf(
@@ -531,7 +565,8 @@ final class BackgroundShellRegistry
             \PHP_BINARY,
             '-d', 'display_errors=stderr',
             '-r', $code,
-            '--', $this->directory, $id, (string) $cols, (string) $rows,
+            // argv[5] is the test-only output cap seam; '0' keeps the production cap.
+            '--', $this->directory, $id, (string) $cols, (string) $rows, '0', (string) $lifetime,
         ]);
         $env = ProcessContainment::scrubbedEnv($envOverrides);
         $descriptors = [
@@ -717,7 +752,7 @@ final class BackgroundShellRegistry
      * either way, and the launch-side lazy ladder and the shutdown hook still
      * apply regardless.
      */
-    private static function buildWrapper(string $command): string
+    private static function buildWrapper(string $command, int $lifetime = self::MAX_LIFETIME_SECONDS): string
     {
         // Derived from the exit-file path already in the env (all these files
         // live at <id>.exit / <id>.out / <id>.outd in one directory —
@@ -772,8 +807,8 @@ final class BackgroundShellRegistry
         // a settled shell is never SIGKILLed on its way to stamping the exit
         // file (a bare `kill $s` would fall through to the group rung).
         return 'SHELL_INNER=' . $inner
-            . '; if command -v timeout >/dev/null 2>&1; then exec timeout -s KILL ' . self::MAX_LIFETIME_SECONDS . ' bash -c "$SHELL_INNER"'
-            . '; else ( trap \'kill $s 2>/dev/null; exit 0\' TERM; sleep ' . self::MAX_LIFETIME_SECONDS
+            . '; if command -v timeout >/dev/null 2>&1; then exec timeout -s KILL ' . $lifetime . ' bash -c "$SHELL_INNER"'
+            . '; else ( trap \'kill $s 2>/dev/null; exit 0\' TERM; sleep ' . $lifetime
             . ' & s=$!; wait $s; kill -KILL -$$ || kill -KILL $$ ) & ' . self::WATCHDOG_PID_ENV . '=$!; export '
             . self::WATCHDOG_PID_ENV . '; exec bash -c "$SHELL_INNER"; fi';
     }
@@ -959,6 +994,7 @@ final class BackgroundShellRegistry
             ? self::outputLimitNote()
             : null;
         $row['ageSeconds'] = \max(0.0, \microtime(true) - (float) $row['spawnedAt']);
+        $row['lifetimeRemainingSeconds'] = (int) \max(0.0, self::lifetimeOf($row) - $row['ageSeconds']);
         $this->rows[$shellId] = $row;
 
         return $row;
@@ -1501,7 +1537,7 @@ final class BackgroundShellRegistry
         if ($this->observe($id, $row)['state'] !== 'running') {
             return $row;
         }
-        if (\microtime(true) - (float) $row['spawnedAt'] <= self::MAX_LIFETIME_SECONDS) {
+        if (\microtime(true) - (float) $row['spawnedAt'] <= self::lifetimeOf($row)) {
             return $row;
         }
         $this->runKillLadder($id, (int) $row['pid']);
@@ -1719,6 +1755,7 @@ final class BackgroundShellRegistry
             'stderrPath' => $paths['stderr'],
             'exitPath' => $paths['exit'],
             'spawnedAt' => (float) $row['spawnedAt'],
+            'lifetimeSeconds' => self::lifetimeOf($row),
             'exitCode' => $exitCode,
             'stopped' => ($row['stopped'] ?? false) === true,
             'expired' => ($row['expired'] ?? false) === true,
