@@ -18,9 +18,9 @@ use SugarCraft\Code\Tools\ToolResult;
 /**
  * The roster of deferred MCP tools (MCP-7), the first half of the dispatcher pair.
  *
- * When a server's advertised schemas cost more than the lazy floor
- * (`mcp.lazySchemaTokens`, see {@see McpToolShape}), its tools are NOT
- * declared as `mcp__server__tool` bridges — they would pay their schema
+ * When the advertised schemas cost more than the lazy floor
+ * (`mcp.lazySchemaTokens`, see {@see McpToolShape}), the deferred tools are
+ * NOT declared as `mcp__server__tool` bridges — they would pay their schema
  * tokens on every request step. This tool is how the model discovers what it
  * is missing: the dispatched roster WITH each entry's JSON Schema, so the
  * cost is paid once, on demand, only for servers a turn actually reaches
@@ -172,7 +172,7 @@ final readonly class McpListTool implements Tool, BuildsFromCatalog, TakesToolCa
 
         if ($lines === []) {
             $content = $filter === null || $filter === ''
-                ? 'No deferred MCP tools: every configured server is below the schema-token floor or marked eager.'
+                ? 'No deferred MCP tools: every configured tool fits under the schema-token floor, or sits on a server marked eager.'
                 : sprintf('No deferred MCP tools on server "%s" (it may be eager, or not exist).', $filter);
         } else {
             $content = implode("\n", $lines);

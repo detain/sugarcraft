@@ -16,14 +16,29 @@ use SugarCraft\McpClient\McpRouter as LibraryMcpRouter;
 /**
  * The frozen split of one launch's MCP tool roster into bridged and dispatched halves.
  *
- * MCP-7: a server whose advertised schemas cost more than the lazy floor
+ * MCP-7: a launch whose advertised schemas cost more than the lazy floor
  * would otherwise spend its schema tokens on EVERY request step whether or
- * not the model uses it. Such a server (unless its config entry opts into
- * `eager`) gets no `mcp__server__tool` bridge; its tools are reached instead
- * through the two stable dispatcher tools — `mcp_list` to read the roster and
- * `mcp_call` to run one of its entries. Everything below the floor keeps the
- * first-class bridge, so a typical small `.mcp.json` is untouched: same wire
+ * not the model uses it. Deferred tools get no `mcp__server__tool` bridge;
+ * they are reached instead through the two stable dispatcher tools —
+ * `mcp_list` to read the roster (with each schema, on demand) and `mcp_call`
+ * to run one of them. Everything else keeps the first-class bridge, same wire
  * names, same descriptions, byte-identical schema payloads.
+ *
+ * The deferral is per TOOL, not per server (#18). The rule, in full:
+ *
+ * 1. A server whose config entry sets `eager` keeps every tool first-class,
+ *    and its schema cost is fixed: it counts toward the total but is never
+ *    deferred. If that fixed cost alone reaches the floor, no candidate can
+ *    bring the total under it, so every candidate is deferred.
+ * 2. Every other tool is a candidate. If the total schema cost of all tools
+ *    is under the floor (or the floor is 0), nothing is deferred.
+ * 3. Otherwise candidates are deferred largest schema first, one at a time,
+ *    until the eager total (fixed cost plus the candidates still eager) is
+ *    under the floor. Largest-first defers the fewest tools that can bring
+ *    the total under the floor. Ties keep declaration order.
+ *
+ * So a small server is never touched by a large neighbour unless it has to be,
+ * and a single oversized tool is deferred alone while its siblings stay eager.
  *
  * The shape is derived ONCE per client memo key (Bootstrap caches it) and the
  * dispatched roster it carries never re-derives mid-session — adoption of
@@ -44,14 +59,14 @@ final class McpToolShape
     /**
      * @param list<McpTool> $eagerDescriptors descriptors that keep first-class bridges
      * @param list<McpTool> $dispatchedDescriptors descriptors reachable only through mcp_call
-     * @param list<string> $demotedServers servers whose schemas crossed the lazy floor — n24: the names the launch row carries
+     * @param list<string> $deferredTools the deferred tools as `server/tool`, for the launch row
      */
     private function __construct(
         public readonly McpClient $client,
         public readonly bool $lazy,
         public readonly array $eagerDescriptors,
         public readonly array $dispatchedDescriptors,
-        public readonly array $demotedServers = [],
+        public readonly array $deferredTools = [],
     ) {}
 
     /**
@@ -62,28 +77,22 @@ final class McpToolShape
      */
     public static function derive(McpClient $client, iterable $descriptors, array $entries, int $floorTokens): self
     {
-        // Sum each server's schema cost in the exact shape the wire carries
+        // Sum each tool's schema cost in the exact shape the wire carries
         // (TokenEstimate::ofToolSchema is the same estimator ofToolSchemas
         // applies to built-ins), and record the read-only hints for EVERY
         // descriptor as we go — a dispatched tool must consult the same
         // readOnlyHint table the gate already consults for bridged ones, or
         // the dispatcher would silently degrade hint-driven Auto allows.
-        $perServer = [];
-        $order = [];
-        $byServer = [];
+        $all = [];
+        $costs = [];
         foreach ($descriptors as $descriptor) {
             $server = $descriptor->serverName;
-            if (!isset($byServer[$server])) {
-                $byServer[$server] = [];
-                $perServer[$server] = 0;
-                $order[] = $server;
-            }
-            $byServer[$server][] = $descriptor;
-            $perServer[$server] += TokenEstimate::ofToolSchema(
+            $costs[] = TokenEstimate::ofToolSchema(
                 McpToolBridge::wireNameFor($server, $descriptor->name),
                 $descriptor->description,
                 $descriptor->inputSchema,
             );
+            $all[] = $descriptor;
             // The bridge constructor records the hint for the eager half when
             // bridges() builds them; the dispatched half never constructs one,
             // so its verdict is recorded here through the same funnel, under
@@ -95,45 +104,68 @@ final class McpToolShape
             );
         }
 
-        $eager = [];
-        $dispatched = [];
-        $demoted = [];
-        foreach ($order as $server) {
-            $entry = $entries[$server] ?? null;
-            $forcesBridge = is_array($entry) && self::entryIsEager($entry);
-            $underBudget = $floorTokens <= 0 || $perServer[$server] < $floorTokens;
-            if (!$forcesBridge && !$underBudget) {
-                $demoted[] = $server;
-            }
-            foreach ($byServer[$server] as $descriptor) {
-                if ($forcesBridge || $underBudget) {
-                    $eager[] = $descriptor;
-                } else {
-                    $dispatched[] = $descriptor;
-                }
+        // Rule 1: eager servers are fixed; everything else is a candidate.
+        $fixed = 0;
+        $candidates = [];
+        foreach ($all as $index => $descriptor) {
+            $entry = $entries[$descriptor->serverName] ?? null;
+            if (is_array($entry) && self::entryIsEager($entry)) {
+                $fixed += $costs[$index];
+            } else {
+                $candidates[] = $index;
             }
         }
 
-        return new self($client, $dispatched !== [], $eager, $dispatched, $demoted);
+        // Rules 2 and 3: defer the largest candidates until the eager total is
+        // under the floor. The total is compared in the same direction the old
+        // per-server check used (under the floor means eager).
+        $deferred = [];
+        $eagerTotal = $fixed + array_sum(array_map(static fn (int $i): int => $costs[$i], $candidates));
+        if ($floorTokens > 0 && $eagerTotal >= $floorTokens) {
+            $bySize = $candidates;
+            usort($bySize, static fn (int $a, int $b): int => [$costs[$b], $a] <=> [$costs[$a], $b]);
+            foreach ($bySize as $index) {
+                if ($eagerTotal < $floorTokens) {
+                    break;
+                }
+                $deferred[$index] = true;
+                $eagerTotal -= $costs[$index];
+            }
+        }
+
+        $eager = [];
+        $dispatched = [];
+        $deferredTools = [];
+        foreach ($all as $index => $descriptor) {
+            if (isset($deferred[$index])) {
+                $dispatched[] = $descriptor;
+                $deferredTools[] = $descriptor->serverName . '/' . $descriptor->name;
+            } else {
+                $eager[] = $descriptor;
+            }
+        }
+
+        return new self($client, $dispatched !== [], $eager, $dispatched, $deferredTools);
     }
 
     /**
-     * n24: the one row that tells the operator which servers crossed the lazy
-     * schema floor this launch — the split was silent before, so a missing
+     * n24: the one row that tells the operator which tools the lazy schema
+     * floor deferred this launch — the split was silent before, so a missing
      * `mcp__server__tool` bridge read as a broken server rather than a budget
-     * decision. Empty string when nothing was deferred (the silent negative
-     * half); the launch drain names the count, the servers, and the key that
-     * raises or disables the floor, mirroring McpClient's sandbox opt-out row.
+     * decision. Names the deferred tools, not whole servers, so an operator
+     * can see exactly which schema is the expensive one. Empty string when
+     * nothing was deferred; the launch drain names the count and the key that
+     * raises or disables the floor.
      */
     public function lazyDemotionNotice(): string
     {
-        if ($this->demotedServers === []) {
+        if ($this->deferredTools === []) {
             return '';
         }
 
         return Lang::t('mcp.lazy_schema_demoted', [
-            'count' => (string) count($this->demotedServers),
-            'servers' => implode(', ', $this->demotedServers),
+            'count' => (string) count($this->deferredTools),
+            'servers' => implode(', ', $this->deferredTools),
         ]);
     }
 
@@ -180,7 +212,7 @@ final class McpToolShape
             }
         }
 
-        return new self($client, $this->lazy, $this->eagerDescriptors, $dispatched, $this->demotedServers);
+        return new self($client, $this->lazy, $this->eagerDescriptors, $dispatched, $this->deferredTools);
     }
 
     /**

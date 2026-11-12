@@ -269,14 +269,12 @@ final class McpToolShapeTest extends TestCase
     }
     // ---- n24: the demotion row the launch drain carries ---------------------
 
-    public function testTheDemotionNoticeNamesTheDeferredServerAndCarriesThePointer(): void
+    public function testTheDemotionNoticeNamesTheDeferredToolAndCarriesThePointer(): void
     {
         $big = $this->shapeServer();
-        $eager = $this->shapeServer();
         $small = $this->shapeServer();
 
         $fat = $this->descriptor($big, 'heavy', 2000);
-        $loud = $this->descriptor($eager, 'loud', 2000);
         $light = $this->descriptor($small, 'ping');
         $priceBig = TokenEstimate::ofToolSchema(
             McpToolBridge::wireNameFor($big, $fat->name),
@@ -291,17 +289,16 @@ final class McpToolShapeTest extends TestCase
 
         $shape = McpToolShape::derive(
             new McpClient('/nonexistent/n24-shape/.mcp.json'),
-            [$fat, $light, $loud],
-            [$eager => ['eager' => true]],
+            [$fat, $light],
+            [],
             (int) (($priceBig + $priceSmall) >> 1),
         );
 
         $notice = $shape->lazyDemotionNotice();
-        $this->assertNotSame('', $notice, 'the fat server crossed the floor: the launch must say so');
-        $this->assertMatchesRegularExpression('/1 MCP server\(s\)/', $notice, 'the count is the demoted half, not the config total');
-        $this->assertStringContainsString($big, $notice, 'the deferred server is named');
-        $this->assertStringNotContainsString($small, $notice, 'the bridged neighbour is not blamed for it');
-        $this->assertStringNotContainsString($eager, $notice, 'an eager opt-in was never demoted, so it must not appear');
+        $this->assertNotSame('', $notice, 'the fat tool crossed the floor: the launch must say so');
+        $this->assertStringContainsString('1 MCP', $notice, 'the count is the deferred tools, not the config total');
+        $this->assertStringContainsString($big . '/heavy', $notice, 'the deferred tool is named');
+        $this->assertStringNotContainsString($small, $notice, 'the small neighbour was never deferred, so it is not named');
         $this->assertStringContainsString('mcp.lazySchemaTokens', $notice, 'the row points at the key that raises or disables the floor');
         $this->assertStringContainsString('mcp_list', $notice, 'and at where the deferred tools actually live now');
     }

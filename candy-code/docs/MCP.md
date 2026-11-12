@@ -352,20 +352,18 @@ server's `initialize` and start-time `tools/list` each wait the same fixed
 `StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS` budget, and nothing in the
 entry or the operator tier changes it.
 
-Launch holds are additive and each is bounded — this is the accepted shape of the rule,
-not an oversight: `McpClient::startServers()` walks the entries
-serially, so a cold `npx` server costs its `startTimeout` before the next
-entry is tried, and several slow entries can hold the first frame for that
-many bounds stacked. An `http` entry pays the same walk with its handshake cut
-by the client's fixed 30 s bound; a `claude-mcp` entry by the fixed start
-budget named above. What the port deliberately does NOT have is a concurrent
-spawn, a wall-clock deadline on the launch as a whole, or a first-frame grace
-notice: the sum of per-entry bounds is already finite, a notice about slow
-synchronous startup would need exactly the asynchronous startup it softens,
-and a blanket launch budget would cut off the user's own slow-but-legitimate
-server for everyone's benefit. Tune the wait per entry with `startTimeout`, or
-park the entry with `enabled: false` — a decision honoured: named in the
-launch report, never launched.
+Startup is concurrent. `McpClient::beginStartup()` launches every server's
+handshake before waiting on any of them, and each stdio handshake runs as a
+Fiber that suspends on the library's wait beat, so no server holds up another
+or the first frame. `McpClient::tick()` advances whichever handshakes have
+bytes ready, and `startupStates()` reports each server as `starting`,
+`ready`, `failed` or `auth-required`. A server still `starting` contributes no
+tools yet, and a turn does not wait for it. The synchronous
+`McpClient::startServers()` is `beginStartup()` followed by a blocking pump, so
+callers that need the finished set keep getting it. Each server's
+`startTimeout` still bounds its own handshake, and those bounds now overlap
+rather than stack. Park an entry with `enabled: false` to skip it; the launch
+report names it.
 
 A server that answers `initialize` with a JSON-RPC `error` has refused the
 session, so `start()` treats it as a start failure: the child is stopped and
@@ -705,12 +703,15 @@ Caveats, stated because a browser server makes every rule above load-bearing:
 ```
 
 - **The schemas are heavy, and may defer.** A browser server advertises a
-  long roster of richly-described tools; when one server's advertised schema
-  total reaches `mcp.lazySchemaTokens` (user-tier setting, default 8000, `0`
-  never defers), its tools stop arriving as first-class names and ride
-  `mcp_list` and `mcp_call` instead — the Deferred schemas section below
-  carries the rules, including which permission and hook spellings still
-  apply to the deferred calls.
+  long roster of richly-described tools. When the advertised schemas across
+  all servers reach `mcp.lazySchemaTokens` (user-tier setting, default 8000,
+  `0` never defers), the largest tools stop arriving as first-class names and
+  ride `mcp_list` and `mcp_call` instead. Deferral is per tool, not per server:
+  a server's small tools stay first-class, and only enough of the largest
+  tools are deferred to bring the total under the floor. A server marked
+  `eager` keeps all its tools first-class, and its cost counts toward the
+  total. The Deferred schemas section below carries the rules, including which
+  permission and hook spellings still apply to the deferred calls.
 - **Already configured in Claude?** Nothing above has to be retyped: the
   import route under "Foreign spellings that are read" translates a Claude
   config — `candy-code mcp import claude <file>` — but note the verb only
@@ -1076,8 +1077,9 @@ names, same schemas, same order. And the pair itself is only built when at
 least one tool was actually deferred; a launch with nothing to defer never
 meets `mcp_list` at all.
 
-**The decision is per server, not per config.** A fat server pays its own
-floor; a small one is not taxed for a noisy neighbour.
+**The decision is per tool.** The largest schemas are deferred first, one at a
+time, until the eager total is under the floor, so a small tool is not taxed
+for a large neighbour. A `eager` server's tools are never deferred.
 
 **The roster is frozen at launch, like everything else MCP.** The split is
 computed once, on the first MCP tool build of the session, and memoised —
