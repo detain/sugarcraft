@@ -339,11 +339,11 @@ final class WorkflowYamlKeyRosterTest extends TestCase
             ],
             'an unknown sub-map key' => [
                 $body("    from:\n      glob: x\n      root: /tmp\n"),
-                'has unknown key "root"; supported keys: glob, chunk, max',
+                'has unknown key "root"; supported keys: glob, stage, context, pointer, key, chunk, max',
             ],
             'a missing glob' => [
                 $body("    from:\n      chunk: 2\n"),
-                'needs a "glob" to expand against the environment root',
+                'needs exactly one source: a "glob" to expand against the environment root',
             ],
             'a blank glob' => [
                 $body("    from:\n      glob: '   '\n"),
@@ -723,8 +723,9 @@ final class WorkflowYamlKeyRosterTest extends TestCase
         $this->assertSame(4, $workflow->stages[1]['loop']['max']);
     }
 
-    public function testLoopOnAParallelStageRefusesAtLoad(): void
+    public function testLoopOnAParallelStageLoads(): void
     {
+        // P1-5: loop: is no longer stage-only — parallel stages repeat too.
         $yaml = "name: r\n"
             . "description: d\n"
             . "stages:\n"
@@ -742,16 +743,12 @@ final class WorkflowYamlKeyRosterTest extends TestCase
             . "        stage: a\n"
             . "        contains: GO\n";
 
-        try {
-            $this->registry()->fromYamlString($yaml);
-            $this->fail('v1 refuses a loop riding a parallel stage');
-        } catch (WorkflowLoadException $error) {
-            $this->assertStringContainsString('stage-only in v1', $error->getMessage());
-            $this->assertStringContainsString('"parallel"', $error->getMessage());
-        }
+        $workflow = $this->registry()->fromYamlString($yaml);
+
+        $this->assertSame(2, $workflow->stages[1]['loop']['max']);
     }
 
-    public function testLoopOnAVerificationStageRefusesAtLoad(): void
+    public function testLoopOnAVerificationStageLoads(): void
     {
         $yaml = "name: r\n"
             . "description: d\n"
@@ -773,12 +770,31 @@ final class WorkflowYamlKeyRosterTest extends TestCase
             . "        stage: a\n"
             . "        contains: GO\n";
 
+        $workflow = $this->registry()->fromYamlString($yaml);
+
+        $this->assertSame(2, $workflow->stages[1]['loop']['max']);
+    }
+
+    public function testLoopOnAPipelineStageRefusesAtLoad(): void
+    {
+        $yaml = "name: r\n"
+            . "stages:\n"
+            . "  - name: b\n"
+            . "    type: pipeline\n"
+            . "    stages:\n"
+            . "      - agent: coder\n"
+            . "        prompt: q\n"
+            . "    loop:\n"
+            . "      max: 2\n"
+            . "      until:\n"
+            . "        stage: b\n"
+            . "        contains: GO\n";
+
         try {
             $this->registry()->fromYamlString($yaml);
-            $this->fail('v1 refuses a loop riding a verification stage');
+            $this->fail('a pipeline stage does not loop');
         } catch (WorkflowLoadException $error) {
-            $this->assertStringContainsString('stage-only in v1', $error->getMessage());
-            $this->assertStringContainsString('"verification"', $error->getMessage());
+            $this->assertStringContainsString('"loop" cannot attach to a "pipeline" stage', $error->getMessage());
         }
     }
 
@@ -931,7 +947,7 @@ final class WorkflowYamlKeyRosterTest extends TestCase
             $this->registry()->fromYamlString($yaml);
             $this->fail('loop: is a map, never a bare count');
         } catch (WorkflowLoadException $error) {
-            $this->assertStringContainsString('must be a map carrying exactly max and until', $error->getMessage());
+            $this->assertStringContainsString('must be a map carrying max and until', $error->getMessage());
         }
     }
 

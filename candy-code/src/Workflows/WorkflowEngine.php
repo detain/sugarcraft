@@ -158,6 +158,27 @@ final class WorkflowEngine implements WorkflowEngineInterface
      */
     public const TYPED_RESULTS_CONTEXT_KEY = '@typedResults';
 
+    /**
+     * P1-1: the context entry a `from:` fan-out hands each item's
+     * interpolation — `{item: mixed, index: int}` — read ONLY by the item
+     * pass of {@see interpolateContext()} (`{{item}}`, `{{item.<pointer>}}`,
+     * `{{index}}`). `@`-prefixed, so no run context can shadow or forge it
+     * ({@see refuseReservedContextKeys()}), and it only ever lives on a
+     * per-item COPY of the context, never on the running one, so it never
+     * reaches a pause record.
+     */
+    public const FAN_OUT_ITEM_CONTEXT_KEY = '@fanOutItem';
+
+    /**
+     * P1-5: the plain context keys a `loop:` injects per round —
+     * `{{round}}` (1-based), `{{previous}}` (the prior round's stage output,
+     * from round 2), and with `accumulate:` `{{seen}}` (JSON list of every
+     * dedup key seen so far) and `{{fresh}}` (JSON list of the items the
+     * previous round added). They shadow same-named run-context keys only
+     * while the loop runs.
+     */
+    private const LOOP_TOKENS = ['round', 'previous', 'seen', 'fresh'];
+
     /** Scan outcome of {@see scanVerdict()}: the pattern matched — reject. */
     private const VERDICT_REJECTED = 'rejected';
     /** Scan outcome: no match — the verdict stands. */
@@ -2162,9 +2183,38 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // their body bytes and behavior are the pre-C4 ones.
                 $loop = is_array($stage['loop'] ?? null) ? $stage['loop'] : null;
                 $round = 1;
+                // P1-5: a looped stage's per-round tokens ({{previous}},
+                // {{seen}}, {{fresh}}, like {{round}}) shadow same-named
+                // context keys only while the loop runs; the author's values
+                // come back afterwards. `accumulate:` keeps its deduped set
+                // here, in memory — a resume re-runs the whole loop.
+                $loopName = (string) ($stage['name'] ?? 'unknown');
+                $accumulate = is_array($loop['accumulate'] ?? null) ? $loop['accumulate'] : null;
+                $accumulator = ['items' => [], 'keys' => [], 'index' => [], 'fresh' => [], 'dry' => 0];
+                $shadowed = [];
+                if ($loop !== null) {
+                    foreach (self::LOOP_TOKENS as $token) {
+                        if (array_key_exists($token, $context)) {
+                            $shadowed[$token] = $context[$token];
+                        }
+                    }
+                    if ($accumulate !== null) {
+                        $context[StageCondition::LOOP_DRY_ROUNDS_CONTEXT_KEY] = 0;
+                    }
+                }
                 do {
                     if ($loop !== null) {
                         $context['round'] = $round;
+                        // Round 1 has no previous round: the token keeps
+                        // whatever the context had (usually nothing, so it
+                        // stays verbatim).
+                        if ($round > 1) {
+                            $context['previous'] = $context[$loopName . '.output'] ?? '';
+                        }
+                        if ($accumulate !== null) {
+                            $context['seen'] = self::compactJson($accumulator['keys']);
+                            $context['fresh'] = self::compactJson($accumulator['fresh']);
+                        }
                     }
 
                     // C6: one StageStarted per dispatched ROUND, raised before
@@ -2213,6 +2263,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
                         $this->releaseStageResources($heldLocks);
                     }
 
+                    // P1-5: fold this round's items into the accumulated set
+                    // before anything reads the round — a round whose rows
+                    // cannot be folded fails like any other failed round.
+                    if ($accumulate !== null) {
+                        $stageResult = self::accumulateRound($stage, $stageType, $stageResult, $dispatched, $accumulate, $accumulator);
+                        $context[StageCondition::LOOP_DRY_ROUNDS_CONTEXT_KEY] = $accumulator['dry'];
+                    }
+
                     // This stage's output and its agents' results, for downstream
                     // interpolation — written here, once the stage has settled, so
                     // a live pause's snapshot never holds half a stage.
@@ -2252,7 +2310,39 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     && !StageCondition::evaluate($loop['until'], $context));
 
                 if ($loop !== null) {
-                    unset($context['round']);
+                    foreach (self::LOOP_TOKENS as $token) {
+                        unset($context[$token]);
+                    }
+                    $context = $shadowed + $context;
+                    unset($context[StageCondition::LOOP_DRY_ROUNDS_CONTEXT_KEY]);
+
+                    // P1-5: an accumulating loop's recorded result IS the
+                    // accumulated set — the stage output, the typed row
+                    // under the stage name (so `{{find.items/0/id}}`, pointer
+                    // conditions and `from: {stage: find, pointer: /items}`
+                    // all read it) and the row the pause file keeps.
+                    if ($accumulate !== null && !$stageResult->isFailure()) {
+                        $document = self::compactJson([
+                            'items' => $accumulator['items'],
+                            'keys' => $accumulator['keys'],
+                            'rounds' => $round - 1,
+                        ]);
+                        $stageResult = new StageResult(
+                            stageName: $stageResult->stageName,
+                            status: $stageResult->status,
+                            output: $document,
+                            error: $stageResult->error,
+                            agents: $stageResult->agents,
+                            startedAt: $stageResult->startedAt,
+                            completedAt: $stageResult->completedAt,
+                        );
+                        $context[$stageResult->stageName . '.output'] = ($stage['capture'] ?? false) === true
+                            ? $this->captureStageOutput($interruptId, $stageIndex, $stageResult)
+                            : $document;
+                        $typedRows = is_array($context[self::TYPED_RESULTS_CONTEXT_KEY] ?? null) ? $context[self::TYPED_RESULTS_CONTEXT_KEY] : [];
+                        $typedRows[$stageResult->stageName] = $document;
+                        $context[self::TYPED_RESULTS_CONTEXT_KEY] = $typedRows;
+                    }
                 }
 
                 $stageResults[] = $stageResult;
@@ -3064,15 +3154,18 @@ final class WorkflowEngine implements WorkflowEngineInterface
     /**
      * C13 substrate: the stable identity of what a stage WAS ASKED to run —
      * its pre-interpolation prompt templates plus each task's model ask and
-     * schema identity, hashed sha256 over a canonical array. A later
-     * resume-side result cache can compare a recorded stage against a new
-     * run's declarations with zero re-dispatch; THIS engine only records
-     * the hash — no caching, no opt-in, no behavior change beyond one extra
-     * key on the pause record.
+     * schema identity, hashed sha256 over a canonical array. Every
+     * successful settle records it on the pause record
+     * (`stageInputHashes`), and the opt-in `cache: true` door
+     * ({@see cachedStageResult()}) compares it on resume: a recorded
+     * success whose hash still matches the stage's declaration is carried
+     * without re-dispatch. Stages without `cache: true` only record it.
      *
      * The recipe is the point: consumers pin its shape, so it lives here,
-     * once, and widening it (tools, agent type, …) is a deliberate
-     * single-site decision for the cache wave, not an accident of this one.
+     * once, and widening it (tools, agent type, `from:`/`loop:` specs, …)
+     * is a deliberate single-site decision, not an accident — it does not
+     * cover them today, so `cache: true` on such a stage is the author's
+     * stability assertion about its inputs.
      *
      * @param array<string, mixed> $stage
      */
@@ -3995,17 +4088,23 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         // C8: a "from:" parallel stage swaps its single template task for a
-        // runtime fan-out, expanded ONCE here at stage entry against the
-        // workflow's environment root. The pause record keeps the MATERIALIZED
-        // list — a resume replays that recorded list and never re-globs,
-        // because files that changed mid-run must fail the resume loudly
-        // rather than silently fork different work from what was paused.
+        // runtime fan-out, expanded ONCE here at stage entry — a glob against
+        // the workflow's environment root (C8), or a list read from a prior
+        // stage's typed row or the run context (P1-1). The pause record keeps
+        // the MATERIALIZED list — a resume replays that recorded list and
+        // never re-derives it, because files or rows that changed mid-run
+        // must fail the resume loudly rather than silently fork different
+        // work from what was paused.
         $dynamic = isset($stage['from']);
         $chunk = null;
         // P0-3: the `[from: kept N of M …]` record an explicit `max:` leaves
         // on the stage output — a header line above it and the dropped list
         // below it; both empty when nothing was truncated.
         $fromNotice = ['', ''];
+        // P1-1: the item each fanned-out task interpolates as {{item}},
+        // parallel to $tasks (a glob item is its path).
+        $itemValues = [];
+        $isGlob = false;
         if ($dynamic) {
             $template = $tasks[0] ?? null;
             if (count($tasks) !== 1 || !$template instanceof WorkflowTask) {
@@ -4019,106 +4118,141 @@ final class WorkflowEngine implements WorkflowEngineInterface
             }
 
             $from = $stage['from'];
-            $recorded = $waveLedger[$stageName] ?? null;
-            if ($recorded === null) {
-                $paths = $this->expandFromGlob((string) $from['glob']);
-                $chunk = $from['chunk'];
-                $max = $from['max'] ?? null;
-                $matched = count($paths);
-                $dropped = [];
-                // P0-3: `max:` is the ONE sanctioned truncation — of the
-                // sorted expansion, so the kept prefix is deterministic — and
-                // it is recorded, never silent.
-                if (is_int($max) && $matched > $max) {
-                    $dropped = array_slice($paths, $max);
-                    $paths = array_slice($paths, 0, $max);
-                }
+            $isGlob = isset($from['glob']);
+            if ($isGlob) {
+                $recorded = $waveLedger[$stageName] ?? null;
+                if ($recorded === null) {
+                    $paths = $this->expandFromGlob((string) $from['glob']);
+                    $chunk = $from['chunk'];
+                    $max = $from['max'] ?? null;
+                    $matched = count($paths);
+                    $dropped = [];
+                    // P0-3: `max:` is the ONE sanctioned truncation — of the
+                    // sorted expansion, so the kept prefix is deterministic — and
+                    // it is recorded, never silent.
+                    if (is_int($max) && $matched > $max) {
+                        $dropped = array_slice($paths, $max);
+                        $paths = array_slice($paths, 0, $max);
+                    }
 
-                // Judged BEFORE the ledger records anything: a resume of a
-                // refused wave must re-glob the author's narrowed pattern,
-                // not replay the list that was too wide.
-                $ceilingRefusal = self::fanOutCeilingRefusal($stageName, count($paths), (string) $from['glob'], $stageStartedAt);
-                if ($ceilingRefusal !== null) {
-                    return $ceilingRefusal;
-                }
+                    // Judged BEFORE the ledger records anything: a resume of a
+                    // refused wave must re-glob the author's narrowed pattern,
+                    // not replay the list that was too wide.
+                    $ceilingRefusal = self::fanOutCeilingRefusal($stageName, count($paths), (string) $from['glob'], $stageStartedAt);
+                    if ($ceilingRefusal !== null) {
+                        return $ceilingRefusal;
+                    }
 
-                if ($waveLedger !== null) {
-                    $waveLedger[$stageName] = ['paths' => $paths, 'chunk' => $chunk]
-                        + (is_int($max) ? ['max' => $max, 'matched' => $matched, 'dropped' => $dropped] : []);
-                }
-                $fromNotice = self::fromTruncationNotice(count($paths), $matched, $max, $dropped);
-            } else {
-                $replayable = false;
-                if (is_array($recorded)) {
-                    $replayable = isset($recorded['paths'])
-                        && is_array($recorded['paths']) && array_is_list($recorded['paths'])
-                        && (!array_key_exists('chunk', $recorded)
-                            || $recorded['chunk'] === null || is_int($recorded['chunk']))
-                        // P0-3: a truncation record is optional, but when
-                        // present it is a whole one — or the replay refuses.
-                        && (!array_key_exists('max', $recorded)
-                            || (is_int($recorded['max'])
-                                && is_int($recorded['matched'] ?? null)
-                                && is_array($recorded['dropped'] ?? null)
-                                && array_is_list($recorded['dropped'])
-                                && array_filter($recorded['dropped'], static fn (mixed $d): bool => !is_string($d)) === []));
-                    if ($replayable) {
-                        foreach ($recorded['paths'] as $candidate) {
-                            if (!is_string($candidate) || $candidate === '') {
-                                $replayable = false;
-                                break;
+                    if ($waveLedger !== null) {
+                        $waveLedger[$stageName] = ['paths' => $paths, 'chunk' => $chunk]
+                            + (is_int($max) ? ['max' => $max, 'matched' => $matched, 'dropped' => $dropped] : []);
+                    }
+                    $fromNotice = self::fromTruncationNotice(count($paths), $matched, $max, $dropped);
+                } else {
+                    $replayable = false;
+                    if (is_array($recorded)) {
+                        $replayable = isset($recorded['paths'])
+                            && is_array($recorded['paths']) && array_is_list($recorded['paths'])
+                            && (!array_key_exists('chunk', $recorded)
+                                || $recorded['chunk'] === null || is_int($recorded['chunk']))
+                            // P0-3: a truncation record is optional, but when
+                            // present it is a whole one — or the replay refuses.
+                            && (!array_key_exists('max', $recorded)
+                                || (is_int($recorded['max'])
+                                    && is_int($recorded['matched'] ?? null)
+                                    && is_array($recorded['dropped'] ?? null)
+                                    && array_is_list($recorded['dropped'])
+                                    && array_filter($recorded['dropped'], static fn (mixed $d): bool => !is_string($d)) === []));
+                        if ($replayable) {
+                            foreach ($recorded['paths'] as $candidate) {
+                                if (!is_string($candidate) || $candidate === '') {
+                                    $replayable = false;
+                                    break;
+                                }
                             }
                         }
                     }
+
+                    if (!$replayable) {
+                        return new StageResult(
+                            stageName: $stageName,
+                            status: WorkflowStatus::Failed,
+                            error: "Stage '{$stageName}' resumed with a dynamic-wave record it cannot replay — refusing to re-glob over files that may have changed",
+                            startedAt: $stageStartedAt,
+                            completedAt: new \DateTimeImmutable(),
+                        );
+                    }
+
+                    $paths = $recorded['paths'];
+                    $chunk = $recorded['chunk'] ?? $from['chunk'];
+
+                    $ceilingRefusal = self::fanOutCeilingRefusal($stageName, count($paths), (string) $from['glob'], $stageStartedAt);
+                    if ($ceilingRefusal !== null) {
+                        return $ceilingRefusal;
+                    }
+                    if (array_key_exists('max', $recorded)) {
+                        $fromNotice = self::fromTruncationNotice(count($paths), $recorded['matched'], $recorded['max'], $recorded['dropped']);
+                    }
                 }
 
-                if (!$replayable) {
+                if ($paths === []) {
                     return new StageResult(
                         stageName: $stageName,
                         status: WorkflowStatus::Failed,
-                        error: "Stage '{$stageName}' resumed with a dynamic-wave record it cannot replay — refusing to re-glob over files that may have changed",
+                        error: "Stage '{$stageName}' expanded no files from \"{$from['glob']}\"",
                         startedAt: $stageStartedAt,
                         completedAt: new \DateTimeImmutable(),
                     );
                 }
 
-                $paths = $recorded['paths'];
-                $chunk = $recorded['chunk'] ?? $from['chunk'];
-
-                $ceilingRefusal = self::fanOutCeilingRefusal($stageName, count($paths), (string) $from['glob'], $stageStartedAt);
-                if ($ceilingRefusal !== null) {
-                    return $ceilingRefusal;
+                $itemValues = $paths;
+                $names = $paths;
+            } else {
+                $expansion = $this->expandFromData($stageName, $from, $context, $waveLedger, $stageStartedAt);
+                if ($expansion instanceof StageResult) {
+                    return $expansion;
                 }
-                if (array_key_exists('max', $recorded)) {
-                    $fromNotice = self::fromTruncationNotice(count($paths), $recorded['matched'], $recorded['max'], $recorded['dropped']);
+                ['items' => $itemValues, 'names' => $names, 'chunk' => $chunk, 'notice' => $fromNotice] = $expansion;
+
+                // P1-1: an empty data list is "nothing to do", not a typo the
+                // way an empty glob is — the stage completes with no agents
+                // and an empty output, so a find → verify chain whose finder
+                // found nothing flows on.
+                if ($itemValues === []) {
+                    if (is_array($stage['minSuccess'] ?? null)) {
+                        $failedNames = [];
+                    }
+
+                    return new StageResult(
+                        stageName: $stageName,
+                        status: WorkflowStatus::Completed,
+                        output: $fromNotice[0] . $fromNotice[1],
+                        startedAt: $stageStartedAt,
+                        completedAt: new \DateTimeImmutable(),
+                    );
                 }
             }
 
-            if ($paths === []) {
-                return new StageResult(
-                    stageName: $stageName,
-                    status: WorkflowStatus::Failed,
-                    error: "Stage '{$stageName}' expanded no files from \"{$from['glob']}\"",
-                    startedAt: $stageStartedAt,
-                    completedAt: new \DateTimeImmutable(),
-                );
-            }
-
-            $tasks = array_map(static fn (string $rel): WorkflowTask => new WorkflowTask(
+            // Every template field rides each item's task — the fan-out
+            // used to drop stallTimeout, restarts and input on the floor.
+            $tasks = array_map(static fn (?string $name): WorkflowTask => new WorkflowTask(
                 agentType: $template->agentType,
                 prompt: $template->prompt,
                 tools: $template->tools,
                 timeout: $template->timeout,
                 retries: $template->retries,
                 isolation: $template->isolation,
-                name: $rel,
+                name: $name,
                 outputSchema: $template->outputSchema,
                 model: $template->model,
                 reject: $template->reject,
                 rejectMinOccurrences: $template->rejectMinOccurrences,
                 resource: $template->resource,
                 lockWaitSeconds: $template->lockWaitSeconds,
-            ), $paths);
+                stallTimeout: $template->stallTimeout,
+                restarts: $template->restarts,
+                input: $template->input,
+            ), $names);
         }
 
         // Every task's declaration is checked before this method builds
@@ -4147,9 +4281,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // static spelling keeps the workflow context exactly as it was. Note
         // the array-plus direction: a context that already defines 'path'
         // wins, so an author-set path variable shadows the item's own path.
-        $firstContext = $dynamic && $firstTask->name !== null
-            ? $context + ['path' => $firstTask->name]
-            : $context;
+        $firstContext = $dynamic ? self::fanOutItemContext($context, $isGlob, $firstTask->name, $itemValues, 0) : $context;
         $firstInterpolated = $this->interpolateContext($firstTask->prompt, self::resolveStageInput($firstContext, $firstTask->input));
 
         $firstAgent = new Agent(
@@ -4199,11 +4331,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $unreachedGrant = $this->resolveRequestTools($task->tools);
             unset($unreachedGrant);
 
-            // C8: on a "from:" fan-out, {{path}} names the item; static
-            // stages keep the workflow context exactly as it was. Left-wins
-            // array-plus: a context 'path' variable shadows the item path.
-            $itemContext = $dynamic && $task->name !== null
-                ? $context + ['path' => $task->name]
+            // C8: on a glob fan-out, {{path}} names the item; P1-1: every
+            // fan-out item also carries {{item}}/{{index}}. Static stages
+            // keep the workflow context exactly as it was.
+            $itemContext = $dynamic
+                ? self::fanOutItemContext($context, $isGlob, $task->name, $itemValues, $agentIndex - 1)
                 : $context;
 
             $interpolatedPrompt = $this->interpolateContext($task->prompt, self::resolveStageInput($itemContext, $task->input));
@@ -4380,12 +4512,352 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
+     * P1-5: fold one settled round of a `loop.accumulate` stage into the
+     * accumulator, returning the round's result (or a FAILED copy of it when
+     * its rows cannot be folded).
+     *
+     * Contributing rows: every completed, schema'd agent of the round — all
+     * of a parallel stage's (their arrays are unioned in declaration order),
+     * a `tasks:` stage's, and only the TASK of a verification stage (the
+     * verifier's verdict is not the work). Each must decode to JSON whose
+     * `pointer` is an array; anything else fails the round loudly, as does a
+     * round with no contributing row at all. A failed round folds nothing
+     * and leaves the dry count where it was.
+     *
+     * Dedup is against everything SEEN (the reference's convergence rule):
+     * an item's identity is its `key` leaf (string, number or bool) or, with
+     * no `key`, the item itself (a scalar's text, else its compact JSON). A
+     * round that adds no unseen identity increments the dry count; one that
+     * adds anything resets it to 0.
+     *
+     * @param array<array-key, mixed> $stage
+     * @param list<array{key: string, result: AgentResult, schema: bool}> $records
+     * @param array{pointer: string, key?: string} $accumulate
+     * @param array{items: list<mixed>, keys: list<string>, index: array<string, true>, fresh: list<mixed>, dry: int} $accumulator
+     */
+    private static function accumulateRound(array $stage, string $stageType, StageResult $round, array $records, array $accumulate, array &$accumulator): StageResult
+    {
+        if (!$round->isSuccess()) {
+            return $round;
+        }
+
+        $stageName = $round->stageName;
+        $fail = static fn (string $error): StageResult => new StageResult(
+            stageName: $stageName,
+            status: WorkflowStatus::Failed,
+            output: $round->output,
+            error: $error,
+            agents: $round->agents,
+            startedAt: $round->startedAt,
+            completedAt: $round->completedAt,
+        );
+
+        $taskKey = null;
+        if ($stageType === 'verification' && ($stage['task'] ?? null) instanceof WorkflowTask) {
+            $taskKey = self::resultKey($stage['task']->name, $stageName);
+        }
+
+        $pointer = $accumulate['pointer'];
+        $keyPointer = $accumulate['key'] ?? null;
+        $roundItems = [];
+        $contributors = 0;
+        foreach ($records as $record) {
+            if (!$record['schema'] || $record['result']->status !== AgentStatus::Completed) {
+                continue;
+            }
+            if ($taskKey !== null && $record['key'] !== $taskKey) {
+                continue;
+            }
+            $contributors++;
+            $hit = JsonPointer::resolveJson($record['result']->output ?? '', $pointer);
+            if (!$hit['found'] || !is_array($hit['value']) || !array_is_list($hit['value'])) {
+                return $fail(
+                    "loop.accumulate: agent '{$record['key']}' of stage '{$stageName}' answered "
+                    . ($hit['found'] ? self::jsonKind($hit['value']) : 'nothing')
+                    . " at \"{$pointer}\", not an array"
+                );
+            }
+            foreach ($hit['value'] as $item) {
+                $roundItems[] = [$record['key'], $item];
+            }
+        }
+        if ($contributors === 0) {
+            return $fail(
+                "loop.accumulate: stage '{$stageName}' settled a round with no schema'd agent result to read \"{$pointer}\" from; "
+                . 'give its agents an outputSchema'
+            );
+        }
+
+        $fresh = [];
+        foreach ($roundItems as $position => [$agent, $item]) {
+            if ($keyPointer !== null) {
+                $leaf = JsonPointer::resolve($item, $keyPointer);
+                $identity = $leaf['found'] ? self::scalarKey($leaf['value']) : null;
+                if ($identity === null) {
+                    return $fail(
+                        "loop.accumulate: an item from agent '{$agent}' of stage '{$stageName}' has no string, number or bool key at \"{$keyPointer}\""
+                    );
+                }
+            } else {
+                $identity = self::scalarKey($item) ?? self::compactJson($item);
+            }
+            if (isset($accumulator['index'][$identity])) {
+                continue;
+            }
+            $accumulator['index'][$identity] = true;
+            $accumulator['keys'][] = $identity;
+            $accumulator['items'][] = $item;
+            $fresh[] = $item;
+        }
+
+        $accumulator['fresh'] = $fresh;
+        $accumulator['dry'] = $fresh === [] ? $accumulator['dry'] + 1 : 0;
+
+        return $round;
+    }
+
+    /** Compact JSON (unescaped slashes and unicode, zero fractions kept) — the engine's one spelling of a JSON value in a prompt or a row. */
+    private static function compactJson(mixed $value): string
+    {
+        $json = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+
+        return is_string($json) ? $json : 'null';
+    }
+
+    /**
+     * C8 + P1-1: one fan-out item's interpolation context. A glob item keeps
+     * C8's `{{path}}` with its left-wins array-plus (a context `path`
+     * variable shadows the item path, as it always has); every item —
+     * glob or data — carries {@see FAN_OUT_ITEM_CONTEXT_KEY} for `{{item}}`,
+     * `{{item.<pointer>}}` and `{{index}}`, which no context key can shadow.
+     *
+     * @param array<array-key, mixed> $context
+     * @param list<mixed> $itemValues
+     * @return array<array-key, mixed>
+     */
+    private static function fanOutItemContext(array $context, bool $isGlob, ?string $taskName, array $itemValues, int $index): array
+    {
+        if ($isGlob && $taskName !== null) {
+            $context += ['path' => $taskName];
+        }
+        if (array_key_exists($index, $itemValues)) {
+            $context[self::FAN_OUT_ITEM_CONTEXT_KEY] = ['item' => $itemValues[$index], 'index' => $index];
+        }
+
+        return $context;
+    }
+
+    /**
+     * P1-1: materialise a DATA fan-out (`from: {stage, pointer}` or
+     * `from: {context}`) — or replay the list a pause recorded for it.
+     *
+     * Fresh: the source must resolve to a JSON array (a list) — anything else
+     * fails the stage loudly, naming what it found. With `key:` each item's
+     * key leaf (a string, number or bool) dedups the list (first occurrence
+     * wins, order kept) and names its task `<stage>_<key>`, sanitised to the
+     * `[a-zA-Z_][a-zA-Z0-9_]*` result-name grammar (a collision after
+     * sanitising takes `_2`, `_3`, …); an item without a scalar key leaf
+     * fails the stage. Without `key:` items are neither deduped nor named
+     * (their results fall back to `<stage>_<n>`). `max:` keeps the first N
+     * (source order) and records the rest; the 4096 ceiling refuses. The
+     * materialised list is written to $waveLedger BEFORE dispatch, exactly as
+     * a glob expansion is, so a resume replays it and never re-reads the
+     * source.
+     *
+     * @param array<string, mixed> $from
+     * @param array<array-key, mixed> $context
+     * @param ?array<array-key, mixed> $waveLedger
+     * @return StageResult|array{items: list<mixed>, names: list<?string>, chunk: ?int, notice: array{0: string, 1: string}}
+     */
+    private function expandFromData(string $stageName, array $from, array $context, ?array &$waveLedger, \DateTimeImmutable $startedAt): StageResult|array
+    {
+        $fail = static fn (string $error): StageResult => new StageResult(
+            stageName: $stageName,
+            status: WorkflowStatus::Failed,
+            error: $error,
+            startedAt: $startedAt,
+            completedAt: new \DateTimeImmutable(),
+        );
+        $sourceLabel = isset($from['stage'])
+            ? "stage '{$from['stage']}' at \"{$from['pointer']}\""
+            : "context '{$from['context']}'";
+
+        $recorded = $waveLedger[$stageName] ?? null;
+        if ($recorded !== null) {
+            $replayable = is_array($recorded)
+                && is_array($recorded['items'] ?? null) && array_is_list($recorded['items'])
+                && is_array($recorded['names'] ?? null) && array_is_list($recorded['names'])
+                && count($recorded['names']) === count($recorded['items'])
+                && array_filter($recorded['names'], static fn (mixed $n): bool => $n !== null && (!is_string($n) || $n === '')) === []
+                && (!array_key_exists('chunk', $recorded) || $recorded['chunk'] === null || is_int($recorded['chunk']))
+                && (!array_key_exists('max', $recorded)
+                    || (is_int($recorded['max'])
+                        && is_int($recorded['matched'] ?? null)
+                        && is_array($recorded['dropped'] ?? null)
+                        && array_is_list($recorded['dropped'])
+                        && array_filter($recorded['dropped'], static fn (mixed $d): bool => !is_string($d)) === []));
+            if (!$replayable) {
+                return $fail("Stage '{$stageName}' resumed with a dynamic-wave record it cannot replay — refusing to re-read {$sourceLabel}, which may have changed");
+            }
+            $ceiling = self::fanOutCeilingRefusal($stageName, count($recorded['items']), $sourceLabel, $startedAt, 'items');
+            if ($ceiling !== null) {
+                return $ceiling;
+            }
+
+            return [
+                'items' => $recorded['items'],
+                'names' => $recorded['names'],
+                'chunk' => $recorded['chunk'] ?? $from['chunk'] ?? null,
+                'notice' => array_key_exists('max', $recorded)
+                    ? self::fromTruncationNotice(count($recorded['items']), $recorded['matched'], $recorded['max'], $recorded['dropped'])
+                    : ['', ''],
+            ];
+        }
+
+        if (isset($from['stage'])) {
+            $typedRows = $context[self::TYPED_RESULTS_CONTEXT_KEY] ?? [];
+            $row = is_array($typedRows) ? ($typedRows[$from['stage']] ?? null) : null;
+            if (!is_string($row)) {
+                return $fail(
+                    "Stage '{$stageName}' fans out from stage '{$from['stage']}', which left no typed row to point into "
+                    . "(a typed row is written under the result name '{$from['stage']}' by a schema'd task of that name, "
+                    . 'or by a loop.accumulate stage)'
+                );
+            }
+            $hit = JsonPointer::resolveJson($row, (string) $from['pointer']);
+            $list = $hit['found'] ? $hit['value'] : null;
+            $what = $hit['found'] ? self::jsonKind($hit['value']) : 'nothing';
+        } else {
+            $present = array_key_exists($from['context'], $context);
+            $list = $present ? $context[$from['context']] : null;
+            $what = $present ? self::jsonKind($list) : 'nothing (the run was handed no such key)';
+        }
+        if (!is_array($list) || !array_is_list($list)) {
+            return $fail("Stage '{$stageName}' fans out from {$sourceLabel}, which is {$what}, not an array");
+        }
+
+        $items = [];
+        $names = [];
+        $labels = [];
+        $keyPointer = $from['key'] ?? null;
+        if (is_string($keyPointer)) {
+            $seen = [];
+            $taken = [];
+            foreach ($list as $position => $item) {
+                $leaf = JsonPointer::resolve($item, $keyPointer);
+                $key = $leaf['found'] ? self::scalarKey($leaf['value']) : null;
+                if ($key === null) {
+                    return $fail(
+                        "Stage '{$stageName}' fans out from {$sourceLabel}: item #" . ($position + 1)
+                        . " has no string, number or bool key at \"{$keyPointer}\""
+                    );
+                }
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $items[] = $item;
+                $names[] = self::itemTaskName($stageName, $key, $taken);
+                $labels[] = $key;
+            }
+        } else {
+            foreach ($list as $item) {
+                $items[] = $item;
+                $names[] = null;
+                $labels[] = self::itemLabel($item);
+            }
+        }
+
+        $chunk = $from['chunk'] ?? null;
+        $max = $from['max'] ?? null;
+        $matched = count($items);
+        $dropped = [];
+        if (is_int($max) && $matched > $max) {
+            $dropped = array_slice($labels, $max);
+            $items = array_slice($items, 0, $max);
+            $names = array_slice($names, 0, $max);
+        }
+
+        // Judged BEFORE the ledger records anything, like the glob leg.
+        $ceiling = self::fanOutCeilingRefusal($stageName, count($items), $sourceLabel, $startedAt, 'items');
+        if ($ceiling !== null) {
+            return $ceiling;
+        }
+
+        if ($waveLedger !== null) {
+            $waveLedger[$stageName] = ['items' => $items, 'names' => $names, 'chunk' => $chunk]
+                + (is_int($max) ? ['max' => $max, 'matched' => $matched, 'dropped' => $dropped] : []);
+        }
+
+        return [
+            'items' => $items,
+            'names' => $names,
+            'chunk' => $chunk,
+            'notice' => self::fromTruncationNotice(count($items), $matched, $max, $dropped),
+        ];
+    }
+
+    /** A JSON value's kind, for a refusal: "an object", "a string", "null", … */
+    private static function jsonKind(mixed $value): string
+    {
+        return match (true) {
+            is_array($value) => array_is_list($value) ? 'an array' : 'an object',
+            is_string($value) => 'a string',
+            is_bool($value) => 'a bool',
+            is_int($value), is_float($value) => 'a number',
+            $value === null => 'null',
+            default => get_debug_type($value),
+        };
+    }
+
+    /** A dedup key leaf as text: strings verbatim, numbers cast, bools true/false; null for anything else. */
+    private static function scalarKey(mixed $value): ?string
+    {
+        return match (true) {
+            is_string($value) => $value,
+            is_bool($value) => $value ? 'true' : 'false',
+            is_int($value), is_float($value) => (string) $value,
+            default => null,
+        };
+    }
+
+    /**
+     * P1-1: `<stage>_<key>` reduced to the `{{name.results}}` grammar —
+     * every other byte becomes `_`, a leading digit gains a `_` — with
+     * `_2`, `_3`, … appended when two keys sanitise to the same name.
+     *
+     * @param array<string, true> $taken in/out: names already handed out
+     */
+    private static function itemTaskName(string $stageName, string $key, array &$taken): string
+    {
+        $base = (string) preg_replace('/[^A-Za-z0-9_]/', '_', $stageName . '_' . $key);
+        if (preg_match('/^[A-Za-z_]/', $base) !== 1) {
+            $base = '_' . $base;
+        }
+        $name = $base;
+        for ($n = 2; isset($taken[$name]); $n++) {
+            $name = $base . '_' . $n;
+        }
+        $taken[$name] = true;
+
+        return $name;
+    }
+
+    /** A key-less item's `dropped:` label: compact JSON (strings verbatim), clipped to one line. */
+    private static function itemLabel(mixed $item): string
+    {
+        $text = str_replace(["\r", "\n"], ' ', self::itemText($item));
+
+        return strlen($text) > 120 ? substr($text, 0, 117) . '...' : $text;
+    }
+
+    /**
      * P0-3: the loud refusal for a fan-out wider than
      * {@see Workflow::FAN_OUT_CEILING}, or null when $count fits. Never a
      * truncation: cutting the list to fit would be a silent cap, and the
      * author's tool for a deliberate one is `from.max`.
      */
-    private static function fanOutCeilingRefusal(string $stageName, int $count, string $glob, \DateTimeImmutable $startedAt): ?StageResult
+    private static function fanOutCeilingRefusal(string $stageName, int $count, string $source, \DateTimeImmutable $startedAt, string $unit = 'files'): ?StageResult
     {
         if ($count <= Workflow::FAN_OUT_CEILING) {
             return null;
@@ -4394,13 +4866,21 @@ final class WorkflowEngine implements WorkflowEngineInterface
         return new StageResult(
             stageName: $stageName,
             status: WorkflowStatus::Failed,
-            error: sprintf(
-                'Stage \'%s\' expanded %d files from "%s"; the per-stage fan-out ceiling is %d — narrow the glob or set from.max',
-                $stageName,
-                $count,
-                $glob,
-                Workflow::FAN_OUT_CEILING,
-            ),
+            error: $unit === 'files'
+                ? sprintf(
+                    'Stage \'%s\' expanded %d files from "%s"; the per-stage fan-out ceiling is %d — narrow the glob or set from.max',
+                    $stageName,
+                    $count,
+                    $source,
+                    Workflow::FAN_OUT_CEILING,
+                )
+                : sprintf(
+                    'Stage \'%s\' expanded %d items from %s; the per-stage fan-out ceiling is %d — set from.max',
+                    $stageName,
+                    $count,
+                    $source,
+                    Workflow::FAN_OUT_CEILING,
+                ),
             startedAt: $startedAt,
             completedAt: new \DateTimeImmutable(),
         );
@@ -4921,6 +5401,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * Interpolate {{variable}}, {{name.results}}, {{name.<pointer>}}, and
      * {{stageName.output}} tokens in a string.
      *
+     * - `{{item}}`, `{{item.<pointer>}}` and `{{index}}` (P1-1) resolve first,
+     *   and only on a `from:` fan-out item, from
+     *   {@see FAN_OUT_ITEM_CONTEXT_KEY}: the item (a string verbatim, any
+     *   other value as compact JSON), an RFC 6901 leaf of it (same
+     *   {@see JsonPointer} rules; a string verbatim, a scalar in its
+     *   interpolated spelling, a container as compact JSON, a miss left
+     *   verbatim) and its 0-based position. They are spliced through
+     *   placeholders AFTER the other passes, so item data — which is usually
+     *   model output — is never itself re-scanned for tokens, and the item
+     *   wins over a context key or result named `item`/`index`.
      * - `{{name.results}}` is replaced with one agent's output, from the
      *   {@see RESULTS_CONTEXT_KEY} map ({@see resultKey()} names its entries).
      * - `{{name.<pointer>}}` addresses the agent's typed JSON row (the
@@ -4938,9 +5428,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * emitted `{{name.results}}` (which had its pass already) survives
      * verbatim.
      *
-     * An unresolved token is left as written. So is one whose value is not a
-     * string or a number: a `runFromPhp()` caller can put anything in the
-     * context, and an array reaching the replacement used to be a TypeError
+     * An unresolved token is left as written. A bare `{{variable}}` whose
+     * context value is an ARRAY (or a JSON-serializable object) renders as
+     * compact JSON (P1-1: `context` may carry real lists now, and a prompt
+     * that names one wants its contents, not the raw braces). Any other
+     * non-string, non-number value — a bool, null, a resource — is still
+     * left verbatim: a `runFromPhp()` caller can put anything in the
+     * context, and a value reaching the replacement used to be a TypeError
      * that failed the stage — after the agents before it had run.
      *
      * @param string $text    The text containing interpolation tokens.
@@ -4954,6 +5448,34 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $typedRows = $context[self::TYPED_RESULTS_CONTEXT_KEY] ?? [];
         $typedRows = is_array($typedRows) ? $typedRows : [];
+
+        // P1-1: lift the item tokens out before any other pass sees them.
+        $spliced = [];
+        $fanOut = $context[self::FAN_OUT_ITEM_CONTEXT_KEY] ?? null;
+        if (is_array($fanOut) && array_key_exists('item', $fanOut)) {
+            $nonce = "\x00" . bin2hex(random_bytes(6)) . ':';
+            $text = (string) preg_replace_callback(
+                '/\{\{(?:item(?:\.([A-Za-z0-9_~\/.\-]+))?|index)\}\}/',
+                static function (array $matches) use ($fanOut, $nonce, &$spliced): string {
+                    if ($matches[0] === '{{index}}') {
+                        $value = (string) (int) ($fanOut['index'] ?? 0);
+                    } elseif (($matches[1] ?? '') === '') {
+                        $value = self::itemText($fanOut['item']);
+                    } else {
+                        $hit = JsonPointer::resolve($fanOut['item'], $matches[1]);
+                        if (!$hit['found']) {
+                            return $matches[0];
+                        }
+                        $value = self::itemText($hit['value']);
+                    }
+                    $placeholder = $nonce . count($spliced) . "\x00";
+                    $spliced[$placeholder] = $value;
+
+                    return $placeholder;
+                },
+                $text,
+            );
+        }
 
         $text = preg_replace_callback(
             '/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\.results\}\}/',
@@ -4993,17 +5515,58 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $text
         );
 
-        return preg_replace_callback(
+        $text = preg_replace_callback(
             '/\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}/',
-            static fn (array $matches): string => self::interpolatable($context[$matches[1]] ?? null) ?? $matches[0],
+            static fn (array $matches): string => self::interpolatable($context[$matches[1]] ?? null)
+                ?? self::contextJson($context[$matches[1]] ?? null)
+                ?? $matches[0],
             $text
         );
+
+        return $spliced === [] ? $text : strtr($text, $spliced);
     }
 
     /** $value as interpolated text, or null when it is not text a prompt can carry. */
     private static function interpolatable(mixed $value): ?string
     {
         return is_string($value) || is_int($value) || is_float($value) ? (string) $value : null;
+    }
+
+    /**
+     * P1-1: an array (or JSON-serializable object) context value as compact
+     * JSON — the one spelling a list handed in as `context` takes in a
+     * prompt. Null for anything else, so the caller leaves the token as is.
+     */
+    private static function contextJson(mixed $value): ?string
+    {
+        if (!is_array($value) && !$value instanceof \JsonSerializable && !$value instanceof \stdClass) {
+            return null;
+        }
+        $json = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+
+        return is_string($json) ? $json : null;
+    }
+
+    /**
+     * P1-1: a fan-out item (or a leaf of one) as prompt text — a string
+     * verbatim, a bool as `true`/`false`, a number in its PHP string form
+     * (what `{{stage.<pointer>}}` splices), anything else (containers, JSON
+     * null) as compact JSON.
+     */
+    private static function itemText(mixed $value): string
+    {
+        if (is_string($value)) {
+            return $value;
+        }
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+        if (is_int($value) || is_float($value)) {
+            return (string) $value;
+        }
+        $json = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRESERVE_ZERO_FRACTION);
+
+        return is_string($json) ? $json : '';
     }
 
     /**
@@ -5074,47 +5637,26 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
-     * RFC 6901 JSON pointer lookup into a {@see TYPED_RESULTS_CONTEXT_KEY} row.
+     * RFC 6901 JSON pointer lookup into a {@see TYPED_RESULTS_CONTEXT_KEY} row,
+     * through the ONE resolver ({@see JsonPointer}) that `when:`/`until:`
+     * pointer leaves, `from: {stage, pointer}` and `loop.accumulate` share,
+     * so the four can never disagree about what a pointer addresses.
      *
-     * The pointer is split on `/` BEFORE unescaping, so `~1` protects an
-     * embedded slash as the spec requires; each reference token then
-     * unescapes `~1` to `/` first and `~0` to `~` second, in that order —
-     * reversed, `~01` would wrongly reach a key named `/`. A leading `/`
-     * is the from-root spelling and addresses the same document as the
-     * bare form. Dots carry no meaning here: `a.b` names ONE key with a
-     * dot in it, as the spec says. Returns null for any miss — a missing
-     * member, an interior object or array (only scalars interpolate), a
-     * null leaf, or a row that is not decodable JSON — so the caller
-     * leaves the `{{name.pointer}}` reference verbatim and the typo shows.
+     * Returns null for any miss — a missing member, an interior object or
+     * array (only scalars interpolate), a null leaf, or a row that is not
+     * decodable JSON — so the caller leaves the `{{name.pointer}}` reference
+     * verbatim and the typo shows.
      *
      * @return string|int|float|bool|null the interpolatable leaf, or null on miss
      */
     private static function jsonPointerValue(string $typedRow, string $pointer): string|int|float|bool|null
     {
-        $document = json_decode($typedRow, true);
-        if (!is_array($document)) {
+        if (!is_array(json_decode($typedRow, true))) {
             return null;
         }
+        $hit = JsonPointer::resolveJson($typedRow, $pointer);
 
-        $segments = explode('/', $pointer);
-        if (($segments[0] ?? '') === '') {
-            array_shift($segments);
-        }
-
-        $node = $document;
-        foreach ($segments as $segment) {
-            $name = str_replace(['~1', '~0'], ['/', '~'], $segment);
-            if (!is_array($node) || !array_key_exists($name, $node)) {
-                return null;
-            }
-            $node = $node[$name];
-        }
-
-        if (is_bool($node) || is_int($node) || is_float($node) || is_string($node)) {
-            return $node;
-        }
-
-        return null;
+        return $hit['found'] && is_scalar($hit['value']) ? $hit['value'] : null;
     }
 
     /**

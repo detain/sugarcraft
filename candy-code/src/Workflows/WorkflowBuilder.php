@@ -25,6 +25,15 @@ namespace SugarCraft\Code\Workflows;
  */
 final class WorkflowBuilder
 {
+    /** The stage shapes a `loop:` may repeat (P1-5; `type: map` joins later). */
+    public const LOOPABLE_TYPES = ['stage', 'parallel', 'verification'];
+
+    /** The closed `loop:` roster. */
+    public const LOOP_KEYS = ['max', 'until', 'accumulate'];
+
+    /** The closed `loop.accumulate` roster. */
+    public const ACCUMULATE_KEYS = ['pointer', 'key'];
+
     private string $name = '';
     private string $description = '';
     /** @var array<int, array{name: string, type: string, tasks?: array<int, mixed>}> */
@@ -118,13 +127,22 @@ final class WorkflowBuilder
      *   - AgentWorkerPool.php: executeAll() runs agents concurrently
      *
      * @param TaskBuilder[] $tasks
-     * @param array{glob: string, chunk?: int|null, max?: int|null}|array{} $from C8 dynamic-wave
-     *        spec, empty for the static list spelling. The engine expands the
-     *        glob at run time and replaces $tasks with one built task per
-     *        match; the template in $tasks[0] is what gets fanned out.
-     *        P0-3 `max` keeps the first N sorted matches and records the
-     *        rest as dropped in the stage output (1 to
-     *        {@see Workflow::FAN_OUT_CEILING}).
+     * @param array<string, mixed> $from C8/P1-1 fan-out spec, empty for the
+     *        static list spelling. Exactly ONE source:
+     *        - `glob` (C8): the engine expands it at run time against the
+     *          environment root, one task per sorted match (`{{path}}`);
+     *        - `stage` + `pointer` (P1-1): an RFC 6901 pointer into a PRIOR
+     *          stage's typed row that must resolve to a JSON array at run
+     *          time, one task per element;
+     *        - `context` (P1-1): a run-context key whose value must be a
+     *          list, one task per element.
+     *        Plus optional `chunk` (in-flight ceiling, >= 1), `max` (keep the
+     *        first N and record the rest as dropped, 1 to
+     *        {@see Workflow::FAN_OUT_CEILING}) and — data sources only —
+     *        `key` (a pointer into each item: dedups items by that leaf and
+     *        names each item's task `<stage>_<key>`). The template in
+     *        $tasks[0] is what gets fanned out; its prompt sees `{{item}}`,
+     *        `{{item.<pointer>}}` and `{{index}}`.
      *
      * @throws \InvalidArgumentException When $from is not that shape.
      */
@@ -153,13 +171,15 @@ final class WorkflowBuilder
 
     /**
      * The PHP spelling of a `from:` spec held to the YAML loader's shape law
-     * (builder parity): `glob` a non-empty string, `chunk` null or >= 1,
-     * `max` absent/null or 1..{@see Workflow::FAN_OUT_CEILING}, nothing else.
-     * `max` is stored only when set, so a max-less spec keeps the two-key
-     * shape the engine and the pause record have always carried.
+     * (builder parity): exactly one source (`glob` a non-empty string;
+     * `stage` + `pointer`; or `context`), `chunk` null or >= 1, `max`
+     * absent/null or 1..{@see Workflow::FAN_OUT_CEILING}, `key` only beside a
+     * data source, nothing else. `max` and `key` are stored only when set, so
+     * a glob spec without them keeps the two-key shape the engine and the
+     * pause record have always carried.
      *
      * @param array<array-key, mixed> $from
-     * @return array{glob: string, chunk: int|null, max?: int}
+     * @return array<string, mixed>
      */
     private static function normalizedFrom(string $stage, array $from): array
     {
@@ -169,25 +189,124 @@ final class WorkflowBuilder
             }
         }
 
-        $glob = $from['glob'] ?? null;
-        if (!is_string($glob) || trim($glob) === '') {
-            throw new \InvalidArgumentException("Stage '{$stage}' from needs a non-empty \"glob\"");
-        }
-
         $chunk = $from['chunk'] ?? null;
         if ($chunk !== null && (!is_int($chunk) || $chunk < 1)) {
             throw new \InvalidArgumentException("Stage '{$stage}' from \"chunk\" must be a whole number of at least 1");
         }
 
-        $spec = ['glob' => trim($glob), 'chunk' => $chunk];
         $max = $from['max'] ?? null;
-        if ($max !== null) {
-            if (!is_int($max) || $max < 1 || $max > Workflow::FAN_OUT_CEILING) {
+        if ($max !== null && (!is_int($max) || $max < 1 || $max > Workflow::FAN_OUT_CEILING)) {
+            throw new \InvalidArgumentException(
+                "Stage '{$stage}' from \"max\" must be a whole number from 1 to " . Workflow::FAN_OUT_CEILING
+            );
+        }
+
+        if (array_key_exists('glob', $from) && !array_key_exists('stage', $from) && !array_key_exists('context', $from)) {
+            $glob = $from['glob'];
+            if (!is_string($glob) || trim($glob) === '') {
+                throw new \InvalidArgumentException("Stage '{$stage}' from needs a non-empty \"glob\"");
+            }
+        }
+
+        try {
+            $source = self::fromSource($from);
+        } catch (\InvalidArgumentException $e) {
+            throw new \InvalidArgumentException("Stage '{$stage}' {$e->getMessage()}", 0, $e);
+        }
+
+        return $source + ['chunk' => $chunk] + ($max !== null ? ['max' => $max] : []);
+    }
+
+    /**
+     * P1-1: the SOURCE half of a `from:` spec — the one law the PHP builder
+     * and the YAML loader share (the loader coerces `chunk`/`max` itself and
+     * re-raises this method's refusals naming the file and stage). Exactly
+     * one of `glob`, `stage` or `context`:
+     *
+     * - `glob`: a non-empty string (trimmed) → `['glob' => g]`; `pointer`
+     *   and `key` are refused beside it (a path list is already unique).
+     * - `stage` + `pointer`: a non-empty stage name and a well-formed RFC
+     *   6901 pointer (`""` is the whole row) → `['stage' => s, 'pointer' => p]`.
+     *   Whether `stage` names a PRIOR stage is judged by the loader, which
+     *   alone sees the whole file.
+     * - `context`: a non-empty key that does not start with `@` (those are
+     *   the engine's own) → `['context' => c]`; `pointer` is refused beside it.
+     *
+     * An optional `key` (data sources only, well-formed pointer) rides as
+     * `['key' => k]` after the source keys.
+     *
+     * @param array<array-key, mixed> $from
+     * @return array<string, string> the source keys (plus `key` when written), in that order
+     *
+     * @throws \InvalidArgumentException `from …` refusals, without a stage prefix.
+     */
+    public static function fromSource(array $from): array
+    {
+        $sources = array_values(array_intersect(['glob', 'stage', 'context'], array_keys($from)));
+        if (count($sources) !== 1) {
+            throw new \InvalidArgumentException(
+                $sources === []
+                    ? 'from needs exactly one source: "glob" (files under the environment root), "stage" + "pointer" (an array in a prior stage\'s typed row) or "context" (a run-context list)'
+                    : 'from carries ' . implode(' and ', array_map(static fn (string $k): string => "\"{$k}\"", $sources)) . '; a fan-out reads exactly one source'
+            );
+        }
+        $kind = $sources[0];
+
+        $string = static function (string $name) use ($from): string {
+            $value = $from[$name];
+            if (!is_string($value)) {
+                throw new \InvalidArgumentException("from \"{$name}\" must be a string, got " . get_debug_type($value));
+            }
+
+            return $value;
+        };
+        $pointer = static function (string $name) use ($string): string {
+            $value = $string($name);
+            if (!JsonPointer::isWellFormed($value)) {
                 throw new \InvalidArgumentException(
-                    "Stage '{$stage}' from \"max\" must be a whole number from 1 to " . Workflow::FAN_OUT_CEILING
+                    "from \"{$name}\" is not a valid RFC 6901 pointer: \"{$value}\" (\"~\" must be written ~0, \"/\" inside a key ~1)"
                 );
             }
-            $spec['max'] = $max;
+
+            return $value;
+        };
+
+        if ($kind === 'glob') {
+            foreach (['pointer', 'key'] as $dataOnly) {
+                if (array_key_exists($dataOnly, $from)) {
+                    throw new \InvalidArgumentException("from \"{$dataOnly}\" belongs to a data source (\"stage\" or \"context\"), not to \"glob\"");
+                }
+            }
+            $glob = trim($string('glob'));
+            if ($glob === '') {
+                throw new \InvalidArgumentException('from "glob" must not be empty');
+            }
+
+            return ['glob' => $glob];
+        }
+
+        if ($kind === 'stage') {
+            $name = trim($string('stage'));
+            if ($name === '') {
+                throw new \InvalidArgumentException('from "stage" must name a prior stage');
+            }
+            if (!array_key_exists('pointer', $from)) {
+                throw new \InvalidArgumentException('from "stage" needs a "pointer" (RFC 6901, e.g. /findings) to the array in that stage\'s typed row');
+            }
+            $spec = ['stage' => $name, 'pointer' => $pointer('pointer')];
+        } else {
+            if (array_key_exists('pointer', $from)) {
+                throw new \InvalidArgumentException('from "pointer" reads a stage\'s typed row; beside "context" the value itself must be the list');
+            }
+            $name = trim($string('context'));
+            if ($name === '' || str_starts_with($name, '@')) {
+                throw new \InvalidArgumentException('from "context" must name a run-context key (not empty, not starting with "@"), got "' . $name . '"');
+            }
+            $spec = ['context' => $name];
+        }
+
+        if (array_key_exists('key', $from)) {
+            $spec['key'] = $pointer('key');
         }
 
         return $spec;
@@ -372,30 +491,52 @@ final class WorkflowBuilder
     }
 
     /**
-     * C4: attach a `loop:` round policy to the stage most recently added by
-     * {@see stage()}. The map is a closed pair — `max` (whole number ≥ 1) and
-     * `until` (a C2 clause) — normalized and refused at call time, the same
-     * raw-English InvalidArgumentException shape {@see when()} rides. v1 is
-     * stage-only: {@see parallel()}, {@see pipeline()} and
-     * {@see withVerification()} rows refuse it, so a built workflow can never
-     * carry a round policy its runner would not honour.
+     * C4 + P1-5: attach a `loop:` round policy to the stage most recently
+     * added by {@see stage()}, {@see parallel()} or {@see withVerification()}.
+     * The map is closed — `max` (whole number ≥ 1), `until` (a C2 clause,
+     * which here also admits the loop-only leaves `{dry: N}` and
+     * `{budgetBelow: N}`) and the optional `accumulate` — normalized and
+     * refused at call time, the same raw-English InvalidArgumentException
+     * shape {@see when()} rides. A {@see pipeline()} stage and a {@see uses()}
+     * stage refuse it, so a built workflow can never carry a round policy its
+     * runner would not honour.
+     *
+     * `accumulate: {pointer, key?}` (P1-5) keeps a deduplicated item set
+     * across rounds: each round's typed row(s) must hold a JSON array at
+     * `pointer` (a parallel stage unions its agents' rows), `key` names the
+     * dedup leaf of each item (absent: the item itself is its identity). The
+     * engine exposes `{{seen}}`/`{{fresh}}` and the dry-round count `{dry: N}`
+     * reads; `{dry: N}` without `accumulate` could never hold, so it is
+     * refused.
      *
      * @param array<string, mixed> $loop the author's `loop:` map
      *
      * @throws \InvalidArgumentException when no stage exists to attach to, the
-     *         last stage is not a plain one, or the map is not the closed pair.
+     *         last stage cannot loop, or the map is not the closed grammar.
      */
     public function loop(array $loop): self
     {
         if ($this->stages === []) {
-            throw new \InvalidArgumentException('loop() needs a stage to attach to; call it after stage() (loop: is stage-only in v1)');
+            throw new \InvalidArgumentException('loop() needs a stage to attach to; call it after stage(), parallel() or withVerification()');
         }
 
         $lastKey = array_key_last($this->stages);
         $last = $this->stages[$lastKey];
-        if ($last['type'] !== 'stage') {
+        if (!in_array($last['type'], self::LOOPABLE_TYPES, true)) {
             throw new \InvalidArgumentException(
-                "loop() is stage-only in v1; the last stage '" . $last['name'] . "' is a '" . $last['type'] . "' stage"
+                "loop() cannot repeat the last stage '" . $last['name'] . "': a '" . $last['type'] . "' stage does not loop (stage, parallel and verification stages do)"
+            );
+        }
+        if (array_key_exists('uses', $last)) {
+            throw new \InvalidArgumentException(
+                "loop() cannot repeat the last stage '" . $last['name'] . "': it carries another workflow (uses), which does not loop"
+            );
+        }
+
+        $unknown = array_diff(array_keys($loop), self::LOOP_KEYS);
+        if ($unknown !== []) {
+            throw new \InvalidArgumentException(
+                "loop() has unknown key(s) '" . implode("', '", $unknown) . "'; the grammar is " . implode(', ', self::LOOP_KEYS)
             );
         }
 
@@ -414,10 +555,89 @@ final class WorkflowBuilder
             throw new \InvalidArgumentException('loop() needs "max" to be a whole number of at least 1');
         }
 
-        $normalized = ['max' => $max, 'until' => StageCondition::parse($loop['until'])];
+        if (!is_array($loop['until'])) {
+            throw new \InvalidArgumentException('loop() needs "until" to be a condition map, got ' . get_debug_type($loop['until']));
+        }
+        $until = StageCondition::parse($loop['until'], allowLoopLeaves: true);
+
+        $normalized = ['max' => $max, 'until' => $until];
+        if (array_key_exists('accumulate', $loop)) {
+            $normalized['accumulate'] = self::parseAccumulate($loop['accumulate']);
+        } elseif (self::clauseUsesOp($until, 'dry')) {
+            throw new \InvalidArgumentException(
+                'loop() "until" uses {dry: N}, which counts rounds that add nothing new to an accumulated set; add "accumulate: {pointer, key}" or drop the dry leaf'
+            );
+        }
+
         $this->stages[$lastKey]['loop'] = $normalized;
 
         return $this;
+    }
+
+    /**
+     * P1-5: the ONE `loop.accumulate` parser (builder and YAML loader):
+     * `{pointer: <RFC 6901>, key?: <RFC 6901>}` → the same shape, both
+     * pointers checked well-formed (`""` is legal: the whole row / item).
+     *
+     * @return array{pointer: string, key?: string}
+     *
+     * @throws \InvalidArgumentException naming the offending key.
+     */
+    public static function parseAccumulate(mixed $accumulate): array
+    {
+        if (!is_array($accumulate) || array_is_list($accumulate) && $accumulate !== []) {
+            throw new \InvalidArgumentException(
+                'loop "accumulate" must be a map {pointer: /items, key: /id}, got ' . (is_array($accumulate) ? 'a list' : get_debug_type($accumulate))
+            );
+        }
+        $unknown = array_diff(array_keys($accumulate), self::ACCUMULATE_KEYS);
+        if ($unknown !== []) {
+            throw new \InvalidArgumentException(
+                "loop \"accumulate\" has unknown key(s) '" . implode("', '", $unknown) . "'; the grammar is pointer and key"
+            );
+        }
+        if (!array_key_exists('pointer', $accumulate)) {
+            throw new \InvalidArgumentException('loop "accumulate" needs a "pointer" (RFC 6901) to the array each round adds');
+        }
+
+        $spec = [];
+        foreach (self::ACCUMULATE_KEYS as $name) {
+            if (!array_key_exists($name, $accumulate)) {
+                continue;
+            }
+            $value = $accumulate[$name];
+            if (!is_string($value)) {
+                throw new \InvalidArgumentException("loop \"accumulate\" \"{$name}\" must be a string (an RFC 6901 pointer), got " . get_debug_type($value));
+            }
+            if (!JsonPointer::isWellFormed($value)) {
+                throw new \InvalidArgumentException(
+                    "loop \"accumulate\" \"{$name}\" is not a valid RFC 6901 pointer: \"{$value}\" (\"~\" must be written ~0, \"/\" inside a key ~1)"
+                );
+            }
+            $spec[$name] = $value;
+        }
+
+        return $spec;
+    }
+
+    /**
+     * Whether a NORMALIZED condition carries a leaf with $op anywhere in it.
+     *
+     * @param array<string, mixed> $node
+     */
+    public static function clauseUsesOp(array $node, string $op): bool
+    {
+        if (isset($node['conditions']) && is_array($node['conditions'])) {
+            foreach ($node['conditions'] as $child) {
+                if (is_array($child) && self::clauseUsesOp($child, $op)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return ($node['op'] ?? null) === $op;
     }
 
     /**

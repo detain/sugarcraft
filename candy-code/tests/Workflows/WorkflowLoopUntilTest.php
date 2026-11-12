@@ -325,15 +325,40 @@ final class WorkflowLoopUntilTest extends TestCase
         (new WorkflowBuilder())->name('nowhere')->loop(['max' => 2, 'until' => ['stage' => 'x', 'equals' => 'y']]);
     }
 
-    public function testBuilderLoopIsStageOnlyInV1(): void
+    public function testBuilderLoopRefusesAPipelineStage(): void
     {
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage("loop() is stage-only in v1; the last stage 'fan' is a 'parallel' stage");
+        $this->expectExceptionMessage("loop() cannot repeat the last stage 'chain': a 'pipeline' stage does not loop");
 
         (new WorkflowBuilder())
             ->name('wrong-shape')
+            ->pipeline('chain', [Tasks::agent('coder')->prompt('left'), Tasks::agent('coder')->prompt('right')])
+            ->loop(['max' => 2, 'until' => ['stage' => 'chain', 'equals' => 'y']]);
+    }
+
+    public function testBuilderLoopRefusesAUsesStage(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('it carries another workflow (uses), which does not loop');
+
+        (new WorkflowBuilder())
+            ->name('wrong-shape')
+            ->uses('carried', 'other')
+            ->loop(['max' => 2, 'until' => ['stage' => 'carried', 'equals' => 'y']]);
+    }
+
+    public function testBuilderLoopAttachesToParallelAndVerificationStages(): void
+    {
+        $workflow = (new WorkflowBuilder())
+            ->name('p15')
             ->parallel('fan', [Tasks::agent('coder')->prompt('left'), Tasks::agent('coder')->prompt('right')])
-            ->loop(['max' => 2, 'until' => ['stage' => 'fan', 'equals' => 'y']]);
+            ->loop(['max' => 2, 'until' => ['stage' => 'fan', 'equals' => 'y']])
+            ->withVerification('gate', Tasks::agent('coder')->prompt('do'), Tasks::agent('reviewer')->prompt('check'))
+            ->loop(['max' => 3, 'until' => ['stage' => 'gate', 'contains' => 'OK']])
+            ->build();
+
+        self::assertSame(2, $workflow->stages[0]['loop']['max']);
+        self::assertSame(3, $workflow->stages[1]['loop']['max']);
     }
 
     public function testBuilderLoopNeedsBothHalvesOfThePair(): void

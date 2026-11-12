@@ -50,7 +50,7 @@ final class WorkflowRegistry
      * The keys a parallel stage's `from:` sub-map may carry (C8 + P0-3
      * `max`), listed once for the same rider law as the rosters above.
      */
-    public const YAML_FROM_KEYS = ['glob', 'chunk', 'max'];
+    public const YAML_FROM_KEYS = ['glob', 'stage', 'context', 'pointer', 'key', 'chunk', 'max'];
 
     /** @var array<string, Workflow> */
     private array $registered = [];
@@ -1550,7 +1550,10 @@ final class WorkflowRegistry
                     // C8: the `from:` sub-map is validated only when the
                     // author wrote it; absent means the static list rides on.
                     $fromSpec = array_key_exists('from', $stage)
-                        ? $this->parseDynamicWaveSubMap($stage, $where)
+                        ? $this->parseDynamicWaveSubMap($stage, $where, array_keys(array_filter(
+                            $seenStageNames,
+                            static fn (int $at): bool => $at < $index,
+                        )))
                         : [];
                     $builder = $builder->parallel($stageName, $parsed, capture: $capture, cache: $cache, from: $fromSpec);
                 } else {
@@ -1589,13 +1592,17 @@ final class WorkflowRegistry
                 // round policy its runner would not honour.
                 if ($loop !== null) {
                     $shape = $isParallel ? 'parallel' : $stageType;
-                    if ($shape !== 'stage') {
+                    if (!in_array($shape, WorkflowBuilder::LOOPABLE_TYPES, true)) {
                         throw new WorkflowLoadException(
-                            "{$where} \"loop\" is stage-only in v1: it cannot attach to a \"{$shape}\" stage"
+                            "{$where} \"loop\" cannot attach to a \"{$shape}\" stage; stage, parallel and verification stages loop"
                         );
                     }
 
-                    $builder = $builder->loop($loop);
+                    try {
+                        $builder = $builder->loop($loop);
+                    } catch (\InvalidArgumentException $e) {
+                        throw new WorkflowLoadException("{$where} {$e->getMessage()}", 0, $e);
+                    }
                 }
             }
 
@@ -1800,16 +1807,16 @@ final class WorkflowRegistry
         $loop = $stage['loop'];
         if (!is_array($loop)) {
             throw new WorkflowLoadException(
-                "{$where} \"loop\" must be a map carrying exactly max and until, got "
+                "{$where} \"loop\" must be a map carrying max and until (and optionally accumulate), got "
                 . get_debug_type($loop)
             );
         }
 
-        $unknown = array_diff_key($loop, array_flip(['max', 'until']));
+        $unknown = array_diff_key($loop, array_flip(WorkflowBuilder::LOOP_KEYS));
         if ($unknown !== []) {
             throw new WorkflowLoadException(
                 "{$where} \"loop\" carries unknown key(s) '" . implode("', '", array_keys($unknown))
-                . "'; the grammar is max and until only"
+                . "'; the grammar is max, until and accumulate only"
             );
         }
 
@@ -1832,9 +1839,19 @@ final class WorkflowRegistry
         }
 
         try {
-            StageCondition::parse($clause);
+            // P1-5: `until:` admits the loop-only leaves ({dry: N},
+            // {budgetBelow: N}); `when:` keeps refusing them.
+            StageCondition::parse($clause, allowLoopLeaves: true);
         } catch (\InvalidArgumentException $error) {
             throw new WorkflowLoadException("{$where} \"loop\" \"until\" " . $error->getMessage());
+        }
+
+        if (array_key_exists('accumulate', $loop)) {
+            try {
+                WorkflowBuilder::parseAccumulate($loop['accumulate']);
+            } catch (\InvalidArgumentException $error) {
+                throw new WorkflowLoadException("{$where} " . $error->getMessage());
+            }
         }
 
         return $loop;
@@ -2053,7 +2070,7 @@ final class WorkflowRegistry
             }
             if (!array_key_exists('prompt', $stage)) {
                 throw new WorkflowLoadException(
-                    "{$where} fans out from a glob, so it needs a stage-level \"prompt\" for each item to run"
+                    "{$where} fans out from \"from\", so it needs a stage-level \"prompt\" for each item to run"
                 );
             }
 
@@ -2481,13 +2498,18 @@ final class WorkflowRegistry
     }
 
     /**
-     * A parallel stage's `from:` sub-map (C8): the glob the engine expands
-     * at run time, plus the optional `chunk` — a ceiling on how many of the
-     * fanned-out items run at once (a cap, never a floor) — and the optional
-     * `max` (P0-3): keep the first N of the sorted expansion and RECORD the
-     * rest as dropped. `max` is at most {@see Workflow::FAN_OUT_CEILING}: a
-     * cap above the ceiling could never be honoured, so it is refused here
-     * rather than discovered at run time.
+     * A parallel stage's `from:` sub-map: the fan-out SOURCE plus the
+     * optional `chunk` — a ceiling on how many of the fanned-out items run
+     * at once (a cap, never a floor) — and the optional `max` (P0-3): keep
+     * the first N items and RECORD the rest as dropped. `max` is at most
+     * {@see Workflow::FAN_OUT_CEILING}: a cap above the ceiling could never
+     * be honoured, so it is refused here rather than discovered at run time.
+     *
+     * Exactly one source ({@see WorkflowBuilder::fromSource()} is the shared
+     * law): `glob` (C8, files under the environment root), `stage` +
+     * `pointer` (P1-1, an array in a PRIOR stage's typed row — the same
+     * order law `input.from` keeps, judged here against $priorStages) or
+     * `context` (P1-1, a run-context list); data sources may add `key`.
      *
      * The parser refuses shapes only; expansion is the engine's job
      * (rider law — a sub-map is checked where it is read, and this one is
@@ -2495,10 +2517,11 @@ final class WorkflowRegistry
      * exist while the workflow runs).
      *
      * @param array<array-key, mixed> $stage
+     * @param list<string> $priorStages names of the stages declared before this one
      *
-     * @return array{glob: string, chunk: int|null, max?: int}
+     * @return array<string, mixed>
      */
-    private function parseDynamicWaveSubMap(array $stage, string $where): array
+    private function parseDynamicWaveSubMap(array $stage, string $where, array $priorStages = []): array
     {
         $map = $stage['from'];
         $at = "{$where} \"from\"";
@@ -2508,12 +2531,27 @@ final class WorkflowRegistry
 
         $this->requireNoUnknownTaskKeys($map, $at, self::YAML_FROM_KEYS);
 
-        if (!array_key_exists('glob', $map)) {
-            throw new WorkflowLoadException("{$at} needs a \"glob\" to expand against the environment root");
+        if (!array_key_exists('glob', $map) && !array_key_exists('stage', $map) && !array_key_exists('context', $map)) {
+            throw new WorkflowLoadException(
+                "{$at} needs exactly one source: a \"glob\" to expand against the environment root, "
+                . '"stage" + "pointer" (an array in a prior stage\'s typed row) or "context" (a run-context list)'
+            );
         }
-        $glob = trim($this->requireString($map, 'glob', '', $at));
-        if ($glob === '') {
+        if (array_key_exists('glob', $map) && is_string($map['glob']) && trim($map['glob']) === ''
+            && !array_key_exists('stage', $map) && !array_key_exists('context', $map)) {
             throw new WorkflowLoadException("{$at} \"glob\" must not be empty");
+        }
+
+        try {
+            $source = WorkflowBuilder::fromSource($map);
+        } catch (\InvalidArgumentException $e) {
+            throw new WorkflowLoadException("{$where} {$e->getMessage()}", 0, $e);
+        }
+
+        if (isset($source['stage']) && !in_array($source['stage'], $priorStages, true)) {
+            throw new WorkflowLoadException(
+                "{$at} \"stage\": \"{$source['stage']}\" is not a stage declared before this one; a fan-out reads prior stages only"
+            );
         }
 
         $chunk = null;
@@ -2521,9 +2559,10 @@ final class WorkflowRegistry
             $chunk = $this->requireTaskPositiveInt($map['chunk'], 'chunk', $at);
         }
 
-        // `max` rides only when written, so a max-less spec stays the
-        // two-key shape every pre-P0-3 consumer reads.
-        $spec = ['glob' => $glob, 'chunk' => $chunk];
+        // `max` (and a data source's `key`) ride only when written, so a
+        // glob spec without them stays the two-key shape every pre-P0-3
+        // consumer reads.
+        $spec = $source + ['chunk' => $chunk];
         if (array_key_exists('max', $map)) {
             $max = $this->requireTaskPositiveInt($map['max'], 'max', $at);
             if ($max > Workflow::FAN_OUT_CEILING) {
