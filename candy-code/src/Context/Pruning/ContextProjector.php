@@ -124,7 +124,7 @@ final class ContextProjector
             if ($message instanceof ToolResultMessage) {
                 $entry = $ledger->prune($message->toolCallId());
                 if ($entry !== null && !$entry->kind->rewritesInput()) {
-                    $message = self::pruned($message, $entry, $calls[$message->toolCallId()] ?? null);
+                    $message = self::pruned($message, $entry, $calls[$message->toolCallId()] ?? null, $refs[$message->toolCallId()] ?? null);
                 }
                 $ref = $refs[$message->toolCallId()] ?? null;
                 $content = $ref === null ? $message->content() : RefTag::appendTo($message->content(), $ref);
@@ -356,12 +356,13 @@ final class ContextProjector
         return $changed ? $message->withToolCalls($calls) : $message;
     }
 
-    private static function pruned(ToolResultMessage $result, PruneEntry $entry, ?ToolCall $call): ToolResultMessage
+    private static function pruned(ToolResultMessage $result, PruneEntry $entry, ?ToolCall $call, ?int $ref): ToolResultMessage
     {
         // Roadmap 3.B-3: a distilled output keeps the model's own stand-in.
+        // The ref and the output's hash let the placeholder name Recall (#33).
         $content = $entry->kind === PruneKind::Distilled && $entry->distillation !== null
-            ? PrunedOutputPlaceholder::distilled($call?->name() ?? 'tool', $call?->arguments() ?? [], $entry->distillation)
-            : PrunedOutputPlaceholder::for($call?->name() ?? 'tool', $call?->arguments() ?? []);
+            ? PrunedOutputPlaceholder::distilled($call?->name() ?? 'tool', $call?->arguments() ?? [], $entry->distillation, $ref, $result->content())
+            : PrunedOutputPlaceholder::for($call?->name() ?? 'tool', $call?->arguments() ?? [], $ref, $result->content());
 
         // The image and the tool's own spend stay behind: neither is part of
         // the wire (toArray() omits them), and a placeholder carries neither.

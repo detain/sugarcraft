@@ -26,14 +26,21 @@ final class PrunedOutputPlaceholder
     /** The main argument is cut to this many characters. */
     public const MAX_ARGUMENT_CHARS = 120;
 
-    /** @param array<array-key, mixed> $arguments */
-    public static function for(string $tool, array $arguments = []): string
+    /**
+     * @param array<array-key, mixed> $arguments
+     * @param ?int    $ref    the ledger ref ({@see RefTag}) the result is shown under; when
+     *                        given, the placeholder names the Recall tool with it
+     * @param ?string $output the pruned output, hashed into the placeholder so a later
+     *                        recall can be told apart from the output the model saw
+     */
+    public static function for(string $tool, array $arguments = [], ?int $ref = null, ?string $output = null): string
     {
         $tool = trim($tool) === '' ? 'tool' : self::oneLine($tool);
         $argument = self::mainArgument($arguments);
 
         return '[' . $tool . ($argument === null ? '' : ' ' . $argument)
-            . ' — output pruned to save context; re-run the tool if you need it]';
+            . ' — output pruned to save context; '
+            . self::recovery($ref, $output, 're-run the tool if you need it') . ']';
     }
 
     /**
@@ -48,13 +55,37 @@ final class PrunedOutputPlaceholder
      *
      * @param array<array-key, mixed> $arguments
      */
-    public static function distilled(string $tool, array $arguments, string $distillation): string
-    {
+    public static function distilled(
+        string $tool,
+        array $arguments,
+        string $distillation,
+        ?int $ref = null,
+        ?string $output = null,
+    ): string {
         $tool = trim($tool) === '' ? 'tool' : self::oneLine($tool);
         $argument = self::mainArgument($arguments);
 
         return '[' . $tool . ($argument === null ? '' : ' ' . $argument)
-            . " — distilled by the model; re-run the tool for the full output]\n" . $distillation;
+            . ' — distilled by the model; '
+            . self::recovery($ref, $output, 're-run the tool for the full output') . "]\n" . $distillation;
+    }
+
+    /**
+     * The clause that says how to get the full output back. With a ref it names
+     * the `Recall` tool and the ref it takes, plus a short hash of the output
+     * that was pruned, so the model can tell a re-run that returns different
+     * bytes from the output it saw. Without one the placeholder keeps the
+     * generic re-run wording, because there is nothing for Recall to take.
+     */
+    private static function recovery(?int $ref, ?string $output, string $fallback): string
+    {
+        if ($ref === null) {
+            return $fallback;
+        }
+
+        $hash = $output === null ? '' : ' (content hash ' . substr(hash('sha256', $output), 0, 8) . ')';
+
+        return 'recall it with Recall ref=' . RefTag::label($ref) . $hash;
     }
 
     /**

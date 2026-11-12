@@ -96,9 +96,9 @@ final class PruneToolTest extends TestCase
                 $sent[$message->toolCallId()] = $message->content();
             }
         }
-        $this->assertSame(RefTag::appendTo(PrunedOutputPlaceholder::for('Read', ['file_path' => 'a.php']), 2), $sent['c1']);
+        $this->assertSame(RefTag::appendTo(PrunedOutputPlaceholder::for('Read', ['file_path' => 'a.php'], 2, self::toolOutput('a')), 2), $sent['c1']);
         $this->assertSame(
-            RefTag::appendTo(PrunedOutputPlaceholder::distilled('Read', ['file_path' => 'b.php'], 'b.php: class B { f(): int }'), 3),
+            RefTag::appendTo(PrunedOutputPlaceholder::distilled('Read', ['file_path' => 'b.php'], 'b.php: class B { f(): int }', 3, self::toolOutput('b')), 3),
             $sent['c2'],
         );
         $this->assertSame(RefTag::appendTo(self::toolOutput('t'), 4), $sent['c3'], 'a protected output stays as it was');

@@ -63,7 +63,7 @@ final class RefTagTest extends TestCase
         $first = $projector->project($messages, $ledger)->messages;
         $results = self::results($first);
 
-        $this->assertSame(RefTag::appendTo(PrunedOutputPlaceholder::for('Read', ['file_path' => 'a.php']), 2), $results['a'], 'a placeholder keeps its ref');
+        $this->assertSame(RefTag::appendTo(PrunedOutputPlaceholder::for('Read', ['file_path' => 'a.php'], 2, 'contents of a'), 2), $results['a'], 'a placeholder keeps its ref');
         $this->assertSame(RefTag::appendTo('contents of b', 3), $results['b']);
         $this->assertSame(serialize($first), serialize($projector->project($messages, $ledger)->messages), 'two projections are the same bytes');
         $this->assertSame(RefTag::appendTo('go', 1), $first[0]->content(), 'a prompt carries its ref too (roadmap 3.B-4)');
