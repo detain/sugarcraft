@@ -237,9 +237,9 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
      * @throws \RuntimeException when the program is refused by the pre-check,
      *         cannot be spawned, or the handshake does not complete in budget
      */
-    public function start(): void
+    public function start(?\Closure $onWait = null): void
     {
-        $this->transport->start();
+        $this->transport->start($onWait);
 
         // The skip is only half the announcement: the library records WHAT it
         // dropped, but a transport nobody queries keeps that record to itself.
@@ -258,6 +258,34 @@ final class StdioMcpServer implements McpServer, McpResourceProvider, McpPromptP
     public function stop(): void
     {
         $this->transport->stop();
+    }
+
+    /**
+     * The child's pipes while a handshake is in flight, for the startup pump's
+     * readiness probe: `stdin` to write into, `output` (stdout, stderr) to read
+     * from. The library keeps them private and offers no readiness query, so
+     * they are read through a scoped closure rather than by widening its API
+     * from this side. stderr counts as output because a child blocked on a full
+     * stderr pipe never answers.
+     *
+     * @return array{stdin: resource|null, output: list<resource>}
+     */
+    public function startupPipes(): array
+    {
+        static $reader = null;
+        $reader ??= \Closure::bind(
+            static function (object $transport): array {
+                return [$transport->pipes[0] ?? null, $transport->pipes[1] ?? null, $transport->pipes[2] ?? null];
+            },
+            null,
+            \SugarCraft\McpClient\StdioMcpServer::class,
+        );
+        [$stdin, $stdout, $stderr] = $reader($this->transport);
+
+        return [
+            'stdin' => is_resource($stdin) ? $stdin : null,
+            'output' => array_values(array_filter([$stdout, $stderr], 'is_resource')),
+        ];
     }
 
     /**

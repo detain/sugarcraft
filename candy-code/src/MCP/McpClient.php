@@ -106,6 +106,26 @@ final class McpClient
     private array $authRequired = [];
 
     /**
+     * Per-server startup state for the current start cycle: starting, ready,
+     * failed or auth-required. Keyed by server name, in launch order.
+     *
+     * @var array<string, string>
+     */
+    private array $startupStates = [];
+
+    /**
+     * Handshakes still in flight, keyed by server name. Each runs in a Fiber
+     * that suspends on the library's wait beat, so N servers start side by
+     * side without forking and without blocking the caller on the first one.
+     *
+     * @var array<string, array{fiber: \Fiber, server: McpServer, deadline: float}>
+     */
+    private array $startups = [];
+
+    /** @var list<string> server names in config order, so {@see $servers} keeps it */
+    private array $launchOrder = [];
+
+    /**
      * MCP-1/MCP-2 surface readout: the ONE launch-time pass over the provider
      * servers' rosters, kept for display and command materialization so the
      * `/mcp` panel and the Chat construction never pay a second exchange and
@@ -389,6 +409,34 @@ final class McpClient
      */
     public function startServers(): void
     {
+        $configError = null;
+        try {
+            $this->beginStartup();
+        } catch (\RuntimeException $e) {
+            $configError = $e;
+        }
+        $this->startAllBlocking();
+        if ($configError !== null) {
+            throw $configError;
+        }
+    }
+
+    /**
+     * Launch every configured server WITHOUT waiting for any of them to come
+     * up, then return. Each stdio handshake is left suspended on its wait
+     * beat; {@see tick()} advances them, and {@see startupStates()} reports
+     * where each one stands. A caller that must not stall on a cold `npx`
+     * calls this and pumps {@see tick()} from its event loop; a server that
+     * is still `starting` simply contributes no tools yet.
+     *
+     * Config errors are still reported after every entry has been attempted,
+     * exactly as {@see startServers()} always did, so this throws the same
+     * aggregate — after the valid servers are already launched.
+     *
+     * @throws \RuntimeException see the config contract on {@see startServers()}
+     */
+    public function beginStartup(): void
+    {
         $tiers = $this->loadConfig();
         $failures = [];
         $this->disabledServers = [];
@@ -396,6 +444,9 @@ final class McpClient
         $this->deniedServers = [];
         $this->authRequired = [];
         $this->strippedSecretEnv = [];
+        $this->startupStates = [];
+        $this->startups = [];
+        $this->launchOrder = [];
 
         // MCP-3: read in tier order (project first) with one rule — a name the
         // first tier declared is not started twice. The shadow test runs
@@ -463,6 +514,208 @@ final class McpClient
         if ($disabled !== '') {
             throw new \RuntimeException($disabled);
         }
+    }
+
+    /**
+     * Block until no launched server is still `starting`, pumping {@see tick()}
+     * as it waits. The synchronous face of the startup state machine, for
+     * callers that want the finished server set in hand, as before.
+     */
+    public function startAllBlocking(): void
+    {
+        while ($this->startups !== []) {
+            $this->tick();
+            if ($this->startups !== []) {
+                usleep(5000);
+            }
+        }
+    }
+
+    /**
+     * Advance every in-flight handshake that can make progress, and return at
+     * once. Meant to be called periodically from the event loop.
+     *
+     * A handshake is resumed only when its stdout has bytes or its own
+     * startTimeout has passed, found by ONE zero-timeout select across all of
+     * them. Resuming a silent handshake would let the library wait out its
+     * read slice in-line, and N silent servers would then serialise into N
+     * slices per tick instead of overlapping.
+     */
+    public function tick(): void
+    {
+        if ($this->startups === []) {
+            return;
+        }
+
+        $outputOwner = [];
+        $output = [];
+        $stdinOwner = [];
+        $stdin = [];
+        foreach ($this->startups as $name => $startup) {
+            if (!$startup['server'] instanceof StdioMcpServer) {
+                continue;
+            }
+            $pipes = $startup['server']->startupPipes();
+            foreach ($pipes['output'] as $pipe) {
+                $outputOwner[(int) $pipe] = $name;
+                $output[] = $pipe;
+            }
+            if ($pipes['stdin'] !== null) {
+                $stdinOwner[(int) $pipes['stdin']] = $name;
+                $stdin[] = $pipes['stdin'];
+            }
+        }
+
+        // Probes use a zero timeout: the point is to learn which handshakes can
+        // progress without waiting, not to wait for them.
+        $readable = $this->probe($output, $outputOwner, 'read');
+        $writable = $this->probe($stdin, $stdinOwner, 'write');
+
+        $now = microtime(true);
+        foreach (array_keys($this->startups) as $name) {
+            $startup = $this->startups[$name] ?? null;
+            if ($startup === null) {
+                continue;
+            }
+            $wantsWrite = isset($writable[$name]) && $this->isSuspendedInWrite($startup['fiber']);
+            if (isset($readable[$name]) || $wantsWrite || $now >= $startup['deadline'] || !($startup['server'] instanceof StdioMcpServer)) {
+                $this->advanceStartup($name);
+            }
+        }
+    }
+
+    /**
+     * The startup state of every server launched or refused in the current
+     * start cycle: `starting`, `ready`, `failed` or `auth-required`. Read-only
+     * and side-effect free, for the `/mcp` panel. Servers the config disabled,
+     * denied or the admission check refused have no row here; they keep their
+     * own reports.
+     *
+     * @return array<string, string>
+     */
+    public function startupStates(): array
+    {
+        return $this->startupStates;
+    }
+
+    /**
+     * Resume one in-flight handshake until it suspends again or finishes, then
+     * settle it into its terminal state if it finished.
+     */
+    private function advanceStartup(string $name): void
+    {
+        $startup = $this->startups[$name];
+        $fiber = $startup['fiber'];
+        $server = $startup['server'];
+
+        try {
+            $fiber->isStarted() ? $fiber->resume() : $fiber->start();
+        } catch (HttpMcpAuthRequiredException $e) {
+            // ISS-042: a host that is down is routine, a server merely not
+            // logged in has a one-command fix. Recorded here, not in the
+            // build-failure aggregate, which is for config only.
+            $this->authRequired[$name] = [
+                'url' => ($server instanceof HttpMcpServer || $server instanceof SseMcpServer)
+                    ? $server->endpoint()
+                    : '',
+                'status' => $e->status,
+                // MCP-4: the transport rides the row; `sse` shares the exception.
+                'transport' => $server instanceof SseMcpServer ? 'sse' : 'http',
+            ];
+            $this->recordStrippedSecretEnv($name, $server);
+            $this->settleStartup($name, 'auth-required');
+
+            return;
+        } catch (\Throwable) {
+            // Silent skip, as it always was: the reason is reported by the
+            // log channel of the transport, and the state row says `failed`.
+            $this->recordStrippedSecretEnv($name, $server);
+            $this->settleStartup($name, 'failed');
+
+            return;
+        }
+
+        if ($fiber->isTerminated()) {
+            $this->recordStrippedSecretEnv($name, $server);
+            $this->servers[$name] = $server;
+            $this->settleStartup($name, 'ready');
+        }
+    }
+
+    /**
+     * The names whose pipes are ready for the given direction, from one
+     * zero-timeout select over all of them.
+     *
+     * @param list<resource> $pipes
+     * @param array<int, string> $owner pipe id => server name
+     * @return array<string, true>
+     */
+    private function probe(array $pipes, array $owner, string $direction): array
+    {
+        if ($pipes === []) {
+            return [];
+        }
+        $read = $direction === 'read' ? $pipes : [];
+        $write = $direction === 'write' ? $pipes : [];
+        $except = null;
+        if (@stream_select($read, $write, $except, 0) <= 0) {
+            return [];
+        }
+        $ready = $direction === 'read' ? $read : $write;
+        $names = [];
+        foreach ($ready as $pipe) {
+            $names[$owner[(int) $pipe]] = true;
+        }
+
+        return $names;
+    }
+
+    /**
+     * Whether a suspended handshake is parked in the library's write loop, the
+     * one place it suspends before touching stdin. Its beat fires before the
+     * write, so only a writable stdin can release it; a fiber parked in the read
+     * loop must not be resumed on writability, or it would wait out its read
+     * slice in-line.
+     */
+    private function isSuspendedInWrite(\Fiber $fiber): bool
+    {
+        if (!$fiber->isSuspended()) {
+            return false;
+        }
+        foreach ((new \ReflectionFiber($fiber))->getTrace() as $frame) {
+            if (($frame['function'] ?? '') === 'writeLine') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function settleStartup(string $name, string $state): void
+    {
+        unset($this->startups[$name]);
+        $this->startupStates[$name] = $state;
+        if ($state === 'ready') {
+            $this->restoreConfigOrder();
+        }
+    }
+
+    /**
+     * Servers finish in whatever order their handshakes do; the tool list
+     * built from {@see $servers} must not reshuffle with it.
+     */
+    private function restoreConfigOrder(): void
+    {
+        $ordered = [];
+        foreach ($this->launchOrder as $name) {
+            if (isset($this->servers[$name])) {
+                $ordered[$name] = $this->servers[$name];
+            }
+        }
+        foreach ($this->servers as $name => $server) {
+            $ordered[$name] ??= $server;
+        }
+        $this->servers = $ordered;
     }
 
     /**
@@ -608,6 +861,10 @@ final class McpClient
      */
     public function stopServers(): void
     {
+        foreach ($this->startups as $startup) {
+            $startup['server']->stop();
+        }
+        $this->startups = [];
         foreach ($this->servers as $server) {
             $server->stop();
         }
@@ -847,45 +1104,52 @@ final class McpClient
             }
             $server = $this->buildServer($name, $type, $entry, $tierPath);
         } catch (\Throwable $e) {
+            $this->startupStates[$name] = 'failed';
+
             return sprintf('%s (%s)', $name, $e->getMessage());
         }
 
-        try {
-            $server->start();
-        } catch (HttpMcpAuthRequiredException $e) {
-            // ISS-042: the silent skip below is right for a host that is down
-            // and wrong for a server that is merely not logged in — the first
-            // is routine, the second has a one-command fix nobody could see
-            // while the failure was swallowed. Recorded; phrased by
-            // {@see authRequiredNotice()}; deliberately NOT also added to the
-            // build-failure aggregate (startServers() throws for config, and
-            // this is runtime — the two channels stay separate, per
-            // startServer()'s own two-catches law).
-            $this->authRequired[$name] = [
-                'url' => ($server instanceof HttpMcpServer || $server instanceof SseMcpServer)
-                    ? $server->endpoint()
-                    : '',
-                'status' => $e->status,
-                // MCP-4: the snapshot row below used to hardcode `http` —
-                // true only while the typed exception had one raising class.
-                // `sse` shares the exception, so the row now CARRIES its
-                // transport and the snapshot reads it (default `http` keeps
-                // every pre-MCP-4 pin byte-identical).
-                'transport' => $server instanceof SseMcpServer ? 'sse' : 'http',
-            ];
-            $this->recordStrippedSecretEnv($name, $server);
-
-            return null;
-        } catch (\Throwable) {
-            $this->recordStrippedSecretEnv($name, $server);
-
-            return null;
-        }
-
-        $this->recordStrippedSecretEnv($name, $server);
-        $this->servers[$name] = $server;
+        $this->launch($name, $server, $entry);
 
         return null;
+    }
+
+    /**
+     * Start one server's handshake as a Fiber and run it to its first wait.
+     *
+     * The stdio handshake suspends on the library's wait beat, so this returns
+     * with the child spawned and `initialize` written, and {@see tick()} owns
+     * the rest. Transports with no beat run to completion on this first resume,
+     * which is the old synchronous behaviour for them.
+     *
+     * @param array<string, mixed> $entry the normalised entry, for its startTimeout
+     */
+    private function launch(string $name, McpServer $server, array $entry): void
+    {
+        $this->startupStates[$name] = 'starting';
+        $this->launchOrder[] = $name;
+
+        $timeout = is_numeric($entry['startTimeout'] ?? null) && (float) $entry['startTimeout'] > 0.0
+            ? (float) $entry['startTimeout']
+            : \SugarCraft\McpClient\StdioMcpServer::DEFAULT_START_TIMEOUT_SECONDS;
+
+        $fiber = new \Fiber(static function () use ($server): void {
+            if ($server instanceof \SugarCraft\Code\MCP\StdioMcpServer) {
+                $server->start(static fn (): mixed => \Fiber::suspend());
+            } else {
+                $server->start();
+            }
+        });
+
+        $this->startups[$name] = [
+            'fiber' => $fiber,
+            'server' => $server,
+            // A small grace past the budget: the library computes its own
+            // deadline a moment after this one, and must still see it passed.
+            'deadline' => microtime(true) + $timeout + 0.05,
+        ];
+
+        $this->advanceStartup($name);
     }
 
     private function recordStrippedSecretEnv(string $name, McpServer $server): void
