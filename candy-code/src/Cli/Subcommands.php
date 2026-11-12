@@ -7049,11 +7049,14 @@ final class Subcommands
      * the bind, and the run fails closed at the refusing worker exactly as
      * before - E663's posture, untouched here.
      */
-    private static function workflowVerbEngine(?string $root): \SugarCraft\Code\Workflows\WorkflowEngine
-    {
-        $gate = Bootstrap::permissionGate();
+    private static function workflowVerbEngine(
+        ?string $root,
+        ?\SugarCraft\Code\Permissions\PermissionGate $gate = null,
+        ?\SugarCraft\Code\Backend $backend = null,
+    ): \SugarCraft\Code\Workflows\WorkflowEngine {
+        $gate ??= Bootstrap::permissionGate();
         $engine = Bootstrap::workflowEngine($root, $gate);
-        $backend = Bootstrap::backend($root, gate: $gate);
+        $backend ??= Bootstrap::backend($root, gate: $gate);
         if ($backend instanceof \SugarCraft\Code\Backend\EngineBackend) {
             $engine->bindEngineBackend($backend);
         }
@@ -7085,7 +7088,19 @@ final class Subcommands
             );
         }
 
-        $engine = self::workflowVerbEngine($args->root);
+        $gate = Bootstrap::permissionGate();
+        $backend = Bootstrap::backend($args->root, gate: $gate);
+
+        // P0-4: lint before the first dispatch, as `/workflow run` and the
+        // Workflow tool do. Errors refuse the run with nothing spent (exit
+        // 1); warnings ride the report — `result.lint` in JSON, a
+        // `lint warning:` line per finding under the text heading.
+        $lint = self::workflowPreRunLint($name, $context, $args->root, $backend);
+        if ($lint !== null && $lint->hasErrors()) {
+            return self::workflowLintRefused($asJson, $name, $lint);
+        }
+
+        $engine = self::workflowVerbEngine($args->root, $gate, $backend);
         $engine->setSignalPauseHandler(
             static fn (\SugarCraft\Code\Workflows\WorkflowResult $partial, ?string $pausePath): int
                 => self::workflowSignalPause($asJson, 'run', $partial, $pausePath),
@@ -7097,7 +7112,94 @@ final class Subcommands
             return self::workflowRefused($asJson, 'run', $name, $e->getMessage());
         }
 
-        return self::workflowReport($asJson, 'run', $name, $result);
+        return self::workflowReport($asJson, 'run', $name, $result, $lint !== null && $lint->hasFindings() ? self::workflowLintDoc($lint) : null);
+    }
+
+    /**
+     * The plan as the run would load it, linted with the run's own
+     * `--param` pairs as the seed — through the same registry tiers
+     * {@see Bootstrap::workflowEngine()} reads, the session's tool universe
+     * when the backend is an engine, and `uses:` resolved through that
+     * registry. Null when the name does not load: the engine's own refusal
+     * then speaks, never a lint-invented one.
+     *
+     * @param array<string, string> $context
+     */
+    private static function workflowPreRunLint(
+        string $name,
+        array $context,
+        ?string $root,
+        \SugarCraft\Code\Backend $backend,
+    ): ?\SugarCraft\Code\Workflows\WorkflowLinter {
+        $userConfigDir = Bootstrap::trustedConfigDirPath();
+        $configRoot = LaunchContext::configRoot($root);
+        $registry = new \SugarCraft\Code\Workflows\WorkflowRegistry(
+            $userConfigDir . '/workflows',
+            $configRoot === null ? null : rtrim($configRoot, '/') . '/.candy-code/workflows',
+            projectRoot: $configRoot,
+            userHome: \dirname($userConfigDir),
+        );
+
+        try {
+            $workflow = $registry->load($name);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        $resolver = static function (string $used) use ($registry): ?\SugarCraft\Code\Workflows\Workflow {
+            try {
+                return $registry->load($used);
+            } catch (\Throwable) {
+                return null;
+            }
+        };
+        $tools = $backend instanceof \SugarCraft\Code\Backend\EngineBackend
+            ? \SugarCraft\Code\Tools\BuiltIn\WorkflowTool::toolNamesOf($backend)
+            : null;
+
+        return \SugarCraft\Code\Workflows\WorkflowLinter::lint($workflow, $context, $tools, $resolver);
+    }
+
+    /** @return array{errors: int, warnings: int, findings: list<string>} */
+    private static function workflowLintDoc(\SugarCraft\Code\Workflows\WorkflowLinter $lint): array
+    {
+        $findings = \array_values(\array_filter(
+            \explode("\n", $lint->renderFindings()),
+            static fn (string $line): bool => \trim($line) !== '',
+        ));
+
+        return ['errors' => $lint->errorCount(), 'warnings' => $lint->warningCount(), 'findings' => $findings];
+    }
+
+    /** A lint-refused run: exit 1, nothing dispatched, the findings named. */
+    private static function workflowLintRefused(bool $asJson, string $name, \SugarCraft\Code\Workflows\WorkflowLinter $lint): int
+    {
+        $message = sprintf(
+            '%s was not run: lint found %d error(s), %d warning(s) (nothing was dispatched)',
+            $name,
+            $lint->errorCount(),
+            $lint->warningCount(),
+        );
+
+        if ($asJson) {
+            self::emitDocument([
+                'verb'   => 'workflow',
+                'action' => 'run',
+                'result' => [
+                    'workflow'   => $name,
+                    'status'     => 'refused',
+                    'refusal'    => $message,
+                    'lint'       => self::workflowLintDoc($lint),
+                    'stages'     => [],
+                    'totals'     => ['tokens' => 0, 'cost' => 0.0, 'duration_ms' => 0],
+                    'session_id' => null,
+                ],
+            ]);
+
+            return NonInteractive::EXIT_FAILURE;
+        }
+
+        return self::workflowRefused(false, 'run', $name, $message . \PHP_EOL . $lint->renderFindings());
     }
 
     /**
@@ -7188,19 +7290,30 @@ final class Subcommands
      * Text/JSON report of a finished, failed or escalated run, with its D4
      * exit code.
      */
+    /**
+     * @param ?array{errors: int, warnings: int, findings: list<string>} $lint
+     *        the pre-run lint's warnings, carried as `result.lint` in JSON
+     *        mode and as `lint warning:` lines under the text heading; null
+     *        (a clean lint, or none) leaves the report as it was
+     */
     private static function workflowReport(
         bool $asJson,
         string $action,
         string $name,
         \SugarCraft\Code\Workflows\WorkflowResult $result,
+        ?array $lint = null,
     ): int {
         $exit = self::workflowExitCode($result);
 
         if ($asJson) {
+            $doc = self::workflowResultDoc($name, $result);
+            if ($lint !== null) {
+                $doc['lint'] = $lint;
+            }
             self::emitDocument([
                 'verb'   => 'workflow',
                 'action' => $action,
-                'result' => self::workflowResultDoc($name, $result),
+                'result' => $doc,
             ]);
 
             return $exit;
@@ -7208,6 +7321,9 @@ final class Subcommands
 
         echo 'candy-code workflow ', $action, ': ', $name, ' - ', $result->status->value,
             ' (', \count($result->stageResults), ' stages)', \PHP_EOL;
+        foreach ($lint['findings'] ?? [] as $finding) {
+            echo '  lint warning: ', \ltrim(\substr($finding, \strlen('- warning')), ' '), \PHP_EOL;
+        }
         foreach ($result->stageResults as $stage) {
             echo '  ', $stage->stageName, ': ', $stage->status->value, \PHP_EOL;
         }

@@ -239,6 +239,58 @@ final class WorkflowSubcommandTest extends TestCase
         self::assertStringContainsString($needle, (string) ($doc['result']['stages'][0]['output'] ?? ''), 'the pair splitter must feed context into the stage prompt');
     }
 
+    public function testALintErrorRefusesTheRunWithExitOneAndNothingDispatched(): void
+    {
+        self::boundWorkflowVerbAlarm();
+        \file_put_contents(
+            $this->home . '/.candy-code/workflows/ghosted.yaml',
+            "name: ghosted\nstages:\n  - name: sole\n    agent: coder\n    prompt: reads {{ghost.results}}\n",
+        );
+
+        // No stub server: a dispatch would have no provider to reach, so the
+        // refusal below can only come from the pre-run lint.
+        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'ghosted', '--format', 'json']);
+
+        self::assertSame(1, $code, 'stderr: ' . $err);
+        $result = self::decodeSingleWorkflowVerbDocument($out)['result'] ?? null;
+        self::assertIsArray($result);
+        self::assertSame('refused', $result['status'] ?? null);
+        self::assertSame('ghosted was not run: lint found 1 error(s), 0 warning(s) (nothing was dispatched)', $result['refusal'] ?? null);
+        self::assertSame(1, $result['lint']['errors'] ?? null);
+        self::assertStringContainsString('{{ghost.results}}', (string) ($result['lint']['findings'][0] ?? ''));
+        self::assertSame([], $result['stages'] ?? null);
+
+        [$code, , $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'ghosted']);
+        self::assertSame(1, $code);
+        self::assertStringContainsString('candy-code: workflow run: ghosted was not run: lint found 1 error(s)', $err);
+        self::assertStringContainsString('- error [sole] {{ghost.results}}', $err);
+    }
+
+    public function testLintWarningsRideTheDocumentAndNeverBlockTheRun(): void
+    {
+        self::boundWorkflowVerbAlarm();
+        self::writeWorkflowVerbSoloFile($this->home);
+        self::startWorkflowVerbStub($this->home);
+
+        // solo's prompt reads {{theme}}, which no --param seeds: a warning.
+        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'solo', '--format', 'json']);
+
+        self::assertSame(0, $code, 'stderr: ' . $err);
+        $result = self::decodeSingleWorkflowVerbDocument($out)['result'] ?? null;
+        self::assertSame('completed', $result['status'] ?? null);
+        self::assertSame(0, $result['lint']['errors'] ?? null);
+        self::assertSame(1, $result['lint']['warnings'] ?? null);
+        self::assertStringContainsString('{{theme}}', (string) ($result['lint']['findings'][0] ?? ''));
+
+        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'solo']);
+        self::assertSame(0, $code, 'stderr: ' . $err);
+        self::assertMatchesRegularExpression('/^  lint warning: \[gather\] \{\{theme\}\}/m', $out, 'text mode prints it under the heading');
+
+        [$code, $out] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'solo', '--param', 'theme=calm', '--format', 'json']);
+        self::assertSame(0, $code);
+        self::assertArrayNotHasKey('lint', self::decodeSingleWorkflowVerbDocument($out)['result'] ?? [], 'a clean lint leaves the document as it was');
+    }
+
     // ------------------------------------------------------------------
     //  Usage legs (exit 2)
     // ------------------------------------------------------------------
