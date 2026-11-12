@@ -141,6 +141,7 @@ final class WorkflowLinter
         // here, before the run that would refuse them burns a single agent.
         self::checkIncludes($workflow, $findings, $resolver);
         self::checkPresets($workflow, $presetNames, $findings);
+        self::checkBudgetAndAnnounce($workflow, $findings);
 
         return new self($workflow->name, $findings, $planRows);
     }
@@ -449,6 +450,76 @@ final class WorkflowLinter
      * @param list<array{severity: string, stage: string, message: string}> $findings
      */
     /**
+     * P1-7 / P2-2 mirrors: a blank or non-string `announce:` (hand-built) is
+     * an error; `{{budget.remaining}}` and a loop's `until: {budgetBelow: N}`
+     * on a plan with no `config.maxTokens` mean something only when the run
+     * is handed a token budget — otherwise the token stays verbatim and the
+     * loop runs to `max` — so each warns once.
+     *
+     * @param list<array{severity: string, stage: string, message: string}> $findings
+     */
+    private static function checkBudgetAndAnnounce(Workflow $workflow, array &$findings): void
+    {
+        $noCeiling = $workflow->maxTokens === null;
+        $budgetToken = false;
+        $scan = static function (mixed $node) use (&$scan, &$budgetToken): void {
+            if ($node instanceof WorkflowTask) {
+                $budgetToken = $budgetToken || str_contains($node->prompt, '{{budget.remaining}}');
+
+                return;
+            }
+            if (is_array($node)) {
+                foreach ($node as $child) {
+                    $scan($child);
+                }
+            }
+        };
+
+        foreach ($workflow->stages as $stage) {
+            if (!is_array($stage)) {
+                continue;
+            }
+            $stageName = is_string($stage['name'] ?? null) && $stage['name'] !== '' ? $stage['name'] : 'unknown';
+            if (array_key_exists('announce', $stage)) {
+                if (!is_string($stage['announce']) || trim($stage['announce']) === '') {
+                    self::add($findings, 'error', $stageName, 'announce must be a non-empty template string; the engine would announce nothing.');
+                } else {
+                    $budgetToken = $budgetToken || str_contains($stage['announce'], '{{budget.remaining}}');
+                }
+            }
+            $scan($stage);
+            $until = is_array($stage['loop']['until'] ?? null) ? $stage['loop']['until'] : null;
+            if ($noCeiling && $until !== null && self::hasLeaf($until, 'budgetBelow')) {
+                self::add($findings, 'warning', $stageName, 'until {budgetBelow: N} reads the tokens left under the run\'s token ceiling, and this plan sets no config.maxTokens; unless the run is handed a token budget the clause never holds and the loop runs to max.');
+            }
+        }
+
+        if ($noCeiling && $budgetToken) {
+            self::add($findings, 'warning', 'workflow', '{{budget.remaining}} resolves only when the run has a token ceiling (config.maxTokens or a run budget); without one it stays verbatim in the prompt.');
+        }
+    }
+
+    /**
+     * Whether a normalized condition clause carries a leaf with op $op.
+     *
+     * @param array<array-key, mixed> $node
+     */
+    private static function hasLeaf(array $node, string $op): bool
+    {
+        if (is_array($node['conditions'] ?? null)) {
+            foreach ($node['conditions'] as $child) {
+                if (is_array($child) && self::hasLeaf($child, $op)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        return ($node['op'] ?? null) === $op;
+    }
+
+    /**
      * P1-6 mirror of the engine's preset pre-flight: a blank preset name
      * (hand-built) is an error, and so is a name the given roster does not
      * hold — the engine refuses that run before dispatching anything.
@@ -590,6 +661,13 @@ final class WorkflowLinter
         }
         if ($workflow->maxAgents < 1) {
             self::add($findings, 'error', 'workflow', "maxAgents {$workflow->maxAgents} is not positive; the run could dispatch nothing.");
+        }
+        // P1-7 mirrors (hand-built DTOs; the loader and builder refuse these).
+        if ($workflow->maxTokens !== null && $workflow->maxTokens < 1) {
+            self::add($findings, 'error', 'workflow', "maxTokens {$workflow->maxTokens} is not positive; the first dispatch would already be past the ceiling.");
+        }
+        if ($workflow->maxCost !== null && !($workflow->maxCost > 0)) {
+            self::add($findings, 'error', 'workflow', 'maxCost ' . var_export($workflow->maxCost, true) . ' is not a positive number of USD; the first dispatch would already be past the ceiling.');
         }
         if ($workflow->stages === []) {
             self::add($findings, 'warning', 'workflow', 'The plan has no stages; the run finishes without dispatching anything.');

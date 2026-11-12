@@ -44,7 +44,7 @@ final class WorkflowRegistry
      * {@see self::YAML_TASK_KEYS}, because a single-task stage legitimately
      * carries its task keys at stage level.
      */
-    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from', 'loop', 'minSuccess', 'steps'];
+    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from', 'loop', 'minSuccess', 'steps', 'announce'];
 
     /**
      * The keys a parallel stage's `from:` sub-map may carry (C8 + P0-3
@@ -1592,6 +1592,18 @@ final class WorkflowRegistry
                     }
                 }
 
+                // P2-2: the stage's settle announcement — a template string,
+                // interpolated by the engine when the stage settles.
+                if (array_key_exists('announce', $stage)) {
+                    if (!is_string($stage['announce']) || trim($stage['announce']) === '') {
+                        throw new WorkflowLoadException(
+                            "{$where} \"announce\" must be a non-empty template string, got "
+                            . (is_string($stage['announce']) ? 'an empty string' : get_debug_type($stage['announce']))
+                        );
+                    }
+                    $builder = $builder->announce($stage['announce']);
+                }
+
                 // C2: the clause lands on the stage THIS iteration just added,
                 // after whichever arm shaped it — same order law as capture.
                 if ($when !== null) {
@@ -1670,6 +1682,32 @@ final class WorkflowRegistry
                     'config.maxAgents',
                     $yamlPath,
                 ));
+            }
+            // P1-7: the hard run-wide budgets — a whole number of tokens >= 1,
+            // and a positive number of USD. Absent = no ceiling.
+            if (array_key_exists('maxTokens', $data['config'])) {
+                $builder = $builder->maxTokens($this->requirePositiveInt(
+                    $data['config']['maxTokens'],
+                    'config.maxTokens',
+                    $yamlPath,
+                ));
+            }
+            if (array_key_exists('maxCost', $data['config'])) {
+                $cost = $data['config']['maxCost'];
+                if (is_string($cost) && is_numeric(trim($cost))) {
+                    $cost = (float) trim($cost);
+                }
+                if (!is_int($cost) && !is_float($cost)) {
+                    throw new WorkflowLoadException(
+                        "Workflow file {$yamlPath} \"config.maxCost\" must be a positive number of USD, got " . get_debug_type($cost)
+                    );
+                }
+                if (!is_finite((float) $cost) || $cost <= 0) {
+                    throw new WorkflowLoadException(
+                        "Workflow file {$yamlPath} \"config.maxCost\" must be a positive number of USD, got " . var_export($cost, true)
+                    );
+                }
+                $builder = $builder->maxCost($cost);
             }
         }
 

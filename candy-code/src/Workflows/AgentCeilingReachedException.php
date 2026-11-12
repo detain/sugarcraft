@@ -11,7 +11,10 @@ namespace SugarCraft\Code\Workflows;
  * `type: map` stage (P1-2) can tell "this run may dispatch no more" — which
  * fails the whole stage and admits no further item — from one item's own
  * failure, which only drops that item.
+ *
+ * Not final: {@see BudgetExhaustedException} (P1-7) is the same kind of
+ * run-wide "dispatch no more" refusal, and a map stage must treat it alike.
  */
-final class AgentCeilingReachedException extends \RuntimeException
+class AgentCeilingReachedException extends \RuntimeException
 {
 }

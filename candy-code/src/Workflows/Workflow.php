@@ -69,6 +69,8 @@ final readonly class Workflow
      * @param WorkflowStatus        $workflowStatus      Current lifecycle status (default Draft).
      * @param bool                  $stopOnFirstFailure When true, a parallel stage stops on first agent failure.
      * @param int                   $maxAgents           Run-wide agent-dispatch ceiling (P0-3, `config.maxAgents`).
+     * @param ?int                  $maxTokens           Hard run-wide token ceiling (P1-7, `config.maxTokens`); null = none.
+     * @param ?float                $maxCost             Hard run-wide USD ceiling (P1-7, `config.maxCost`); null = none.
      */
     public function __construct(
         public string         $name,
@@ -79,6 +81,8 @@ final readonly class Workflow
         public WorkflowStatus $workflowStatus = WorkflowStatus::Draft,
         public bool           $stopOnFirstFailure = false,
         public int            $maxAgents = self::DEFAULT_MAX_AGENTS,
+        public ?int           $maxTokens = null,
+        public ?float         $maxCost = null,
     ) {}
 
     /**
@@ -144,6 +148,8 @@ final readonly class Workflow
             workflowStatus: $workflowStatus ?? $this->workflowStatus,
             stopOnFirstFailure: $stopOnFirstFailureSet ? $stopOnFirstFailure : $this->stopOnFirstFailure,
             maxAgents: $this->maxAgents,
+            maxTokens: $this->maxTokens,
+            maxCost: $this->maxCost,
         );
     }
 }

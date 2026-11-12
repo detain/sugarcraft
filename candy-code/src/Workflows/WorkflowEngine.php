@@ -483,6 +483,57 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private array $stagePresets = [];
 
     /**
+     * P1-7: what the OUTERMOST run has spent so far — seeded from a resumed
+     * run's recorded totals, then every settled agent's tokens and USD
+     * ({@see noteSettled()}), included workflows' agents too. Engine state
+     * for the {@see $usesChain} reason: the ceiling is run-wide.
+     */
+    private int $spentTokens = 0;
+    private float $spentCost = 0.0;
+
+    /** P1-7: the outermost run's token ceiling — min(config.maxTokens, the external budget); null = none. */
+    private ?int $tokenCeiling = null;
+
+    /** P1-7: the outermost run's USD ceiling (config.maxCost); null = none. */
+    private ?float $costCeiling = null;
+
+    /** P1-7: the external per-run token budget the next outermost run takes ({@see runWorkflow()}, {@see run()}, {@see resume()}). */
+    private ?int $externalTokenBudget = null;
+
+    /**
+     * P1-7: set when a dispatch (or a retry) was refused for the budget —
+     * the refusal text. The stage loop then PAUSES the run instead of
+     * failing it, so `resume` with a raised ceiling continues.
+     */
+    private ?string $budgetStop = null;
+
+    /**
+     * P2-2: the outermost run's announcements, in order — the stage
+     * `announce:` lines and the engine's mandatory notices (truncation,
+     * minSuccess casualties, budget stops, the agent ceiling).
+     *
+     * @var list<string>
+     */
+    private array $announcements = [];
+
+    /**
+     * P2-2: where announcements stream as they are made
+     * ({@see setAnnouncementSink()}); null = collected on the result only.
+     *
+     * @var ?\Closure(string, array<string, mixed>): void
+     */
+    private ?\Closure $announcementSink = null;
+
+    /** @var array<string, true> P2-2: mandatory notices already made this run, so a repeated refusal is announced once. */
+    private array $announcedOnce = [];
+
+    /** P2-2: the outermost run's id, for the sink's meta. */
+    private string $announceRunId = '';
+
+    /** P2-2: the stage the run is settling right now, for engine notices raised below the stage loop. */
+    private ?string $announceStage = null;
+
+    /**
      * P1-2: true while a `type: map` stage runs, so {@see dispatchOne()}
      * takes the pool's batch door (see there).
      */
@@ -696,6 +747,18 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($result->requestedWrite !== null) {
             $this->stageWriteSignal = $result->requestedWrite;
         }
+    }
+
+    /**
+     * Every settled agent result passes here once: the M-11 write signal,
+     * and (P1-7) the run's spend, which the budget ceiling is checked
+     * against before the next dispatch.
+     */
+    private function noteSettled(AgentResult $result): void
+    {
+        $this->foldStageWriteSignal($result);
+        $this->spentTokens += $result->tokensUsed;
+        $this->spentCost += $result->costUsd;
     }
 
     /**
@@ -1041,14 +1104,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @throws WorkflowNotFoundException When the workflow does not exist.
      * @throws WorkflowLoadException When the workflow cannot be loaded.
      */
-    public function run(string $workflowPath, array $context = [], ?CancellationToken $cancellation = null): WorkflowResult
+    public function run(string $workflowPath, array $context = [], ?CancellationToken $cancellation = null, ?int $budgetTokens = null): WorkflowResult
     {
         self::refuseReservedContextKeys($context);
         $workflow = $this->registry->load($workflowPath);
-        $result = $this->underCancellation(
+        $result = $this->underBudget($budgetTokens, fn (): WorkflowResult => $this->underCancellation(
             $cancellation,
             fn(): WorkflowResult => $this->runFromWorkflow($workflow, $context, 0, null, $workflowPath, $workflowPath),
-        );
+        ));
         $this->rememberResult($workflowPath, $result, $workflowPath);
 
         return $result;
@@ -1108,6 +1171,21 @@ final class WorkflowEngine implements WorkflowEngineInterface
      */
     private function dispatching(AgentWorkerPool $pool): AgentWorkerPool
     {
+        // P1-7: a retry is a dispatch too — with a ceiling set, the pool asks
+        // before it re-runs a failed agent, and a refusal stops the run the
+        // way a refused first dispatch does.
+        if ($this->tokenCeiling !== null || $this->costCeiling !== null) {
+            $pool = $pool->withRetryGate(function (int $tokens, float $cost): ?string {
+                $refusal = $this->budgetRefusal($tokens, $cost);
+                if ($refusal !== null) {
+                    $this->budgetStop ??= $refusal;
+                    $this->announceOnce('budget', $refusal . '; a retry was not started and the run is paused');
+                }
+
+                return $refusal;
+            });
+        }
+
         if ($this->runCancellation === null) {
             return $pool;
         }
@@ -1235,16 +1313,57 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * engine).
      *
      * @param array<string, mixed> $context Key-value pairs for {{variable}} interpolation.
-     * @throws \InvalidArgumentException When a context key is reserved (starts with `@`).
+     * @param ?int $budgetTokens P1-7: an external per-run token budget (the
+     *        `Workflow` tool's `budget`, a user's "+500k"); the run's ceiling
+     *        is the tighter of it and `config.maxTokens`. Null = none.
+     * @throws \InvalidArgumentException When a context key is reserved (starts with `@`),
+     *         or $budgetTokens is below 1.
      */
-    public function runWorkflow(Workflow $workflow, array $context = [], ?CancellationToken $cancellation = null): WorkflowResult
+    public function runWorkflow(Workflow $workflow, array $context = [], ?CancellationToken $cancellation = null, ?int $budgetTokens = null): WorkflowResult
     {
         self::refuseReservedContextKeys($context);
 
-        return $this->underCancellation(
+        return $this->underBudget($budgetTokens, fn (): WorkflowResult => $this->underCancellation(
             $cancellation,
             fn (): WorkflowResult => $this->runFromWorkflow($workflow, $context, 0, null, interruptible: false),
-        );
+        ));
+    }
+
+    /**
+     * P1-7: run $run with $budgetTokens as the external token budget the
+     * outermost run takes; the previous value comes back afterwards.
+     *
+     * @throws \InvalidArgumentException When $budgetTokens is below 1.
+     */
+    private function underBudget(?int $budgetTokens, \Closure $run): WorkflowResult
+    {
+        if ($budgetTokens !== null && $budgetTokens < 1) {
+            throw new \InvalidArgumentException("a workflow token budget must be at least 1, got {$budgetTokens}");
+        }
+
+        $previous = $this->externalTokenBudget;
+        $this->externalTokenBudget = $budgetTokens;
+        try {
+            return $run();
+        } finally {
+            $this->externalTokenBudget = $previous;
+        }
+    }
+
+    /**
+     * P2-2: stream every announcement as it is made — `$sink($line, $meta)`
+     * with `$meta = ['kind' => announce|truncation|casualties|budget|ceiling,
+     * 'stage' => ?string, 'workflowId' => string]`. Called synchronously on
+     * the run's own path; a sink that throws is the caller's bug and is
+     * swallowed so it can never break the run. Null (the default) streams
+     * nothing — the lines are still collected on
+     * {@see WorkflowResult::$announcements}.
+     *
+     * @param ?\Closure(string, array<string, mixed>): void $sink
+     */
+    public function setAnnouncementSink(?\Closure $sink): void
+    {
+        $this->announcementSink = $sink;
     }
 
     /**
@@ -1356,7 +1475,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *                                      drive one run; an ORPHANED record resumes normally).
      * @throws WorkflowNotFoundException   When the workflow definition can no longer be loaded.
      */
-    public function resume(string $workflowId, ?CancellationToken $cancellation = null): WorkflowResult
+    public function resume(string $workflowId, ?CancellationToken $cancellation = null, ?int $budgetTokens = null): WorkflowResult
     {
         $pauseFile = $this->pauseFileFor($workflowId);
 
@@ -1410,21 +1529,21 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $runId = is_string($data['workflowId'] ?? null) && $data['workflowId'] !== '' ? $data['workflowId'] : $workflowId;
         // A full closure, not `fn`: $pauseRequested is an OUT parameter, and
         // an arrow function would capture a copy of it.
-        $result = $this->underCancellation(
-            $cancellation,
-            function () use ($workflow, $context, $stagesCompleted, $runId, $pauseKey, $workflowPath, $prior, &$pauseRequested): WorkflowResult {
-                return $this->runFromWorkflow(
-                    $workflow,
-                    $context,
-                    $stagesCompleted,
-                    $runId,
-                    $pauseKey,
-                    $workflowPath,
-                    $prior,
-                    $pauseRequested,
-                );
-            },
-        );
+        // (The closure is built OUTSIDE the budget wrapper's arrow function,
+        // which would otherwise capture a by-value copy of the reference.)
+        $resumeRun = function () use ($workflow, $context, $stagesCompleted, $runId, $pauseKey, $workflowPath, $prior, &$pauseRequested): WorkflowResult {
+            return $this->runFromWorkflow(
+                $workflow,
+                $context,
+                $stagesCompleted,
+                $runId,
+                $pauseKey,
+                $workflowPath,
+                $prior,
+                $pauseRequested,
+            );
+        };
+        $result = $this->underBudget($budgetTokens, fn (): WorkflowResult => $this->underCancellation($cancellation, $resumeRun));
         $this->rememberResult($pauseKey, $result, $workflowPath);
 
         // A pause requested during this resume rewrote (or withdrew) the file
@@ -2273,6 +2392,20 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // P1-6: presets are re-read per run, so an edited preset file
             // (or a re-wired roster) is what the next run uses.
             $this->stagePresets = [];
+            // P1-7: the spend continues a resumed run's recorded totals; the
+            // ceilings are this run's config (a resume re-reads the YAML, so
+            // an edited maxTokens/maxCost is what it runs under) and the
+            // external budget, whichever is tighter.
+            $this->spentTokens = $totalTokens;
+            $this->spentCost = $totalCost;
+            $this->tokenCeiling = self::tighterCeiling($workflow->maxTokens, $this->externalTokenBudget);
+            $this->costCeiling = $workflow->maxCost;
+            $this->budgetStop = null;
+            // P2-2: a fresh announcement list per outermost run.
+            $this->announcements = [];
+            $this->announcedOnce = [];
+            $this->announceRunId = $resolvedWorkflowId;
+            $this->announceStage = null;
         }
 
         // P1-6: resolve and merge every `preset:` before anything else looks
@@ -2324,6 +2457,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // exactly as the interrupt handler above captures it, so a snapshot holds
         // the stages that have FINISHED and nothing that is still in flight.
         // (A full closure, not `fn`: an arrow function captures by value.)
+        // P2-2: the engine rides along (a static closure keeps class scope)
+        // so every snapshot carries the run's announcements so far.
+        $engine = $this;
         $snapshot = static function (WorkflowStatus $status) use (
             $resolvedWorkflowId,
             $startedAt,
@@ -2331,6 +2467,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             &$stageResults,
             &$totalTokens,
             &$totalCost,
+            $engine,
         ): WorkflowResult {
             return new WorkflowResult(
                 workflowId: $resolvedWorkflowId,
@@ -2341,6 +2478,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 totalCost: $totalCost,
                 startedAt: $startedAt,
                 completedAt: new \DateTimeImmutable(),
+                announcements: $engine->announcements,
             );
         };
 
@@ -2438,6 +2576,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     if (($prior['totalsCountRecordedRows'] ?? false) !== true) {
                         $totalTokens += $this->sumTokens($cached);
                         $totalCost += $this->sumCost($cached);
+                        $this->spentTokens += $this->sumTokens($cached);
+                        $this->spentCost += $this->sumCost($cached);
                     }
                     continue;
                 }
@@ -2486,6 +2626,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     // any resource acquisition — a looped stage announces once
                     // per round, matching what the executor will see.
                     $this->announceStageStarted($resolvedWorkflowId, (string) ($stage['name'] ?? 'unknown'), $round);
+                    $this->announceStage = (string) ($stage['name'] ?? 'unknown');
 
                     // Every agent the stage ran is recorded by the executor as each
                     // settles — an executor that throws AFTER one ran still bills it.
@@ -2580,7 +2721,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 } while ($loop !== null
                     && $round <= $loop['max']
                     && $this->runCancellation?->isCancelled() !== true
-                    && !StageCondition::evaluate($loop['until'], $context));
+                    && $this->budgetStop === null
+                    && !StageCondition::evaluate($loop['until'], $this->withBudgetRemaining($context)));
 
                 if ($loop !== null) {
                     foreach (self::LOOP_TOKENS as $token) {
@@ -2619,6 +2761,17 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 }
 
                 $stageResults[] = $stageResult;
+
+                // P2-2: the stage's own `announce:` template, interpolated now
+                // that it has settled — its `{{<stage>.output}}`, pointers and
+                // `{{<stage>.failed}}` are in scope. Settled stages only: a
+                // skip or a cache carry announces nothing (they `continue`d).
+                if (is_string($stage['announce'] ?? null) && trim($stage['announce']) !== '') {
+                    $line = trim($this->interpolateContext($stage['announce'], $context));
+                    if ($line !== '') {
+                        $this->announce($line, 'announce', $stageResult->stageName);
+                    }
+                }
 
                 // C6: the settle event. The engine's own fail-fast predicate
                 // (StageResult::isFailure() — the same one the fail-fast door
@@ -2692,6 +2845,20 @@ final class WorkflowEngine implements WorkflowEngineInterface
                         $this->liveRuns[$liveToken]['pauseRequested'],
                         $pauseRequested,
                     );
+                }
+
+                // P1-7: a stage that failed because the budget refused a
+                // dispatch PAUSES the run rather than failing it: the record
+                // keeps the successful prefix (the stage re-runs on resume),
+                // so `resume` under a raised ceiling continues from here.
+                if ($stageResult->isFailure() && $this->budgetStop !== null) {
+                    $paused = $snapshot(WorkflowStatus::Paused);
+                    if ($loadPath !== null) {
+                        $pauseRequested = true;
+                        $this->writePauseFile($interruptId, $paused, $loadPath, true);
+                    }
+
+                    return $paused;
                 }
 
                 // Fail fast: stop processing on first stage failure
@@ -3760,7 +3927,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $dispatched[] = $record;
             // M-11 (cc-fix-1111): fold this result's self-report before the
             // next render on this path pays for it.
-            $this->foldStageWriteSignal($agentResult);
+            $this->noteSettled($agentResult);
 
             if (!$multi) {
                 return $this->buildStageResult($stageName, $agentResult, $stageStartedAt);
@@ -3910,7 +4077,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $dispatched[] = $record;
             // M-11 (cc-fix-1111): nested pipeline steps repeat the render —
             // fold first, then let the next step's prompt see the report.
-            $this->foldStageWriteSignal($agentResult);
+            $this->noteSettled($agentResult);
             $pipelineContext = self::withResults($pipelineContext, [$record]);
 
             // Track timing
@@ -4051,7 +4218,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $dispatched[] = $taskRecord;
         // M-11 (cc-fix-1111): the verifier renders after this dispatch —
         // fold the task's report before that prompt is paid for.
-        $this->foldStageWriteSignal($taskResult);
+        $this->noteSettled($taskResult);
 
         // If task itself fails, the whole stage fails immediately
         if ($taskResult->status === AgentStatus::Failed || $taskResult->status === AgentStatus::TimedOut) {
@@ -4132,7 +4299,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // M-11 (cc-fix-1111): verdict-retry rounds re-dispatch on the
             // same rendered request today; fold anyway so a future round
             // that re-renders sees the honest report (idempotent per round).
-            $this->foldStageWriteSignal($verifierResult);
+            $this->noteSettled($verifierResult);
 
             if ($verifierResult->status !== AgentStatus::Completed) {
                 // A dead verifier speaks nothing: no verdict, no question —
@@ -4431,7 +4598,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $agentResults = [];
         foreach ($results as $agentResult) {
             $agentResults[] = $agentResult;
-            $this->foldStageWriteSignal($agentResult);
+            $this->noteSettled($agentResult);
         }
         $dispatched = [...$dispatched, ...self::recordsInDeclarationOrder($resultKeys, $agentResults)];
 
@@ -4499,7 +4666,25 @@ final class WorkflowEngine implements WorkflowEngineInterface
      */
     private function reserveAgents(int $n): void
     {
+        // P1-7: the token/cost ceiling first — a dispatch that would START
+        // past it does not start. The throw lands as this stage's failure,
+        // and the stage loop turns a budget stop into a pause.
+        $refusal = $this->budgetRefusal();
+        if ($refusal !== null) {
+            $this->budgetStop ??= $refusal;
+            $this->announceOnce('budget', $refusal . '; the run is paused before this dispatch');
+
+            throw new BudgetExhaustedException($refusal . '; the run is paused: raise the ceiling (config.maxTokens / config.maxCost, or the run\'s token budget) and resume');
+        }
+
         if ($this->agentCeiling !== null && $this->agentsDispatched + $n > $this->agentCeiling) {
+            $this->announceOnce('ceiling', sprintf(
+                'agent ceiling reached (%d): %d agent%s dispatched and a stage needed %d more',
+                $this->agentCeiling,
+                $this->agentsDispatched,
+                $this->agentsDispatched === 1 ? '' : 's',
+                $n,
+            ));
             throw new AgentCeilingReachedException(sprintf(
                 'agent ceiling reached (%d): this run has dispatched %d agent%s and this stage needs %d more; '
                 . 'raise config.maxAgents or narrow the fan-out',
@@ -4511,6 +4696,144 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
 
         $this->agentsDispatched += $n;
+    }
+
+    /**
+     * P2-2: record one announcement and stream it to the sink (if any). The
+     * sink is observe-only: whatever it throws is swallowed.
+     */
+    private function announce(string $line, string $kind, ?string $stage): void
+    {
+        $this->announcements[] = $line;
+        if ($this->announcementSink === null) {
+            return;
+        }
+
+        try {
+            ($this->announcementSink)($line, ['kind' => $kind, 'stage' => $stage, 'workflowId' => $this->announceRunId]);
+        } catch (\Throwable) {
+            // An announcement is narration; a broken listener never breaks the run.
+        }
+    }
+
+    /** P2-2: a mandatory engine notice made at most once per run per $kind (a refusal can repeat across items/rounds). */
+    private function announceOnce(string $kind, string $message): void
+    {
+        if (isset($this->announcedOnce[$kind])) {
+            return;
+        }
+        $this->announcedOnce[$kind] = true;
+        $stage = $this->announceStage;
+        $this->announce($stage === null ? $message : "Stage '{$stage}': {$message}", $kind, $stage);
+    }
+
+    /**
+     * P2-2 (no silent caps): a `from.max` that cut the list always says so.
+     *
+     * @param array{matched: int, dropped: list<string>} $expansion
+     */
+    private function announceTruncation(string $stageName, array $expansion, string $unit): void
+    {
+        $dropped = $expansion['dropped'] ?? [];
+        if (!is_array($dropped) || $dropped === []) {
+            return;
+        }
+        $matched = (int) ($expansion['matched'] ?? 0);
+        $this->announce(sprintf(
+            "Stage '%s': from.max kept %d of %d %s; %d dropped (listed in the stage output)",
+            $stageName,
+            $matched - count($dropped),
+            $matched,
+            $unit,
+            count($dropped),
+        ), 'truncation', $stageName);
+    }
+
+    /**
+     * P2-2: a `minSuccess` stage's casualties always announce, met or not.
+     *
+     * @param list<array{0: string, 1: string}> $casualties
+     * @param array{count?: int, percent?: int} $minSuccess
+     */
+    private function announceCasualties(string $stageName, array $casualties, int $total, int $required, array $minSuccess, string $unit): void
+    {
+        $names = array_map(static fn (array $c): string => self::oneLine("{$c[0]} ({$c[1]})"), array_slice($casualties, 0, 10));
+        $more = count($casualties) - count($names);
+        $this->announce(sprintf(
+            "Stage '%s': %d of %d %s failed, minSuccess %s %s; failed: %s%s",
+            $stageName,
+            count($casualties),
+            $total,
+            $unit,
+            WorkflowBuilder::minSuccessLabel($minSuccess),
+            $total - count($casualties) >= $required ? 'met' : 'not met',
+            implode(', ', $names),
+            $more > 0 ? ", +{$more} more" : '',
+        ), 'casualties', $stageName);
+    }
+
+    /**
+     * P1-7: why the next dispatch may not start — "budget exhausted (spent X
+     * of Y tokens|USD)" — or null when it may. $pendingTokens/$pendingCost is
+     * spend not yet folded into the run's total (a failed attempt a retry
+     * would follow). Spent AT or past a ceiling refuses.
+     */
+    private function budgetRefusal(int $pendingTokens = 0, float $pendingCost = 0.0): ?string
+    {
+        $tokens = $this->spentTokens + $pendingTokens;
+        if ($this->tokenCeiling !== null && $tokens >= $this->tokenCeiling) {
+            return sprintf('budget exhausted (spent %d of %d tokens)', $tokens, $this->tokenCeiling);
+        }
+
+        $cost = $this->spentCost + $pendingCost;
+        if ($this->costCeiling !== null && $cost >= $this->costCeiling) {
+            return sprintf('budget exhausted (spent %s of %s USD)', self::usd($cost), self::usd($this->costCeiling));
+        }
+
+        return null;
+    }
+
+    /** P1-7: a USD figure with at least two and at most four decimals. */
+    private static function usd(float $amount): string
+    {
+        $text = rtrim(sprintf('%.4F', $amount), '0');
+        $decimals = strlen($text) - (int) strpos($text, '.') - 1;
+
+        return $decimals < 2 ? sprintf('%.2F', $amount) : $text;
+    }
+
+    /** P1-7: the tighter of two optional token ceilings. */
+    private static function tighterCeiling(?int $a, ?int $b): ?int
+    {
+        return $a === null ? $b : ($b === null ? $a : min($a, $b));
+    }
+
+    /**
+     * P1-7: tokens still spendable under the run's ceiling, or null when the
+     * run has no token ceiling. Never negative.
+     */
+    private function budgetRemaining(): ?int
+    {
+        return $this->tokenCeiling === null ? null : max(0, $this->tokenCeiling - $this->spentTokens);
+    }
+
+    /**
+     * P1-7: $context with `@budgetRemaining` set when the run has a token
+     * ceiling — what a loop's `until: {budgetBelow: N}` reads. Only the copy
+     * handed to the condition carries it; the run context (and so the pause
+     * record) never does.
+     *
+     * @param array<array-key, mixed> $context
+     * @return array<array-key, mixed>
+     */
+    private function withBudgetRemaining(array $context): array
+    {
+        $remaining = $this->budgetRemaining();
+        if ($remaining !== null) {
+            $context[StageCondition::BUDGET_REMAINING_CONTEXT_KEY] = $remaining;
+        }
+
+        return $context;
     }
 
     /**
@@ -4651,6 +4974,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     return $globbed;
                 }
                 ['paths' => $paths, 'chunk' => $chunk, 'notice' => $fromNotice] = $globbed;
+                $this->announceTruncation($stageName, $globbed, 'files');
 
                 if ($paths === []) {
                     return new StageResult(
@@ -4670,6 +4994,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     return $expansion;
                 }
                 ['items' => $itemValues, 'names' => $names, 'chunk' => $chunk, 'notice' => $fromNotice] = $expansion;
+                $this->announceTruncation($stageName, $expansion, 'items');
 
                 // P1-1: an empty data list is "nothing to do", not a typo the
                 // way an empty glob is — the stage completes with no agents
@@ -4878,7 +5203,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $agentResults[] = $agentResult;
             // M-11 (cc-fix-1111): fold each wave member's self-report so the
             // NEXT stage's render sees whether anything in this wave wrote.
-            $this->foldStageWriteSignal($agentResult);
+            $this->noteSettled($agentResult);
         }
         $dispatched = [...$dispatched, ...self::recordsInDeclarationOrder($resultKeys, $agentResults)];
 
@@ -4916,6 +5241,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $succeeded = $total - count($casualties);
                 $listed = implode(', ', array_map(static fn (array $c): string => "{$c[0]} ({$c[1]})", $casualties));
                 $casualtyLine = sprintf("\n[%d of %d agents failed: %s]", count($casualties), $total, $listed);
+                $this->announceCasualties($stageName, $casualties, $total, $required, $minSuccess, 'agents');
 
                 if ($succeeded >= $required) {
                     $status = WorkflowStatus::Completed;
@@ -5106,6 +5432,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             }
         }
         $truncation = $expansion['dropped'] === [] ? [] : ['matched' => $expansion['matched'], 'dropped' => $expansion['dropped']];
+        $this->announceTruncation($stageName, $expansion, $isGlob ? 'files' : 'items');
 
         $minSuccess = is_array($stage['minSuccess'] ?? null) ? $stage['minSuccess'] : null;
         $count = count($items);
@@ -5231,6 +5558,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
         ]];
         if ($minSuccess !== null) {
             $failedNames = array_column($casualties, 0);
+            if ($casualties !== [] && $ceiling === null) {
+                $this->announceCasualties($stageName, $casualties, $count, WorkflowBuilder::requiredSuccesses($minSuccess, $count), $minSuccess, 'items');
+            }
         }
 
         $status = WorkflowStatus::Completed;
@@ -6476,6 +6806,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 },
                 $text,
             );
+        }
+
+        // P1-7: `{{budget.remaining}}` — tokens left under the run's ceiling.
+        // Only a run WITH a token ceiling claims it; without one the token
+        // falls through to the ordinary passes (verbatim, normally).
+        $remaining = $this->budgetRemaining();
+        if ($remaining !== null) {
+            $text = str_replace('{{budget.remaining}}', (string) $remaining, $text);
         }
 
         $text = preg_replace_callback(

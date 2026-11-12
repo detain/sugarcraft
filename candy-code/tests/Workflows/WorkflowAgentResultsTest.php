@@ -841,6 +841,7 @@ final class WorkflowAgentResultsTest extends TestCase
         $needle = '$this->interpolateContext(';
         $joined = 0;
         $carried = 0;
+        $announced = 0;
 
         foreach (explode("\n", (string) file_get_contents($enginePath)) as $line) {
             if (strpos($line, $needle) === false) {
@@ -849,6 +850,14 @@ final class WorkflowAgentResultsTest extends TestCase
 
             if (str_contains($line, 'self::resolveStageInput(')) {
                 ++$joined;
+                continue;
+            }
+
+            // wf-impl P2-2: a stage's `announce:` template is narration made
+            // after the stage settles, not a task prompt — no task input is in
+            // scope to join.
+            if (str_contains($line, "\$stage['announce']")) {
+                ++$announced;
                 continue;
             }
 
@@ -861,6 +870,7 @@ final class WorkflowAgentResultsTest extends TestCase
 
         self::assertSame(7, $joined, 'seven prompt paths resolve the join before interpolating (P1-4 adds the verifier-panel vote)');
         self::assertSame(1, $carried, 'exactly one surface is join-less by design');
+        self::assertSame(1, $announced, 'the announce: template is the one non-prompt interpolation');
     }
 
     private function removeDirectory(string $dir): void

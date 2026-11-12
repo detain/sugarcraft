@@ -123,6 +123,19 @@ final class AgentWorkerPool
     private int $maxRetries = 0;
 
     /**
+     * wf-impl P1-7: asked before a failed agent is re-run. Given the spend
+     * of every attempt the agent has made so far (tokens, USD), it answers
+     * null to allow the retry or the reason it may not start — the workflow
+     * engine's token/cost ceiling. Null (the default) asks nothing.
+     *
+     * @var ?\Closure(int, float): ?string
+     */
+    private ?\Closure $retryGate = null;
+
+    /** @var array<string, string> agent id => why the gate refused its retry */
+    private array $retryGateRefusals = [];
+
+    /**
      * @var array<string, array{attempts: int, tokens: int, cost: float, startedAt: ?\DateTimeImmutable, last: ?AgentResult, pending: bool, stalls: int}>
      *      agent id => the current executeAll() run's attempts at it
      *
@@ -717,7 +730,10 @@ final class AgentWorkerPool
                 // fail-fast batch either; only an agent's FINAL result does.
                 $agent = $runAgents[$completedId] ?? null;
                 $attempts = $this->attemptLog[$completedId]['attempts'] ?? 1;
-                if ($agent !== null && $this->retryAllowed($agent, $result, $attempts, $this->runDeadlineNs)) {
+                $log = $this->attemptLog[$completedId] ?? null;
+                $priorTokens = $log === null ? 0 : $log['tokens'] + ($log['last']?->tokensUsed ?? 0);
+                $priorCost = $log === null ? 0.0 : $log['cost'] + ($log['last']?->costUsd ?? 0.0);
+                if ($agent !== null && $this->retryAllowed($agent, $result, $attempts, $this->runDeadlineNs, $priorTokens, $priorCost)) {
                     $this->recordFailedAttempt($completedId, $result);
                     $agent->output = '';
                     $this->queue[$completedId] = $agent;
@@ -790,7 +806,7 @@ final class AgentWorkerPool
      * ever granted the subtraction is zero and the comparison is the
      * original one, byte for byte.
      */
-    private function retryAllowed(SubAgent $agent, AgentResult $result, int $attempts, ?int $deadlineNs): bool
+    private function retryAllowed(SubAgent $agent, AgentResult $result, int $attempts, ?int $deadlineNs, int $priorTokens = 0, float $priorCost = 0.0): bool
     {
         if (!$result->isFailure() || $result->status === AgentStatus::Stopped) {
             return false;
@@ -809,7 +825,20 @@ final class AgentWorkerPool
             return false;
         }
 
-        return $deadlineNs === null || hrtime(true) < $deadlineNs;
+        if ($deadlineNs !== null && hrtime(true) >= $deadlineNs) {
+            return false;
+        }
+
+        if ($this->retryGate !== null) {
+            $refusal = ($this->retryGate)($priorTokens + $result->tokensUsed, $priorCost + $result->costUsd);
+            if ($refusal !== null) {
+                $this->retryGateRefusals[$agent->id] = $refusal;
+
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -834,6 +863,10 @@ final class AgentWorkerPool
 
         if ($deadlineNs !== null && hrtime(true) >= $deadlineNs) {
             return sprintf('not retried after attempt %d of %d: the time budget was spent', $attempts, $retries + 1);
+        }
+
+        if (isset($this->retryGateRefusals[$agent->id])) {
+            return sprintf('not retried after attempt %d of %d: %s', $attempts, $retries + 1, $this->retryGateRefusals[$agent->id]);
         }
 
         return null;
@@ -1107,7 +1140,7 @@ final class AgentWorkerPool
         while (true) {
             $log['attempts']++;
             $result = $this->executeInline($executor, $agent, $request, $deadlineNs);
-            if (!$this->retryAllowed($agent, $result, $log['attempts'], $deadlineNs)) {
+            if (!$this->retryAllowed($agent, $result, $log['attempts'], $deadlineNs, $log['tokens'], $log['cost'])) {
                 return self::foldAttempts(
                     $result,
                     $log['attempts'],
@@ -1312,6 +1345,22 @@ final class AgentWorkerPool
     {
         $clone = clone $this;
         $clone->maxRetries = max(0, $retries);
+        return $clone;
+    }
+
+    /**
+     * wf-impl P1-7: a pool that asks $gate before re-running a failed agent
+     * (see {@see $retryGate}); a refusal settles the agent on the attempt
+     * that ran, its error naming why it was not retried. Null removes it.
+     * A clone, like {@see withTimeBudget()}.
+     *
+     * @param ?\Closure(int, float): ?string $gate
+     */
+    public function withRetryGate(?\Closure $gate): self
+    {
+        $clone = clone $this;
+        $clone->retryGate = $gate;
+        $clone->retryGateRefusals = [];
         return $clone;
     }
 

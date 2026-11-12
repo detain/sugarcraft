@@ -21,6 +21,9 @@ final readonly class WorkflowResult
      * @param float             $totalCost     Cumulative cost in USD across all stages.
      * @param \DateTimeImmutable $startedAt     Wall-clock time the workflow began.
      * @param \DateTimeImmutable|null $completedAt Wall-clock time the workflow finished, or null if still running.
+     * @param list<string>      $announcements P2-2: the run's announcements in the order they were made — stage
+     *                                         `announce:` lines and the engine's mandatory notices (from.max truncation,
+     *                                         minSuccess casualties, budget stops, the agent ceiling).
      */
     public function __construct(
         public string                $workflowId,
@@ -31,6 +34,7 @@ final readonly class WorkflowResult
         public float                 $totalCost = 0.0,
         public \DateTimeImmutable    $startedAt = new \DateTimeImmutable(),
         public ?\DateTimeImmutable   $completedAt = null,
+        public array                 $announcements = [],
     ) {}
 
     /**

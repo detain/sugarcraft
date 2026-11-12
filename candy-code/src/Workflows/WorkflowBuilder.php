@@ -43,6 +43,8 @@ final class WorkflowBuilder
     private array $stages = [];
     private ?int $maxConcurrent = null;
     private int $maxAgents = Workflow::DEFAULT_MAX_AGENTS;
+    private ?int $maxTokens = null;
+    private ?float $maxCost = null;
     private int $timeout = 3600;
     private bool $stopOnFirstFailure = false;
 
@@ -595,6 +597,43 @@ final class WorkflowBuilder
     }
 
     /**
+     * P1-7 `config.maxTokens`: a HARD run-wide token ceiling, checked before
+     * every dispatch (stage, task, fan-out item, vote, retry, loop round,
+     * included workflow). A dispatch that would start at or past it does not
+     * start; its stage fails "budget exhausted (spent X of Y tokens)" and the
+     * run PAUSES, so a resume under a raised ceiling continues. Also feeds
+     * `{{budget.remaining}}` and `until: {budgetBelow: N}`. Null clears it.
+     *
+     * @throws \InvalidArgumentException When $tokens is below 1.
+     */
+    public function maxTokens(?int $tokens): self
+    {
+        if ($tokens !== null && $tokens < 1) {
+            throw new \InvalidArgumentException("maxTokens() needs a whole number of at least 1, got {$tokens}");
+        }
+
+        $this->maxTokens = $tokens;
+        return $this;
+    }
+
+    /**
+     * P1-7 `config.maxCost`: a HARD run-wide USD ceiling, with exactly the
+     * {@see maxTokens()} semantics ("budget exhausted (spent X of Y USD)").
+     * Null clears it.
+     *
+     * @throws \InvalidArgumentException When $usd is not a positive number.
+     */
+    public function maxCost(int|float|null $usd): self
+    {
+        if ($usd !== null && (!is_finite((float) $usd) || $usd <= 0)) {
+            throw new \InvalidArgumentException('maxCost() needs a positive number of USD, got ' . var_export($usd, true));
+        }
+
+        $this->maxCost = $usd === null ? null : (float) $usd;
+        return $this;
+    }
+
+    /**
      * Return a builder with a verification stage appended: a task runs, then
      * a verifier validates its result.
      *
@@ -893,6 +932,29 @@ final class WorkflowBuilder
     }
 
     /**
+     * P2-2: attach a settle announcement to the last stage — a template
+     * interpolated when the stage settles (its own `{{<stage>.output}}`,
+     * pointers and `{{<stage>.failed}}` in scope) and emitted on the run's
+     * announcement stream ({@see WorkflowResult::$announcements}, the
+     * engine's sink). Any stage shape may carry one.
+     *
+     * @throws \InvalidArgumentException With no stage, or a blank template.
+     */
+    public function announce(string $template): self
+    {
+        if ($this->stages === []) {
+            throw new \InvalidArgumentException('announce() needs a stage to attach to; call it after the stage it narrates');
+        }
+        if (trim($template) === '') {
+            throw new \InvalidArgumentException('announce() needs a non-empty template');
+        }
+
+        $this->stages[array_key_last($this->stages)]['announce'] = $template;
+
+        return $this;
+    }
+
+    /**
      * The ONE `minSuccess:` parser, shared by {@see minSuccess()} and the
      * YAML loader: an int (or quoted whole number) >= 1 normalizes to
      * `['count' => n]`, an `"NN%"` string with NN in 1..100 to
@@ -988,6 +1050,8 @@ final class WorkflowBuilder
             timeout: $this->timeout,
             stopOnFirstFailure: $this->stopOnFirstFailure,
             maxAgents: $this->maxAgents,
+            maxTokens: $this->maxTokens,
+            maxCost: $this->maxCost,
         );
     }
 }
