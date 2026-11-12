@@ -28,12 +28,12 @@ namespace SugarCraft\Code\Workflows;
  */
 final class WorkflowGrammarGlossary
 {
-    /** Top-level document keys (no loader roster exists for these; not drift-pinned). */
+    /** Top-level document keys, keyed by every {@see WorkflowRegistry::YAML_WORKFLOW_KEYS} entry (drift-pinned). */
     public const WORKFLOW_KEYS = [
         'name' => 'the plan\'s name (defaults to "plan" in the tool)',
         'description' => 'one line of intent',
         'stages' => 'the ordered stage list (required)',
-        'config' => '`{timeout: seconds per stage (default 3600), maxConcurrent: in-flight agent width (unset = min(16, CPUs-2), 0 = no cap), maxAgents: run-wide dispatch ceiling counting retries and loop rounds (default ' . Workflow::DEFAULT_MAX_AGENTS . '), maxTokens: hard run-wide token ceiling, maxCost: hard run-wide USD ceiling}`; a dispatch (stage, item, vote, retry, loop round, include) that would start at or past a ceiling does not start: its stage fails "budget exhausted (spent X of Y tokens|USD)" and the run PAUSES, so resume with a raised ceiling continues',
+        'config' => '`{timeout: seconds per stage (default 3600), maxConcurrent: in-flight agent width (unset = min(16, CPUs-2), 0 = no cap), maxAgents: run-wide dispatch ceiling counting retries and loop rounds (default ' . Workflow::DEFAULT_MAX_AGENTS . '), maxTokens: hard run-wide token ceiling, maxCost: hard run-wide USD ceiling, stopOnFirstFailure: true|false (default false) — a parallel stage stops dispatching on its first failed agent}`; any other `config:` key, like any unknown top-level key, is refused at load; a dispatch (stage, item, vote, retry, loop round, include) that would start at or past a ceiling does not start: its stage fails "budget exhausted (spent X of Y tokens|USD)" and the run PAUSES, so resume with a raised ceiling continues',
         'schemas' => 'a map of name => object-rooted JSON Schema; any task\'s `outputSchema: {$ref: name}` resolves to it at load',
     ];
 
@@ -132,7 +132,7 @@ final class WorkflowGrammarGlossary
         $modifiers = array_values(array_diff($stageKeys, self::SHAPE_STAGE_KEYS));
 
         return 'The workflow as YAML: `stages:` (required) plus optional `name`, `description`, `schemas:` and '
-            . '`config: {timeout, maxConcurrent, maxAgents, maxTokens, maxCost}`. Each stage is one shape: '
+            . '`config: {' . implode(', ', WorkflowRegistry::YAML_CONFIG_KEYS) . '}` (any other top-level or config key is refused). Each stage is one shape: '
             . implode('; ', $shapes)
             . '; or `uses: <saved workflow>` with `with:`. Stage modifiers: '
             . implode(', ', array_map(static fn (string $k): string => "`{$k}`", $modifiers))

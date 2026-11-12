@@ -52,6 +52,20 @@ final class WorkflowRegistry
      */
     public const YAML_FROM_KEYS = ['glob', 'stage', 'context', 'pointer', 'key', 'chunk', 'max'];
 
+    /**
+     * C6 (wf-impl): the top-level document keys this loader reads, listed once
+     * for the rider law. A key outside it is refused at load naming it and
+     * this set — `maxToken:` beside `config:` used to load as nothing at all.
+     */
+    public const YAML_WORKFLOW_KEYS = ['name', 'description', 'config', 'schemas', 'stages'];
+
+    /**
+     * C6 (wf-impl): the `config:` keys this loader reads. A typo here was the
+     * worst kind of silent: `config: {maxToken: 50000}` loaded as a run with
+     * NO token ceiling at all. Refused at load like any unknown key.
+     */
+    public const YAML_CONFIG_KEYS = ['timeout', 'maxConcurrent', 'maxAgents', 'maxTokens', 'maxCost', 'stopOnFirstFailure'];
+
     /** @var array<string, Workflow> */
     private array $registered = [];
 
@@ -1323,6 +1337,16 @@ final class WorkflowRegistry
             );
         }
 
+        // C6: the document vocabulary itself fails closed, the first
+        // offender named with the supported set (the fix is in the refusal).
+        foreach (array_keys($data) as $key) {
+            if (!in_array($key, self::YAML_WORKFLOW_KEYS, true)) {
+                throw new WorkflowLoadException(
+                    "Workflow file {$yamlPath} has unknown top-level key \"{$key}\"; supported keys: " . implode(', ', self::YAML_WORKFLOW_KEYS)
+                );
+            }
+        }
+
         return $this->parseYamlWorkflow($data, $yamlPath);
     }
 
@@ -1657,6 +1681,26 @@ final class WorkflowRegistry
         }
 
         if (array_key_exists('config', $data) && is_array($data['config'])) {
+            foreach (array_keys($data['config']) as $key) {
+                if (!in_array($key, self::YAML_CONFIG_KEYS, true)) {
+                    throw new WorkflowLoadException(
+                        "Workflow file {$yamlPath} \"config\" has unknown key \"{$key}\"; supported keys: " . implode(', ', self::YAML_CONFIG_KEYS)
+                    );
+                }
+            }
+            // C6: the PHP builder's fail-fast switch, spelled in YAML. Strict
+            // boolean like `capture:` — `'yes'` or `1` is refused, never read
+            // as truthy. Absent keeps the default false byte-identical.
+            if (array_key_exists('stopOnFirstFailure', $data['config'])) {
+                $stop = $data['config']['stopOnFirstFailure'];
+                if (!is_bool($stop)) {
+                    throw new WorkflowLoadException(
+                        "Workflow file {$yamlPath} \"config.stopOnFirstFailure\" must be a boolean (true or false, unquoted), got "
+                        . get_debug_type($stop)
+                    );
+                }
+                $builder = $builder->stopOnFirstFailure($stop);
+            }
             // array_key_exists(), not isset(): `timeout: ~` is a key the author
             // wrote, and isset() reported it absent so it silently took the
             // default the docblock says it must be a whole number instead of.

@@ -77,6 +77,22 @@ final class WorkflowToolDescriptionDriftTest extends TestCase
         );
     }
 
+    /** C6: the top-level gloss and the loader's document roster are one set. */
+    public function testEveryTopLevelKeyHasAGlossAndNoGlossNamesAnUnknownKey(): void
+    {
+        $this->assertEqualsCanonicalizing(WorkflowRegistry::YAML_WORKFLOW_KEYS, array_keys(WorkflowGrammarGlossary::WORKFLOW_KEYS));
+    }
+
+    /** C6: every `config:` key the loader reads is glossed and named in the plan schema. */
+    public function testEveryConfigKeyIsGlossedAndInThePlanSchema(): void
+    {
+        $plan = (new WorkflowTool())->inputSchema()['properties']['plan']['description'];
+        foreach (WorkflowRegistry::YAML_CONFIG_KEYS as $key) {
+            $this->assertStringContainsString($key . ':', WorkflowGrammarGlossary::WORKFLOW_KEYS['config'], "config.{$key} has no gloss");
+            $this->assertStringContainsString($key, $plan);
+        }
+    }
+
     public function testThePlanSchemaDescriptionNamesEveryStageShape(): void
     {
         $plan = (new WorkflowTool())->inputSchema()['properties']['plan']['description'];
