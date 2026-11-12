@@ -28,7 +28,7 @@
 #     its own identity) dedups the list, so no two agents ever edit the same
 #     file, and names each agent wave_<file>. The agents edit the shared
 #     checkout; that is safe only because their files are disjoint. (The
-#     linter still warns about shared-checkout writers; read it, then decide.)
+#     linter cannot see a from: wave's width, so nothing warns you here.)
 #   - Each agent answers a typed report (outputSchema $ref: report),
 #     enforced: the agent must end with a valid StructuredOutput call.
 #   - minSuccess: 90% completes the wave when at least 90% of the files

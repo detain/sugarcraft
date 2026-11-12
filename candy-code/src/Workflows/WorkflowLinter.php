@@ -6,6 +6,8 @@ namespace SugarCraft\Code\Workflows;
 
 use SugarCraft\Code\Agents\Isolation;
 use SugarCraft\Code\Permissions\PermissionRule;
+use SugarCraft\Code\Tools\Catalog\ToolCatalog;
+use SugarCraft\Code\Tools\Catalog\ToolPermissionClass;
 
 /**
  * Static analysis of a compiled workflow plan — `/workflow lint` (C5).
@@ -1130,9 +1132,19 @@ final class WorkflowLinter
     }
 
     /**
-     * Parallel-shape sanity: two workers without worktree isolation write the
-     * same checkout at the same time — not a refusal, a footgun worth one
-     * line of warning.
+     * Parallel-shape sanity: two workers that can WRITE the same checkout at
+     * the same time, outside worktree isolation — not a refusal, a footgun
+     * worth one line of warning.
+     *
+     * C6 (wf-impl): only agents that can write count. A stage of `[Read,
+     * Grep]` judges (judge-panel, research) used to draw the warning too,
+     * which taught authors to ignore it. An agent can write when its `tools:`
+     * is ABSENT (the session's tools, presets unresolved at lint included) or
+     * declares a Write-class tool ({@see ToolPermissionClass::Write}: Bash,
+     * Edit, Write, ApplyPatch, …) or a name the catalog does not know (an MCP
+     * bridge or a glob — it cannot be vouched for). `tools: []` (no tools)
+     * and Read/Ask/NoAsk-class tools (Read, Grep, WebFetch, Todo, …) never
+     * touch the checkout. Writers in their own worktree do not clash.
      *
      * @param array<array-key, mixed> $stage
      */
@@ -1145,15 +1157,42 @@ final class WorkflowLinter
         if (count($tasks) < 2) {
             return;
         }
+        $sharedWriters = 0;
         foreach ($tasks as $task) {
-            if (!$task instanceof WorkflowTask) {
-                continue;
-            }
-            if ($task->isolation === Isolation::Worktree) {
-                return;
+            if ($task instanceof WorkflowTask && $task->isolation !== Isolation::Worktree && self::canWrite($task)) {
+                $sharedWriters++;
             }
         }
-        self::add($findings, 'warning', $stageName, 'Every agent in this parallel stage writes the shared checkout (no worktree isolation); concurrent file edits can clobber each other.');
+        if ($sharedWriters < 2) {
+            return;
+        }
+        self::add($findings, 'warning', $stageName, sprintf(
+            '%d agents in this parallel stage can write the shared checkout (no worktree isolation); concurrent file edits can clobber each other. Narrow their tools to read-class ones or set isolation: worktree.',
+            $sharedWriters,
+        ));
+    }
+
+    /** C6: whether a task's grant can write the checkout — see {@see checkIsolationSanity()}. */
+    private static function canWrite(WorkflowTask $task): bool
+    {
+        if ($task->tools === []) {
+            return !$task->declaresNoTools();
+        }
+
+        $known = [];
+        foreach ([ToolPermissionClass::Read, ToolPermissionClass::Ask, ToolPermissionClass::NoAsk] as $class) {
+            foreach (ToolCatalog::namesOf($class) as $name) {
+                $known[$name] = true;
+            }
+        }
+        foreach ($task->tools as $declaration) {
+            $name = is_string($declaration) ? (string) preg_replace('/\(.*$/s', '', $declaration) : '';
+            if (!isset($known[$name])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

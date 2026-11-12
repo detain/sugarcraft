@@ -239,12 +239,32 @@ final class WorkflowLinterTest extends TestCase
         $warned = WorkflowLinter::lint($unguarded, [], self::UNIVERSE);
         self::assertTrue($warned->hasFindings());
         self::assertFalse($warned->hasErrors(), 'contention is a warning, not a refusal');
-        self::assertStringContainsString('writes the shared checkout', $warned->renderFindings());
+        self::assertStringContainsString('2 agents in this parallel stage can write the shared checkout', $warned->renderFindings());
 
         $isolated = new Workflow('safe', 'worktree fan', [
             ['name' => 'fan', 'type' => 'parallel', 'tasks' => $tasks(Isolation::Worktree)],
         ]);
         self::assertFalse(WorkflowLinter::lint($isolated, [], self::UNIVERSE)->hasFindings());
+    }
+
+    /**
+     * C6 (wf-impl): only agents that can WRITE count — silence (the session's
+     * tools) or a Write-class / uncatalogued tool. Read-only panels and
+     * `tools: []` agents never drew a real clash.
+     */
+    public function testOnlyAgentsThatCanWriteDrawTheContentionWarning(): void
+    {
+        $stage = static fn (array $tasks): Workflow => new Workflow('w', 'd', [['name' => 'fan', 'type' => 'parallel', 'tasks' => $tasks]]);
+        $lint = static fn (array $tasks): string => WorkflowLinter::lint($stage($tasks), [], self::UNIVERSE)->renderFindings();
+        $task = static fn (array $tools, ?Isolation $isolation = null): WorkflowTask => new WorkflowTask('coder', 'p', $tools, isolation: $isolation, toolsSet: true);
+
+        self::assertStringNotContainsString('shared checkout', $lint([$task(['Read', 'Grep']), $task(['Read', 'Glob']), $task(['WebFetch'])]), 'read-only judges');
+        self::assertStringNotContainsString('shared checkout', $lint([$task([]), $task([])]), 'tools: [] grants nothing');
+        self::assertStringNotContainsString('shared checkout', $lint([$task(['Edit']), $task(['Read'])]), 'one writer cannot clash with itself');
+        self::assertStringNotContainsString('shared checkout', $lint([$task(['Edit']), $task(['Edit'], Isolation::Worktree)]), 'the other writer has its own tree');
+
+        self::assertStringContainsString('2 agents in this parallel stage can write', $lint([$task(['Read', 'Edit']), $task(['Bash(git *)']), $task(['Write'], Isolation::Worktree)]));
+        self::assertStringContainsString('2 agents in this parallel stage can write', $lint([new WorkflowTask('coder', 'p'), $task(['mcp__x__y'])]), 'silence and an uncatalogued name both count');
     }
 
     // ---- C11: the include-compose (uses: chain) leg -----------------------
