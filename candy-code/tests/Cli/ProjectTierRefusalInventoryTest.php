@@ -258,6 +258,14 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // (`workflowsPath()`), never this path: the literal configures the mirror
         // only, touches no project tier file, and refuses nothing — no drain.
         'Host/Commands/WorkflowCommand.php|.candy-code/workflows' => self::REPOSITORY,
+        // wf-impl B2/C5: the headless `workflow run` verb's pre-run lint
+        // (`workflowPreRunLint()`) mirrors `Bootstrap::workflowEngine()`'s
+        // two-tier registry, and the flagged literal is its PROJECT tier —
+        // `<configRoot>/.candy-code/workflows`, repository-chosen on the
+        // same basis as `WorkflowCommand.php`'s row above. It only loads the
+        // named plan to lint it (the run itself goes through the Bootstrap
+        // engine, whose refusals Bootstrap drains) — no drain of its own.
+        'Cli/Subcommands.php|.candy-code/workflows' => self::REPOSITORY,
         // MOVED OUT OF THE PACKAGE-RELATIVE BLOCK BELOW, and the move is the
         // finding rather than a tidy-up. This literal was package-relative
         // because {@see \SugarCraft\Code\Agents\WorktreeManager} constructed
@@ -606,8 +614,8 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is NINETY-FOUR occurrences — one per entry
-     * in {@see DOT_PATHS} — of SIXTY-FOUR distinct paths. THIRTY-SIX of those
+     * APPEARS IN. On this tree that is NINETY-FIVE occurrences — one per entry
+     * in {@see DOT_PATHS} — of SIXTY-FOUR distinct paths. THIRTY-SEVEN of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
      * they are TWENTY-NINE distinct paths — which is the figure
@@ -846,7 +854,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
             28 => 'TWENTY-EIGHT', 29 => 'TWENTY-NINE',
             30 => 'THIRTY', 31 => 'THIRTY-ONE', 32 => 'THIRTY-TWO',
             33 => 'THIRTY-THREE', 34 => 'THIRTY-FOUR', 35 => 'THIRTY-FIVE',
-            36 => 'THIRTY-SIX'];
+            36 => 'THIRTY-SIX', 37 => 'THIRTY-SEVEN'];
 
         $occurrences = \count(self::DOT_PATHS);
         $repositoryOccurrences = 0;

@@ -17,6 +17,7 @@ use SugarCraft\Code\Message;
 use SugarCraft\Code\Tools\BuiltIn\WorkflowTool;
 use SugarCraft\Code\Workflows\StageResult;
 use SugarCraft\Code\Workflows\Workflow;
+use SugarCraft\Code\Workflows\WorkflowEngine;
 use SugarCraft\Code\Workflows\WorkflowEngineInterface;
 use SugarCraft\Code\Workflows\WorkflowLinter;
 use SugarCraft\Code\Workflows\WorkflowRegistry;
@@ -275,7 +276,39 @@ final class WorkflowCommand implements HostCommand
             return null;
         }
 
-        return WorkflowLinter::lint($workflow, $runContext, self::toolUniverse($context), self::includeResolver($context));
+        return WorkflowLinter::lint($workflow, $runContext, self::toolUniverse($context), self::includeResolver($context), self::presetNames($workflow, $context));
+    }
+
+    /**
+     * C5: the preset names a `preset:` may name in this session, for the
+     * lint's unknown-preset check — asked only when $workflow names one (the
+     * roster reads preset files). The session's `/workflow` engine answers
+     * first (its roster, or its manager's); a bare AgentManager next; null
+     * leaves the check to the engine's own pre-flight refusal.
+     *
+     * @return ?list<string>
+     */
+    private static function presetNames(Workflow $workflow, CommandContext $context): ?array
+    {
+        if (WorkflowEngine::presetsNamedBy($workflow) === []) {
+            return null;
+        }
+
+        if ($context->workflowEngine instanceof WorkflowEngine) {
+            $names = $context->workflowEngine->presetNames();
+            if ($names !== null) {
+                return $names;
+            }
+        }
+
+        if ($context->agentManager === null) {
+            return null;
+        }
+
+        $names = array_values(array_unique(array_map(static fn ($agent): string => $agent->name, array_values($context->agentManager->all()))));
+        sort($names);
+
+        return $names;
     }
 
     /** $report with the lint-warning block placed under its heading line. */
@@ -447,6 +480,17 @@ final class WorkflowCommand implements HostCommand
         $failure = $result->firstFailure();
         if ($failure !== null && ($failure->error ?? '') !== '') {
             $response .= "\n\n" . Lang::t('host.workflow.report.failure', ['stage' => $failure->stageName, 'error' => $failure->error]);
+        }
+
+        // P2-2: the run's announcements — `announce:` lines and the
+        // engine's mandatory notices (truncations, minSuccess casualties,
+        // budget stops, the agent ceiling) — as transcript lines. Absent when
+        // the run made none, so an announcement-free report is unchanged.
+        if ($result->announcements !== []) {
+            $response .= "\n\nAnnouncements:";
+            foreach ($result->announcements as $line) {
+                $response .= "\n- " . $line;
+            }
         }
 
         if ($result->status === WorkflowStatus::Paused) {
@@ -754,7 +798,7 @@ final class WorkflowCommand implements HostCommand
         // refusal owns that verdict, and the linter must not invent it.
         $includeResolver = self::includeResolver($context);
 
-        $report = WorkflowLinter::lint($workflow, [], self::toolUniverse($context), $includeResolver);
+        $report = WorkflowLinter::lint($workflow, [], self::toolUniverse($context), $includeResolver, self::presetNames($workflow, $context));
 
         $lines = ["Lint of workflow `{$workflow->name}` (no agents dispatched):", '', $report->renderPlanTable()];
         if ($report->hasFindings()) {

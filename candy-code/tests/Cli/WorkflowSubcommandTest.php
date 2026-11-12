@@ -291,6 +291,49 @@ final class WorkflowSubcommandTest extends TestCase
         self::assertArrayNotHasKey('lint', self::decodeSingleWorkflowVerbDocument($out)['result'] ?? [], 'a clean lint leaves the document as it was');
     }
 
+    /**
+     * wf-impl C5 (P2-2): the run's announcements ride the report — under the
+     * text heading as `announce:` lines, and as `result.announcements` in
+     * JSON (absent when the run announced nothing, as the lint key is).
+     */
+    public function testAnnouncementsRideTheReportInBothFormats(): void
+    {
+        self::boundWorkflowVerbAlarm();
+        \file_put_contents(
+            $this->home . '/.candy-code/workflows/talk.yaml',
+            "name: talk\nstages:\n  - name: gather\n    prompt: say hi\n    announce: 'gather settled'\n",
+        );
+        self::startWorkflowVerbStub($this->home);
+
+        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'talk', '--format', 'json']);
+        self::assertSame(0, $code, 'stderr: ' . $err);
+        self::assertSame(['gather settled'], self::decodeSingleWorkflowVerbDocument($out)['result']['announcements'] ?? null);
+
+        [$code, $out, $err] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'talk']);
+        self::assertSame(0, $code, 'stderr: ' . $err);
+        self::assertMatchesRegularExpression('/^  announce: gather settled$/m', $out);
+    }
+
+    /**
+     * wf-impl C5 (P1-6): the pre-run lint knows the session's preset roster,
+     * so an unknown `preset:` refuses the run (exit 1) before any dispatch.
+     */
+    public function testAnUnknownPresetIsALintErrorBeforeAnyDispatch(): void
+    {
+        self::boundWorkflowVerbAlarm();
+        \file_put_contents(
+            $this->home . '/.candy-code/workflows/ghosted.yaml',
+            "name: ghosted\nstages:\n  - name: gather\n    prompt: say hi\n    preset: no-such-preset\n",
+        );
+
+        [$code, $out] = self::runWorkflowVerbChild($this->home, ['workflow', 'run', 'ghosted', '--format', 'json']);
+        self::assertSame(1, $code);
+        $result = self::decodeSingleWorkflowVerbDocument($out)['result'] ?? [];
+        self::assertSame('refused', $result['status'] ?? null);
+        self::assertStringContainsString('preset "no-such-preset" is not an agent preset this session knows (known: ', implode("\n", $result['lint']['findings'] ?? []));
+        self::assertStringContainsString('reviewer', implode("\n", $result['lint']['findings'] ?? []), 'the built-in roster is what the lint names');
+    }
+
     // ------------------------------------------------------------------
     //  Usage legs (exit 2)
     // ------------------------------------------------------------------

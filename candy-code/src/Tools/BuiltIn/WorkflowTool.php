@@ -111,9 +111,6 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
     /** How error messages name the plan, in the loader's "Workflow file <source>" shape. */
     private const PLAN_SOURCE = '(Workflow tool plan)';
 
-    /** The user workflows directory when none is resolved (the registry's own default). */
-    private const DEFAULT_WORKFLOWS_PATH = '~/.candy-code/workflows/';
-
     /**
      * @param \Closure(): void|null $heartbeat the turn's liveness sink ({@see DelegatesToEngine})
      * @param \Closure(SubAgentActivity): void|null $subAgentEmitter the turn's delegation channel; narration rides it
@@ -282,7 +279,8 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             }
         }
 
-        $registry = new WorkflowRegistry($this->workflowsPath ?? self::DEFAULT_WORKFLOWS_PATH);
+        // No resolved directory keeps the registry's own default user tier.
+        $registry = $this->workflowsPath === null ? new WorkflowRegistry() : new WorkflowRegistry($this->workflowsPath);
         try {
             $workflow = $registry->fromYamlString($plan, self::PLAN_SOURCE);
         } catch (WorkflowLoadException $e) {

@@ -7157,7 +7157,23 @@ final class Subcommands
             ? \SugarCraft\Code\Tools\BuiltIn\WorkflowTool::toolNamesOf($backend)
             : null;
 
-        return \SugarCraft\Code\Workflows\WorkflowLinter::lint($workflow, $context, $tools, $resolver);
+        // C5: an unknown `preset:` is a lint error here too — the roster is
+        // built only when the plan names one (it reads preset files).
+        $presetNames = null;
+        if (\SugarCraft\Code\Workflows\WorkflowEngine::presetsNamedBy($workflow) !== []) {
+            try {
+                [$provider, $model] = Bootstrap::selectedProviderLabel();
+                $presetNames = \array_values(\array_unique(\array_map(
+                    static fn (\SugarCraft\Code\Agents\Agent $agent): string => $agent->name,
+                    Bootstrap::agentRoster($root ?? (\getcwd() ?: '.'), $provider, $model),
+                )));
+                \sort($presetNames);
+            } catch (\Throwable) {
+                $presetNames = null;
+            }
+        }
+
+        return \SugarCraft\Code\Workflows\WorkflowLinter::lint($workflow, $context, $tools, $resolver, $presetNames);
     }
 
     /** @return array{errors: int, warnings: int, findings: list<string>} */
@@ -7327,6 +7343,11 @@ final class Subcommands
         foreach ($result->stageResults as $stage) {
             echo '  ', $stage->stageName, ': ', $stage->status->value, \PHP_EOL;
         }
+        // P2-2: the run's announcements (`announce:` lines and the engine's
+        // mandatory truncation / casualty / budget / ceiling notices).
+        foreach ($result->announcements as $line) {
+            echo '  announce: ', $line, \PHP_EOL;
+        }
         $failure = $result->firstFailure();
         if ($failure !== null && $failure->error !== null) {
             echo '  error: ', $failure->error, \PHP_EOL;
@@ -7379,7 +7400,7 @@ final class Subcommands
             ];
         }
 
-        return [
+        $doc = [
             'workflow'   => $name,
             'status'     => $result->status->value,
             'stages'     => $rows,
@@ -7390,6 +7411,13 @@ final class Subcommands
             ],
             'session_id' => null,
         ];
+        // P2-2: present only when the run announced something, so an
+        // announcement-free document is unchanged.
+        if ($result->announcements !== []) {
+            $doc['announcements'] = $result->announcements;
+        }
+
+        return $doc;
     }
 
     /**

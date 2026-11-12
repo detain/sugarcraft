@@ -2532,7 +2532,7 @@ final class Bootstrap
         // naming the absence — this wiring deliberately never echo-degrades.
         $poolConfig = self::agentPoolConfig();
 
-        return new WorkflowEngine(
+        $engine = new WorkflowEngine(
             $registry,
             // forkedExecutor: every stage agent is a real tool loop through
             // the session engine (bound late by Chat's constructor), run in
@@ -2554,6 +2554,15 @@ final class Bootstrap
             environmentRoot: $root,
             toolRegistry: self::toolSetUnder(self::unfilteredTools($root, skills: $skills), self::readUserConfig()),
         );
+
+        // P1-6 (wf-impl C5): a stage's `preset:` resolves against the same
+        // roster `Task` uses, so CLI and TUI runs need no AgentManager for it.
+        // DEFERRED: the roster reads preset files from disk, so it is built
+        // the first time a plan actually names a preset, never at launch.
+        // Chat's setAgentManager() still answers when no roster resolves.
+        $engine->setAgentRosterSource(static fn (): array => self::agentRoster($root ?? (getcwd() ?: '.'), $provider, $model));
+
+        return $engine;
     }
 
     /**
