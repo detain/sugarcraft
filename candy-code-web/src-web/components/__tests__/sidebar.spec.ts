@@ -161,3 +161,33 @@ describe('sidebar list-cap notice (M-20)', () => {
     expect(wrapper.find('[data-testid="sessions-capped"]').exists()).toBe(false)
   })
 })
+
+describe('sidebar cold-load failure (F-cfe observation)', () => {
+  it('names the listing refusal instead of painting a silent blank list', async () => {
+    const wire = await Wire.connect()
+    router = createAppRouter(createMemoryHistory())
+    await router.push({ name: 'session', params: { id: 'x' } })
+    await router.isReady()
+    const wrapper = mount(SessionSidebar, {
+      props: { activeId: null },
+      global: { plugins: [router] },
+    })
+    // The connect-time cold listing is still in flight (Wire answers only the
+    // hello). Refusing it is a cold-load failure: the store keeps `loaded`
+    // false and lands the refusal in `sessions.error`. The list area must
+    // voice it — an empty index beside a failed load is a silence that reads
+    // as "none exist", which is exactly the observation this test retires.
+    const listFrame = wire.sent('session.list')[0]
+    expect(listFrame, 'the cold listing is in flight').toBeDefined()
+    // Targeted by id on purpose: the handshake arms a `session.shares` read
+    // alongside the listing, so `last()` would refuse the wrong flight — and
+    // a refused shares listing is a swallowed best-effort by design.
+    wire.socket.fail(-32001, 'unavailable', 'the host refused the cold listing', listFrame!.id)
+    await flush()
+    await wrapper.vm.$nextTick()
+    const line = wrapper.find('[data-testid="sidebar-error"]')
+    expect(line.exists(), 'the refusal reaches the sidebar error line').toBe(true)
+    expect(line.text()).toContain('the host refused the cold listing')
+    expect(wrapper.text(), 'no empty-state claim paints beside the failure').not.toContain('No sessions yet.')
+  })
+})

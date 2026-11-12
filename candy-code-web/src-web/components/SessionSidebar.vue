@@ -426,7 +426,10 @@ function onKey(event: KeyboardEvent): void {
     <input v-model="filter" type="search" :placeholder="t('web.chrome.sidebar.filter_placeholder')" :aria-label="t('web.chrome.sidebar.filter_aria')">
     <!-- C-SES-7.e: the tray toggle drives the store's re-read of the server. -->
     <label class="tray"><input v-model="trayShown" type="checkbox" data-testid="show-archived"> {{ t('web.chrome.sidebar.show_archived') }}</label>
-    <p v-if="error" class="error" role="alert" data-testid="sidebar-error">{{ error }}</p>
+    <!-- One error line, both sources: an action refusal (local `error`) or the
+         store's listing failure (sessions.error) — a refused cold load must
+         never leave the list area silent. Raw server message, house precedent. -->
+    <p v-if="error || sessions.error" class="error" role="alert" data-testid="sidebar-error">{{ error ?? sessions.error }}</p>
     <!-- M-21: a cold index must never read as an empty one — until the
          first list has landed (and unless the store itself reported a
          load failure) this row carries role=status. The "no sessions
