@@ -122,11 +122,12 @@ final class CtagsSymbolExtractorTest extends TestCase
 
     public function testTheRunDisablesOptionFilesAndPassesOnlyAbsolutePaths(): void
     {
-        $command = CtagsSymbolExtractor::new()->commandFor(['/r/a b.py', '/r/-x.c']);
+        $argv = CtagsSymbolExtractor::new()->commandFor(['/r/a b.py', '/r/-x.c']);
 
-        self::assertMatchesRegularExpression("/^'ctags' --options=NONE /", $command, '--options=NONE must come first');
-        self::assertStringContainsString('--output-format=json', $command);
-        self::assertStringContainsString("'/r/a b.py' '/r/-x.c'", $command);
+        self::assertSame('ctags', $argv[0]);
+        self::assertSame('--options=NONE', $argv[1], '--options=NONE must come first');
+        self::assertContains('--output-format=json', $argv);
+        self::assertSame(['/r/a b.py', '/r/-x.c'], \array_slice($argv, -2), 'each path is one argv word, spaces intact');
     }
 
     public function testAHungCtagsIsCutOffAtTheDeadline(): void

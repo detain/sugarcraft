@@ -17,6 +17,7 @@ use SugarCraft\Code\Permissions\PermissionGate;
 use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Support\ForkedChild;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\ShellInvocation;
 use SugarCraft\Code\Support\ToolIpcFiles;
 use SugarCraft\Code\ToolCall;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
@@ -229,12 +230,15 @@ final class BangShell
     {
         $shell = new self();
         $script = ($root !== '' ? ProcessContainment::cdGuard($root) : '') . $command;
-        $run = $shell->runCaptured(
-            'bash -c ' . escapeshellarg($script),
-            null,
-            self::DEFAULT_MAX_OUTPUT_BYTES,
-            (float) self::TIMEOUT_SECONDS,
-        );
+        $argv = ShellInvocation::argv($script, bashOnPosix: true);
+        $run = $argv === null
+            ? ShellInvocation::refusedRun()
+            : $shell->runCaptured(
+                $argv,
+                null,
+                self::DEFAULT_MAX_OUTPUT_BYTES,
+                (float) self::TIMEOUT_SECONDS,
+            );
 
         return [
             'exitCode' => (int) $run['exitCode'],

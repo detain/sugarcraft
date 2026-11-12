@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Format;
 
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Support\ShellInvocation;
 use SugarCraft\Code\Support\ToolOutputSpill;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Code\Tools\PathJail;
@@ -357,12 +358,18 @@ final class FormatRunner
             $line = $this->sandbox->wrap($line, $rootReal);
         }
 
-        $run = $this->runCaptured(
-            $line,
-            $rootReal,
-            self::MAX_CAPTURE_BYTES,
-            $this->timeoutSeconds,
-        );
+        // The formatter line is shell syntax (a configured command with its
+        // file argument quoted), so it rides ShellInvocation's argv: /bin/sh on
+        // POSIX as before, bash.exe on Windows, and a refusal without one.
+        $argv = ShellInvocation::argv($line);
+        $run = $argv === null
+            ? ShellInvocation::refusedRun()
+            : $this->runCaptured(
+                $argv,
+                $rootReal,
+                self::MAX_CAPTURE_BYTES,
+                $this->timeoutSeconds,
+            );
 
         return $this->guard($absolute, $display, $line, $before, $hashBefore, $run);
     }

@@ -195,7 +195,7 @@ final class CtagsSymbolExtractor
         }
 
         $run = $this->runCaptured(
-            \escapeshellarg($this->binary) . ' --version',
+            [$this->binary, '--version'],
             null,
             65536,
             self::PROBE_TIMEOUT_SECONDS,
@@ -403,15 +403,17 @@ final class CtagsSymbolExtractor
     }
 
     /**
-     * The command line for one batch. Absolute paths only, so no argument
-     * can read as an option.
+     * The argv for one batch, handed to proc_open's array form — no shell
+     * sits between the paths and ctags, so a space or a `$` in a file name
+     * is just bytes. Absolute paths only, so no argument can read as an option.
      *
      * @param list<string> $absPaths
+     * @return non-empty-list<string>
      */
-    public function commandFor(array $absPaths): string
+    public function commandFor(array $absPaths): array
     {
         $argv = [
-            \escapeshellarg($this->binary),
+            $this->binary,
             '--options=NONE',
             '--output-format=json',
             '--fields=+nKsS',
@@ -420,10 +422,10 @@ final class CtagsSymbolExtractor
             '-',
         ];
         foreach ($absPaths as $path) {
-            $argv[] = \escapeshellarg($path);
+            $argv[] = $path;
         }
 
-        return \implode(' ', $argv);
+        return $argv;
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Lint;
 
 use SugarCraft\Code\Lang;
+use SugarCraft\Code\Support\ShellInvocation;
 use SugarCraft\Code\Support\ToolOutputSpill;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
 use SugarCraft\Code\Tools\PathJail;
@@ -278,14 +279,18 @@ final class LintRunner
             $line = $this->sandbox->wrap($line, $rootReal);
         }
 
-        $run = $this->runCaptured(
-            $line,
-            $rootReal,
-            self::MAX_CAPTURE_BYTES,
-            $this->timeoutSeconds,
-        );
+        // Shell syntax, so argv through ShellInvocation (see FormatRunner::run()).
+        $argv = ShellInvocation::argv($line);
+        $run = $argv === null
+            ? ShellInvocation::refusedRun()
+            : $this->runCaptured(
+                $argv,
+                $rootReal,
+                self::MAX_CAPTURE_BYTES,
+                $this->timeoutSeconds,
+            );
 
-        $source = filesize($absolute) <= self::MAX_SOURCE_BYTES ? (string) @file_get_contents($absolute) : '';
+        $source =filesize($absolute) <= self::MAX_SOURCE_BYTES ? (string) @file_get_contents($absolute) : '';
 
         return new LintReport(
             file: $display,

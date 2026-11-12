@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Tools\UserTools;
 
 use SugarCraft\Code\Agents\PathJail as AgentPathJail;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\ShellInvocation;
 use SugarCraft\Code\Tools\AcceptsHeartbeat;
 use SugarCraft\Code\Tools\AcceptsWorktreeJail;
 use SugarCraft\Code\Tools\BuiltIn\Bash;
@@ -124,7 +125,20 @@ final readonly class UserScriptTool implements Tool, AcceptsHeartbeat, AcceptsWo
 
         $cwd = $this->worktreeJail?->root() ?? $this->root ?? (string) getcwd();
 
-        $command = "bash -c " . escapeshellarg(ProcessContainment::cdGuard($cwd) . $rendered);
+        $script = ProcessContainment::cdGuard($cwd) . $rendered;
+
+        // A sandbox wraps a SHELL STRING (its jail argv is a prefix), so that
+        // arm keeps the string; the unsandboxed arm takes the argv, which is
+        // bash.exe on Windows and a refusal when there is none.
+        $command = null;
+        if ($this->sandbox === null) {
+            $command = ShellInvocation::argv($script, bashOnPosix: true);
+            if ($command === null) {
+                return $this->error(ShellInvocation::refusal());
+            }
+        } else {
+            $command = "bash -c " . escapeshellarg($script);
+        }
 
         if ($this->sandbox !== null) {
             $probeRefusal = $this->sandbox->probe(function (string $probe): array {

@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Tools\BuiltIn;
 use SugarCraft\Code\Context\InstructionFileLoader;
 use SugarCraft\Code\Context\RulePathNudge;
 use SugarCraft\Code\Skills\SkillPathNudge;
+use SugarCraft\Code\Support\ShellInvocation;
 use SugarCraft\Code\Support\ToolOutputSpill;
 use SugarCraft\Code\Tools\AcceptsHeartbeat;
 use SugarCraft\Code\Tools\CarriesSessionState;
@@ -447,7 +448,13 @@ final readonly class Grep implements Tool, AcceptsWorktreeJail, AcceptsInstructi
             // the variable is non-empty), which is the unset this overrides
             // channel cannot express as a key removal. Harmless to the grep
             // branch — the variable names an rg flag file only.
-            $run = $this->runCaptured($cmd, null, $this->captureBound($this->maxOutputBytes), $timeout, ['RIPGREP_CONFIG_PATH' => ''], $heartbeat);
+            // The command is POSIX-quoted (escapeshellarg), which bash reads
+            // exactly as /bin/sh does, so it rides ShellInvocation's argv:
+            // bash.exe on Windows, and a refusal when there is none.
+            $argv = ShellInvocation::argv($cmd);
+            $run = $argv === null
+                ? ShellInvocation::refusedRun()
+                : $this->runCaptured($argv, null, $this->captureBound($this->maxOutputBytes), $timeout, ['RIPGREP_CONFIG_PATH' => ''], $heartbeat);
         }
 
         $filtered = self::withoutIgnoredHits($run, $rules, $path);
