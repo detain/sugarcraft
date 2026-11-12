@@ -355,6 +355,7 @@ async function fetchOlderTranscript(): Promise<string | null> {
       <p v-if="notice" class="save-notice" role="status" data-testid="session-save-notice">{{ notice }}</p>
       <Composer
         v-model="draft"
+        :session-id="id"
         :busy="session.busy"
         :disabled="sending || !connection.connected"
         :commands="session.commands"

@@ -58,6 +58,13 @@ const props = defineProps<{
      */
     searchMcpResources?: (query: string) => Promise<McpMention[]>;
     agentRoster?: () => string[];
+    /**
+     * B-24: the session channel — the prop wins. In-app SessionView passes the
+     * routed id (`/s/:id` with `props: true`, so prop and route always agree);
+     * the route read inside the component stays only as the documented
+     * fallback for mounts that thread no prop, the way it was before.
+     */
+    sessionId?: string;
 }>();
 const emit = defineEmits<{
     "update:modelValue": [value: string];
@@ -69,13 +76,17 @@ const emit = defineEmits<{
 // session store; a mount without a routed session (no id, or no pinia owner
 // for one) simply never has an offer to show.
 const route = useRoute();
-const sessionId = computed(() =>
-    typeof route?.params?.id === "string" ? route.params.id : "",
+const activeSessionId = computed(() =>
+    typeof props.sessionId === "string" && props.sessionId !== ""
+        ? props.sessionId
+        : typeof route?.params?.id === "string"
+          ? route.params.id
+          : "",
 );
 const suggestion = computed<string | null>(() =>
-    sessionId.value === ""
+    activeSessionId.value === ""
         ? null
-        : useSessionStore(sessionId.value).state.suggestedPrompt,
+        : useSessionStore(activeSessionId.value).state.suggestedPrompt,
 );
 
 const initialDelivery = (): Delivery => props.defaultDelivery ?? "steer";
@@ -537,7 +548,7 @@ async function sendTake(finished: Take): Promise<void> {
         const audioBase64 = await encodeTakeBase64(finished.blob);
         if (token !== transcribeToken) return;
         const submitted = await store.request("audio.transcribe", {
-            sessionId: sessionId.value,
+            sessionId: activeSessionId.value,
             audioBase64,
             mime: finished.mime,
             language: navigator.language,
@@ -549,7 +560,7 @@ async function sendTake(finished: Take): Promise<void> {
             await new Promise((resolve) => setTimeout(resolve, 500));
             if (token !== transcribeToken) return;
             const status = await store.request("audio.status", {
-                sessionId: sessionId.value,
+                sessionId: activeSessionId.value,
                 jobId: submitted.jobId,
             });
             if (status.state === "done") {
@@ -585,7 +596,7 @@ async function toggleServerTake(): Promise<void> {
     if (voiceState.value !== "") return; // transcribing: the button waits its turn
     dictationNotice.value = "";
     interim.value = "";
-    if (sessionId.value === "") {
+    if (activeSessionId.value === "") {
         dictationNotice.value = t("web.composer.voice.no_session");
         return;
     }
@@ -748,8 +759,8 @@ function onKeydown(event: KeyboardEvent): void {
         // clear-then-read would emit null.
         event.preventDefault();
         const offer = suggestion.value;
-        if (sessionId.value !== "")
-            useSessionStore(sessionId.value).state.suggestedPrompt = null;
+        if (activeSessionId.value !== "")
+            useSessionStore(activeSessionId.value).state.suggestedPrompt = null;
         emit("update:modelValue", offer);
         return;
     }
@@ -845,7 +856,7 @@ function answerQuickAdd(): boolean {
         void confirmQuickAdd();
         return true;
     }
-    if (props.busy || sessionId.value === "") return false;
+    if (props.busy || activeSessionId.value === "") return false;
     if (images.value.length > 0 || documents.value.length > 0) return false;
     const line = quickAddLine(props.modelValue);
     if (line === null) return false;
@@ -856,12 +867,12 @@ function answerQuickAdd(): boolean {
 
 async function confirmQuickAdd(): Promise<void> {
     const offer = quickAdd.value;
-    if (offer === null || quickAddBusy.value || sessionId.value === "") return;
+    if (offer === null || quickAddBusy.value || activeSessionId.value === "") return;
     quickAddBusy.value = true;
     quickAddError.value = null;
     try {
         await useConnectionStore().request("context.instructionWrite", {
-            sessionId: sessionId.value,
+            sessionId: activeSessionId.value,
             path: "personal",
             append: offer.line,
         });
