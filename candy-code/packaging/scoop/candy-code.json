@@ -1,0 +1,21 @@
+{
+    "version": "{{VERSION}}",
+    "description": "Terminal coding agent for PHP projects",
+    "homepage": "https://github.com/detain/sugarcraft",
+    "license": "MIT",
+    "depends": "php",
+    "url": [
+        "https://github.com/detain/sugarcraft/releases/download/candy-code/v{{VERSION}}/candy-code.phar#/candy-code",
+        "https://github.com/detain/sugarcraft/releases/download/candy-code/v{{VERSION}}/candy-code.cmd#/candy-code.cmd"
+    ],
+    "hash": [
+        "{{SHA256_PHAR}}",
+        "{{SHA256_CMD}}"
+    ],
+    "bin": "candy-code.cmd",
+    "checkver": {
+        "url": "https://github.com/detain/sugarcraft/releases/latest",
+        "regex": "candy-code/v([\\d.]+)/candy-code\\.phar"
+    },
+    "test": "candy-code --version"
+}

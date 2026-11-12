@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.singleton.1.6.0.schema.json
+PackageIdentifier: SugarCraft.CandyCode
+PackageVersion: "{{VERSION}}"
+PackageLocale: en-US
+Publisher: SugarCraft
+PublisherUrl: https://github.com/detain/sugarcraft
+PackageName: candy-code
+PackageUrl: https://github.com/detain/sugarcraft
+License: MIT
+ShortDescription: Terminal coding agent for PHP projects
+Moniker: candy-code
+Tags:
+  - php
+  - terminal
+  - agent
+Dependencies:
+  PackageDependencies:
+    - PackageIdentifier: PHP.PHP
+Installers:
+  - Architecture: x64
+    InstallerType: zip
+    InstallerUrl: https://github.com/detain/sugarcraft/releases/download/candy-code/v{{VERSION}}/candy-code-windows.zip
+    InstallerSha256: "{{SHA256_ZIP}}"
+    NestedInstallerType: portable
+    NestedInstallerFiles:
+      - RelativeFilePath: candy-code.cmd
+        PortableCommandAlias: candy-code
+      - RelativeFilePath: candy-code.phar
+ManifestType: singleton
+ManifestVersion: 1.6.0
