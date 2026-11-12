@@ -237,6 +237,17 @@ final class InterpolationOpenerTokenTest extends TestCase
             . 'token can reach it: the gap is in the selection, not in the walker — the '
             . 'same family as the ShellSubjectToolsCompletenessTest row.',
         ],
+        // cc-fix-1111 closeout: n32 (80a2abe31) grew a second structural-pin
+        // sliceFunctionBody in the wire test - the same blind selection.
+        'tests/MCP/McpNestedArgumentsWireTest.php' => [
+            'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
+            'reason' =>
+            'sliceFunctionBody() counts the raw \'{\'/\'}\' CHARACTERS of a src/MCP '
+            . 'file\'s text from a `function <name>(` hit to its matching brace, for '
+            . 'structural pins. Its input is source TEXT, never token_get_all() output, '
+            . 'so no PHP opener token can reach it: the gap is in the selection, not in '
+            . 'the walker — the same family as the ShellSubjectToolsCompletenessTest row.',
+        ],
     ];
 
     /**
