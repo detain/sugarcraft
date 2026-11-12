@@ -79,21 +79,31 @@ final class WorkflowToolForkTest extends TestCase
 
     /**
      * The test reads the tools the agent's REQUEST carries — what is really
-     * on its wire. On the pool path every parallel agent's request carries
-     * the first task's grant today (WorkflowEngine's E641 note), so a stage
-     * whose first agent may ask keeps every agent inline.
+     * on its wire. Every parallel agent rides its own `tools:` grant (C4), so
+     * one stage can be mixed: the Bash agent stays in the turn's process
+     * while its Read-only sibling forks — in either declaration order, which
+     * proves the judgement is per agent, not the first task's.
      */
     public function testEachAgentIsJudgedOnTheToolsItsRequestCarries(): void
     {
         $plan = "stages:\n  - name: sweep\n    parallel: true\n    agents:\n"
             . "      - {type: x, name: shell, prompt: one, tools: [Bash]}\n"
             . "      - {type: x, name: reader, prompt: two, tools: [Read]}\n";
-        $result = $this->tool(['Read', 'Bash'])->execute(['plan' => $plan]);
+        $reversed = "stages:\n  - name: sweep\n    parallel: true\n    agents:\n"
+            . "      - {type: x, name: reader, prompt: two, tools: [Read]}\n"
+            . "      - {type: x, name: shell, prompt: one, tools: [Bash]}\n";
 
-        $this->assertFalse($result->isError(), $result->content());
-        $row = WorkflowToolTest::document($result->content())['stages'][0];
-        $this->assertSame('parallel: inline (agent "shell" may ask: Bash; 1 more inline)', $row['dispatch']);
-        $this->assertSame([(int) getmypid(), (int) getmypid()], self::pids($row['output']));
+        foreach (['shell first' => $plan, 'reader first' => $reversed] as $label => $yaml) {
+            $result = $this->tool(['Read', 'Bash'])->execute(['plan' => $yaml]);
+
+            $this->assertFalse($result->isError(), $result->content());
+            $row = WorkflowToolTest::document($result->content())['stages'][0];
+            $this->assertSame('parallel: 1 forked, 1 inline (agent "shell" may ask: Bash)', $row['dispatch'], $label);
+            $pids = self::pids($row['output']);
+            $this->assertCount(2, $pids, $label);
+            $this->assertSame(1, count(array_filter($pids, static fn (int $pid): bool => $pid === (int) getmypid())), $label . ': exactly the shell agent ran in the turn process');
+            $this->assertCount(2, array_unique($pids), $label . ': the reader ran in a child of its own');
+        }
     }
 
     public function testTheSummaryCountsAMixedStage(): void
