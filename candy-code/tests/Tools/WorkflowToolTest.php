@@ -186,10 +186,53 @@ final class WorkflowToolTest extends TestCase
         $this->assertStringContainsString('needs a non-empty "plan"', $tool->execute([])->content());
         $this->assertStringContainsString('needs a non-empty "plan"', $tool->execute(['plan' => '  '])->content());
         $this->assertStringContainsString('"context" must be an object', $tool->execute(['plan' => 'stages: []', 'context' => ['a', 'b']])->content());
-        $this->assertStringContainsString('"context.k" must be a string', $tool->execute(['plan' => 'stages: []', 'context' => ['k' => ['x']]])->content());
+        $this->assertStringContainsString('"context.k" must be a JSON value', $tool->execute(['plan' => 'stages: []', 'context' => ['k' => NAN]])->content());
+        $this->assertStringContainsString('"context.k" must be a JSON value', $tool->execute(['plan' => 'stages: []', 'context' => ['k' => ['deep' => [INF]]]])->content());
         $reserved = $tool->execute(['plan' => 'stages: []', 'context' => ['@results' => 'x']]);
         $this->assertTrue($reserved->isError());
         $this->assertStringContainsString('@results', $reserved->content());
+    }
+
+    /**
+     * B3: `context` carries any JSON value. A list drives a
+     * `from: {context: files}` fan-out through the tool unchanged, and an
+     * array in a plain `{{key}}` reaches the prompt as compact JSON.
+     */
+    public function testAListContextDrivesADataFanOutEndToEnd(): void
+    {
+        $provider = new ScriptedProvider([
+            new CompleteResponse(content: 'read A'),
+            new CompleteResponse(content: 'read B'),
+            new CompleteResponse(content: 'read C'),
+            new CompleteResponse(content: 'summed'),
+        ]);
+        $plan = "stages:\n"
+            . "  - name: each\n    parallel: true\n    from: {context: files}\n    prompt: \"Read {{item}} (#{{index}})\"\n    tools: [Edit]\n"
+            . "  - name: sum\n    prompt: \"Sum {{files}} with {{opts}}\"\n    tools: [Edit]\n";
+
+        $result = $this->tool($provider, [self::probe('Edit')])->execute([
+            'plan' => $plan,
+            'context' => ['files' => ['src/A.php', 'src/B.php', 'src/C.php'], 'opts' => ['deep' => true]],
+        ]);
+
+        $this->assertFalse($result->isError(), $result->content());
+        $this->assertCount(4, $provider->requests);
+        $this->assertSame(
+            ['Read src/A.php (#0)', 'Read src/B.php (#1)', 'Read src/C.php (#2)'],
+            array_map(self::lastUserTurn(...), array_slice($provider->requests, 0, 3)),
+            'one agent per list item, in order',
+        );
+        $this->assertSame('Sum ["src/A.php","src/B.php","src/C.php"] with {"deep":true}', self::lastUserTurn($provider->requests[3]));
+        $stages = self::document($result->content())['stages'];
+        $this->assertSame(['completed', 'completed'], array_column($stages, 'status'));
+    }
+
+    public function testTheContextSchemaAdmitsAnyJsonValue(): void
+    {
+        $context = (new WorkflowTool())->inputSchema()['properties']['context'];
+
+        $this->assertSame('object', $context['type']);
+        $this->assertSame('{}', json_encode($context['additionalProperties']), 'an empty schema: any JSON value');
     }
 
     public function testAnUnboundToolRefusesRatherThanFabricating(): void

@@ -140,14 +140,16 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
                     'type' => 'string',
                     'description' => 'The workflow as YAML: `stages:` (required) plus optional `name`, `description` and '
                         . '`config: {timeout, maxConcurrent}`. Each stage is one shape: a plain task (`prompt`, `tools`, … '
-                        . 'on the stage), a `tasks:` list run in order, `parallel: true` with `agents:` or a `from: {glob}` '
-                        . 'fan-out, `type: pipeline` with nested `stages:`, `type: verification` with `task:` + `verifier:`, '
+                        . 'on the stage), a `tasks:` list run in order, `parallel: true` with `agents:` or a `from:` fan-out '
+                        . '(`{glob}`, `{stage, pointer}` or `{context}`), `type: pipeline` with nested `stages:`, `type: verification` with `task:` + `verifier:`, '
                         . 'or `uses: <saved workflow>` with `with:`. Stage modifiers: `when`, `loop`, `capture`, `cache`.',
                 ],
                 'context' => [
                     'type' => 'object',
-                    'description' => 'Values for `{{key}}` placeholders in the stage prompts, as strings; keys must not start with `@`.',
-                    'additionalProperties' => ['type' => 'string'],
+                    'description' => 'The run context: values for `{{key}}` placeholders in the stage prompts (an array or object '
+                        . 'renders as compact JSON) and the lists a `from: {context: key}` fan-out walks. Any JSON value; '
+                        . 'keys must not start with `@`.',
+                    'additionalProperties' => new \stdClass(),
                 ],
                 'dryRun' => [
                     'type' => 'boolean',
@@ -180,9 +182,16 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
         if (!is_array($context) || ($context !== [] && array_is_list($context))) {
             return new ToolResult($toolCallId, 'Error: "context" must be an object of placeholder values.', true);
         }
+        // Arrays and objects pass through untouched: the engine renders them
+        // as compact JSON in a `{{key}}` and walks a list for
+        // `from: {context: key}`. Only `@` keys (the engine's own run-state
+        // namespace) and a value JSON cannot carry are refused here.
         foreach ($context as $key => $value) {
-            if (!is_scalar($value)) {
-                return new ToolResult($toolCallId, sprintf('Error: "context.%s" must be a string, number or boolean.', $key), true);
+            if (str_starts_with((string) $key, '@')) {
+                return new ToolResult($toolCallId, sprintf('Error: "context.%s" is not allowed: keys starting with "@" are reserved for the workflow engine.', $key), true);
+            }
+            if (json_encode($value, JSON_PRESERVE_ZERO_FRACTION) === false) {
+                return new ToolResult($toolCallId, sprintf('Error: "context.%s" must be a JSON value (string, number, boolean, null, array or object).', $key), true);
             }
         }
 
