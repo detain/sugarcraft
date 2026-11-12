@@ -13,11 +13,11 @@
 # WorkflowRegistry lookup path) and run it via the /workflow command inside
 # the chat TUI: `/workflow run fix-wave files=src/A.php,src/B.php spec=docs/briefs/migration.md`.
 #
-# Parameters (run-context values are whitespace-split, so no value may
-# contain a space — the file list is comma-separated for that reason, and
-# the prose of the job lives in a spec FILE every shard Reads):
-#   - files: comma-separated work list (src/A.php,src/B.php,...).
-#   - spec:  path to the written brief describing the fix to apply.
+# Parameters:
+#   - files: comma-separated work list (src/A.php,src/B.php,...). Quote it
+#     if a path holds a space: files="src/A.php,src/My Dir/B.php".
+#   - spec:  path to the written brief describing the fix to apply. The
+#     prose of the job lives in that FILE so every shard Reads the same text.
 #
 # Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow):
 #   - top-level "name" is required; "description" and "config" are optional.
@@ -25,8 +25,9 @@
 #     list of "agents") and one regular stage (agent/prompt/tools);
 #     WORKFLOWS.md is the source of truth for every stage shape and key the
 #     grammar accepts.
-#   - {{var}} interpolates initial run() context; {{stageName.output}}
-#     interpolates a prior stage's collected output.
+#   - {{var}} interpolates initial run() context. "summarize" reads the
+#     wave through an "input:" join ({{input}}): the parallel stage's
+#     output is every shard's report, joined by newlines.
 #   - config.maxConcurrent bounds how many parallel-stage agents run at
 #     once; config.timeout is each stage's wall-clock budget in seconds, the
 #     only timeout this file sets. WORKFLOWS.md is the source of truth for
@@ -35,18 +36,20 @@
 #     on agents that are safe to run twice. The shards edit files, so they
 #     carry none; "summarize" is read-only, so it carries one.
 #
-# Driver-contract notes (what nothing in this file gates):
-#   - This file's shard count is fixed at write-time — the three shards
-#     above are written in full, not generated from {{files}}. Three static
-#     shards therefore split the list by position: every 3rd entry starting
-#     at 1/2/3 covers it exactly.
-#   - Each shard's outputSchema result comes back as TEXT inside
-#     {{wave.output}}; summarize re-reads it as prose — this file does no
-#     filtering, counting, or merging of fields between the stages.
-#   - Nothing in this file branches on a shard's result or stops the run
-#     early when every file is already clean: the two stages above are
-#     unconditional. WORKFLOWS.md is the source of truth for what the
-#     grammar can gate or condition on.
+# Shape notes (what this file does and does not do):
+#   - The shard count is fixed at write-time — the three shards below are
+#     written in full, not generated from {{files}}. A parallel stage's
+#     runtime fan-out ("from:") expands a GLOB, not a run-context list, so
+#     three static shards split the list by position instead: every 3rd
+#     entry starting at 1/2/3 covers it exactly.
+#   - The shards carry an outputSchema, but they run tools before
+#     answering and the schema rides only the first request, so a report
+#     can arrive as prose wrapped in the engine's "not constrained to the
+#     output schema" disclosure. "summarize" re-reads every report as
+#     text and does the counting itself.
+#   - Nothing here branches on a shard's result: "when:" can gate a stage
+#     on a prior stage's text, but every stage of this pass is meant to
+#     run. Re-run the workflow over whatever "summarize" lists as risky.
 #   - The shards edit the SHARED checkout — safe only because their file
 #     sets are disjoint by list position. Set `isolation: worktree` on each
 #     shard to keep each one in its own branch instead, but NOTHING merges
@@ -64,7 +67,7 @@ stages:
   - name: wave
     parallel: true
     agents:
-      - name: shard-one
+      - name: shard_one
         type: coder
         prompt: >
           Read the job brief at {{spec}}. The work list is {{files}} —
@@ -89,7 +92,7 @@ stages:
               type: string
           required: [changed, skipped, notes]
 
-      - name: shard-two
+      - name: shard_two
         type: coder
         prompt: >
           Read the job brief at {{spec}}. The work list is {{files}} —
@@ -114,7 +117,7 @@ stages:
               type: string
           required: [changed, skipped, notes]
 
-      - name: shard-three
+      - name: shard_three
         type: coder
         prompt: >
           Read the job brief at {{spec}}. The work list is {{files}} —
@@ -141,9 +144,12 @@ stages:
 
   - name: summarize
     agent: reviewer
+    input:
+      from: [wave]
+      as: all
     prompt: >
       The parallel stage above reported each shard's changed and skipped
-      files as JSON blobs: {{wave.output}}. Merge the three shard reports
+      files, each report a JSON object or prose: {{input}} Merge the three shard reports
       into one summary — total files changed, files skipped, and any risks
       or inconsistencies you spot between the shards. Do not edit anything:
       this stage has no tools at all.

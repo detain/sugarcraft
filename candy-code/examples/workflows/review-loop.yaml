@@ -1,4 +1,5 @@
-# review-loop — build from a spec file, review with a structured verdict, address it.
+# review-loop — build from a spec file, then review and fix in an engine loop,
+# then gate the run on an independent sign-off verdict.
 #
 # Loadable directly via SugarCraft\Code\Workflows\WorkflowRegistry:
 #
@@ -9,51 +10,53 @@
 # Or drop a copy in ~/.candy-code/workflows/review-loop.yaml (the default
 # WorkflowRegistry lookup path) and run it via the /workflow command inside
 # the chat TUI: `/workflow run review-loop specfile=docs/briefs/feature.md`.
+# Run-context values may be quoted (`specfile="docs/my brief.md"`); the
+# spec still lives in a FILE so every stage Reads the same text instead of
+# carrying it inline in each prompt.
 #
-# Parameters (run-context values are whitespace-split, so no value may
-# contain a space — which is why the task prose lives in a spec FILE that
-# every stage Reads, and only its path is passed):
+# Parameters:
 #   - specfile: path to the written spec to implement and review against.
 #
-# Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow):
+# Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow;
+# docs/WORKFLOWS.md is the source of truth for every key):
 #   - top-level "name" is required; "description" and "config" are optional.
-#   - the stages this file uses are regular stages (agent/prompt/tools);
-#     WORKFLOWS.md is the source of truth for every stage shape and key the
-#     grammar accepts.
-#   - {{var}} interpolates initial run() context; {{stageName.output}}
-#     interpolates a prior stage's collected output.
-#   - config.timeout is each stage's wall-clock budget in seconds, the only
-#     timeout spelling this file uses. maxConcurrent is omitted because this
-#     workflow has no parallel stage. WORKFLOWS.md is the source of truth
-#     for every timeout spelling the grammar accepts.
-#   - "retries" goes only on agents that are safe to run twice: "review"
-#     just reads, so it carries one; "build" and "address" edit files, so
-#     they carry none.
+#   - {{var}} interpolates initial run() context; {{round}} is the 1-based
+#     round number the engine injects while a "loop:" stage runs; inside a
+#     "tasks:" list, {{prevResult}} is the previous task's output.
+#   - config.timeout is each stage's wall-clock budget in seconds; a looped
+#     stage's rounds and a verification stage's task + verifier share it.
+#   - "retries" goes only on agents that are safe to run twice: the
+#     reviewers just read, so they carry one; "build" and "address" edit
+#     files, so they carry none.
 #
-# Driver-contract notes (why this is a three-stage pass, not a loop):
-#   - "address" runs UNCONDITIONALLY. Nothing in this file gates the run on
-#     the verdict, so the APPROVE branch is carried by the address prompt
-#     itself: with a clean verdict it must change nothing and say so. That
-#     is a convention, not a gate. WORKFLOWS.md is the source of truth for
-#     what the grammar can gate or condition on.
-#   - The loop therefore lives with the DRIVER: re-run this workflow until
-#     the review stage's verdict reads APPROVE with zero findings. The
-#     gating spellings the grammar can express live in WORKFLOWS.md, not
-#     in this file — the shape above is deliberately a single pass.
-#   - "review" uses tools before answering, and outputSchema rides the
-#     first request, so its output can arrive wrapped in the engine's "not
-#     constrained to the output schema" disclosure instead of the JSON
-#     shape below. A driver should treat any output that does not parse as
-#     a verdict as NEEDS-FIX.
-#   - {{review.output}} reaches "address" as a text blob, not parsed data —
-#     the addressing coder re-reads the verdict by eye.
+# Shape (why three stages, and where the loop lives):
+#   - "fix" is a plain stage with a two-task list, re-dispatched by "loop:"
+#     until its "verdict" task's reply carries the line "VERDICT: APPROVE",
+#     at most 3 rounds. The until-clause names the TASK "verdict": no stage
+#     carries that name, so the condition reads the task's recorded result,
+#     which every round overwrites with the newest review.
+#   - Tasks of one stage cannot be skipped one by one ("when:" is
+#     stage-level), so "address" runs in the approving round too; its prompt
+#     makes it a no-op there. The loop then ends on that round.
+#   - A loop that spends all its rounds still COMPLETES (loop: means "try up
+#     to N times", not "fail if it never happens") and the last round's
+#     fixes were never reviewed. "signoff" is the gate: a type: verification
+#     stage whose verifier "reject:"s any reply without an APPROVE line.
+#     "retries: 1" re-asks a FRESH verifier against the same task result (a
+#     second opinion; the fixer is not re-run). A rejection the retry does
+#     not overturn fails the run; /workflow resume re-runs "signoff" only.
+#   - A verifier line starting "ESCALATE:" stops the run for a person
+#     without spending a retry — the spec is ambiguous, not the code wrong.
+#   - The reviewers answer in prose ending in a fixed VERDICT line rather
+#     than through outputSchema: they run tools before answering, and the
+#     schema rides only the first request, so the line is the dependable
+#     contract.
 
 name: review-loop
 description: >
-  Implement the spec at the given file, review the working tree against
-  that same spec with a structured APPROVE/NEEDS-FIX verdict, then hand
-  the verdict to a coder that addresses the findings; the driver re-runs
-  the workflow until the verdict is APPROVE.
+  Implement the spec at the given file, then loop review and fix until a
+  reviewer approves (at most three rounds), then fail the run unless an
+  independent sign-off verifier approves too.
 
 stages:
   - name: build
@@ -65,37 +68,60 @@ stages:
       changed and how each spec requirement is met.
     tools: [Read, Edit, Grep, Glob, Bash]
 
-  - name: review
-    agent: reviewer
-    prompt: >
-      Read the spec at {{specfile}}, then review the changes made for it
-      (see the build report: {{build.output}}) against the spec. Report
-      every finding — missing requirement, bug, convention violation —
-      with its file:line, and set verdict to APPROVE only if there are no
-      findings at all.
-    tools: [Read, Grep, Glob, Bash]
-    retries: 1
-    outputSchema:
-      type: object
-      properties:
-        verdict:
-          type: string
-          enum: [APPROVE, NEEDS-FIX]
-        findings:
-          type: array
-          items:
-            type: string
-      required: [verdict, findings]
+  - name: fix
+    loop:
+      max: 3
+      until:
+        stage: verdict
+        matches: '/^VERDICT: APPROVE[ \t]*$/m'
+    tasks:
+      - name: verdict
+        agent: reviewer
+        prompt: >
+          Review round {{round}}. Read the spec at {{specfile}}, then review
+          the working tree's changes for it against the spec. Report every
+          finding — missing requirement, bug, convention violation — with
+          its file:line. End your reply with exactly one line, either
+          "VERDICT: APPROVE" (no findings at all) or "VERDICT: NEEDS-FIX".
+        tools: [Read, Grep, Glob, Bash]
+        retries: 1
 
-  - name: address
-    agent: coder
-    prompt: >
-      The reviewer's structured verdict for the last pass is below. If
-      verdict is APPROVE and findings is empty, change NOTHING and reply
-      exactly "no-changes". Otherwise apply every listed finding, then
-      report what you changed:
-      {{review.output}}
-    tools: [Read, Edit, Grep, Glob, Bash]
+      - name: address
+        agent: coder
+        prompt: >
+          The review below just ran. If its last line is "VERDICT: APPROVE",
+          change NOTHING and reply exactly "no-changes". Otherwise apply
+          every listed finding, then report what you changed:
+          {{prevResult}}
+        tools: [Read, Edit, Grep, Glob, Bash]
+
+  - name: signoff
+    type: verification
+    task:
+      name: summary
+      agent: reviewer
+      prompt: >
+        Summarize the change made in this checkout for the spec at
+        {{specfile}}: every file created or changed, and for each spec
+        requirement, where it is met. Edit nothing.
+      tools: [Read, Grep, Glob, Bash]
+    verifier:
+      name: final_review
+      agent: reviewer
+      prompt: >
+        You are the final, independent reviewer. Read the spec at
+        {{specfile}} and check the working tree against it, using this
+        summary as a map (verify it; do not trust it): {{prevResult}}
+        If the spec is too ambiguous to judge, start a line with
+        "ESCALATE: <your question>" instead of a verdict. Otherwise list
+        any remaining findings with file:line and end with exactly one
+        line, "VERDICT: APPROVE" or "VERDICT: NEEDS-FIX".
+      tools: [Read, Grep, Glob, Bash]
+      retries: 1
+      # Fail closed: matches (and so rejects) any reply that has NO line
+      # reading exactly "VERDICT: APPROVE" — a NEEDS-FIX verdict and a
+      # reply that forgot the verdict line both fail the stage.
+      reject: '/\A(?![\s\S]*^VERDICT: APPROVE[ \t]*$)/m'
 
 config:
   timeout: 2400

@@ -702,9 +702,10 @@ of these rather than loading a workflow that quietly does less:
   ignored. Placement of a *known* key on the wrong shape (a `prompt:` beside
   a `tasks:` list) stays the dedicated per-shape refusals' job.
 
-Stage numbering in messages is **0-based** (the list index), while the comments
-in `examples/workflows/` number stages from 1. That is worth knowing when reading
-an error.
+Stage numbering differs by surface. The loader's `stage #N` messages are
+**0-based** (the list index); the linter's `Stage #N` / `stage #N` and the
+`Workflow` tool report's `Stage N:` headings count from 1. That is worth knowing
+when reading an error.
 
 ### Interpolation
 
@@ -856,10 +857,19 @@ not `hasFindings()`): a warning-only plan prints its verdict line but is not
 flagged — errors flag the row, warnings surface in the verdict line only. A
 `.php` path is refused (it would execute at load); a `.yaml` or `.yml` path is
 read as DATA (`fromYamlString`); any other argument resolves the name from the
-registry. ERRORS: unsupported stage types, unknown or forward `.results`
-references, `reject` outside the verifier slot, non-compiling PCRE,
-out-of-universe tool patterns, and bound violations. WARNINGS: bare unknown
-`{{token}}`, an empty prompt, and retries above the warn ceiling.
+registry. ERRORS: unsupported stage types, unknown or forward `.results` and
+`.output` references, duplicate result keys, `reject` outside the verifier
+slot, non-compiling PCRE, out-of-universe or unregistered tool declarations,
+a `uses:` chain that cycles or runs too deep, and bound violations. WARNINGS:
+bare unknown `{{token}}`, an empty prompt, an unnamed stage, a plan with no
+stages, a parallel stage whose agents all share the checkout, an unsatisfiable
+`rejectMinOccurrences`, and retries above the warn ceiling.
+
+`/workflow run <name> key=value …` seeds the run context from the pairs after
+the name. Pairs are split on whitespace outside quotes, and a `"…"` or `'…'`
+span keeps its spaces — `/workflow run review-loop specfile="docs/my brief.md"`
+— with the quotes removed. A pair with no `=`, an empty key, an `@`-prefixed
+key or an unterminated quote is refused before anything is dispatched.
 
 **2026-09-10 (the seam fully closed): what `/workflow run`
 reports for a sub-agent changed under you, and the change is on purpose.**
@@ -934,11 +944,14 @@ decides for the dead. Records written before the stamps existed carry none and
 keep behaving as they always did.
 
 The record also carries a purely additive `stageInputHashes` map — per
-settled stage, a sha256 over its pre-interpolation prompt templates plus each
-task's model and schema identity. It is the substrate a future resume-side
-result cache (C13) will use to skip re-dispatching an unchanged stage; today
-nothing acts on it, and records written before it existed (or stages a
-resumed run never settled itself) read as a cache miss, never as corruption.
+settled stage, a sha256 over its stage type and its pre-interpolation prompt
+templates plus each task's model and schema identity (a `uses:` stage hashes
+the included name and its `with:` templates instead). It is what the opt-in
+[`cache:`](#cache-reuses-a-recorded-stage-result-on-resume-opt-in) door compares
+on resume to carry an unchanged stage without re-dispatching it; a stage
+without `cache: true` records its hash and is re-run regardless. Records
+written before the map existed (or stages a resumed run never settled itself)
+read as a cache miss, never as corruption.
 
 ### Pause, resume, status
 
@@ -1178,9 +1191,12 @@ error result.
 **1. A stage's tasks run one after another, never at once.** A regular stage
 may hold several tasks — a list in PHP, `->stage('work', [Tasks::agent('architect')->name('plan'), Tasks::agent('coder')])`,
 or a `tasks:` list in YAML, whose entries take the one-task stage's keys
-(`agent`, `name`, `prompt`, `tools`, `retries`, `outputSchema`, `isolation`, `model`, `resource`, `lockWaitSeconds`);
-`capture` is the stage's own flag, not a task key, so it lives on the stage
-map even when the stage lists `tasks:`:
+(every key of `WorkflowRegistry::YAML_TASK_KEYS`: `agent`, `name`, `prompt`,
+`tools`, `retries`, `outputSchema`, `isolation`, `model`, `resource`,
+`lockWaitSeconds`, `timeout`, `reject`, `rejectMinOccurrences`, `stallTimeout`,
+`restarts`, `input`); `capture`, `cache`, `when` and `loop` are the stage's own
+keys, not task keys, so they live on the stage map even when the stage lists
+`tasks:`:
 
 ```yaml
 - name: fix
@@ -1264,11 +1280,14 @@ return (new WorkflowBuilder())
 
 `TaskBuilder` carries `agent()`, `prompt()`, `tools()`, `timeout()`,
 `retries()`, `isolation()`, `name()`, `outputSchema()`, `model()`, `reject()`,
-`resource()`, `lockWaitSeconds()`, `stallTimeout()` and `restarts()`. `timeout` and `reject` have
-**no
-YAML spelling**, so a YAML-declared task never carries them; `retries`,
-`outputSchema` and `isolation` are the `retries:`, `outputSchema:` and
-`isolation:` keys above. `WorkflowEngine` substitutes defaults for whatever a task
+`resource()`, `lockWaitSeconds()`, `stallTimeout()`, `restarts()` and
+`input()`. Every one has a YAML spelling — the keys of
+`WorkflowRegistry::YAML_TASK_KEYS`, `agent:`/`type:` for `agent()` and
+`reject:` plus `rejectMinOccurrences:` for `reject()`'s pattern and
+`atLeast` — so a YAML-declared task reaches the same DTO fields a PHP one
+does. The stage-level flags are `WorkflowBuilder`'s: `capture` and `cache`
+are named arguments of `stage()`/`parallel()`/`pipeline()`/`withVerification()`/`uses()`,
+and `when()`/`loop()` attach to the stage added last. `WorkflowEngine` substitutes defaults for whatever a task
 leaves unset when it builds the `SubAgent`:
 `$task->timeout ?? config.timeout` seconds, `$task->retries ?? 0`,
 `$task->isolation ?? Isolation::None`, `$task->stallTimeout ?? 0` and
@@ -1308,9 +1327,12 @@ describes.
 `timeout()` — spelled `timeout:` on any task map, list entry, parallel agent,
 pipeline step or verification sub-map in YAML — bounds that one agent, and
 `reject()` with its optional `atLeast` — spelled `reject:` and
-`rejectMinOccurrences:` on a verification stage's `verifier:` (or `task:`) map
-— carries the verdict pattern onto the DTO, after which the semantics below are
-identical whatever spelling authored it.
+`rejectMinOccurrences:` on a verification stage's `verifier:` map (the keys
+parse on every task surface; the engine's pre-flight refuses them anywhere
+else) — carries the verdict pattern onto the DTO, after which the semantics
+below are identical whatever spelling authored it. `input()` — spelled
+`input:` — is the join described in
+[Joining prior stages with `input:`](#joining-prior-stages-with-input).
 
 ### `reject()` fails a stage on the verifier verdict
 
@@ -1378,11 +1400,17 @@ Semantics, precisely:
   below — that scan answers "did a human get asked?", not "did the rule fire",
   so it changes outcomes only when the marker is actually present.
 
-This is what makes a review→fix→re-review loop an engine feature rather than an
-operator habit: the fixer task runs, the verifier judges, a rejecting verdict
-consumes a retry (or stops the run for `/workflow resume` after you act on the
-reason), and stage tokens and cost already fold every attempt into the run
-totals.
+This is what makes a review→fix→re-review gate an engine feature rather than an
+operator habit: the fixer task runs once, the verifier judges, a rejecting
+verdict consumes a retry by asking a fresh verifier about the same task result
+(the fixer is not re-run), and a verdict that still rejects stops the run for
+`/workflow resume` — which re-runs the whole stage, task included, after you
+act on the reason. Stage tokens and cost already fold every attempt into the
+run totals. To re-run the *fixer* until a reviewer approves inside one run, put
+both in a plain stage's `tasks:` list under
+[`loop:`](#loop-re-runs-a-stage-until-a-clause-holds) and gate the result with a
+verification stage after it — `examples/workflows/review-loop.yaml` is that
+shape.
 
 ### `ESCALATE:` stops the run for a human — retries never burn
 

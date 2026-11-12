@@ -14,11 +14,27 @@ use SugarCraft\Code\Workflows\WorkflowBuilder;
  * expert sources, then synthesizing findings into a comprehensive report.
  *
  * Workflow stages:
- *  1. plan       - Planner breaks down the research question into investigation areas
- *  2. research  - Parallel researchers explore docs, code, pitfalls, and integration
- *  3. synthesize - Synthesizer collects findings and identifies gaps/conflicts
- *  4. report     - Produces structured report with findings, examples, and references
- *  5. refine     - Iterative re-planning if original assumptions were incorrect
+ *  1. plan        - Planner breaks down the research question into investigation areas
+ *  2. investigate - Parallel researchers explore docs, code, pitfalls, and integration
+ *  3. synthesize  - Synthesizer collects findings and names the gaps, one GAP: line each
+ *  4. follow_up   - ONE extra research round, run only when synthesize named a gap
+ *  5. report      - Produces structured report with findings, examples, and references
+ *
+ * Shape notes:
+ *  - Task names are snake_case so every result is addressable as
+ *    `{{name.results}}`; a hyphenated name is recorded but can never be read
+ *    back (docs/WORKFLOWS.md, "What {{name.results}} is named by").
+ *  - `investigate` is captured (`capture: true`): downstream prompts get the
+ *    capture file's path plus a 2 KiB preview instead of four full reports,
+ *    and the readers carry `Read` to open the file. `synthesize` and `report`
+ *    reach earlier stages through `input:` joins rather than pasting
+ *    `{{stage.output}}` into each prompt.
+ *  - `follow_up` is gated by `when:` and is a single bounded round, not a
+ *    loop: `loop:` re-runs plain stages only, and the research it would
+ *    repeat is a parallel stage. A follow-up the gate skips records nothing,
+ *    so the report's join simply omits it.
+ *  - `report` returns the report as its answer; it holds `Read` only (to
+ *    open the capture file), never `Write`/`Edit`.
  *
  * @see SugarCraft\Code\Workflows\WorkflowRegistry
  */
@@ -28,7 +44,7 @@ return (new WorkflowBuilder())
     ->stage(
         'plan',
         Tasks::agent('planner')
-            ->name('research-planner')
+            ->name('research_planner')
             ->prompt(
                 'You are a research planner. Break down the research question "{{question}}" into ' .
                 'specific areas to investigate. Identify: 1) key concepts that need understanding, ' .
@@ -43,7 +59,7 @@ return (new WorkflowBuilder())
         'investigate',
         [
             Tasks::agent('researcher')
-                ->name('docs-explorer')
+                ->name('docs_explorer')
                 ->prompt(
                     'You are a documentation researcher. Using the research plan from {{plan.output}}, ' .
                     'investigate official documentation, tutorials, and reference materials for: {{question}}. ' .
@@ -54,7 +70,7 @@ return (new WorkflowBuilder())
                 ->timeout(900),
 
             Tasks::agent('researcher')
-                ->name('code-analyzer')
+                ->name('code_analyzer')
                 ->prompt(
                     'You are a code analysis researcher. Using the research plan from {{plan.output}}, ' .
                     'investigate example code, real-world usage patterns, and implementation details for: {{question}}. ' .
@@ -65,7 +81,7 @@ return (new WorkflowBuilder())
                 ->timeout(900),
 
             Tasks::agent('researcher')
-                ->name('pitfalls-researcher')
+                ->name('pitfalls_researcher')
                 ->prompt(
                     'You are a pitfalls researcher. Using the research plan from {{plan.output}}, ' .
                     'investigate common pitfalls, anti-patterns, and mistakes to avoid with: {{question}}. ' .
@@ -76,7 +92,7 @@ return (new WorkflowBuilder())
                 ->timeout(900),
 
             Tasks::agent('researcher')
-                ->name('integration-researcher')
+                ->name('integration_researcher')
                 ->prompt(
                     'You are an integration researcher. Using the research plan from {{plan.output}}, ' .
                     'investigate integration challenges, compatibility concerns, and ecosystem tooling ' .
@@ -86,36 +102,54 @@ return (new WorkflowBuilder())
                 )
                 ->tools(['Read', 'Grep', 'Glob', 'Bash'])
                 ->timeout(900),
-        ]
+        ],
+        capture: true,
     )
     ->stage(
         'synthesize',
         Tasks::agent('synthesizer')
-            ->name('findings-synthesizer')
+            ->name('findings_synthesizer')
             ->prompt(
                 'You are a research synthesizer. Review all findings from the parallel research stage ' .
                 'and synthesize them into a coherent picture of: {{question}}.\n\n' .
-                'Research findings:\n{{investigate.output}}\n\n' .
+                'The research stage\'s output was captured to a file; below is its path and a preview. ' .
+                'Read the file for the full findings.\n\n{{input}}\n\n' .
                 'Your task:\n' .
                 '1. Identify key themes and patterns across all research areas\n' .
                 '2. Note where findings confirm each other or conflict\n' .
                 '3. Identify gaps where more research is needed\n' .
                 '4. Flag any assumptions that may need validation\n' .
                 '5. Determine if the original research question needs refinement\n\n' .
-                'Format your response to highlight consensus, conflicts, gaps, and suggested follow-ups.'
+                'Format your response to highlight consensus, conflicts, and suggested follow-ups. ' .
+                'List every gap that needs more research as its own line starting with "GAP: ", ' .
+                'and write no line starting with "GAP: " when nothing is missing.'
             )
+            ->input(['from' => ['investigate'], 'as' => 'all'])
             ->tools(['Read', 'Grep'])
             ->timeout(600)
     )
     ->stage(
+        'follow_up',
+        Tasks::agent('researcher')
+            ->name('gap_researcher')
+            ->prompt(
+                'You are a follow-up researcher on: {{question}}.\n\n' .
+                'The synthesis below names the gaps the first research round left open, ' .
+                'one per line starting with "GAP: ". Investigate each gap and report what you found, ' .
+                'gap by gap; say plainly when a gap stays open.\n\n{{synthesize.output}}'
+            )
+            ->tools(['Read', 'Grep', 'Glob', 'WebFetch'])
+            ->timeout(900)
+    )
+    ->when(['stage' => 'synthesize', 'matches' => '/^GAP: /m'])
+    ->stage(
         'report',
         Tasks::agent('scribe')
-            ->name('report-writer')
+            ->name('report_writer')
             ->prompt(
                 'You are a technical writer producing a comprehensive research report on: {{question}}.\n\n' .
-                'Research plan: {{plan.output}}\n\n' .
-                'Research findings: {{investigate.output}}\n\n' .
-                'Synthesis: {{synthesize.output}}\n\n' .
+                'Below are the research plan, the research findings (captured to a file: Read it for the full text), ' .
+                'the synthesis, and, when one ran, the follow-up round:\n\n{{input}}\n\n' .
                 'Produce a structured report with these sections:\n\n' .
                 '## Background and Context\n' .
                 'What is this technology/concept? Why does it matter?\n\n' .
@@ -131,30 +165,12 @@ return (new WorkflowBuilder())
                 'Links to docs, tutorials, and relevant projects.\n\n' .
                 '## Open Questions and Research Gaps\n' .
                 'Areas that need more investigation.\n\n' .
-                'Be thorough but concise. Include realistic code examples.'
+                'Be thorough but concise. Include realistic code examples. ' .
+                'Return the report as your answer; do not write it to a file.'
             )
-            ->tools(['Read', 'Write', 'Edit'])
+            ->input(['from' => ['plan', 'investigate', 'synthesize', 'follow_up'], 'as' => 'all'])
+            ->tools(['Read'])
             ->timeout(900)
-    )
-    ->stage(
-        'refine',
-        Tasks::agent('planner')
-            ->name('refinement-planner')
-            ->prompt(
-                'You are a research refinement planner. Review the synthesized findings and report for: {{question}}.\n\n' .
-                'Synthesis: {{synthesize.output}}\n\n' .
-                'Report: {{report.output}}\n\n' .
-                'Determine if the original research assumptions were correct. If the findings reveal ' .
-                'that the original question was based on incorrect assumptions or missed the real issue, ' .
-                'propose a refined research question that better addresses what was actually discovered.\n\n' .
-                'Output one of:\n' .
-                '1. "RESEARCH COMPLETE" if the findings adequately answer the original question\n' .
-                '2. A refined research question if the original assumptions were wrong, along with ' .
-                '   specific areas that need re-investigation\n\n' .
-                'This stage enables iterative refinement when initial assumptions prove incorrect.'
-            )
-            ->tools(['Read', 'Grep'])
-            ->timeout(300)
     )
     ->maxConcurrent(5)
     ->timeout(3600)

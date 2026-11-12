@@ -10,9 +10,9 @@
 # WorkflowRegistry lookup path) and run it via the /workflow command inside
 # the chat TUI: `/workflow run docs-drift-sweep scope=docs/`.
 #
-# Parameters (run-context values are whitespace-split, so no value may
-# contain a space):
-#   - scope: the docs subtree to sweep, as a single path token.
+# Parameters:
+#   - scope: the docs subtree to sweep. A path with a space is quoted:
+#     `/workflow run docs-drift-sweep scope="docs/user guide/"`.
 #
 # Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow):
 #   - top-level "name" is required; "description" and "config" are optional.
@@ -21,7 +21,8 @@
 #     is the source of truth for every stage shape and key the grammar
 #     accepts.
 #   - {{var}} interpolates initial run() context; {{stageName.output}}
-#     interpolates a prior stage's collected output.
+#     interpolates a prior stage's collected output. "recheck" reads the
+#     fix reports through an "input:" join ({{input}}) instead.
 #   - config.maxConcurrent bounds how many parallel-stage agents run at
 #     once; config.timeout is each stage's wall-clock budget in seconds, the
 #     only timeout this file sets. WORKFLOWS.md is the source of truth for
@@ -32,12 +33,14 @@
 #     none. The fixers are disjoint by finding category, the same partition
 #     lint-then-fix.yaml uses for its style/correctness fixers.
 #
-# Driver-contract notes (what nothing in this file gates):
-#   - "recheck" emits a schema-shaped clean/remaining verdict, but nothing
-#     in this file conditions on it: the stages above run unconditionally,
-#     so the verdict is for the DRIVER — read it, and if "remaining" is
-#     non-empty, re-run the sweep. This file is one pass. WORKFLOWS.md is
-#     the source of truth for what the grammar can gate or condition on.
+# Gating notes:
+#   - "fix" and "recheck" carry the same "when:" clause: they run only when
+#     the audit tagged at least one line with a category. A clean audit
+#     ends the run after one stage, with nothing else dispatched or billed.
+#   - The sweep is still ONE pass. "loop:" re-runs only plain stages in v1
+#     (a parallel stage like "fix" refuses it), so a second sweep is the
+#     driver's call: if "recheck" reports remaining findings, re-run the
+#     workflow.
 #   - "recheck" uses tools before answering, and outputSchema rides the
 #     first request, so its output can arrive wrapped in the engine's "not
 #     constrained to the output schema" disclosure instead of the JSON
@@ -46,13 +49,14 @@
 #   - {{audit.output}} reaches the fixers as a text blob, not data: each
 #     fixer self-selects its category by reading, and this file fans out
 #     one fixer per CATEGORY, not per FINDING — its agent list is written
-#     in full above.
+#     in full below.
 
 name: docs-drift-sweep
 description: >
   Compare documentation under the given scope against the code it
   describes, fan out a doc fixer per finding category in parallel, then
-  re-audit and emit a clean/remaining verdict the driver acts on.
+  re-audit and emit a clean/remaining verdict the driver acts on. A clean
+  audit skips the fix and re-audit stages.
 
 stages:
   - name: audit
@@ -70,8 +74,11 @@ stages:
 
   - name: fix
     parallel: true
+    when:
+      stage: audit
+      matches: '/^(readme-table|guide-prose|api-doc) \|/m'
     agents:
-      - name: readme-table-fixer
+      - name: readme_table_fixer
         type: coder
         prompt: >
           From the findings listed in {{audit.output}}, apply ONLY the
@@ -81,7 +88,7 @@ stages:
           those.
         tools: [Read, Edit, Grep]
 
-      - name: guide-prose-fixer
+      - name: guide_prose_fixer
         type: coder
         prompt: >
           From the findings listed in {{audit.output}}, apply ONLY the
@@ -91,7 +98,7 @@ stages:
           other agents own those.
         tools: [Read, Edit, Grep]
 
-      - name: api-doc-fixer
+      - name: api_doc_fixer
         type: coder
         prompt: >
           From the findings listed in {{audit.output}}, apply ONLY the
@@ -103,11 +110,18 @@ stages:
 
   - name: recheck
     agent: reviewer
+    when:
+      stage: audit
+      matches: '/^(readme-table|guide-prose|api-doc) \|/m'
+    input:
+      from: [fix]
+      as: all
     prompt: >
       Re-audit {{scope}} exactly as the audit stage did, after the fixes
-      reported in {{fix.output}} landed. Set clean to true only if NO
+      reported below landed. Set clean to true only if NO
       drift findings remain in any category; otherwise list every leftover
       finding in "remaining", one per line, in the same tagged form.
+      {{input}}
     tools: [Read, Grep, Glob, Bash]
     retries: 1
     outputSchema:

@@ -8,7 +8,8 @@
 #
 # Or drop a copy in ~/.candy-code/workflows/lint-then-fix.yaml (the default
 # WorkflowRegistry lookup path) and run it via the /workflow command inside
-# the chat TUI: `/workflow run lint-then-fix`.
+# the chat TUI: `/workflow run lint-then-fix scope=src/Chat.php` (values may
+# be quoted: `scope="src/Some Dir/"`).
 #
 # Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow):
 #   - top-level "name" is required; "description" and "config" are optional.
@@ -17,7 +18,13 @@
 #     is the source of truth for every stage shape and key the grammar
 #     accepts.
 #   - {{var}} interpolates initial run() context; {{stageName.output}}
-#     interpolates a prior stage's collected output.
+#     interpolates a prior stage's collected output. "verify" reads the
+#     earlier stages through an "input:" join instead: one labelled block
+#     per stage that ran, and a stage "when:" skipped is simply absent.
+#   - "when:" gates the "fix" stage on the lint report: it runs only when
+#     at least one line is tagged with a category a fixer owns. A clean
+#     lint skips it — nothing dispatched, nothing billed — and "verify"
+#     still runs the suite.
 #   - config.maxConcurrent bounds how many parallel-stage agents run at
 #     once; config.timeout is each stage's wall-clock budget in seconds. A
 #     stage that runs past it has its agent killed (with every process the
@@ -42,16 +49,20 @@ stages:
     agent: reviewer
     prompt: >
       Review the diff at {{scope}} for style, correctness, and
-      simplification issues. List each finding with its file, line
-      number, and category (style, correctness, or simplification), one
-      finding per line.
+      simplification issues. List each finding as exactly one line in
+      the form "category | file:line | finding", where category is one
+      of style, correctness, or simplification. Report nothing else on a
+      line that starts with a category word.
     tools: [Read, Grep, Glob, Bash]
     retries: 1
 
   - name: fix
     parallel: true
+    when:
+      stage: lint
+      matches: '/^(style|correctness) \|/m'
     agents:
-      - name: style-fixer
+      - name: style_fixer
         type: coder
         prompt: >
           Apply only the "style" findings from {{lint.output}} to their
@@ -59,7 +70,7 @@ stages:
           another agent is handling those.
         tools: [Read, Edit, Grep]
 
-      - name: correctness-fixer
+      - name: correctness_fixer
         type: coder
         prompt: >
           Apply only the "correctness" findings from {{lint.output}} to
@@ -69,10 +80,15 @@ stages:
 
   - name: verify
     agent: tester
+    input:
+      from: [lint, fix]
+      as: all
     prompt: >
-      Run the project's test suite and report pass/fail. If the fixes
-      from {{fix.output}} introduced any new failures relative to
-      {{lint.output}}'s baseline, list them explicitly.
+      Run the project's test suite and report pass/fail. Below are the
+      lint report and, when fixers ran, their reports. If the fixes
+      introduced any new failures relative to the lint baseline, list
+      them explicitly.
+      {{input}}
     tools: [Bash, Read]
 
 config:
