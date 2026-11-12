@@ -945,8 +945,10 @@ PHP);
 
     /**
      * `maxConcurrent: 0` is the author's spelling of "no cap", the same verdict
-     * `subagentMaxConcurrent` and `max_teammates` give for 0. It reaches the
-     * pool as null, never as the literal 0: AgentWorkerPool's dispatch loop is
+     * `subagentMaxConcurrent` and `max_teammates` give for 0. Since P0-3 the
+     * DTO keeps the literal 0 (an ABSENT key is null, the CPU-derived default
+     * width), and the engine's concurrencyFor() hands the pool null for it —
+     * never the literal 0: AgentWorkerPool's dispatch loop is
      * `while (count($active) < $max)`, which at 0 never runs, so executeAll()
      * yields nothing and executeParallelStage() maps "no failures among zero
      * results" onto Completed — a parallel stage reporting success having
@@ -963,7 +965,7 @@ PHP);
 
         $workflow = (new WorkflowRegistry($userDir))->load('zero-concurrency');
 
-        $this->assertNull($workflow->maxConcurrent);
+        $this->assertSame(0, $workflow->maxConcurrent, 'an explicit 0 stays distinguishable from an absent key');
     }
 
     public function testANegativeMaxConcurrentIsRejected(): void
@@ -982,8 +984,11 @@ PHP);
         $registry->load('negative-concurrency');
     }
 
-    /** Omitting the key caps nothing either — the width is opt-in. */
-    public function testAnAbsentMaxConcurrentMeansNoCap(): void
+    /**
+     * Omitting the key leaves the width UNSET (null): the engine resolves it
+     * to the CPU-derived default, min(16, max(1, cpus - 2)) — P0-3.
+     */
+    public function testAnAbsentMaxConcurrentStaysUnset(): void
     {
         [$userDir] = $this->twoTierDirs();
         file_put_contents(
@@ -994,6 +999,42 @@ PHP);
         $workflow = (new WorkflowRegistry($userDir))->load('no-concurrency');
 
         $this->assertNull($workflow->maxConcurrent);
+    }
+
+    public function testConfigMaxAgentsLoadsAndDefaults(): void
+    {
+        $registry = new WorkflowRegistry($this->tempDir);
+
+        self::assertSame(
+            300,
+            $registry->fromYamlString("name: capped\nstages: []\nconfig:\n  maxAgents: \"300\"\n")->maxAgents,
+        );
+        self::assertSame(
+            Workflow::DEFAULT_MAX_AGENTS,
+            $registry->fromYamlString("name: uncapped\nstages: []\n")->maxAgents,
+        );
+    }
+
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function refusedMaxAgents(): iterable
+    {
+        yield 'zero' => ['0', '"config.maxAgents" must be at least 1, got 0'];
+        yield 'negative' => ['-5', '"config.maxAgents" must be at least 1, got -5'];
+        yield 'text' => ['lots', '"config.maxAgents" must be a whole number, got string'];
+        yield 'null' => ['~', '"config.maxAgents" must be a whole number, got null'];
+    }
+
+    /**
+     * @dataProvider refusedMaxAgents
+     */
+    public function testConfigMaxAgentsIsRefusedWhenNotAPositiveWholeNumber(string $value, string $needle): void
+    {
+        $this->expectException(WorkflowLoadException::class);
+        $this->expectExceptionMessage($needle);
+
+        (new WorkflowRegistry($this->tempDir))->fromYamlString("name: bad\nstages: []\nconfig:\n  maxAgents: {$value}\n");
     }
 
     public function testAConfigThatIsNotAMapIsRejected(): void

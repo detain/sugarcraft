@@ -339,7 +339,7 @@ final class WorkflowYamlKeyRosterTest extends TestCase
             ],
             'an unknown sub-map key' => [
                 $body("    from:\n      glob: x\n      root: /tmp\n"),
-                'has unknown key "root"; supported keys: glob, chunk',
+                'has unknown key "root"; supported keys: glob, chunk, max',
             ],
             'a missing glob' => [
                 $body("    from:\n      chunk: 2\n"),
@@ -357,7 +357,36 @@ final class WorkflowYamlKeyRosterTest extends TestCase
                 $body("    from:\n      glob: x\n      chunk: half\n"),
                 '"chunk" must be a whole number, got string',
             ],
+            // P0-3: `max` is a whole number from 1 to the fan-out ceiling.
+            'a zero max' => [
+                $body("    from:\n      glob: x\n      max: 0\n"),
+                '"max" must be at least 1, got 0',
+            ],
+            'a textual max' => [
+                $body("    from:\n      glob: x\n      max: lots\n"),
+                '"max" must be a whole number, got string',
+            ],
+            'a max above the fan-out ceiling' => [
+                $body("    from:\n      glob: x\n      max: 4097\n"),
+                '"max" must be at most 4096 (the per-stage fan-out ceiling), got 4097',
+            ],
         ];
+    }
+
+    public function testAFanOutMaxRidesTheSpecOnlyWhenWritten(): void
+    {
+        $workflow = $this->registry()->fromYamlString(
+            "name: r\n"
+            . "stages:\n"
+            . "  - name: waves\n"
+            . "    parallel: true\n"
+            . "    prompt: fix {{path}}\n"
+            . "    from:\n"
+            . "      glob: 'src/*.php'\n"
+            . "      max: \"200\"\n"
+        );
+
+        self::assertSame(['glob' => 'src/*.php', 'chunk' => null, 'max' => 200], $workflow->stages[0]['from']);
     }
 
     /**

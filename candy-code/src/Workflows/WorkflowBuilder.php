@@ -30,6 +30,7 @@ final class WorkflowBuilder
     /** @var array<int, array{name: string, type: string, tasks?: array<int, mixed>}> */
     private array $stages = [];
     private ?int $maxConcurrent = null;
+    private int $maxAgents = Workflow::DEFAULT_MAX_AGENTS;
     private int $timeout = 3600;
     private bool $stopOnFirstFailure = false;
 
@@ -117,13 +118,22 @@ final class WorkflowBuilder
      *   - AgentWorkerPool.php: executeAll() runs agents concurrently
      *
      * @param TaskBuilder[] $tasks
-     * @param array{glob: string, chunk: int|null}|array{} $from C8 dynamic-wave
+     * @param array{glob: string, chunk?: int|null, max?: int|null}|array{} $from C8 dynamic-wave
      *        spec, empty for the static list spelling. The engine expands the
      *        glob at run time and replaces $tasks with one built task per
      *        match; the template in $tasks[0] is what gets fanned out.
+     *        P0-3 `max` keeps the first N sorted matches and records the
+     *        rest as dropped in the stage output (1 to
+     *        {@see Workflow::FAN_OUT_CEILING}).
+     *
+     * @throws \InvalidArgumentException When $from is not that shape.
      */
     public function parallel(string $name, array $tasks, bool $capture = false, bool $cache = false, array $from = []): self
     {
+        if ($from !== []) {
+            $from = self::normalizedFrom($name, $from);
+        }
+
         $builtTasks = array_map(
             static fn(TaskBuilder $t) => $t->build(),
             $tasks,
@@ -139,6 +149,48 @@ final class WorkflowBuilder
             + ($from !== [] ? ['from' => $from] : []);
 
         return $this;
+    }
+
+    /**
+     * The PHP spelling of a `from:` spec held to the YAML loader's shape law
+     * (builder parity): `glob` a non-empty string, `chunk` null or >= 1,
+     * `max` absent/null or 1..{@see Workflow::FAN_OUT_CEILING}, nothing else.
+     * `max` is stored only when set, so a max-less spec keeps the two-key
+     * shape the engine and the pause record have always carried.
+     *
+     * @param array<array-key, mixed> $from
+     * @return array{glob: string, chunk: int|null, max?: int}
+     */
+    private static function normalizedFrom(string $stage, array $from): array
+    {
+        foreach (array_keys($from) as $key) {
+            if (!in_array($key, WorkflowRegistry::YAML_FROM_KEYS, true)) {
+                throw new \InvalidArgumentException("Stage '{$stage}' from has unknown key \"{$key}\"; supported keys: " . implode(', ', WorkflowRegistry::YAML_FROM_KEYS));
+            }
+        }
+
+        $glob = $from['glob'] ?? null;
+        if (!is_string($glob) || trim($glob) === '') {
+            throw new \InvalidArgumentException("Stage '{$stage}' from needs a non-empty \"glob\"");
+        }
+
+        $chunk = $from['chunk'] ?? null;
+        if ($chunk !== null && (!is_int($chunk) || $chunk < 1)) {
+            throw new \InvalidArgumentException("Stage '{$stage}' from \"chunk\" must be a whole number of at least 1");
+        }
+
+        $spec = ['glob' => trim($glob), 'chunk' => $chunk];
+        $max = $from['max'] ?? null;
+        if ($max !== null) {
+            if (!is_int($max) || $max < 1 || $max > Workflow::FAN_OUT_CEILING) {
+                throw new \InvalidArgumentException(
+                    "Stage '{$stage}' from \"max\" must be a whole number from 1 to " . Workflow::FAN_OUT_CEILING
+                );
+            }
+            $spec['max'] = $max;
+        }
+
+        return $spec;
     }
 
     /**
@@ -181,13 +233,40 @@ final class WorkflowBuilder
     }
 
     /**
-     * Set the maximum number of stages that may run concurrently. Null, the
-     * default, sets no cap: every task of a parallel stage is dispatched at
-     * once.
+     * Set how many agents of a parallel stage run at once (P0-3). Null, the
+     * default, leaves it unset: the engine runs
+     * {@see Workflow::defaultConcurrency()} of the host's CPUs,
+     * `min(16, max(1, cpus - 2))`. 0 is the explicit "no cap" — every task
+     * of a parallel stage is dispatched at once (the linter warns on it).
+     *
+     * @throws \InvalidArgumentException When $n is negative.
      */
     public function maxConcurrent(?int $n): self
     {
+        if ($n !== null && $n < 0) {
+            throw new \InvalidArgumentException("maxConcurrent() needs 0 (no cap) or a width of at least 1, got {$n}");
+        }
+
         $this->maxConcurrent = $n;
+        return $this;
+    }
+
+    /**
+     * Set the run-wide agent-dispatch ceiling (P0-3, `config.maxAgents`,
+     * default {@see Workflow::DEFAULT_MAX_AGENTS}). Every dispatch counts —
+     * retries, stall restarts, loop rounds and an included workflow's
+     * agents — and a dispatch past it fails its stage with "agent ceiling
+     * reached (N)".
+     *
+     * @throws \InvalidArgumentException When $n is below 1.
+     */
+    public function maxAgents(int $n): self
+    {
+        if ($n < 1) {
+            throw new \InvalidArgumentException("maxAgents() needs a whole number of at least 1, got {$n}");
+        }
+
+        $this->maxAgents = $n;
         return $this;
     }
 
@@ -370,6 +449,7 @@ final class WorkflowBuilder
             maxConcurrent: $this->maxConcurrent,
             timeout: $this->timeout,
             stopOnFirstFailure: $this->stopOnFirstFailure,
+            maxAgents: $this->maxAgents,
         );
     }
 }

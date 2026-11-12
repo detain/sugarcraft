@@ -28,13 +28,47 @@ final readonly class Workflow
     public const STAGE_TYPES = ['stage', 'parallel', 'pipeline', 'verification'];
 
     /**
+     * P0-3: the run-wide dispatch backstop when `config.maxAgents` is unset.
+     * Every agent dispatch — retries, stall restarts, loop rounds and the
+     * agents of an included workflow — counts against it.
+     */
+    public const DEFAULT_MAX_AGENTS = 1000;
+
+    /**
+     * P0-3: the most items ONE fan-out stage may dispatch. A `from:` that
+     * expands past it fails the stage loudly; it is never truncated to fit
+     * (only an explicit `from.max` truncates, and that records its drop).
+     */
+    public const FAN_OUT_CEILING = 4096;
+
+    /** P0-3: the upper bound of the computed default width. */
+    public const DEFAULT_WIDTH_CAP = 16;
+
+    /**
+     * The width an unset `maxConcurrent` runs at: `min(16, max(1, cpus - 2))`.
+     *
+     * WHY a computed default rather than "no cap": a `from:` glob over a real
+     * tree used to fork every match at once (1,370 workers for candy-code's
+     * own `src/`). Two CPUs are left for the session and the provider I/O;
+     * sixteen is the ceiling past which provider rate limits, not cores, are
+     * the bottleneck. An explicit `maxConcurrent: 0` still means no cap.
+     */
+    public static function defaultConcurrency(int $cpus): int
+    {
+        return min(self::DEFAULT_WIDTH_CAP, max(1, $cpus - 2));
+    }
+
+    /**
      * @param string                $name                Human-readable workflow name.
      * @param string                $description         Brief description of what the workflow does.
      * @param array                 $stages              Ordered list of raw stage-task arrays built by WorkflowBuilder.
-     * @param ?int                  $maxConcurrent       Maximum number of stages that may run concurrently; null (the default) sets no cap.
+     * @param ?int                  $maxConcurrent       Maximum number of agents a parallel stage runs at once. Null (the
+     *                                                    default) means UNSET: the engine runs {@see defaultConcurrency()}
+     *                                                    of the host's CPU count. 0 is the explicit "no cap" (P0-3).
      * @param int                   $timeout             Per-stage timeout in seconds (default 3600 = 1 hour).
      * @param WorkflowStatus        $workflowStatus      Current lifecycle status (default Draft).
      * @param bool                  $stopOnFirstFailure When true, a parallel stage stops on first agent failure.
+     * @param int                   $maxAgents           Run-wide agent-dispatch ceiling (P0-3, `config.maxAgents`).
      */
     public function __construct(
         public string         $name,
@@ -44,6 +78,7 @@ final readonly class Workflow
         public int            $timeout = 3600,
         public WorkflowStatus $workflowStatus = WorkflowStatus::Draft,
         public bool           $stopOnFirstFailure = false,
+        public int            $maxAgents = self::DEFAULT_MAX_AGENTS,
     ) {}
 
     /**
@@ -96,6 +131,7 @@ final readonly class Workflow
             timeout: $this->timeout,
             workflowStatus: $workflowStatus ?? $this->workflowStatus,
             stopOnFirstFailure: $stopOnFirstFailureSet ? $stopOnFirstFailure : $this->stopOnFirstFailure,
+            maxAgents: $this->maxAgents,
         );
     }
 }

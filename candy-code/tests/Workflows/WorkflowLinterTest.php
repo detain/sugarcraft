@@ -134,7 +134,7 @@ final class WorkflowLinterTest extends TestCase
                 new WorkflowTask('coder', 'work', retries: 20),
                 new WorkflowTask('coder', 'work', timeout: 0),
             ]),
-        ], timeout: -5, maxConcurrent: 0);
+        ], timeout: -5, maxConcurrent: -1);
 
         $report = WorkflowLinter::lint($plan, [], self::UNIVERSE);
         $findings = $report->renderFindings();
@@ -144,7 +144,33 @@ final class WorkflowLinterTest extends TestCase
         self::assertStringContainsString('Retries 20 is unusually high', $findings);
         self::assertStringContainsString('Task timeout 0 is not a positive', $findings);
         self::assertStringContainsString('Workflow timeout -5 is not positive', $findings);
-        self::assertStringContainsString('maxConcurrent 0 is not positive', $findings);
+        self::assertStringContainsString('maxConcurrent -1 is negative', $findings);
+    }
+
+    public function testAnExplicitNoCapWidthWarnsAndAnUnsetOneIsSilent(): void
+    {
+        $stages = [self::linterStage('act', [new WorkflowTask('coder', 'work', tools: ['Read'])])];
+
+        $nocap = WorkflowLinter::lint(new Workflow('nocap', 'd', $stages, maxConcurrent: 0), [], self::UNIVERSE);
+        self::assertFalse($nocap->hasErrors(), $nocap->renderFindings());
+        self::assertStringContainsString('warning [workflow] maxConcurrent 0 means no cap', $nocap->renderFindings());
+
+        $unset = WorkflowLinter::lint(new Workflow('unset', 'd', $stages), [], self::UNIVERSE);
+        self::assertStringNotContainsString('maxConcurrent', $unset->renderFindings());
+    }
+
+    public function testAHandBuiltMaxAgentsOrFromMaxOutOfRangeIsAnError(): void
+    {
+        $plan = new Workflow('ceil', 'd', [
+            ['name' => 'wave', 'type' => 'parallel', 'tasks' => [new WorkflowTask('coder', 'fix {{path}}', tools: ['Read'])], 'from' => ['glob' => 'src/*', 'chunk' => null, 'max' => 5000]],
+            ['name' => 'solo', 'type' => 'stage', 'tasks' => [new WorkflowTask('coder', 'x', tools: ['Read'])], 'from' => ['glob' => 'src/*', 'chunk' => null]],
+        ], maxAgents: 0);
+
+        $findings = WorkflowLinter::lint($plan, [], self::UNIVERSE)->renderFindings();
+
+        self::assertStringContainsString('maxAgents 0 is not positive', $findings);
+        self::assertStringContainsString('from.max 5000 is not a whole number from 1 to 4096', $findings);
+        self::assertStringContainsString("\"from\" on a 'stage' stage fans nothing out", $findings);
     }
 
     public function testUnsupportedStageTypeAndEmptyToolDeclaration(): void

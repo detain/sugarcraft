@@ -46,6 +46,12 @@ final class WorkflowRegistry
      */
     private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from', 'loop'];
 
+    /**
+     * The keys a parallel stage's `from:` sub-map may carry (C8 + P0-3
+     * `max`), listed once for the same rider law as the rosters above.
+     */
+    public const YAML_FROM_KEYS = ['glob', 'chunk', 'max'];
+
     /** @var array<string, Workflow> */
     private array $registered = [];
 
@@ -1188,7 +1194,7 @@ final class WorkflowRegistry
      * `tools` is a list of strings; `retries` (on a stage or a parallel agent)
      * is a whole number >= 0; a parallel stage's `agents` is a list of maps;
      * `config` is a map whose `maxConcurrent` is a whole number >= 0 (0 = no
-     * cap) and whose `timeout` is a whole number >= 1.
+     * cap) and whose `timeout` and `maxAgents` are whole numbers >= 1.
      *
      * "Is a list" means `array_is_list()`. It used to mean `is_array()`, which
      * is a different claim: `stages: {a: {...}}`, `tools: {a: Read}` and a
@@ -1599,6 +1605,15 @@ final class WorkflowRegistry
                     $yamlPath,
                 ));
             }
+            // P0-3: the run-wide dispatch backstop — a whole number >= 1;
+            // absent keeps Workflow::DEFAULT_MAX_AGENTS.
+            if (array_key_exists('maxAgents', $data['config'])) {
+                $builder = $builder->maxAgents($this->requirePositiveInt(
+                    $data['config']['maxAgents'],
+                    'config.maxAgents',
+                    $yamlPath,
+                ));
+            }
         }
 
         return $builder;
@@ -1881,7 +1896,8 @@ final class WorkflowRegistry
 
     /**
      * A `config.maxConcurrent` value as a width: a whole number >= 1, or 0 for
-     * NO cap (null).
+     * NO cap — kept as 0, because since P0-3 an ABSENT key (null on the DTO)
+     * means the CPU-derived default width, and the two must stay apart.
      *
      * `requirePositiveInt()` cannot serve here. Its whole point is that a
      * literal 0 reaching {@see \SugarCraft\Code\Agents\AgentWorkerPool} means
@@ -1893,11 +1909,11 @@ final class WorkflowRegistry
      * still refused: it names no width, and clamping it to 1 would run a stage
      * the author asked to stop.
      *
-     * @return ?int the width, or null when the author asked for no cap
+     * @return int the width, or 0 when the author asked for no cap
      *
      * @throws WorkflowLoadException When the value is not a whole number >= 0.
      */
-    private function requireWidthOrUnlimited(mixed $value, string $key, string $yamlPath): ?int
+    private function requireWidthOrUnlimited(mixed $value, string $key, string $yamlPath): int
     {
         $int = null;
         if (is_int($value)) {
@@ -1918,7 +1934,7 @@ final class WorkflowRegistry
             );
         }
 
-        return $int === 0 ? null : $int;
+        return $int;
     }
 
     /**
@@ -2429,7 +2445,11 @@ final class WorkflowRegistry
     /**
      * A parallel stage's `from:` sub-map (C8): the glob the engine expands
      * at run time, plus the optional `chunk` — a ceiling on how many of the
-     * fanned-out items run at once (a cap, never a floor).
+     * fanned-out items run at once (a cap, never a floor) — and the optional
+     * `max` (P0-3): keep the first N of the sorted expansion and RECORD the
+     * rest as dropped. `max` is at most {@see Workflow::FAN_OUT_CEILING}: a
+     * cap above the ceiling could never be honoured, so it is refused here
+     * rather than discovered at run time.
      *
      * The parser refuses shapes only; expansion is the engine's job
      * (rider law — a sub-map is checked where it is read, and this one is
@@ -2438,7 +2458,7 @@ final class WorkflowRegistry
      *
      * @param array<array-key, mixed> $stage
      *
-     * @return array{glob: string, chunk: int|null}
+     * @return array{glob: string, chunk: int|null, max?: int}
      */
     private function parseDynamicWaveSubMap(array $stage, string $where): array
     {
@@ -2448,7 +2468,7 @@ final class WorkflowRegistry
             throw new WorkflowLoadException("{$at} must be a map, got " . get_debug_type($map));
         }
 
-        $this->requireNoUnknownTaskKeys($map, $at, ['glob', 'chunk']);
+        $this->requireNoUnknownTaskKeys($map, $at, self::YAML_FROM_KEYS);
 
         if (!array_key_exists('glob', $map)) {
             throw new WorkflowLoadException("{$at} needs a \"glob\" to expand against the environment root");
@@ -2463,7 +2483,20 @@ final class WorkflowRegistry
             $chunk = $this->requireTaskPositiveInt($map['chunk'], 'chunk', $at);
         }
 
-        return ['glob' => $glob, 'chunk' => $chunk];
+        // `max` rides only when written, so a max-less spec stays the
+        // two-key shape every pre-P0-3 consumer reads.
+        $spec = ['glob' => $glob, 'chunk' => $chunk];
+        if (array_key_exists('max', $map)) {
+            $max = $this->requireTaskPositiveInt($map['max'], 'max', $at);
+            if ($max > Workflow::FAN_OUT_CEILING) {
+                throw new WorkflowLoadException(
+                    "{$at} \"max\" must be at most " . Workflow::FAN_OUT_CEILING . " (the per-stage fan-out ceiling), got {$max}"
+                );
+            }
+            $spec['max'] = $max;
+        }
+
+        return $spec;
     }
 
     /**

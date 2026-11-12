@@ -113,6 +113,7 @@ final class WorkflowLinter
             }
             $stageName = is_array($stage) && is_string($stage['name'] ?? null) && $stage['name'] !== '' ? $stage['name'] : 'unknown';
             self::checkIsolationSanity($type, $stageName, $stage, $findings);
+            self::checkFanOutShape($type, $stageName, $stage, $findings);
             foreach (self::tasksOf($type, $stage) as [$slot, $task]) {
                 self::checkTask($stageName, $slot, $task, $ordinal, $producers, $outputs, $seedContext, $toolNames, $findings);
             }
@@ -512,8 +513,16 @@ final class WorkflowLinter
         if ($workflow->timeout <= 0) {
             self::add($findings, 'error', 'workflow', "Workflow timeout {$workflow->timeout} is not positive; the engine arms the budget as-is.");
         }
-        if ($workflow->maxConcurrent !== null && $workflow->maxConcurrent <= 0) {
-            self::add($findings, 'error', 'workflow', "maxConcurrent {$workflow->maxConcurrent} is not positive; null is the documented uncapped value.");
+        // P0-3: null is UNSET (the CPU-derived default width), 0 the
+        // explicit "no cap" — legal, but every agent of a fan-out then forks
+        // at once, so it is worth one line. A negative names no width.
+        if ($workflow->maxConcurrent !== null && $workflow->maxConcurrent < 0) {
+            self::add($findings, 'error', 'workflow', "maxConcurrent {$workflow->maxConcurrent} is negative; 0 is the explicit no-cap value and leaving it unset runs the default width.");
+        } elseif ($workflow->maxConcurrent === 0) {
+            self::add($findings, 'warning', 'workflow', 'maxConcurrent 0 means no cap: every agent of a parallel stage is dispatched at once. Leave it unset for the default width of min(16, CPUs - 2), or set a number.');
+        }
+        if ($workflow->maxAgents < 1) {
+            self::add($findings, 'error', 'workflow', "maxAgents {$workflow->maxAgents} is not positive; the run could dispatch nothing.");
         }
         if ($workflow->stages === []) {
             self::add($findings, 'warning', 'workflow', 'The plan has no stages; the run finishes without dispatching anything.');
@@ -640,6 +649,30 @@ final class WorkflowLinter
         }
 
         return $pairs;
+    }
+
+    /**
+     * P0-3 mirror of the `from:` spec law the YAML loader and
+     * {@see WorkflowBuilder::parallel()} enforce — reached only by a
+     * hand-built stage array, which neither door saw: `from` on a
+     * non-parallel stage, and a `max` outside 1..{@see Workflow::FAN_OUT_CEILING}.
+     *
+     * @param array<array-key, mixed> $stage
+     */
+    private static function checkFanOutShape(string $type, string $stageName, array $stage, array &$findings): void
+    {
+        if (!array_key_exists('from', $stage)) {
+            return;
+        }
+        if ($type !== 'parallel') {
+            self::add($findings, 'error', $stageName, "\"from\" on a '{$type}' stage fans nothing out; only a parallel stage reads it.");
+            return;
+        }
+        $from = is_array($stage['from']) ? $stage['from'] : [];
+        if (array_key_exists('max', $from) && $from['max'] !== null
+            && (!is_int($from['max']) || $from['max'] < 1 || $from['max'] > Workflow::FAN_OUT_CEILING)) {
+            self::add($findings, 'error', $stageName, 'from.max ' . var_export($from['max'], true) . ' is not a whole number from 1 to ' . Workflow::FAN_OUT_CEILING . '; the engine cannot honour it.');
+        }
     }
 
     /**

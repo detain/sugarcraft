@@ -430,6 +430,25 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private array $usesChain = [];
 
     /**
+     * P0-3: the CPU count the default width is computed from; null asks
+     * {@see CpuCount::detect()}. Injectable ({@see setCpuCount()}) so a test
+     * pins the width a host-independent number.
+     */
+    private ?int $cpuCount = null;
+
+    /**
+     * P0-3 `config.maxAgents`: agents the OUTERMOST live run has dispatched
+     * so far, every attempt counted (retries, stall restarts, loop rounds,
+     * included workflows' agents). Engine state rather than a loop local for
+     * the {@see $usesChain} reason: an included run shares its parent's
+     * count, so the backstop is run-wide, not per include.
+     */
+    private int $agentsDispatched = 0;
+
+    /** The outermost run's `config.maxAgents`; null outside a run. */
+    private ?int $agentCeiling = null;
+
+    /**
      * @param string $model    The model every stage's agent runs on. A workflow
      *        stage names an agent TYPE ('reviewer', 'coder'), never a model, so
      *        the model has to come from the run — and until this parameter
@@ -680,6 +699,35 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($executor instanceof EngineExecutor && $executor->engine() !== null) {
             $executor->bind($executor->engine(), $agentManager);
         }
+    }
+
+    /**
+     * Pin the CPU count the default parallel width is computed from (P0-3:
+     * an unset `maxConcurrent` runs `min(16, max(1, cpus - 2))` agents at
+     * once). Null restores host detection. A mutable-service setter for the
+     * {@see setAgentManager()} reason.
+     */
+    public function setCpuCount(?int $cpus): void
+    {
+        if ($cpus !== null && $cpus < 1) {
+            throw new \InvalidArgumentException("setCpuCount() needs at least 1 CPU, got {$cpus}");
+        }
+
+        $this->cpuCount = $cpus;
+    }
+
+    /**
+     * The width a parallel stage of $workflow runs at (P0-3): the explicit
+     * `maxConcurrent` when one is set, null (no cap) for an explicit 0, and
+     * {@see Workflow::defaultConcurrency()} of the host's CPUs when unset.
+     */
+    public function concurrencyFor(Workflow $workflow): ?int
+    {
+        if ($workflow->maxConcurrent === null) {
+            return Workflow::defaultConcurrency($this->cpuCount ?? CpuCount::detect());
+        }
+
+        return $workflow->maxConcurrent <= 0 ? null : $workflow->maxConcurrent;
     }
 
     /**
@@ -1216,6 +1264,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // one; the join hazard predates the record, refusing old pauses
             // would buy zero safety for zero cost paid).
             'inputJoins' => is_array($data['inputJoins'] ?? null) ? $data['inputJoins'] : [],
+            // P0-3: the dispatch count so far; a pre-P0-3 or hand-mangled
+            // record restarts the count at zero (it can only be generous).
+            'agentsDispatched' => is_int($data['agentsDispatched'] ?? null) && $data['agentsDispatched'] > 0
+                ? $data['agentsDispatched']
+                : 0,
             'recordedResults' => $recordedByName,
             // Whether the seed totals are the file's cumulative spend (which
             // was written in the same snapshot as the rows above, so it ALREADY
@@ -1667,6 +1720,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($joins !== []) {
             $data['inputJoins'] = $joins;
         }
+        // P0-3: the run-wide dispatch count, so a resume keeps counting
+        // against config.maxAgents instead of starting a fresh allowance.
+        // Only a LIVE run's count is true; a run with none omits the key.
+        if ($slotToken !== null && $this->agentsDispatched > 0) {
+            $data['agentsDispatched'] = $this->agentsDispatched;
+        }
 
         // Audit M4: the pre-fix write ignored file_put_contents' return (a
         // failed pause silently lost the run) and wrote the live path
@@ -1947,6 +2006,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $resolvedWorkflowId = $workflowIdOverride ?? $this->generateWorkflowId($workflow);
         $interruptId = $pauseId ?? $resolvedWorkflowId;
 
+        // P0-3: the OUTERMOST run owns the agent backstop; an included run
+        // (usesChain non-empty) keeps counting against its parent's ceiling.
+        // A resume continues the count its pause record carries.
+        if ($this->usesChain === []) {
+            $this->agentsDispatched = $prior['agentsDispatched'] ?? 0;
+            $this->agentCeiling = $workflow->maxAgents;
+        }
+
         // Whole-workflow pre-flight: a stage 5 that declares a refused tool
         // must not cost four stages of real agent work first. Reported as that
         // stage's failure rather than thrown — see preflightRefusal().
@@ -2159,6 +2226,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
                         ? $this->captureStageOutput($interruptId, $stageIndex, $stageResult)
                         : $stageResult->output ?? '';
                     $context = self::withResults($context, $dispatched);
+                    // P0-3: every dispatch was reserved once up front; the
+                    // retries and stall restarts the pool ran on top of that
+                    // are counted as they settle, so the NEXT dispatch past
+                    // the ceiling is refused.
+                    foreach ($dispatched as $record) {
+                        $this->agentsDispatched += max(0, $record['result']->attempts - 1);
+                    }
 
                     $totalTokens += $this->sumTokens($stageResult);
                     $totalCost += $this->sumCost($stageResult);
@@ -3350,8 +3424,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @param ?int  $maxConcurrent The workflow's concurrency width, carried for
      *                             call-site symmetry: a pipeline's steps run one
      *                             at a time by definition, so nothing here reads
-     *                             it (null, the workflow default, caps nothing
-     *                             wherever it is read).
+     *                             it (the parallel executor resolves the
+     *                             width through {@see concurrencyFor()}).
      * @param int   $stageTimeout  Workflow::$timeout — the budget for the whole
      *                             pipeline: each step gets what the steps
      *                             before it left, not a fresh allowance.
@@ -3792,6 +3866,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
      */
     private function dispatchOne(SubAgent $subAgent, CompleteRequest $request, AgentWorkerPool $pool): AgentResult
     {
+        $this->reserveAgents(1);
+
         if ($this->agentManager === null) {
             return $pool->executeOne($subAgent, $request);
         }
@@ -3806,6 +3882,30 @@ final class WorkflowEngine implements WorkflowEngineInterface
             error: new \RuntimeException('cancelled before it produced a result'),
             completedAt: new \DateTimeImmutable(),
         );
+    }
+
+    /**
+     * P0-3 `config.maxAgents`: count $n dispatches against the run-wide
+     * ceiling BEFORE any of them forks, or refuse them all. The throw lands
+     * through the stage loop's catch as that stage's failure, so a stage
+     * past the backstop dispatches nothing and the run stops there.
+     *
+     * @throws \RuntimeException "agent ceiling reached (N)" when $n more would cross it.
+     */
+    private function reserveAgents(int $n): void
+    {
+        if ($this->agentCeiling !== null && $this->agentsDispatched + $n > $this->agentCeiling) {
+            throw new \RuntimeException(sprintf(
+                'agent ceiling reached (%d): this run has dispatched %d agent%s and this stage needs %d more; '
+                . 'raise config.maxAgents or narrow the fan-out',
+                $this->agentCeiling,
+                $this->agentsDispatched,
+                $this->agentsDispatched === 1 ? '' : 's',
+                $n,
+            ));
+        }
+
+        $this->agentsDispatched += $n;
     }
 
     /**
@@ -3835,7 +3935,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *
      * Builds SubAgents from all tasks in the stage, then runs them concurrently
      * via AgentWorkerPool::executeAll(). The workflow's maxConcurrent setting
-     * controls how many agents run at once; null — the default — runs them all.
+     * controls how many agents run at once ({@see concurrencyFor()}): unset
+     * runs the CPU-derived default width, an explicit 0 runs them all (P0-3).
      *
      * This method is part of the parallel() primitive implementation which spans
      * five files:
@@ -3889,6 +3990,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // rather than silently fork different work from what was paused.
         $dynamic = isset($stage['from']);
         $chunk = null;
+        // P0-3: the `[from: kept N of M …]` record an explicit `max:` leaves
+        // on the stage output — a header line above it and the dropped list
+        // below it; both empty when nothing was truncated.
+        $fromNotice = ['', ''];
         if ($dynamic) {
             $template = $tasks[0] ?? null;
             if (count($tasks) !== 1 || !$template instanceof WorkflowTask) {
@@ -3906,16 +4011,45 @@ final class WorkflowEngine implements WorkflowEngineInterface
             if ($recorded === null) {
                 $paths = $this->expandFromGlob((string) $from['glob']);
                 $chunk = $from['chunk'];
-                if ($waveLedger !== null) {
-                    $waveLedger[$stageName] = ['paths' => $paths, 'chunk' => $chunk];
+                $max = $from['max'] ?? null;
+                $matched = count($paths);
+                $dropped = [];
+                // P0-3: `max:` is the ONE sanctioned truncation — of the
+                // sorted expansion, so the kept prefix is deterministic — and
+                // it is recorded, never silent.
+                if (is_int($max) && $matched > $max) {
+                    $dropped = array_slice($paths, $max);
+                    $paths = array_slice($paths, 0, $max);
                 }
+
+                // Judged BEFORE the ledger records anything: a resume of a
+                // refused wave must re-glob the author's narrowed pattern,
+                // not replay the list that was too wide.
+                $ceilingRefusal = self::fanOutCeilingRefusal($stageName, count($paths), (string) $from['glob'], $stageStartedAt);
+                if ($ceilingRefusal !== null) {
+                    return $ceilingRefusal;
+                }
+
+                if ($waveLedger !== null) {
+                    $waveLedger[$stageName] = ['paths' => $paths, 'chunk' => $chunk]
+                        + (is_int($max) ? ['max' => $max, 'matched' => $matched, 'dropped' => $dropped] : []);
+                }
+                $fromNotice = self::fromTruncationNotice(count($paths), $matched, $max, $dropped);
             } else {
                 $replayable = false;
                 if (is_array($recorded)) {
                     $replayable = isset($recorded['paths'])
                         && is_array($recorded['paths']) && array_is_list($recorded['paths'])
                         && (!array_key_exists('chunk', $recorded)
-                            || $recorded['chunk'] === null || is_int($recorded['chunk']));
+                            || $recorded['chunk'] === null || is_int($recorded['chunk']))
+                        // P0-3: a truncation record is optional, but when
+                        // present it is a whole one — or the replay refuses.
+                        && (!array_key_exists('max', $recorded)
+                            || (is_int($recorded['max'])
+                                && is_int($recorded['matched'] ?? null)
+                                && is_array($recorded['dropped'] ?? null)
+                                && array_is_list($recorded['dropped'])
+                                && array_filter($recorded['dropped'], static fn (mixed $d): bool => !is_string($d)) === []));
                     if ($replayable) {
                         foreach ($recorded['paths'] as $candidate) {
                             if (!is_string($candidate) || $candidate === '') {
@@ -3938,6 +4072,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
                 $paths = $recorded['paths'];
                 $chunk = $recorded['chunk'] ?? $from['chunk'];
+
+                $ceilingRefusal = self::fanOutCeilingRefusal($stageName, count($paths), (string) $from['glob'], $stageStartedAt);
+                if ($ceilingRefusal !== null) {
+                    return $ceilingRefusal;
+                }
+                if (array_key_exists('max', $recorded)) {
+                    $fromNotice = self::fromTruncationNotice(count($paths), $recorded['matched'], $recorded['max'], $recorded['dropped']);
+                }
             }
 
             if ($paths === []) {
@@ -4108,9 +4250,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // silently applies to sequential stages only.
         // C8: "chunk" caps this stage's in-flight window — a ceiling, never
         // a floor: it can narrow the workflow width, never widen it.
+        // P0-3: the workflow width is resolved once — explicit, explicit 0
+        // (no cap, null here), or the CPU-derived default when unset.
+        $width = $this->concurrencyFor($workflow);
         $concurrency = $dynamic && $chunk !== null
-            ? ($workflow->maxConcurrent === null ? $chunk : min($workflow->maxConcurrent, $chunk))
-            : $workflow->maxConcurrent;
+            ? ($width === null ? $chunk : min($width, $chunk))
+            : $width;
 
         $pool = new AgentWorkerPool(
             maxConcurrent: $concurrency,
@@ -4136,6 +4281,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // agents instead of zeros (section 5 E6). Exactly one of
         // the two paths runs -- the manager accumulates with `+=`, so iterating
         // the pool as well would double-count this stage's usage.
+        // P0-3: the whole wave is reserved against config.maxAgents before
+        // any of it forks — a wave that would cross the ceiling forks none.
+        $this->reserveAgents(count($subAgents));
+
         $results = $this->agentManager !== null
             ? $this->agentManager->executeAll($subAgents, $defaultRequest, $pool)
             : $pool->executeAll($subAgents, $defaultRequest);
@@ -4166,12 +4315,73 @@ final class WorkflowEngine implements WorkflowEngineInterface
         return new StageResult(
             stageName: $stageName,
             status: $status,
-            output: implode("\n", $allOutputs),
+            output: $fromNotice[0] . implode("\n", $allOutputs) . $fromNotice[1],
             error: $anyFailure ? ($firstResult?->error?->getMessage() ?? 'One or more parallel tasks failed') : null,
             agents: $agentResults,
             startedAt: $firstResult?->startedAt ?? $stageStartedAt,
             completedAt: $firstResult?->completedAt ?? new \DateTimeImmutable(),
         );
+    }
+
+    /**
+     * P0-3: the loud refusal for a fan-out wider than
+     * {@see Workflow::FAN_OUT_CEILING}, or null when $count fits. Never a
+     * truncation: cutting the list to fit would be a silent cap, and the
+     * author's tool for a deliberate one is `from.max`.
+     */
+    private static function fanOutCeilingRefusal(string $stageName, int $count, string $glob, \DateTimeImmutable $startedAt): ?StageResult
+    {
+        if ($count <= Workflow::FAN_OUT_CEILING) {
+            return null;
+        }
+
+        return new StageResult(
+            stageName: $stageName,
+            status: WorkflowStatus::Failed,
+            error: sprintf(
+                'Stage \'%s\' expanded %d files from "%s"; the per-stage fan-out ceiling is %d — narrow the glob or set from.max',
+                $stageName,
+                $count,
+                $glob,
+                Workflow::FAN_OUT_CEILING,
+            ),
+            startedAt: $startedAt,
+            completedAt: new \DateTimeImmutable(),
+        );
+    }
+
+    /**
+     * P0-3 "no silent caps": the record a `from.max` truncation leaves on
+     * its stage output, as `[header, tail]`. The header line goes ABOVE the
+     * agents' output so a `capture: true` preview (the first 2 KiB) always
+     * shows it; the tail — one `dropped:` line per cut path, in expansion
+     * order — goes below, so with capture on the full list lives in the
+     * capture file and without it the list rides the output. Both are empty
+     * when nothing was dropped: an un-truncated wave's output is
+     * byte-identical to a wave without `max:`.
+     *
+     * @param list<string> $dropped
+     * @return array{0: string, 1: string}
+     */
+    private static function fromTruncationNotice(int $kept, int $matched, ?int $max, array $dropped): array
+    {
+        if ($dropped === []) {
+            return ['', ''];
+        }
+
+        $header = sprintf(
+            '[from: kept %d of %d matches (max: %d); %d dropped, listed at the end of this output]',
+            $kept,
+            $matched,
+            (int) $max,
+            count($dropped),
+        );
+        $tail = '';
+        foreach ($dropped as $path) {
+            $tail .= "\ndropped: " . $path;
+        }
+
+        return [$header . "\n", $tail];
     }
 
     /**
