@@ -1,173 +1,96 @@
-# fix-wave — fan a parameterized file list over parallel coder shards, then summarize.
+# fix-wave — apply one written fix to every file in a list, one agent per
+# file in parallel, then fold the per-file reports into one summary.
 #
-# Loadable directly via SugarCraft\Code\Workflows\WorkflowRegistry:
-#
-#   $registry = new WorkflowRegistry(__DIR__ . '/examples/workflows');
-#   $workflow = $registry->loadYaml('fix-wave');
-#   (new WorkflowEngine($registry, $pool))->run('fix-wave', [
-#       'files' => 'src/A.php,src/B.php,src/C.php',
-#       'spec'  => 'docs/briefs/migration.md',
-#   ]);
-#
-# Or drop a copy in ~/.candy-code/workflows/fix-wave.yaml (the default
-# WorkflowRegistry lookup path) and run it via the /workflow command inside
-# the chat TUI: `/workflow run fix-wave files=src/A.php,src/B.php spec=docs/briefs/migration.md`.
+# Pattern: data fan-out over a run-context LIST (from: {context: files}),
+# with minSuccess so one bad file does not throw away the rest. See the
+# workflow-authoring skill, "Quality patterns".
 #
 # Parameters:
-#   - files: comma-separated work list (src/A.php,src/B.php,...). Quote it
-#     if a path holds a space: files="src/A.php,src/My Dir/B.php".
-#   - spec:  path to the written brief describing the fix to apply. The
-#     prose of the job lives in that FILE so every shard Reads the same text.
+#   - files: a JSON LIST of paths, e.g. ["src/A.php", "src/B.php"]. A
+#            comma-separated string is not a list: the stage fails before
+#            dispatching anything ("... from context 'files', which is a
+#            string, not an array").
+#   - spec:  path to the brief describing the fix. The job's prose lives in
+#            that FILE so every agent reads the same text.
 #
-# Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow):
-#   - top-level "name" is required; "description" and "config" are optional.
-#   - the stages this file uses are one parallel stage (parallel: true + a
-#     list of "agents") and one regular stage (agent/prompt/tools);
-#     WORKFLOWS.md is the source of truth for every stage shape and key the
-#     grammar accepts.
-#   - {{var}} interpolates initial run() context. "summarize" reads the
-#     wave through an "input:" join ({{input}}): the parallel stage's
-#     output is every shard's report, joined by newlines.
-#   - config.maxConcurrent bounds how many parallel-stage agents run at
-#     once; config.timeout is each stage's wall-clock budget in seconds, the
-#     only timeout this file sets. WORKFLOWS.md is the source of truth for
-#     every timeout spelling the grammar accepts.
-#   - "retries" re-runs a failed agent inside the stage budget; it goes only
-#     on agents that are safe to run twice. The shards edit files, so they
-#     carry none; "summarize" is read-only, so it carries one.
+# Run it:
+#   Workflow tool (context takes real JSON, so the list goes in as a list):
+#     {"plan": "<this file's YAML>",
+#      "context": {"files": ["src/A.php", "src/B.php"], "spec": "docs/briefs/fix.md"}}
+#   PHP: $engine->run('fix-wave', ['files' => ['src/A.php', 'src/B.php'], 'spec' => 'docs/briefs/fix.md']);
+#   /workflow run fix-wave ... and `candy-code workflow run fix-wave --param ...`
+#   hand every value over as a STRING today, so from those doors "files"
+#   arrives as text and the wave stage refuses it as described above.
 #
-# Shape notes (what this file does and does not do):
-#   - The shard count is fixed at write-time — the three shards below are
-#     written in full, not generated from {{files}}. A parallel stage's
-#     runtime fan-out ("from:") expands a GLOB, not a run-context list, so
-#     three static shards split the list by position instead: every 3rd
-#     entry starting at 1/2/3 covers it exactly.
-#   - The shards carry an outputSchema, but they run tools before
-#     answering and the schema rides only the first request, so a report
-#     can arrive as prose wrapped in the engine's "not constrained to the
-#     output schema" disclosure. "summarize" re-reads every report as
-#     text and does the counting itself.
-#   - Nothing here branches on a shard's result: "when:" can gate a stage
-#     on a prior stage's text, but every stage of this pass is meant to
-#     run. Re-run the workflow over whatever "summarize" lists as risky.
-#   - The shards edit the SHARED checkout — safe only because their file
-#     sets are disjoint by list position. Set `isolation: worktree` on each
-#     shard to keep each one in its own branch instead, but NOTHING merges
-#     isolated trees automatically: each shard's output names its tree and
-#     branch for a hand merge, which is usually worse than this partitioned
-#     shared-checkout shape. See docs/WORKFLOWS.md.
+# How it works:
+#   - "wave" fans out one agent per list entry. key: "" (the whole item is
+#     its own identity) dedups the list, so no two agents ever edit the same
+#     file, and names each agent wave_<file>. The agents edit the shared
+#     checkout; that is safe only because their files are disjoint. (The
+#     linter still warns about shared-checkout writers; read it, then decide.)
+#   - Each agent answers a typed report (outputSchema $ref: report),
+#     enforced: the agent must end with a valid StructuredOutput call.
+#   - minSuccess: 90% completes the wave when at least 90% of the files
+#     succeeded (rounded up). The casualties are listed in the stage output
+#     and as {{wave.failed}}, and the engine always announces them.
+#   - The fixers carry no retries: a re-run would start from a file the
+#     failed attempt may already have edited. "summarize" only reads, so it
+#     retries once.
+#   - Nothing caps the list here except the engine's 4096-item fan-out
+#     ceiling; add max: N to "from" to keep the first N and record the rest
+#     as dropped.
 
 name: fix-wave
 description: >
-  Split a comma-separated file list across three parallel coder shards that
-  apply the fix described in a spec file, then have an empty-tools reviewer
-  fold the shard reports into one schema-shaped summary.
+  Fan the fix described in a spec file out over a JSON list of files, one
+  agent per file in parallel, tolerate a few casualties, and fold the
+  per-file reports into one summary.
+
+config:
+  timeout: 1800
+  maxConcurrent: 4
+
+schemas:
+  report:
+    type: object
+    properties:
+      file: {type: string}
+      changed: {type: boolean}
+      notes: {type: string}
+    required: [file, changed, notes]
+  summary:
+    type: object
+    properties:
+      summary: {type: string}
+      totalChanged: {type: integer}
+      failed:
+        type: array
+        items: {type: string}
+      risks:
+        type: array
+        items: {type: string}
+    required: [summary, totalChanged, failed, risks]
 
 stages:
   - name: wave
     parallel: true
-    agents:
-      - name: shard_one
-        type: coder
-        prompt: >
-          Read the job brief at {{spec}}. The work list is {{files}} —
-          treat it as a comma-separated list and handle every 3rd entry
-          starting at the FIRST entry (positions 1, 4, 7, ...). Two other
-          agents are handling the remaining positions, so touch no file
-          outside your share. Apply the brief's fix to each of your files;
-          if one needs no change, list it as skipped rather than editing it.
-        tools: [Read, Edit, Grep, Glob]
-        outputSchema:
-          type: object
-          properties:
-            changed:
-              type: array
-              items:
-                type: string
-            skipped:
-              type: array
-              items:
-                type: string
-            notes:
-              type: string
-          required: [changed, skipped, notes]
-
-      - name: shard_two
-        type: coder
-        prompt: >
-          Read the job brief at {{spec}}. The work list is {{files}} —
-          treat it as a comma-separated list and handle every 3rd entry
-          starting at the SECOND entry (positions 2, 5, 8, ...). Two other
-          agents are handling the remaining positions, so touch no file
-          outside your share. Apply the brief's fix to each of your files;
-          if one needs no change, list it as skipped rather than editing it.
-        tools: [Read, Edit, Grep, Glob]
-        outputSchema:
-          type: object
-          properties:
-            changed:
-              type: array
-              items:
-                type: string
-            skipped:
-              type: array
-              items:
-                type: string
-            notes:
-              type: string
-          required: [changed, skipped, notes]
-
-      - name: shard_three
-        type: coder
-        prompt: >
-          Read the job brief at {{spec}}. The work list is {{files}} —
-          treat it as a comma-separated list and handle every 3rd entry
-          starting at the THIRD entry (positions 3, 6, 9, ...). Two other
-          agents are handling the remaining positions, so touch no file
-          outside your share. Apply the brief's fix to each of your files;
-          if one needs no change, list it as skipped rather than editing it.
-        tools: [Read, Edit, Grep, Glob]
-        outputSchema:
-          type: object
-          properties:
-            changed:
-              type: array
-              items:
-                type: string
-            skipped:
-              type: array
-              items:
-                type: string
-            notes:
-              type: string
-          required: [changed, skipped, notes]
+    from: {context: files, key: ""}
+    minSuccess: 90%
+    prompt: >
+      Read the job brief at {{spec}} and apply its fix to exactly ONE file:
+      {{item}}. Other agents own every other file in the list, so touch no
+      file but this one. If the file needs no change, change nothing and
+      say so (changed: false).
+    tools: [Read, Edit, Grep, Glob]
+    outputSchema: {$ref: report}
 
   - name: summarize
-    agent: reviewer
-    input:
-      from: [wave]
-      as: all
+    input: {from: [wave], as: all}
     prompt: >
-      The parallel stage above reported each shard's changed and skipped
-      files, each report a JSON object or prose: {{input}} Merge the three shard reports
-      into one summary — total files changed, files skipped, and any risks
-      or inconsistencies you spot between the shards. Do not edit anything:
-      this stage has no tools at all.
-    tools: []
+      Below are the per-file reports of a fix wave (one JSON report per
+      file), and these files failed outright: {{wave.failed}}. Merge them
+      into one summary: how many files changed, which failed, and any risks
+      or inconsistencies between the reports. Edit nothing. {{input}}
+    tools: [Read]
     retries: 1
-    outputSchema:
-      type: object
-      properties:
-        summary:
-          type: string
-        totalChanged:
-          type: integer
-        risks:
-          type: array
-          items:
-            type: string
-      required: [summary, totalChanged, risks]
-
-config:
-  maxConcurrent: 3
-  timeout: 1800
+    outputSchema: {$ref: summary}

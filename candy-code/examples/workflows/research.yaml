@@ -1,0 +1,162 @@
+# research — answer a question about this codebase by searching it four
+# different ways, have a critic name what is still missing, run a second
+# round over exactly those gaps, then synthesise.
+#
+# Pattern: multi-modal sweep -> completeness critic -> conditional second
+# round -> synthesis. See the workflow-authoring skill, "Quality patterns".
+#
+# Parameters:
+#   - question: the question to answer ("how does session resume restore tool state?").
+#   - scope:    the subtree to search (src/, or . for the whole checkout).
+#
+# Run it:
+#   /workflow run research question="how is a session resumed?" scope=src/
+#   candy-code workflow run research --param 'question=how is a session resumed?' --param scope=src/
+#   Workflow tool: {"plan": "<this file's YAML>",
+#                   "context": {"question": "how is a session resumed?", "scope": "src/"}}
+#
+# How it works:
+#   - "sweep" runs four readers that each search a DIFFERENT way: by the
+#     file tree, by content (Grep), by history ("Bash(git log *)" and
+#     "Bash(git show *)" only), and by the docs. Readers that search the same
+#     way find the same things. The stage is captured: later prompts get the
+#     capture file's path plus a 2 KiB preview, and Read the rest.
+#   - "critic" reads the whole sweep and answers a typed list of gaps
+#     (a modality not used, a claim nobody verified, a source nobody read).
+#     An empty list means "complete".
+#   - "round_two" runs only when the critic found gaps
+#     (when: {stage: critic, pointer: /gaps, empty: false}); otherwise it is
+#     skipped, which is recorded and is not a failure. It fans out one
+#     reader per gap straight from the critic's data
+#     (from: {stage: critic, pointer: /gaps, key: /id}), with {{item.*}}
+#     naming that gap.
+#   - "synthesize" joins everything with input: (as: all). A skipped
+#     round_two simply has no block in the join.
+#   - Every reader only reads; retries are safe on all of them.
+
+name: research
+description: >
+  Answer a question about the codebase with a four-way search sweep, a
+  completeness critic, a second round over the critic's gaps when it found
+  any, and a cited synthesis.
+
+config:
+  timeout: 1800
+  maxTokens: 1200000
+
+schemas:
+  notes:
+    type: object
+    properties:
+      findings:
+        type: array
+        items:
+          type: object
+          properties:
+            claim: {type: string}
+            source: {type: string}
+          required: [claim, source]
+      unanswered:
+        type: array
+        items: {type: string}
+    required: [findings, unanswered]
+  gaps:
+    type: object
+    properties:
+      gaps:
+        type: array
+        items:
+          type: object
+          properties:
+            id: {type: string}
+            question: {type: string}
+            how: {type: string}
+          required: [id, question, how]
+    required: [gaps]
+
+stages:
+  - name: sweep
+    parallel: true
+    agents:
+      - name: by_tree
+        type: researcher
+        prompt: >
+          Question: {{question}}. Search {{scope}} BY FILE TREE: Glob the
+          directory layout, find the files whose names and locations suggest
+          they hold the answer, and read them. Every finding cites
+          file:line as its source. List what you could not answer.
+        tools: [Read, Glob]
+        outputSchema: {$ref: notes}
+        retries: 1
+      - name: by_content
+        type: researcher
+        prompt: >
+          Question: {{question}}. Search {{scope}} BY CONTENT: Grep for the
+          symbols, strings, config keys and error messages involved, follow
+          the call sites, and read the code. Every finding cites file:line.
+          List what you could not answer.
+        tools: [Read, Grep]
+        outputSchema: {$ref: notes}
+        retries: 1
+      - name: by_history
+        type: researcher
+        prompt: >
+          Question: {{question}}. Search BY HISTORY: use git log (with -S,
+          -G, --follow or a path under {{scope}}) and git show to find the
+          commits that introduced or changed the relevant behaviour, and
+          what their messages say about why. Every finding cites a commit
+          hash. List what you could not answer.
+        tools: [Read, "Bash(git log *)", "Bash(git show *)"]
+        outputSchema: {$ref: notes}
+        retries: 1
+      - name: by_docs
+        type: researcher
+        prompt: >
+          Question: {{question}}. Search BY DOCUMENTATION: READMEs, docs/,
+          docblocks and comments that describe the behaviour, then check
+          each documented claim against the code. Every finding cites
+          file:line and says whether the code agrees. List what you could
+          not answer.
+        tools: [Read, Glob, Grep]
+        outputSchema: {$ref: notes}
+        retries: 1
+    capture: true
+
+  - name: critic
+    input: {from: [sweep], as: all}
+    prompt: >
+      You are the completeness critic for the question: {{question}}. Below
+      are four searches of {{scope}} (captured; Read the file the preview
+      names for the full text). Name what is MISSING: a part of the
+      question nobody answered, a claim only one search made and nobody
+      verified, a contradiction between searches, a file or commit that
+      was mentioned but never read. Each gap gets a short id, the question
+      a reader must answer, and how to search for it. Return an empty list
+      if the searches together answer the question completely.
+      {{input}}
+    tools: [Read]
+    outputSchema: {$ref: gaps}
+    retries: 1
+
+  - name: round_two
+    parallel: true
+    when: {stage: critic, pointer: /gaps, empty: false}
+    from: {stage: critic, pointer: /gaps, key: /id, max: 12}
+    prompt: >
+      Close one gap in research on: {{question}}. The gap: {{item.question}}
+      Suggested approach: {{item.how}}. Search {{scope}} and answer it,
+      citing file:line or a commit hash for every claim; say plainly if the
+      gap stays open.
+    tools: [Read, Grep, Glob, "Bash(git log *)", "Bash(git show *)"]
+    retries: 1
+
+  - name: synthesize
+    input: {from: [sweep, critic, round_two], as: all}
+    prompt: >
+      Answer the question: {{question}}. Below are four independent searches
+      (captured: Read the file for the full text), a completeness critique,
+      and, when it ran, a second round over the critic's gaps. Write the
+      answer with a citation (file:line or commit) on every claim, note
+      where the searches disagreed and which side the code supports, and
+      end with the questions that are still open. {{input}}
+    tools: [Read]

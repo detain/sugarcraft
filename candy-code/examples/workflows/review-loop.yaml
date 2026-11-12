@@ -1,30 +1,25 @@
 # review-loop — build from a spec file, then review and fix in an engine loop,
-# then gate the run on an independent sign-off verdict.
+# then gate the run on a three-vote sign-off panel.
 #
-# Loadable directly via SugarCraft\Code\Workflows\WorkflowRegistry:
-#
-#   $registry = new WorkflowRegistry(__DIR__ . '/examples/workflows');
-#   $workflow = $registry->loadYaml('review-loop');
-#   (new WorkflowEngine($registry, $pool))->run('review-loop', ['specfile' => 'docs/briefs/feature.md']);
-#
-# Or drop a copy in ~/.candy-code/workflows/review-loop.yaml (the default
-# WorkflowRegistry lookup path) and run it via the /workflow command inside
-# the chat TUI: `/workflow run review-loop specfile=docs/briefs/feature.md`.
-# Run-context values may be quoted (`specfile="docs/my brief.md"`); the
-# spec still lives in a FILE so every stage Reads the same text instead of
-# carrying it inline in each prompt.
+# Pattern: a verdict loop, then a quorum sign-off gate. See the
+# workflow-authoring skill, "Quality patterns".
 #
 # Parameters:
 #   - specfile: path to the written spec to implement and review against.
+#     The spec lives in a FILE so every stage reads the same text instead of
+#     carrying it inline in each prompt.
 #
-# Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow;
-# docs/WORKFLOWS.md is the source of truth for every key):
-#   - top-level "name" is required; "description" and "config" are optional.
-#   - {{var}} interpolates initial run() context; {{round}} is the 1-based
-#     round number the engine injects while a "loop:" stage runs; inside a
-#     "tasks:" list, {{prevResult}} is the previous task's output.
+# Run it:
+#   /workflow run review-loop specfile=docs/briefs/feature.md
+#     (values may be quoted: specfile="docs/my brief.md")
+#   candy-code workflow run review-loop --param specfile=docs/briefs/feature.md
+#   Workflow tool: {"plan": "<this file's YAML>", "context": {"specfile": "docs/briefs/feature.md"}}
+#
+# Keys this file relies on (docs/WORKFLOWS.md is the source of truth):
+#   - {{round}} is the 1-based round number while a "loop:" stage runs;
+#     inside a "tasks:" list, {{prevResult}} is the previous task's output.
 #   - config.timeout is each stage's wall-clock budget in seconds; a looped
-#     stage's rounds and a verification stage's task + verifier share it.
+#     stage's rounds and a verification stage's task + votes share it.
 #   - "retries" goes only on agents that are safe to run twice: the
 #     reviewers just read, so they carry one; "build" and "address" edit
 #     files, so they carry none.
@@ -35,22 +30,25 @@
 #     at most 3 rounds. The until-clause names the TASK "verdict": no stage
 #     carries that name, so the condition reads the task's recorded result,
 #     which every round overwrites with the newest review.
-#   - Tasks of one stage cannot be skipped one by one ("when:" is
+#   - Tasks of one "tasks:" list cannot be skipped one by one ("when:" is
 #     stage-level), so "address" runs in the approving round too; its prompt
 #     makes it a no-op there. The loop then ends on that round.
 #   - A loop that spends all its rounds still COMPLETES (loop: means "try up
 #     to N times", not "fail if it never happens") and the last round's
 #     fixes were never reviewed. "signoff" is the gate: a type: verification
-#     stage whose verifier "reject:"s any reply without an APPROVE line.
-#     "retries: 1" re-asks a FRESH verifier against the same task result (a
-#     second opinion; the fixer is not re-run). A rejection the retry does
+#     stage whose verifier is a PANEL of three independent votes, each
+#     through a different lens. A vote rejects when its reply has no line
+#     "VERDICT: APPROVE" (or when it fails or times out); quorum: 2 means two
+#     votes must approve. "retries: 1" re-runs the whole panel once against
+#     the same summary (the fixer is not re-run). A rejection the retry does
 #     not overturn fails the run; /workflow resume re-runs "signoff" only.
-#   - A verifier line starting "ESCALATE:" stops the run for a person
-#     without spending a retry — the spec is ambiguous, not the code wrong.
-#   - The reviewers answer in prose ending in a fixed VERDICT line rather
-#     than through outputSchema: they run tools before answering, and the
-#     schema rides only the first request, so the line is the dependable
-#     contract.
+#   - A vote line starting "ESCALATE:" stops the run for a person without
+#     spending a retry — the spec is ambiguous, not the code wrong. It
+#     outranks a met quorum.
+#   - The reviewers answer in prose ending in a fixed VERDICT line: the
+#     reject pattern reads that line. (An outputSchema would work too: it is
+#     enforced through a final StructuredOutput call. Prose keeps the
+#     review's findings readable in the transcript.)
 
 name: review-loop
 description: >
@@ -109,18 +107,22 @@ stages:
       name: final_review
       agent: reviewer
       prompt: >
-        You are the final, independent reviewer. Read the spec at
-        {{specfile}} and check the working tree against it, using this
-        summary as a map (verify it; do not trust it): {{prevResult}}
+        You are one of three independent final reviewers; judge through the
+        {{lens}} lens. Read the spec at {{specfile}} and check the working
+        tree against it, using this summary as a map (verify it; do not
+        trust it): {{prevResult}}
         If the spec is too ambiguous to judge, start a line with
         "ESCALATE: <your question>" instead of a verdict. Otherwise list
         any remaining findings with file:line and end with exactly one
         line, "VERDICT: APPROVE" or "VERDICT: NEEDS-FIX".
       tools: [Read, Grep, Glob, Bash]
       retries: 1
+      votes: 3
+      lenses: [spec-coverage, correctness, regressions]
+      quorum: 2
       # Fail closed: matches (and so rejects) any reply that has NO line
       # reading exactly "VERDICT: APPROVE" — a NEEDS-FIX verdict and a
-      # reply that forgot the verdict line both fail the stage.
+      # reply that forgot the verdict line both count against the quorum.
       reject: '/\A(?![\s\S]*^VERDICT: APPROVE[ \t]*$)/m'
 
 config:

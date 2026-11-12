@@ -1,0 +1,160 @@
+# review-changes — find bugs in a diff until the finders run dry, verify every
+# finding's verdict with a three-lens panel, then report what survived.
+#
+# Pattern: scout -> loop-until-dry fan-out -> per-item adversarial verify
+# (type: map, no barrier) -> cheap report. See the workflow-authoring skill,
+# "Quality patterns".
+#
+# Parameters:
+#   - base: the git ref the change is measured against (main, HEAD~3, a sha).
+#
+# Run it:
+#   /workflow run review-changes base=main
+#   candy-code workflow run review-changes --param base=main --format json
+#   Workflow tool: {"plan": "<this file's YAML>", "context": {"base": "main"}}
+# (Saved copies go in .candy-code/workflows/ or ~/.candy-code/workflows/.)
+#
+# How it works:
+#   - "find" runs two finders in parallel, each with a narrow read grant
+#     (Read, Grep, and git only through "Bash(git *)"). Their answers are
+#     enforced through outputSchema ($ref: findings), so every finding is a
+#     typed object with a stable id.
+#   - loop.accumulate keeps ONE deduped set across rounds (identity = /id,
+#     deduped against everything SEEN, so a finding never comes back), and
+#     {{seen}} tells each round what is already known. until: {dry: 2} stops
+#     after two rounds that add nothing new; max: 4 is the backstop. The
+#     stage's result is {"items": [...], "keys": [...], "rounds": n}, so the
+#     next stage reads /items, not /findings.
+#   - "verify" is a map: each finding flows through its own verification step
+#     the moment the stage starts, with no barrier between findings. The task
+#     decides whether the finding holds; three independent votes, each
+#     through a different lens, try to prove that decision WRONG. quorum: 2
+#     means two of three votes must not reject. A vote that fails or times
+#     out counts as a rejection; a line starting "ESCALATE:" in any vote
+#     stops the run for a person and burns no retry.
+#   - A finding whose verdict the panel overturns drops out of the map as a
+#     casualty (listed in {{verify.failed}}), so minSuccess decides how much
+#     disagreement the stage tolerates before the run stops.
+#   - "report" runs at effort: low; it only formats. Its input is the map's
+#     JSON item document (input as: results).
+#   - config.maxTokens is a hard ceiling: a dispatch that would start past it
+#     PAUSES the run instead (resume after raising it). config.maxAgents
+#     bounds dispatches; the panel alone is 3 votes per finding.
+#   - tools: [] does NOT mean "no tools" (it means the session's tools, the
+#     same as leaving tools out), so the toolless-looking stages grant [Read].
+
+name: review-changes
+description: >
+  Find correctness bugs and edge cases in the diff against a base ref until
+  two rounds add nothing new, verify each finding's verdict with a
+  three-lens quorum panel, and report the confirmed ones.
+
+config:
+  timeout: 1800
+  maxTokens: 1500000
+  maxAgents: 800
+
+schemas:
+  findings:
+    type: object
+    properties:
+      findings:
+        type: array
+        items:
+          type: object
+          properties:
+            id: {type: string}
+            file: {type: string}
+            line: {type: integer}
+            claim: {type: string}
+            scenario: {type: string}
+          required: [id, file, line, claim, scenario]
+    required: [findings]
+  verdict:
+    type: object
+    properties:
+      holds: {type: boolean}
+      evidence: {type: string}
+    required: [holds, evidence]
+
+stages:
+  - name: find
+    parallel: true
+    agents:
+      - name: f_correctness
+        type: finder
+        prompt: >
+          Find correctness bugs INTRODUCED by `git diff {{base}}...HEAD` in
+          this checkout (read the diff, then the surrounding code). Report
+          only real defects: each with the file, the line in the new code, a
+          one-sentence claim, and a concrete failure scenario. Give each an
+          id of the form <file>:<line>:<short-slug>. These ids are already
+          known; do not report them again: {{seen}}. Report an empty list
+          when you find nothing new.
+        tools: [Read, Grep, "Bash(git *)"]
+        outputSchema: {$ref: findings}
+        retries: 1
+      - name: f_edge_cases
+        type: finder
+        prompt: >
+          Same diff (`git diff {{base}}...HEAD`), edge cases only: empty and
+          null input, unicode, boundaries, concurrency, partial failure and
+          resume. Same output contract and id form. Skip these known ids:
+          {{seen}}. Report an empty list when you find nothing new.
+        tools: [Read, Grep, "Bash(git *)"]
+        outputSchema: {$ref: findings}
+        retries: 1
+    loop:
+      max: 4
+      accumulate: {pointer: /findings, key: /id}
+      until: {dry: 2}
+    capture: true
+    announce: "find: {{find.rounds}} rounds"
+
+  - name: verify
+    type: map
+    from: {stage: find, pointer: /items, key: /id, max: 150}
+    minSuccess: 50%
+    steps:
+      - name: check
+        type: verification
+        task:
+          prompt: >
+            Decide whether this finding against `git diff {{base}}...HEAD`
+            holds: {{item}}. Read the code at {{item.file}} around line
+            {{item.line}} and try to reproduce the scenario by reasoning
+            through it. holds=true only if the defect is real and reachable;
+            put the decisive evidence (code quoted with file:line) in
+            evidence.
+          tools: [Read, Grep, "Bash(git *)"]
+          outputSchema: {$ref: verdict}
+          retries: 1
+        verifier:
+          prompt: >
+            Through the {{lens}} lens, try to prove this verdict WRONG. The
+            finding: {{item}}. The verdict under review: {{prevResult}}.
+            Re-read the code yourself; do not trust the evidence quoted. If
+            the verdict is wrong or unsupported, end with a line "REJECT:
+            <why>". If it is right, end with "UPHOLD". If the finding cannot
+            be judged without a decision from a person, start a line with
+            "ESCALATE: <question>".
+          tools: [Read, Grep, "Bash(git *)"]
+          reject: '/^REJECT\b/m'
+          votes: 3
+          lenses: [correctness, reachability, reproduction]
+          quorum: 2
+    announce: "verify: overturned or failed verdicts: {{verify.failed}}"
+
+  - name: report
+    effort: low
+    input: {from: [verify], as: results}
+    prompt: >
+      Below is a JSON document of verified findings. Each item's
+      steps.check.data is the verdict a three-vote panel upheld: holds=true
+      is a confirmed bug, holds=false a refuted one. Items whose status is
+      not "completed" were overturned by the panel or failed; list their
+      keys separately as "contested". Output a table of the confirmed bugs,
+      most severe first: file:line, claim, failure scenario. Then one line
+      with the counts (confirmed, refuted, contested). Do not edit files.
+      {{input}}
+    tools: [Read]

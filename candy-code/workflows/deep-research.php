@@ -29,10 +29,11 @@ use SugarCraft\Code\Workflows\WorkflowBuilder;
  *    and the readers carry `Read` to open the file. `synthesize` and `report`
  *    reach earlier stages through `input:` joins rather than pasting
  *    `{{stage.output}}` into each prompt.
- *  - `follow_up` is gated by `when:` and is a single bounded round, not a
- *    loop: `loop:` re-runs plain stages only, and the research it would
- *    repeat is a parallel stage. A follow-up the gate skips records nothing,
- *    so the report's join simply omits it.
+ *  - `follow_up` is gated by `when:` and is a single bounded round over the
+ *    synthesizer's `GAP:` lines (prose). A follow-up the gate skips records
+ *    nothing, so the report's join simply omits it. For the data-driven
+ *    variant — a schema'd critic whose `gaps` list drives one reader per gap
+ *    through `from: {stage, pointer}` — see examples/workflows/research.yaml.
  *  - `report` returns the report as its answer; it holds `Read` only (to
  *    open the capture file), never `Write`/`Edit`.
  *

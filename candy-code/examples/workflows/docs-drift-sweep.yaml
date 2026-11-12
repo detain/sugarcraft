@@ -1,14 +1,9 @@
 # docs-drift-sweep — audit docs for drift, fan out a fixer per category, re-audit.
 #
-# Loadable directly via SugarCraft\Code\Workflows\WorkflowRegistry:
-#
-#   $registry = new WorkflowRegistry(__DIR__ . '/examples/workflows');
-#   $workflow = $registry->loadYaml('docs-drift-sweep');
-#   (new WorkflowEngine($registry, $pool))->run('docs-drift-sweep', ['scope' => 'docs/']);
-#
-# Or drop a copy in ~/.candy-code/workflows/docs-drift-sweep.yaml (the default
-# WorkflowRegistry lookup path) and run it via the /workflow command inside
-# the chat TUI: `/workflow run docs-drift-sweep scope=docs/`.
+# Run it:
+#   /workflow run docs-drift-sweep scope=docs/
+#   candy-code workflow run docs-drift-sweep --param scope=docs/
+#   Workflow tool: {"plan": "<this file's YAML>", "context": {"scope": "docs/"}}
 #
 # Parameters:
 #   - scope: the docs subtree to sweep. A path with a space is quoted:
@@ -37,19 +32,20 @@
 #   - "fix" and "recheck" carry the same "when:" clause: they run only when
 #     the audit tagged at least one line with a category. A clean audit
 #     ends the run after one stage, with nothing else dispatched or billed.
-#   - The sweep is still ONE pass. "loop:" re-runs only plain stages in v1
-#     (a parallel stage like "fix" refuses it), so a second sweep is the
-#     driver's call: if "recheck" reports remaining findings, re-run the
-#     workflow.
-#   - "recheck" uses tools before answering, and outputSchema rides the
-#     first request, so its output can arrive wrapped in the engine's "not
-#     constrained to the output schema" disclosure instead of the JSON
-#     shape below. A driver should treat any output that does not parse as
-#     a verdict as "still dirty" and re-run.
+#   - The sweep is ONE pass. A second pass is the driver's call: if
+#     "recheck" reports clean: false, re-run the workflow. (A loop could
+#     repeat it, but it would re-run the fixers on findings a round already
+#     fixed; review-changes.yaml shows the accumulate-until-dry shape for
+#     discovery.)
+#   - "recheck" answers through outputSchema, which is enforced: the agent
+#     must end with a StructuredOutput call that validates, so once it
+#     completes, {{recheck.clean}} and the Workflow tool's "data" field
+#     always have the schema's shape.
 #   - {{audit.output}} reaches the fixers as a text blob, not data: each
 #     fixer self-selects its category by reading, and this file fans out
 #     one fixer per CATEGORY, not per FINDING — its agent list is written
-#     in full below.
+#     in full below. For one agent per finding, give the audit an
+#     outputSchema and fan out with from: {stage: audit, pointer: ...}.
 
 name: docs-drift-sweep
 description: >

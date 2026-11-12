@@ -1,15 +1,11 @@
 # lint-then-fix — review a change, fan out fixers by finding category, then verify.
 #
-# Loadable directly via SugarCraft\Code\Workflows\WorkflowRegistry:
-#
-#   $registry = new WorkflowRegistry(__DIR__ . '/examples/workflows');
-#   $workflow = $registry->loadYaml('lint-then-fix');
-#   (new WorkflowEngine($registry, $pool))->run('lint-then-fix', ['scope' => 'src/Chat.php']);
-#
-# Or drop a copy in ~/.candy-code/workflows/lint-then-fix.yaml (the default
-# WorkflowRegistry lookup path) and run it via the /workflow command inside
-# the chat TUI: `/workflow run lint-then-fix scope=src/Chat.php` (values may
-# be quoted: `scope="src/Some Dir/"`).
+# Run it:
+#   /workflow run lint-then-fix scope=src/Chat.php
+#     (values may be quoted: scope="src/Some Dir/")
+#   candy-code workflow run lint-then-fix --param scope=src/Chat.php
+#   Workflow tool: {"plan": "<this file's YAML>", "context": {"scope": "src/Chat.php"}}
+#   PHP: (new WorkflowEngine($registry, $pool))->run('lint-then-fix', ['scope' => 'src/Chat.php']);
 #
 # Schema notes (see src/Workflows/WorkflowRegistry.php::parseYamlWorkflow):
 #   - top-level "name" is required; "description" and "config" are optional.

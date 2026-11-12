@@ -1,0 +1,151 @@
+# migrate — find every site a mechanical change applies to, change each one in
+# its own git worktree and run the suite there, verify each change, report the
+# branches to merge.
+#
+# Pattern: scout (a schema'd list of sites) -> type: map per site
+# (transform in a worktree -> verify) -> report. See the workflow-authoring
+# skill, "Quality patterns".
+#
+# Parameters:
+#   - spec:  path to a brief describing the change (read by every agent, so
+#            the job's prose lives in ONE file, not in every prompt).
+#   - scope: where to look for sites (a directory or a glob, e.g. src/).
+#
+# Run it:
+#   /workflow run migrate spec=docs/briefs/migration.md scope=src/
+#   candy-code workflow run migrate --param spec=docs/briefs/migration.md --param scope=src/
+#   Workflow tool: {"plan": "<this file's YAML>",
+#                   "context": {"spec": "docs/briefs/migration.md", "scope": "src/"}}
+#
+# How it works:
+#   - "scout" only reads, and answers a typed list of sites (outputSchema
+#     $ref: sites), so the fan-out reads data, not prose.
+#   - "apply" is a map over /sites (key: /id dedups and names each item). No
+#     barrier: site A can be verifying while site B is still transforming.
+#     Width is config.maxConcurrent item chains.
+#   - "transform" runs with isolation: worktree: its own git worktree and
+#     branch, so parallel sites never collide. A tree with changes is KEPT
+#     and named in the step's output; nothing merges automatically. Every
+#     isolated agent gets a FRESH tree of its own and no later step can work
+#     inside it, so the agent that edits the tree is also the one that runs
+#     the suite there ("Bash(composer install *)" then
+#     "Bash(vendor/bin/phpunit *)"; a new worktree has no vendor/). It
+#     carries no retries: a re-run would start from a tree the failed
+#     attempt may already have changed.
+#   - "verify" is a verification step: the task restates the evidence from
+#     the kept tree (worktrees live under .candy-code/worktrees/, inside the
+#     project), and a skeptical verifier REJECTs unless the tests passed and
+#     the change matches the spec. A rejection drops that site; the other
+#     sites carry on.
+#   - minSuccess: 90% lets the stage complete with a few casualties instead
+#     of throwing away every good site for one bad one. {{apply.failed}}
+#     names them, and the engine always announces casualties and any
+#     from.max truncation on its own; announce: adds a one-line summary.
+#   - In a monorepo, run the suite of the package the site lives in, not the
+#     root's: copy this plan and widen the two Bash grants to that package's
+#     paths.
+
+name: migrate
+description: >
+  Scout every site a spec'd change applies to, transform each site in its
+  own worktree and run the suite there, verify each change skeptically, and
+  report the branches to merge.
+
+config:
+  timeout: 3600
+  maxConcurrent: 4
+  maxAgents: 400
+  maxTokens: 2000000
+
+schemas:
+  sites:
+    type: object
+    properties:
+      sites:
+        type: array
+        items:
+          type: object
+          properties:
+            id: {type: string}
+            file: {type: string}
+            line: {type: integer}
+            what: {type: string}
+          required: [id, file, what]
+    required: [sites]
+  change:
+    type: object
+    properties:
+      tree: {type: string}
+      branch: {type: string}
+      changed:
+        type: array
+        items: {type: string}
+      testCommand: {type: string}
+      testsPassed: {type: boolean}
+      testTail: {type: string}
+    required: [tree, changed, testCommand, testsPassed, testTail]
+
+stages:
+  - name: scout
+    prompt: >
+      Read the migration brief at {{spec}}. List every site under {{scope}}
+      that the brief's change applies to: one entry per site, with an id of
+      the form <file>:<line>, the file, the line and a one-line note of what
+      must change there. Read the code to confirm each site; do not guess
+      from names alone. Change nothing.
+    tools: [Read, Grep, Glob]
+    outputSchema: {$ref: sites}
+    retries: 1
+
+  - name: apply
+    type: map
+    from: {stage: scout, pointer: /sites, key: /id, max: 200}
+    minSuccess: 90%
+    steps:
+      - name: transform
+        prompt: >
+          Read the migration brief at {{spec}} and apply its change to this
+          ONE site only: {{item.file}} (line {{item.line}}): {{item.what}}.
+          Touch nothing else. Then prove it in this tree: run
+          `composer install --no-interaction --quiet`, then
+          `vendor/bin/phpunit` limited to the tests covering the file
+          (a --filter or a test path). Report the tree path and branch you
+          worked in, the files you changed, the exact test command, whether
+          it passed, and the last lines of its output.
+        tools: [Read, Edit, Grep, Glob, "Bash(composer install *)", "Bash(vendor/bin/phpunit *)"]
+        isolation: worktree
+        outputSchema: {$ref: change}
+      - name: verify
+        type: verification
+        task:
+          effort: low
+          prompt: >
+            Collect the evidence for this change: {{prevResult}}. Read each
+            changed file inside the kept tree {{transform.tree}} and quote
+            the changed lines with file:line, then restate the test command
+            and its result. Change nothing.
+          tools: [Read, Grep, Glob]
+        verifier:
+          prompt: >
+            Be skeptical. The brief is {{spec}}; the site was {{item}}. The
+            evidence: {{prevResult}}. Re-read the changed files in
+            {{transform.tree}} yourself. End with "REJECT: <why>" if the
+            tests did not pass, if the change goes beyond the site, or if it
+            does not do what the brief asks; otherwise end with "ACCEPT". If
+            the brief is ambiguous for this site, start a line with
+            "ESCALATE: <question>" instead.
+          tools: [Read, Grep, Glob]
+          reject: '/^REJECT\b/m'
+          retries: 1
+    announce: "apply settled; dropped sites: {{apply.failed}}"
+
+  - name: report
+    effort: low
+    input: {from: [apply], as: results}
+    prompt: >
+      Below is the per-site result of a migration as JSON. For every item
+      whose status is "completed", list the site, the branch and the tree
+      path from steps.transform.data. Then list every other item with the
+      error that dropped it. End with the git commands to merge the
+      completed branches, one per line. Do not run them. {{input}}
+    tools: [Read]

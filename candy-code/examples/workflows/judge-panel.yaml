@@ -1,0 +1,157 @@
+# judge-panel — three designers attack one problem from different angles,
+# three independent judges score every design, and a synthesis takes the
+# winner and grafts the best ideas from the runners-up.
+#
+# Pattern: judge panel, for problems with a wide solution space. See the
+# workflow-authoring skill, "Quality patterns".
+#
+# Parameters:
+#   - goal: what to design, in one sentence ("a retry policy for the mail queue").
+#   - spec: path to a file holding the constraints every designer must honour.
+#
+# Run it:
+#   /workflow run judge-panel goal="a retry policy for the mail queue" spec=docs/briefs/retry.md
+#   candy-code workflow run judge-panel --param 'goal=a retry policy' --param spec=docs/briefs/retry.md
+#   Workflow tool: {"plan": "<this file's YAML>",
+#                   "context": {"goal": "a retry policy", "spec": "docs/briefs/retry.md"}}
+#
+# How it works:
+#   - The designers get DISTINCT angles (smallest viable, risk-first,
+#     operator-first). Three copies of one prompt would mostly produce three
+#     copies of one design.
+#   - Every design and every score sheet is schema'd (outputSchema $ref), so
+#     the answers are enforced JSON and the synthesis can compare like with
+#     like.
+#   - "judge" is a BARRIER on purpose: each judge must see ALL the designs
+#     to compare them, so it cannot start until "designs" has settled. That
+#     cross-item need is the one thing that justifies a barrier; a per-item
+#     check would be a type: map instead.
+#   - Each judge reads the designs through an input: join (as: all, one
+#     labelled block per designer) rather than pasting {{designs.output}}.
+#   - Judges are independent: none sees another's scores, and each gets a
+#     different emphasis so their errors do not line up.
+#   - The designers and judges only read. The narrowest grant is [Read]:
+#     tools: [] means the session's tools, not none.
+
+name: judge-panel
+description: >
+  Three designers propose solutions from different angles, three
+  independent judges score every design, and a synthesis builds on the
+  winner while grafting the best ideas of the runners-up.
+
+config:
+  timeout: 1800
+  maxTokens: 800000
+
+schemas:
+  design:
+    type: object
+    properties:
+      title: {type: string}
+      approach: {type: string}
+      tradeoffs:
+        type: array
+        items: {type: string}
+      risks:
+        type: array
+        items: {type: string}
+    required: [title, approach, tradeoffs, risks]
+  scores:
+    type: object
+    properties:
+      scores:
+        type: array
+        items:
+          type: object
+          properties:
+            design: {type: string}
+            correctness: {type: integer}
+            cost: {type: integer}
+            risk: {type: integer}
+            note: {type: string}
+          required: [design, correctness, cost, risk, note]
+      winner: {type: string}
+    required: [scores, winner]
+
+stages:
+  - name: designs
+    parallel: true
+    agents:
+      - name: d_minimal
+        type: designer
+        prompt: >
+          Design {{goal}}, SMALLEST-VIABLE first: the least new code and
+          concepts that fully meets the constraints in {{spec}}. Read the
+          relevant code before you design. Name your design's title after
+          its core idea.
+        tools: [Read, Grep, Glob]
+        outputSchema: {$ref: design}
+        retries: 1
+      - name: d_risk
+        type: designer
+        prompt: >
+          Design {{goal}}, RISK-FIRST: start from how this can fail in
+          production (data loss, partial failure, concurrency, rollback) and
+          design so those cannot happen. Constraints: {{spec}}. Read the
+          relevant code before you design.
+        tools: [Read, Grep, Glob]
+        outputSchema: {$ref: design}
+        retries: 1
+      - name: d_operator
+        type: designer
+        prompt: >
+          Design {{goal}}, OPERATOR-FIRST: optimise for the person who runs,
+          configures and debugs it (observability, defaults, clear errors).
+          Constraints: {{spec}}. Read the relevant code before you design.
+        tools: [Read, Grep, Glob]
+        outputSchema: {$ref: design}
+        retries: 1
+
+  # Barrier justified: every judge compares ALL the designs.
+  - name: judge
+    parallel: true
+    agents:
+      - name: j_correctness
+        type: judge
+        input: {from: [designs], as: all}
+        prompt: >
+          Score each design below 1-10 on correctness, cost and risk (10 is
+          best on every axis), weighting correctness most. Check each
+          against the constraints in {{spec}}; read code where a design's
+          claim depends on it. Name the winner by its block label.
+          {{input}}
+        tools: [Read]
+        outputSchema: {$ref: scores}
+        retries: 1
+      - name: j_cost
+        type: judge
+        input: {from: [designs], as: all}
+        prompt: >
+          Score each design below 1-10 on correctness, cost and risk (10 is
+          best), weighting long-term maintenance cost most. Constraints:
+          {{spec}}. Name the winner by its block label. {{input}}
+        tools: [Read]
+        outputSchema: {$ref: scores}
+        retries: 1
+      - name: j_risk
+        type: judge
+        input: {from: [designs], as: all}
+        prompt: >
+          Score each design below 1-10 on correctness, cost and risk (10 is
+          best), weighting failure modes in production most. Constraints:
+          {{spec}}. Name the winner by its block label. {{input}}
+        tools: [Read]
+        outputSchema: {$ref: scores}
+        retries: 1
+
+  - name: synthesize
+    input: {from: [designs, judge], as: all}
+    prompt: >
+      Below are three designs for {{goal}} and three independent score
+      sheets. Take the design with the best total score as the base, then
+      graft in the specific ideas from the runners-up that the judges
+      scored well and that do not conflict with it. Output: the chosen
+      base and why, the grafted ideas with their source design, the final
+      design, and the open risks the judges raised. Constraints: {{spec}}.
+      {{input}}
+    tools: [Read]
