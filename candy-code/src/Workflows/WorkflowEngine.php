@@ -1021,7 +1021,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private static function mergePreset(WorkflowTask $task, StagePreset $preset): WorkflowTask
     {
         $changes = [];
-        if ($task->tools === [] && $preset->tools !== []) {
+        // C6: only SILENCE takes the preset's tools — a written `tools: []`
+        // is the task's own statement (no tools) and wins like any other key.
+        if ($task->tools === [] && !$task->toolsSet && $preset->tools !== []) {
             $changes['tools'] = $preset->tools;
         }
         if (($task->model === null || $task->model === 'inherit') && $preset->model !== null) {
@@ -4437,6 +4439,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 permissionGate: $this->stageGate($task),
                 // P1-6: the task's reasoning effort (its own, or its preset's).
                 effort: $task->effort,
+                // C6: a declared `tools: []` runs with NO tools, on every executor.
+                toolless: $task->declaresNoTools(),
             );
 
             // Build CompleteRequest
@@ -4589,6 +4593,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 permissionGate: $this->stageGate($task),
                 // P1-6: the task's reasoning effort (its own, or its preset's).
                 effort: $task->effort,
+                // C6: a declared `tools: []` runs with NO tools, on every executor.
+                toolless: $task->declaresNoTools(),
             );
 
             $request = new CompleteRequest(
@@ -4736,6 +4742,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
             permissionGate: $this->stageGate($task),
             // P1-6: the task's reasoning effort (its own, or its preset's).
             effort: $task->effort,
+            // C6: a declared `tools: []` runs with NO tools, on every executor.
+            toolless: $task->declaresNoTools(),
         );
 
         $taskRequest = new CompleteRequest(
@@ -4819,6 +4827,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 permissionGate: $this->stageGate($verifier),
                 // P1-6: the task's reasoning effort (its own, or its preset's).
                 effort: $verifier->effort,
+                // C6: a declared `tools: []` runs with NO tools, on every executor.
+                toolless: $verifier->declaresNoTools(),
             );
             $maxRetriesForAttempt = max(0, $maxAttempts - 1 - $attemptsUsed);
 
@@ -5005,6 +5015,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     permissionGate: $this->stageGate($verifier),
                     // P1-6: the task's reasoning effort (its own, or its preset's).
                     effort: $verifier->effort,
+                    // C6: a declared `tools: []` runs with NO tools, on every executor.
+                    toolless: $verifier->declaresNoTools(),
                 );
                 $subAgents[] = $subAgent;
                 $resultKeys[$subAgent->id] = ['key' => $baseKey . '_' . ($k + 1), 'schema' => $verifier->outputSchema !== null];
@@ -5644,6 +5656,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 permissionGate: $this->stageGate($task),
                 // P1-6: the task's reasoning effort (its own, or its preset's).
                 effort: $task->effort,
+                // C6: a declared `tools: []` runs with NO tools, on every executor.
+                toolless: $task->declaresNoTools(),
             );
             $subAgents[] = $subAgent;
             $agentGrants[$subAgent->id] = $agentGrant;
@@ -6784,6 +6798,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * reading {@see AgentManager::resolveGrantedTools()} documents for the
      * delegation path ("NO DECLARATION IS NOT AN EMPTY GRANT") — the two
      * seams now answer the question identically.
+     *
+     * A DECLARED `tools: []` IS NOT THIS CASE (C6): it means "no tools", and
+     * it travels as {@see SubAgent::$toolless}, not as an empty request list
+     * — the request still carries null, and the executor withholds the
+     * session's set on the flag ({@see WorkflowTask::declaresNoTools()}).
      *
      * ## REGISTRY-ORDER, EXACT-NAME, FAIL-LOUD
      *

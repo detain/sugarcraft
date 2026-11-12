@@ -123,7 +123,25 @@ final readonly class WorkflowTask
          * the request untouched (or takes the preset's).
          */
         public ?Effort $effort = null,
+        /**
+         * C6 (wf-impl): whether `tools:` was DECLARED. `$tools === []` alone
+         * cannot tell "the task says nothing about tools" (the default: the
+         * session's tools) from a written `tools: []` ("this agent gets no
+         * tools at all"), and the two used to collapse into the first — an
+         * empty list granted the session's full, unpoliced tool set. False,
+         * the default, keeps every hand-built task's meaning.
+         */
+        public bool $toolsSet = false,
     ) {}
+
+    /**
+     * C6 (wf-impl): a task that declared `tools: []` — it runs with NO tools
+     * (a schema'd one still gets its StructuredOutput answer channel).
+     */
+    public function declaresNoTools(): bool
+    {
+        return $this->toolsSet && $this->tools === [];
+    }
 
     /**
      * A copy with some fields replaced — every promoted field is a

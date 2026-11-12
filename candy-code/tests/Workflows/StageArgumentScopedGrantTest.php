@@ -86,7 +86,9 @@ final class StageArgumentScopedGrantTest extends TestCase
         ]);
         $engine = EngineBackend::new($provider, 'm')->withTools([$bash]);
 
-        self::workflows($engine, [$bash])->runFromPhp(self::oneStage([]));
+        // C6: NO declaration is an unset `tools` — `->tools([])` now declares
+        // "no tools at all" (WorkflowToollessTaskTest).
+        self::workflows($engine, [$bash])->runFromPhp(self::oneStage(null));
 
         $this->assertSame([['command' => 'make test']], $bash->calls);
     }
@@ -160,12 +162,17 @@ final class StageArgumentScopedGrantTest extends TestCase
     /**
      * @param list<string> $tools
      */
-    private static function oneStage(array $tools): \Closure
+    private static function oneStage(?array $tools): \Closure
     {
+        $task = Tasks::agent('reviewer')->prompt('review the change');
+        if ($tools !== null) {
+            $task = $task->tools($tools);
+        }
+
         return static fn () => (new WorkflowBuilder())
             ->name('grant')
             ->description('one stage with a declared grant')
-            ->stage('review', Tasks::agent('reviewer')->prompt('review the change')->tools($tools))
+            ->stage('review', $task)
             ->build();
     }
 

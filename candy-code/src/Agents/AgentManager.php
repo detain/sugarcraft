@@ -1985,6 +1985,14 @@ final class AgentManager
         $denied = $agent->disallowedTools;
         $root ??= $this->projectRoot;
 
+        // C6 (wf-impl): a run DECLARED toolless (a workflow task's
+        // `tools: []`) is offered no tools at all; this is the per-call
+        // backstop for a name that reaches it anyway. Its schema answer
+        // channel is the one exception — it reports, it does not act.
+        if ($subAgent->toolless && $toolCall->name !== StructuredOutputTool::NAME) {
+            return sprintf('is refused: agent "%s" declares tools: [] (no tools)', $agent->name);
+        }
+
         if ($declarations === [] && $denied === [] && $agent->mcpServers === []) {
             return null;
         }

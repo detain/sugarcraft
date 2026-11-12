@@ -184,6 +184,13 @@ final class SubAgent
         // `effort` rides App::$reasoningEffort. Null leaves the request's
         // effort untouched, so every existing construction is byte-identical.
         public readonly ?Effort $effort = null,
+        // C6 (wf-impl): this run was DECLARED toolless (a workflow task's
+        // `tools: []`). `Agent::$tools === []` is silence ("the session's
+        // tools"), so the declaration needs its own bit: {@see EngineExecutor}
+        // runs it with no tools (a schema'd run keeps its StructuredOutput
+        // answer channel) and {@see AgentManager::grantRefusalFor()} refuses
+        // any other call. False keeps every existing construction unchanged.
+        public readonly bool $toolless = false,
     ) {
         $this->isolation = $isolation ?? $agent->isolation ?? Isolation::None;
         $this->status = self::STATUS_PENDING;

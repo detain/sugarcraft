@@ -40,8 +40,9 @@
 #   - config.maxTokens is a hard ceiling: a dispatch that would start past it
 #     PAUSES the run instead (resume after raising it). config.maxAgents
 #     bounds dispatches; the panel alone is 3 votes per finding.
-#   - tools: [] does NOT mean "no tools" (it means the session's tools, the
-#     same as leaving tools out), so the toolless-looking stages grant [Read].
+#   - tools: [] means NO tools (a schema'd agent still answers through
+#     StructuredOutput); leaving tools out means the session's tools. The
+#     read-only stages grant [Read] so they can open what they judge.
 
 name: review-changes
 description: >

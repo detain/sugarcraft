@@ -30,8 +30,8 @@
 #     labelled block per designer) rather than pasting {{designs.output}}.
 #   - Judges are independent: none sees another's scores, and each gets a
 #     different emphasis so their errors do not line up.
-#   - The designers and judges only read. The narrowest grant is [Read]:
-#     tools: [] means the session's tools, not none.
+#   - The designers and judges only read, so they grant [Read]. tools: []
+#     would grant nothing at all; leaving tools out gives the session's tools.
 
 name: judge-panel
 description: >

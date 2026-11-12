@@ -43,6 +43,7 @@ final class TaskBuilder
     private ?int $quorum = null;
     private ?string $preset = null;
     private ?Effort $effort = null;
+    private bool $toolsSet = false;
 
     /**
      * Set the agent type (e.g. 'architect', 'coder', 'reviewer').
@@ -70,6 +71,9 @@ final class TaskBuilder
     public function tools(array $tools): self
     {
         $this->tools = $tools;
+        // C6: a declared list, even an empty one, is a statement — `[]` is
+        // "no tools", never "the session's tools" (that is not calling this).
+        $this->toolsSet = true;
         return $this;
     }
 
@@ -539,6 +543,7 @@ final class TaskBuilder
             quorum: $this->quorum,
             preset: $this->preset,
             effort: $this->effort,
+            toolsSet: $this->toolsSet,
         );
     }
 

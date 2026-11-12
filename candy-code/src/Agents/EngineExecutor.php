@@ -154,7 +154,7 @@ final class EngineExecutor implements ForksAskFreeAgents
             return 'no session engine is bound';
         }
 
-        $tools = self::runTools($request->tools ?? $this->engine->tools());
+        $tools = $agent->toolless ? [] : self::runTools($request->tools ?? $this->engine->tools());
         if ($agent->outputSchema !== null) {
             $tools[] = new StructuredOutputTool($agent->outputSchema);
         }
@@ -376,7 +376,11 @@ final class EngineExecutor implements ForksAskFreeAgents
         // toolset. Their body is itself a delegated turn, and inside this
         // child the parent's emitter is a pid-bound no-op — a nested
         // delegation here would report progress nowhere.
-        $tools = self::runTools($request->tools ?? $this->engine->tools());
+        // C6: a run declared toolless (`tools: []`) gets none — not the
+        // session's set a null request field otherwise falls back to. A
+        // schema'd one still gets StructuredOutput below: it is the answer
+        // channel, not a capability.
+        $tools = $agent->toolless ? [] : self::runTools($request->tools ?? $this->engine->tools());
 
         // P0-2: the run's own answer channel, minted per run (it holds the
         // accepted answer). A same-named tool from the request is dropped so
