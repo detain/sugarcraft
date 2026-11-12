@@ -12,7 +12,9 @@ use SugarCraft\Code\Support\DrainsStreamedChild;
 use SugarCraft\Code\Support\HookContextFiles;
 use SugarCraft\Code\Support\ProcessContainment;
 use SugarCraft\Code\Support\ProcessReaper;
+use SugarCraft\Code\Support\ShellInvocation;
 use SugarCraft\Code\Support\ToolIpcFiles;
+use SugarCraft\Code\Support\WindowsShell;
 use SugarCraft\Code\Tools\Sandbox\SandboxBackend;
 use SugarCraft\Core\Util\Sanitize;
 
@@ -826,10 +828,13 @@ final readonly class ScriptHook implements BoundedHookInterface
      *
      * @return string|array<int|string, string>
      */
-    private function spawnCommand(?string $cwd, array $payloadFiles): string|array
+    private function spawnCommand(?string $cwd, array $payloadFiles): string|array|null
     {
         if ($this->sandbox === null) {
-            return $this->command;
+            // POSIX keeps the raw string (proc_open runs it as `/bin/sh -c`).
+            // Windows must never hand it to cmd.exe: the same bash.exe ladder
+            // the Bash tool uses, and null (refused) when there is none.
+            return WindowsShell::isWindows() ? ShellInvocation::argv($this->command) : $this->command;
         }
 
         return [
@@ -878,6 +883,11 @@ final readonly class ScriptHook implements BoundedHookInterface
             2 => ['pipe', 'w'],
         ];
 
+        $spec = $this->spawnCommand($cwd, $payload['files']);
+        if ($spec === null) {
+            return HookResult::deny(ShellInvocation::refusal());
+        }
+
         // THE REAL BYTES ARE OFFERED FIRST AND THE OS DECIDES — see
         // MAX_ENV_ENTRY_BYTES for why this is an attempt rather than a
         // calculation. `@` because the refusal is REPORTED, below, as a deny
@@ -895,7 +905,7 @@ final readonly class ScriptHook implements BoundedHookInterface
         // variables are dropped unless the operator's `secretEnvAllowlist`
         // names them. The size-refusal reasoning below is unchanged.
         $process = @proc_open(
-            ProcessContainment::spawnSpec($this->spawnCommand($cwd, $payload['files'])),
+            ProcessContainment::spawnSpec($spec),
             $descriptors,
             $pipes,
             $cwd,
@@ -908,7 +918,7 @@ final readonly class ScriptHook implements BoundedHookInterface
             // has not run — `proc_open()` returning false means no child was
             // started — so this is a retry, never a second execution.
             $process = @proc_open(
-                ProcessContainment::spawnSpec($this->spawnCommand($cwd, $payload['files'])),
+                ProcessContainment::spawnSpec($spec),
                 $descriptors,
                 $pipes,
                 $cwd,
