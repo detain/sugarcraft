@@ -92,4 +92,4 @@ map/votes/minSuccess/from.stage/empty/pointer keys used or documented).
   default) — not caused by track A.
 
 ## 4. Commits
-- see `git log --oneline -- candy-code/docs/WORKFLOWS.md` (wf-impl P2-3)
+- 905d83be0 — docs/examples truth pass (wf-impl P2-3)
