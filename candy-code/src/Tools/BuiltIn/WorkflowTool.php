@@ -16,11 +16,14 @@ use SugarCraft\Code\Tools\ExemptFromParallelDeadline;
 use SugarCraft\Code\Tools\Tool;
 use SugarCraft\Code\Tools\ToolResult;
 use SugarCraft\Code\Workflows\StageResult;
+use SugarCraft\Code\Workflows\Workflow;
 use SugarCraft\Code\Workflows\WorkflowEngine;
+use SugarCraft\Code\Workflows\WorkflowGrammarGlossary;
+use SugarCraft\Code\Workflows\WorkflowLinter;
 use SugarCraft\Code\Workflows\WorkflowLoadException;
 use SugarCraft\Code\Workflows\WorkflowRegistry;
 use SugarCraft\Code\Workflows\WorkflowResult;
-use SugarCraft\Code\Workflows\WorkflowStatus;
+use SugarCraft\Code\Workflows\WorkflowTask;
 
 /**
  * Model-authored workflows (roadmap 4.10-2): the model writes a YAML plan in
@@ -97,18 +100,19 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
         return 'Run a multi-stage plan of sub-agents, written as a YAML workflow, and get back every stage\'s '
             . 'result. Reach for it when a task splits into ordered phases (survey, change, review) or into '
             . 'independent pieces for a fan-out; for one delegated task use Task, and for anything you can do '
-            . 'in a few tool calls do it yourself. `plan` is the YAML: an optional `name` and `description`, '
-            . 'a `stages` list and an optional `config` with `timeout` (seconds per stage, default 3600). Each '
-            . 'stage has a unique `name` and either one task (`agent` label, `prompt`, `tools`, `retries`), a '
-            . '`tasks:` list of such tasks run in order, or `parallel: true` with an `agents:` list (each '
-            . '`type`, `name`, `prompt`, `tools`). A prompt may use `{{key}}` from `context`, '
-            . '`{{<stage>.output}}` from an earlier stage, `{{prevResult}}` inside a `tasks:` list and '
-            . '`{{<name>.results}}` for one agent\'s output. Every stage agent works with this session\'s tools '
-            . 'and permissions, limited to its `tools` list when it has one (entries may be argument-scoped, '
-            . 'like `Bash(git *)`); stage agents cannot call Task or Workflow, and they do not see this '
-            . 'conversation, so each prompt must be self-contained. Stages run one after another and the run '
-            . 'stops at the first stage that fails. The result lists each stage\'s status and output; it does '
-            . 'not include the agents\' intermediate tool calls.';
+            . "in a few tool calls do it yourself.\n\n"
+            . WorkflowGrammarGlossary::grammar()
+            . "\n\n"
+            . 'Every stage agent works with this session\'s tools and permissions, limited to its `tools` list '
+            . 'when it has one; stage agents cannot call Task or Workflow and do not see this conversation. '
+            . 'Stages run one after another and the run stops at the first stage that fails. The plan is linted '
+            . 'before anything runs: lint errors refuse the run (nothing is dispatched) and come back in the '
+            . 'result, lint warnings ride the result\'s header. `dryRun: true` lints and returns the stage rows '
+            . 'without dispatching. The result is a one-line headline plus a ```json block '
+            . '`{status, runId, stages:[{name, status, error, attempts, tokens, cost, data?, output?, capture?}]}`: '
+            . '`data` is a schema\'d stage\'s decoded JSON, never clipped; `output` is prose, its middle elided '
+            . 'past ' . self::STAGE_OUTPUT_MAX_BYTES . ' bytes, and the elision marker says where the full text is. '
+            . 'Load the `workflow-authoring` skill before authoring a non-trivial plan.';
     }
 
     public function inputSchema(): array
@@ -118,12 +122,20 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             'properties' => [
                 'plan' => [
                     'type' => 'string',
-                    'description' => 'The workflow as YAML: `stages:` (required), optional `name`, `description` and `config: {timeout}`.',
+                    'description' => 'The workflow as YAML: `stages:` (required) plus optional `name`, `description` and '
+                        . '`config: {timeout, maxConcurrent}`. Each stage is one shape: a plain task (`prompt`, `tools`, … '
+                        . 'on the stage), a `tasks:` list run in order, `parallel: true` with `agents:` or a `from: {glob}` '
+                        . 'fan-out, `type: pipeline` with nested `stages:`, `type: verification` with `task:` + `verifier:`, '
+                        . 'or `uses: <saved workflow>` with `with:`. Stage modifiers: `when`, `loop`, `capture`, `cache`.',
                 ],
                 'context' => [
                     'type' => 'object',
                     'description' => 'Values for `{{key}}` placeholders in the stage prompts, as strings; keys must not start with `@`.',
                     'additionalProperties' => ['type' => 'string'],
+                ],
+                'dryRun' => [
+                    'type' => 'boolean',
+                    'description' => 'true: lint the plan and return its stage rows and findings without dispatching any agent.',
                 ],
             ],
             'required' => ['plan'],
@@ -141,6 +153,11 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
         $plan = $args['plan'] ?? null;
         if (!is_string($plan) || trim($plan) === '') {
             return new ToolResult($toolCallId, 'Error: the Workflow tool needs a non-empty "plan": the workflow as YAML, with a `stages:` list.', true);
+        }
+
+        $dryRun = $args['dryRun'] ?? false;
+        if (!is_bool($dryRun)) {
+            return new ToolResult($toolCallId, 'Error: "dryRun" must be true or false.', true);
         }
 
         $context = $args['context'] ?? [];
@@ -161,6 +178,24 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
         }
 
         $engine = $this->engine;
+
+        // P0-4: lint BEFORE the first dispatch. The engine's own pre-flights
+        // catch tools and reject placement only; an unresolved `{{token}}`
+        // would otherwise reach the agent verbatim and be billed for.
+        $lint = WorkflowLinter::lint($workflow, $context, self::toolNamesOf($engine), self::includeResolver($registry));
+
+        if ($dryRun) {
+            return new ToolResult($toolCallId, self::dryRunReport($workflow, $lint), $lint->hasErrors());
+        }
+
+        if ($lint->hasErrors()) {
+            return new ToolResult(
+                $toolCallId,
+                sprintf("Error: the plan was not run: lint found %s (nothing was dispatched).\n", self::lintCounts($lint)) . $lint->renderFindings(),
+                true,
+            );
+        }
+
         $workflows = new WorkflowEngine(
             $registry,
             new AgentWorkerPool(executor: new EngineExecutor($engine, heartbeat: $this->heartbeat)),
@@ -182,19 +217,94 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             return new ToolResult($toolCallId, 'Error: the workflow could not run. ' . $e->getMessage(), true);
         }
 
-        return new ToolResult($toolCallId, self::report($workflow->name, count($workflow->stages), $result), !$result->isSuccess());
+        return new ToolResult($toolCallId, self::report($workflow, $result, $lint), !$result->isSuccess());
     }
 
     /**
-     * The run as the model reads it: a headline, then each stage that ran,
-     * with its output (clipped) or the reason it failed.
+     * The session's tool universe for {@see WorkflowLinter::lint()}'s
+     * declared-vs-known leg — the same registry the run's pre-flight checks.
+     * Shared with `/workflow run` and `/workflow lint`.
+     *
+     * @return list<string>
      */
-    private static function report(string $name, int $stageCount, WorkflowResult $result): string
+    public static function toolNamesOf(EngineBackend $engine): array
     {
+        return array_values(array_map(static fn (Tool $tool): string => $tool->name(), $engine->tools()));
+    }
+
+    /**
+     * The "N lint warning(s): …" block that rides under a run's headline, or
+     * '' for a clean lint. Called only once errors have refused the run, so every
+     * finding left is a warning. Shared with `/workflow run`.
+     */
+    public static function lintWarningHeader(WorkflowLinter $lint): string
+    {
+        $count = $lint->warningCount();
+        if ($count === 0) {
+            return '';
+        }
+
+        return sprintf("%d lint warning%s:\n%s\n\n", $count, $count === 1 ? '' : 's', $lint->renderFindings());
+    }
+
+    /**
+     * `uses:` edges resolve through the registry the run itself loads from; a
+     * name it cannot load is "no verdict from here", never "no edge" (the
+     * run-start refusal owns that).
+     *
+     * @return callable(string): ?Workflow
+     */
+    private static function includeResolver(WorkflowRegistry $registry): callable
+    {
+        return static function (string $name) use ($registry): ?Workflow {
+            try {
+                return $registry->load($name);
+            } catch (\Throwable) {
+                return null;
+            }
+        };
+    }
+
+    private static function lintCounts(WorkflowLinter $lint): string
+    {
+        return sprintf(
+            '%d error%s, %d warning%s',
+            $lint->errorCount(),
+            $lint->errorCount() === 1 ? '' : 's',
+            $lint->warningCount(),
+            $lint->warningCount() === 1 ? '' : 's',
+        );
+    }
+
+    private static function dryRunReport(Workflow $workflow, WorkflowLinter $lint): string
+    {
+        $lines = [
+            sprintf("Dry run of workflow '%s' (no agents dispatched): %d stage%s.", $workflow->name, count($workflow->stages), count($workflow->stages) === 1 ? '' : 's'),
+            '',
+            $lint->renderPlanTable(),
+        ];
+        if ($lint->hasFindings()) {
+            $lines[] = '';
+            $lines[] = $lint->renderFindings();
+        }
+        $lines[] = '';
+        $lines[] = 'Lint: ' . $lint->verdictLine() . ($lint->hasErrors() ? ' — a real run would be refused.' : '');
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * The run as the model reads it: a one-line headline a human can read,
+     * then a fenced JSON document a model can branch on next turn without
+     * re-parsing prose.
+     */
+    private static function report(Workflow $workflow, WorkflowResult $result, WorkflowLinter $lint): string
+    {
+        $stageCount = count($workflow->stages);
         $succeeded = count(array_filter($result->stageResults, static fn (StageResult $s): bool => $s->isSuccess()));
         $lines = [sprintf(
             "Workflow '%s' %s: %d of %d stage%s succeeded, %d tokens, $%.4f.",
-            $name,
+            $workflow->name,
             $result->status->value,
             $succeeded,
             $stageCount,
@@ -203,28 +313,166 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
             $result->totalCost,
         )];
 
-        foreach ($result->stageResults as $i => $stage) {
-            $lines[] = '';
-            $lines[] = sprintf('### Stage %d: %s (%s)', $i + 1, $stage->stageName, $stage->status->value);
-            if ($stage->status !== WorkflowStatus::Completed && $stage->error !== null && $stage->error !== '') {
-                $lines[] = 'Error: ' . $stage->error;
-            }
-            $output = trim((string) $stage->output);
-            if ($output !== '') {
-                $lines[] = self::clip($output);
+        $warnings = self::lintWarningHeader($lint);
+        if ($warnings !== '') {
+            $lines[] = rtrim($warnings);
+        }
+
+        // Failures stay in prose too: the reason is what a reader scans for,
+        // and inside the JSON it arrives escaped.
+        foreach ($result->stageResults as $stage) {
+            if ($stage->isFailure() && $stage->error !== null && $stage->error !== '') {
+                $lines[] = sprintf("Stage '%s' %s: %s", $stage->stageName, $stage->status->value, $stage->error);
             }
         }
 
-        if (count($result->stageResults) < $stageCount && !$result->isSuccess()) {
-            $lines[] = '';
-            $lines[] = sprintf('%d later stage%s did not run.', $stageCount - count($result->stageResults), $stageCount - count($result->stageResults) === 1 ? '' : 's');
+        $notRun = $stageCount - count($result->stageResults);
+        if ($notRun > 0 && !$result->isSuccess()) {
+            $lines[] = sprintf('%d later stage%s did not run.', $notRun, $notRun === 1 ? '' : 's');
         }
 
-        return implode("\n", $lines);
+        $declared = [];
+        foreach ($workflow->stages as $stage) {
+            if (is_array($stage) && is_string($stage['name'] ?? null)) {
+                $declared[$stage['name']] = $stage;
+            }
+        }
+
+        $stages = [];
+        foreach ($result->stageResults as $stage) {
+            $stages[] = self::stageRow($stage, $declared[$stage->stageName] ?? null, $result->context);
+        }
+
+        $document = [
+            'status' => $result->status->value,
+            // Seam: null until tool runs leave a resumable record (a later
+            // track adds tool-run records and `resumeFrom`). The key is in the
+            // shape now so a consumer written against it never changes.
+            'runId' => null,
+            'stages' => $stages,
+        ];
+
+        $json = json_encode($document, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PRESERVE_ZERO_FRACTION);
+
+        return implode("\n", $lines) . "\n\n```json\n" . ($json === false ? '{}' : $json) . "\n```";
     }
 
-    /** $text with its middle elided past {@see STAGE_OUTPUT_MAX_BYTES}, cut on character boundaries. */
-    private static function clip(string $text): string
+    /**
+     * One stage's JSON row. `data` appears when every task the stage declares
+     * carries an `outputSchema` and the output decodes — then it replaces
+     * `output` and is NEVER clipped (a clipped JSON document is a corrupt
+     * one). Everything else is prose under head/tail elision whose marker
+     * names how to get the elided bytes back.
+     *
+     * @param ?array<string, mixed> $declared the stage as the Workflow DTO holds it
+     * @param array<string, mixed>  $context  the run's final context (capture paths ride `<stage>.output`)
+     * @return array<string, mixed>
+     */
+    private static function stageRow(StageResult $stage, ?array $declared, array $context): array
+    {
+        $attempts = 0;
+        $tokens = 0;
+        $cost = 0.0;
+        foreach ($stage->agents as $agent) {
+            // The most tries any one agent took — the same reading `/workflow
+            // run` reports; a sum would read a 3-wide fan-out as 3 retries.
+            $attempts = max($attempts, $agent->attempts);
+            $tokens += $agent->tokensUsed;
+            $cost += $agent->costUsd;
+        }
+
+        $row = [
+            'name' => $stage->stageName,
+            'status' => $stage->status->value,
+            'error' => $stage->error !== null && $stage->error !== '' ? $stage->error : null,
+            'attempts' => $attempts,
+            'tokens' => $tokens,
+            'cost' => round($cost, 6),
+        ];
+
+        $capture = ($declared['capture'] ?? false) === true ? self::capturePathOf($context, $stage->stageName) : null;
+        if ($capture !== null) {
+            $row['capture'] = $capture;
+        }
+
+        $output = trim((string) $stage->output);
+        if ($output === '') {
+            return $row;
+        }
+
+        if ($declared !== null && self::everyTaskIsSchemad($declared)) {
+            $data = self::decodeJson($output);
+            if ($data !== null) {
+                $row['data'] = $data;
+
+                return $row;
+            }
+        }
+
+        $row['output'] = self::clip($output, $capture);
+
+        return $row;
+    }
+
+    /** @param array<string, mixed> $declared */
+    private static function everyTaskIsSchemad(array $declared): bool
+    {
+        $tasks = $declared['tasks'] ?? null;
+        if (!is_array($tasks) || $tasks === []) {
+            return false;
+        }
+        foreach ($tasks as $task) {
+            if (!$task instanceof WorkflowTask || $task->outputSchema === null) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * The decoded document, or null when the output is not JSON. A reply
+     * fenced as one ```json block decodes too; a JSON scalar does not count
+     * (a bare `"ok"` is prose, not a structured row).
+     */
+    private static function decodeJson(string $output): mixed
+    {
+        if (preg_match('/\A```(?:json)?\s*\n(.*)\n```\z/s', $output, $m) === 1) {
+            $output = trim($m[1]);
+        }
+
+        try {
+            $decoded = json_decode($output, false, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return null;
+        }
+
+        return is_array($decoded) || is_object($decoded) ? $decoded : null;
+    }
+
+    /**
+     * The capture file the engine wrote for a `capture: true` stage, read
+     * back from the `[output captured to <path>]` line it put in the run
+     * context — the engine's own record, not a second copy of its path rule.
+     *
+     * @param array<string, mixed> $context
+     */
+    private static function capturePathOf(array $context, string $stageName): ?string
+    {
+        $value = $context[$stageName . '.output'] ?? null;
+        if (!is_string($value) || preg_match('/\A\[output captured to (.+)\]$/m', $value, $m) !== 1) {
+            return null;
+        }
+
+        return $m[1];
+    }
+
+    /**
+     * $text with its middle elided past {@see STAGE_OUTPUT_MAX_BYTES}, cut on
+     * character boundaries. The marker says where the elided bytes live: the
+     * capture file when the stage was captured, otherwise how to get one.
+     */
+    private static function clip(string $text, ?string $capture = null): string
     {
         if (strlen($text) <= self::STAGE_OUTPUT_MAX_BYTES) {
             return $text;
@@ -233,7 +481,10 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
         $half = intdiv(self::STAGE_OUTPUT_MAX_BYTES, 2);
         $head = mb_strcut($text, 0, $half, 'UTF-8');
         $tail = mb_strcut($text, strlen($text) - $half, null, 'UTF-8');
+        $recover = $capture !== null
+            ? 'the full output is in ' . $capture
+            : 're-run with capture: true on this stage to keep the full output';
 
-        return $head . sprintf("\n[… %d bytes elided …]\n", strlen($text) - strlen($head) - strlen($tail)) . $tail;
+        return $head . sprintf("\n[… %d bytes elided; %s …]\n", strlen($text) - strlen($head) - strlen($tail), $recover) . $tail;
     }
 }

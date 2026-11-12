@@ -75,8 +75,11 @@ final class WorkflowToolTest extends TestCase
         $this->assertSame('call_wf', $result->toolCallId());
         $this->assertSame([['path' => 'src/A.php']], $read->calls, 'the stage agent ran its own tool loop');
         $this->assertStringStartsWith("Workflow 'survey-then-fix' completed: 2 of 2 stages succeeded", $result->content());
-        $this->assertStringContainsString("### Stage 1: survey (completed)\nA.php and B.php call it", $result->content());
-        $this->assertStringContainsString("### Stage 2: fix (completed)\nboth callers updated", $result->content());
+        $stages = self::document($result->content())['stages'];
+        $this->assertSame(['survey', 'fix'], array_column($stages, 'name'));
+        $this->assertSame(['completed', 'completed'], array_column($stages, 'status'));
+        $this->assertSame(['A.php and B.php call it', 'both callers updated'], array_column($stages, 'output'));
+        $this->assertSame([1, 1], array_column($stages, 'attempts'));
 
         $this->assertSame('List the callers of Foo::bar.', self::lastUserTurn($provider->requests[0]), 'context interpolated');
         $this->assertSame('Update every caller: A.php and B.php call it', self::lastUserTurn($provider->requests[2]), 'stage output chained');
@@ -121,7 +124,8 @@ final class WorkflowToolTest extends TestCase
 
         $this->assertTrue($result->isError());
         $this->assertStringStartsWith("Workflow 'survey-then-fix' failed: 0 of 2 stages succeeded", $result->content());
-        $this->assertStringContainsString("### Stage 1: survey (failed)\nError: upstream 503", $result->content());
+        $this->assertStringContainsString("Stage 'survey' failed: upstream 503", $result->content());
+        $this->assertSame('upstream 503', self::document($result->content())['stages'][0]['error']);
         $this->assertStringContainsString('1 later stage did not run.', $result->content());
         $this->assertCount(1, $provider->requests, 'the second stage was never dispatched');
     }
@@ -154,7 +158,8 @@ final class WorkflowToolTest extends TestCase
         $result = $this->tool($provider, [self::probe('Read')])->execute(['plan' => "stages:\n  - name: a\n    prompt: x\n    tools: [Write]\n"]);
 
         $this->assertTrue($result->isError());
-        $this->assertStringContainsString('declares tool "Write", which this session\'s tool registry does not contain', $result->content());
+        $this->assertStringContainsString('the plan was not run: lint found 1 error', $result->content(), 'P0-4: the lint refuses before the engine is built');
+        $this->assertStringContainsString('declares tool "Write", which the session\'s tool registry does not contain', $result->content());
         $this->assertSame([], $provider->requests);
     }
 
@@ -220,12 +225,13 @@ final class WorkflowToolTest extends TestCase
         $provider = new ScriptedProvider([new CompleteResponse(content: 'START-' . $long)]);
 
         $content = $this->tool($provider, [])->execute(['plan' => "stages:\n  - name: a\n    prompt: x\n"])->content();
+        $output = self::document($content)['stages'][0]['output'];
 
-        $this->assertStringContainsString("\nSTART-", $content);
-        $this->assertStringEndsWith('THE-END', $content);
-        $this->assertMatchesRegularExpression('/\[… \d+ bytes elided …\]/', $content);
-        $this->assertTrue(mb_check_encoding($content, 'UTF-8'), 'the cut never splits a character');
-        $this->assertLessThan(WorkflowTool::STAGE_OUTPUT_MAX_BYTES + 400, strlen($content));
+        $this->assertStringStartsWith('START-', $output);
+        $this->assertStringEndsWith('THE-END', $output);
+        $this->assertMatchesRegularExpression('/\[… \d+ bytes elided; re-run with capture: true on this stage to keep the full output …\]/', $output);
+        $this->assertTrue(mb_check_encoding($output, 'UTF-8'), 'the cut never splits a character');
+        $this->assertLessThan(WorkflowTool::STAGE_OUTPUT_MAX_BYTES + 200, strlen($output));
     }
 
     /**
@@ -287,6 +293,19 @@ final class WorkflowToolTest extends TestCase
         $this->roots[] = $dir;
 
         return $dir;
+    }
+
+    /**
+     * The fenced JSON document the report ends with (P0-4).
+     *
+     * @return array<string, mixed>
+     */
+    public static function document(string $content): array
+    {
+        self::assertMatchesRegularExpression('/\n```json\n(.*)\n```\z/s', $content);
+        preg_match('/\n```json\n(.*)\n```\z/s', $content, $m);
+
+        return json_decode($m[1], true, 512, JSON_THROW_ON_ERROR);
     }
 
     private static function lastUserTurn(CompleteRequest $request): string
