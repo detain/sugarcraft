@@ -550,14 +550,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
      *        so a parallel agent that declared `[Read]` is handed its own
      *        grant rather than a sibling's — and
      *        {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook} holds
-     *        every call it then makes to the same declaration. An embedder
-     *        driving the pool without a resolver — or a manager with no
-     *        registry, its documented escape hatch — still gets the shared
-     *        first list, and on that path the declaration remains a request
-     *        for capability, not a boundary. Neither branch is a bypass of
-     *        the check above: it examines every task's declaration, so what
-     *        reaches an agent — its own grant or the first task's list — is
-     *        always a subset of the checked union.
+     *        every call it then makes to the same declaration. wf-impl C4
+     *        closed the remaining branch: without a manager (or with one
+     *        that has no registry) the engine resolves every task's grant
+     *        itself and hands the pool that per-agent map, so no agent of a
+     *        parallel stage runs on a sibling's list any more. Every grant
+     *        is a subset of the checked union the pre-flight examined.
      *
      * @param ?string $environmentRoot The session's resolved project root -
      *        `--root`'s value as {@see \SugarCraft\Code\Cli\Bootstrap::chat()}
@@ -4293,6 +4291,29 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
+     * C4: the per-agent grant resolver a stage hands the pool — each SubAgent
+     * gets the grant ITS task declared, never a sibling's. A member missing
+     * from the map is a wiring bug and refuses rather than running on
+     * nobody's (or somebody else's) grant.
+     *
+     * @param array<string, ?list<Tool>> $grants SubAgent id => resolved grant
+     * @return \Closure(SubAgent): ?list<Tool>
+     */
+    private static function grantResolver(array $grants): \Closure
+    {
+        return static function (SubAgent $agent) use ($grants): ?array {
+            if (!array_key_exists($agent->id, $grants)) {
+                throw new \RuntimeException(sprintf(
+                    'SubAgent "%s" reached the stage pool without its own resolved tool grant; it is not run on a sibling\'s.',
+                    $agent->id,
+                ));
+            }
+
+            return $grants[$agent->id];
+        };
+    }
+
+    /**
      * The shared pool, bounded by what is left of a stage's budget.
      *
      * AUDIT WF-1: `config.timeout` (Workflow::$timeout) is documented as the
@@ -4520,6 +4541,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
         );
 
         $subAgents = [];
+        /** @var array<string, ?list<Tool>> $agentGrants SubAgent id => that agent's OWN resolved grant (C4) */
+        $agentGrants = [];
         /** @var array<string, array{key: string, schema: bool}> $resultKeys SubAgent id => result name + schema flag, in declaration order */
         $resultKeys = [];
         $agentIndex = 0;
@@ -4527,22 +4550,15 @@ final class WorkflowEngine implements WorkflowEngineInterface
             /** @var WorkflowTask $task */
             $agentIndex++;
 
-            // E641 fixup — REFUSAL PARITY, result deliberately discarded.
-            // resolveRequestTools() is this engine's fail-loud gate on names
-            // the registry cannot type, and the $defaultRequest above only
-            // ran it over the FIRST task: tasks 2..N could name a tool that
-            // exists in no registry and reach the pool unnoticed (with no
-            // permission gate, refuseDeniedTools stays silent too). The
-            // typed per-agent grant each worker finally receives is lane A's
-            // AgentWorkerPool::executeAll() work — until that lands, every
-            // parallel agent runs on the first task's grant anyway, so this
-            // call's ONLY job is to throw here, at build time, before
-            // anything dispatches. If the discard starts looking redundant
-            // after per-agent grants exist, that is because the pool began
-            // calling this itself — at which point delete this line, do not
-            // double-resolve.
-            $unreachedGrant = $this->resolveRequestTools($task->tools);
-            unset($unreachedGrant);
+            // C4 (wf-impl): EACH agent's own grant. resolveRequestTools() is
+            // still the fail-loud gate on names the registry cannot type, run
+            // for every task here at build time, before anything dispatches.
+            // Its result is no longer discarded: the pool used to hand every
+            // agent of the stage the FIRST task's list ($defaultRequest's),
+            // so an agent declared `[Read]` beside a `[Read, Bash]` sibling
+            // was put on the wire with Bash (and the reverse got none). The
+            // map below is handed to the pool as its per-agent resolver.
+            $agentGrant = $this->resolveRequestTools($task->tools);
 
             // C8: on a glob fan-out, {{path}} names the item; P1-1: every
             // fan-out item also carries {{item}}/{{index}}. Static stages
@@ -4581,6 +4597,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 permissionGate: $this->permissionGate,
             );
             $subAgents[] = $subAgent;
+            $agentGrants[$subAgent->id] = $agentGrant;
             $resultKeys[$subAgent->id] = [
                 'key' => self::resultKey($task->name, $stageName . '_' . $agentIndex),
                 'schema' => $task->outputSchema !== null,
@@ -4646,9 +4663,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // any of it forks — a wave that would cross the ceiling forks none.
         $this->reserveAgents(count($subAgents));
 
+        // C4: every agent runs on its OWN declared grant — on the pool path
+        // directly, and on the manager path as the fallback a registry-less
+        // manager uses (one with a registry resolves the declarations itself).
+        $grantResolver = self::grantResolver($agentGrants);
         $results = $this->agentManager !== null
-            ? $this->agentManager->executeAll($subAgents, $defaultRequest, $pool)
-            : $pool->executeAll($subAgents, $defaultRequest);
+            ? $this->agentManager->executeAll($subAgents, $defaultRequest, $pool, $grantResolver)
+            : $pool->executeAll($subAgents, $defaultRequest, $grantResolver);
 
         // Collect all results from the generator
         $agentResults = [];

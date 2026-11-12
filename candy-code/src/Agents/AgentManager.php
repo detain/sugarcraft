@@ -2180,13 +2180,22 @@ final class AgentManager
      * caller's shared request forwards verbatim — the constructor's documented
      * escape hatch, not an accident of this path.
      *
+     * THE FALLBACK (wf-impl C4): a manager with no registry used to forward
+     * the caller's shared request — the FIRST task's list — to every member.
+     * A caller that has already resolved each member's grant itself (the
+     * workflow engine, which holds the session's tool set even when this
+     * manager does not) hands that resolver in as `$fallbackGrantResolver`,
+     * and it governs the batch exactly when this manager cannot. A manager
+     * WITH a registry ignores it: its own pattern-aware resolution wins.
+     *
      * @param SubAgent[] $agents
+     * @param ?\Closure(SubAgent): (?list<\SugarCraft\Code\Tools\Tool>) $fallbackGrantResolver
      * @return \Generator<AgentResult>
      * @throws \RuntimeException When a batch member's grant cannot be
      *         resolved — BEFORE the pool dispatches anything.
      * @see P1.S10 for wiring AgentWorkerPool into Chat; callers migrating from Agent[] must now pass SubAgent[]
      */
-    public function executeAll(array $agents, CompleteRequest $request, ?AgentWorkerPool $pool = null): \Generator
+    public function executeAll(array $agents, CompleteRequest $request, ?AgentWorkerPool $pool = null, ?\Closure $fallbackGrantResolver = null): \Generator
     {
         $pool ??= $this->workerPool ?? new AgentWorkerPool();
 
@@ -2220,7 +2229,7 @@ final class AgentManager
         }
 
         $toolGrantResolver = $toolGrants === null
-            ? null
+            ? $fallbackGrantResolver
             : static function (SubAgent $agent) use ($toolGrants): ?array {
                 if (!array_key_exists($agent->id, $toolGrants)) {
                     throw new \RuntimeException(sprintf(

@@ -1547,31 +1547,20 @@ final class WorkflowEngineTest extends TestCase
     }
 
     /**
-     * The declared tool list is ADVISORY, not a capability boundary — pinned
-     * here because it is the converse of what the enforcement docblocks invite a
-     * reader to assume, and because a documented wart with no test is a
-     * docblock waiting to go stale.
+     * Each parallel agent's declared tool list is ITS grant.
      *
-     * {@see \SugarCraft\Code\Agents\AgentWorkerPool::executeAll()} builds every
-     * per-agent request with `tools: $request->tools` — the tools of the FIRST
-     * task, since that is what the stage's `$defaultRequest` was built from. So
-     * a parallel agent that declared `[Read]` is handed the first agent's list.
-     * Not a bypass of the pre-check (every task's declaration is checked, so the
-     * set handed out is a subset of the checked union), but it does mean nothing
-     * downstream enforces that an agent receives only what it declared.
+     * wf-impl C4 FIXED what this test used to pin: the pool forwarded the FIRST
+     * task's list (the stage's `$defaultRequest`) to every agent, so a parallel
+     * agent that declared `[Glob]` was handed `[Read, Grep]`. The engine now
+     * hands the pool a per-agent grant resolver, and each request carries the
+     * grant its own task declared (see ParallelPerAgentGrantTest for the
+     * call-level regression).
      *
-     * If this test starts failing because the pool grew per-agent tools, that is
-     * a fix: update {@see WorkflowEngine}'s constructor docblock, which
-     * currently states this behaviour as fact.
-     *
-     * E641 reshaped what "handed" means: a CompleteRequest carries resolved
-     * {@see \SugarCraft\Code\Tools\Tool} objects, never the declared name
-     * strings, so this runs against an engine WITH a registry and compares by
-     * name(). The advisory property under test is unchanged — it is about
-     * WHICH list crosses to the second agent (the first task's), not the
-     * element type.
+     * E641: a CompleteRequest carries resolved {@see \SugarCraft\Code\Tools\Tool}
+     * objects, never the declared name strings, so this runs against an engine
+     * WITH a registry and compares by name().
      */
-    public function testAParallelAgentIsHandedTheFirstTasksToolsNotItsOwn(): void
+    public function testAParallelAgentIsHandedItsOwnToolsNotTheFirstTasks(): void
     {
         $fakeTool = static fn (string $name): \SugarCraft\Code\Tools\Tool => new class ($name) implements \SugarCraft\Code\Tools\Tool {
             public function __construct(private readonly string $toolName) {}
@@ -1629,9 +1618,9 @@ final class WorkflowEngineTest extends TestCase
 
         $this->assertSame(['Read', 'Grep'], $toNames((array) $requests[0]->tools));
         $this->assertSame(
-            ['Read', 'Grep'],
+            ['Glob'],
             $toNames((array) $requests[1]->tools),
-            'the second agent is handed the FIRST task\'s tools — the declared list is advisory',
+            'wf-impl C4: the second agent is handed its OWN grant, never the first task\'s',
         );
     }
 
