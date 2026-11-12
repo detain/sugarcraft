@@ -14,8 +14,9 @@ use SugarCraft\Code\Support\Log;
 /**
  * Worker pool for parallel agent execution.
  *
- * Manages concurrent agent execution with a configurable max limit (default 5),
- * returning results as they complete via a Generator. Coordinates execution through
+ * Manages concurrent agent execution with an optional max limit (null, the
+ * default, dispatches every agent at once), returning results as they complete
+ * via a Generator. Coordinates execution through
  * an ExecutorInterface which handles the actual spawning mechanism.
  *
  * Mirrors charmbracelet/crush AgentWorkerPool implementation.
@@ -269,6 +270,13 @@ final class AgentWorkerPool
 
     /** True once the sequential-fallback warning has been logged for this pool instance. */
     private bool $sequentialFallbackWarned = false;
+
+    /**
+     * Why this pool last ran an agent in the parent instead of forked, or null
+     * when every dispatch so far was concurrent. Set by the first fallback of
+     * either kind and kept; read through {@see fallbackReason()}.
+     */
+    private ?string $fallbackReason = null;
 
     /** @var bool Whether {@see warnForkFailed()} has already fired on this pool. */
     private bool $forkFailureWarned = false;
@@ -1163,6 +1171,34 @@ final class AgentWorkerPool
     public function activeCount(): int
     {
         return count($this->active);
+    }
+
+    /**
+     * The width cap this pool was built with, or null when it dispatches every
+     * agent it is given at once.
+     */
+    public function cap(): ?int
+    {
+        return $this->maxConcurrent;
+    }
+
+    /**
+     * Agents submitted but not yet dispatched because the cap is full. Always
+     * 0 for an uncapped pool, which drains its queue straight into dispatch.
+     */
+    public function queuedCount(): int
+    {
+        return count($this->queue);
+    }
+
+    /**
+     * Why agents are running sequentially in the parent rather than forked, or
+     * null while every dispatch has been concurrent. Names the cause the
+     * operator can act on: no pcntl, or a fork that failed.
+     */
+    public function fallbackReason(): ?string
+    {
+        return $this->fallbackReason;
     }
 
     /**
@@ -2694,6 +2730,7 @@ final class AgentWorkerPool
         // Counted per event, BEFORE the once-per-pool latch (E261): the
         // latch governs the log line, never the counter.
         $this->forkFailureCount++;
+        $this->fallbackReason = 'pcntl_fork() failed; the agent ran sequentially in the parent';
 
         if ($this->forkFailureWarned) {
             return;
@@ -2761,6 +2798,7 @@ final class AgentWorkerPool
      */
     protected function warnSequentialFallback(): void
     {
+        $this->fallbackReason ??= 'pcntl_fork() is unavailable in this process; agents run sequentially in the parent';
         if ($this->sequentialFallbackWarned) {
             return;
         }
