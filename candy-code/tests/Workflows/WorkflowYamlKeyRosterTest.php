@@ -470,7 +470,7 @@ final class WorkflowYamlKeyRosterTest extends TestCase
             ['agent', 'name', 'prompt', 'tools', 'retries', 'outputSchema',
                 'isolation', 'model', 'resource', 'lockWaitSeconds',
                 'timeout', 'reject', 'rejectMinOccurrences',
-                'stallTimeout', 'restarts', 'input', 'votes', 'lenses', 'quorum'],
+                'stallTimeout', 'restarts', 'input', 'votes', 'lenses', 'quorum', 'preset', 'effort'],
             $registry->getConstant('YAML_TASK_KEYS'),
             'the parsed task-key roster is one pinned list'
         );

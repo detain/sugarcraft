@@ -88,6 +88,8 @@ final class WorkflowGrammarGlossary
         'votes' => 'verifier only: N independent verifier dispatches run concurrently on the stage budget (default 1); a vote rejects when its output matches `reject` or it fails/times out, an `ESCALATE:` line in any vote stops the run, and `retries` re-runs the whole panel',
         'lenses' => 'verifier only: one lens name per vote (length must equal `votes`), interpolated as `{{lens}}` into that vote\'s prompt',
         'quorum' => 'verifier only: how many votes must NOT reject for the verdict to pass, 1..votes (default the majority, floor(votes/2)+1)',
+        'preset' => 'run as the named agent preset (`.candy-code/agents/<name>.md`, the roster `Task` uses): its system prompt, tools, disallowed tools, model, effort, isolation, step cap and permission mode; this task\'s own keys win; an unknown preset refuses the run before anything is dispatched',
+        'effort' => '`low` | `medium` | `high` | `xhigh` | `max`: the reasoning effort the agent asks for (`low` for mechanical stages, high tiers only for the hardest judges); usually leave it unset',
     ];
 
     /** @var array<string, string> interpolation form => what it resolves to */

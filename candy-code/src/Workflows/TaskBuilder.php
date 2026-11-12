@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Workflows;
 
+use SugarCraft\Code\Agents\Effort;
 use SugarCraft\Code\Agents\Isolation;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\JsonSchemaArgument;
@@ -40,6 +41,8 @@ final class TaskBuilder
     /** @var list<string>|null */
     private ?array $lenses = null;
     private ?int $quorum = null;
+    private ?string $preset = null;
+    private ?Effort $effort = null;
 
     /**
      * Set the agent type (e.g. 'architect', 'coder', 'reviewer').
@@ -305,6 +308,55 @@ final class TaskBuilder
         return $this;
     }
 
+    /**
+     * P1-6: run this task as the named agent preset (`.candy-code/agents/<name>.md`,
+     * resolved by the engine against the same roster `Task` uses). The preset
+     * supplies its system prompt, tools, disallowed tools, model, effort,
+     * isolation, step cap and permission mode; any key this task sets itself
+     * wins. An unknown name refuses the run before anything is dispatched.
+     * `agent`/`Tasks::agent()` stays a display label.
+     */
+    public function preset(string $name): self
+    {
+        $name = trim($name);
+        if ($name === '') {
+            throw new \InvalidArgumentException('preset() needs a preset name, got an empty string');
+        }
+
+        $this->preset = $name;
+        return $this;
+    }
+
+    /**
+     * P1-6: the reasoning effort this task's agent asks for — `low` for
+     * mechanical stages, the high tiers only for the hardest judge/verify
+     * stages. A closed set: anything outside it is refused.
+     */
+    public function effort(Effort|string $effort): self
+    {
+        $this->effort = self::trustedEffort($effort);
+        return $this;
+    }
+
+    /**
+     * P1-6: the one parser for an `effort` spelling — an {@see Effort} case or
+     * its exact lowercase value.
+     *
+     * @throws \InvalidArgumentException naming the closed set.
+     */
+    public static function trustedEffort(Effort|string $effort): Effort
+    {
+        if ($effort instanceof Effort) {
+            return $effort;
+        }
+
+        return Effort::tryFrom($effort) ?? throw new \InvalidArgumentException(sprintf(
+            'effort must be one of %s, got "%s"',
+            implode(', ', array_map(static fn (Effort $e): string => $e->value, Effort::cases())),
+            $effort,
+        ));
+    }
+
     /** P1-4: the default quorum of a $votes panel — a strict majority, floor(votes/2)+1. */
     public static function defaultQuorum(int $votes): int
     {
@@ -485,6 +537,8 @@ final class TaskBuilder
             votes: $this->votes,
             lenses: $this->lenses,
             quorum: $this->quorum,
+            preset: $this->preset,
+            effort: $this->effort,
         );
     }
 

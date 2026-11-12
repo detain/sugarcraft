@@ -17,6 +17,7 @@ use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Agents\AgentStatus;
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\EngineExecutor;
+use SugarCraft\Code\Agents\StagePreset;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Backend\CancellationToken;
 use SugarCraft\Code\Backend\EngineBackend;
@@ -24,6 +25,7 @@ use SugarCraft\Code\Hooks\HookContext;
 use SugarCraft\Code\Hooks\HookDispatcher;
 use SugarCraft\Code\Permissions\PermissionAction;
 use SugarCraft\Code\Permissions\PermissionGate;
+use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Permissions\PermissionRule;
 use SugarCraft\Code\Permissions\ToolDeclaration;
 use SugarCraft\Code\Providers\CompleteRequest;
@@ -470,6 +472,17 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private ?int $agentCeiling = null;
 
     /**
+     * P1-6: the roster `preset:` names resolve against ({@see setAgentRoster()});
+     * null falls back to the manager's.
+     *
+     * @var ?list<Agent>
+     */
+    private ?array $agentRoster = null;
+
+    /** @var array<string, StagePreset> P1-6: presets resolved so far, by name */
+    private array $stagePresets = [];
+
+    /**
      * P1-2: true while a `type: map` stage runs, so {@see dispatchOne()}
      * takes the pool's batch door (see there).
      */
@@ -727,6 +740,223 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($executor instanceof EngineExecutor && $executor->engine() !== null) {
             $executor->bind($executor->engine(), $agentManager);
         }
+    }
+
+    /**
+     * P1-6: the agent roster a task's `preset: <name>` resolves against —
+     * the list {@see \SugarCraft\Code\Cli\Bootstrap::agentRoster()} builds
+     * (built-ins < foreign < native project < native user presets), the same
+     * tiers `Task` resolves names in. Without one the engine falls back to
+     * its {@see AgentManager}'s roster; with neither, a plan naming a preset
+     * is refused before anything is dispatched. Null clears it.
+     *
+     * @param ?iterable<Agent> $roster
+     */
+    public function setAgentRoster(?iterable $roster): void
+    {
+        $this->agentRoster = $roster === null ? null : array_values(is_array($roster) ? $roster : iterator_to_array($roster, false));
+    }
+
+    /**
+     * P1-6: resolve every `preset:` the workflow names and merge each preset
+     * into its task, before the run dispatches anything. A field the task
+     * sets itself wins: `tools` (when the task declares any), `model` (unless
+     * the task leaves it unset or `inherit`), `effort`, `isolation`. The
+     * preset's system prompt, `disallowedTools`, `maxTurns` and permission
+     * mode have no task spelling and are applied where the agent is built
+     * ({@see stageAgent()}, {@see stageGate()}).
+     *
+     * @return Workflow|array{0: string, 1: string} the merged workflow, or
+     *         [stage name, refusal] for an unknown preset / no roster.
+     */
+    private function applyPresets(Workflow $workflow): Workflow|array
+    {
+        $stages = $workflow->stages;
+        $refusal = null;
+        $changed = false;
+
+        $walk = function (mixed &$node, string $stageName) use (&$walk, &$refusal, &$changed): void {
+            if ($refusal !== null) {
+                return;
+            }
+            if ($node instanceof WorkflowTask) {
+                if ($node->preset === null) {
+                    return;
+                }
+                try {
+                    $preset = $this->resolveStagePreset($node->preset);
+                } catch (\InvalidArgumentException $e) {
+                    $refusal = [$stageName, "Stage '{$stageName}' preset \"{$node->preset}\": {$e->getMessage()}; nothing was dispatched"];
+
+                    return;
+                }
+                $merged = self::mergePreset($node, $preset);
+                if ($merged !== $node) {
+                    $node = $merged;
+                    $changed = true;
+                }
+
+                return;
+            }
+            if (is_array($node)) {
+                foreach ($node as &$child) {
+                    $walk($child, $stageName);
+                }
+                unset($child);
+            }
+        };
+
+        foreach ($stages as &$stage) {
+            if (is_array($stage)) {
+                $walk($stage, (string) ($stage['name'] ?? 'unknown'));
+            }
+        }
+        unset($stage);
+
+        if ($refusal !== null) {
+            return $refusal;
+        }
+
+        return $changed ? $workflow->withStages($stages) : $workflow;
+    }
+
+    /**
+     * P1-6: one preset by name, against {@see setAgentRoster()}'s list or
+     * the manager's roster, memoised for the engine's lifetime of this roster.
+     *
+     * @throws \InvalidArgumentException unknown preset / no roster
+     */
+    private function resolveStagePreset(string $name): StagePreset
+    {
+        if (isset($this->stagePresets[$name])) {
+            return $this->stagePresets[$name];
+        }
+
+        $roster = $this->agentRoster ?? $this->agentManager;
+        if ($roster === null) {
+            throw new \InvalidArgumentException(
+                'this engine has no agent roster to resolve presets against (the host that runs it must hand one over)'
+            );
+        }
+
+        return $this->stagePresets[$name] = StagePreset::resolve($name, $roster);
+    }
+
+    /** P1-6: a task with its preset merged under it — the task's own keys win. */
+    private static function mergePreset(WorkflowTask $task, StagePreset $preset): WorkflowTask
+    {
+        $changes = [];
+        if ($task->tools === [] && $preset->tools !== []) {
+            $changes['tools'] = $preset->tools;
+        }
+        if (($task->model === null || $task->model === 'inherit') && $preset->model !== null) {
+            $changes['model'] = $preset->model;
+        }
+        if ($task->effort === null && $preset->effort !== null) {
+            $changes['effort'] = $preset->effort;
+        }
+        if ($task->isolation === null && $preset->isolation !== null) {
+            $changes['isolation'] = $preset->isolation;
+        }
+
+        return $changes === [] ? $task : $task->with($changes);
+    }
+
+    /** P1-6: the resolved preset a (merged) task runs as, or null. */
+    private function presetOf(WorkflowTask $task): ?StagePreset
+    {
+        return $task->preset === null ? null : ($this->stagePresets[$task->preset] ?? null);
+    }
+
+    /**
+     * The Agent one stage task runs as. Its own system prompt is the
+     * preset's body ('' without a preset — the request carries the rest),
+     * and a preset's `disallowedTools`, `maxTurns` and permission mode ride
+     * it so {@see \SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook} and
+     * {@see EngineExecutor} honour them exactly as they do for `Task`.
+     */
+    private function stageAgent(WorkflowTask $task, string $prompt): Agent
+    {
+        $preset = $this->presetOf($task);
+
+        return new Agent(
+            name: $task->name ?? $task->agentType,
+            description: $prompt,
+            prompt: $preset?->systemPrompt ?? '', // the session half is set via CompleteRequest
+            model: $this->model,
+            provider: $this->provider,
+            tools: $task->tools,
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+            disallowedTools: $preset?->disallowedTools ?? [],
+            permissionMode: $preset?->permissionMode ?? PermissionMode::Default,
+            maxTurns: $preset?->maxTurns,
+            environmentRoot: $this->environmentRoot,
+        );
+    }
+
+    /**
+     * P1-6: the permission gate a stage agent carries — the session's, or,
+     * when its preset declares a STRICTER mode, the session's rules under
+     * that mode (a bypass session's children stay bypass, the same ruling
+     * {@see AgentManager::createSubAgent()} applies). Without a session gate
+     * there is nothing to narrow and the field stays null.
+     */
+    private function stageGate(WorkflowTask $task): ?PermissionGate
+    {
+        $preset = $this->presetOf($task);
+        if ($preset === null || $this->permissionGate === null) {
+            return $this->permissionGate;
+        }
+
+        $session = $this->permissionGate->mode();
+        if ($session->isBypass() || !$preset->permissionMode->isStricterThan($session)) {
+            return $this->permissionGate;
+        }
+
+        return $this->permissionGate->withMode($preset->permissionMode);
+    }
+
+    /**
+     * The system prompt a stage request carries. Through a manager it is
+     * the session's environment half only — the manager composes each
+     * agent's own body on top ({@see AgentManager::executeAll()}). Without
+     * one the request is the agent's whole prompt: its preset body (if any)
+     * over that environment half, exactly {@see Agent::systemPrompt()}'s
+     * layout. $environment reuses an already-rendered environment half, so
+     * a fan-out pays the git polls once, not once per agent.
+     */
+    private function stageSystemPrompt(Agent $agent, ?string $environment = null): string
+    {
+        if ($agent->prompt === '') {
+            return $environment ?? $this->renderStagePrompt($agent);
+        }
+
+        $environment ??= $this->environmentPrompt($agent);
+
+        return $this->agentManager !== null ? $environment : $agent->prompt . "\n\n" . $environment;
+    }
+
+    /** The session (environment) half of a stage agent's system prompt, without any preset body. */
+    private function environmentPrompt(Agent $agent): string
+    {
+        if ($agent->prompt === '') {
+            return $this->renderStagePrompt($agent);
+        }
+
+        return $this->renderStagePrompt(new Agent(
+            name: $agent->name,
+            description: $agent->description,
+            prompt: '',
+            model: $agent->model,
+            provider: $agent->provider,
+            tools: [],
+            skillNames: [],
+            hooks: [],
+            isActive: true,
+            environmentRoot: $agent->environmentRoot,
+        ));
     }
 
     /**
@@ -2040,7 +2270,35 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($this->usesChain === []) {
             $this->agentsDispatched = $prior['agentsDispatched'] ?? 0;
             $this->agentCeiling = $workflow->maxAgents;
+            // P1-6: presets are re-read per run, so an edited preset file
+            // (or a re-wired roster) is what the next run uses.
+            $this->stagePresets = [];
         }
+
+        // P1-6: resolve and merge every `preset:` before anything else looks
+        // at the declarations — the permission pre-flight below must judge
+        // the tools a preset contributes, and an unknown preset refuses here
+        // with nothing dispatched (the shape a declaration refusal has).
+        $merged = $this->applyPresets($workflow);
+        if (is_array($merged)) {
+            return new WorkflowResult(
+                workflowId: $resolvedWorkflowId,
+                status: WorkflowStatus::Failed,
+                stageResults: [...$stageResults, new StageResult(
+                    stageName: $merged[0],
+                    status: WorkflowStatus::Failed,
+                    error: $merged[1],
+                    startedAt: new \DateTimeImmutable(),
+                    completedAt: new \DateTimeImmutable(),
+                )],
+                context: $context,
+                totalTokens: $totalTokens,
+                totalCost: $totalCost,
+                startedAt: $startedAt,
+                completedAt: new \DateTimeImmutable(),
+            );
+        }
+        $workflow = $merged;
 
         // Whole-workflow pre-flight: a stage 5 that declares a refused tool
         // must not cost four stages of real agent work first. Reported as that
@@ -3203,11 +3461,21 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $push = static function (mixed $task) use (&$material): void {
             if ($task instanceof WorkflowTask) {
-                $material['tasks'][] = [
+                $row = [
                     'prompt' => $task->prompt,
                     'model' => $task->model,
                     'schema' => $task->outputSchema,
                 ];
+                // P1-6: a preset or effort changes what the stage was asked
+                // to run, so it is identity — appended only when set, so every
+                // hash recorded before P1-6 still matches its stage.
+                if ($task->preset !== null) {
+                    $row['preset'] = $task->preset;
+                }
+                if ($task->effort !== null) {
+                    $row['effort'] = $task->effort->value;
+                }
+                $material['tasks'][] = $row;
             }
         };
 
@@ -3453,18 +3721,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $interpolatedPrompt = $this->interpolateContext($task->prompt, self::resolveStageInput($taskContext, $task->input));
 
             // Build SubAgent
-            $agent = new Agent(
-                name: $task->name ?? $task->agentType,
-                description: $interpolatedPrompt,
-                prompt: '', // system prompt is set via CompleteRequest
-                model: $this->model,
-                provider: $this->provider,
-                tools: $task->tools,
-                skillNames: [],
-                hooks: [],
-                isActive: true,
-                environmentRoot: $this->environmentRoot,
-            );
+            $agent = $this->stageAgent($task, $interpolatedPrompt);
 
             $subAgent = new SubAgent(
                 id: $stageName . ($multi ? '-' . ($i + 1) : '') . '-' . uniqid(getmypid() . '_', true),
@@ -3478,7 +3735,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 outputSchema: $task->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
                 model: $task->model,
-                permissionGate: $this->permissionGate,
+                permissionGate: $this->stageGate($task),
+                // P1-6: the task's reasoning effort (its own, or its preset's).
+                effort: $task->effort,
             );
 
             // Build CompleteRequest
@@ -3488,7 +3747,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     ['role' => 'user', 'content' => $interpolatedPrompt],
                 ],
                 tools: $this->resolveRequestTools($task->tools),
-                systemPrompt: $this->renderStagePrompt($agent),
+                systemPrompt: $this->stageSystemPrompt($agent),
             );
 
             // Execute via pool, on what is left of the stage's budget
@@ -3614,18 +3873,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $interpolatedPrompt = $this->interpolateContext($task->prompt, self::resolveStageInput($pipelineContext, $task->input));
 
             // Build SubAgent for this pipeline stage
-            $agent = new Agent(
-                name: $task->name ?? $task->agentType,
-                description: $interpolatedPrompt,
-                prompt: '',
-                model: $this->model,
-                provider: $this->provider,
-                tools: $task->tools,
-                skillNames: [],
-                hooks: [],
-                isActive: true,
-                environmentRoot: $this->environmentRoot,
-            );
+            $agent = $this->stageAgent($task, $interpolatedPrompt);
 
             $subAgent = new SubAgent(
                 id: $stageName . '-' . $nestedStageName . '-' . uniqid(getmypid() . '_', true),
@@ -3639,7 +3887,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 outputSchema: $task->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
                 model: $task->model,
-                permissionGate: $this->permissionGate,
+                permissionGate: $this->stageGate($task),
+                // P1-6: the task's reasoning effort (its own, or its preset's).
+                effort: $task->effort,
             );
 
             $request = new CompleteRequest(
@@ -3648,7 +3898,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     ['role' => 'user', 'content' => $interpolatedPrompt],
                 ],
                 tools: $this->resolveRequestTools($task->tools),
-                systemPrompt: $this->renderStagePrompt($agent),
+                systemPrompt: $this->stageSystemPrompt($agent),
             );
 
             $agentResult = $this->dispatchOne($subAgent, $request, $this->stagePool($stageTimeout, $stageClock));
@@ -3770,18 +4020,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         // the helper returns a copy, so the persisted $context never carries it.
         $taskPrompt = $this->interpolateContext($task->prompt, self::resolveStageInput($context, $task->input));
 
-        $taskAgent = new Agent(
-            name: $task->name ?? $task->agentType,
-            description: $taskPrompt,
-            prompt: '',
-            model: $this->model,
-            provider: $this->provider,
-            tools: $task->tools,
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-            environmentRoot: $this->environmentRoot,
-        );
+        $taskAgent = $this->stageAgent($task, $taskPrompt);
 
         $taskSubAgent = new SubAgent(
             id: $stageName . '-task-' . uniqid(getmypid() . '_', true),
@@ -3795,14 +4034,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
             outputSchema: $task->outputSchema,
             // S2: the per-stage model ask; null keeps today's session-default dial.
             model: $task->model,
-            permissionGate: $this->permissionGate,
+            permissionGate: $this->stageGate($task),
+            // P1-6: the task's reasoning effort (its own, or its preset's).
+            effort: $task->effort,
         );
 
         $taskRequest = new CompleteRequest(
             model: $taskAgent->model,
             messages: [['role' => 'user', 'content' => $taskPrompt]],
             tools: $this->resolveRequestTools($task->tools),
-            systemPrompt: $this->renderStagePrompt($taskAgent),
+            systemPrompt: $this->stageSystemPrompt($taskAgent),
         );
 
         $taskResult = $this->dispatchOne($taskSubAgent, $taskRequest, $this->stagePool($stageTimeout, $stageClock));
@@ -3830,24 +4071,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $verifierPrompt = $this->interpolateContext($verifier->prompt, self::resolveStageInput($verifierContext, $verifier->input));
 
-        $verifierAgent = new Agent(
-            name: $verifier->name ?? $verifier->agentType,
-            description: $verifierPrompt,
-            prompt: '',
-            model: $this->model,
-            provider: $this->provider,
-            tools: $verifier->tools,
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-            environmentRoot: $this->environmentRoot,
-        );
+        $verifierAgent = $this->stageAgent($verifier, $verifierPrompt);
 
         $verifierRequest = new CompleteRequest(
             model: $verifierAgent->model,
             messages: [['role' => 'user', 'content' => $verifierPrompt]],
             tools: $this->resolveRequestTools($verifier->tools),
-            systemPrompt: $this->renderStagePrompt($verifierAgent),
+            systemPrompt: $this->stageSystemPrompt($verifierAgent),
         );
 
         // --- Verdict-aware verifier loop ---
@@ -3887,7 +4117,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 outputSchema: $verifier->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
                 model: $verifier->model,
-                permissionGate: $this->permissionGate,
+                permissionGate: $this->stageGate($verifier),
+                // P1-6: the task's reasoning effort (its own, or its preset's).
+                effort: $verifier->effort,
             );
             $maxRetriesForAttempt = max(0, $maxAttempts - 1 - $attemptsUsed);
 
@@ -4052,23 +4284,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     $voteContext['lens'] = $verifier->lenses[$k];
                 }
                 $prompt = $this->interpolateContext($verifier->prompt, self::resolveStageInput($voteContext, $verifier->input));
-                $agent = new Agent(
-                    name: $verifier->name ?? $verifier->agentType,
-                    description: $prompt,
-                    prompt: '',
-                    model: $this->model,
-                    provider: $this->provider,
-                    tools: $verifier->tools,
-                    skillNames: [],
-                    hooks: [],
-                    isActive: true,
-                    environmentRoot: $this->environmentRoot,
-                );
+                $agent = $this->stageAgent($verifier, $prompt);
                 $defaultRequest ??= new CompleteRequest(
                     model: $agent->model,
                     messages: [['role' => 'user', 'content' => $prompt]],
                     tools: $this->resolveRequestTools($verifier->tools),
-                    systemPrompt: $this->renderStagePrompt($agent),
+                    systemPrompt: $this->stageSystemPrompt($agent),
                 );
                 $subAgent = new SubAgent(
                     id: $stageName . '-vote' . ($k + 1) . '-' . uniqid(getmypid() . '_', true),
@@ -4082,7 +4303,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     isolation: $verifier->isolation ?? \SugarCraft\Code\Agents\Isolation::None,
                     outputSchema: $verifier->outputSchema,
                     model: $verifier->model,
-                    permissionGate: $this->permissionGate,
+                    permissionGate: $this->stageGate($verifier),
+                    // P1-6: the task's reasoning effort (its own, or its preset's).
+                    effort: $verifier->effort,
                 );
                 $subAgents[] = $subAgent;
                 $resultKeys[$subAgent->id] = ['key' => $baseKey . '_' . ($k + 1), 'schema' => $verifier->outputSchema !== null];
@@ -4469,24 +4692,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
             // Every template field rides each item's task — the fan-out
             // used to drop stallTimeout, restarts and input on the floor.
-            $tasks = array_map(static fn (?string $name): WorkflowTask => new WorkflowTask(
-                agentType: $template->agentType,
-                prompt: $template->prompt,
-                tools: $template->tools,
-                timeout: $template->timeout,
-                retries: $template->retries,
-                isolation: $template->isolation,
-                name: $name,
-                outputSchema: $template->outputSchema,
-                model: $template->model,
-                reject: $template->reject,
-                rejectMinOccurrences: $template->rejectMinOccurrences,
-                resource: $template->resource,
-                lockWaitSeconds: $template->lockWaitSeconds,
-                stallTimeout: $template->stallTimeout,
-                restarts: $template->restarts,
-                input: $template->input,
-            ), $names);
+            $tasks = array_map(
+                static fn (?string $name): WorkflowTask => $template->with(['name' => $name]),
+                $names,
+            );
         }
 
         // Every task's declaration is checked before this method builds
@@ -4518,18 +4727,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $firstContext = $dynamic ? self::fanOutItemContext($context, $isGlob, $firstTask->name, $itemValues, 0) : $context;
         $firstInterpolated = $this->interpolateContext($firstTask->prompt, self::resolveStageInput($firstContext, $firstTask->input));
 
-        $firstAgent = new Agent(
-            name: $firstTask->name ?? $firstTask->agentType,
-            description: $firstInterpolated,
-            prompt: '',
-            model: $this->model,
-            provider: $this->provider,
-            tools: $firstTask->tools,
-            skillNames: [],
-            hooks: [],
-            isActive: true,
-            environmentRoot: $this->environmentRoot,
-        );
+        $firstAgent = $this->stageAgent($firstTask, $firstInterpolated);
 
         $defaultRequest = new CompleteRequest(
             model: $firstAgent->model,
@@ -4537,8 +4735,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 ['role' => 'user', 'content' => $firstInterpolated],
             ],
             tools: $this->resolveRequestTools($firstTask->tools),
-            systemPrompt: $this->renderStagePrompt($firstAgent),
+            systemPrompt: $this->stageSystemPrompt($firstAgent, $environment = $this->environmentPrompt($firstAgent)),
         );
+        /** @var array<string, string> $agentPrompts P1-6: SubAgent id => its own system prompt (preset bodies differ per agent) */
+        $agentPrompts = [];
+        $anyPresetBody = false;
 
         $subAgents = [];
         /** @var array<string, ?list<Tool>> $agentGrants SubAgent id => that agent's OWN resolved grant (C4) */
@@ -4569,18 +4770,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
             $interpolatedPrompt = $this->interpolateContext($task->prompt, self::resolveStageInput($itemContext, $task->input));
 
-            $agent = new Agent(
-                name: $task->name ?? $task->agentType,
-                description: $interpolatedPrompt,
-                prompt: '',
-                model: $this->model,
-                provider: $this->provider,
-                tools: $task->tools,
-                skillNames: [],
-                hooks: [],
-                isActive: true,
-                environmentRoot: $this->environmentRoot,
-            );
+            $agent = $this->stageAgent($task, $interpolatedPrompt);
 
             $subAgent = new SubAgent(
                 id: $stageName . '-' . $agentIndex . '-' . uniqid(getmypid() . '_', true),
@@ -4594,10 +4784,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 outputSchema: $task->outputSchema,
                 // S2: the per-stage model ask; null keeps today's session-default dial.
                 model: $task->model,
-                permissionGate: $this->permissionGate,
+                permissionGate: $this->stageGate($task),
+                // P1-6: the task's reasoning effort (its own, or its preset's).
+                effort: $task->effort,
             );
             $subAgents[] = $subAgent;
             $agentGrants[$subAgent->id] = $agentGrant;
+            $agentPrompts[$subAgent->id] = $this->stageSystemPrompt($agent, $environment);
+            $anyPresetBody = $anyPresetBody || $agent->prompt !== '';
             $resultKeys[$subAgent->id] = [
                 'key' => self::resultKey($task->name, $stageName . '_' . $agentIndex),
                 'schema' => $task->outputSchema !== null,
@@ -4669,7 +4863,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $grantResolver = self::grantResolver($agentGrants);
         $results = $this->agentManager !== null
             ? $this->agentManager->executeAll($subAgents, $defaultRequest, $pool, $grantResolver)
-            : $pool->executeAll($subAgents, $defaultRequest, $grantResolver);
+            : $pool->executeAll(
+                $subAgents,
+                $defaultRequest,
+                $grantResolver,
+                // P1-6: without a manager to compose them, each agent's own
+                // preset body rides its own request; no preset, no resolver.
+                $anyPresetBody ? static fn (SubAgent $a): ?string => $agentPrompts[$a->id] ?? null : null,
+            );
 
         // Collect all results from the generator
         $agentResults = [];

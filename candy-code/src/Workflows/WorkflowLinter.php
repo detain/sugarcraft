@@ -72,8 +72,12 @@ final class WorkflowLinter
      *        walk entirely — a caller with no registry view keeps byte-identical
      *        pre-C11 verdicts. An edge whose name the resolver cannot load is
      *        left to load()'s own refusal, not guessed at here.
+     * @param ?list<string> $presetNames P1-6: the agent-preset roster the run
+     *        will resolve `preset:` against; null = roster unknown => only the
+     *        spelling is checked (the engine still refuses an unknown preset
+     *        before dispatch).
      */
-    public static function lint(Workflow $workflow, array $seedContext = [], ?array $toolNames = null, ?callable $resolver = null): self
+    public static function lint(Workflow $workflow, array $seedContext = [], ?array $toolNames = null, ?callable $resolver = null, ?array $presetNames = null): self
     {
         $findings = [];
         $planRows = [];
@@ -136,6 +140,7 @@ final class WorkflowLinter
         // C11: include-compose edges — cycles and too-deep chains are errors
         // here, before the run that would refuse them burns a single agent.
         self::checkIncludes($workflow, $findings, $resolver);
+        self::checkPresets($workflow, $presetNames, $findings);
 
         return new self($workflow->name, $findings, $planRows);
     }
@@ -443,6 +448,46 @@ final class WorkflowLinter
     /**
      * @param list<array{severity: string, stage: string, message: string}> $findings
      */
+    /**
+     * P1-6 mirror of the engine's preset pre-flight: a blank preset name
+     * (hand-built) is an error, and so is a name the given roster does not
+     * hold — the engine refuses that run before dispatching anything.
+     *
+     * @param ?list<string> $presetNames
+     * @param list<array{severity: string, stage: string, message: string}> $findings
+     */
+    private static function checkPresets(Workflow $workflow, ?array $presetNames, array &$findings): void
+    {
+        $walk = static function (mixed $node, string $stageName) use (&$walk, $presetNames, &$findings): void {
+            if ($node instanceof WorkflowTask) {
+                if ($node->preset === null) {
+                    return;
+                }
+                $where = $node->name !== null && $node->name !== '' ? "{$stageName}:\"{$node->name}\"" : $stageName;
+                if (trim($node->preset) === '') {
+                    self::add($findings, 'error', $where, 'preset is blank; name an agent preset or drop the key.');
+                } elseif ($presetNames !== null && !in_array($node->preset, $presetNames, true)) {
+                    $known = $presetNames;
+                    sort($known);
+                    self::add($findings, 'error', $where, "preset \"{$node->preset}\" is not an agent preset this session knows (known: " . ($known === [] ? 'none' : implode(', ', $known)) . '); the engine refuses the run before dispatching anything.');
+                }
+
+                return;
+            }
+            if (is_array($node)) {
+                foreach ($node as $child) {
+                    $walk($child, $stageName);
+                }
+            }
+        };
+
+        foreach ($workflow->stages as $stage) {
+            if (is_array($stage)) {
+                $walk($stage, is_string($stage['name'] ?? null) && $stage['name'] !== '' ? $stage['name'] : 'unknown');
+            }
+        }
+    }
+
     private static function add(array &$findings, string $severity, string $stage, string $message): void
     {
         $findings[] = ['severity' => $severity, 'stage' => $stage, 'message' => $message];

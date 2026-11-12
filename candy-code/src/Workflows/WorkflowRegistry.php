@@ -36,7 +36,7 @@ final class WorkflowRegistry
      * silently and quietly do less. An arm added here without its refusal
      * update is caught by {@see \SugarCraft\Code\Tests\Workflows\WorkflowYamlKeyRosterTest}.
      */
-    public const YAML_TASK_KEYS = ['agent', 'name', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds', 'timeout', 'reject', 'rejectMinOccurrences', 'stallTimeout', 'restarts', 'input', 'votes', 'lenses', 'quorum'];
+    public const YAML_TASK_KEYS = ['agent', 'name', 'prompt', 'tools', 'retries', 'outputSchema', 'isolation', 'model', 'resource', 'lockWaitSeconds', 'timeout', 'reject', 'rejectMinOccurrences', 'stallTimeout', 'restarts', 'input', 'votes', 'lenses', 'quorum', 'preset', 'effort'];
 
     /**
      * The stage-shape vocabulary (names, flags and the nested containers the
@@ -2397,6 +2397,32 @@ final class WorkflowRegistry
             TaskBuilder::verifierPanel($votes, $lenses, $quorum);
         } catch (\InvalidArgumentException $error) {
             throw new WorkflowLoadException("{$at} {$error->getMessage()}", 0, $error);
+        }
+
+        // P1-6: the agent-preset arm. Only the SPELLING is judged here — the
+        // roster the name resolves against belongs to the engine (the same
+        // tiers `Task` uses), which refuses an unknown preset before the run
+        // dispatches anything.
+        if (array_key_exists('preset', $map)) {
+            if (!is_string($map['preset']) || trim($map['preset']) === '') {
+                throw new WorkflowLoadException(
+                    "{$at} \"preset\" must name an agent preset (e.g. reviewer), got "
+                    . (is_string($map['preset']) ? 'an empty string' : get_debug_type($map['preset']))
+                );
+            }
+            $b = $b->preset($map['preset']);
+        }
+        if (array_key_exists('effort', $map)) {
+            if (!is_string($map['effort'])) {
+                throw new WorkflowLoadException(
+                    "{$at} \"effort\" must be one of low, medium, high, xhigh, max, got " . get_debug_type($map['effort'])
+                );
+            }
+            try {
+                $b = $b->effort($map['effort']);
+            } catch (\InvalidArgumentException $error) {
+                throw new WorkflowLoadException("{$at} {$error->getMessage()}", 0, $error);
+            }
         }
 
         // C9: the fan-in join arm. trustedJoin() judges the SHAPE (raw

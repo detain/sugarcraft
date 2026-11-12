@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Workflows;
 
+use SugarCraft\Code\Agents\Effort;
 use SugarCraft\Code\Agents\Isolation;
 
 /**
@@ -110,7 +111,31 @@ final readonly class WorkflowTask
          * 1..votes. Null = the majority, {@see TaskBuilder::defaultQuorum()}.
          */
         public ?int $quorum = null,
+        /**
+         * P1-6: the agent preset this task runs as (`preset: reviewer`). The
+         * engine resolves it against its agent roster before the run
+         * dispatches anything and merges it in: every field this task sets
+         * itself wins. Null = no preset, byte-identical to every pre-P1-6 task.
+         */
+        public ?string $preset = null,
+        /**
+         * P1-6: the reasoning effort this task's agent asks for; null leaves
+         * the request untouched (or takes the preset's).
+         */
+        public ?Effort $effort = null,
     ) {}
+
+    /**
+     * A copy with some fields replaced — every promoted field is a
+     * constructor parameter of the same name, so a field added later is
+     * carried without touching this method.
+     *
+     * @param array<string, mixed> $changes field name => new value
+     */
+    public function with(array $changes): self
+    {
+        return new self(...array_merge(get_object_vars($this), $changes));
+    }
 
     /**
      * P1-4: whether this task declares a verifier panel at all — any of

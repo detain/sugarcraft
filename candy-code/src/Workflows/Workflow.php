@@ -92,6 +92,17 @@ final readonly class Workflow
     }
 
     /**
+     * A copy with its stage list replaced — the engine's P1-6 preset merge
+     * runs on a copy, never on the registry's value.
+     *
+     * @param array<array-key, mixed> $stages
+     */
+    public function withStages(array $stages): self
+    {
+        return $this->mutate(stages: $stages);
+    }
+
+    /**
      * Returns a new Workflow instance that stops (or keeps running) a
      * parallel stage after its first agent failure.
      *
@@ -120,13 +131,14 @@ final readonly class Workflow
      */
     private function mutate(
         ?WorkflowStatus $workflowStatus = null,
+        ?array $stages = null,
         ?bool $stopOnFirstFailure = null,
         bool $stopOnFirstFailureSet = false,
     ): self {
         return new self(
             name: $this->name,
             description: $this->description,
-            stages: $this->stages,
+            stages: $stages ?? $this->stages,
             maxConcurrent: $this->maxConcurrent,
             timeout: $this->timeout,
             workflowStatus: $workflowStatus ?? $this->workflowStatus,

@@ -10,6 +10,7 @@ use SugarCraft\Code\Backend\TurnInterrupted;
 use SugarCraft\Code\Events\ToolFinished;
 use SugarCraft\Code\Events\ToolStarted;
 use SugarCraft\Code\Hooks\BuiltIn\SubAgentGrantHook;
+use SugarCraft\Code\Permissions\PermissionMode;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\Message;
@@ -532,9 +533,21 @@ final class EngineExecutor implements ForksAskFreeAgents
             $engine = $engine->withTools([...$engine->tools(), $structured]);
         }
 
+        // P1-6 (wf-impl C4): a stage run as a preset that declares a STRICTER
+        // permission mode carries a gate built for it (WorkflowEngine::
+        // stageGate()); it rides the grant hook as the second gate, exactly
+        // as Task's preset mode does. Only a declared mode counts — every
+        // agent without one keeps the hook's one-gate shape.
+        $sessionMode = $this->engine->permissionGate()?->mode() ?? PermissionMode::Default;
+        $modeGate = $agent->agent->permissionMode !== PermissionMode::Default
+            && $agent->permissionGate !== null
+            && $agent->permissionGate->mode()->isStricterThan($sessionMode)
+            ? $agent->permissionGate
+            : null;
         $engine = $engine->withSubAgentGrant(new SubAgentGrantHook(
             $this->grantManager ?? new AgentManager($this->engine->provider(), new SkillRegistry()),
             $agent,
+            $modeGate,
         ));
 
         // Blank-return resume (wf-g4): a child that COMPLETED its turn with a
