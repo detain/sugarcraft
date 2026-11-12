@@ -234,7 +234,7 @@ final class CustomProviderTest extends TestCase
     // 7. contextWindow() returns 128000
     // -------------------------------------------------------------------------
 
-    public function testContextWindowReturns128000(): void
+    public function testContextWindowIsUnknownWithoutADatabaseRowOrOverride(): void
     {
         $client = new Client();
         $provider = new CustomProvider(
@@ -247,7 +247,8 @@ final class CustomProviderTest extends TestCase
             true
         );
 
-        $this->assertSame(128_000, $provider->contextWindow());
+        // No database row and no operator override: unknown, so the caller's labelled fallback applies.
+        $this->assertSame(0, $provider->contextWindow());
     }
 
     // -------------------------------------------------------------------------

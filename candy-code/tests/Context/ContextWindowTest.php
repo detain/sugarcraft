@@ -70,6 +70,35 @@ final class ContextWindowTest extends TestCase
         $this->assertNotInstanceOf(ReportsContextWindow::class, $command);
         $this->assertSame(ContextWindow::FALLBACK_TOKENS, ContextWindow::ofBackend($command));
     }
+
+    public function testClassifyMarksAPositiveWindowMeasuredAndANonPositiveOneAssumed(): void
+    {
+        $measured = ContextWindow::classify(196_608);
+        $this->assertSame(196_608, $measured->tokens);
+        $this->assertFalse($measured->assumed);
+
+        $unknown = ContextWindow::classify(0);
+        $this->assertSame(ContextWindow::FALLBACK_TOKENS, $unknown->tokens);
+        $this->assertTrue($unknown->assumed, 'the fallback must be labelled as assumed');
+    }
+
+    public function testDescribeBackendCarriesTheAssumedFlagForAnUnanswerableBackend(): void
+    {
+        $this->assertTrue(ContextWindow::describeBackend(new EchoBackend())->assumed);
+        $this->assertFalse(ContextWindow::describeBackend(new FakeWindowBackend(196_608))->assumed);
+        $this->assertTrue(ContextWindow::describeBackend(new FakeWindowBackend(0))->assumed);
+    }
+
+    public function testModelWindowsIsTheSingleSourceForClaudeRowsAcrossRoutes(): void
+    {
+        $this->assertSame(1_000_000, \SugarCraft\Code\Context\ModelWindows::lookup('claude-sonnet-4-6'));
+        $this->assertSame(
+            \SugarCraft\Code\Context\ModelWindows::lookup('claude-sonnet-4-6'),
+            \SugarCraft\Code\Context\ModelWindows::lookup('anthropic.claude-sonnet-4-6'),
+            'a Bedrock route prefix reads the same row',
+        );
+        $this->assertNull(\SugarCraft\Code\Context\ModelWindows::lookup('claude-unlisted-9'));
+    }
 }
 
 /**

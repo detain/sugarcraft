@@ -365,37 +365,24 @@ final class ClaudeCodeProviderTest extends TestCase
     // ClaudeCodeProvider Method Tests - contextWindow()
     // =========================================================================
 
-    public function testClaudeCodeProviderContextWindowReturns200000(): void
+    public function testClaudeCodeProviderContextWindowIsTheDefaultModelsSharedRow(): void
     {
+        // The default model is claude-sonnet-4-6, which the shared table ships at 1M.
         $provider = new ClaudeCodeProvider(new ClaudeCodeInvocation());
-        $this->assertSame(200_000, $provider->contextWindow());
+        $this->assertSame(1_000_000, $provider->contextWindow());
     }
 
-    public function testClaudeCodeProviderContextWindowWithDifferentModels(): void
+    public function testClaudeCodeProviderContextWindowReadsTheSharedTableAndAnswersUnknownForOthers(): void
     {
-        // Test with Sonnet 4-6
-        $provider1 = new ClaudeCodeProvider(new ClaudeCodeInvocation(), 'claude-sonnet-4-6');
-        $this->assertSame(200_000, $provider1->contextWindow());
+        $this->assertSame(1_000_000, (new ClaudeCodeProvider(new ClaudeCodeInvocation(), 'claude-sonnet-4-6'))->contextWindow());
+        $this->assertSame(1_000_000, (new ClaudeCodeProvider(new ClaudeCodeInvocation(), 'claude-opus-4-6'))->contextWindow());
+        $this->assertSame(1_000_000, (new ClaudeCodeProvider(new ClaudeCodeInvocation(), 'claude-opus-4-7'))->contextWindow());
+        $this->assertSame(200_000, (new ClaudeCodeProvider(new ClaudeCodeInvocation(), 'claude-haiku-4-5'))->contextWindow());
 
-        // Test with Opus 4-6
-        $provider2 = new ClaudeCodeProvider(new ClaudeCodeInvocation(), 'claude-opus-4-6');
-        $this->assertSame(200_000, $provider2->contextWindow());
-
-        // Test with Sonnet 4-7
-        $provider3 = new ClaudeCodeProvider(new ClaudeCodeInvocation(), 'claude-sonnet-4-7');
-        $this->assertSame(200_000, $provider3->contextWindow());
-
-        // Test with Opus 4-7
-        $provider4 = new ClaudeCodeProvider(new ClaudeCodeInvocation(), 'claude-opus-4-7');
-        $this->assertSame(200_000, $provider4->contextWindow());
-
-        // Test with Haiku 4-7
-        $provider5 = new ClaudeCodeProvider(new ClaudeCodeInvocation(), 'claude-haiku-4-7');
-        $this->assertSame(200_000, $provider5->contextWindow());
-
-        // Test with unknown model (should default to 200000)
-        $provider6 = new ClaudeCodeProvider(new ClaudeCodeInvocation(), 'unknown-model');
-        $this->assertSame(200_000, $provider6->contextWindow());
+        // Not in the table: 0 ("unknown"), never a flat 200K presented as the model's window.
+        $this->assertSame(0, (new ClaudeCodeProvider(new ClaudeCodeInvocation(), 'claude-sonnet-4-7'))->contextWindow());
+        $this->assertSame(0, (new ClaudeCodeProvider(new ClaudeCodeInvocation(), 'claude-haiku-4-7'))->contextWindow());
+        $this->assertSame(0, (new ClaudeCodeProvider(new ClaudeCodeInvocation(), 'unknown-model'))->contextWindow());
     }
 
     // =========================================================================
@@ -468,7 +455,7 @@ final class ClaudeCodeProviderTest extends TestCase
         $this->assertTrue($provider->supportsFunctionCalling());
         $this->assertFalse($provider->supportsVision());
         $this->assertFalse($provider->supportsJsonSchema());
-        $this->assertSame(200_000, $provider->contextWindow());
+        $this->assertSame(1_000_000, $provider->contextWindow());
         $this->assertSame(0.0, $provider->costPer1kTokens('any-model', 'input'));
     }
 }

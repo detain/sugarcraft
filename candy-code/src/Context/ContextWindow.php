@@ -77,10 +77,30 @@ final class ContextWindow
      */
     public static function ofBackend(Backend $backend): int
     {
+        return self::describeBackend($backend)->tokens;
+    }
+
+    /**
+     * {@see ofBackend()} with the provenance attached: whether the budget is
+     * the backend's own answer or the assumed {@see FALLBACK_TOKENS}.
+     */
+    public static function describeBackend(Backend $backend): WindowSize
+    {
         if (!$backend instanceof ReportsContextWindow) {
-            return self::FALLBACK_TOKENS;
+            return self::classify(0);
         }
 
-        return self::resolve($backend->contextWindow());
+        return self::classify($backend->contextWindow());
+    }
+
+    /**
+     * A reported window with its provenance: a positive report is measured, a
+     * non-positive one ("unknown") becomes the assumed fallback.
+     */
+    public static function classify(int $reported): WindowSize
+    {
+        return $reported > 0
+            ? new WindowSize($reported, false)
+            : new WindowSize(self::FALLBACK_TOKENS, true);
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Providers;
 
 use GuzzleHttp\Client;
+use SugarCraft\Code\Context\ModelWindows;
 use SugarCraft\Code\Providers\Concerns\AnthropicMessagesWire;
 use SugarCraft\Code\Providers\Concerns\HttpClientDefaults;
 use SugarCraft\Code\Providers\Concerns\ToolSchema;
@@ -76,36 +77,6 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
     private const FAST_MODE_FAMILIES = ['claude-opus-5-5', 'claude-opus-5', 'claude-opus-4-8'];
 
     private const FAST_MODE_BETA_FAMILIES = ['claude-opus-5', 'claude-opus-4-8'];
-
-    /**
-     * Context windows by pricing family (ISS-073's table, claude rows only -
-     * the native endpoint speaks no other family). Mirrors
-     * {@see BedrockProvider::CONTEXT_WINDOWS} without the route prefixes.
-     */
-    private const CONTEXT_WINDOWS = [
-        'claude-fable-5-1' => 1_000_000,
-        'claude-fable-5' => 1_000_000,
-        'claude-opus-5-5' => 1_000_000,
-        'claude-opus-5' => 1_000_000,
-        'claude-opus-4-8' => 1_000_000,
-        'claude-opus-4-7' => 1_000_000,
-        'claude-opus-4-6' => 1_000_000,
-        'claude-sonnet-5-5' => 1_000_000,
-        'claude-sonnet-5' => 1_000_000,
-        'claude-sonnet-4-6' => 1_000_000,
-        'claude-opus-4-5' => 200_000,
-        'claude-opus-4-1' => 200_000,
-        'claude-opus-4' => 200_000,
-        'claude-3-opus' => 200_000,
-        'claude-sonnet-4-5' => 200_000,
-        'claude-sonnet-4' => 200_000,
-        'claude-3-7-sonnet' => 200_000,
-        'claude-3-5-sonnet' => 200_000,
-        'claude-3-sonnet' => 200_000,
-        'claude-haiku-4-5' => 200_000,
-        'claude-3-5-haiku' => 200_000,
-        'claude-3-haiku' => 200_000,
-    ];
 
     /** The floor for a claude id whose family is not (yet) in the table. */
     private const FALLBACK_CONTEXT_WINDOW = 200_000;
@@ -369,7 +340,7 @@ final readonly class AnthropicProvider implements ProviderInterface, MarksPrompt
         // versioned `claude-sonnet-4-6@20250929` reads the 1M row); otherwise
         // the flat 200K every pre-table provider answered.
         return $this->contextWindowOverride
-            ?? self::CONTEXT_WINDOWS[self::pricingFamily($this->defaultModel)]
+            ?? ModelWindows::lookup(self::pricingFamily($this->defaultModel))
             ?? self::FALLBACK_CONTEXT_WINDOW;
     }
 

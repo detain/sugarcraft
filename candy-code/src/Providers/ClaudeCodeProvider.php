@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Providers;
 
 use SugarCraft\Code\Cli\Bootstrap;
+use SugarCraft\Code\Context\ModelWindows;
 use SugarCraft\Code\Cli\LaunchNotices;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Messages\AssistantMessage;
@@ -183,16 +184,15 @@ final readonly class ClaudeCodeProvider implements ProviderInterface, RebindsMod
         return new self(...array_merge(get_object_vars($this), ['defaultModel' => $model]));
     }
 
+    /**
+     * The shared Claude table ({@see ModelWindows}), so Claude Code reports the
+     * window the native endpoint does for the same model. A model the table
+     * does not list answers 0 - unknown - rather than a flat 200K that would
+     * present a guess as the model's window.
+     */
     public function contextWindow(): int
     {
-        return match ($this->defaultModel) {
-            'claude-sonnet-4-6' => 200_000,
-            'claude-opus-4-6' => 200_000,
-            'claude-sonnet-4-7' => 200_000,
-            'claude-opus-4-7' => 200_000,
-            'claude-haiku-4-7' => 200_000,
-            default => 200_000,
-        };
+        return ModelWindows::lookup($this->defaultModel) ?? 0;
     }
 
     public function costPer1kTokens(string $model, string $direction): float

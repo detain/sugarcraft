@@ -373,15 +373,16 @@ final readonly class CustomProvider implements ProviderInterface, RebindsModel, 
 
     /**
      * Roadmap 5.13a: the operator's `contextWindow` setting, else the model
-     * database's figure for this model ({@see ModelMetadata}), else 128,000 —
-     * the fixed answer this method gave for every model before, kept as the
-     * last resort for a self-hosted id no database lists.
+     * database's figure for this model ({@see ModelMetadata}), else 0 -
+     * unknown. A self-hosted id no database lists used to be told 128,000, a
+     * guess that read as the model's window; now it takes the labelled
+     * fallback until the operator names one.
      */
     public function contextWindow(): int
     {
         return $this->contextWindowOverride
             ?? $this->modelMetadata?->contextWindow($this->model)
-            ?? 128_000;
+            ?? 0;
     }
 
     /**

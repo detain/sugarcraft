@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Providers;
 
 use Aws\BedrockRuntime\BedrockRuntimeClient;
 use Aws\Exception\AwsException;
+use SugarCraft\Code\Context\ModelWindows;
 use SugarCraft\Code\Messages\Message;
 use SugarCraft\Code\Messages\AssistantMessage;
 use SugarCraft\Code\Messages\UserMessage;
@@ -190,43 +191,6 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
     private const CACHE_POINT = ['cachePoint' => ['type' => 'default']];
 
     /**
-     * Context windows by normalised family id. Unknown answers 0 - the
-     * "unknown" of {@see ProviderInterface::contextWindow()}, so
-     * {@see \SugarCraft\Code\Context\ContextWindow::resolve()} applies its
-     * one named fallback instead of this class guessing a denominator (the
-     * old `default => 8_192` made Chat's context tiers fire against 8k on a
-     * 200k model: auto-compaction after a few messages, every turn).
-     *
-     * @var array<string, int>
-     */
-    private const CONTEXT_WINDOWS = [
-        'anthropic.claude-fable-5-1' => 1_000_000,
-        'anthropic.claude-fable-5' => 1_000_000,
-        'anthropic.claude-opus-5-5' => 1_000_000,
-        'anthropic.claude-opus-5' => 1_000_000,
-        'anthropic.claude-opus-4-8' => 1_000_000,
-        'anthropic.claude-opus-4-7' => 1_000_000,
-        'anthropic.claude-opus-4-6' => 1_000_000,
-        'anthropic.claude-opus-4-5' => 200_000,
-        'anthropic.claude-opus-4-1' => 200_000,
-        'anthropic.claude-opus-4' => 200_000,
-        'anthropic.claude-3-opus' => 200_000,
-        'anthropic.claude-sonnet-5-5' => 1_000_000,
-        'anthropic.claude-sonnet-5' => 1_000_000,
-        'anthropic.claude-sonnet-4-6' => 1_000_000,
-        'anthropic.claude-sonnet-4-5' => 200_000,
-        'anthropic.claude-sonnet-4' => 200_000,
-        'anthropic.claude-3-7-sonnet' => 200_000,
-        'anthropic.claude-3-5-sonnet' => 200_000,
-        'anthropic.claude-3-sonnet' => 200_000,
-        'anthropic.claude-haiku-4-5' => 200_000,
-        'anthropic.claude-3-5-haiku' => 200_000,
-        'anthropic.claude-3-haiku' => 200_000,
-        'meta.llama3-70b-instruct' => 8_192,
-        'meta.llama3-8b-instruct' => 8_192,
-    ];
-
-    /**
      * The geography prefixes of Bedrock's cross-region inference profiles
      * (`us.anthropic.…`, `global.anthropic.…`). Named rather than "any first
      * segment" so the VENDOR segment (`anthropic.`, `meta.`) is never mistaken
@@ -305,7 +269,7 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
 
     /**
      * This provider answering for $model (roadmap 4.1-1): the window reads
-     * the configured id ({@see CONTEXT_WINDOWS}), so a model switch through
+     * the configured id ({@see \SugarCraft\Code\Context\ModelWindows}), so a model switch through
      * {@see \SugarCraft\Code\Backend\EngineBackend::withModel()} rebinds
      * it here instead of leaving it the old model's.
      */
@@ -493,7 +457,7 @@ final readonly class BedrockProvider implements ProviderInterface, MarksPromptCa
     public function contextWindow(): int
     {
         return $this->contextWindowOverride
-            ?? self::CONTEXT_WINDOWS[self::family($this->defaultModel)] ?? 0;
+            ?? ModelWindows::lookup(self::family($this->defaultModel)) ?? 0;
     }
 
     /**
