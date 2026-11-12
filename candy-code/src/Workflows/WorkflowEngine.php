@@ -403,6 +403,26 @@ final class WorkflowEngine implements WorkflowEngineInterface
      */
     private array $liveRuns = [];
 
+    /**
+     * P1-8: the run IDs of Workflow-tool (model-authored plan) runs this
+     * engine started or resumed — the keys whose record is KEPT at every
+     * terminal (completed, failed, cancelled) instead of withdrawn, carries
+     * `planRun: true`, and records a whole-declaration hash for every settled
+     * stage ({@see planStageHash()}).
+     *
+     * @var array<string, true>
+     */
+    private array $planRuns = [];
+
+    /** P1-8: how many Workflow-tool run records (and their plans and captures) are kept; older ones are pruned. */
+    public const PLAN_RUN_RETENTION = 20;
+
+    /** P1-8: the prefix every Workflow-tool run ID starts with: `plan-<sha8 of the plan YAML>-<n>`. */
+    public const PLAN_RUN_PREFIX = 'plan-';
+
+    /** P1-8: the source name a stored plan is re-parsed under, the tool's own spelling. */
+    public const PLAN_SOURCE = '(Workflow tool plan)';
+
     /** The error a stage the cancel interrupted carries ({@see cancelledRun()}). */
     public const CANCELLED_STAGE_ERROR = 'cancelled with Esc Esc while it ran; its agents were stopped';
 
@@ -1244,8 +1264,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $this->writePauseFile($interruptId, $cancelled, $loadPath, true);
         } elseif ($loadPath !== null) {
             // O1: a cancelled run with no pause standing leaves no file
-            // today; the resilience record must not either.
-            $this->withdrawPauseRecord($interruptId);
+            // today; the resilience record must not either (P1-8: a plan
+            // run's is kept, marked cancelled).
+            $this->settleRecord($interruptId, $cancelled, $loadPath);
         }
 
         return $cancelled;
@@ -1327,6 +1348,344 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $cancellation,
             fn (): WorkflowResult => $this->runFromWorkflow($workflow, $context, 0, null, interruptible: false),
         ));
+    }
+
+    /**
+     * P1-8: run a Workflow-tool (model-authored) plan AS A RESUMABLE RUN.
+     *
+     * Everything {@see runWorkflow()} does, plus the record a registry run
+     * keeps: the run gets the ID `plan-<sha8 of $planYaml>-<n>` (n = 1, 2, …
+     * — the first number no record or stored plan under that digest has
+     * claimed yet, claimed by exclusive create so two concurrent runs of the
+     * same plan never share one), the plan YAML and the seed context are
+     * stored beside the record (`<runId>.plan`, JSON, 0600) so
+     * {@see resume()} — `/workflow resume <runId>` — can re-read it, and the
+     * crash-safe per-stage record is written under `.running/` exactly as a
+     * registry run's is. Unlike a registry run's, the record is KEPT at every
+     * terminal, stamped completed/failed/cancelled/paused, so an edited plan
+     * can resume a finished run ({@see resumePlan()}). Only the newest
+     * {@see PLAN_RUN_RETENTION} plan runs are kept: older records, plans and
+     * capture directories are pruned when a new plan run starts.
+     *
+     * No SIGINT/SIGTERM handlers, for the reason {@see runWorkflow()} gives.
+     *
+     * @param array<string, mixed> $context
+     * @throws \InvalidArgumentException When a context key is reserved, or $budgetTokens is below 1.
+     */
+    public function runPlan(Workflow $workflow, string $planYaml, array $context = [], ?CancellationToken $cancellation = null, ?int $budgetTokens = null): WorkflowResult
+    {
+        self::refuseReservedContextKeys($context);
+        if ($budgetTokens !== null && $budgetTokens < 1) {
+            throw new \InvalidArgumentException("a workflow token budget must be at least 1, got {$budgetTokens}");
+        }
+
+        $runId = $this->claimPlanRunId($planYaml, $context);
+        $this->prunePlanRuns($runId);
+
+        return $this->underBudget($budgetTokens, fn (): WorkflowResult => $this->runPlanFrom($runId, $workflow, $context, 0, [], $cancellation));
+    }
+
+    /**
+     * P1-8: resume Workflow-tool run $runId with $workflow — the plan as it
+     * stands now, possibly edited; null re-reads the stored plan, which is
+     * what `/workflow resume <runId>` does.
+     *
+     * THE LONGEST-UNCHANGED-PREFIX RULE. Walking the plan's stages in order
+     * against the record's settled rows (successes and `when:` skips, up to
+     * the first failure), stage i is CARRIED — its recorded row, output and
+     * context reused, nothing dispatched, no spend — while it has the same
+     * name as row i and the same whole-declaration hash ({@see
+     * planStageHash()}). The first stage that differs, was never settled, or
+     * failed, and EVERY stage after it, run live, even a later one whose
+     * declaration did not change: its inputs are the changed stage's
+     * outputs, so its recorded answer can no longer be trusted. A context
+     * that differs from the one the run was started (or last resumed) with
+     * carries nothing at all — the declaration hash cannot see what a
+     * `{{key}}` will render to. Null $context reuses the stored one.
+     *
+     * The run keeps its ID; its record and stored plan are rewritten. The
+     * result's totals count only THIS call's spend (carried stages cost
+     * nothing), and so does a token budget; {@see WorkflowResult::$stagesCarried}
+     * says how many leading stages were carried.
+     *
+     * @param ?array<string, mixed> $context
+     * @throws WorkflowNotRunningException When $runId names no Workflow-tool run (unknown, or a saved workflow's
+     *                                      run), it has no stored plan, or its writer is live in another process.
+     * @throws WorkflowLoadException When the stored plan no longer parses.
+     * @throws \InvalidArgumentException When a context key is reserved, or $budgetTokens is below 1.
+     */
+    public function resumePlan(string $runId, ?Workflow $workflow = null, ?string $planYaml = null, ?array $context = null, ?CancellationToken $cancellation = null, ?int $budgetTokens = null): WorkflowResult
+    {
+        if ($budgetTokens !== null && $budgetTokens < 1) {
+            throw new \InvalidArgumentException("a workflow token budget must be at least 1, got {$budgetTokens}");
+        }
+        if (!str_starts_with($runId, self::PLAN_RUN_PREFIX) || str_contains($runId, '/') || str_contains($runId, '..') || str_contains($runId, "\0")) {
+            throw new WorkflowNotRunningException("'{$runId}' is not a Workflow-tool run ID (they read plan-<8 hex>-<n>); nothing was dispatched");
+        }
+
+        $planFile = $this->planFilePath($runId);
+        $stored = is_file($planFile) ? json_decode((string) @file_get_contents($planFile), true) : null;
+        $recordFile = $this->getPauseFilePath($runId);
+        $data = is_file($recordFile) ? json_decode((string) @file_get_contents($recordFile), true) : null;
+        $data = is_array($data) ? $data : null;
+
+        if ($data !== null && ($data['planRun'] ?? null) !== true) {
+            throw new WorkflowNotRunningException("'{$runId}' is a saved workflow's run, not a Workflow-tool run; resume it with /workflow resume. Nothing was dispatched");
+        }
+        if (!is_array($stored) || !is_string($stored['plan'] ?? null)) {
+            throw new WorkflowNotRunningException("No Workflow-tool run found with ID '{$runId}' (no stored plan under " . \dirname($planFile) . '); nothing was dispatched');
+        }
+        if ($data !== null && self::recordNeedsLivenessJudgement($data) && !self::crashRecordIsOrphaned($data, $recordFile)) {
+            throw new WorkflowNotRunningException(
+                "Workflow '{$runId}' is live in another process (pid " . (int) ($data['pid'] ?? 0)
+                . "), so its record cannot be resumed here; nothing was dispatched"
+            );
+        }
+
+        if ($workflow === null) {
+            $planYaml = $stored['plan'];
+            $workflow = $this->registry->fromYamlString($planYaml, self::PLAN_SOURCE);
+        }
+        $planYaml ??= $stored['plan'];
+        $storedContext = is_array($stored['context'] ?? null) ? $stored['context'] : [];
+        $context ??= $storedContext;
+        self::refuseReservedContextKeys($context);
+
+        $sameContext = self::canonicalJson($context) === self::canonicalJson($storedContext);
+        [$carry, $prior] = $data === null || !$sameContext ? [0, []] : $this->planPrefix($workflow, $data);
+        $runContext = $carry > 0
+            ? [...self::withSanitizedResults(is_array($data['context'] ?? null) ? $data['context'] : []), ...$context]
+            : $context;
+
+        $this->storePlan($runId, $planYaml, $context);
+        $this->planRuns[$runId] = true;
+
+        return $this->underBudget(
+            $budgetTokens,
+            fn (): WorkflowResult => $this->runPlanFrom($runId, $workflow, $runContext, $carry, $prior, $cancellation),
+        )->withStagesCarried($carry);
+    }
+
+    /**
+     * P1-8: the shared body of {@see runPlan()} and {@see resumePlan()}.
+     *
+     * @param array<string, mixed> $context
+     * @param array<string, mixed> $prior
+     */
+    private function runPlanFrom(string $runId, Workflow $workflow, array $context, int $carry, array $prior, ?CancellationToken $cancellation = null): WorkflowResult
+    {
+        $this->planRuns[$runId] = true;
+        $pauseRequested = false;
+        // A full closure for the by-reference out parameter (see resume()).
+        $run = function () use ($runId, $workflow, $context, $carry, $prior, &$pauseRequested): WorkflowResult {
+            return $this->runFromWorkflow($workflow, $context, $carry, $runId, $runId, $runId, $prior, $pauseRequested, interruptible: false);
+        };
+        $result = $this->underCancellation($cancellation, $run);
+        $this->rememberResult($runId, $result, $runId);
+
+        return $result;
+    }
+
+    /**
+     * P1-8: how many leading stages of $workflow the record $data can carry
+     * (the prefix rule — see {@see resumePlan()}), and the seed the stage loop
+     * resumes from: the carried rows with their hashes, waves and joins, and
+     * zero spend (a carried stage costs nothing this call).
+     *
+     * @param array<string, mixed> $data the decoded record
+     * @return array{0: int, 1: array<string, mixed>}
+     */
+    private function planPrefix(Workflow $workflow, array $data): array
+    {
+        $rows = is_array($data['stageResults'] ?? null) ? array_values($data['stageResults']) : [];
+        $hashes = is_array($data['planStageHashes'] ?? null) ? $data['planStageHashes'] : [];
+
+        $carried = [];
+        foreach (array_values($workflow->stages) as $i => $stage) {
+            $row = is_array($rows[$i] ?? null) ? $this->deserializeStageResult($rows[$i]) : null;
+            $name = is_array($stage) ? (string) ($stage['name'] ?? '') : '';
+            if ($row === null
+                || $row->stageName !== $name
+                || (!$row->isSuccess() && $row->status !== WorkflowStatus::Skipped)
+                || !is_string($hashes[$name] ?? null)
+                || !hash_equals($hashes[$name], self::planStageHash($stage))
+            ) {
+                break;
+            }
+            $carried[] = $row;
+        }
+
+        if ($carried === []) {
+            return [0, []];
+        }
+
+        $names = array_flip(array_map(static fn (StageResult $row): string => $row->stageName, $carried));
+        $keep = static fn (mixed $map): array => is_array($map) ? array_intersect_key($map, $names) : [];
+
+        return [count($carried), [
+            'stageResults' => $carried,
+            'totalTokens' => 0,
+            'totalCost' => 0.0,
+            'startedAt' => new \DateTimeImmutable(),
+            'stageInputHashes' => $keep($data['stageInputHashes'] ?? null),
+            'planStageHashes' => $keep($hashes),
+            // A re-run stage re-expands its fan-out; only carried stages
+            // keep their materialised lists.
+            'dynamicWaves' => $keep($data['dynamicWaves'] ?? null),
+            'inputJoins' => $keep($data['inputJoins'] ?? null),
+            'agentsDispatched' => 0,
+            'recordedResults' => [],
+            'totalsCountRecordedRows' => true,
+        ]];
+    }
+
+    /**
+     * P1-8: the identity a plan resume compares — the WHOLE stage
+     * declaration (tasks with every key, `when`, `loop`, `from`, `capture`,
+     * …), stricter than the `cache:` door's {@see stageInputHash()} because a
+     * plan's author edits any of it between calls. `announce` and `cache`
+     * are presentation and opt-in switches, never identity. A declaration
+     * that cannot be encoded hashes to '' — never equal, so never carried.
+     *
+     * @param array<string, mixed>|mixed $stage
+     */
+    private static function planStageHash(mixed $stage): string
+    {
+        if (!is_array($stage)) {
+            return '';
+        }
+        unset($stage['announce'], $stage['cache']);
+
+        try {
+            return hash('sha256', json_encode($stage, JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR));
+        } catch (\JsonException) {
+            return '';
+        }
+    }
+
+    /** P1-8: a JSON value with every object's keys sorted, so key order never reads as a change. */
+    private static function canonicalJson(mixed $value): string
+    {
+        $sort = static function (mixed $v) use (&$sort): mixed {
+            if (!is_array($v)) {
+                return $v;
+            }
+            if (!array_is_list($v)) {
+                ksort($v);
+            }
+
+            return array_map($sort, $v);
+        };
+
+        return (string) json_encode($sort($value), JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION);
+    }
+
+    /** P1-8: where a plan run's stored plan lives — beside its record. */
+    private function planFilePath(string $runId): string
+    {
+        return \dirname($this->getPauseFilePath($runId)) . '/' . $runId . '.plan';
+    }
+
+    /**
+     * P1-8: claim the next free `plan-<sha8>-<n>` for $planYaml by creating
+     * its stored-plan file exclusively, then fill it.
+     *
+     * @param array<string, mixed> $context
+     */
+    private function claimPlanRunId(string $planYaml, array $context): string
+    {
+        $digest = substr(hash('sha256', $planYaml), 0, 8);
+        $directory = \dirname($this->getPauseFilePath(self::PLAN_RUN_PREFIX . $digest . '-1'));
+        PrivateDir::ensure($directory, 'workflow run records');
+
+        for ($n = 1; ; $n++) {
+            $runId = self::PLAN_RUN_PREFIX . $digest . '-' . $n;
+            if (is_file($this->getPauseFilePath($runId))) {
+                continue;
+            }
+            $handle = @fopen($this->planFilePath($runId), 'x');
+            if ($handle === false) {
+                if ($n > 100000) {
+                    throw new \RuntimeException("could not claim a run ID for this plan under {$directory}");
+                }
+                continue;
+            }
+            fclose($handle);
+            $this->storePlan($runId, $planYaml, $context);
+
+            return $runId;
+        }
+    }
+
+    /**
+     * P1-8: (re)write a plan run's stored plan and seed context — what a
+     * TUI resume re-reads and what the next resume's context is compared to.
+     *
+     * @param array<string, mixed> $context
+     */
+    private function storePlan(string $runId, string $planYaml, array $context): void
+    {
+        AtomicJsonFile::new($this->planFilePath($runId))
+            ->withPermissions(0600)
+            ->write([
+                'runId' => $runId,
+                'plan' => $planYaml,
+                'context' => $context,
+                'storedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+            ]);
+    }
+
+    /**
+     * P1-8: keep the newest {@see PLAN_RUN_RETENTION} plan runs (by their
+     * stored plan's mtime, which every start and resume refreshes); an older
+     * run's record, stored plan and capture directory go. A run whose writer
+     * is still live in another process is never pruned, nor is $current.
+     */
+    private function prunePlanRuns(string $current): void
+    {
+        $directory = \dirname($this->planFilePath($current));
+        $plans = glob($directory . '/' . self::PLAN_RUN_PREFIX . '*.plan') ?: [];
+        if (count($plans) <= self::PLAN_RUN_RETENTION) {
+            return;
+        }
+
+        $ages = [];
+        foreach ($plans as $plan) {
+            $ages[$plan] = (int) @filemtime($plan);
+        }
+        uksort($ages, static fn (string $a, string $b): int => [$ages[$b], $b] <=> [$ages[$a], $a]);
+
+        foreach (array_slice(array_keys($ages), self::PLAN_RUN_RETENTION) as $plan) {
+            $runId = basename($plan, '.plan');
+            if ($runId === $current) {
+                continue;
+            }
+            $record = $directory . '/' . $runId . '.json';
+            $data = is_file($record) ? json_decode((string) @file_get_contents($record), true) : null;
+            if (is_array($data) && self::recordNeedsLivenessJudgement($data) && !self::crashRecordIsOrphaned($data, $record)) {
+                continue;
+            }
+            @unlink($record);
+            @unlink($plan);
+            self::removeCaptureDir($directory . '/' . $runId . '.stages');
+        }
+    }
+
+    private static function removeCaptureDir(string $directory): void
+    {
+        if (!is_dir($directory) || is_link($directory)) {
+            return;
+        }
+        foreach (scandir($directory) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $directory . '/' . $entry;
+            if (is_file($path) || is_link($path)) {
+                @unlink($path);
+            }
+        }
+        @rmdir($directory);
     }
 
     /**
@@ -1487,6 +1846,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $data = json_decode((string) file_get_contents($pauseFile), true);
         $data = is_array($data) ? $data : [];
+
+        // P1-8: a Workflow-tool run has no registry name — it resumes from
+        // the plan stored beside its record, under the prefix rule, and its
+        // record is kept rather than consumed.
+        if (($data['planRun'] ?? null) === true) {
+            return $this->resumePlan(basename($pauseFile, '.json'), cancellation: $cancellation, budgetTokens: $budgetTokens);
+        }
 
         $workflowPath = $data['workflowPath'] ?? null;
         if (!is_string($workflowPath) || $workflowPath === '') {
@@ -2029,7 +2395,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * process). Purely additive: a reader that ignores the keys sees the old
      * file.
      */
-    private function writePauseFile(string $key, WorkflowResult $result, ?string $loadPath, bool $clean): void
+    private function writePauseFile(string $key, WorkflowResult $result, ?string $loadPath, bool $clean, ?WorkflowStatus $recordStatus = null): void
     {
         $completed = self::completedStages($result);
 
@@ -2042,7 +2408,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // after a resume unloadable, since resume()'s identifier is an ID.
             'workflowId' => $result->workflowId,
             'workflowPath' => $loadPath ?? $key,
-            'status' => WorkflowStatus::Paused->value,
+            // P1-8: a Workflow-tool run's record outlives its terminal and
+            // says how it ended; every other writer records a pause.
+            'status' => ($recordStatus ?? WorkflowStatus::Paused)->value,
             'stagesCompleted' => count($completed),
             'context' => $result->context,
             'stageResults' => array_map(
@@ -2069,6 +2437,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
         if ($clean) {
             $data['pausedCleanly'] = true;
+        }
+        // P1-8: the marker resume() branches on — a plan run is re-read from
+        // its stored plan, never from the registry.
+        if (isset($this->planRuns[$key])) {
+            $data['planRun'] = true;
         }
 
         // C13 substrate, purely additive: the identity hashes of every stage
@@ -2097,6 +2470,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($joins !== []) {
             $data['inputJoins'] = $joins;
         }
+        // P1-8: a plan run's whole-declaration hashes, the resume prefix rule's
+        // evidence ({@see resumePlan()}).
+        $planHashes = $slotToken === null ? [] : ($this->liveRuns[$slotToken]['planHashes'] ?? []);
+        if ($planHashes !== []) {
+            $data['planStageHashes'] = $planHashes;
+        }
         // P0-3: the run-wide dispatch count, so a resume keeps counting
         // against config.maxAgents instead of starting a fresh allowance.
         // Only a LIVE run's count is true; a run with none omits the key.
@@ -2122,6 +2501,29 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * file is success: an explicit resume() may have consumed it in the
      * meantime, and the run's remembered result then carries the truth.
      */
+    /**
+     * P1-8: a clean terminal's record handling — withdrawn for a registry
+     * run (O1), KEPT for a Workflow-tool plan run, rewritten as a clean record
+     * stamped with how the run ended, so `/workflow status <runId>` reads the
+     * truth and a resume with an edited plan has the settled prefix to carry.
+     * Best-effort for the same reason the O1 refresh is: a record write that
+     * fails must not turn a finished run into a crash.
+     */
+    private function settleRecord(string $key, WorkflowResult $result, ?string $loadPath): void
+    {
+        if (!isset($this->planRuns[$key])) {
+            $this->withdrawPauseRecord($key);
+
+            return;
+        }
+
+        try {
+            $this->writePauseFile($key, $result, $loadPath, true, $result->status);
+        } catch (\Throwable) {
+            // Ignored: the run's result is still returned whole.
+        }
+    }
+
     private function withdrawPauseRecord(string $key): void
     {
         $pauseFile = $this->getPauseFilePath($key);
@@ -2498,6 +2900,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // C9L: seed so a RE-pause of this resumed run preserves the
                 // first incarnation's join rows (lineage law, see refuse()).
                 'inputJoins' => $prior['inputJoins'] ?? [],
+                // P1-8: a plan run's carried whole-declaration hashes.
+                'planHashes' => $prior['planStageHashes'] ?? [],
             ];
 
             // M-11 (cc-fix-1111): one run, one signal register; reset at the
@@ -2553,6 +2957,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $skipped = $this->skippedWhenRow($stage, $context, $stageStartedAt);
                 if ($skipped !== null) {
                     $stageResults[] = $skipped;
+                    // P1-8: a skip is a settled fact a plan resume may carry.
+                    if (isset($this->planRuns[$interruptId])) {
+                        $this->liveRuns[$liveToken]['planHashes'][$skipped->stageName] = self::planStageHash($stage);
+                    }
                     // C6 adjudication: a skipped stage never reached a
                     // dispatch, so it raises ONLY StageComplete — status
                     // carries the distinction — and no StageStarted. Round
@@ -2807,6 +3215,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // (incremental, explicit, signal) carries the same map.
                 if ($stageResult->isSuccess()) {
                     $this->liveRuns[$liveToken]['inputHashes'][$stageResult->stageName] = self::stageInputHash($stage, $stageType);
+                    if (isset($this->planRuns[$interruptId])) {
+                        $this->liveRuns[$liveToken]['planHashes'][$stageResult->stageName] = self::planStageHash($stage);
+                    }
                     $joinRows = $this->stageJoinDeclarations($stage, $stageType);
                     if ($joinRows !== []) {
                         $this->liveRuns[$liveToken]['inputJoins'][$stageResult->stageName] = $joinRows;
@@ -2878,7 +3289,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                         // either — status() reads a file BEFORE the
                         // remembered result, so a leftover would report the
                         // Failed run as Paused with nothing new to resume.
-                        $this->withdrawPauseRecord($interruptId);
+                        // P1-8: a plan run keeps it, marked failed.
+                        $this->settleRecord($interruptId, $failed, $loadPath);
                     }
 
                     return $failed;
@@ -2891,14 +3303,17 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // resume and stages missing from it. A clean completion likewise
             // withdraws the O1 resilience record (3); an interrupted one keeps
             // it for resume().
+            $completed = $snapshot(WorkflowStatus::Completed);
             if ($this->liveRuns[$liveToken]['pauseRequested']) {
                 $pauseRequested = true;
-                $this->withdrawPauseRecord($interruptId);
+                $this->settleRecord($interruptId, $completed, $loadPath);
             } elseif ($loadPath !== null) {
-                $this->withdrawPauseRecord($interruptId);
+                // P1-8: a plan run keeps its record, marked completed, so
+                // an edited plan can resume it.
+                $this->settleRecord($interruptId, $completed, $loadPath);
             }
 
-            return $snapshot(WorkflowStatus::Completed);
+            return $completed;
         } finally {
             unset($this->liveRuns[$liveToken]);
 

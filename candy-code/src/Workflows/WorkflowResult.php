@@ -24,6 +24,8 @@ final readonly class WorkflowResult
      * @param list<string>      $announcements P2-2: the run's announcements in the order they were made — stage
      *                                         `announce:` lines and the engine's mandatory notices (from.max truncation,
      *                                         minSuccess casualties, budget stops, the agent ceiling).
+     * @param int               $stagesCarried P1-8: how many leading stages a Workflow-tool resume carried from the
+     *                                         run's record without dispatching (0 for every other run).
      */
     public function __construct(
         public string                $workflowId,
@@ -35,7 +37,25 @@ final readonly class WorkflowResult
         public \DateTimeImmutable    $startedAt = new \DateTimeImmutable(),
         public ?\DateTimeImmutable   $completedAt = null,
         public array                 $announcements = [],
+        public int                   $stagesCarried = 0,
     ) {}
+
+    /** P1-8: this result with $count leading stages marked as carried from a record. */
+    public function withStagesCarried(int $count): self
+    {
+        return new self(
+            $this->workflowId,
+            $this->status,
+            $this->stageResults,
+            $this->context,
+            $this->totalTokens,
+            $this->totalCost,
+            $this->startedAt,
+            $this->completedAt,
+            $this->announcements,
+            max(0, $count),
+        );
+    }
 
     /**
      * Whether the workflow completed successfully (terminal status is Completed).
