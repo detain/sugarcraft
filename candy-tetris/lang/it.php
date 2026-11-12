@@ -72,5 +72,6 @@ Uso: candy-tetris [opzioni]
   -v, --vs   Modalità contro il computer
   -h, --help Mostra questo aiuto
   --version  Stampa la versione
-'
+',
+    'cli.no_tty' => 'candy-tetris richiede un terminale interattivo: avvialo da un TTY (non da una pipe o un reindirizzamento) con TERM diverso da dumb.',
 ];

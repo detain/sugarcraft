@@ -65,5 +65,6 @@ quitter',
 
     // Launch screen
     'mode.unknown' => 'candy-tetris : mode inconnu "{flag}"',
-    'help_text'    => "candy-tetris - clone de Tetris\n\nUtilisation : candy-tetris [options]\n  (aucun)    Démarrer une partie solo\n  -v, --vs   Mode contre l'ordinateur\n  -h, --help Afficher cette aide\n  --version  Afficher la version\n"
+    'help_text'    => "candy-tetris - clone de Tetris\n\nUtilisation : candy-tetris [options]\n  (aucun)    Démarrer une partie solo\n  -v, --vs   Mode contre l'ordinateur\n  -h, --help Afficher cette aide\n  --version  Afficher la version\n",
+    'cli.no_tty' => 'candy-tetris a besoin d\'un terminal interactif : lancez-le depuis un TTY (pas un tube ni une redirection) avec un TERM autre que dumb.',
 ];

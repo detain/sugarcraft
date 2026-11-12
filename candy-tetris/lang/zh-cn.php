@@ -72,5 +72,6 @@ return [
   -v, --vs   电脑对战模式
   -h, --help 显示此帮助
   --version  显示版本
-'
+',
+    'cli.no_tty' => 'candy-tetris 需要交互式终端：请在 TTY 中运行（不要通过管道或重定向），并将 TERM 设为 dumb 以外的值。',
 ];

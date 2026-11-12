@@ -72,5 +72,6 @@ Gebruik: candy-tetris [opties]
   -v, --vs   Modus tegen de computer
   -h, --help Toon deze hulp
   --version  Toon de versie
-'
+',
+    'cli.no_tty' => 'candy-tetris heeft een interactieve terminal nodig: start het vanuit een TTY (geen pipe of omleiding) met een TERM anders dan dumb.',
 ];

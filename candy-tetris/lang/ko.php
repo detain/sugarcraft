@@ -72,5 +72,6 @@ return [
   -v, --vs   컴퓨터 대전 모드
   -h, --help 이 도움말 표시
   --version  버전 출력
-'
+',
+    'cli.no_tty' => 'candy-tetris는 대화형 터미널이 필요합니다. 파이프나 리디렉션이 아닌 TTY에서, TERM을 dumb 이외의 값으로 설정해 실행하세요.',
 ];

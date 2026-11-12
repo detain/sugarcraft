@@ -72,5 +72,6 @@ return [
   -v, --vs   コンピューター対戦
   -h, --help このヘルプを表示
   --version  バージョンを表示
-'
+',
+    'cli.no_tty' => 'candy-tetris には対話型ターミナルが必要です。パイプやリダイレクトではなく TTY から、TERM を dumb 以外にして起動してください。',
 ];
