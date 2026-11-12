@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Context;
 use DateTimeImmutable;
 use SugarCraft\Code\Providers\ModelMetadata;
 use SugarCraft\Code\Tools\Concerns\CapturesProcessOutput;
+use SugarCraft\Code\Support\WindowsShell;
 use SugarCraft\Code\Workspace\GitRunner;
 use SugarCraft\Code\Tools\Concerns\TruncatesOutput;
 
@@ -1612,6 +1613,12 @@ final readonly class EnvironmentBlock implements PromptSection
 
         if (!\function_exists('shell_exec')) {
             return 'unavailable (shell_exec is disabled on this build)';
+        }
+
+        // shell_exec is cmd.exe on Windows, which cannot read the POSIX line
+        // below; with no bounded spawn and no shell to hand, the field says so.
+        if (WindowsShell::isWindows()) {
+            return 'unavailable (proc_open is disabled on this build)';
         }
 
         // The runner's own command line, so even this unbounded fallback reads

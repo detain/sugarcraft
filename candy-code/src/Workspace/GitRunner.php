@@ -188,8 +188,8 @@ final class GitRunner
     /**
      * Run `git <args>` with $input on its stdin — `update-index --stdin`,
      * `update-ref --stdin`. The input goes through a private temp file and a
-     * shell redirect, because the bounded spawn closes the child's stdin pipe
-     * at once by design.
+     * file descriptor for the child's stdin, because the bounded spawn closes
+     * the stdin pipe at once by design.
      *
      * @return array{ok: bool, stdout: string, stderr: string, exitCode: int, timedOut: bool}
      */
@@ -244,20 +244,31 @@ final class GitRunner
             ];
         }
 
-        return $this->runCaptured($this->commandLine(null, $args), $this->cwd, $maxBytes, $timeout, self::ENV);
+        return $this->spawn(null, $args, $maxBytes, $timeout);
     }
 
     /**
-     * The `sh` command line {@see run()} and {@see capture()} spawn, for a
-     * caller with no bounded spawn left to use — {@see \SugarCraft\Code\Context\EnvironmentBlock}'s
+     * The POSIX `sh` command line {@see capture()} would spawn, for the one
+     * caller that has no bounded spawn left: {@see \SugarCraft\Code\Context\EnvironmentBlock}'s
      * branch read on a build with `proc_open` disabled hands it to
-     * `shell_exec` — so even that fallback reads the repository under the
-     * same scrubbed environment and options. It does not change directory:
-     * such a caller passes `-C <dir>` in $args.
+     * `shell_exec`, which takes no environment argument, so the scrub and the
+     * `GIT_*` pins have to ride in the string. It is POSIX-only by nature —
+     * shell_exec on Windows is cmd.exe — so a Windows caller must not use it.
+     * It does not change directory: such a caller passes `-C <dir>` in $args.
      */
     public function shellCommand(string ...$args): string
     {
-        return $this->commandLine(null, $args);
+        $command = $this->inheritGitEnv ? '' : 'unset ' . implode(' ', self::SCRUBBED_GIT_ENV) . ' 2>/dev/null; ';
+        foreach ($this->spawnEnv() as $name => $value) {
+            $command .= $name . '=' . escapeshellarg($value) . ' ';
+        }
+
+        $command .= 'exec git';
+        foreach (\array_slice($this->argv($args), 1) as $word) {
+            $command .= ' ' . escapeshellarg($word);
+        }
+
+        return $command;
     }
 
     /** This call's bound in seconds, or null when the shared deadline is already spent. */
@@ -275,11 +286,38 @@ final class GitRunner
         return $timeout;
     }
 
-    /** @param list<string> $args */
-    private function commandLine(?string $stdinFile, array $args): string
+    /**
+     * The git argv, program name first: the global options and the pinned
+     * repository, then the caller's words. Never a shell string — proc_open's
+     * array form hands each word to the OS unexpanded on every platform.
+     *
+     * @param list<string> $args
+     * @return non-empty-list<string>
+     */
+    private function argv(array $args): array
     {
-        $command = $this->inheritGitEnv ? '' : 'unset ' . implode(' ', self::SCRUBBED_GIT_ENV) . ' 2>/dev/null; ';
-        $assign = [
+        $words = [...self::GLOBAL_OPTIONS];
+        if ($this->gitDir !== null) {
+            $words[] = '--git-dir=' . $this->gitDir;
+        }
+        if ($this->workTree !== null) {
+            $words[] = '--work-tree=' . $this->workTree;
+        }
+
+        return ['git', ...$words, ...$args];
+    }
+
+    /**
+     * The environment the git child gets: the identity and index pins, plus
+     * ENV. The scrub of inherited location variables is a removal, carried
+     * separately (see {@see spawn()}), because proc_open's $env is the whole
+     * environment and a name can only be dropped, not assigned empty.
+     *
+     * @return array<string, string>
+     */
+    private function spawnEnv(): array
+    {
+        $env = [
             'GIT_AUTHOR_NAME' => self::IDENTITY_NAME,
             'GIT_AUTHOR_EMAIL' => self::IDENTITY_EMAIL,
             'GIT_COMMITTER_NAME' => self::IDENTITY_NAME,
@@ -287,28 +325,29 @@ final class GitRunner
             ...self::ENV,
         ];
         if ($this->indexFile !== null) {
-            $assign['GIT_INDEX_FILE'] = $this->indexFile;
-        }
-        foreach ($assign as $name => $value) {
-            $command .= $name . '=' . escapeshellarg($value) . ' ';
+            $env['GIT_INDEX_FILE'] = $this->indexFile;
         }
 
-        $words = self::GLOBAL_OPTIONS;
-        if ($this->gitDir !== null) {
-            $words[] = '--git-dir=' . $this->gitDir;
-        }
-        if ($this->workTree !== null) {
-            $words[] = '--work-tree=' . $this->workTree;
-        }
-        $command .= 'exec git';
-        foreach ([...$words, ...$args] as $word) {
-            $command .= ' ' . escapeshellarg($word);
-        }
-        if ($stdinFile !== null) {
-            $command .= ' < ' . escapeshellarg($stdinFile);
-        }
+        return $env;
+    }
 
-        return $command;
+    /**
+     * @param list<string> $args
+     * @return array{stdout: string, stderr: string, exitCode: int, truncatedBytes: int, stdoutDropped: int, stderrDropped: int, stdoutMidLine: bool, stderrMidLine: bool, timedOut: bool}
+     */
+    private function spawn(?string $stdinFile, array $args, ?int $maxBytes, float $timeout): array
+    {
+        return $this->runCaptured(
+            $this->argv($args),
+            $this->cwd,
+            $maxBytes,
+            $timeout,
+            $this->spawnEnv(),
+            null,
+            null,
+            $stdinFile,
+            $this->inheritGitEnv ? [] : self::SCRUBBED_GIT_ENV,
+        );
     }
 
     /**
@@ -322,7 +361,7 @@ final class GitRunner
             return ['ok' => false, 'stdout' => '', 'stderr' => self::BUDGET_SPENT, 'exitCode' => 124, 'timedOut' => true];
         }
 
-        $captured = $this->runCaptured($this->commandLine($stdinFile, $args), $this->cwd, self::MAX_OUTPUT_BYTES, $timeout, self::ENV);
+        $captured = $this->spawn($stdinFile, $args, self::MAX_OUTPUT_BYTES, $timeout);
         $ok = !$captured['timedOut'] && $captured['exitCode'] === 0 && $captured['truncatedBytes'] === 0;
 
         return [

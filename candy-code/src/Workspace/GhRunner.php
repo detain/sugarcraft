@@ -86,18 +86,23 @@ final class GhRunner
      */
     public function capture(?int $maxBytes, string ...$args): array
     {
-        return $this->runCaptured($this->commandLine($args), $this->cwd, $maxBytes, $this->timeoutSeconds, self::grant());
+        return $this->runCaptured(['gh', ...$args], $this->cwd, $maxBytes, $this->timeoutSeconds, self::grant());
     }
 
     /**
-     * The `sh` command line {@see capture()} spawns: `exec gh` and every
-     * argument word quoted with `escapeshellarg` — the same argv discipline
-     * {@see GitRunner}'s command line keeps, so no word can ever split or
-     * expand, whatever it came from.
+     * The POSIX `sh` line for the same argv, for inspection only: nothing
+     * spawns through it. {@see capture()} hands proc_open the argv itself,
+     * which is what runs on Windows too, where this string would be read by
+     * cmd.exe and is not a command anyone should trust.
      */
     public function shellCommand(string ...$args): string
     {
-        return $this->commandLine($args);
+        $command = 'exec gh';
+        foreach ($args as $word) {
+            $command .= ' ' . escapeshellarg($word);
+        }
+
+        return $command;
     }
 
     /**
@@ -118,17 +123,6 @@ final class GhRunner
         }
 
         return $grant;
-    }
-
-    /** @param list<string> $args */
-    private function commandLine(array $args): string
-    {
-        $command = 'exec gh';
-        foreach ($args as $word) {
-            $command .= ' ' . escapeshellarg($word);
-        }
-
-        return $command;
     }
 
     /**
