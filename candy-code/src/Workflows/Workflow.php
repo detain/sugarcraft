@@ -25,7 +25,7 @@ final readonly class Workflow
      *
      * @var list<string>
      */
-    public const STAGE_TYPES = ['stage', 'parallel', 'pipeline', 'verification'];
+    public const STAGE_TYPES = ['stage', 'parallel', 'pipeline', 'verification', 'map'];
 
     /**
      * P0-3: the run-wide dispatch backstop when `config.maxAgents` is unset.

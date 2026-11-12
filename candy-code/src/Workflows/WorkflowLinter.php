@@ -121,6 +121,11 @@ final class WorkflowLinter
             $stageTokens = self::stageEngineTokens($stage);
             self::checkLoop($type, $stageName, $stage, $findings);
             self::checkDataFanOut($stageName, $stage, $ordinal, $outputs, $findings);
+            if ($type === 'map') {
+                self::checkMapSteps($stageName, $stage, $ordinal, $producers, $outputs, $failedProducers, $seedContext + $stageTokens, $toolNames, $findings);
+
+                continue;
+            }
             foreach (self::tasksOf($type, $stage) as $position => [$slot, $task]) {
                 $engineTokens = $stageTokens + self::taskEngineTokens($type, $stage, $slot, $task, $position);
                 self::checkTask($stageName, $slot, $task, $ordinal, $producers, $outputs, $seedContext + $engineTokens, $toolNames, $findings);
@@ -471,6 +476,14 @@ final class WorkflowLinter
             return;
         }
 
+        if ($type === 'map') {
+            foreach (self::mapSteps($stage) as [$stepName, $pairs]) {
+                $planRows[] = self::planRowCells("{$stageName}/{$stepName}", 'map-step', array_column($pairs, 1), $workflowTimeout);
+            }
+
+            return;
+        }
+
         $planRows[] = self::planRowCells($stageName, $type, self::taskList($stage), $workflowTimeout);
     }
 
@@ -575,6 +588,14 @@ final class WorkflowLinter
             return;
         }
 
+        // P1-2: a map stage records ONE result — its JSON document — under
+        // the stage name; its steps' results are item-scoped.
+        if ($type === 'map') {
+            self::noteProducer($producers, $stageName, $ordinal, $stageName, $findings);
+
+            return;
+        }
+
         if ($type === 'verification') {
             $task = $stage['task'] ?? null;
             $verifier = $stage['verifier'] ?? null;
@@ -667,6 +688,101 @@ final class WorkflowLinter
     }
 
     /**
+     * P1-2: a map stage's steps as [step name, [[slot, task]…]] — a task
+     * step's slot is its name, a verification step's `<step>/task` and
+     * `<step>/verifier`.
+     *
+     * @param array<array-key, mixed> $stage
+     * @return list<array{0: string, 1: list<array{0: string, 1: WorkflowTask}>, 2: array<array-key, mixed>}>
+     */
+    private static function mapSteps(array $stage): array
+    {
+        $steps = [];
+        foreach (is_array($stage['steps'] ?? null) ? $stage['steps'] : [] as $i => $step) {
+            if (!is_array($step)) {
+                continue;
+            }
+            $name = is_string($step['name'] ?? null) && $step['name'] !== '' ? $step['name'] : 'step_' . ($i + 1);
+            $pairs = [];
+            if (($step['type'] ?? '') === 'verification') {
+                foreach (['task', 'verifier'] as $slot) {
+                    if (($step[$slot] ?? null) instanceof WorkflowTask) {
+                        $pairs[] = ["{$name}/{$slot}", $step[$slot]];
+                    }
+                }
+            } else {
+                foreach (self::taskList($step) as $task) {
+                    $pairs[] = [$name, $task];
+                }
+            }
+            $steps[] = [$name, $pairs, $step];
+        }
+
+        return $steps;
+    }
+
+    /**
+     * P1-2 mirror of a map stage's run law, step by step: every step sees
+     * `{{prevResult}}`, the item tokens and — item-scoped — the results and
+     * `.output` of the steps BEFORE it (a verifier also its own task's); a
+     * later step's are a silent miss like a later stage's. A step `when:`
+     * that reads neither an earlier step nor an earlier stage is never
+     * satisfied, so the step always skips.
+     *
+     * @param array<string, int> $producers
+     * @param array<string, int> $outputs
+     * @param array<string, int> $failedProducers
+     * @param array<string, mixed> $seedContext
+     * @param ?list<string> $toolNames
+     */
+    private static function checkMapSteps(string $stageName, array $stage, int $ordinal, array $producers, array $outputs, array $failedProducers, array $seedContext, ?array $toolNames, array &$findings): void
+    {
+        $steps = self::mapSteps($stage);
+        if ($steps === []) {
+            self::add($findings, 'error', $stageName, 'This map stage has no steps; the engine fails it before any item runs.');
+
+            return;
+        }
+
+        $seen = [];
+        foreach ($steps as [$stepName, $pairs, $raw]) {
+            if (isset($seen[$stepName])) {
+                self::add($findings, 'error', "{$stageName}/{$stepName}", "Duplicate map step name \"{$stepName}\"; the item row and {{{$stepName}.results}} can name only one of them.");
+            }
+            $type = $raw['type'] ?? '';
+            if ($type !== 'stage' && $type !== 'verification') {
+                self::add($findings, 'error', "{$stageName}/{$stepName}", "A '" . (is_string($type) ? $type : get_debug_type($type)) . "' map step is refused; a step is a task or a verification sub-stage.");
+            }
+            if (is_array($raw['when'] ?? null)) {
+                foreach (WorkflowBuilder::clauseStages($raw['when']) as $read) {
+                    if (!isset($seen[$read]) && !(isset($outputs[$read]) && $outputs[$read] < $ordinal)) {
+                        self::add($findings, 'warning', "{$stageName}/{$stepName}", "when reads \"{$read}\", which is neither an earlier step of this map nor an earlier stage; the guard is never satisfied and the step always skips.");
+                    }
+                }
+            }
+
+            $stepTokens = ['prevResult' => true];
+            foreach ($pairs as [$slot, $task]) {
+                $tokens = $stepTokens;
+                if ($task->input !== null) {
+                    $tokens['input'] = true;
+                }
+                if (self::isVerifierSlot($slot) && $task->lenses !== null) {
+                    $tokens['lens'] = true;
+                }
+                self::checkTask($stageName, $slot, $task, $ordinal, $producers, $outputs, $seedContext + $tokens, $toolNames, $findings);
+                self::checkFailedRefs($stageName, $task, $ordinal, $failedProducers, $producers, $findings);
+                // Item-scoped: what this slot wrote is visible to the slots
+                // and steps after it, as if produced at this ordinal.
+                $key = $task->name !== null && $task->name !== '' ? $task->name : (str_ends_with($slot, '/verifier') ? $stepName . '_verifier' : $stepName);
+                $producers[$key] = $ordinal;
+            }
+            $outputs[$stepName] = $ordinal;
+            $seen[$stepName] = true;
+        }
+    }
+
+    /**
      * P1-3 mirror of the `minSuccess:` law {@see WorkflowBuilder::minSuccess()}
      * and the YAML loader enforce, for a hand-built stage neither door saw:
      * parallel-only, one of the two normalized spellings, and a count a
@@ -681,8 +797,8 @@ final class WorkflowLinter
         if (!array_key_exists('minSuccess', $stage)) {
             return false;
         }
-        if ($type !== 'parallel' || array_key_exists('uses', $stage)) {
-            self::add($findings, 'error', $stageName, "minSuccess on a '{$type}' stage is never read; only a parallel stage tolerates failures.");
+        if (!in_array($type, WorkflowBuilder::TOLERANT_TYPES, true) || array_key_exists('uses', $stage)) {
+            self::add($findings, 'error', $stageName, "minSuccess on a '{$type}' stage is never read; only a parallel or map stage tolerates failures.");
 
             return false;
         }
@@ -806,7 +922,7 @@ final class WorkflowLinter
             return;
         }
         if (!in_array($type, WorkflowBuilder::LOOPABLE_TYPES, true) || array_key_exists('uses', $stage)) {
-            self::add($findings, 'error', $stageName, "loop on a '{$type}'" . (array_key_exists('uses', $stage) ? ' uses' : '') . ' stage is never honoured; stage, parallel and verification stages loop.');
+            self::add($findings, 'error', $stageName, "loop on a '{$type}'" . (array_key_exists('uses', $stage) ? ' uses' : '') . ' stage is never honoured; stage, parallel, verification and map stages loop.');
 
             return;
         }
@@ -873,10 +989,14 @@ final class WorkflowLinter
     private static function checkFanOutShape(string $type, string $stageName, array $stage, array &$findings): void
     {
         if (!array_key_exists('from', $stage)) {
+            if ($type === 'map') {
+                self::add($findings, 'error', $stageName, 'This map stage has no "from" source; the engine fails it before any item runs.');
+            }
+
             return;
         }
-        if ($type !== 'parallel') {
-            self::add($findings, 'error', $stageName, "\"from\" on a '{$type}' stage fans nothing out; only a parallel stage reads it.");
+        if ($type !== 'parallel' && $type !== 'map') {
+            self::add($findings, 'error', $stageName, "\"from\" on a '{$type}' stage fans nothing out; only a parallel or map stage reads it.");
             return;
         }
         $from = is_array($stage['from']) ? $stage['from'] : [];

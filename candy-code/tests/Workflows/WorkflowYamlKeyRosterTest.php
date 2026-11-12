@@ -439,7 +439,7 @@ final class WorkflowYamlKeyRosterTest extends TestCase
             );
             self::fail('a serial stage carried a fan-out');
         } catch (WorkflowLoadException $error) {
-            self::assertStringContainsString('only a parallel stage can fan out', $error->getMessage());
+            self::assertStringContainsString('only a parallel or map stage can fan out', $error->getMessage());
         }
     }
 
@@ -477,7 +477,7 @@ final class WorkflowYamlKeyRosterTest extends TestCase
         self::assertSame(
             ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks',
                 'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from',
-                'loop', 'minSuccess'],
+                'loop', 'minSuccess', 'steps'],
             $registry->getConstant('YAML_STAGE_KEYS'),
             'the stage-shape vocabulary is one pinned list'
         );

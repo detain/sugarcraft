@@ -73,7 +73,7 @@ final class WorkflowMinSuccessTest extends TestCase
     {
         $fan = "  - name: fan\n    parallel: true\n    agents:\n      - {type: a, prompt: one}\n      - {type: a, prompt: two}\n      - {type: a, prompt: three}\n";
 
-        yield 'a plain stage' => ["  - name: solo\n    prompt: p\n    minSuccess: 1\n", "stage 'solo' carries \"minSuccess\", which only a parallel stage can tolerate failures with"];
+        yield 'a plain stage' => ["  - name: solo\n    prompt: p\n    minSuccess: 1\n", "stage 'solo' carries \"minSuccess\", which only a parallel or map stage can tolerate failures with"];
         yield 'a pipeline' => ["  - name: pipe\n    type: pipeline\n    minSuccess: 1\n    stages:\n      - {prompt: p}\n", "stage 'pipe' carries \"minSuccess\""];
         yield 'a verification' => ["  - name: v\n    type: verification\n    minSuccess: 1\n    task: {prompt: p}\n    verifier: {prompt: q}\n", "stage 'v' carries \"minSuccess\""];
         yield 'a uses stage' => ["  - name: u\n    uses: other\n    minSuccess: 1\n", "stage 'u' carries \"minSuccess\""];
@@ -115,7 +115,7 @@ final class WorkflowMinSuccessTest extends TestCase
         self::assertSame(['count' => 150], $fanOut->stages[0]['minSuccess']);
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage("minSuccess() is parallel-only in v1; the last stage 'solo' is a 'stage' stage");
+        $this->expectExceptionMessage("minSuccess() judges parallel and map stages only; the last stage 'solo' is a 'stage' stage");
         (new WorkflowBuilder())->stage('solo', Tasks::agent('a'))->minSuccess(1);
     }
 

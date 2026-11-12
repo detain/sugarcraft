@@ -314,7 +314,7 @@ final class MultiTaskStageTest extends TestCase
         // formula itself is pinned: chunk meets the workflow width through
         // min(), never max() — a fan-out may narrow concurrency, not widen it.
         $source = (string) file_get_contents((new \ReflectionClass(WorkflowEngine::class))->getFileName());
-        self::assertSame(1, substr_count($source, 'min($width, $chunk)'));
+        self::assertSame(2, substr_count($source, 'min($width, $chunk)'), 'the parallel and the map (P1-2) width');
         self::assertSame(0, substr_count($source, 'max($width, $chunk)'));
         // A recorded chunk wins on replay, not the re-read YAML: the width
         // of a materialised wave was decided when it expanded. (A record

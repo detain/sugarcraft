@@ -40,10 +40,10 @@ final class WorkflowStageTypeParityTest extends TestCase
         $this->removeParityDirectory($this->tempDir);
     }
 
-    public function testTheSharedListCarriesExactlyTheFourStageShapes(): void
+    public function testTheSharedListCarriesExactlyTheFiveStageShapes(): void
     {
         self::assertSame(
-            ['stage', 'parallel', 'pipeline', 'verification'],
+            ['stage', 'parallel', 'pipeline', 'verification', 'map'],
             Workflow::STAGE_TYPES,
             'the order spells the engine refusal sentence; adding a shape means adding it here, nowhere else'
         );
@@ -83,7 +83,7 @@ final class WorkflowStageTypeParityTest extends TestCase
             self::fail('the walker must refuse an unsupported stage type');
         } catch (UnsupportedStageTypeException $error) {
             self::assertSame(
-                "Stage type 'wat' is not supported. Only 'stage', 'parallel', 'pipeline', and 'verification' are implemented.",
+                "Stage type 'wat' is not supported. Only 'stage', 'parallel', 'pipeline', 'verification', and 'map' are implemented.",
                 $error->getMessage()
             );
         }

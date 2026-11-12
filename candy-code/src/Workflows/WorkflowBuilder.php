@@ -25,8 +25,11 @@ namespace SugarCraft\Code\Workflows;
  */
 final class WorkflowBuilder
 {
-    /** The stage shapes a `loop:` may repeat (P1-5; `type: map` joins later). */
-    public const LOOPABLE_TYPES = ['stage', 'parallel', 'verification'];
+    /** The stage shapes a `loop:` may repeat (P1-5; P1-2 adds `map`). */
+    public const LOOPABLE_TYPES = ['stage', 'parallel', 'verification', 'map'];
+
+    /** P1-2: the stage shapes `minSuccess:` judges (agents of a parallel stage, items of a map). */
+    public const TOLERANT_TYPES = ['parallel', 'map'];
 
     /** The closed `loop:` roster. */
     public const LOOP_KEYS = ['max', 'until', 'accumulate'];
@@ -352,6 +355,208 @@ final class WorkflowBuilder
     }
 
     /**
+     * P1-2: add a `type: map` stage — every item of the `from:` source flows
+     * through `$steps` INDEPENDENTLY, with no barrier between steps (item A
+     * can be in step 3 while item B is in step 1); up to the stage width of
+     * item chains run at once. See {@see WorkflowEngine} `executeMapStage()`
+     * for the full run law and the stage's JSON output.
+     *
+     * `$from` is the same spec {@see parallel()} takes — exactly one of
+     * `glob`, `stage` + `pointer`, or `context`, plus optional `key`,
+     * `chunk` and `max` — held to the same shape law.
+     *
+     * `$steps` is a non-empty list, each entry one of:
+     * - a {@see TaskBuilder} — a task step, named by its task `name()`
+     *   (required: it is the step's key in the item's `steps` row and its
+     *   `{{<name>.results}}` handle inside the item);
+     * - {@see mapStep()}`($task, $when)` — the same, with a per-item guard;
+     * - {@see mapVerification()}`($name, $task, $verifier, $when)` — a
+     *   verification sub-stage (its verifier may convene a vote panel).
+     * Step names are unique within the map. A step's `when:` is a C2 clause
+     * whose leaves may spell `step: <name>` (a synonym of `stage:`); one that
+     * names this step or a LATER step is refused, since it has not run for
+     * the item yet.
+     *
+     * @param array<string, mixed> $from
+     * @param list<TaskBuilder|array<string, mixed>> $steps
+     *
+     * @throws \InvalidArgumentException naming the malformed spec or step.
+     */
+    public function map(string $name, array $from, array $steps, bool $capture = false, bool $cache = false): self
+    {
+        if ($from === []) {
+            throw new \InvalidArgumentException("Map stage '{$name}' needs a from: source (glob, stage + pointer, or context)");
+        }
+        $from = self::normalizedFrom($name, $from);
+
+        if ($steps === [] || !array_is_list($steps)) {
+            throw new \InvalidArgumentException("Map stage '{$name}' needs a non-empty list of steps");
+        }
+
+        $built = [];
+        $names = [];
+        foreach ($steps as $i => $step) {
+            $at = "Map stage '{$name}' step #" . ($i + 1);
+            if ($step instanceof TaskBuilder) {
+                $step = self::mapStep($step);
+            }
+            if (!is_array($step) || !isset($step['type'])) {
+                throw new \InvalidArgumentException("{$at} must be a TaskBuilder, mapStep() or mapVerification(), got " . get_debug_type($step));
+            }
+            if ($step['type'] === 'stage') {
+                $task = $step['task'] ?? null;
+                if (!$task instanceof TaskBuilder) {
+                    throw new \InvalidArgumentException("{$at} carries no task");
+                }
+                $workflowTask = $task->build();
+                $stepName = $workflowTask->name ?? '';
+                $node = ['name' => $stepName, 'type' => 'stage', 'tasks' => [$workflowTask]];
+            } elseif ($step['type'] === 'verification') {
+                $stepName = (string) ($step['name'] ?? '');
+                $node = ['name' => $stepName, 'type' => 'verification', 'task' => $step['task']->build(), 'verifier' => $step['verifier']->build()];
+            } else {
+                throw new \InvalidArgumentException(
+                    "{$at} is a '{$step['type']}' step; a map step is a task or a verification sub-stage (parallel, map, pipeline and uses steps are refused in v1)"
+                );
+            }
+            if (trim($stepName) === '') {
+                throw new \InvalidArgumentException("{$at} needs a name: it keys the step in each item's row and is read as {{<name>.results}} inside the item");
+            }
+            if (isset($names[$stepName])) {
+                throw new \InvalidArgumentException("{$at} reuses the step name '{$stepName}'; step names must be unique within a map");
+            }
+            if (array_key_exists('when', $step) && $step['when'] !== null) {
+                if (!is_array($step['when'])) {
+                    throw new \InvalidArgumentException("{$at} \"when\" must be a condition map, got " . get_debug_type($step['when']));
+                }
+                $when = StageCondition::parse(self::stepClause($step['when'], $at));
+                foreach (self::clauseStages($when) as $read) {
+                    if (self::laterStepName($steps, $i, $read)) {
+                        throw new \InvalidArgumentException(
+                            "{$at} \"when\" reads step '{$read}', which has not run yet for the item; a step guard reads earlier steps only"
+                        );
+                    }
+                }
+                $node['when'] = $when;
+            }
+            $names[$stepName] = true;
+            $built[] = $node;
+        }
+
+        $this->stages[] = [
+            'name' => $name,
+            'type' => 'map',
+            'from' => $from,
+            'steps' => $built,
+        ]
+            + ($capture === true ? ['capture' => true] : [])
+            + ($cache === true ? ['cache' => true] : []);
+
+        return $this;
+    }
+
+    /**
+     * P1-2: a task step for {@see map()}, optionally guarded per item by a
+     * `when:` clause over the item's earlier steps.
+     *
+     * @param array<string, mixed>|null $when
+     * @return array<string, mixed>
+     */
+    public static function mapStep(TaskBuilder $task, ?array $when = null): array
+    {
+        return ['type' => 'stage', 'task' => $task] + ($when !== null ? ['when' => $when] : []);
+    }
+
+    /**
+     * P1-2: a verification sub-stage step for {@see map()} — `$task` does
+     * the item's work, `$verifier` judges it (votes/lenses/quorum allowed).
+     *
+     * @param array<string, mixed>|null $when
+     * @return array<string, mixed>
+     */
+    public static function mapVerification(string $name, TaskBuilder $task, TaskBuilder $verifier, ?array $when = null): array
+    {
+        return ['type' => 'verification', 'name' => $name, 'task' => $task, 'verifier' => $verifier]
+            + ($when !== null ? ['when' => $when] : []);
+    }
+
+    /**
+     * P1-2: a map step's `when:` with every leaf's `step:` spelled `stage:`
+     * (the condition grammar's own key); a leaf carrying both is refused.
+     *
+     * @param array<array-key, mixed> $clause
+     * @return array<array-key, mixed>
+     */
+    public static function stepClause(array $clause, string $at = 'map step'): array
+    {
+        foreach (['all', 'any'] as $combinator) {
+            if (isset($clause[$combinator]) && is_array($clause[$combinator])) {
+                $clause[$combinator] = array_map(
+                    static fn (mixed $child): mixed => is_array($child) ? self::stepClause($child, $at) : $child,
+                    $clause[$combinator],
+                );
+            }
+        }
+        if (array_key_exists('step', $clause)) {
+            if (array_key_exists('stage', $clause)) {
+                throw new \InvalidArgumentException("{$at} \"when\" leaf carries both \"step\" and \"stage\"; spell one");
+            }
+            $rewritten = [];
+            foreach ($clause as $key => $value) {
+                $rewritten[$key === 'step' ? 'stage' : $key] = $value;
+            }
+            $clause = $rewritten;
+        }
+
+        return $clause;
+    }
+
+    /**
+     * Every stage name a NORMALIZED clause reads.
+     *
+     * @param array<array-key, mixed> $node
+     * @return list<string>
+     */
+    public static function clauseStages(array $node): array
+    {
+        if (is_array($node['conditions'] ?? null)) {
+            $names = [];
+            foreach ($node['conditions'] as $child) {
+                if (is_array($child)) {
+                    $names = [...$names, ...self::clauseStages($child)];
+                }
+            }
+
+            return $names;
+        }
+
+        return is_string($node['stage'] ?? null) ? [$node['stage']] : [];
+    }
+
+    /**
+     * Whether $read names a step declared at or after position $i of the
+     * author's $steps list (TaskBuilder steps are named by their task).
+     *
+     * @param list<mixed> $steps
+     */
+    private static function laterStepName(array $steps, int $i, string $read): bool
+    {
+        foreach (array_slice($steps, $i) as $step) {
+            $name = match (true) {
+                $step instanceof TaskBuilder => $step->build()->name,
+                is_array($step) && ($step['type'] ?? '') === 'verification' => $step['name'] ?? null,
+                is_array($step) && ($step['task'] ?? null) instanceof TaskBuilder => $step['task']->build()->name,
+                default => null,
+            };
+            if ($name === $read) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Set how many agents of a parallel stage run at once (P0-3). Null, the
      * default, leaves it unset: the engine runs
      * {@see Workflow::defaultConcurrency()} of the host's CPUs,
@@ -524,7 +729,7 @@ final class WorkflowBuilder
         $last = $this->stages[$lastKey];
         if (!in_array($last['type'], self::LOOPABLE_TYPES, true)) {
             throw new \InvalidArgumentException(
-                "loop() cannot repeat the last stage '" . $last['name'] . "': a '" . $last['type'] . "' stage does not loop (stage, parallel and verification stages do)"
+                "loop() cannot repeat the last stage '" . $last['name'] . "': a '" . $last['type'] . "' stage does not loop (stage, parallel, verification and map stages do)"
             );
         }
         if (array_key_exists('uses', $last)) {
@@ -652,7 +857,7 @@ final class WorkflowBuilder
      * {@see stopOnFirstFailure()}: cancelling siblings on the first casualty
      * would defeat the tolerance the stage declares.
      *
-     * v1 is parallel-only: a plain, pipeline, verification or `uses:` stage
+     * Parallel and map stages only (P1-2: a map counts ITEMS): a plain, pipeline, verification or `uses:` stage
      * refuses it. A static agent list is checked here too — a count above
      * the list's length could never be met.
      *
@@ -662,14 +867,14 @@ final class WorkflowBuilder
     public function minSuccess(int|string $threshold): self
     {
         if ($this->stages === []) {
-            throw new \InvalidArgumentException('minSuccess() needs a stage to attach to; call it after parallel()');
+            throw new \InvalidArgumentException('minSuccess() needs a stage to attach to; call it after parallel() or map()');
         }
 
         $lastKey = array_key_last($this->stages);
         $last = $this->stages[$lastKey];
-        if ($last['type'] !== 'parallel') {
+        if (!in_array($last['type'], self::TOLERANT_TYPES, true)) {
             throw new \InvalidArgumentException(
-                "minSuccess() is parallel-only in v1; the last stage '" . $last['name'] . "' is a '" . $last['type'] . "' stage"
+                "minSuccess() judges parallel and map stages only; the last stage '" . $last['name'] . "' is a '" . $last['type'] . "' stage"
             );
         }
 

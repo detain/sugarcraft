@@ -42,26 +42,28 @@ final class WorkflowGrammarGlossary
         'stage' => 'the default: one task (task keys on the stage itself) or a `tasks:` list run in order, each later task seeing `{{prevResult}}`',
         'parallel' => '`parallel: true` (or `type: parallel`) with an `agents:` list, or `from:` plus a template `prompt`; every agent runs, then the stage settles',
         'pipeline' => '`type: pipeline` with a nested `stages:` list of steps run in order for one item, each step seeing `{{prevResult}}`',
+        'map' => '`type: map` with `from:` and a `steps:` list: every item flows through the steps on its own with NO barrier between steps (item A can be verifying while item B is still being found), up to the stage width of item chains at once; the output is JSON `{"items":[{key, index, status, steps:{name:{status, output, data?, votes?}}}]}`, pointer-addressable; a failed step drops only its item (without `minSuccess` any dropped item fails the stage). Candy `pipeline` is a sequential chain for ONE item; `map` is the per-item streaming kind',
         'verification' => '`type: verification` with a `task:` map and a `verifier:` map that judges the task\'s output (`{{prevResult}}`); `reject` on the verifier fails the stage, `votes`/`lenses`/`quorum` turn the verifier into a panel judged by quorum, and a line starting `ESCALATE:` stops the run for a human',
     ];
 
     /** @var array<string, string> keyed by every registry stage key, in print order */
     public const STAGE_KEYS = [
         'name' => 'unique stage name; later prompts read `{{name.output}}`',
-        'type' => 'stage shape: `stage` (default), `parallel`, `pipeline` or `verification`',
+        'type' => 'stage shape: `stage` (default), `parallel`, `pipeline`, `verification` or `map`',
         'parallel' => '`true` is the flag spelling of `type: parallel`; never spell both',
         'agents' => 'parallel only: the list of task maps (the label is spelled `type:` here, not `agent:`)',
         'tasks' => 'a list of task maps run in order inside one stage; the first failure stops the stage',
         'task' => 'verification only: the task map that does the work',
         'verifier' => 'verification only: the task map that judges it',
         'stages' => 'pipeline only: the nested list of step maps',
-        'from' => 'parallel fan-out over exactly one source, one task per item from a template `prompt`: `{glob: "src/**/*.php"}` (files, `{{path}}`), `{stage: find, pointer: /findings, key: /id}` (an array in a prior stage\'s typed row; `key` dedups and names items) or `{context: files}` (a run-context list); `{{item}}`, `{{item.<pointer>}}`, `{{index}}` read the item, `chunk: N` caps in-flight width, `max: N` keeps the first N and lists the dropped rest (ceiling ' . Workflow::FAN_OUT_CEILING . ' items); an empty data list completes with no agents',
+        'steps' => 'map only: the per-item chain, in order; each step needs a unique `name` and is a task map or `type: verification` with `task:`/`verifier:` (parallel/map/pipeline/uses steps are refused); inside an item a step sees `{{prevResult}}` (the previous step of THIS item), `{{<step>.results}}`, `{{<step>.output}}`, `{{<step>.<pointer>}}` and `{{<step>.votes}}` of its earlier steps, and the item tokens; a step `when:` (leaves may spell `step: name`) is judged per item, and a skipped step passes `{{prevResult}}` through',
+        'from' => 'parallel or map fan-out over exactly one source, one task per item from a template `prompt`: `{glob: "src/**/*.php"}` (files, `{{path}}`), `{stage: find, pointer: /findings, key: /id}` (an array in a prior stage\'s typed row; `key` dedups and names items) or `{context: files}` (a run-context list); `{{item}}`, `{{item.<pointer>}}`, `{{index}}` read the item, `chunk: N` caps in-flight width, `max: N` keeps the first N and lists the dropped rest (ceiling ' . Workflow::FAN_OUT_CEILING . ' items); an empty data list completes with no agents',
         'when' => 'skip the stage unless a clause over an earlier stage\'s output holds: `{stage: s, equals|contains|matches: v}` or `{stage: s, empty: true|false}`, optionally `pointer: /leaf` to judge a schema\'d stage\'s JSON instead of its text, or `{all|any: [leaves]}` (one nesting level); a stage that never ran or a pointer that misses is unsatisfied, and a skip is not a failure',
-        'loop' => 'stage, parallel and verification stages: `{max: N, until: <when-clause>}` re-runs the stage (seeing `{{round}}` and, from round 2, `{{previous}}`) until the clause holds; hitting `max` completes with the last round. `accumulate: {pointer: /findings, key: /id}` keeps a deduped item set across rounds (`{{seen}}` keys, `{{fresh}}` last round\'s new items) and makes the stage\'s result `{"items":[…],"keys":[…],"rounds":n}`; `until: {dry: N}` stops after N rounds that added nothing new',
+        'loop' => 'stage, parallel, verification and map stages: `{max: N, until: <when-clause>}` re-runs the stage (seeing `{{round}}` and, from round 2, `{{previous}}`) until the clause holds; hitting `max` completes with the last round. `accumulate: {pointer: /findings, key: /id}` keeps a deduped item set across rounds (`{{seen}}` keys, `{{fresh}}` last round\'s new items) and makes the stage\'s result `{"items":[…],"keys":[…],"rounds":n}`; `until: {dry: N}` stops after N rounds that added nothing new',
         'capture' => '`true` writes the full output to a file; later prompts get the path plus a 2 KiB preview',
         'cache' => '`true` lets a resumed run carry this stage\'s recorded successful result when its declaration is unchanged',
         'uses' => 'run another saved workflow (by name) as this stage\'s body; depth at most ' . WorkflowEngine::MAX_USES_DEPTH . ', no cycles',
-        'minSuccess' => 'parallel only: `N` agents or `"NN%"` must succeed (default all); when met the stage completes, lists its casualties and exposes them as `{{stage.failed}}`',
+        'minSuccess' => 'parallel and map: `N` agents (map: items) or `"NN%"` must succeed (default all); when met the stage completes, lists its casualties and exposes them as `{{stage.failed}}`',
         'with' => 'with `uses:` only: context values handed to the included workflow (may interpolate, e.g. `"{{research.output}}"`)',
     ];
 
@@ -94,16 +96,16 @@ final class WorkflowGrammarGlossary
         '{{stage.output}}' => 'a prior stage\'s output (parallel: agent outputs joined by newlines)',
         '{{name.results}}' => 'one agent\'s output by result name (unnamed: `<stage>`, `<stage>_<n>` in parallel, `<stage>_verifier`)',
         '{{stage.<pointer>}}' => 'an RFC 6901 leaf of a schema\'d stage\'s JSON (`{{find.items/0/id}}`; dots do not nest)',
-        '{{prevResult}}' => 'the previous task/step output in a `tasks:` list or pipeline, or the task\'s output inside a verifier',
+        '{{prevResult}}' => 'the previous task/step output in a `tasks:` list, pipeline or map item, or the task\'s output inside a verifier',
         '{{input}}' => 'the `input:` join',
         '{{path}}' => 'the current file in a `from: {glob}` fan-out',
-        '{{item}}' => 'the current `from:` fan-out item (a string verbatim, anything else as JSON); `{{item.<pointer>}}` reads a leaf of it',
+        '{{item}}' => 'the current `from:` fan-out or map item (a string verbatim, anything else as JSON); `{{item.<pointer>}}` reads a leaf of it',
         '{{index}}' => 'the 0-based position of the current `from:` fan-out item',
         '{{round}}' => 'the 1-based round inside a `loop:`',
         '{{previous}}' => 'the prior round\'s stage output inside a `loop:` (left verbatim in round 1)',
         '{{seen}}' => 'inside a `loop:` with `accumulate`: the JSON list of every dedup key collected so far',
         '{{fresh}}' => 'inside a `loop:` with `accumulate`: the JSON list of the items the previous round added',
-        '{{stage.failed}}' => 'the JSON list of a `minSuccess` stage\'s failed agent names',
+        '{{stage.failed}}' => 'the JSON list of a `minSuccess` stage\'s casualties: failed agent names (map: item keys, else `<stage>_<n>`)',
         '{{lens}}' => 'inside a verifier vote: that vote\'s entry of `lenses` (verbatim when the verifier declares no lenses)',
         '{{stage.votes}}' => 'a verifier panel\'s votes as JSON, `[{lens, rejected, output|data}]` (`data` when the verifier has an outputSchema)',
     ];
@@ -132,7 +134,7 @@ final class WorkflowGrammarGlossary
             $lines[] = self::line($key, self::STAGE_KEYS[$key] ?? null);
         }
 
-        $lines[] = 'Task keys (on a plain stage, a `tasks:` or `agents:` entry, a pipeline step, a verification `task:`/`verifier:`):';
+        $lines[] = 'Task keys (on a plain stage, a `tasks:` or `agents:` entry, a pipeline or map step, a verification `task:`/`verifier:`):';
         foreach (WorkflowRegistry::YAML_TASK_KEYS as $key) {
             $lines[] = self::line($key, self::TASK_KEYS[$key] ?? null);
         }

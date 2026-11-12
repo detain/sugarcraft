@@ -470,6 +470,15 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private ?int $agentCeiling = null;
 
     /**
+     * P1-2: true while a `type: map` stage runs, so {@see dispatchOne()}
+     * takes the pool's batch door (see there).
+     */
+    private bool $batchDispatch = false;
+
+    /** P1-2: the pool's poll interval, used when every map item chain is waiting outside a Fiber. */
+    private const MAP_IDLE_USEC = 5_000;
+
+    /**
      * @param string $model    The model every stage's agent runs on. A workflow
      *        stage names an agent TYPE ('reviewer', 'coder'), never a model, so
      *        the model has to come from the run — and until this parameter
@@ -2141,7 +2150,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 $stageType = $stage['type'] ?? '';
                 if (!in_array($stageType, Workflow::STAGE_TYPES, true)) {
                     throw new UnsupportedStageTypeException(
-                        "Stage type '{$stageType}' is not supported. Only 'stage', 'parallel', 'pipeline', and 'verification' are implemented."
+                        "Stage type '{$stageType}' is not supported. Only 'stage', 'parallel', 'pipeline', 'verification', and 'map' are implemented."
                     );
                 }
 
@@ -2244,6 +2253,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                             $stageResult = $this->executeParallelStage($stage, $context, $workflow, $dispatched, $this->liveRuns[$liveToken]['dynamicWaves'], $failedNames);
                         } elseif ($stageType === 'stage') {
                             $stageResult = $this->executeStage($stage, $context, $dispatched, $workflow->timeout);
+                        } elseif ($stageType === 'map') {
+                            $stageResult = $this->executeMapStage($stage, $context, $workflow, $dispatched, $this->liveRuns[$liveToken]['dynamicWaves'], $failedNames);
                         } elseif ($stageType === 'pipeline') {
                             $stageResult = $this->executePipelineStage($stage, $context, $dispatched, $workflow->maxConcurrent, $workflow->timeout);
                         } else {
@@ -2985,6 +2996,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         if ($stageType === 'verification') {
             $candidates = [$stage['task'] ?? null, $stage['verifier'] ?? null];
+        } elseif ($stageType === 'map') {
+            $candidates = array_column(self::mapStepTasks($stage), 1);
         } elseif ($stageType === 'pipeline') {
             foreach ($stage['stages'] ?? [] as $nested) {
                 if (is_array($nested)) {
@@ -3203,6 +3216,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
         if ($stageType === 'verification') {
             $push($stage['task'] ?? null);
             $push($stage['verifier'] ?? null);
+        } elseif ($stageType === 'map') {
+            foreach (self::mapStepTasks($stage) as [, $task]) {
+                $push($task);
+            }
         } elseif ($stageType === 'pipeline') {
             foreach ($stage['stages'] ?? [] as $nested) {
                 if (is_array($nested)) {
@@ -3383,11 +3400,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @param int   $stageTimeout Workflow::$timeout — this stage's wall-clock budget, in seconds.
      * @return StageResult
      */
-    private function executeStage(array $stage, array $context, array &$dispatched, int $stageTimeout): StageResult
+    private function executeStage(array $stage, array $context, array &$dispatched, int $stageTimeout, ?int $stageClock = null): StageResult
     {
         $stageName = $stage['name'] ?? 'unknown';
         $stageStartedAt = new \DateTimeImmutable();
-        $stageClock = hrtime(true);
+        // P1-2: a map step shares its map stage's clock (one budget for the
+        // whole stage); a top-level stage starts its own.
+        $stageClock ??= hrtime(true);
 
         $tasks = array_values($stage['tasks'] ?? []);
         if (empty($tasks)) {
@@ -4217,7 +4236,24 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $this->reserveAgents(1);
 
         if ($this->agentManager === null) {
-            return $pool->executeOne($subAgent, $request);
+            // P1-2: inside a map stage every dispatch takes the pool's batch
+            // door, the one whose startAgent() lets an injected
+            // ForksAskFreeAgents executor fork an ask-free agent — so item
+            // chains really overlap on the Workflow tool path, where the
+            // single-agent door would run each one inline.
+            if (!$this->batchDispatch) {
+                return $pool->executeOne($subAgent, $request);
+            }
+            foreach ($pool->executeAll([$subAgent], $request) as $result) {
+                return $result;
+            }
+
+            return new AgentResult(
+                agentId: $subAgent->id,
+                status: AgentStatus::Stopped,
+                error: new \RuntimeException('cancelled before it produced a result'),
+                completedAt: new \DateTimeImmutable(),
+            );
         }
 
         foreach ($this->agentManager->executeAll([$subAgent], $request, $pool) as $result) {
@@ -4243,7 +4279,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
     private function reserveAgents(int $n): void
     {
         if ($this->agentCeiling !== null && $this->agentsDispatched + $n > $this->agentCeiling) {
-            throw new \RuntimeException(sprintf(
+            throw new AgentCeilingReachedException(sprintf(
                 'agent ceiling reached (%d): this run has dispatched %d agent%s and this stage needs %d more; '
                 . 'raise config.maxAgents or narrow the fan-out',
                 $this->agentCeiling,
@@ -4366,80 +4402,11 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $from = $stage['from'];
             $isGlob = isset($from['glob']);
             if ($isGlob) {
-                $recorded = $waveLedger[$stageName] ?? null;
-                if ($recorded === null) {
-                    $paths = $this->expandFromGlob((string) $from['glob']);
-                    $chunk = $from['chunk'];
-                    $max = $from['max'] ?? null;
-                    $matched = count($paths);
-                    $dropped = [];
-                    // P0-3: `max:` is the ONE sanctioned truncation — of the
-                    // sorted expansion, so the kept prefix is deterministic — and
-                    // it is recorded, never silent.
-                    if (is_int($max) && $matched > $max) {
-                        $dropped = array_slice($paths, $max);
-                        $paths = array_slice($paths, 0, $max);
-                    }
-
-                    // Judged BEFORE the ledger records anything: a resume of a
-                    // refused wave must re-glob the author's narrowed pattern,
-                    // not replay the list that was too wide.
-                    $ceilingRefusal = self::fanOutCeilingRefusal($stageName, count($paths), (string) $from['glob'], $stageStartedAt);
-                    if ($ceilingRefusal !== null) {
-                        return $ceilingRefusal;
-                    }
-
-                    if ($waveLedger !== null) {
-                        $waveLedger[$stageName] = ['paths' => $paths, 'chunk' => $chunk]
-                            + (is_int($max) ? ['max' => $max, 'matched' => $matched, 'dropped' => $dropped] : []);
-                    }
-                    $fromNotice = self::fromTruncationNotice(count($paths), $matched, $max, $dropped);
-                } else {
-                    $replayable = false;
-                    if (is_array($recorded)) {
-                        $replayable = isset($recorded['paths'])
-                            && is_array($recorded['paths']) && array_is_list($recorded['paths'])
-                            && (!array_key_exists('chunk', $recorded)
-                                || $recorded['chunk'] === null || is_int($recorded['chunk']))
-                            // P0-3: a truncation record is optional, but when
-                            // present it is a whole one — or the replay refuses.
-                            && (!array_key_exists('max', $recorded)
-                                || (is_int($recorded['max'])
-                                    && is_int($recorded['matched'] ?? null)
-                                    && is_array($recorded['dropped'] ?? null)
-                                    && array_is_list($recorded['dropped'])
-                                    && array_filter($recorded['dropped'], static fn (mixed $d): bool => !is_string($d)) === []));
-                        if ($replayable) {
-                            foreach ($recorded['paths'] as $candidate) {
-                                if (!is_string($candidate) || $candidate === '') {
-                                    $replayable = false;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (!$replayable) {
-                        return new StageResult(
-                            stageName: $stageName,
-                            status: WorkflowStatus::Failed,
-                            error: "Stage '{$stageName}' resumed with a dynamic-wave record it cannot replay — refusing to re-glob over files that may have changed",
-                            startedAt: $stageStartedAt,
-                            completedAt: new \DateTimeImmutable(),
-                        );
-                    }
-
-                    $paths = $recorded['paths'];
-                    $chunk = $recorded['chunk'] ?? $from['chunk'];
-
-                    $ceilingRefusal = self::fanOutCeilingRefusal($stageName, count($paths), (string) $from['glob'], $stageStartedAt);
-                    if ($ceilingRefusal !== null) {
-                        return $ceilingRefusal;
-                    }
-                    if (array_key_exists('max', $recorded)) {
-                        $fromNotice = self::fromTruncationNotice(count($paths), $recorded['matched'], $recorded['max'], $recorded['dropped']);
-                    }
+                $globbed = $this->expandGlobSource($stageName, $from, $waveLedger, $stageStartedAt);
+                if ($globbed instanceof StageResult) {
+                    return $globbed;
                 }
+                ['paths' => $paths, 'chunk' => $chunk, 'notice' => $fromNotice] = $globbed;
 
                 if ($paths === []) {
                     return new StageResult(
@@ -4758,6 +4725,534 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
+     * P1-2: every task a `type: map` stage's steps declare, as
+     * [label, task, is-verifier] — the label the run's diagnostics use
+     * (`step 'refute'`, `step 'check' task|verifier`).
+     *
+     * @param array<array-key, mixed> $stage
+     * @return list<array{0: string, 1: WorkflowTask, 2: bool}>
+     */
+    private static function mapStepTasks(array $stage): array
+    {
+        $tasks = [];
+        foreach (is_array($stage['steps'] ?? null) ? $stage['steps'] : [] as $step) {
+            if (!is_array($step)) {
+                continue;
+            }
+            $label = "step '" . (string) ($step['name'] ?? 'unknown') . "'";
+            if (($step['type'] ?? '') === 'verification') {
+                if (($step['task'] ?? null) instanceof WorkflowTask) {
+                    $tasks[] = ["{$label} task", $step['task'], false];
+                }
+                if (($step['verifier'] ?? null) instanceof WorkflowTask) {
+                    $tasks[] = ["{$label} verifier", $step['verifier'], true];
+                }
+
+                continue;
+            }
+            foreach (is_array($step['tasks'] ?? null) ? $step['tasks'] : [] as $task) {
+                if ($task instanceof WorkflowTask) {
+                    $tasks[] = [$label, $task, false];
+                }
+            }
+        }
+
+        return $tasks;
+    }
+
+    /**
+     * P1-2: run a `type: map` stage — every `from:` item flows through the
+     * stage's `steps` INDEPENDENTLY, with no barrier between steps: item A
+     * can be in its third step while item B is still in its first.
+     *
+     * SCHEDULING. Up to the stage width ({@see concurrencyFor()}, narrowed
+     * by `from.chunk`) item chains are in flight at once, each in its own
+     * `\Fiber`. A chain dispatches its steps one at a time through the
+     * ordinary executors (a task step through {@see executeStage()}, a
+     * verification step — vote panel included — through
+     * {@see executeVerificationStage()}). Whenever a chain's agent is
+     * waiting, the pool's {@see AgentWorkerPool::idle()} suspends the
+     * chain's Fiber; this loop then resumes the next chain, so N chains poll
+     * N agents round-robin, and a chain whose step settles starts its next
+     * step at once — never waiting for the other items of the same step. A
+     * new item is admitted the moment a chain finishes. When a whole pass
+     * settles nothing, the loop yields once: to the caller's Fiber (the
+     * TUI's workflow Fiber, which repaints) or, outside one, for the pool's
+     * poll interval. A dispatch that runs inline (an injected executor that
+     * does not fork the agent) never suspends, so its chain runs to its end
+     * before the next is admitted — the same limit every inline stage has.
+     * While the stage runs, single dispatches take the pool's batch door
+     * ({@see $batchDispatch}) so an ask-free agent forks on the Workflow
+     * tool path too.
+     *
+     * PER ITEM. The chain's context is the stage context plus the item
+     * (`{{item}}`, `{{item.<pointer>}}`, `{{index}}`, and `{{path}}` for a
+     * glob). Each step sees `{{prevResult}}` (the previous step of THIS
+     * item; "" for the first), and `{{<step>.results}}`,
+     * `{{<step>.output}}`, `{{<step>.<pointer>}}` and `{{<step>.votes}}` of
+     * the steps this item already ran — item-scoped, never visible to other
+     * items or later stages. A step's `when:` is judged against that same
+     * item context; a skipped step records `{status: skipped}` and passes
+     * `prevResult` through unchanged. The first failing step drops the item:
+     * its remaining steps never run (they are absent from its row).
+     *
+     * RESULT. The stage output — and its typed row and `{{<stage>.results}}`
+     * — is the JSON document `{"items":[{key, index, status, steps:{name:
+     * {status, output, data?, votes?, error?}}, error?}…]}` (plus `matched`
+     * and `dropped` when `from.max` cut the list). `key` is the item's
+     * `from.key` leaf, its path for a glob, else null; `status` is
+     * `completed`, `failed` or `cancelled` (never started, or stopped by a
+     * cancel / fail-fast). Without `minSuccess` any failed item fails the
+     * stage; with it the stage completes when enough items completed and
+     * `{{<stage>.failed}}` lists the casualties (key, else `<stage>_<n>`).
+     * `stopOnFirstFailure` (without `minSuccess`) admits no item after the
+     * first casualty. An agent-ceiling refusal (`config.maxAgents`) admits
+     * no further item and fails the stage whatever `minSuccess` says.
+     *
+     * Pause/resume is whole-stage: the materialised item list rides the
+     * pause record exactly as a parallel `from:` does, and a resume re-runs
+     * every item.
+     *
+     * @param list<array{key: string, result: AgentResult, schema: bool}> $dispatched Out: ONE record, the stage's own JSON row.
+     * @param ?array<array-key, mixed> $waveLedger
+     * @param ?list<string> $failedNames
+     */
+    private function executeMapStage(array $stage, array $context, Workflow $workflow, array &$dispatched, ?array &$waveLedger = null, ?array &$failedNames = null): StageResult
+    {
+        $stageName = (string) ($stage['name'] ?? 'unknown');
+        $stageStartedAt = new \DateTimeImmutable();
+        $stageClock = hrtime(true);
+        $fail = static fn (string $error, array $agents = []): StageResult => new StageResult(
+            stageName: $stageName,
+            status: WorkflowStatus::Failed,
+            error: $error,
+            agents: $agents,
+            startedAt: $stageStartedAt,
+            completedAt: new \DateTimeImmutable(),
+        );
+
+        $steps = $stage['steps'] ?? null;
+        $from = $stage['from'] ?? null;
+        if (!is_array($steps) || $steps === [] || !array_is_list($steps) || !is_array($from)) {
+            return $fail("Map stage '{$stageName}' needs a from: source and at least one step");
+        }
+
+        // Every step's declaration before the first item runs: a refusal is
+        // knowable from the definition, and finding it at item 40's third
+        // step would mean 120 dispatches of work first.
+        foreach ($steps as $i => $step) {
+            $label = "Map stage '{$stageName}' step '" . (is_array($step) ? (string) ($step['name'] ?? '#' . ($i + 1)) : '#' . ($i + 1)) . "'";
+            $type = is_array($step) ? ($step['type'] ?? '') : '';
+            if ($type === 'stage') {
+                $tasks = $step['tasks'] ?? null;
+                if (!is_array($tasks) || count($tasks) !== 1 || !($tasks[0] ?? null) instanceof WorkflowTask) {
+                    return $fail("{$label} must carry exactly one task");
+                }
+                $this->refuseDeniedTools($tasks[0], $label);
+            } elseif ($type === 'verification') {
+                if (!($step['task'] ?? null) instanceof WorkflowTask || !($step['verifier'] ?? null) instanceof WorkflowTask) {
+                    return $fail("{$label} must have both a 'task' and a 'verifier' WorkflowTask");
+                }
+                $this->refuseDeniedTools($step['task'], "{$label} task");
+                $this->refuseDeniedTools($step['verifier'], "{$label} verifier");
+            } else {
+                return $fail("{$label} is a '" . (is_string($type) ? $type : get_debug_type($type)) . "' step; a map step is a task or a type: verification sub-stage");
+            }
+        }
+
+        $isGlob = isset($from['glob']);
+        if ($isGlob) {
+            $expansion = $this->expandGlobSource($stageName, $from, $waveLedger, $stageStartedAt);
+            if ($expansion instanceof StageResult) {
+                return $expansion;
+            }
+            if ($expansion['paths'] === []) {
+                return $fail("Stage '{$stageName}' expanded no files from \"{$from['glob']}\"");
+            }
+            $items = $expansion['paths'];
+            $keys = $expansion['paths'];
+        } else {
+            $expansion = $this->expandFromData($stageName, $from, $context, $waveLedger, $stageStartedAt);
+            if ($expansion instanceof StageResult) {
+                return $expansion;
+            }
+            $items = $expansion['items'];
+            $keys = [];
+            foreach ($items as $item) {
+                $leaf = isset($from['key']) ? JsonPointer::resolve($item, (string) $from['key']) : ['found' => false, 'value' => null];
+                $keys[] = $leaf['found'] ? self::scalarKey($leaf['value']) : null;
+            }
+        }
+        $truncation = $expansion['dropped'] === [] ? [] : ['matched' => $expansion['matched'], 'dropped' => $expansion['dropped']];
+
+        $minSuccess = is_array($stage['minSuccess'] ?? null) ? $stage['minSuccess'] : null;
+        $count = count($items);
+        $width = $this->concurrencyFor($workflow);
+        $chunk = $expansion['chunk'];
+        $concurrency = $chunk !== null ? ($width === null ? $chunk : min($width, $chunk)) : $width;
+        $failFast = $workflow->stopOnFirstFailure && $minSuccess === null;
+
+        /** @var array<int, array{row: array<string, mixed>, agents: list<AgentResult>, ceiling: ?string}> $outcomes */
+        $outcomes = [];
+        $halt = false;
+        $ceiling = null;
+        $running = [];
+        $next = 0;
+
+        $settle = function (int $i, array $outcome) use (&$outcomes, &$halt, &$ceiling, $failFast): void {
+            $outcomes[$i] = $outcome;
+            if ($outcome['ceiling'] !== null) {
+                $ceiling ??= $outcome['ceiling'];
+                $halt = true;
+            }
+            if ($failFast && $outcome['row']['status'] !== 'completed') {
+                $halt = true;
+            }
+        };
+        $crashed = static fn (int $i, \Throwable $e): array => [
+            'row' => ['key' => $keys[$i], 'index' => $i, 'status' => 'failed', 'steps' => new \stdClass(), 'error' => self::oneLine($e->getMessage())],
+            'agents' => [],
+            'ceiling' => $e instanceof AgentCeilingReachedException ? $e->getMessage() : null,
+        ];
+
+        $previousBatch = $this->batchDispatch;
+        $this->batchDispatch = true;
+        try {
+            while ($next < $count || $running !== []) {
+                while (!$halt && $next < $count && ($concurrency === null || count($running) < $concurrency)) {
+                    if ($this->runCancellation?->isCancelled()) {
+                        $halt = true;
+                        break;
+                    }
+                    $i = $next++;
+                    // A full closure: the chain must see $halt flip while it runs.
+                    $fiber = new \Fiber(function () use ($steps, $context, $items, $keys, $i, $isGlob, $workflow, $stageClock, &$halt): array {
+                        return $this->runMapItem($steps, $context, $items, $keys[$i], $i, $isGlob, $workflow->timeout, $stageClock, $halt);
+                    });
+                    try {
+                        $fiber->start();
+                    } catch (\Throwable $e) {
+                        $settle($i, $crashed($i, $e));
+                        continue;
+                    }
+                    if ($fiber->isTerminated()) {
+                        $settle($i, $fiber->getReturn());
+                        continue;
+                    }
+                    $running[$i] = $fiber;
+                }
+
+                if ($running === []) {
+                    if ($halt || $next >= $count) {
+                        break;
+                    }
+                    continue;
+                }
+
+                $progressed = false;
+                foreach ($running as $i => $fiber) {
+                    try {
+                        $fiber->resume();
+                    } catch (\Throwable $e) {
+                        unset($running[$i]);
+                        $settle($i, $crashed($i, $e));
+                        $progressed = true;
+                        continue;
+                    }
+                    if ($fiber->isTerminated()) {
+                        unset($running[$i]);
+                        $settle($i, $fiber->getReturn());
+                        $progressed = true;
+                    }
+                }
+
+                if (!$progressed && $running !== []) {
+                    if (\Fiber::getCurrent() !== null) {
+                        \Fiber::suspend();
+                    } else {
+                        usleep(self::MAP_IDLE_USEC);
+                    }
+                }
+            }
+        } finally {
+            $this->batchDispatch = $previousBatch;
+        }
+
+        $rows = [];
+        $agents = [];
+        $casualties = [];
+        for ($i = 0; $i < $count; $i++) {
+            $outcome = $outcomes[$i] ?? [
+                'row' => ['key' => $keys[$i], 'index' => $i, 'status' => 'cancelled', 'steps' => new \stdClass(), 'error' => 'not started: the stage stopped admitting items'],
+                'agents' => [],
+                'ceiling' => null,
+            ];
+            $rows[] = $outcome['row'];
+            $agents = [...$agents, ...$outcome['agents']];
+            if ($outcome['row']['status'] !== 'completed') {
+                $name = $keys[$i] ?? $stageName . '_' . ($i + 1);
+                $casualties[] = [$name, (string) ($outcome['row']['error'] ?? $outcome['row']['status'])];
+            }
+        }
+
+        $document = self::compactJson(['items' => $rows] + $truncation);
+        $dispatched = [[
+            'key' => $stageName,
+            'result' => new AgentResult(
+                agentId: $stageName . '-map',
+                status: AgentStatus::Completed,
+                output: $document,
+                startedAt: $stageStartedAt,
+                completedAt: new \DateTimeImmutable(),
+            ),
+            'schema' => true,
+        ]];
+        if ($minSuccess !== null) {
+            $failedNames = array_column($casualties, 0);
+        }
+
+        $status = WorkflowStatus::Completed;
+        $error = null;
+        $listed = implode('; ', array_map(static fn (array $c): string => "{$c[0]} ({$c[1]})", $casualties));
+        if ($ceiling !== null) {
+            $status = WorkflowStatus::Failed;
+            $error = $ceiling;
+        } elseif ($casualties !== [] && $minSuccess === null) {
+            $status = WorkflowStatus::Failed;
+            $error = sprintf("Map stage '%s': %d of %d items failed: %s", $stageName, count($casualties), $count, $listed);
+        } elseif ($casualties !== []) {
+            $required = WorkflowBuilder::requiredSuccesses($minSuccess, $count);
+            $succeeded = $count - count($casualties);
+            if ($succeeded < $required) {
+                $status = WorkflowStatus::Failed;
+                $error = sprintf(
+                    'minSuccess %s not met: %d of %d items succeeded and %d %s needed; failed: %s',
+                    WorkflowBuilder::minSuccessLabel($minSuccess),
+                    $succeeded,
+                    $count,
+                    $required,
+                    $required === 1 ? 'was' : 'were',
+                    $listed,
+                );
+            }
+        }
+
+        return new StageResult(
+            stageName: $stageName,
+            status: $status,
+            output: $document,
+            error: $error,
+            agents: $agents,
+            startedAt: $stageStartedAt,
+            completedAt: new \DateTimeImmutable(),
+        );
+    }
+
+    /**
+     * P1-2: one map item's chain — its steps in order, on an item-scoped
+     * context ({@see executeMapStage()} has the law). Runs inside the
+     * item's Fiber; returns the item's row, every agent it billed, and the
+     * agent-ceiling message when a dispatch was refused for the whole run.
+     *
+     * @param list<array<string, mixed>> $steps
+     * @param array<array-key, mixed> $context
+     * @param list<mixed> $items
+     * @return array{row: array<string, mixed>, agents: list<AgentResult>, ceiling: ?string}
+     */
+    private function runMapItem(array $steps, array $context, array $items, ?string $key, int $index, bool $isGlob, int $stageTimeout, int $stageClock, bool &$halt): array
+    {
+        $itemContext = self::fanOutItemContext($context, $isGlob, $isGlob ? $key : null, $items, $index);
+        $prevResult = '';
+        $stepRows = [];
+        $agents = [];
+        $status = 'completed';
+        $error = null;
+        $ceiling = null;
+
+        foreach ($steps as $step) {
+            $name = (string) $step['name'];
+            if ($halt || $this->runCancellation?->isCancelled()) {
+                $status = 'cancelled';
+                $error = "stopped before step '{$name}': the stage stopped admitting work";
+                break;
+            }
+
+            if (is_array($step['when'] ?? null) && !StageCondition::evaluate($step['when'], $itemContext)) {
+                $stepRows[$name] = ['status' => 'skipped'];
+                continue;
+            }
+
+            $itemContext['prevResult'] = $prevResult;
+            $records = [];
+            $votes = null;
+            try {
+                $result = ($step['type'] ?? '') === 'verification'
+                    ? $this->executeVerificationStage($step, $itemContext, $records, $stageTimeout, $stageClock, $votes)
+                    : $this->executeStage($step, $itemContext, $records, $stageTimeout, $stageClock);
+            } catch (\Throwable $e) {
+                $result = new StageResult(
+                    stageName: $name,
+                    status: WorkflowStatus::Failed,
+                    error: $e->getMessage(),
+                    agents: array_column($records, 'result'),
+                    completedAt: new \DateTimeImmutable(),
+                );
+                if ($e instanceof AgentCeilingReachedException) {
+                    $ceiling = $e->getMessage();
+                }
+            }
+
+            // The map is one stage to the run loop, which counts retries off
+            // the records it is handed; a step's own are counted here, as
+            // they settle, so the NEXT dispatch past the ceiling is refused.
+            foreach ($records as $record) {
+                $this->agentsDispatched += max(0, $record['result']->attempts - 1);
+            }
+            $agents = [...$agents, ...$result->agents];
+            $itemContext = self::withResults($itemContext, $records);
+            $itemContext[$name . '.output'] = $result->output ?? '';
+            if ($votes !== null) {
+                $itemContext[$name . '.votes'] = self::compactJson($votes);
+            }
+
+            $row = ['status' => $result->isFailure() ? 'failed' : 'completed', 'output' => $result->output ?? ''];
+            // The step's typed document: a task step's own, a verification
+            // step's TASK (the work; the verdict is in `votes`/`status`).
+            $primary = $records[0] ?? null;
+            if ($primary !== null && $primary['schema'] && $primary['result']->status === AgentStatus::Completed) {
+                $decoded = json_decode($primary['result']->output ?? '', true);
+                if (is_array($decoded)) {
+                    $row['data'] = $decoded;
+                }
+            }
+            if ($votes !== null) {
+                $row['votes'] = $votes;
+            }
+
+            if ($result->isFailure()) {
+                $row['error'] = self::oneLine((string) ($result->error ?? 'the step did not complete'));
+                $stepRows[$name] = $row;
+                $status = 'failed';
+                $error = "step '{$name}' failed: " . $row['error'];
+                break;
+            }
+
+            $stepRows[$name] = $row;
+            $prevResult = $result->output ?? '';
+        }
+
+        $row = ['key' => $key, 'index' => $index, 'status' => $status, 'steps' => $stepRows === [] ? new \stdClass() : $stepRows];
+        if ($error !== null) {
+            $row['error'] = $error;
+        }
+
+        return ['row' => $row, 'agents' => $agents, 'ceiling' => $ceiling];
+    }
+
+    /**
+     * C8 + P0-3: materialise a `from: {glob}` fan-out — or replay the list a
+     * pause recorded for it — shared by the parallel and map executors.
+     * Returns the stage's refusal, or the kept paths, the in-flight `chunk`,
+     * the `[header, tail]` truncation notice and the raw `matched`/`dropped`
+     * record (P1-2: a map stage records its cut inside its JSON output).
+     *
+     * @param array<string, mixed> $from
+     * @param ?array<array-key, mixed> $waveLedger
+     * @return StageResult|array{paths: list<string>, chunk: ?int, notice: array{0: string, 1: string}, matched: int, dropped: list<string>}
+     */
+    private function expandGlobSource(string $stageName, array $from, ?array &$waveLedger, \DateTimeImmutable $stageStartedAt): StageResult|array
+    {
+        $fromNotice = ['', ''];
+        $matched = 0;
+        $dropped = [];
+        $recorded = $waveLedger[$stageName] ?? null;
+        if ($recorded === null) {
+            $paths = $this->expandFromGlob((string) $from['glob']);
+            $chunk = $from['chunk'];
+            $max = $from['max'] ?? null;
+            $matched = count($paths);
+            $dropped = [];
+            // P0-3: `max:` is the ONE sanctioned truncation — of the
+            // sorted expansion, so the kept prefix is deterministic — and
+            // it is recorded, never silent.
+            if (is_int($max) && $matched > $max) {
+                $dropped = array_slice($paths, $max);
+                $paths = array_slice($paths, 0, $max);
+            }
+
+            // Judged BEFORE the ledger records anything: a resume of a
+            // refused wave must re-glob the author's narrowed pattern,
+            // not replay the list that was too wide.
+            $ceilingRefusal = self::fanOutCeilingRefusal($stageName, count($paths), (string) $from['glob'], $stageStartedAt);
+            if ($ceilingRefusal !== null) {
+                return $ceilingRefusal;
+            }
+
+            if ($waveLedger !== null) {
+                $waveLedger[$stageName] = ['paths' => $paths, 'chunk' => $chunk]
+                    + (is_int($max) ? ['max' => $max, 'matched' => $matched, 'dropped' => $dropped] : []);
+            }
+            $fromNotice = self::fromTruncationNotice(count($paths), $matched, $max, $dropped);
+        } else {
+            $replayable = false;
+            if (is_array($recorded)) {
+                $replayable = isset($recorded['paths'])
+                    && is_array($recorded['paths']) && array_is_list($recorded['paths'])
+                    && (!array_key_exists('chunk', $recorded)
+                        || $recorded['chunk'] === null || is_int($recorded['chunk']))
+                    // P0-3: a truncation record is optional, but when
+                    // present it is a whole one — or the replay refuses.
+                    && (!array_key_exists('max', $recorded)
+                        || (is_int($recorded['max'])
+                            && is_int($recorded['matched'] ?? null)
+                            && is_array($recorded['dropped'] ?? null)
+                            && array_is_list($recorded['dropped'])
+                            && array_filter($recorded['dropped'], static fn (mixed $d): bool => !is_string($d)) === []));
+                if ($replayable) {
+                    foreach ($recorded['paths'] as $candidate) {
+                        if (!is_string($candidate) || $candidate === '') {
+                            $replayable = false;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!$replayable) {
+                return new StageResult(
+                    stageName: $stageName,
+                    status: WorkflowStatus::Failed,
+                    error: "Stage '{$stageName}' resumed with a dynamic-wave record it cannot replay — refusing to re-glob over files that may have changed",
+                    startedAt: $stageStartedAt,
+                    completedAt: new \DateTimeImmutable(),
+                );
+            }
+
+            $paths = $recorded['paths'];
+            $chunk = $recorded['chunk'] ?? $from['chunk'];
+
+            $ceilingRefusal = self::fanOutCeilingRefusal($stageName, count($paths), (string) $from['glob'], $stageStartedAt);
+            if ($ceilingRefusal !== null) {
+                return $ceilingRefusal;
+            }
+            $matched = count($paths);
+            if (array_key_exists('max', $recorded)) {
+                $fromNotice = self::fromTruncationNotice(count($paths), $recorded['matched'], $recorded['max'], $recorded['dropped']);
+                $matched = $recorded['matched'];
+                $dropped = $recorded['dropped'];
+            }
+        }
+
+        return [
+            'paths' => $paths,
+            'chunk' => $chunk,
+            'notice' => $fromNotice,
+            'matched' => $matched,
+            'dropped' => $dropped,
+        ];
+    }
+
+    /**
      * P1-5: fold one settled round of a `loop.accumulate` stage into the
      * accumulator, returning the round's result (or a FAILED copy of it when
      * its rows cannot be folded).
@@ -4913,7 +5408,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
      * @param array<string, mixed> $from
      * @param array<array-key, mixed> $context
      * @param ?array<array-key, mixed> $waveLedger
-     * @return StageResult|array{items: list<mixed>, names: list<?string>, chunk: ?int, notice: array{0: string, 1: string}}
+     * @return StageResult|array{items: list<mixed>, names: list<?string>, chunk: ?int, notice: array{0: string, 1: string}, matched: int, dropped: list<string>}
      */
     private function expandFromData(string $stageName, array $from, array $context, ?array &$waveLedger, \DateTimeImmutable $startedAt): StageResult|array
     {
@@ -4957,6 +5452,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 'notice' => array_key_exists('max', $recorded)
                     ? self::fromTruncationNotice(count($recorded['items']), $recorded['matched'], $recorded['max'], $recorded['dropped'])
                     : ['', ''],
+                'matched' => array_key_exists('max', $recorded) ? $recorded['matched'] : count($recorded['items']),
+                'dropped' => array_key_exists('max', $recorded) ? $recorded['dropped'] : [],
             ];
         }
 
@@ -5040,6 +5537,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
             'names' => $names,
             'chunk' => $chunk,
             'notice' => self::fromTruncationNotice(count($items), $matched, $max, $dropped),
+            'matched' => $matched,
+            'dropped' => $dropped,
         ];
     }
 
@@ -5461,6 +5960,10 @@ final class WorkflowEngine implements WorkflowEngineInterface
             } elseif ($stageType === 'verification') {
                 $checks[] = [$stage['task'] ?? null, "Verification stage '{$stageName}' task"];
                 $checks[] = [$stage['verifier'] ?? null, "Verification stage '{$stageName}' verifier"];
+            } elseif ($stageType === 'map') {
+                foreach (self::mapStepTasks($stage) as [$label, $task]) {
+                    $checks[] = [$task, "Map stage '{$stageName}' {$label}"];
+                }
             }
 
             foreach ($checks as [$task, $where]) {
@@ -5500,6 +6003,24 @@ final class WorkflowEngine implements WorkflowEngineInterface
         foreach ($workflow->stages as $stage) {
             $stageName = $stage['name'] ?? 'unknown';
             $stageType = $stage['type'] ?? '';
+
+            // P1-2: a map step is judged by the slot it fills — only the
+            // verifier of a `type: verification` step renders a verdict.
+            if ($stageType === 'map') {
+                foreach (self::mapStepTasks($stage) as [$label, $task, $isVerifier]) {
+                    if ($isVerifier) {
+                        continue;
+                    }
+                    if ($task->reject !== null) {
+                        return [$stageName, self::rejectMisuseMessage("Map stage '{$stageName}' {$label}")];
+                    }
+                    if ($task->declaresPanel()) {
+                        return [$stageName, self::panelMisuseMessage("Map stage '{$stageName}' {$label}")];
+                    }
+                }
+
+                continue;
+            }
 
             if ($stageType === 'verification') {
                 $task = $stage['task'] ?? null;

@@ -44,7 +44,7 @@ final class WorkflowRegistry
      * {@see self::YAML_TASK_KEYS}, because a single-task stage legitimately
      * carries its task keys at stage level.
      */
-    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from', 'loop', 'minSuccess'];
+    private const YAML_STAGE_KEYS = ['name', 'parallel', 'capture', 'cache', 'type', 'agents', 'tasks', 'task', 'verifier', 'stages', 'when', 'uses', 'with', 'from', 'loop', 'minSuccess', 'steps'];
 
     /**
      * The keys a parallel stage's `from:` sub-map may carry (C8 + P0-3
@@ -1450,7 +1450,7 @@ final class WorkflowRegistry
                         "{$where} carries both \"parallel: true\" and \"type: parallel\"; one spelling is enough"
                     );
                 }
-                if ($flaggedParallel && ($stageType === 'verification' || $stageType === 'pipeline')) {
+                if ($flaggedParallel && ($stageType === 'verification' || $stageType === 'pipeline' || $stageType === 'map')) {
                     throw new WorkflowLoadException(
                         "{$where} declares \"parallel: true\", which contradicts \"type: {$stageType}\""
                     );
@@ -1460,17 +1460,24 @@ final class WorkflowRegistry
                 // Refused here — before any type arm dispatches — so a
                 // `from:` beside tasks:, a single task, a verification pair or
                 // a pipeline list is named, never silently dropped (rider law).
-                if (!$isParallel && array_key_exists('from', $stage)) {
+                if (!$isParallel && $stageType !== 'map' && array_key_exists('from', $stage)) {
                     throw new WorkflowLoadException(
-                        "{$where} carries \"from\", which only a parallel stage can fan out"
+                        "{$where} carries \"from\", which only a parallel or map stage can fan out"
+                    );
+                }
+                // P1-2: `steps:` is the map body; anywhere else it names
+                // nothing the stage would run.
+                if ($stageType !== 'map' && array_key_exists('steps', $stage)) {
+                    throw new WorkflowLoadException(
+                        "{$where} carries \"steps\", which only a \"type: map\" stage runs"
                     );
                 }
                 // P1-3: partial-failure tolerance is a fan-out affordance —
                 // v1 reads it on parallel stages only (and never beside
                 // `uses:`, whose body is another workflow's stages).
-                if (array_key_exists('minSuccess', $stage) && (!$isParallel || array_key_exists('uses', $stage))) {
+                if (array_key_exists('minSuccess', $stage) && ((!$isParallel && $stageType !== 'map') || array_key_exists('uses', $stage))) {
                     throw new WorkflowLoadException(
-                        "{$where} carries \"minSuccess\", which only a parallel stage can tolerate failures with"
+                        "{$where} carries \"minSuccess\", which only a parallel or map stage can tolerate failures with"
                     );
                 }
                 // S3: the capture flag is stage-scoped like `parallel:` — a
@@ -1540,6 +1547,11 @@ final class WorkflowRegistry
                     );
                 } elseif ($stageType === 'pipeline') {
                     $builder = $builder->pipeline($stageName, $this->parsePipelineSteps($stage, $where), capture: $capture, cache: $cache);
+                } elseif ($stageType === 'map') {
+                    $builder = $this->parseMapStage($builder, $stage, $stageName, $where, array_keys(array_filter(
+                        $seenStageNames,
+                        static fn (int $at): bool => $at < $index,
+                    )), $capture, $cache);
                 } elseif ($isParallel) {
                     // $parsed is an array of TaskBuilders for parallel stages
                     // This delegates to WorkflowBuilder::parallel(), which feeds
@@ -1594,7 +1606,7 @@ final class WorkflowRegistry
                     $shape = $isParallel ? 'parallel' : $stageType;
                     if (!in_array($shape, WorkflowBuilder::LOOPABLE_TYPES, true)) {
                         throw new WorkflowLoadException(
-                            "{$where} \"loop\" cannot attach to a \"{$shape}\" stage; stage, parallel and verification stages loop"
+                            "{$where} \"loop\" cannot attach to a \"{$shape}\" stage; stage, parallel, verification and map stages loop"
                         );
                     }
 
@@ -2608,6 +2620,115 @@ final class WorkflowRegistry
         }
 
         return $spec;
+    }
+
+    /**
+     * P1-2: a `type: map` stage — a `from:` source (the parallel fan-out's
+     * sub-map, same law) and a `steps:` list. The stage map itself carries
+     * no task keys: each step is its own body. A step is a task map (task
+     * keys plus `when:`) or `type: verification` with `task:`/`verifier:`
+     * sub-maps (plus `name` and `when`); every step needs a unique `name`.
+     * `type: parallel|map|pipeline`, `uses:` and nested fan-out keys are
+     * refused as steps in v1. A step's `when:` may spell its leaves
+     * `step: <name>` (read as `stage:`) and must not read itself or a later
+     * step ({@see WorkflowBuilder::map()} judges that, re-raised here).
+     *
+     * @param array<array-key, mixed> $stage
+     * @param list<string> $priorStages
+     */
+    private function parseMapStage(WorkflowBuilder $builder, array $stage, string $stageName, string $where, array $priorStages, bool $capture, bool $cache): WorkflowBuilder
+    {
+        foreach (['agents', 'tasks', 'task', 'verifier', 'stages'] as $body) {
+            if (array_key_exists($body, $stage)) {
+                throw new WorkflowLoadException(
+                    "{$where} is type: map, so its body is \"steps\"; it cannot carry \"{$body}\""
+                );
+            }
+        }
+        foreach (array_diff(self::YAML_TASK_KEYS, ['name']) as $key) {
+            if (array_key_exists($key, $stage)) {
+                throw new WorkflowLoadException(
+                    "{$where} is type: map, so \"{$key}\" belongs on a step, not on the stage"
+                );
+            }
+        }
+        if (!array_key_exists('from', $stage)) {
+            throw new WorkflowLoadException(
+                "{$where} is type: map, so it needs a \"from\" source: a \"glob\", \"stage\" + \"pointer\", or \"context\""
+            );
+        }
+        $from = $this->parseDynamicWaveSubMap($stage, $where, $priorStages);
+
+        if (!array_key_exists('steps', $stage)) {
+            throw new WorkflowLoadException("{$where} is type: map, so it needs a \"steps\" list");
+        }
+        $steps = $stage['steps'];
+        if (!is_array($steps) || !array_is_list($steps)) {
+            throw new WorkflowLoadException(
+                "{$where} \"steps\" must be a list, got " . (is_array($steps) ? 'a map' : get_debug_type($steps))
+            );
+        }
+        if ($steps === []) {
+            throw new WorkflowLoadException("{$where} \"steps\" must list at least one step");
+        }
+
+        $built = [];
+        foreach ($steps as $stepIndex => $step) {
+            $at = "{$where} step #" . self::ordinal($stepIndex);
+            if (!is_array($step)) {
+                throw new WorkflowLoadException("{$at} must be a map, got " . get_debug_type($step));
+            }
+            $type = $this->requireString($step, 'type', 'stage', $at);
+            if ($type !== 'stage' && $type !== 'verification') {
+                throw new WorkflowLoadException(
+                    "{$at} declares type: {$type}; a map step is a task map or \"type: verification\" "
+                    . '(parallel, map, pipeline and uses steps are refused in v1)'
+                );
+            }
+            foreach (['uses', 'parallel', 'agents', 'tasks', 'stages', 'from', 'steps', 'loop', 'minSuccess', 'capture', 'cache', 'with'] as $stageOnly) {
+                if (array_key_exists($stageOnly, $step)) {
+                    throw new WorkflowLoadException(
+                        "{$at} carries \"{$stageOnly}\", which a map step cannot (a step is one task or one verification sub-stage)"
+                    );
+                }
+            }
+            if (!array_key_exists('name', $step)) {
+                throw new WorkflowLoadException(
+                    "{$at} needs a \"name\": it keys the step in each item's row and is read as {{<name>.results}} inside the item"
+                );
+            }
+            $when = null;
+            if (array_key_exists('when', $step)) {
+                if (!is_array($step['when'])) {
+                    throw new WorkflowLoadException("{$at} \"when\" must be a condition map, got " . get_debug_type($step['when']));
+                }
+                $when = $step['when'];
+            }
+
+            if ($type === 'verification') {
+                $this->requireNoUnknownTaskKeys($step, $at, ['name', 'type', 'task', 'verifier', 'when']);
+                $name = $this->requireString($step, 'name', '', $at);
+                $built[] = WorkflowBuilder::mapVerification(
+                    $name,
+                    $this->parseVerificationSubMap($step, 'task', $at),
+                    $this->parseVerificationSubMap($step, 'verifier', $at),
+                    $when,
+                );
+
+                continue;
+            }
+
+            $this->requireNoUnknownTaskKeys($step, $at, array_merge(self::YAML_TASK_KEYS, ['type', 'when']));
+            $taskMap = $step;
+            unset($taskMap['type'], $taskMap['when']);
+            $built[] = WorkflowBuilder::mapStep($this->readTaskMap($taskMap, $at), $when);
+        }
+
+        try {
+            return $builder->map($stageName, $from, $built, capture: $capture, cache: $cache);
+        } catch (\InvalidArgumentException $e) {
+            throw new WorkflowLoadException("{$where} {$e->getMessage()}", 0, $e);
+        }
     }
 
     /**
