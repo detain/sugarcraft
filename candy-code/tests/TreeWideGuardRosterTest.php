@@ -763,6 +763,7 @@ final class TreeWideGuardRosterTest extends TestCase
         // test's own forked child created under its sandboxed HOME.
         'MCP/McpBackgroundCallTest.php' => ['scandir($registry)'],
         'MCP/McpClientTest.php' => ['glob($this->tempDir.\'/*\')'],
+        'MCP/McpNestedArgumentsWireTest.php' => ['glob($this->workDir.\'/*\')'],
         // W4 (WEB-3a): purgeTree() in tearDown() empties the sys_get_temp_dir()
         // sandbox the test itself built (fake HOME, project dir, session store).
         'Protocol/ContextSourcesTest.php' => ['scandir($dir)'],
