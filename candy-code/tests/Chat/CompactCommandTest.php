@@ -131,4 +131,94 @@ final class CompactCommandTest extends TestCase
         $lastMsg = $next->history[count($next->history) - 1];
         $this->assertStringContainsString('saved 0% tokens', $lastMsg->content);
     }
+
+    /** @return list<string> the contents the model reads, in order */
+    private static function modelReadContents(Chat $chat): array
+    {
+        return array_map(static fn (Message $m): string => $m->content, Message::agentVisible($chat->history));
+    }
+
+    /** Type a draft one key at a time and press Enter, as a user would. */
+    private static function typeAndSubmitDraft(Chat $chat, string $draft): Chat
+    {
+        foreach (mb_str_split($draft) as $char) {
+            [$chat] = $chat->update(new KeyMsg(KeyType::Char, $char));
+        }
+        [$chat] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+
+        return $chat;
+    }
+
+    /** A history with a prompt appended after the compaction, as a sent turn leaves it. */
+    private static function withPromptSentAfter(Chat $chat): Chat
+    {
+        return (new \ReflectionMethod(Chat::class, 'mutate'))->invoke($chat, [
+            'history' => [...$chat->history, Message::user('a prompt sent after the compaction')],
+        ]);
+    }
+
+    private static function fifteenExchanges(): array
+    {
+        $messages = [];
+        for ($i = 0; $i < 15; $i++) {
+            $messages[] = Message::user("User message number {$i}");
+            $messages[] = Message::assistant("Assistant response number {$i} with some longer content to ensure compaction works properly");
+        }
+
+        return $messages;
+    }
+
+    public function testCompactUndoRestoresTheRowsTheMostRecentCompactionHid(): void
+    {
+        $original = self::fifteenExchanges();
+        $compacted = self::typeAndSubmitDraft(new Chat(history: $original, backend: new EchoBackend()), '/compact');
+        $this->assertNotSame(
+            array_map(static fn (Message $m): string => $m->content, $original),
+            self::modelReadContents($compacted),
+            'the compaction changed what the model reads',
+        );
+
+        $undone = self::typeAndSubmitDraft($compacted, '/compact --undo');
+
+        $this->assertSame(
+            array_map(static fn (Message $m): string => $m->content, $original),
+            self::modelReadContents($undone),
+            'undo puts back exactly the rows the model read before /compact',
+        );
+    }
+
+    public function testCompactUndoIsRefusedOnceAPromptHasBeenSentSinceTheCompaction(): void
+    {
+        $compacted = self::typeAndSubmitDraft(new Chat(history: self::fifteenExchanges(), backend: new EchoBackend()), '/compact');
+        $later = self::withPromptSentAfter($compacted);
+
+        $refused = self::typeAndSubmitDraft($later, '/compact --undo');
+
+        $this->assertSame(
+            self::modelReadContents($later),
+            self::modelReadContents($refused),
+            'a refused undo leaves the transcript the model reads untouched',
+        );
+    }
+
+    public function testCompactUndoWithNoPriorCompactionChangesNothingTheModelReads(): void
+    {
+        $original = self::fifteenExchanges();
+        $chat = self::typeAndSubmitDraft(new Chat(history: $original, backend: new EchoBackend()), '/compact --undo');
+
+        $this->assertSame(
+            array_map(static fn (Message $m): string => $m->content, $original),
+            self::modelReadContents($chat),
+        );
+    }
+
+    public function testASecondCompactUndoAfterASuccessfulOneHasNothingToUndo(): void
+    {
+        $compacted = self::typeAndSubmitDraft(new Chat(history: self::fifteenExchanges(), backend: new EchoBackend()), '/compact');
+        $undone = self::typeAndSubmitDraft($compacted, '/compact --undo');
+
+        $again = self::typeAndSubmitDraft($undone, '/compact --undo');
+
+        $this->assertSame(self::modelReadContents($undone), self::modelReadContents($again));
+    }
 }

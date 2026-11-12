@@ -11,6 +11,7 @@ use SugarCraft\Code\Chat;
 use SugarCraft\Code\Context\Compaction\HistoryFingerprint;
 use SugarCraft\Code\Context\Compaction\StateSummaryTemplate;
 use SugarCraft\Code\Context\Compaction\SummarySafeguard;
+use SugarCraft\Code\Context\CompactionSource;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextCompactor;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
@@ -218,6 +219,7 @@ final class CompactionService
         \Closure $estimate,
         string $prefix = '',
         bool $tierNotice = false,
+        ?CompactionSource $source = null,
     ): array {
         // Counted over what the model reads: compaction no longer removes rows
         // from the transcript (roadmap 1.B-3), it hides them from the model, so
@@ -279,6 +281,7 @@ final class CompactionService
                 $savingsPercentage,
                 $estimate($compactedHistory),
                 $tokenLimit(),
+                $source,
             )->content);
         } else {
             $report = Message::assistant($prefix . Lang::t('host.compact.done', [
@@ -2212,14 +2215,21 @@ final class CompactionService
         int $savedPercentage,
         int $tokenCount,
         int $tokenLimit,
+        ?CompactionSource $source = null,
     ): Message {
-        return Message::notice(Lang::t('host.compact.tier_report', [
+        $report = Lang::t('host.compact.tier_report', [
             'before' => $beforeMessages,
             'after' => $afterMessages,
             'saved' => $savedPercentage,
             'tokens' => $tokenCount,
             'limit' => $tokenLimit,
-        ]));
+        ]);
+
+        // Appended, not woven into the sentence, so a notice without a source
+        // (every caller that predates #7) reads exactly as it always did.
+        return Message::notice($source === null
+            ? $report
+            : $report . ' ' . Lang::t('host.compact.source', ['source' => $source->label()]));
     }
 
     /**

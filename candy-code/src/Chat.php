@@ -101,6 +101,7 @@ use SugarCraft\Code\Workflows\WorkflowEngineInterface;
 use SugarCraft\Code\Workflows\WorkflowResult;
 use SugarCraft\Code\Context\ContextCompactor;
 use SugarCraft\Code\Context\ContextCategories;
+use SugarCraft\Code\Context\CompactionSource;
 use SugarCraft\Code\Context\CompactorConfig;
 use SugarCraft\Code\Context\ContextWindow;
 use SugarCraft\Code\Context\IdleCompactionPolicy;
@@ -1892,6 +1893,14 @@ final class Chat implements Model
          * before it is untouched.
          */
         ?bool $resumeCostGuardArmed = null,
+        /**
+         * #7: what the most recent compaction did, for `/compact --undo` and
+         * `/context`: `{source, snapshot, userTurns}`. `snapshot` is the history
+         * that compaction condensed; `userTurns` counts the agent-visible prompts
+         * as the compaction left them, so an undo can show no turn has run since.
+         * In memory only; `/compact --undo` refuses it once a turn has run.
+         */
+        private readonly ?array $compactionRecord = null,
     ) {
         $this->transcriptWriter = $transcriptWriter ?? new DebouncedTranscriptWriter();
         $this->inputHistory = $inputHistory ?? ($promptHistory?->entries() ?? []);
@@ -9176,6 +9185,7 @@ final class Chat implements Model
     {
         $constructorProps = [
             'history' => $this->history,
+            'compactionRecord' => $this->compactionRecord,
             'inputBuf' => $this->inputBuf,
             'inFlight' => $this->inFlight,
             'streaming' => $this->streaming,
@@ -12329,6 +12339,8 @@ final class Chat implements Model
             workspace: $this->workspace,
             grants: \SugarCraft\Code\Permissions\SessionPermissionMemo::fromGrants($this->permissionGrants),
             scheduleRegistry: $this->scheduleRegistry,
+            lastCompaction: $this->compactionRecord['source'] ?? null,
+            windowAssumed: $this->contextWindowAssumed(),
         );
     }
 
@@ -14590,6 +14602,9 @@ final class Chat implements Model
         // MODEL writes the summary with its own Compress call, and the person
         // previews it before it applies; no summariser, no rewrite of rows.
         $argument = self::commandArgument($inputText);
+        if ($argument === '--undo') {
+            return $this->undoLastCompaction($inputText);
+        }
         if ($argument === '--self' || str_starts_with($argument, '--self ')) {
             $refusal = \SugarCraft\Code\Tools\BuiltIn\Compress::refusalFor($this->sessionContextLedger()->effectiveMode());
             if ($refusal !== null) {
@@ -14836,6 +14851,15 @@ final class Chat implements Model
             'inputBuf' => '',
             'inFlight' => false,
         ]);
+        // A non-empty prefix is the spend-cap notice ({@see scheduleModelCompaction()});
+        // an empty one means the model was never asked (offline, or heuristic mode).
+        $next = $this->withCompactionRecord(
+            $next,
+            $baseHistory,
+            CompactionSource::heuristic($prefix === ''
+                ? CompactionSource::REASON_NO_MODEL
+                : CompactionSource::REASON_SPEND_CAP),
+        );
 
         return [$next, $this->postCompactCmd(\SugarCraft\Code\Host\CompactionService::TRIGGER_MANUAL, $baseHistory, $next->history)];
     }
@@ -14872,6 +14896,7 @@ final class Chat implements Model
         array $summaries,
         string $prefix = '',
         bool $tierNotice = false,
+        ?CompactionSource $source = null,
     ): array {
         return [
             'history' => $this->compactionService()->compactedHistory(
@@ -14883,6 +14908,7 @@ final class Chat implements Model
                 $this->estimateTokenCount(...),
                 $prefix,
                 $tierNotice,
+                $source,
             ),
             // Whatever summarization was outstanding has either just been
             // consumed or has just been superseded by this compaction; either
@@ -15811,7 +15837,14 @@ final class Chat implements Model
      */
     private function applyModelCompaction(HistoryCompactedMsg $msg): array
     {
+        $before = $this->history;
         [$next, $cmd] = $this->landModelCompaction($msg);
+        // A parked landing dispatches the user's turn right behind this rewrite,
+        // so that turn has already run against the compacted history: nothing
+        // to undo, and no record of it is kept.
+        if ($msg->blockedBy === null && $msg->parkedSubmission === null) {
+            $next = $this->withCompactionRecord($next, $before, $this->compactionSourceOf($msg));
+        }
 
         // PostCompact (roadmap 2.12) fires for a compaction that was APPLIED —
         // never for one a PreCompact hook blocked — and rides beside whatever
@@ -15827,6 +15860,88 @@ final class Chat implements Model
             : null;
 
         return [$next, $post === null ? $cmd : ($cmd === null ? $post : Cmd::batch($cmd, $post))];
+    }
+
+    /**
+     * `/compact --undo` (#7): puts back the history the most recent compaction
+     * condensed, if no turn has run since. The rows the compaction hid come
+     * back to the model as they were, and the summary rows it wrote go away.
+     *
+     * In memory only: a restart or a session switch loses the record, and the
+     * compaction then stands. Refused rather than guessed once a turn has run,
+     * because the model has by then answered against the compacted history.
+     *
+     * @return array{0:Chat,1:?\Closure}
+     */
+    private function undoLastCompaction(string $inputText): array
+    {
+        $record = $this->compactionRecord;
+        if ($record === null) {
+            return $this->applyCommandResult(\SugarCraft\Code\Host\Commands\CommandResult::reply($inputText, Lang::t('cmd.compact.undo.none')));
+        }
+
+        if ($this->pendingCompactionId !== null || self::userTurnCount($this->history) !== $record['userTurns']) {
+            [$next, $cmd] = $this->applyCommandResult(\SugarCraft\Code\Host\Commands\CommandResult::reply($inputText, Lang::t('cmd.compact.undo.refused')));
+
+            return [$next->mutate(['compactionRecord' => null]), $cmd];
+        }
+
+        return $this->mutate([
+            'history' => $record['snapshot'],
+            'compactionRecord' => null,
+            'inputBuf' => '',
+        ])->applyCommandResult(\SugarCraft\Code\Host\Commands\CommandResult::reply($inputText, Lang::t('cmd.compact.undo.done')));
+    }
+
+    /**
+     * Remember what $next's compaction condensed, so `/compact --undo` and
+     * `/context` can answer for it. $before is the history the compaction ran
+     * over; `userTurns` is counted on the result, so any prompt sent after it
+     * moves the count and the undo refuses.
+     *
+     * @param list<Message> $before
+     */
+    private function withCompactionRecord(Chat $next, array $before, CompactionSource $source): Chat
+    {
+        if ($next->history === $before) {
+            return $next;
+        }
+
+        return $next->mutate(['compactionRecord' => [
+            'source' => $source,
+            'snapshot' => $before,
+            'userTurns' => self::userTurnCount($next->history),
+        ]]);
+    }
+
+    /** Who condensed the history a model-route landing folded, and why when it was not the model. */
+    private function compactionSourceOf(HistoryCompactedMsg $msg): CompactionSource
+    {
+        if ($msg->heuristicNotice !== null) {
+            return CompactionSource::heuristic($msg->heuristicNotice === ''
+                ? CompactionSource::REASON_NO_MODEL
+                : CompactionSource::REASON_SPEND_CAP);
+        }
+        if ($msg->error !== null) {
+            return CompactionSource::heuristic(CompactionSource::REASON_MODEL_FAILED);
+        }
+        if ($msg->safeguardHold !== null) {
+            return CompactionSource::heuristic(CompactionSource::REASON_SAFEGUARD);
+        }
+        if ($msg->summaries === []) {
+            return CompactionSource::heuristic(CompactionSource::REASON_MODEL_EMPTY);
+        }
+
+        return CompactionSource::model();
+    }
+
+    /** The agent-visible prompts in $history: the count a new turn moves. */
+    private static function userTurnCount(array $history): int
+    {
+        return count(array_filter(
+            Message::agentVisible($history),
+            static fn (Message $message): bool => $message->role === Role::User,
+        ));
     }
 
     /**
@@ -15886,7 +16001,7 @@ final class Chat implements Model
             return [$this->mutate($blocked !== [] ? $blocked : $this->compactionChanges('', $this->history, $summaries, $prefix)), null];
         }
 
-        $compacted = $this->mutate($blocked !== [] ? $blocked : $this->compactionChanges('', $this->history, $summaries, $prefix, true));
+        $compacted = $this->mutate($blocked !== [] ? $blocked : $this->compactionChanges('', $this->history, $summaries, $prefix, true, $this->compactionSourceOf($msg)));
 
         // Hoisted above every judgement below because the breaker's measurement and
         // the 95% tier must read the SAME post-compaction state, or the two would
@@ -21219,6 +21334,16 @@ final class Chat implements Model
     public function contextTokenLimit(): int
     {
         return $this->contextMeter()->limit($this->backend);
+    }
+
+    /**
+     * Whether {@see contextTokenLimit()} is the assumed fallback rather than
+     * the backend's own window (#6): the status bar and `/context` must say so,
+     * because the same 100,000 shown bare reads as a fact about the model.
+     */
+    public function contextWindowAssumed(): bool
+    {
+        return \SugarCraft\Code\Context\ContextWindow::describeBackend($this->backend)->assumed;
     }
 
     /**

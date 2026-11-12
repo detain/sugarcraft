@@ -10,6 +10,7 @@ use RuntimeException;
 use SugarCraft\Code\Backend\DumpsSystemPrompt;
 use SugarCraft\Code\Commands\ContextCommand;
 use SugarCraft\Code\Commands\ShareCommand;
+use SugarCraft\Code\Context\ContextWindow;
 use SugarCraft\Code\Host\ContextSources;
 use SugarCraft\Code\Lang;
 use SugarCraft\Code\Support\AtomicFileWriter;
@@ -71,7 +72,24 @@ final class ContextHostCommand implements HostCommand
 
         $breakdown = ContextSources::measure($context, self::instructionFiles($context->root));
 
-        return CommandResult::reply($text, (new ContextCommand($breakdown))->report());
+        return CommandResult::reply($text, (new ContextCommand($breakdown))->report() . "\n" . self::windowAndCompactionLines($context));
+    }
+
+    /**
+     * The two facts the breakdown does not carry (#6, #7): whether the window
+     * is the assumed fallback, and what the most recent compaction was.
+     */
+    private static function windowAndCompactionLines(CommandContext $context): string
+    {
+        $lines = [];
+        if ($context->windowAssumed) {
+            $lines[] = Lang::t('cmd.context.window.assumed', ['tokens' => (string) ContextWindow::FALLBACK_TOKENS]);
+        }
+        $lines[] = $context->lastCompaction === null
+            ? Lang::t('cmd.context.compaction.none')
+            : Lang::t('cmd.context.compaction.last', ['source' => $context->lastCompaction->label()]);
+
+        return implode("\n", $lines);
     }
 
     /**

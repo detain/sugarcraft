@@ -7,6 +7,7 @@ namespace SugarCraft\Code\Host\Commands;
 use SugarCraft\Code\Agents\AgentManager;
 use SugarCraft\Code\Backend;
 use SugarCraft\Code\Commands\TranscriptTable;
+use SugarCraft\Code\Context\CompactionSource;
 use SugarCraft\Code\Context\Pruning\ContextLedger;
 use SugarCraft\Code\Context\Pruning\PruningMode;
 use SugarCraft\Code\Context\RulesState;
@@ -80,6 +81,8 @@ final class CommandContext
         public readonly ?ScheduleRegistry $scheduleRegistry,
         public readonly ?TokenTracker $spendTracker,
         public readonly ?float $spendCap,
+        public readonly ?CompactionSource $lastCompaction = null,
+        public readonly bool $windowAssumed = false,
     ) {
     }
 
@@ -111,6 +114,8 @@ final class CommandContext
         ?ScheduleRegistry $scheduleRegistry = null,
         ?TokenTracker $spendTracker = null,
         ?float $spendCap = null,
+        ?CompactionSource $lastCompaction = null,
+        bool $windowAssumed = false,
     ): self {
         return new self(
             history: array_values($history),
@@ -137,6 +142,8 @@ final class CommandContext
             scheduleRegistry: $scheduleRegistry,
             spendTracker: $spendTracker,
             spendCap: $spendCap,
+            lastCompaction: $lastCompaction,
+            windowAssumed: $windowAssumed,
         );
     }
 
