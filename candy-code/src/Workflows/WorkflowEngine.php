@@ -3220,7 +3220,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $multi = count($tasks) > 1;
         $where = static fn (int $i): string => $multi
-            ? "Stage '{$stageName}' task #{$i}"
+            ? "Stage '{$stageName}' task #" . ($i + 1)
             : "Stage '{$stageName}'";
 
         // Every task's declaration up front, for executePipelineStage()'s
@@ -4453,7 +4453,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // its stage started, after the earlier stages had run.
                 $tasks = array_values($stage['tasks'] ?? []);
                 foreach ($tasks as $i => $task) {
-                    $checks[] = [$task, count($tasks) > 1 ? "Stage '{$stageName}' task #{$i}" : "Stage '{$stageName}'"];
+                    $checks[] = [$task, count($tasks) > 1 ? "Stage '{$stageName}' task #" . ($i + 1) : "Stage '{$stageName}'"];
                 }
             } elseif ($stageType === 'parallel') {
                 foreach ($stage['tasks'] ?? [] as $task) {

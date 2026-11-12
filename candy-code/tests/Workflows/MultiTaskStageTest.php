@@ -206,7 +206,7 @@ final class MultiTaskStageTest extends TestCase
         self::assertSame([], $this->prompts, 'no stage may run on the way to a refused task in a later stage');
         $failure = $result->firstFailure();
         self::assertSame('second', $failure?->stageName);
-        self::assertStringContainsString("Stage 'second' task #1", (string) $failure?->error);
+        self::assertStringContainsString("Stage 'second' task #2", (string) $failure?->error);
         self::assertStringContainsString('Bash', (string) $failure?->error);
     }
 
@@ -237,7 +237,7 @@ final class MultiTaskStageTest extends TestCase
         }
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage("Stage 'mixed' task #1 must be a TaskBuilder, got string");
+        $this->expectExceptionMessage("Stage 'mixed' task #2 must be a TaskBuilder, got string");
         (new WorkflowBuilder())->stage('mixed', [Tasks::agent('coder'), 'nope']);
     }
 
@@ -438,8 +438,8 @@ final class MultiTaskStageTest extends TestCase
         yield 'empty list' => ["tasks: []", '"tasks" must list at least one task'];
         yield 'a map' => ["tasks: {a: {prompt: x}}", '"tasks" must be a list, got a map'];
         yield 'a scalar' => ["tasks: go", '"tasks" must be a list, got string'];
-        yield 'an entry that is not a map' => ["tasks: [just-a-string]", 'task #0 must be a map, got string'];
-        yield 'a mistyped prompt' => ["tasks:\n      - prompt: [1]", 'task #0 "prompt" must be a string'];
+        yield 'an entry that is not a map' => ["tasks: [just-a-string]", 'task #1 must be a map, got string'];
+        yield 'a mistyped prompt' => ["tasks:\n      - prompt: [1]", 'task #1 "prompt" must be a string'];
         yield 'a stage-level prompt beside tasks' => ["prompt: shared\n    tasks:\n      - prompt: x", '"prompt" belongs on each task, not on the stage'];
         yield 'tasks on a parallel stage' => ["parallel: true\n    tasks:\n      - prompt: x", 'is parallel, so it lists "agents", not "tasks"'];
     }

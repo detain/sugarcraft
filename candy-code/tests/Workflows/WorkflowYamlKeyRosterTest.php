@@ -136,7 +136,7 @@ final class WorkflowYamlKeyRosterTest extends TestCase
         } catch (WorkflowLoadException $error) {
             self::assertStringContainsString('unknown key', $error->getMessage());
             self::assertStringContainsString('"agent"', $error->getMessage());
-            self::assertStringContainsString('agent #0', $error->getMessage());
+            self::assertStringContainsString('agent #1', $error->getMessage());
         }
     }
 

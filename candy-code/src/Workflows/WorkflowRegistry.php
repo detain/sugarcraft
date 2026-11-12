@@ -1393,15 +1393,16 @@ final class WorkflowRegistry
                 //
                 // So the index form is kept on its own merits, not as a policy
                 // closure: a duplicate name is by definition written twice, and
-                // `#0 and #3` says where both are while the name says neither.
-                // The indices are 0-based to match `stage #{$index}` in
-                // {@see requireStageName()} and `agent #{$agentIndex}` in
-                // {@see parseYamlStage()}; nothing in the README, `workflows/`
-                // or `examples/workflows/` numbers stages from 1.
+                // `#1 and #4` says where both are while the name says neither.
+                // The numbers are 1-based ({@see self::ordinal()}), like
+                // `stage #N` in {@see requireStageName()}, `agent #N` in
+                // {@see parseYamlStage()} and the tool report's `Stage %d`:
+                // an author counts the stages on the page from one, and a
+                // 0-based diagnostic pointed at the wrong entry (P2-3).
                 if (isset($seenStageNames[$stageName])) {
                     throw new WorkflowLoadException(
                         "Workflow file {$yamlPath} has two stages with the same name "
-                        . "(stages #{$seenStageNames[$stageName]} and #{$index}); stage names are how "
+                        . '(stages #' . self::ordinal($seenStageNames[$stageName]) . ' and #' . self::ordinal($index) . '); stage names are how '
                         . '{{<name>.output}} refers to one, so they must be unique.'
                     );
                 }
@@ -1921,6 +1922,16 @@ final class WorkflowRegistry
     }
 
     /**
+     * A list position as the 1-based number every load diagnostic prints
+     * (`stage #1` is the first stage on the page). A non-int key cannot come
+     * from a list, but is echoed rather than guessed at.
+     */
+    private static function ordinal(int|string $index): string
+    {
+        return is_int($index) ? (string) ($index + 1) : $index;
+    }
+
+    /**
      * The `name` of one `stages:` entry.
      *
      * @param mixed $stage The raw YAML value, which is why this takes mixed:
@@ -1933,13 +1944,13 @@ final class WorkflowRegistry
     {
         if (!is_array($stage)) {
             throw new WorkflowLoadException(
-                "Workflow file {$yamlPath} stage #{$index} must be a map, got " . get_debug_type($stage)
+                "Workflow file {$yamlPath} stage #" . self::ordinal($index) . " must be a map, got " . get_debug_type($stage)
             );
         }
 
         if (!array_key_exists('name', $stage) || !is_string($stage['name']) || $stage['name'] === '') {
             throw new WorkflowLoadException(
-                "Workflow file {$yamlPath} stage #{$index} must have a \"name\" field"
+                "Workflow file {$yamlPath} stage #" . self::ordinal($index) . " must have a \"name\" field"
             );
         }
 
@@ -2016,9 +2027,10 @@ final class WorkflowRegistry
 
             $builders = [];
             foreach ($agents as $agentIndex => $agent) {
+                $agentOrdinal = self::ordinal($agentIndex);
                 if (!is_array($agent)) {
                     throw new WorkflowLoadException(
-                        "{$where} agent #{$agentIndex} must be a map, got " . get_debug_type($agent)
+                        "{$where} agent #{$agentOrdinal} must be a map, got " . get_debug_type($agent)
                     );
                 }
 
@@ -2028,44 +2040,44 @@ final class WorkflowRegistry
                 // spelling variant of the roster).
                 $this->requireNoUnknownTaskKeys(
                     $agent,
-                    "{$where} agent #{$agentIndex}",
+                    "{$where} agent #{$agentOrdinal}",
                     array_values(array_merge(['type'], array_diff(self::YAML_TASK_KEYS, ['agent'])))
                 );
 
-                $b = Tasks::agent($this->requireString($agent, 'type', 'coder', "{$where} agent #{$agentIndex}"));
+                $b = Tasks::agent($this->requireString($agent, 'type', 'coder', "{$where} agent #{$agentOrdinal}"));
                 if (array_key_exists('name', $agent)) {
-                    $b = $b->name($this->requireString($agent, 'name', '', "{$where} agent #{$agentIndex}"));
+                    $b = $b->name($this->requireString($agent, 'name', '', "{$where} agent #{$agentOrdinal}"));
                 }
                 if (array_key_exists('prompt', $agent)) {
-                    $b = $b->prompt($this->requireString($agent, 'prompt', '', "{$where} agent #{$agentIndex}"));
+                    $b = $b->prompt($this->requireString($agent, 'prompt', '', "{$where} agent #{$agentOrdinal}"));
                 }
                 if (array_key_exists('tools', $agent)) {
-                    $b = $b->tools($this->requireToolList($agent['tools'], "{$where} agent #{$agentIndex}"));
+                    $b = $b->tools($this->requireToolList($agent['tools'], "{$where} agent #{$agentOrdinal}"));
                 }
                 if (array_key_exists('retries', $agent)) {
-                    $b = $b->retries($this->requireRetryCount($agent['retries'], "{$where} agent #{$agentIndex}"));
+                    $b = $b->retries($this->requireRetryCount($agent['retries'], "{$where} agent #{$agentOrdinal}"));
                 }
                 if (array_key_exists('outputSchema', $agent)) {
-                    $b = $b->outputSchema($this->requireSchema($agent['outputSchema'], "{$where} agent #{$agentIndex}"));
+                    $b = $b->outputSchema($this->requireSchema($agent['outputSchema'], "{$where} agent #{$agentOrdinal}"));
                 }
                 if (array_key_exists('isolation', $agent)) {
-                    $b = $b->isolation($this->requireIsolation($agent['isolation'], "{$where} agent #{$agentIndex}"));
+                    $b = $b->isolation($this->requireIsolation($agent['isolation'], "{$where} agent #{$agentOrdinal}"));
                 }
                 // S2 (wf-g2g3): the per-stage model ask — a trimmed non-empty
                 // string here; whether the session can SERVE it is the ONE
                 // ladder's job at dispatch (ModelChoice), never a second here.
                 if (array_key_exists('model', $agent)) {
-                    $b = $b->model($this->requireModel($agent['model'], "{$where} agent #{$agentIndex}"));
+                    $b = $b->model($this->requireModel($agent['model'], "{$where} agent #{$agentOrdinal}"));
                 }
                 // O3: the host resource this agent's stage serializes on,
                 // plus its wait bound — checked spellings, refused here.
                 if (array_key_exists('resource', $agent)) {
-                    $b = $b->resource($this->requireResource($agent['resource'], "{$where} agent #{$agentIndex}"));
+                    $b = $b->resource($this->requireResource($agent['resource'], "{$where} agent #{$agentOrdinal}"));
                 }
                 if (array_key_exists('lockWaitSeconds', $agent)) {
-                    $b = $b->lockWaitSeconds($this->requireLockWaitSeconds($agent['lockWaitSeconds'], "{$where} agent #{$agentIndex}"));
+                    $b = $b->lockWaitSeconds($this->requireLockWaitSeconds($agent['lockWaitSeconds'], "{$where} agent #{$agentOrdinal}"));
                 }
-                $b = $this->applyTaskArms($b, $agent, "{$where} agent #{$agentIndex}");
+                $b = $this->applyTaskArms($b, $agent, "{$where} agent #{$agentOrdinal}");
                 $builders[] = $b;
             }
             return $builders;
@@ -2152,7 +2164,7 @@ final class WorkflowRegistry
 
         $builders = [];
         foreach ($tasks as $taskIndex => $task) {
-            $at = "{$where} task #{$taskIndex}";
+            $at = "{$where} task #" . self::ordinal($taskIndex);
             if (!is_array($task)) {
                 throw new WorkflowLoadException("{$at} must be a map, got " . get_debug_type($task));
             }
@@ -2483,7 +2495,7 @@ final class WorkflowRegistry
 
         $builders = [];
         foreach ($steps as $stepIndex => $step) {
-            $at = "{$where} step #{$stepIndex}";
+            $at = "{$where} step #" . self::ordinal($stepIndex);
             if (!is_array($step)) {
                 throw new WorkflowLoadException("{$at} must be a map, got " . get_debug_type($step));
             }

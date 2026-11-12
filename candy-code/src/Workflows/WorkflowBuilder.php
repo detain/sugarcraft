@@ -88,7 +88,7 @@ final class WorkflowBuilder
                 throw new \InvalidArgumentException(sprintf(
                     "Stage '%s' task #%d must be a TaskBuilder, got %s",
                     $name,
-                    $i,
+                    $i + 1,
                     get_debug_type($task),
                 ));
             }

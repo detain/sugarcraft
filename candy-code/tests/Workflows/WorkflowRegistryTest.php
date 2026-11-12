@@ -625,7 +625,7 @@ PHP);
         $registry = new WorkflowRegistry($userDir);
 
         $this->expectException(WorkflowLoadException::class);
-        $this->expectExceptionMessage('stage #0 must have a "name" field');
+        $this->expectExceptionMessage('stage #1 must have a "name" field');
 
         $registry->load('no-stage-name');
     }
@@ -638,7 +638,7 @@ PHP);
         $registry = new WorkflowRegistry($userDir);
 
         $this->expectException(WorkflowLoadException::class);
-        $this->expectExceptionMessage('stage #0 must be a map, got string');
+        $this->expectExceptionMessage('stage #1 must be a map, got string');
 
         $registry->load('scalar-stage');
     }
@@ -1060,7 +1060,7 @@ PHP);
         $registry = new WorkflowRegistry($userDir);
 
         $this->expectException(WorkflowLoadException::class);
-        $this->expectExceptionMessage('agent #0 must be a map, got string');
+        $this->expectExceptionMessage('agent #1 must be a map, got string');
 
         $registry->load('scalar-agent');
     }
@@ -1082,7 +1082,7 @@ PHP);
         $registry = new WorkflowRegistry($userDir);
 
         $this->expectException(WorkflowLoadException::class);
-        $this->expectExceptionMessage('stage #0 must have a "name" field');
+        $this->expectExceptionMessage('stage #1 must have a "name" field');
 
         $registry->load('numeric-stage-name');
     }
@@ -1098,7 +1098,7 @@ PHP);
         $registry = new WorkflowRegistry($userDir);
 
         $this->expectException(WorkflowLoadException::class);
-        $this->expectExceptionMessage('stage #0 must have a "name" field');
+        $this->expectExceptionMessage('stage #1 must have a "name" field');
 
         $registry->load('empty-stage-name');
     }
@@ -1586,7 +1586,7 @@ PHP);
             $this->fail('two stages sharing one name must be refused');
         } catch (WorkflowLoadException $e) {
             $this->assertStringContainsString('has two stages with the same name', $e->getMessage());
-            $this->assertStringContainsString('(stages #0 and #2)', $e->getMessage());
+            $this->assertStringContainsString('(stages #1 and #3)', $e->getMessage());
             $this->assertStringNotContainsString(
                 'SENTINELSECRET',
                 $e->getMessage(),
