@@ -1324,6 +1324,18 @@ final class Renderer
     }
 
     /**
+     * Declare how many background jobs are running for the frame being
+     * composited, for the status bar's "N bg" segment. Same per-paint
+     * lineage as {@see setAgentsPaneDocked()}: the shell sets it around one
+     * paint, and the default 0 keeps the segment absent everywhere else.
+     * Storage: {@see RenderFrame} (its `backgroundJobCount()` read).
+     */
+    public static function setBackgroundJobCount(int $count): void
+    {
+        self::publishedFrame()->noteBackgroundJobCount($count);
+    }
+
+    /**
      * Declare the Agent View for the frame being composited (roadmap P-C2),
      * as {@see \SugarCraft\Code\App\App::agentViewFrame()} built it, or null
      * for the parent transcript.
@@ -2620,6 +2632,17 @@ final class Renderer
         $queued = count($chat->queuedPrompts());
         if ($queued > 0) {
             $segment = ' · ' . Lang::t('tui.status.queued', ['count' => $queued]);
+            $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
+            if ($floor <= $cols) {
+                $processing .= $segment;
+            }
+        }
+        // #16: the background-jobs count rides the same fit rule as the queue
+        // segment above, so a narrow terminal drops it instead of cutting the
+        // hint. Zero (the default, and every un-wired paint) draws nothing.
+        $backgroundJobs = $frame->backgroundJobCount();
+        if ($backgroundJobs > 0) {
+            $segment = ' · ' . Lang::t('tui.status.bg_jobs', ['count' => $backgroundJobs]);
             $floor = Width::of(self::stripZoneMarkers($processing)) + Width::of($segment) + 3 + 2;
             if ($floor <= $cols) {
                 $processing .= $segment;
@@ -5386,6 +5409,16 @@ final class Renderer
             // the verbatim row prefix, and $labelRoom reads the ACTUAL prefix.
             $skillName = SkillMentions::invokedSkillName($result);
             $prefix = $skillName === null ? self::toolRowPrefix() : self::skillRowPrefix();
+            // #35: a failed row names its next step, but only when the hint
+            // leaves the tool name a usable share of the pane. The hint is
+            // dropped rather than cut, because a cut would take the "error"
+            // word the status is there to say.
+            if ($result->isError() && !$stopped) {
+                $hint = ' ' . self::dim($theme)->render('· ' . Lang::t('tui.tool.error_hint'));
+                if (Width::of($prefix) + Width::of($status) + Width::of($hint) + 1 + 12 <= $width) {
+                    $status .= $hint;
+                }
+            }
             $labelRoom = $width - Width::of($prefix) - Width::of($status) - 1;
             $name = Width::truncate(self::oneLine($skillName ?? $result->name), max(1, $labelRoom));
             // W7-B: the key is the cursor identity too, so it is read BEFORE
@@ -5834,8 +5867,15 @@ final class Renderer
             return $collapsed['output'];
         }
 
-        return $collapsed['output'] . "\n"
-            . self::dim($theme)->render(Lang::t('tui.tool.output_truncated'));
+        // Same count the hidden-body row reports: total lines less the lines
+        // kept. A character clip inside the kept lines can leave nothing whole
+        // hidden, in which case the count-free notice is the honest one.
+        $hidden = (substr_count($body, "\n") + 1) - (substr_count($collapsed['output'], "\n") + 1);
+        $notice = $hidden > 0
+            ? Lang::t('tui.tool.output_truncated_lines', ['count' => $hidden])
+            : Lang::t('tui.tool.output_truncated');
+
+        return $collapsed['output'] . "\n" . self::dim($theme)->render($notice);
     }
 
     /**

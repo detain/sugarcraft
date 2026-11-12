@@ -117,6 +117,14 @@ final class RenderFrame
      * Same per-paint handoff as {@see $paletteAbandoned}.
      */
     private bool $agentsPaneDocked = false;
+    /**
+     * Background jobs the shell reports as running for this paint, shown as the
+     * status bar's "N bg" segment. Plain int, not a supervisor read: the
+     * renderer stays ignorant of the background subsystem, and the count is
+     * wired in by the shell compositor the same way the other per-paint
+     * signals are.
+     */
+    private int $backgroundJobCount = 0;
 
     /**
      * The row-unit keys the shell's SETTLED `Ctrl+F` cursor stands on
@@ -213,6 +221,7 @@ final class RenderFrame
         $next = new self();
         $next->paletteAbandoned = $this->paletteAbandoned;
         $next->agentsPaneDocked = $this->agentsPaneDocked;
+        $next->backgroundJobCount = $this->backgroundJobCount;
         $next->agentView = $this->agentView;
         $next->focusedToolRowKeys = $this->focusedToolRowKeys;
 
@@ -338,6 +347,16 @@ final class RenderFrame
     public function noteAgentsPaneDocked(bool $docked): void
     {
         $this->agentsPaneDocked = $docked;
+    }
+
+    public function noteBackgroundJobCount(int $count): void
+    {
+        $this->backgroundJobCount = max(0, $count);
+    }
+
+    public function backgroundJobCount(): int
+    {
+        return $this->backgroundJobCount;
     }
 
     public function agentsPaneDocked(): bool

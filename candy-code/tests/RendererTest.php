@@ -589,7 +589,9 @@ final class RendererTest extends TestCase
 
         $this->assertStringContainsString('stderr line 1', $out);
         $this->assertStringNotContainsString('stderr line 40', $out);
-        $this->assertStringContainsString('output truncated (ctrl+o to expand)', $out);
+        // The trailer now counts what it hides (#34), so the bare notice is gone.
+        $this->assertStringNotContainsString('output truncated (ctrl+o to expand)', $out);
+        $this->assertMatchesRegularExpression('/… \d+ lines hidden \(ctrl\+o to expand\)/', $out);
     }
 
     public function testCollapseToolOutputKeepsShortOutputVerbatim(): void
