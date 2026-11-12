@@ -89,6 +89,7 @@ config:                          # optional
   maxAgents: 200                 # whole number >= 1; run-wide dispatch ceiling (default 1000)
   maxTokens: 2000000             # whole number >= 1; hard run-wide token ceiling (unset = none)
   maxCost: 5.00                  # positive number of USD; hard run-wide cost ceiling (unset = none)
+  stopOnFirstFailure: false      # strict boolean; true = a failed agent cancels its stage's siblings
 
 schemas:                         # optional; named object-rooted schemas for outputSchema: {$ref: …}
   verdict:
@@ -101,7 +102,7 @@ stages:                          # a LIST, never a map
     agent: reviewer              # default: coder
     prompt: >
       Review the diff at {{scope}} …
-    tools: [Read, Grep, Glob, Bash]
+    tools: [Read, Grep, Glob, Bash]  # omitted = the session's tools; [] = no tools at all
     retries: 1                   # whole number >= 0; default 0
     outputSchema:                # optional; map, inline JSON string, or file path
       type: object
@@ -129,11 +130,53 @@ stages:                          # a LIST, never a map
 
 Defaults are `Workflow`'s own: `maxConcurrent` unset (the default width, below
 — never "no cap" unless you write `0`), `timeout: 3600`, `maxAgents: 1000`,
-and no `maxTokens`/`maxCost` ceiling. `stopOnFirstFailure` (default `false`) is
-a PHP-builder setting only — YAML has no spelling for it. Unlike stage and task
-keys, the top-level and `config:` maps have no closed roster: an unknown key
-there is ignored, not refused, so a typo such as `maxToken:` silently means "no
-ceiling" — `/workflow lint` will not catch it either.
+no `maxTokens`/`maxCost` ceiling, and `stopOnFirstFailure: false`.
+
+**Both maps have a closed roster.** The top-level keys are exactly `name`,
+`description`, `config`, `schemas`, `stages`
+(`WorkflowRegistry::YAML_WORKFLOW_KEYS`), and `config:` takes exactly
+`timeout`, `maxConcurrent`, `maxAgents`, `maxTokens`, `maxCost`,
+`stopOnFirstFailure` (`WorkflowRegistry::YAML_CONFIG_KEYS`). Any other key
+fails the load, first offender named — on every door (a saved file, the
+`Workflow` tool's `plan`, a `uses:` include, headless):
+
+```
+Workflow file <src> has unknown top-level key "<key>"; supported keys: name, description, config, schemas, stages
+Workflow file <src> "config" has unknown key "<key>"; supported keys: timeout, maxConcurrent, maxAgents, maxTokens, maxCost, stopOnFirstFailure
+```
+
+So a typo such as `maxToken:` is a load error, not a silent "no ceiling".
+
+**`config.stopOnFirstFailure`** is the PHP builder's
+`->stopOnFirstFailure()` spelled in YAML. It is a strict boolean like
+`capture:` — `true`/`false` unquoted; `'yes'`, `1`, `'true'` and `~` are
+refused (`Workflow file <src> "config.stopOnFirstFailure" must be a boolean
+(true or false, unquoted), got <type>`). Absent means `false`. Under `true`, a
+parallel stage cancels its remaining agents on the first failure (only an
+agent's last attempt counts — see [`retries`](#retries-re-runs-a-failed-agent)),
+and a `type: map` stage admits no item after its first casualty; a
+`minSuccess` stage is exempt, so its tolerance is judged over every agent
+(the linter warns when both are set).
+
+### `tools:` — omitted means the session's tools, `[]` means none
+
+On any task surface (a one-task stage, a `tasks:` entry, a parallel agent, a
+pipeline or map step, either slot of a verification stage, a `from:`
+template) and on PHP's `->tools([...])`:
+
+- **`tools:` omitted** — the agent gets the session's tools (or its
+  `preset:`'s, when it names one).
+- **`tools: []`** — the agent gets **no tools**. Nothing is put on the
+  request's tool list, and the grant hook refuses any call that reaches it
+  anyway: `is refused: agent "<name>" declares tools: [] (no tools)`. The one
+  exception is `StructuredOutput`: a schema'd agent (`outputSchema:`) still
+  gets its answer channel.
+- **An explicit `[]` beats a preset.** `preset: reviewer` plus `tools: []`
+  runs with no tools; only an ABSENT `tools:` takes the preset's list.
+- **A non-empty list** is exactly the agent's tool set, each call held to its
+  declaration by the grant hook (argument-scoped entries included — see
+  [Running from the CLI](#running-from-the-cli-headless) for the up-front
+  check).
 
 ### Width, the fan-out ceiling and the agent budget
 
@@ -729,7 +772,7 @@ pipeline or map step, either slot of a verification stage — or
 
   | From the preset | Applied when |
   |---|---|
-  | `tools` | the task declares none (`tools:` absent or `[]`) |
+  | `tools` | the task's `tools:` is absent (an explicit `tools: []` means no tools and wins) |
   | `model` | the task's `model:` is absent or `inherit` |
   | `effort`, `isolation` | the task leaves them unset |
   | system prompt (the preset body) | always — the stage agent runs under it |
@@ -1059,8 +1102,11 @@ reads **exactly one source** (`WorkflowRegistry::YAML_FROM_KEYS`):
   without `accumulate` keeps its rows under `<stage>_<n>`, so it has no row
   under its stage name to point into, and the fan-out fails loudly.
 - **`context:`** — a run-context key whose value is a JSON list (handed in
-  through the `Workflow` tool's `context`, or a PHP caller's array). The key
-  must not be empty or start with `@`.
+  through the `Workflow` tool's `context`, a PHP caller's array, or a
+  `key:=<json>` pair on either command line — `/workflow run fix-wave
+  files:='["src/A.php","src/B.php"]'`, see [Running one](#running-one)). A
+  plain `files=…` pair is a string, and the stage fails before dispatching
+  anything. The key must not be empty or start with `@`.
 
 Optional keys beside the source:
 
@@ -1345,10 +1391,14 @@ of these rather than loading a workflow that quietly does less:
   thrown away, so the author's `first:` meant nothing.
 - **two stages with the same name** — stage names are how `{{name.output}}`
   interpolates, so duplicates make every reference ambiguous.
-- `config:` not a map; `maxConcurrent` not a whole number >= 0 (0 means no cap);
-  `timeout` not a positive integer; `maxAgents` not a whole number of at least
-  1 (`"config.maxAgents" must be at least 1, got 0`); `maxTokens` not a whole
-  number of at least 1; `maxCost` not a positive number of USD.
+- a top-level key outside `name`, `description`, `config`, `schemas`,
+  `stages` (`has unknown top-level key "<key>"; supported keys: …`).
+- `config:` not a map; a `config:` key outside its roster (`"config" has
+  unknown key "<key>"; supported keys: …`); `maxConcurrent` not a whole number
+  >= 0 (0 means no cap); `timeout` not a positive integer; `maxAgents` not a
+  whole number of at least 1 (`"config.maxAgents" must be at least 1, got
+  0`); `maxTokens` not a whole number of at least 1; `maxCost` not a positive
+  number of USD; `stopOnFirstFailure` not an unquoted `true`/`false`.
 - `schemas:` not a map of name => schema, a name outside
   `[A-Za-z_][A-Za-z0-9_-]*`, a schema that is not a map or has no
   `type: object` at its root, or a `required` that is not a list or names a
@@ -1461,7 +1511,7 @@ item data is never re-scanned):
 | `{{stage.failed}}` | a `minSuccess` stage's casualties as a JSON list ([`minSuccess`](#minsuccess-tolerates-casualties-in-a-fan-out)); claims the tail only when that stage recorded one |
 | `{{stage.votes}}` | a verifier panel's last round as JSON ([panels](#verifier-panels-votes-lenses-and-quorum)); claims the tail only when a panel ran |
 | `{{stageName.output}}` | a prior stage's collected output — every stage type writes it: a parallel stage's is every agent's output joined by newlines, a verification stage's the task and verifier output, a map stage's its JSON item document, an accumulate loop's its `{"items",…}` document |
-| `{{variable}}` | a key from the run context (`/workflow run <name> key=val …`, the `Workflow` tool's `context`); an array or object renders as compact JSON |
+| `{{variable}}` | a key from the run context (`/workflow run <name> key=val …` or `key:=<json>`, the `Workflow` tool's `context`); an array or object renders as compact JSON |
 
 The engine also injects tokens of its own, each only where it means something:
 
@@ -1604,7 +1654,7 @@ four `as:` shapes:
 
 ```
 /workflow list
-/workflow run <name>
+/workflow run <name> [key=val | key:=json ...]
 /workflow pause <id>
 /workflow resume <id>
 /workflow status <id>
@@ -1635,7 +1685,8 @@ session's roster does not know (every caller passes the roster's names when
 the plan names a preset), a blank `announce:`, a hand-built `maxTokens` below
 1 or a non-positive `maxCost`, and bound violations. WARNINGS: bare
 unknown `{{token}}`, an empty prompt, an unnamed stage, a plan with no stages,
-a parallel stage whose agents all share the checkout, an unsatisfiable
+two or more agents of a parallel stage that can write the shared checkout
+(below), an unsatisfiable
 `rejectMinOccurrences`, retries above the warn ceiling, `maxConcurrent: 0`
 (no cap), `{dry: N}` with N not below `max`, `stopOnFirstFailure` beside
 `minSuccess`, a panel with no `reject:`, `{{lens}}` with no lenses, a
@@ -1646,6 +1697,24 @@ reads neither an earlier step nor an earlier stage, and an `until:
 (`{{input}}`, `{{prevResult}}`, `{{round}}`, `{{previous}}`, `{{seen}}`,
 `{{fresh}}`, `{{item}}`, `{{index}}`, `{{path}}`, `{{lens}}`) are known in
 the scopes listed under [Interpolation](#interpolation) and warn outside them.
+
+**The shared-checkout warning** fires only when **two or more agents of one
+parallel stage can write AND are not `isolation: worktree`** — a lone writer,
+or a writer in its own worktree, does not count:
+
+```
+N agents in this parallel stage can write the shared checkout (no worktree isolation); concurrent file edits can clobber each other. Narrow their tools to read-class ones or set isolation: worktree.
+```
+
+An agent *can write* when its `tools:` is absent (the session's tools — a
+`preset:` is not resolved at lint time), when it declares a Write-class tool
+(`Bash`, `Edit`, `Write`, `ApplyPatch`, `NotebookEdit`, …; the name half of
+`Bash(git *)` counts), or when it declares a name the tool catalog cannot
+classify (an MCP bridge tool or a glob cannot be vouched for). `tools: []` and
+Read-, Ask- and NoAsk-class tools (`Read`, `Grep`, `Glob`, `WebFetch`,
+`WebSearch`, `Todo`, …) never count, so a read-only review or research panel
+lints clean. A `from:` fan-out has one template task, so it never draws the
+warning — keep its items disjoint yourself.
 
 **`/workflow run` lints first.** Before anything is dispatched, `/workflow run
 <name>` — in the TUI and on the host (`serve`) surface alike — loads the name
@@ -1664,6 +1733,26 @@ the name. Pairs are split on whitespace outside quotes, and a `"…"` or `'…'`
 span keeps its spaces — `/workflow run review-loop specfile="docs/my brief.md"`
 — with the quotes removed. A pair with no `=`, an empty key, an `@`-prefixed
 key or an unterminated quote is refused before anything is dispatched.
+
+`key=value` is always a **string**. `key:=<json>` carries a typed value
+instead — the value is decoded as JSON (a list, object, number, boolean or
+null), so a `from: {context: files}` fan-out can be driven from the command
+line:
+
+```
+/workflow run fix-wave files:='["src/A.php","src/B.php"]' spec=docs/brief.md
+```
+
+The tokenizer strips quotes, so **single-quote the JSON** to keep its own
+double quotes: an unquoted `files:=["a","b"]` reaches the decoder as `[a,b]`
+and is refused rather than run on a mangled value. The operator is only `:`
+immediately before the pair's first `=` (`a:b=1` stays a plain string pair
+keyed `a:b`). Malformed JSON is refused naming the key, joined into the usual
+`Malformed run arguments: …` error with nothing dispatched:
+
+```
+`files:=` needs a JSON value (e.g. files:='["a","b"]'), got `[a` (Syntax error)
+```
 
 **2026-09-10 (the seam fully closed): what `/workflow run`
 reports for a sub-agent changed under you, and the change is on purpose.**
@@ -1838,8 +1927,10 @@ whole declaration by the same `SubAgentGrantHook` a `Task` preset's grant uses
 (`EngineExecutor` binds it, ahead of the session gate and even under
 `withoutHooks()`): `git status` runs, `rm x` and `git log && rm x` come back to
 the agent as denied calls it can work around. A stage with no `tools:` is not
-policed by the grant, and a malformed entry (`Bash(git *`) fails the stage
-naming why.
+policed by the grant; a `tools: []` stage is, and every call but
+`StructuredOutput` is refused
+([`tools:`](#tools--omitted-means-the-sessions-tools--means-none)). A
+malformed entry (`Bash(git *`) fails the stage naming why.
 
 ## Running from the CLI (headless)
 
@@ -1847,7 +1938,7 @@ The `workflow` subcommand executes a saved workflow through the engine
 directly — no model in the loop, no TUI, no turn machinery:
 
 ```
-candy-code workflow run <name-or-path> [--param k=v]... [--format json]
+candy-code workflow run <name-or-path> [--param k=v | --param k:=json]... [--format json]
 candy-code workflow status <id-or-name> [--format json]
 candy-code workflow resume <id-or-name> [--format json]
 ```
@@ -1905,6 +1996,22 @@ so a value containing a comma must be quoted *inside* the payload —
 breaking the joined string back into pairs. Keys are validated the same way
 the TUI slash command validates them; `@`-prefixed keys are refused because
 they collide with the engine-reserved context namespace.
+
+`--param key:=<json>` is the typed spelling, exactly as on `/workflow run`:
+the value is decoded as JSON, so a list can feed a `from: {context: key}`
+fan-out.
+
+```
+candy-code workflow run fix-wave --param files:='["src/A.php","src/B.php"]' --param spec=docs/brief.md
+```
+
+Inside a `:=` segment the comma rule changes: a comma nested in `[]` or `{}`
+is the JSON's own, not a pair separator, and `\"` inside a JSON string does
+not close it. An outer single-quote wrapper that survives the shell is
+stripped; double quotes are kept, since they are JSON. Malformed JSON is a
+usage error (exit 2) naming the key, with nothing dispatched — behind the
+verb's usual `candy-code:` prefix, `` workflow --param: `files:=` needs a JSON
+value (e.g. files:='["a","b"]'), got `[a` (Syntax error) ``.
 
 ### Machine document
 
@@ -2078,7 +2185,8 @@ and an optional `resumeFrom` run ID:
     baseline.
 - **What a stage agent may do.** This session's tool loop, hooks, permission
   gate and root, limited to its stage's `tools:` (argument-scoped entries
-  included) or the session's tools when it declares none. `Task` and `Workflow`
+  included), the session's tools when `tools:` is absent, or none at all
+  under `tools: []`. `Task` and `Workflow`
   are withheld from it, so a plan cannot recurse, and it does not see the
   conversation that called the tool.
 - **Every run is resumable, and returns a `runId`.** The ID is

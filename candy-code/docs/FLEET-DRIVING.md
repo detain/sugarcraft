@@ -170,7 +170,7 @@ Measured absent: `--allowedTools` / `--disallowedTools` (tool narrowing is the
 `permissionRules` config surface), `--session-id` on shipped builds (ids are
 minted, or supplied to `--resume`; a pre-allocation variant is weld-queued
 under "Driver flags queued for merge" above), `--values` flag (params ride the native verb: `candy-code workflow run
---param k=v`; the top-level `workflow` subcommand itself exists since W-1 —
+--param k=v` or `--param 'k:=<json>'`; the top-level `workflow` subcommand itself exists since W-1 —
 run, status, resume; pause and list stay `/workflow` slash commands), and any `--auto-review` flag (`autoReview` is a
 config key only — src/Config/LayeredSettings.php:589). The saved-workflow DSL
 lives at `~/.candy-code/workflows/<name>.php`; pause records live under
