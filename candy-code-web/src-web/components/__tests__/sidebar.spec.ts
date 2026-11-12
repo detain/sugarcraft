@@ -191,3 +191,68 @@ describe('sidebar cold-load failure (F-cfe observation)', () => {
     expect(wrapper.text(), 'no empty-state claim paints beside the failure').not.toContain('No sessions yet.')
   })
 })
+
+describe('sidebar list-region busy mark (B-81/CW-UX-A NIT-5)', () => {
+  // The m21 row and the cfe alert are separate lines OUTSIDE the list region.
+  // A screen reader parked on the rows needed the region itself to say
+  // "working" — during a cold index AND during a server query. One predicate
+  // rules both surfaces; its cold arm mirrors m21's byte-exactly.
+  it('marks the list busy during a cold load and settles it once warm', async () => {
+    const wrapper = await mountSidebar(['s1', 's2'])
+    const sessions = useSessionsStore()
+    expect(sessions.loaded).toBe(false)
+    expect(sessions.error).toBe(null)
+    const list = wrapper.find('[data-testid="session-list"]')
+    expect(list.exists(), 'the list region carries a stable test id').toBe(true)
+    expect(list.attributes('aria-busy'), 'cold index in flight reads as busy').toBe('true')
+    expect(wrapper.find('[data-testid="sidebar-loading"]').exists(), 'the m21 row is untouched').toBe(true)
+    sessions.loaded = true
+    await wrapper.vm.$nextTick()
+    expect(list.attributes('aria-busy'), 'warm index settles the busy mark').toBe('false')
+    expect(wrapper.find('[data-testid="sidebar-loading"]').exists()).toBe(false)
+  })
+
+  it('marks the stale painted set busy while a server search is in flight', async () => {
+    const wrapper = await mountSidebar(['s1', 's2'])
+    const sessions = useSessionsStore()
+    sessions.loaded = true
+    await wrapper.vm.$nextTick()
+    const list = wrapper.find('[data-testid="session-list"]')
+    expect(list.attributes('aria-busy'), 'warm idle is not busy').toBe('false')
+    // The exact NIT-5 shape: the query runs while the OLD result set stays painted.
+    sessions.searching = true
+    await wrapper.vm.$nextTick()
+    expect(list.attributes('aria-busy'), 'an in-flight query marks the stale set busy').toBe('true')
+    expect(wrapper.findAll('[data-testid="session-link"]'), 'old rows stay painted mid-search').toHaveLength(2)
+    sessions.searching = false
+    await wrapper.vm.$nextTick()
+    expect(list.attributes('aria-busy'), 'a settled search is done, not busy').toBe('false')
+  })
+
+  it('treats a refused cold load as an error, not a spinner', async () => {
+    const wrapper = await mountSidebar([])
+    const sessions = useSessionsStore()
+    const list = wrapper.find('[data-testid="session-list"]')
+    expect(list.attributes('aria-busy'), 'cold in flight is busy before any failure lands').toBe('true')
+    sessions.error = 'the host refused the cold listing'
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="sidebar-error"]').exists(), 'the cfe alert line is untouched').toBe(true)
+    expect(list.attributes('aria-busy'), 'a failed load is not claimed as busy — same arm m21 uses').toBe('false')
+  })
+
+  it('is one state machine: a query in flight stays busy even past a cold failure', async () => {
+    const wrapper = await mountSidebar(['s1', 's2'])
+    const sessions = useSessionsStore()
+    sessions.searching = true
+    await wrapper.vm.$nextTick()
+    const list = wrapper.find('[data-testid="session-list"]')
+    expect(list.attributes('aria-busy'), 'cold + searching marks busy once').toBe('true')
+    sessions.error = 'the host refused the cold listing'
+    await wrapper.vm.$nextTick()
+    expect(list.attributes('aria-busy'), 'the searching arm still holds it — the query really is running').toBe('true')
+    sessions.searching = false
+    await wrapper.vm.$nextTick()
+    expect(list.attributes('aria-busy'), 'idle-and-refused: the alert voices it, busy goes false').toBe('false')
+    expect(wrapper.find('[data-testid="sidebar-error"]').exists()).toBe(true)
+  })
+})

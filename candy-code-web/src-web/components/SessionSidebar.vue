@@ -437,7 +437,12 @@ function onKey(event: KeyboardEvent): void {
     <p v-if="!sessions.loaded && sessions.error === null" class="empty" role="status" data-testid="sidebar-loading">{{ t('web.chrome.sidebar.loading') }}</p>
     <p v-else-if="sessions.loaded && sessions.items.length === 0" class="empty">{{ t('web.chrome.sidebar.empty') }}</p>
     <p v-else-if="filter.trim() !== '' && !sessions.searching && shown.length === 0" class="empty" data-testid="search-empty">{{ t('web.chrome.sidebar.search_empty', { query: filter.trim() }) }}</p>
-    <ul>
+    <!-- B-81 (CW-UX-A NIT-5): the list region itself carries the busy mark.
+         Cold branch mirrors the m21 row's predicate byte-exactly (one state
+         machine rules both surfaces); the searching branch marks stale rows
+         non-final while a server query is in flight. An error refuses busy —
+         the alert line at :432 names the failure instead. -->
+    <ul :aria-busy="sessions.searching || (!sessions.loaded && sessions.error === null)" data-testid="session-list">
       <li v-for="summary in shown" :key="summary.id" class="row" :class="{ open: menuFor === summary.id }">
         <a
           :href="`#/s/${summary.id}`"
