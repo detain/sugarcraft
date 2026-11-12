@@ -118,8 +118,12 @@ final class WorkflowLinter
             $stageName = is_array($stage) && is_string($stage['name'] ?? null) && $stage['name'] !== '' ? $stage['name'] : 'unknown';
             self::checkIsolationSanity($type, $stageName, $stage, $findings);
             self::checkFanOutShape($type, $stageName, $stage, $findings);
-            foreach (self::tasksOf($type, $stage) as [$slot, $task]) {
-                self::checkTask($stageName, $slot, $task, $ordinal, $producers, $outputs, $seedContext, $toolNames, $findings);
+            $stageTokens = self::stageEngineTokens($stage);
+            self::checkLoop($type, $stageName, $stage, $findings);
+            self::checkDataFanOut($stageName, $stage, $ordinal, $outputs, $findings);
+            foreach (self::tasksOf($type, $stage) as $position => [$slot, $task]) {
+                $engineTokens = $stageTokens + self::taskEngineTokens($type, $stage, $slot, $task, $position);
+                self::checkTask($stageName, $slot, $task, $ordinal, $producers, $outputs, $seedContext + $engineTokens, $toolNames, $findings);
                 self::checkFailedRefs($stageName, $task, $ordinal, $failedProducers, $producers, $findings);
             }
         }
@@ -537,20 +541,29 @@ final class WorkflowLinter
     /**
      * Stage-order producer pass: mirrors the engine's recordContextResult /
      * withResults fold (the `@results` map keyed by resultKey, later writes
-     * silently overwriting earlier) and the two `.output` writer sites
-     * (sequential stage rows; pipeline step rows).
+     * silently overwriting earlier) and the `.output` writers: the engine
+     * writes `<stage>.output` once EVERY stage settles — sequential,
+     * parallel (agent outputs joined), verification, pipeline and `uses:`
+     * alike — and a pipeline also writes each step's row.
      *
      * @param array<string, int> $producers
      * @param array<string, int> $outputs
      */
     private static function collectProducers(string $type, string $stageName, array $stage, int $ordinal, array &$producers, array &$outputs, array &$findings): void
     {
+        // Stage names are unique (the loader refuses twins), so this slot is
+        // only ever contested by a pipeline step of the same name — which
+        // the engine writes too; neither is a collision worth an error.
+        $outputs[$stageName] ??= $ordinal;
+
         if ($type === 'pipeline') {
             foreach (is_array($stage['stages'] ?? null) ? $stage['stages'] : [] as $stepIndex => $step) {
                 $stepName = is_array($step) && is_string($step['name'] ?? null) && $step['name'] !== ''
                     ? $step['name']
                     : $stageName . '_' . ($stepIndex + 1);
-                self::noteProducer($outputs, $stepName, $ordinal, "pipeline step {$stageName}/{$stepName}", $findings);
+                if ($stepName !== $stageName) {
+                    self::noteProducer($outputs, $stepName, $ordinal, "pipeline step {$stageName}/{$stepName}", $findings);
+                }
                 $tasks = self::taskList(is_array($step) ? $step : []);
                 $multi = count($tasks) > 1;
                 foreach ($tasks as $taskIndex => $task) {
@@ -576,9 +589,6 @@ final class WorkflowLinter
         // labels each agent `<stage>_<n>`, 1-based declaration order.
         $tasks = self::taskList($stage);
         $multi = count($tasks) > 1;
-        if ($type === 'stage') {
-            self::noteProducer($outputs, $stageName, $ordinal, $stageName, $findings);
-        }
         foreach ($tasks as $taskIndex => $task) {
             $fallback = $multi ? $stageName . '_' . ($taskIndex + 1) : $stageName;
             self::noteTaskKey($producers, $task, $fallback, $ordinal, $stageName, $findings);
@@ -720,6 +730,132 @@ final class WorkflowLinter
             } elseif ($failedProducers[$name] >= $ordinal) {
                 self::add($findings, 'error', $stageName, "{{{$name}.failed}} reads a casualty list recorded at stage #{$failedProducers[$name]} — not earlier than this stage #{$ordinal}, so the token stays verbatim.");
             }
+        }
+    }
+
+    /**
+     * The bare `{{token}}`s the ENGINE injects for every task of this stage
+     * (keyed like a seed context, so checkInterpolation() treats them as
+     * resolvable): `{{round}}`/`{{previous}}` inside a `loop:` (`previous`
+     * resolves from round 2 on), `{{seen}}`/`{{fresh}}` beside
+     * `loop.accumulate`, and on a `from:` fan-out `{{item}}`/`{{index}}`
+     * (plus `{{path}}` for a glob).
+     *
+     * @param array<array-key, mixed> $stage
+     * @return array<string, true>
+     */
+    private static function stageEngineTokens(array $stage): array
+    {
+        $tokens = [];
+        if (is_array($stage['loop'] ?? null)) {
+            $tokens += ['round' => true, 'previous' => true];
+            if (is_array($stage['loop']['accumulate'] ?? null)) {
+                $tokens += ['seen' => true, 'fresh' => true];
+            }
+        }
+        if (is_array($stage['from'] ?? null)) {
+            $tokens += ['item' => true, 'index' => true];
+            if (isset($stage['from']['glob'])) {
+                $tokens['path'] = true;
+            }
+        }
+
+        return $tokens;
+    }
+
+    /**
+     * The task-scoped engine tokens: `{{input}}` on a task with an `input:`
+     * join, `{{prevResult}}` on a `tasks:` entry after the first, on every
+     * pipeline step (the first sees ""), and on a verifier.
+     *
+     * @param array<array-key, mixed> $stage
+     * @return array<string, true>
+     */
+    private static function taskEngineTokens(string $type, array $stage, string $slot, WorkflowTask $task, int $position): array
+    {
+        $tokens = [];
+        if ($task->input !== null) {
+            $tokens['input'] = true;
+        }
+        if ($type === 'pipeline'
+            || ($type === 'verification' && $slot === 'verifier')
+            || ($type === 'stage' && $position > 0)) {
+            $tokens['prevResult'] = true;
+        }
+
+        return $tokens;
+    }
+
+    /**
+     * P1-5 mirror of the `loop:` law {@see WorkflowBuilder::loop()} and the
+     * loader enforce, for a hand-built stage neither door saw — a loop on a
+     * shape the engine does not repeat, `{dry: N}` without `accumulate`
+     * (never satisfied: the loop always runs to max) — plus one warning the
+     * loader cannot give: `{dry: N}` with N >= max can never fire before
+     * `max` ends the loop anyway.
+     *
+     * @param array<array-key, mixed> $stage
+     */
+    private static function checkLoop(string $type, string $stageName, array $stage, array &$findings): void
+    {
+        $loop = $stage['loop'] ?? null;
+        if (!is_array($loop)) {
+            return;
+        }
+        if (!in_array($type, WorkflowBuilder::LOOPABLE_TYPES, true) || array_key_exists('uses', $stage)) {
+            self::add($findings, 'error', $stageName, "loop on a '{$type}'" . (array_key_exists('uses', $stage) ? ' uses' : '') . ' stage is never honoured; stage, parallel and verification stages loop.');
+
+            return;
+        }
+        $until = is_array($loop['until'] ?? null) ? $loop['until'] : [];
+        $dry = self::dryLeaf($until);
+        if ($dry === null) {
+            return;
+        }
+        if (!is_array($loop['accumulate'] ?? null)) {
+            self::add($findings, 'error', $stageName, "until {dry: {$dry}} counts rounds that add nothing new to loop.accumulate, which this loop does not declare; it can never hold and the loop always runs to max.");
+        } elseif (is_int($loop['max'] ?? null) && $dry >= $loop['max']) {
+            self::add($findings, 'warning', $stageName, "until {dry: {$dry}} needs {$dry} dry rounds after at least one productive round, but max is {$loop['max']}; max ends the loop first.");
+        }
+    }
+
+    /**
+     * The N of the first `{dry: N}` leaf in a normalized clause, or null.
+     *
+     * @param array<array-key, mixed> $node
+     */
+    private static function dryLeaf(array $node): ?int
+    {
+        if (is_array($node['conditions'] ?? null)) {
+            foreach ($node['conditions'] as $child) {
+                $found = is_array($child) ? self::dryLeaf($child) : null;
+                if ($found !== null) {
+                    return $found;
+                }
+            }
+
+            return null;
+        }
+
+        return ($node['op'] ?? null) === 'dry' && is_int($node['value'] ?? null) ? $node['value'] : null;
+    }
+
+    /**
+     * P1-1 mirror: `from: {stage: X}` reads a typed row written by a stage
+     * BEFORE this one (the loader judges the same order law; a hand-built
+     * array is checked here).
+     *
+     * @param array<array-key, mixed> $stage
+     * @param array<string, int> $outputs
+     */
+    private static function checkDataFanOut(string $stageName, array $stage, int $ordinal, array $outputs, array &$findings): void
+    {
+        $source = is_array($stage['from'] ?? null) ? ($stage['from']['stage'] ?? null) : null;
+        if (!is_string($source)) {
+            return;
+        }
+        if (!isset($outputs[$source]) || $outputs[$source] >= $ordinal) {
+            self::add($findings, 'error', $stageName, "from.stage \"{$source}\" is not a stage declared before this one; the fan-out reads prior stages only and fails at run time.");
         }
     }
 
@@ -950,6 +1086,11 @@ final class WorkflowLinter
         foreach ($tokens as $token) {
             $name = $token[1];
             $suffix = $token[2] ?? '';
+            // P1-1: inside a fan-out `{{item.output}}` is a pointer into the
+            // item (the engine's item pass claims it first), not a stage row.
+            if ($suffix !== '' && $name === 'item' && array_key_exists('index', $seedContext) && array_key_exists('item', $seedContext)) {
+                continue;
+            }
             if ($suffix === '.results') {
                 if (isset($producers[$name])) {
                     if ($producers[$name] > $ordinal) {
@@ -965,12 +1106,12 @@ final class WorkflowLinter
             if ($suffix === '.output') {
                 if (isset($outputs[$name])) {
                     if ($outputs[$name] > $ordinal) {
-                        self::add($findings, 'error', $where, "{{{$name}.output}} reads the output written at stage #{$outputs[$name]} — later than this task's stage #{$ordinal}; only sequential stages and pipeline steps write `.output`, and the miss is silent at run time.");
+                        self::add($findings, 'error', $where, "{{{$name}.output}} reads the output written at stage #{$outputs[$name]} — later than this task's stage #{$ordinal}, so the token stays verbatim in the dispatched prompt (a silent miss at run time).");
                     }
 
                     continue;
                 }
-                self::add($findings, 'error', $where, "{{{$name}.output}} names no sequential stage or pipeline step: parallel and verification stages never write `.output`, so the token survives interpolation.");
+                self::add($findings, 'error', $where, "{{{$name}.output}} names no stage or pipeline step in this plan, so the token survives interpolation.");
 
                 continue;
             }

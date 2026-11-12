@@ -78,20 +78,35 @@ final class WorkflowLinterTest extends TestCase
         self::assertStringContainsString('later than this task', $report->renderFindings());
     }
 
-    public function testParallelStagesNeverProduceOutputReferences(): void
+    public function testEveryStageTypeProducesOutputReferences(): void
     {
+        // The engine writes `<stage>.output` once every stage settles — a
+        // parallel stage's is its agents' outputs joined, a verification
+        // stage's the combined task + verdict (wf-impl track A report).
         $plan = new Workflow('parout', 'parallel output plan', [
             ['name' => 'fan', 'type' => 'parallel', 'tasks' => [
                 new WorkflowTask('coder', 'one', isolation: Isolation::Worktree, name: 'one'),
                 new WorkflowTask('coder', 'two', isolation: Isolation::Worktree, name: 'two'),
             ]],
-            self::linterStage('after', [new WorkflowTask('coder', 'uses {{fan.output}}')]),
+            ['name' => 'gate', 'type' => 'verification', 'task' => new WorkflowTask('coder', 'do'), 'verifier' => new WorkflowTask('reviewer', 'judge {{prevResult}}')],
+            self::linterStage('after', [new WorkflowTask('coder', 'uses {{fan.output}} and {{gate.output}}')]),
+        ]);
+
+        $report = WorkflowLinter::lint($plan, [], self::UNIVERSE);
+
+        self::assertFalse($report->hasFindings(), $report->renderFindings());
+    }
+
+    public function testAnOutputReferenceToNoStageIsStillAnError(): void
+    {
+        $plan = new Workflow('ghost', 'ghost plan', [
+            self::linterStage('after', [new WorkflowTask('coder', 'uses {{ghost.output}}')]),
         ]);
 
         $report = WorkflowLinter::lint($plan, [], self::UNIVERSE);
 
         self::assertTrue($report->hasErrors());
-        self::assertStringContainsString('parallel and verification stages never write', $report->renderFindings());
+        self::assertStringContainsString('{{ghost.output}} names no stage or pipeline step in this plan', $report->renderFindings());
     }
 
     public function testDuplicateProducerKeysCollide(): void
