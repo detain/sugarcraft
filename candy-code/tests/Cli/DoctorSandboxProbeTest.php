@@ -140,18 +140,19 @@ final class DoctorSandboxProbeTest extends TestCase
         $rows = $this->probeRows();
         $row = ($rows['sandbox'])();
 
-        // Nothing configured: OK on every host and every jail verdict — the
-        // off arms answer OK whether or not the jail would start.
-        $this->assertSame('OK', $row['status'], $row['detail']);
+        // Nothing configured: OK when the jail cannot start here, WARN when it
+        // can (the nudge). Either way the row names the setting, never FAIL.
+        $this->assertContains($row['status'], ['OK', 'WARN'], $row['detail']);
         $this->assertStringStartsWith('bashSandbox is off; bwrap', $row['detail']);
         $this->assertStringNotContainsString('cli.doctor.', $row['detail'], 'a raw key means a typo slipped past the catalogue');
     }
 
-    public function testOffWithAStartingJailStaysOkAndSaysItWouldStart(): void
+    public function testOffWithAStartingJailWarnsAndNamesTheSettingAsTheFix(): void
     {
+        // The default stays off; a working jail sitting unused is the nudge.
         $row = $this->sandboxProbeRow(static fn (): ?string => null);
 
-        $this->assertSame('OK', $row['status'], $row['detail']);
+        $this->assertSame('WARN', $row['status'], $row['detail']);
         $this->assertStringStartsWith('bashSandbox is off; bwrap', $row['detail']);
         $this->assertStringContainsString('and the jail would start here if it were enabled', $row['detail']);
         $this->assertStringNotContainsString('cli.doctor.', $row['detail']);

@@ -389,6 +389,17 @@ final class DoctorChecks
                     return ['status' => 'FAIL', 'detail' => Lang::t('cli.doctor.config_invalid', ['path' => $path, 'error' => $e->getMessage()])];
                 }
 
+                // WARN, never FAIL: plaintext stays the default, and a config
+                // that another local user can read still loads and runs. The
+                // file can hold provider keys, so the row says so.
+                $loose = self::looseConfigMode($path);
+                if ($loose !== null) {
+                    return ['status' => 'WARN', 'detail' => Lang::t('cli.doctor.config_loose_mode', [
+                        'path' => $path,
+                        'mode' => \sprintf('%04o', $loose),
+                    ])];
+                }
+
                 return ['status' => 'OK', 'detail' => $path];
             },
 
@@ -601,6 +612,25 @@ final class DoctorChecks
      *
      * @param ?\Closure(): ?string $jail
      */
+    /**
+     * The permission bits of $path when any group or other bit is set, else
+     * null. POSIX only: Windows reports synthetic modes that say nothing
+     * about who else can read the file, so the check answers null there.
+     */
+    private static function looseConfigMode(string $path, string $osFamily = \PHP_OS_FAMILY): ?int
+    {
+        if ($osFamily === 'Windows') {
+            return null;
+        }
+        $mode = @\fileperms($path);
+        if ($mode === false) {
+            return null;
+        }
+        $bits = $mode & 0777;
+
+        return ($bits & 0077) !== 0 ? $bits : null;
+    }
+
     private static function sandboxProbe(?\Closure $jail = null, ?string $sysctlPath = null, string $osFamily = \PHP_OS_FAMILY): array
     {
         $configured = SandboxFactory::fromSetting(Bootstrap::readUserConfig()['bashSandbox'] ?? null, $osFamily);
@@ -640,11 +670,21 @@ final class DoctorChecks
             : 'cli.doctor.sandbox_binary', ['backend' => $binaryLabel, 'path' => $binary]);
 
         if ($configured === null) {
+            // Off stays the default (a jail that fails to start would break
+            // every Bash call), but a jail that starts here is a setting the
+            // user has not turned on yet: WARN names it, OK would hide it.
+            if ($refusal === null) {
+                return [
+                    'status' => 'WARN',
+                    'detail' => Lang::t('cli.doctor.sandbox_off', [
+                        'bwrap' => $jailReport(),
+                    ]),
+                ];
+            }
+
             return [
                 'status' => 'OK',
-                'detail' => Lang::t($refusal === null
-                    ? 'cli.doctor.sandbox_off'
-                    : 'cli.doctor.sandbox_off_blocked', [
+                'detail' => Lang::t('cli.doctor.sandbox_off_blocked', [
                     'bwrap' => $jailReport(),
                     'reason' => (string) $refusal,
                 ]),
