@@ -87,6 +87,8 @@ config:                          # optional
   maxConcurrent: 3               # whole number >= 1, or 0 for no cap; unset = min(16, CPUs - 2)
   timeout: 900                   # positive int; per-stage seconds
   maxAgents: 200                 # whole number >= 1; run-wide dispatch ceiling (default 1000)
+  maxTokens: 2000000             # whole number >= 1; hard run-wide token ceiling (unset = none)
+  maxCost: 5.00                  # positive number of USD; hard run-wide cost ceiling (unset = none)
 
 schemas:                         # optional; named object-rooted schemas for outputSchema: {$ref: …}
   verdict:
@@ -105,12 +107,15 @@ stages:                          # a LIST, never a map
       type: object
     isolation: worktree          # optional; own git worktree for this task (or none)
     model: claude-sonnet-4-5     # optional; run this task on a named model
+    preset: reviewer             # optional; run this task as an agent preset (the task's own keys win)
+    effort: high                 # optional; low|medium|high|xhigh|max reasoning effort
     resource: gpu                  # optional; exclusive host lock held for this task's stage
     lockWaitSeconds: 60            # optional; seconds to wait for that lock before the stage fails
     timeout: 60                    # optional; positive int, this ONE task's wall-clock budget
     stallTimeout: 120              # optional; whole number >= 1; seconds a forked worker may go silent before it expires
     restarts: 1                    # optional; whole number >= 0; re-dispatch budget for stall expiries — its own, apart from retries:
     capture: true                  # optional; publish this stage's full output to a file (downstream sees path + preview)
+    announce: "lint found {{lint.output}}"  # optional; a line the run announces once this stage settles
 
   - name: fix
     parallel: true
@@ -124,7 +129,11 @@ stages:                          # a LIST, never a map
 
 Defaults are `Workflow`'s own: `maxConcurrent` unset (the default width, below
 — never "no cap" unless you write `0`), `timeout: 3600`, `maxAgents: 1000`,
-`stopOnFirstFailure: false`.
+and no `maxTokens`/`maxCost` ceiling. `stopOnFirstFailure` (default `false`) is
+a PHP-builder setting only — YAML has no spelling for it. Unlike stage and task
+keys, the top-level and `config:` maps have no closed roster: an unknown key
+there is ignored, not refused, so a typo such as `maxToken:` silently means "no
+ceiling" — `/workflow lint` will not catch it either.
 
 ### Width, the fan-out ceiling and the agent budget
 
@@ -164,6 +173,54 @@ Three rails keep one plan from forking a machine's worth of agents.
   stops: `agent ceiling reached (1000): this run has dispatched 998 agents
   and this stage needs 4 more; raise config.maxAgents or narrow the
   fan-out`.
+
+### `config.maxTokens` and `config.maxCost` are hard run budgets
+
+`maxAgents` counts dispatches; these two count spend. `config.maxTokens` is a
+whole number of tokens `>= 1`; `config.maxCost` is a positive number of USD
+(an int, a float, or a numeric string — `"config.maxCost" must be a positive
+number of USD, got …` otherwise). Both default to no ceiling. The PHP
+builder spells them `->maxTokens(int)` and `->maxCost(float)`.
+
+- **What counts.** Every settled agent result adds its tokens and cost to the
+  run's spend — failed attempts included — and so do rows a `cache:` door
+  carries and, on `resume`, the totals the record already holds. The ceiling
+  always compares the **whole run's** spend.
+- **When it is checked.** Before every dispatch — a stage task, a pipeline
+  or map step, a verifier or panel vote, a loop round, every agent of a wave
+  (refused whole: nothing of it starts) — and before every pool **retry**,
+  counting the failed attempt's spend. Spend AT or past the ceiling refuses:
+  `budget exhausted (spent 800 of 700 tokens)` or `budget exhausted (spent
+  0.60 of 0.50 USD)`; a refused retry reads `not retried after attempt N of
+  M: budget exhausted (…)`. It is a "may the next dispatch start" check
+  against settled spend, so a wave already in flight can overshoot by its
+  own cost.
+- **A budget stop PAUSES the run; it does not fail it.** The refused stage
+  carries `…; the run is paused: raise the ceiling (config.maxTokens /
+  config.maxCost, or the run's token budget) and resume`, the run returns
+  `paused`, and a run that has a record (`/workflow run`, `candy-code
+  workflow run`, every `Workflow` tool run) writes its pause record with the
+  successful prefix — the refused stage re-runs on resume. A `map` stage
+  stops admitting items exactly as it does at the agent ceiling. A PHP host
+  calling `runWorkflow()` / `runFromPhp()` gets `paused` with no record:
+  there is nothing to resume from.
+- **Raising the ceiling.** `resume` re-reads the YAML, so edit
+  `config.maxTokens` / `maxCost` and resume; the PHP API also takes a
+  trailing `budgetTokens:` on `run()`, `runWorkflow()`, `runPlan()`,
+  `resume()` and `resumePlan()` (below 1 throws `a workflow token budget
+  must be at least 1, got N`), and the `Workflow` tool takes it as
+  [`budget`](#model-authored-plans-the-workflow-tool). The effective token
+  ceiling is the tighter of `config.maxTokens` and that budget; `maxCost` has
+  no external counterpart. Resuming under the same ceiling pauses again with
+  nothing dispatched.
+- **`{{budget.remaining}}`** interpolates the tokens left under the token
+  ceiling (never negative). Without a token ceiling it is left verbatim, and
+  the linter warns.
+- **`until: {budgetBelow: N}`** — a loop-only leaf — holds once fewer than N
+  tokens remain ([Loop-only `until:` leaves](#loop-only-until-leaves)).
+
+The headless verb reports a budget stop with `status` `paused` and exit 1 —
+exit 3 is reserved for an escalation or a signal pause.
 
 ### `timeout` is a per-stage wall-clock budget
 
@@ -458,11 +515,15 @@ kept.
   without it the load is refused (`… uses {dry: N}, which counts rounds that
   add nothing new to an accumulated set; add "accumulate: {pointer, key}" or
   drop the dry leaf`) — and the linter warns when N is not below `max`.
-- **`{budgetBelow: N}`** (whole number `>= 1`) holds once the run's remaining
-  token budget is below N. It parses today, but it needs a token budget
-  (`config.maxTokens`), which lands with run budgets: until then nothing
-  supplies the remaining figure, the leaf is never satisfied, and the loop
-  simply runs to `max`.
+- **`{budgetBelow: N}`** (whole number `>= 1`) holds once fewer than N tokens
+  remain under the run's token ceiling — `config.maxTokens`, or the tighter
+  run budget a caller passed ([run budgets](#configmaxtokens-and-configmaxcost-are-hard-run-budgets)).
+  It is checked after each round settles, against the spend so far, so
+  "stop looping while there is still room for the stages after this one" is
+  `until: {any: [{stage: s, contains: DONE}, {budgetBelow: 200000}]}`. A run
+  with no token ceiling has no remaining figure: the leaf never holds and the
+  loop runs to `max` — the linter warns when the plan sets no
+  `config.maxTokens`.
 
 A loop leaf is a whole condition on its own — no `stage:`, no `pointer:` —
 and may sit inside `all:`/`any:`.
@@ -630,6 +691,66 @@ provider's real capability).
   stage `model:` pins ONE agent's dial. The option is independent and stacks
   with `outputSchema:` and `isolation:` — a fast model drafts, a strong model
   verifies, in the same stage list.
+
+### `preset:` runs a task as an agent preset; `effort:` sets its reasoning effort
+
+`agent:` (`type:` on a parallel agent) is only a label. `preset: <name>` on
+any task surface — a one-task stage, a `tasks:` entry, a parallel agent, a
+pipeline or map step, either slot of a verification stage — or
+`->preset($name)` on a PHP task runs that task **as** the named agent preset:
+
+```yaml
+  - name: review
+    preset: reviewer             # the reviewer `Task` would run
+    prompt: Review {{diff}} for correctness.
+    tools: [Read, Grep]          # the task's own keys win over the preset's
+```
+
+- **Resolution.** The name resolves against the same roster a `Task`
+  delegation uses — built-ins, then foreign (`.claude/agents`,
+  `.opencode/agents`), then native project, then native user presets, a later
+  tier replacing a same-named earlier one (`Bootstrap::agentRoster()`, or the
+  session's `AgentManager`). Every door wires it: `/workflow run` and
+  `candy-code workflow run` through `Bootstrap::workflowEngine()`'s deferred
+  roster, the `Workflow` tool through the session's roster — each built only
+  when the plan names a preset, since it reads preset files from disk.
+- **An unknown name refuses the run before anything is dispatched.** The
+  loader checks only the spelling (`"preset" must name an agent preset (e.g.
+  reviewer), got an empty string`); the engine's pre-flight resolves every
+  preset at any depth and refuses with `Stage '<s>' preset "<n>": unknown
+  agent preset "<n>" (known: …); nothing was dispatched` (or, with no roster
+  at all, `…: this engine has no agent roster to resolve presets against (the
+  host that runs it must hand one over); nothing was dispatched`). Every lint
+  caller — `/workflow lint`, the pre-run lint of all three doors — passes the
+  session's preset names, so the same plan is a lint ERROR first: `preset
+  "<n>" is not an agent preset this session knows (known: a, b); the engine
+  refuses the run before dispatching anything.`
+- **The merge — the task's own keys always win.**
+
+  | From the preset | Applied when |
+  |---|---|
+  | `tools` | the task declares none (`tools:` absent or `[]`) |
+  | `model` | the task's `model:` is absent or `inherit` |
+  | `effort`, `isolation` | the task leaves them unset |
+  | system prompt (the preset body) | always — the stage agent runs under it |
+  | `disallowedTools`, `maxTurns` | always — the grant hook and the step loop honour them |
+  | `permissionMode` | only when **stricter** than the session's mode |
+
+  The permission mode can only tighten: the stage agent's calls are judged
+  by the session's rules under the preset's mode, a `bypass-permissions`
+  session's children stay bypass, and an engine with no session gate has
+  nothing to narrow — the `Task` ruling
+  ([`PERMISSIONS.md`](PERMISSIONS.md#a-sub-agents-mode)). A preset's
+  `skills` are **not** carried; the `skills:` route is the task's own.
+- **Identity.** A task's `preset` and `effort` join its `cache:` identity
+  hash only when set, so a stage without them hashes exactly as before.
+
+`effort: low|medium|high|xhigh|max` (or `->effort(Effort|string)`) sends that
+reasoning effort with the task's requests. A provider that ignores reasoning
+effort still runs the task, and the run says so in a bracketed note —
+`[effort: high sent, but provider "x" ignores reasoning effort]`. Any other
+value fails the load (`effort must be one of low, medium, high, xhigh, max,
+got "huge"`).
 
 ### `resource` serializes a stage against the host
 
@@ -1160,6 +1281,58 @@ Four limits to design around:
   agent that may ask), or a build without `pcntl` — never yields, so its
   chain runs to completion before the next item is admitted.
 
+### `announce:` and the run's announcements
+
+A run says what it decided on its own. `announce: <template>` on any stage
+form (`uses:` included) — or `->announce($template)` on the PHP builder,
+attached to the last stage — is interpolated with the run context once the
+stage **settles**, so its `{{<stage>.output}}`, pointer leaves and
+`{{<stage>.failed}}` are in scope:
+
+```yaml
+  - name: triage
+    prompt: Decide whether {{diff}} needs a security review.
+    tools: [Read, Grep]
+    outputSchema: {$ref: verdict}      # {ok: boolean}
+    announce: "triage settled: ok={{triage.ok}}"
+```
+
+A failed stage announces too; a `when:` skip, a `cache:` carry and a stage
+carried by a `Workflow` tool `resumeFrom` announce nothing (nothing settled).
+A blank or non-string template fails the load (`"announce" must be a
+non-empty template string, got …`), and the linter mirrors it. `announce` is
+presentation: it is not part of a stage's resume identity.
+
+Beside the author's lines, the engine makes four **mandatory** announcements
+— the decisions a plan would otherwise take silently:
+
+| Kind | When | Line |
+|---|---|---|
+| truncation | a `from.max` cut a parallel `from:` list or a map's items | `Stage 'v': from.max kept 2 of 5 items; 3 dropped (listed in the stage output)` (`files` for a glob) |
+| casualties | a `minSuccess` stage lost agents or items — met or not | `Stage 'fan': 1 of 3 agents failed, minSuccess 2 met; failed: two (failed)` (at most 10 names, then `, +N more`; `items` for a map) |
+| budget | a run budget refused a dispatch or a retry (once per run) | `Stage 'c': budget exhausted (spent 800 of 700 tokens); the run is paused before this dispatch` / `…; a retry was not started and the run is paused` |
+| ceiling | `config.maxAgents` refused a dispatch (once per run) | `Stage 'b': agent ceiling reached (1): 1 agent dispatched and a stage needed 2 more` |
+
+Every line lands on `WorkflowResult::$announcements` (also on a paused or
+failed result) in the order made. A host can stream them as they happen:
+`WorkflowEngine::setAnnouncementSink(\Closure)` is called with `($line,
+['kind' => 'announce'|'truncation'|'casualties'|'budget'|'ceiling', 'stage' =>
+?string, 'workflowId' => string])`; a sink that throws is ignored, and with
+no sink the run is unchanged apart from the result field. Announcements are
+not hook events — the [lifecycle events](#stage-lifecycle-events) stay
+observe-only stage transitions. Where each surface shows them:
+
+- **`Workflow` tool** — live, as the call's activity line under the
+  `Workflow` row while the run works, and as `announcements` in the result's
+  JSON.
+- **`/workflow run` / `resume`** (TUI and `serve`) — after the run, as an
+  `Announcements:` block under the report (`- <line>` each); the run's fiber
+  has no channel to the transcript while it works. A run that announced
+  nothing reports exactly as before.
+- **`candy-code workflow run` / `resume`** — text mode prints `  announce:
+  <line>` under the stage rows on stdout; JSON adds `result.announcements`
+  only when the list is non-empty.
+
 ### Everything malformed is refused, not coerced
 
 `WorkflowRegistry::parseYamlWorkflow()` raises `WorkflowLoadException` for each
@@ -1174,7 +1347,8 @@ of these rather than loading a workflow that quietly does less:
   interpolates, so duplicates make every reference ambiguous.
 - `config:` not a map; `maxConcurrent` not a whole number >= 0 (0 means no cap);
   `timeout` not a positive integer; `maxAgents` not a whole number of at least
-  1 (`"config.maxAgents" must be at least 1, got 0`).
+  1 (`"config.maxAgents" must be at least 1, got 0`); `maxTokens` not a whole
+  number of at least 1; `maxCost` not a positive number of USD.
 - `schemas:` not a map of name => schema, a name outside
   `[A-Za-z_][A-Za-z0-9_-]*`, a schema that is not a map or has no
   `type: object` at its root, or a `required` that is not a list or names a
@@ -1246,6 +1420,10 @@ of these rather than loading a workflow that quietly does less:
   accepted exactly as for `retries:`; `0` is the legitimate ask-once bound);
   both are refused on a stage that already carries a `tasks:` list, like
   their sibling keys.
+- `preset:` that is not a non-empty string, or `effort:` that is not one of
+  `low`, `medium`, `high`, `xhigh`, `max` (whether a well-formed preset name
+  exists is the engine's pre-flight refusal, before any dispatch).
+- `announce:` that is not a non-empty template string.
 - `capture:` is not a boolean — `true`/`false` unquoted, the exact spelling
   law `parallel:` holds; `'yes'` and `1` are refused, not coerced.
   Whether a *well-formed* name is servable is a dispatch-time refusal, not
@@ -1298,6 +1476,7 @@ The engine also injects tokens of its own, each only where it means something:
 | `{{previous}}` | a looped stage, from the second round | the prior round's `<stage>.output` |
 | `{{seen}}`, `{{fresh}}` | a loop with `accumulate:` | every dedup key so far / the items the previous round added, as JSON lists |
 | `{{lens}}` | a verifier panel vote with `lenses:` | that vote's lens |
+| `{{budget.remaining}}` | any prompt or `announce:`, in a run with a token ceiling | the tokens left under it ([run budgets](#configmaxtokens-and-configmaxcost-are-hard-run-budgets)); verbatim without one |
 
 Names must match `[a-zA-Z_][a-zA-Z0-9_]*`. An **unresolved** reference is left
 as written, not blanked — so a typo appears verbatim in the prompt rather than
@@ -1451,14 +1630,19 @@ a `uses:` chain that cycles or runs too deep, a `loop:` on a pipeline or
 prior stage, `minSuccess` off a parallel/map stage or above a static agent
 count, a `{{X.failed}}` reading a `minSuccess` stage at or after its own
 position, a map with no steps, no `from:` or a duplicate step name, a negative
-`maxConcurrent`, an unresolved `{$ref}`, and bound violations. WARNINGS: bare
+`maxConcurrent`, an unresolved `{$ref}`, a blank `preset:` or one the
+session's roster does not know (every caller passes the roster's names when
+the plan names a preset), a blank `announce:`, a hand-built `maxTokens` below
+1 or a non-positive `maxCost`, and bound violations. WARNINGS: bare
 unknown `{{token}}`, an empty prompt, an unnamed stage, a plan with no stages,
 a parallel stage whose agents all share the checkout, an unsatisfiable
 `rejectMinOccurrences`, retries above the warn ceiling, `maxConcurrent: 0`
 (no cap), `{dry: N}` with N not below `max`, `stopOnFirstFailure` beside
 `minSuccess`, a panel with no `reject:`, `{{lens}}` with no lenses, a
 `{{X.failed}}` naming no `minSuccess` stage, and a map step `when:` that
-reads neither an earlier step nor an earlier stage. Engine-injected tokens
+reads neither an earlier step nor an earlier stage, and an `until:
+{budgetBelow}` or a `{{budget.remaining}}` in a plan with no
+`config.maxTokens`. Engine-injected tokens
 (`{{input}}`, `{{prevResult}}`, `{{round}}`, `{{previous}}`, `{{seen}}`,
 `{{fresh}}`, `{{item}}`, `{{index}}`, `{{path}}`, `{{lens}}`) are known in
 the scopes listed under [Interpolation](#interpolation) and warn outside them.
@@ -1466,8 +1650,9 @@ the scopes listed under [Interpolation](#interpolation) and warn outside them.
 **`/workflow run` lints first.** Before anything is dispatched, `/workflow run
 <name>` — in the TUI and on the host (`serve`) surface alike — loads the name
 through the same tiers `/workflow lint` uses and lints it with the run's own
-`key=value` pairs as the context seed, the session's tool universe and the
-`uses:` resolver. Errors refuse the run with an error row naming them
+`key=value` pairs as the context seed, the session's tool universe, the
+`uses:` resolver and — when the plan names a `preset:` — the session's preset
+names. Errors refuse the run with an error row naming them
 (``**Error:** workflow `<name>` was not run: lint found N error(s), M
 warning(s) (nothing was dispatched).`` followed by the findings) — no stage
 starts and the turn is not held. Warnings never block: they are listed under
@@ -1522,7 +1707,10 @@ sequential stage's tile appear at all.
 
 Pause files live under `<workflowsPath>/.running/*.json` — anchored to the
 registry's directory rather than to `~`, so a registry pointed somewhere trusted
-does not pause into a directory nobody vetted.
+does not pause into a directory nobody vetted. A `Workflow` tool run keeps its
+files in the same directory (the user tier's): the record `<runId>.json`, the
+stored plan `<runId>.plan` and the capture directory `<runId>.stages/`
+([below](#model-authored-plans-the-workflow-tool)).
 
 A registry-backed run (`/workflow run`, and any `resume()`) refreshes that same
 record after **every stage that completes** — not only at pause boundaries. A
@@ -1530,7 +1718,9 @@ record after **every stage that completes** — not only at pause boundaries. A
 in-flight stage: `resume()` replays from the first stage the record does not
 count, and skips the prefix it does. The record is withdrawn whenever the run
 ends without a standing pause (completed, failed, or cancelled), so an
-undisturbed run still leaves no file behind. Honest limit: a stage that was
+undisturbed run still leaves no file behind — a budget stop is a pause and
+keeps it. (A `Workflow` tool run is the exception: its record is kept at
+every terminal.) Honest limit: a stage that was
 mid-flight when the process died always **re-runs in full** — records are per
 whole stage, and there is no partial credit inside a stage (or inside a
 `parallel` sub-stage).
@@ -1554,7 +1744,8 @@ keep behaving as they always did.
 
 The record also carries a purely additive `stageInputHashes` map — per
 settled stage, a sha256 over its stage type and its pre-interpolation prompt
-templates plus each task's model and schema identity (a `uses:` stage hashes
+templates plus each task's model and schema identity, and its `preset` and
+`effort` when it sets them (a `uses:` stage hashes
 the included name and its `with:` templates instead). It is what the opt-in
 [`cache:`](#cache-reuses-a-recorded-stage-result-on-resume-opt-in) door compares
 on resume to carry an unchanged stage without re-dispatching it; a stage
@@ -1565,7 +1756,12 @@ read as a cache miss, never as corruption.
 ### Pause, resume, status
 
 `<id>` is the run ID `/workflow run` prints (`three-1a2b3c4d`) or the workflow
-name; both resolve to the same run.
+name; both resolve to the same run. A `Workflow` tool run's ID
+(`plan-1a2b3c4d-1`, from its result) works here too: `status <runId>` reads
+its kept record and stage ledger (`completed`, `failed`, `cancelled` or
+`paused`), and `resume <runId>` resumes it from its stored plan and context
+under the [longest-unchanged-prefix rule](#model-authored-plans-the-workflow-tool)
+— the record is kept, not consumed, so a tool run can be resumed again.
 
 - **`pause` on a live run** writes the pause file at once and asks the run to
   stop. The stage in flight finishes, and the next stage is not started. The
@@ -1684,8 +1880,10 @@ before exiting 3. `candy-code workflow resume <id>` picks it up. The TUI
 `run` lints before it builds the engine, exactly as `/workflow run` does: the
 same tiers (`~/.candy-code/workflows`, then the project's
 `.candy-code/workflows`), the `--param` pairs as the context seed, the launch
-backend's tool names, and `uses:` resolved through that registry. A name that
-does not load skips the lint and lets the engine's refusal speak.
+backend's tool names, `uses:` resolved through that registry, and — when the
+plan names a `preset:` — the launch's preset roster (`Bootstrap::agentRoster()`),
+so an unknown preset exits 1 with nothing dispatched. A name that does not
+load skips the lint and lets the engine's refusal speak.
 
 - **Errors refuse the run with exit 1**, nothing dispatched. Text mode prints
   `workflow run: <name> was not run: lint found N error(s), M warning(s)
@@ -1778,7 +1976,8 @@ just leaves the working tree uncommitted while the workflow marches on.
 
 The model can run a workflow of its own: the built-in `Workflow` tool takes the
 same YAML as a `.yaml` file, as a string, plus an optional `context` object for
-`{{key}}` placeholders and an optional `dryRun` flag:
+`{{key}}` placeholders, an optional `dryRun` flag, an optional token `budget`
+and an optional `resumeFrom` run ID:
 
 ```json
 {"plan": "stages:\n  - name: survey\n    agent: explorer\n    prompt: List the callers of Foo::bar.\n    tools: [Read, Grep]\n  - name: fix\n    prompt: \"Update every caller: {{survey.output}}\"\n    tools: [Read, Edit, \"Bash(composer test*)\"]\n"}
@@ -1819,19 +2018,25 @@ same YAML as a `.yaml` file, as a string, plus an optional `context` object for
   array or object).`).
 - **One engine per call, bound to the calling turn.** The tool builds its own
   `WorkflowEngine` and pool around an `EngineExecutor` bound to the engine that
-  is running the current turn, and calls `WorkflowEngine::runWorkflow()`. It
-  never re-binds the launch's `/workflow` engine, whose executor binding is
-  shared.
+  is running the current turn, and calls `WorkflowEngine::runPlan()` (or
+  `resumePlan()` for a `resumeFrom` call). It never re-binds the launch's
+  `/workflow` engine, whose executor binding is shared. A `preset:` resolves
+  against the session's roster, built only when the plan names one.
 - **Stages run inside the turn — unless they cannot ask.** Stage agents run
   synchronously in the turn's own process, not in forked workers as
   `/workflow run` stages do: the turn already runs off the TUI, and staying in
   its process is what lets a stage agent's permission questions reach your
   prompt (the approver answers only in the process that built it). The
-  exception is a `parallel: true` stage (`from:` fan-outs included): an agent
-  there whose effective tools **could not put a permission question** runs in
-  a forked child, so those agents run concurrently up to the stage width.
-  Sequential stages, `tasks:` lists, pipeline, verification and map steps
-  always run inline (a map's chains therefore serialise on this path, see
+  exception is every dispatch that goes through the pool's batch door: the
+  agents of a `parallel: true` stage (`from:` fan-outs included), the votes
+  of a verifier panel, and **every step agent inside a `type: map` stage**
+  (`dispatchOne()` takes the batch door while a map runs). An agent there
+  whose effective tools **could not put a permission question** runs in a
+  forked child, so those agents — and a map's item chains — run concurrently
+  up to the stage width. Sequential stages, `tasks:` lists, pipeline steps
+  and a verification stage's task and single verifier run inline; so does a
+  map step agent that may ask, whose chain then runs to its end before the
+  next item is admitted (see
   [`type: map`](#type-map-streams-each-item-through-its-steps)).
   - *Could not ask* means: for every tool actually on the agent's request
     (after `Task`/`Workflow` are withheld), no judging gate — the session's
@@ -1847,9 +2052,13 @@ same YAML as a `.yaml` file, as a string, plus an optional `context` object for
     the engine always count as asking. An agent with no `tools:` inherits the
     session's tools, which nearly always include something that asks, so it
     stays inline.
-  - On this path every agent of a parallel stage still runs on the FIRST
-    task's tool grant (the pool does not yet resolve a grant per agent), so
-    the whole stage is judged together today.
+  - Each agent is judged on its **own** grant: every agent of a parallel,
+    `from:` or vote wave is offered exactly the tools its own `tools:` (or
+    its preset's) declares, and the grant hook holds its calls to that same
+    declaration. A `[Read]` agent beside a `[Read, Bash]` sibling therefore
+    forks while the shell agent stays inline — `parallel: 1 forked, 1 inline
+    (agent "shell" may ask: Bash)`. (Before this was fixed, every agent of a
+    wave rode the first task's grant.)
   - **Hooks that ask on their own are not seen** by that judgement — a user
     `PreToolUse` script answering `ask`, or the built-in protect-files hook's
     question about a policy-file write. In a forked agent such a question
@@ -1872,26 +2081,90 @@ same YAML as a `.yaml` file, as a string, plus an optional `context` object for
   included) or the session's tools when it declares none. `Task` and `Workflow`
   are withheld from it, so a plan cannot recurse, and it does not see the
   conversation that called the tool.
-- **Not resumable.** A plan has no registry name, so `runWorkflow()` writes no
-  pause file, remembers no result and installs no interrupt handlers;
-  `/workflow pause`/`resume`/`status` do not apply. Cancelling the turn stops
-  the run and its agents.
+- **Every run is resumable, and returns a `runId`.** The ID is
+  `plan-<first 8 hex of sha256(plan YAML)>-<n>`: n counts up from 1 to the
+  first number no record or stored plan under that digest has claimed, and
+  the claim is an exclusive create of the stored-plan file, so two concurrent
+  runs of one plan never share an ID. Under the user workflows directory's
+  `.running/` (the directory `/workflow` reads; files 0600) the run keeps:
+  - `<runId>.json` — the same crash-safe per-stage record a `/workflow run`
+    writes (stamped with the writer's pid), plus `planRun: true` and a
+    whole-declaration hash per settled stage. Unlike a saved workflow's, it
+    is **kept at every terminal**, stamped `completed`, `failed`,
+    `cancelled` or `paused`;
+  - `<runId>.plan` — the plan YAML and the seed context, as JSON;
+  - `<runId>.stages/<n>-<stage>.txt` — the capture files (below).
+
+  Only the newest **20** plan runs are kept (`WorkflowEngine::PLAN_RUN_RETENTION`,
+  by the stored plan's mtime, which every start and resume refreshes): when
+  a new plan run starts, older runs' record, plan and captures are deleted,
+  except a run whose writer is still live in another process.
+  `/workflow status <runId>` and `/workflow resume <runId>` (and the headless
+  verb's `status`/`resume`) reach these records too. No SIGINT/SIGTERM
+  handler is installed — cancelling the turn stops the run and its agents —
+  but the per-stage record means a killed run still leaves its settled
+  prefix to resume.
+- **`resumeFrom: <runId>` carries the longest unchanged prefix.** Call again
+  with the plan as it stands now (`plan` is still required) and the ID. The
+  engine walks the plan's stages against the record's settled rows
+  (successes and `when:` skips, up to the first failure): stage *i* is
+  **carried** — its row, output and context reused, nothing dispatched, no
+  spend — while it has row *i*'s name and the same **whole-declaration**
+  hash (every task key, `when`, `loop`, `from`, `capture`, …; only
+  `announce` and `cache` are left out). The first stage that changed, never
+  settled or failed, and **every stage after it**, run live — even unchanged
+  later ones, since their inputs are the changed stage's outputs. That
+  identity is deliberately stricter than the `cache:` door's prompt hash. An
+  omitted `context` reuses the stored one; a `context` that differs from it
+  (compared as canonical JSON, key order ignored) carries **nothing** — the
+  hash cannot see what a `{{key}}` renders to — and the run starts over from
+  stage 1 under the same ID. The run keeps its ID, its record and stored
+  plan are rewritten, re-run stages re-expand their `from:` fan-outs, and
+  the result's totals (and any `budget`) count only **this call's** live
+  spend. Refusals, nothing dispatched, come back as `Error: the plan was not
+  resumed: <reason>`: an ID that does not read `plan-…` (`'<id>' is not a
+  Workflow-tool run ID (they read plan-<8 hex>-<n>)`), a saved workflow's
+  record (resume it with `/workflow resume`), no stored plan under that ID,
+  or a writer still live in another process; a non-string `resumeFrom` is
+  `Error: "resumeFrom" must be a runId string an earlier Workflow call
+  returned.`
+- **`budget: N` caps this call's tokens.** A whole number `>= 1` (otherwise
+  `Error: "budget" must be a whole number of tokens, at least 1.`), passed
+  as the run's `budgetTokens`: the effective ceiling is the tighter of it and
+  the plan's `config.maxTokens`. A dispatch at or past it does not start and
+  the run **pauses** with its record kept — call again with `resumeFrom` and
+  a larger `budget` ([run budgets](#configmaxtokens-and-configmaxcost-are-hard-run-budgets)).
 - **The permission gate sees the tool call itself.** `Workflow` is
   write-capable, so it asks under `default` and is denied under `plan` and
   `dont-ask`, before any stage runs.
 
 **The result.** A one-line headline — `Workflow '<name>' <status>: X of N
-stages succeeded, T tokens, $C.` — then the lint-warning block if any, one
-`Stage '<name>' <status>: <error>` line per failed stage (the reason stays
-readable unescaped), `K later stage(s) did not run.` when the run stopped
-early, and a fenced ```` ```json ```` document:
+stages succeeded, T tokens[ of a B-token budget], $C.`, then ` K stages
+carried from the record at no cost.` when a resume carried any, and ` Run ID
+plan-…-n (resumeFrom).` — then, for a paused run, `The run is paused; call
+again with resumeFrom: <runId> (and a larger budget when a budget stopped
+it).`, the lint-warning block if any, one `Stage '<name>' <status>: <error>`
+line per failed stage (the reason stays readable unescaped), `K later
+stage(s) did not run.` when the run stopped early, and a fenced
+```` ```json ```` document:
 
 ```json
-{"status": "completed", "runId": null,
+{"status": "completed", "runId": "plan-1a2b3c4d-1", "carried": 0,
+ "budget": {"tokens": 500000, "spent": 5120},
+ "announcements": [],
  "stages": [{"name": "survey", "status": "completed", "error": null,
              "attempts": 1, "tokens": 5120, "cost": 0.0123,
-             "data": {"callers": ["src/A.php"]}, "capture": "…", "dispatch": "…"}]}
+             "capture": "…/.running/plan-1a2b3c4d-1.stages/0-survey.txt",
+             "data": {"callers": ["src/A.php"]}, "dispatch": "…"}]}
 ```
+
+- `runId` is the record's ID — pass it back as `resumeFrom`. `carried` is how
+  many leading stages a resume carried (each such row also has `carried:
+  true`); `budget` is `{tokens, spent}` against the effective token ceiling
+  (the `budget` input or `config.maxTokens`, whichever is tighter), or `null`
+  with neither; `announcements` lists the run's
+  [announcements](#announce-and-the-runs-announcements), which also stream
+  onto the call's live activity line while it runs.
 
 - `attempts` is the most tries any one agent of the stage took (0 for a stage
   refused before dispatch); `tokens` and `cost` sum the stage's agents.
@@ -1901,23 +2174,31 @@ early, and a fenced ```` ```json ```` document:
   is accepted). It **replaces** `output` and is never clipped — a clipped
   document is a corrupt one. Pipeline and verification stages report
   `output`.
-- `output` is the prose, its middle elided past 8192 bytes; the marker says
+- `output` is the prose, its middle elided past 8192 bytes; the marker names
   where the elided bytes are — `[… N bytes elided; the full output is in
-  <capture path> …]` on a `capture: true` stage, otherwise `[… N bytes
-  elided; re-run with capture: true on this stage to keep the full output
-  …]`.
-- `capture` is the capture file of a `capture: true` stage.
-- `dispatch` (parallel stages only) says how its agents ran:
+  <capture path> …]`, or, when the capture file could not be written, `[… N
+  bytes elided; its capture file could not be written; re-run with capture:
+  true on this stage to keep the full output …]`.
+- `capture` is the file holding the stage's **full** output. Every stage with
+  output gets one, at the engine's path rule
+  (`<runId>.stages/<index>-<stage>.txt`, index 0-based), written by the tool
+  **after** the run — a report-side capture; carried stages are re-captured
+  from their recorded rows, and a `capture: true` stage keeps the file the
+  engine already wrote. Capture is deliberately not switched on in the
+  engine for every stage: engine capture (`capture: true`) replaces
+  `{{stage.output}}` for later stages with the file path and a 2 KiB
+  preview, which would silently break a downstream `when: {stage: x, equals:
+  PASS}` and truncate downstream prompts. The report-side copy leaves what
+  later stages read byte-identical.
+- `dispatch` (stages whose agents went through the batch door — parallel,
+  panel and map stages) says how its agents ran:
   `parallel: forked (3 ask-free agents)`, `parallel: inline (agent "shell"
   may ask: Bash; 2 more inline)`, `parallel: inline (agent "a0" may ask: an
   Ask rule "Read(*.env)" covers some Read calls)`, `parallel: 2 forked, 1
   inline (…)`, or `parallel: inline (agent "x": pcntl_fork() is unavailable
   in this process)` / `…: pcntl_fork() failed`.
-- `runId` is always `null` today: tool runs leave no resumable record yet,
-  and the key is in the shape now so a consumer written against it does not
-  change when they do.
-
-A run that did not complete is returned as an error result.
+A run that did not complete — paused included — is returned as an error
+result.
 
 ---
 
@@ -1929,9 +2210,10 @@ or a `tasks:` list in YAML, whose entries take the one-task stage's keys
 (every key of `WorkflowRegistry::YAML_TASK_KEYS`: `agent`, `name`, `prompt`,
 `tools`, `retries`, `outputSchema`, `isolation`, `model`, `resource`,
 `lockWaitSeconds`, `timeout`, `reject`, `rejectMinOccurrences`, `stallTimeout`,
-`restarts`, `input`, `votes`, `lenses`, `quorum`); `capture`, `cache`, `when`,
-`loop` and `minSuccess` are the stage's own keys, not task keys, so they live
-on the stage map even when the stage lists `tasks:`:
+`restarts`, `input`, `votes`, `lenses`, `quorum`, `preset`, `effort`);
+`capture`, `cache`, `when`, `loop`, `minSuccess` and `announce` are the
+stage's own keys, not task keys, so they live on the stage map even when the
+stage lists `tasks:`:
 
 ```yaml
 - name: fix
@@ -1955,9 +2237,8 @@ refused, as is an empty list. For tasks that should run at the same time, use
 `parallel: true` with `agents:`; for the same short chain run per item of a
 list, use [`type: map`](#type-map-streams-each-item-through-its-steps).
 
-**2. `agent:` / `type:` is a LABEL, not a preset reference.** `WorkflowEngine`
-contains no reference to `AgentPreset` or `AgentDefinition` at all. A stage
-saying `agent: reviewer` produces
+**2. `agent:` / `type:` is a LABEL; `preset:` is the preset reference.** A
+stage saying only `agent: reviewer` produces
 
 ```php
 new Agent(name: 'reviewer', description: <the interpolated prompt>, prompt: '', …)
@@ -1965,8 +2246,11 @@ new Agent(name: 'reviewer', description: <the interpolated prompt>, prompt: '', 
 
 — the name is carried for display, and the stage's own `prompt:` is the entire
 instruction. Your `~/.candy-code/agents/reviewer.md` preset and a stage saying
-`agent: reviewer` are unrelated objects that happen to share a string. If you
-want a preset's prompt in a stage, paste it into the stage's `prompt:`.
+`agent: reviewer` are unrelated objects that happen to share a string. To run
+a task as that preset — its body as the system prompt, its tools, model,
+effort, isolation, denylist, step cap and (stricter-only) permission mode
+under the task's own keys — write `preset: reviewer`
+([`preset:`](#preset-runs-a-task-as-an-agent-preset-effort-sets-its-reasoning-effort)).
 
 **3. `reject:` only takes effect on a verification stage's verifier.** This
 claim used to read "pipeline and verification stages are PHP-only" — that
@@ -2020,18 +2304,18 @@ return (new WorkflowBuilder())
 `TaskBuilder` carries `agent()`, `prompt()`, `tools()`, `timeout()`,
 `retries()`, `isolation()`, `name()`, `outputSchema()`, `model()`, `reject()`,
 `resource()`, `lockWaitSeconds()`, `stallTimeout()`, `restarts()`, `input()`,
-`votes()`, `lenses()` and `quorum()`. Every one has a YAML spelling — the keys of
+`votes()`, `lenses()`, `quorum()`, `preset()` and `effort()`. Every one has a YAML spelling — the keys of
 `WorkflowRegistry::YAML_TASK_KEYS`, `agent:`/`type:` for `agent()` and
 `reject:` plus `rejectMinOccurrences:` for `reject()`'s pattern and
 `atLeast` — so a YAML-declared task reaches the same DTO fields a PHP one
 does. The stage-level flags are `WorkflowBuilder`'s: `capture` and `cache`
 are named arguments of `stage()`/`parallel()`/`pipeline()`/`withVerification()`/`uses()`/`map()`,
-and `when()`/`loop()`/`minSuccess()` attach to the stage added last
+and `when()`/`loop()`/`minSuccess()`/`announce()` attach to the stage added last
 (`loop()` takes `accumulate` beside `max` and `until`). `parallel()` takes
 `from:` as an array in any of the three source shapes, validated by the same
 `WorkflowBuilder::fromSource()` law the loader uses; `map()` builds a map stage
-from `mapStep()`/`mapVerification()` entries; `maxConcurrent()` and
-`maxAgents()` set the rails. Only `schemas:` has no builder spelling — share a
+from `mapStep()`/`mapVerification()` entries; `maxConcurrent()`,
+`maxAgents()`, `maxTokens()` and `maxCost()` set the rails. Only `schemas:` has no builder spelling — share a
 PHP variable instead. `WorkflowEngine` substitutes defaults for whatever a task
 leaves unset when it builds the `SubAgent`:
 `$task->timeout ?? config.timeout` seconds, `$task->retries ?? 0`,

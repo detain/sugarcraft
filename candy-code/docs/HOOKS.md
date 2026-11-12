@@ -556,7 +556,12 @@ at all.
   `cache:` stage carried from a record raises nothing either: no dispatch
   happened. Nor does a plan the pre-run lint refuses (`/workflow run`, the
   `Workflow` tool and `candy-code workflow run` all lint first): it never
-  reaches the engine.
+  reaches the engine. A budget stop (`config.maxTokens`/`maxCost`) is a
+  pause, so it raises no terminal either, and a stage a `Workflow` tool
+  `resumeFrom` carries from its record raises nothing. A run's
+  announcements (`announce:` lines and the engine's truncation, casualty,
+  budget and ceiling notices) are not hook events: they ride
+  `WorkflowResult::$announcements` and the engine's announcement sink.
 - **Context.** `toolName` is `Workflow` (write the `matcher:` against it), the
   session id is the run's stamped identity (the workflow's name plus the mint's
   suffix), and `toolInput` is JSON: `{"workflow", "stage", "round"}` for

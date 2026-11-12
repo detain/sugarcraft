@@ -419,8 +419,11 @@ model itself as a YAML plan through the `Workflow` tool. Every one of those
 doors lints the plan before anything is dispatched. Each stage agent runs the
 real tool loop under the session's hook chain and permission gate; a stage
 with an `outputSchema` hands in its answer through a validated
-`StructuredOutput` tool call. A stage's `agent:` is a label, not a roster
-preset. See [`WORKFLOWS.md`](WORKFLOWS.md).
+`StructuredOutput` tool call. A stage's `agent:` is a label; `preset: <name>`
+runs the task as that roster preset (resolved through the same tiers `Task`
+uses, the task's own keys winning, a preset's permission mode only
+tightening), and `effort:` sets its reasoning effort. See
+[`WORKFLOWS.md`](WORKFLOWS.md).
 
 ## Not yet available
 

@@ -130,6 +130,12 @@ runs under `default` while a native (`.candy-code/agents`) preset rides through
 with its own mode (see
 [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#which-fields-reach-the-roster)).
 
+A workflow task that names `preset: <name>` gets the same ruling: its agent
+runs under the session's rules in the preset's mode only when that mode is
+stricter than the session's, a `bypass-permissions` session keeps bypass,
+and the stricter gate rides the stage agent's grant hook (see
+[`WORKFLOWS.md`](WORKFLOWS.md#preset-runs-a-task-as-an-agent-preset-effort-sets-its-reasoning-effort)).
+
 One call is exempt from all of it: a workflow stage agent's `StructuredOutput`
 call — the per-run tool through which a stage with an `outputSchema` hands in
 its answer — skips the gate, the stage's grant hook and every `PreToolUse`

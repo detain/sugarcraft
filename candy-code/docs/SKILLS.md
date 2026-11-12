@@ -29,7 +29,7 @@ is reported — see below):
 
 | Tier | Directory | Notes |
 |---|---|---|
-| built-in | `src/Skills/BuiltIn/` | Ships with the package — nine directories in this checkout (`api-design`, `composer-wizard`, `laravel-best-practices`, `php-best-practices`, `phpunit-master`, `security-audit`, `skill-creator`, `symfony-best-practices`, `testing-strategies`). Lowest precedence. |
+| built-in | `src/Skills/BuiltIn/` | Ships with the package — ten directories in this checkout (`api-design`, `composer-wizard`, `laravel-best-practices`, `php-best-practices`, `phpunit-master`, `security-audit`, `skill-creator`, `symfony-best-practices`, `testing-strategies`, `workflow-authoring`). Lowest precedence. |
 | project | `<root>/.candy-code/skills/` | Confined to the checkout; see [Containment](#containment). Beats a built-in. |
 | user | `~/.candy-code/skills/` | Yours. Symlinks inside it may resolve anywhere under `$HOME`. Highest precedence. |
 

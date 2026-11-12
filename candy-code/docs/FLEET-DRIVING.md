@@ -199,16 +199,21 @@ exit 1 with nothing spent (`result.status` `refused` plus `result.lint`), and
 lint warnings ride `result.lint` of a normal run without blocking it. The
 `-p '/workflow'` route above remains model-mediated by design.
 
-## Killing workflow runs: the native verb pauses resumably; the model path does not
+## Killing workflow runs: the native verb pauses resumably; the model path keeps only its record
 
 A `SIGTERM` (or `SIGINT`) delivered to the MODEL-MEDIATED path — the
 `Workflow` tool reached through `-p '/workflow run <name>'` — exits 143 with
-an **empty stdout and no pause file**. The root cause is on the `WorkflowTool`
-path, which calls the engine's non-interactive entry
-`WorkflowEngine::runWorkflow()` with the interruptibility argument pinned off;
-`installInterruptHandlers()` runs only on interruptible paths, so the process
-dies on the raw signal. That is by design: the tool executes inside a forked
-turn whose cancellation kills the child tree wholesale.
+an **empty stdout and no cooperative pause**. The `WorkflowTool` path runs
+the engine's `WorkflowEngine::runPlan()` with no interrupt handlers
+(`installInterruptHandlers()` runs only on interruptible paths), so the
+process dies on the raw signal. That is by design: the tool executes inside a
+forked turn whose cancellation kills the child tree wholesale. What survives
+is the run's per-stage record: every tool run writes
+`<user workflows dir>/.running/plan-<sha8>-<n>.json` as its stages settle, so
+once the killed writer is gone the record reads `orphaned` and
+`candy-code workflow resume <runId>` (or `/workflow resume <runId>`) continues
+after the settled prefix. The run ID rode the tool result the killed process
+never printed, so a driver has to find it on disk.
 
 The native verb is different. `candy-code workflow run` calls
 `WorkflowEngine::run()`, which takes the interruptible default: a signal
@@ -233,4 +238,5 @@ writes the cooperative pause record first, and the verb's pause observer
 6. For saved-workflow fan-out prefer the native `candy-code workflow run` verb
    over hand-rolled `-p` lanes; signal-stopping it leaves a resume point
    (`candy-code workflow resume <id>`). The model-mediated `-p '/workflow'`
-   route still has no resume point — budget time there.
+   route leaves only its crash record, under a run ID stdout never names —
+   budget time there.
