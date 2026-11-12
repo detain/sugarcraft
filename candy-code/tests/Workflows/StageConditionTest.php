@@ -26,7 +26,10 @@ final class StageConditionTest extends TestCase
     public function testTheGrammarRostersAreClosed(): void
     {
         $this->assertSame(['all', 'any'], StageCondition::COMBINATORS);
-        $this->assertSame(['equals', 'contains', 'matches'], StageCondition::OPS);
+        $this->assertSame(['equals', 'contains', 'matches', 'empty'], StageCondition::OPS);
+        $this->assertSame(['dry', 'budgetBelow'], StageCondition::LOOP_OPS);
+        $this->assertSame('@loopDryRounds', StageCondition::LOOP_DRY_ROUNDS_CONTEXT_KEY);
+        $this->assertSame('@budgetRemaining', StageCondition::BUDGET_REMAINING_CONTEXT_KEY);
         $this->assertSame(2, StageCondition::MAX_DEPTH, 'two combinator layers, never an unbounded tree');
     }
 
