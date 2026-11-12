@@ -41,10 +41,11 @@ final class SkillRegistry
      *
      * WHY 1,024, AND NOT A NUMBER A REAL ROSTER COULD REACH. MEASURED on this
      * tree by {@see Skill::fromFile()} over `src/Skills/BuiltIn/*\/SKILL.md`:
-     * the nine shipped built-ins declare FOUR distinct `paths:` globs between
-     * them (`composer.json`, `composer.lock`, `**\/*.php`, `**\/*Test.php`),
-     * across five `paths:` entries, and no skill declares more than two. 1,024
-     * is 256x that, so a roster would need ~200 skills each declaring five
+     * the ten shipped built-ins declare six distinct `paths:` globs between
+     * them (`composer.json`, `composer.lock`, `**\/*.php`, `**\/*Test.php`,
+     * `*workflows/*.yaml`, `*workflows/*.yml`), across seven `paths:` entries,
+     * and no skill declares more than two. 1,024 is 170x that, so a roster
+     * would need ~200 skills each declaring five
      * DISTINCT globs before it noticed the cap exists. Every one of those
      * numbers is re-derived from the shipped frontmatter and from this constant
      * by {@see \SugarCraft\Code\Tests\Skills\CompiledPatternCacheBoundTest},

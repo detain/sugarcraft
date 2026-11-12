@@ -25,7 +25,7 @@ use SugarCraft\Code\Tests\Support\HomeSandboxTrait;
  * built-ins they were listed in every project's system prompt — one told the
  * model to `git checkout -- . && git clean -fd` a dirty tree. They now live in
  * the monorepo's own project tier, `<repo root>/.candy-code/skills/`, and the
- * nine generic skills stay built in. The four keep their metadata pins here,
+ * generic skills stay built in. The four keep their metadata pins here,
  * retargeted at the new location, so moving them did not also unpin them.
  */
 final class BuiltInSkillsTest extends TestCase
@@ -46,7 +46,7 @@ final class BuiltInSkillsTest extends TestCase
     }
 
     /**
-     * Expected definitions for the nine built-in skills.
+     * Expected definitions for the ten built-in skills.
      *
      * `effort` is null on every entry: C-EXT-2.b (R-EXT-1) trimmed the
      * built-ins to what each truly needs — no built-in forces a thinking
@@ -129,6 +129,14 @@ final class BuiltInSkillsTest extends TestCase
                 'effort' => null,
                 'allowedTools' => 'Read, Grep',
                 'paths' => [],
+            ],
+            'workflow-authoring' => [
+                'name' => 'workflow-authoring',
+                'description' => 'Reference for writing a workflow plan (YAML for the Workflow tool or a saved workflow file) — stage shapes, keys, interpolation, fan-out, verifier panels, budgets, resume, and quality patterns. Load before authoring a non-trivial plan; loading it does not justify running one.',
+                'userInvocable' => true,
+                'effort' => null,
+                'allowedTools' => null,
+                'paths' => ['*workflows/*.yaml', '*workflows/*.yml'],
             ],
         ];
     }
@@ -215,7 +223,7 @@ final class BuiltInSkillsTest extends TestCase
     }
 
     /**
-     * The nine built-in skill files.
+     * The ten built-in skill files.
      *
      * @return array<string, array{string, string}>
      */
@@ -232,6 +240,7 @@ final class BuiltInSkillsTest extends TestCase
             'symfony-best-practices' => ["$basePath/symfony-best-practices/SKILL.md", 'symfony-best-practices'],
             'testing-strategies' => ["$basePath/testing-strategies/SKILL.md", 'testing-strategies'],
             'skill-creator' => ["$basePath/skill-creator/SKILL.md", 'skill-creator'],
+            'workflow-authoring' => ["$basePath/workflow-authoring/SKILL.md", 'workflow-authoring'],
         ];
     }
 
@@ -479,7 +488,7 @@ final class BuiltInSkillsTest extends TestCase
     // SkillLoader::loadBuiltInSkills() integration
     // -------------------------------------------------------------------------
 
-    public function testLoadBuiltInSkillsReturnsAllNineSkills(): void
+    public function testLoadBuiltInSkillsReturnsAllTenSkills(): void
     {
         // Arrange
         $loader = new SkillLoader();
@@ -488,7 +497,7 @@ final class BuiltInSkillsTest extends TestCase
         $skills = $loader->loadBuiltInSkills();
 
         // Assert
-        $this->assertCount(9, $skills, 'Should load exactly 9 built-in skills');
+        $this->assertCount(10, $skills, 'Should load exactly 10 built-in skills');
         $this->assertSame([], array_values(array_intersect(self::MONOREPO_SKILLS, array_keys($skills))));
     }
 
@@ -532,9 +541,9 @@ final class BuiltInSkillsTest extends TestCase
      * symfony-best-practices, testing-strategies, api-design) must be
      * discoverable through SkillLoader's existing BuiltIn scan path with NO
      * loader code changes -- i.e. loadAll() from the candy-code project root
-     * surfaces all nine built-ins.
+     * surfaces every built-in.
      */
-    public function testLoadAllFromSugarCrushRootReturnsAllNineBuiltIns(): void
+    public function testLoadAllFromSugarCrushRootReturnsEveryBuiltIn(): void
     {
         // Arrange
         $loader = new SkillLoader();
@@ -619,12 +628,16 @@ final class BuiltInSkillsTest extends TestCase
     public function testNoBuiltInSkillNamesASugarCraftPathOrRunsADestructiveGitCommand(): void
     {
         $files = self::skillFilesUnder($this->builtInSkillsPath);
-        $this->assertCount(9, $files, 'the scan must read every built-in, or it proves nothing');
+        $this->assertCount(10, $files, 'the scan must read every built-in, or it proves nothing');
 
         $forbidden = [
             'the monorepo port map' => '/MATCHUPS/i',
             'the monorepo naming rulebook' => '/PROJECT_NAMES/i',
-            'a candy-* lib' => '/\bcandy-/i',
+            // The product's own names — the `candy-code` binary and its
+            // `.candy-code/` config directory — hold wherever it runs, so they
+            // are not monorepo leakage; any other `candy-*` (including
+            // `candy-code-web`) still is.
+            'a candy-* lib' => '/\bcandy-(?!code(?![\w-]))/i',
             'a honey-* lib' => '/\bhoney-/i',
             'a sugar-* lib or candy-code itself' => '/\bsugar-[a-z]/i',
             'the SugarCraft monorepo' => '/sugarcraft/i',

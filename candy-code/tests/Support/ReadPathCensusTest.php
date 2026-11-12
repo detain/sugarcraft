@@ -1614,6 +1614,12 @@ final class ReadPathCensusTest extends TestCase
                 . 'to the shouldOffer()/markDismissed() seam); an unreadable or empty body reads as '
                 . '"no stamp" and fails soft toward OFFERING the wizard again, never as data consumed',
         ],
+        'Workflows/CpuCount.php|file_get_contents' => [
+            'PROCESS_DERIVED — probe(): the kernel\'s `/sys/devices/system/cpu/online` CPU list, a '
+                . 'fixed literal path, parsed for a count that sizes the default workflow width',
+            'PROCESS_DERIVED — probe(): the kernel\'s `/proc/cpuinfo`, a fixed literal path read only '
+                . 'when the sysfs list did not answer; only `processor` lines are counted',
+        ],
         'Workflows/StageResourceLocks.php|fopen' => [
             'SELF_LOCATED — an O3 host-resource lock file the class itself '
                 . 'creates (mode c+, private lock dir, TimedFileLock over the '
@@ -1621,17 +1627,27 @@ final class ReadPathCensusTest extends TestCase
                 . 'lock reads to its holder as the same lock it wanted',
         ],
         'Workflows/WorkflowEngine.php|file_get_contents' => [
+            'SELF_LOCATED — readOwnJson(): a Workflow-tool plan run\'s record or stored plan this '
+                . 'engine wrote under `.running/` (P1-8)',
             'SELF_LOCATED — a pause file this engine wrote',
             'SELF_LOCATED — the same, on resume',
             'SELF_LOCATED — the same, while listing paused runs',
         ],
+        'Workflows/WorkflowEngine.php|fopen' => [
+            'SELF_LOCATED — claimPlanRunId(): exclusive create (`x`) of its own '
+                . '`.running/<runId>.plan` to claim a Workflow-tool run ID; nothing is read',
+        ],
         'Workflows/WorkflowEngine.php|glob' => [
+            'SELF_LOCATED — prunePlanRuns(): its own `.running/plan-*.plan` names, for the '
+                . 'newest-20 retention of Workflow-tool runs',
             'SELF_LOCATED — its own `.running/*.json`. RESIDUAL, stated: the pause directory is '
                 . 'built from the registry\'s CONFIGURED workflowsPath(), not from the anchored '
                 . 'readableUserDir(), so a link on the workflows directory relocates the pause '
                 . 'files with it. What that yields is this engine\'s own JSON, not code',
         ],
         'Workflows/WorkflowEngine.php|scandir' => [
+            'NAMES_ONLY — removeCaptureDir(): a pruned Workflow-tool run\'s own `<runId>.stages/` '
+                . 'capture names, unlinked; no bytes are read through this call',
             'NAMES_ONLY — expandFromGlob(): a from: fan-out lists the environment root to '
                 . 'materialise its wave list; only relative path names are matched and recorded, '
                 . 'no bytes are read through this call. RESIDUAL, stated: is_dir/is_file follow '
