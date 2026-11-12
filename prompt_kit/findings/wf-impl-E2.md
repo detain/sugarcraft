@@ -85,7 +85,7 @@ meaning per checkout.
 
 ## 2. Not done / caveats
 
-- The skill is ~33 KB (503 lines), somewhat longer than the reference, because the corrections
+- The skill is ~33 KB (507 lines), somewhat longer than the reference, because the corrections
   add rows. Built-ins have no size cap (SkillFileReader caps at 1 MiB; the 16 KiB cap is for
   proposed skills only).
 - review-changes' map: `minSuccess` cannot be 0, so if more than half the verdicts are
