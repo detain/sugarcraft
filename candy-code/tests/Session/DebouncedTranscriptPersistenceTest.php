@@ -92,11 +92,26 @@ final class DebouncedTranscriptPersistenceTest extends TestCase
         $chatWithOne = self::advance($chat, [Message::user('one')]);
         $chatWithTwo = self::advance($chatWithOne, [Message::user('one'), Message::assistant('two')]);
 
-        self::assertNull($this->store->loadTranscript('live'));
+        // A reply is a boundary the writer must not leave to the tick (the
+        // reply appended in this window is written at once, with the newest
+        // snapshot), so the window holds one write, not two.
+        self::assertSame(['one', 'two'], self::stored('live'));
 
         $chatWithTwo->update(new TranscriptFlushMsg());
 
         self::assertSame(['one', 'two'], self::stored('live'));
+    }
+
+    /** A user's line alone still waits for the tick, as before. */
+    public function testAUserLineAloneStillWaitsForTheTick(): void
+    {
+        $chat = new Chat(sessionStore: $this->store, currentSessionId: 'live');
+
+        $chatWithOne = self::advance($chat, [Message::user('one')]);
+
+        self::assertNull($this->store->loadTranscript('live'));
+        self::assertTrue($chatWithOne->update(new TranscriptFlushMsg())[0] instanceof Chat);
+        self::assertSame(['one'], self::stored('live'));
     }
 
     /**

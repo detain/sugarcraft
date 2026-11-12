@@ -127,6 +127,9 @@ final class TranscriptStore
     {
         if ($this->store !== null) {
             $this->writer->schedule($this->store, $sessionId, $history);
+            if ($this->writer->atBoundary($history)) {
+                $this->writer->flush();
+            }
         }
     }
 

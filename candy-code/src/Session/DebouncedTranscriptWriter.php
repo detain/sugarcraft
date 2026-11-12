@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Session;
 
 use SugarCraft\Code\Message;
+use SugarCraft\Code\Role;
 
 /**
  * Coalesces {@see \SugarCraft\Code\Chat}'s transcript saves (audit R2).
@@ -44,8 +45,13 @@ use SugarCraft\Code\Message;
  */
 final class DebouncedTranscriptWriter
 {
-    /** How long a change may wait before it is written. */
-    public const DELAY_SECONDS = 0.5;
+    /**
+     * How long a change may wait before it is written. Short on purpose: the
+     * boundaries that matter most (a finished tool result, a new reply) are
+     * written at once by {@see atBoundary()}, so what this window still risks
+     * is streamed text inside one reply, not a settled turn.
+     */
+    public const DELAY_SECONDS = 0.1;
 
     /**
      * A snapshot pending for longer than this many windows means no tick is
@@ -65,6 +71,9 @@ final class DebouncedTranscriptWriter
     private ?float $pendingSince = null;
 
     private bool $shutdownRegistered = false;
+
+    /** @var array{0: int, 1: int}|null [message count, tool results on the last message] at the last boundary check */
+    private ?array $lastShape = null;
 
     private int $ownerPid;
 
@@ -98,6 +107,29 @@ final class DebouncedTranscriptWriter
         $this->history = $history;
         $this->pendingSince ??= microtime(true);
         $this->registerShutdown();
+    }
+
+    /**
+     * Whether $history has reached a boundary a crash must not lose: a reply
+     * (assistant message) appended since the last call, or tool results landing
+     * on the last message. A user's own message is not one — it waits for the
+     * tick like any change, so submitting a turn stays out of update().
+     * Text that only grows in place inside one reply is not a boundary either,
+     * so a streaming reply is not re-encoded per chunk. Stateful by design: the
+     * writer is the one object every call shares.
+     *
+     * @param list<Message> $history
+     */
+    public function atBoundary(array $history): bool
+    {
+        $last = $history === [] ? null : $history[array_key_last($history)];
+        $shape = [count($history), $last === null ? 0 : count($last->toolResults)];
+        $replyAppended = $last !== null && $last->role === Role::Assistant
+            && ($this->lastShape === null || $shape[0] !== $this->lastShape[0]);
+        $resultsLanded = $this->lastShape !== null && $shape[0] === $this->lastShape[0] && $shape[1] !== $this->lastShape[1];
+        $this->lastShape = $shape;
+
+        return $replyAppended || $resultsLanded;
     }
 
     /** How long the tick that writes a pending snapshot waits, in seconds. */
