@@ -82,6 +82,19 @@ final class StructuredOutputToolTest extends TestCase
         self::assertFalse($tool->accepted(), 'reading text never records an accepted call');
     }
 
+    public function testTheWireSchemaNeverEncodesAnEmptyMapAsAJsonArray(): void
+    {
+        // What a decoded `properties: {a: {}}` / bare `{type: object}` arrives as.
+        $tool = new StructuredOutputTool(['type' => 'object', 'properties' => ['a' => [], 'b' => ['type' => 'array', 'items' => []]]]);
+
+        self::assertSame(
+            '{"type":"object","properties":{"a":{},"b":{"type":"array","items":{}}},"required":[]}',
+            json_encode($tool->inputSchema()),
+        );
+        self::assertSame('{"type":"object","properties":{},"required":[]}', json_encode((new StructuredOutputTool())->inputSchema()));
+        self::assertFalse($tool->execute(['a' => 1, 'b' => ['x']])->isError(), 'validation still reads the plain-array form');
+    }
+
     public function testTheErrorsAccessorReportsAgainstTheInputSchema(): void
     {
         self::assertSame([], (new StructuredOutputTool(self::SCHEMA))->errors(['ok' => true]));

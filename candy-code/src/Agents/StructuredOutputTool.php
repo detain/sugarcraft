@@ -54,12 +54,18 @@ final class StructuredOutputTool implements Tool
     public const NUDGE = 'You ended your turn without calling `' . self::NAME . '`. '
         . 'Call `' . self::NAME . '` now with your final answer — nothing else is accepted as the result of this run.';
 
+    /** Keywords whose array value is a JSON list, never a schema or a map of schemas. */
+    private const LIST_KEYWORDS = ['enum', 'required', 'type', 'examples', 'oneOf', 'anyOf', 'allOf'];
+
     private ?string $answer = null;
 
     private readonly bool $wrapped;
 
-    /** @var array<string, mixed> */
+    /** @var array<string, mixed> the schema calls are validated against (plain arrays throughout) */
     private readonly array $inputSchema;
+
+    /** @var array<string, mixed> the same schema in its wire shape — see {@see wireShape()} */
+    private readonly array $wireSchema;
 
     /**
      * @param array<string, mixed> $schema the agent's decoded outputSchema.
@@ -78,6 +84,7 @@ final class StructuredOutputTool implements Tool
                 'additionalProperties' => false,
             ]
             : $schema;
+        $this->wireSchema = self::wireShape($this->inputSchema);
     }
 
     public function name(): string
@@ -96,7 +103,7 @@ final class StructuredOutputTool implements Tool
 
     public function inputSchema(): array
     {
-        return $this->inputSchema;
+        return $this->wireSchema;
     }
 
     public function execute(array $args): ToolResult
@@ -170,6 +177,44 @@ final class StructuredOutputTool implements Tool
     public function errors(array $args): array
     {
         return SchemaValidator::new(self::defs($this->schema))->errors($args, $this->inputSchema);
+    }
+
+    /**
+     * The tool-input schema as a provider must receive it: a top-level
+     * `properties` and `required` always present, and every EMPTY
+     * `properties` map an object rather than a PHP `[]` — which json-encodes
+     * as the JSON array `[]`, and a strict server (SGLang) rejects the whole
+     * request over one such tool. A YAML/JSON-decoded schema arrives with
+     * exactly that `[]` whenever its author wrote `properties: {}`.
+     * Validation keeps the plain-array form; only the wire copy is touched.
+     *
+     * @param array<string, mixed> $schema
+     * @return array<string, mixed>
+     */
+    private static function wireShape(array $schema, bool $top = true): array
+    {
+        foreach ($schema as $key => $value) {
+            if (!\is_array($value) || \in_array($key, self::LIST_KEYWORDS, true)) {
+                if (\is_array($value) && \in_array($key, ['oneOf', 'anyOf', 'allOf'], true)) {
+                    $schema[$key] = array_map(
+                        static fn (mixed $item): mixed => \is_array($item) ? ($item === [] ? new \stdClass() : self::wireShape($item, false)) : $item,
+                        $value,
+                    );
+                }
+
+                continue;
+            }
+            // Everything else that is an array is a schema or a map of them
+            // (`properties`, `$defs`, `items`, …): empty means `{}`.
+            $schema[$key] = $value === [] ? new \stdClass() : self::wireShape($value, false);
+        }
+
+        if ($top) {
+            $schema['properties'] ??= new \stdClass();
+            $schema['required'] ??= [];
+        }
+
+        return $schema;
     }
 
     /** @param array<string, mixed> $schema */
