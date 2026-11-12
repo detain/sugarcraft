@@ -756,6 +756,203 @@ final class PermissionGate
     }
 
     /**
+     * Could this gate answer `Ask` for SOME call a declaration admits?
+     *
+     * The other read-only question about a declaration, for a caller that has
+     * to know whether a run can put a permission question before it starts —
+     * the `Workflow` tool forks a parallel stage agent out of the turn's
+     * process only when it cannot ask, because a question asked below the
+     * turn child has no approver and fails closed (workflow-update P2-1;
+     * {@see \SugarCraft\Code\Agents\AskFreeGrant}). `true` is the SAFE answer
+     * here, so every judgement this method cannot make from the declaration
+     * alone resolves to `true`. {@see askReason()} says why.
+     */
+    public function wouldAsk(ToolDeclaration $declaration): bool
+    {
+        return $this->askReason($declaration) !== null;
+    }
+
+    /**
+     * Why some call admitted by $declaration could be answered `Ask` — or
+     * null when no call it admits can be. The reason is literal English,
+     * naming the rule (`an Ask rule "Read(*.env)" covers some Read calls`) or
+     * the mode (`the "default" mode asks for Bash`) responsible.
+     *
+     * WHAT A DECLARATION ADMITS. A bare name (`Bash`) admits every call to
+     * that tool. An argument-scoped one (`Bash(vendor/bin/phpunit *)`, the
+     * shape an agent's `tools:` grant takes) admits exactly the calls an
+     * `Allow` rule with that pattern would grant. A NAME GLOB (`mcp__git__*`)
+     * is not resolved against a tool roster this class does not hold: it is
+     * presumed to ask unless the mode is `bypass-permissions`.
+     *
+     * HOW IT IS JUDGED — the order {@see decide()} applies, each step asked
+     * "for every admitted call" or "for some admitted call":
+     *
+     * - `bypass-permissions`: nothing asks. An Ask rule falls through to the
+     *   mode there, and the mode allows.
+     * - The channel scope, or a skill's turn deny that covers the whole
+     *   declaration: every call is refused, so none is asked.
+     * - Configured rules, first match wins. A rule that covers the WHOLE
+     *   declaration settles it (a name-only rule, or one whose argument
+     *   pattern is the declaration's own, whitespace-normalised): `Allow` /
+     *   `Deny` → no question, `Ask` → a question unless an "always" answer
+     *   covers it. A rule that covers only SOME calls (`Ask Bash(git *)` for a
+     *   bare `Bash`) asks for those, so an `Ask` one answers `true` and an
+     *   `Allow`/`Deny` one leaves the rest to the next rule. Argument-pattern
+     *   SUBSUMPTION is not attempted: `Allow Bash(vendor/bin/*)` does not
+     *   cover a `Bash(vendor/bin/phpunit *)` declaration here, because the
+     *   matcher's segment and path readings make glob containment a claim
+     *   this method cannot prove — and an unproven "no" is the unsafe one.
+     * - The mode, for calls no rule settled: `default` / `accept-edits` ask
+     *   for everything outside the read-only class (their grants — read-only
+     *   shell lines, in-root edits — cover only some calls); `plan` asks only
+     *   for a tool it neither allows nor denies by name; `dont-ask` never
+     *   asks; `auto` judges every non-read call per call (classifier,
+     *   reviewer, strike breaker) and, without a classifier, asks for
+     *   everything — so it answers `true` for all of them, and for reads too
+     *   when the reviewer's `autoReviewScope` is `all`. A no-ask tool asks in
+     *   no mode — `SendMessage` excepted, whose `session:` target is a
+     *   question by its arguments.
+     * - An `Ask` is turned into `Allow` by a remembered "always" answer or a
+     *   skill's turn grant that covers the whole declaration — except where
+     *   decide() forces the question: keystrokes typed into a terminal
+     *   (`ShellSend`, `PtyRun` steps) and `auto`'s security findings.
+     *
+     * WHAT IT CANNOT SEE, because none of it is the gate: a hook that asks on
+     * its own ({@see \SugarCraft\Code\Hooks\BuiltIn\ProtectFilesHook}'s
+     * policy-file writes, a user `PreToolUse` script). A caller that acts on
+     * a "no" must keep such a question failing closed.
+     *
+     * DOES NOT MUTATE — the {@see refuses()} law: no strike counter, no
+     * auto reason, no forced-ask mark is read from or written to a real call.
+     */
+    public function askReason(ToolDeclaration $declaration): ?string
+    {
+        if ($this->mode->isBypass()) {
+            return null;
+        }
+
+        $raw = $declaration->name;
+        $why = PermissionRule::patternRejectionReason($raw);
+        if ($why !== null) {
+            return sprintf('"%s" is not a tool pattern this gate can judge (it %s)', $raw, $why);
+        }
+        $parsed = new PermissionRule($raw, PermissionAction::Allow);
+        $name = $parsed->toolNamePattern();
+        $scope = $parsed->argumentPattern();
+
+        if (strpbrk($name, '*?[') !== false) {
+            return sprintf('"%s" is a name pattern, and a tool it names may ask', $name);
+        }
+
+        if ($this->channelScope !== null && $this->channelScope->verdict($name) !== null) {
+            return null;
+        }
+        if (self::declarationCoveredBy($this->turnDenyRules, $name, $scope)) {
+            return null;
+        }
+
+        // ShellSend types by name; PtyRun types whenever its call carries
+        // steps, which a declaration cannot rule out. Auto's security findings
+        // force their question too. A forced Ask is never answered by an
+        // "always" grant ({@see decide()}).
+        $forced = $name === \SugarCraft\Code\Tools\BuiltIn\ShellSend::NAME
+            || $name === 'PtyRun'
+            || $this->mode === PermissionMode::Auto;
+        $answered = !$forced
+            && (self::declarationCoveredBy($this->sessionRules, $name, $scope)
+                || self::declarationCoveredBy($this->turnAllowRules, $name, $scope));
+
+        foreach ($this->rules as $rule) {
+            if (!self::ruleNamesTool($rule, $name)) {
+                continue;
+            }
+            $whole = self::ruleCoversScope($rule, $scope);
+            if ($rule->action !== PermissionAction::Ask) {
+                if ($whole) {
+                    return null;
+                }
+                continue;
+            }
+            if (!$answered) {
+                return sprintf(
+                    'an Ask rule "%s" covers %s',
+                    $rule->pattern,
+                    $whole ? $name : sprintf('some %s calls', $name),
+                );
+            }
+            if ($whole) {
+                return null;
+            }
+        }
+
+        // The NAME half alone: an evaluator below must never see a scope it
+        // could mistake for the call's arguments.
+        $named = new ToolCall($name);
+        if ($name !== SendMessageTool::NAME && $this->isNoAskTool($named)) {
+            return null;
+        }
+
+        $modeAsks = match ($this->mode) {
+            PermissionMode::Default, PermissionMode::AcceptEdits => !$this->isReadOnlyTool($named),
+            PermissionMode::Plan => $this->evaluatePlan($named, argumentsKnown: false) === PermissionDecision::Ask,
+            PermissionMode::Auto => $this->classifier === null
+                || !$this->isReadOnlyTool($named)
+                || ($this->reviewer !== null && self::autoReviewScope() === 'all'),
+            PermissionMode::DontAsk, PermissionMode::BypassPermissions => false,
+        };
+        if (!$modeAsks || $answered) {
+            return null;
+        }
+
+        return $this->mode === PermissionMode::Auto
+            ? sprintf('the "auto" mode judges each %s call and may ask', $name)
+            : sprintf('the "%s" mode asks for %s', $this->mode->value, $name);
+    }
+
+    /**
+     * Does $rule's tool-name half bind a call to $name — the same binding
+     * {@see PermissionRule::matches()} applies, shell and patch proxies for a
+     * restrictive rule included? Asked of the rule with its argument half
+     * dropped, so the name decides alone.
+     */
+    private static function ruleNamesTool(PermissionRule $rule, string $name): bool
+    {
+        return (new PermissionRule($rule->toolNamePattern(), $rule->action))
+            ->matches(new ToolCall($name), argumentsKnown: false);
+    }
+
+    /**
+     * Does $rule match EVERY call a declaration scoped by $scope admits,
+     * given that its name binds? Only a name-only rule, or one whose
+     * argument pattern is the declaration's own (whitespace-normalised, as
+     * the matcher normalises) — see {@see askReason()} on subsumption.
+     */
+    private static function ruleCoversScope(PermissionRule $rule, ?string $scope): bool
+    {
+        $pattern = $rule->argumentPattern();
+        if ($pattern === null) {
+            return true;
+        }
+
+        $norm = static fn (string $s): string => trim((string) preg_replace('/\s+/', ' ', $s));
+
+        return $scope !== null && $norm($pattern) === $norm($scope);
+    }
+
+    /** @param array<PermissionRule> $rules */
+    private static function declarationCoveredBy(array $rules, string $name, ?string $scope): bool
+    {
+        foreach ($rules as $rule) {
+            if (self::ruleNamesTool($rule, $name) && self::ruleCoversScope($rule, $scope)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * The one copy of the decision path, shared by both entry points.
      *
      * Shared rather than duplicated because the alternative — a second
