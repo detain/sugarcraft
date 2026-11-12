@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# tmux-guard — keeps coding agents off the user's own tmux/byobu server.
+#
+# Install as `tmux` in a PATH directory that precedes the real binary for the
+# agent runtime (e.g. ~/.local/bin/tmux). Humans and byobu pass straight
+# through to the real tmux. A caller is an AGENT when its environment carries
+# a marker the agent runtimes export into their tool shells:
+#   OPENCODE / OPENCODE_SESSION_ID  (opencode)
+#   CLAUDECODE                      (Claude Code)
+#   TMUX_GUARD_AGENT=1              (opt-in for any other runtime)
+#
+# Why: agent shells inherit $TMUX from the pane the runtime was started in.
+# With $TMUX set and no -L/-S, tmux talks to the server named in $TMUX and
+# ignores TMUX_TMPDIR — so one agent's `tmux kill-server` (2026-11-12, the
+# candy-tetris QA reviewer) destroyed the user's entire byobu session.
+#
+# For an agent this wrapper:
+#   - drops TMUX/TMUX_PANE, so nothing steers it to the user's server;
+#   - adds `-L agent-<session>` when no -L/-S was given, so an unscoped call
+#     lands on a private per-session server (successive calls from the same
+#     session keep finding it);
+#   - refuses (exit 2) any explicit -L/-S that names the user's own server.
+# TMUX_GUARD_OFF=1 disables the guard for one call.
+set -u
+
+self=${BASH_SOURCE[0]}
+
+real_tmux() {
+    local c dir
+    if [[ -n ${TMUX_GUARD_REAL:-} && -x ${TMUX_GUARD_REAL} ]]; then
+        printf '%s\n' "$TMUX_GUARD_REAL"
+        return 0
+    fi
+    for c in /usr/local/bin/tmux /usr/bin/tmux /bin/tmux; do
+        if [[ -x $c && ! $c -ef $self ]]; then
+            printf '%s\n' "$c"
+            return 0
+        fi
+    done
+    local IFS=:
+    for dir in $PATH; do
+        dir=${dir/#\~/$HOME}
+        c=$dir/tmux
+        if [[ -x $c && ! -d $c && ! $c -ef $self ]]; then
+            printf '%s\n' "$c"
+            return 0
+        fi
+    done
+    return 1
+}
+
+real=$(real_tmux) || { echo "tmux-guard: no real tmux binary found" >&2; exit 127; }
+
+is_agent=0
+if [[ -n ${OPENCODE:-}${OPENCODE_SESSION_ID:-}${CLAUDECODE:-} || ${TMUX_GUARD_AGENT:-} == 1 ]]; then
+    is_agent=1
+fi
+if [[ $is_agent == 0 || ${TMUX_GUARD_OFF:-} == 1 ]]; then
+    exec "$real" "$@"
+fi
+
+uid=$(id -u)
+user_dir=${TMUX_TMPDIR:-/tmp}
+user_dir=${user_dir%/}/tmux-$uid
+# Sockets that belong to the human: the default server, plus whatever $TMUX
+# points at (byobu may run under a non-default socket).
+protected=("/tmp/tmux-$uid/default" "$user_dir/default")
+if [[ -n ${TMUX:-} ]]; then
+    protected+=("${TMUX%%,*}")
+fi
+
+# Walk tmux's global flags (everything before the command name). Flags with
+# a value: -c -f -L -S -T; the value may be attached (-Lname) or separate.
+socket_name='' socket_path='' i=0
+args=("$@")
+while (( i < ${#args[@]} )); do
+    a=${args[i]}
+    [[ $a == -- ]] && break
+    [[ $a == -* && $a != - ]] || break
+    flag=${a:1:1} rest=${a:2}
+    case $flag in
+        c|f|L|S|T)
+            if [[ -n $rest ]]; then val=$rest; else (( i++ )); val=${args[i]:-}; fi
+            [[ $flag == L ]] && socket_name=$val
+            [[ $flag == S ]] && socket_path=$val
+            ;;
+    esac
+    (( i++ ))
+done
+
+refuse() {
+    echo "tmux-guard: refused — agents may not touch the user's tmux server ($1)." >&2
+    echo "tmux-guard: use your own server: env -u TMUX -u TMUX_PANE tmux -L <unique-name> ..." >&2
+    exit 2
+}
+
+target=''
+if [[ -n $socket_path ]]; then
+    target=$socket_path
+elif [[ -n $socket_name ]]; then
+    target=$user_dir/$socket_name
+fi
+if [[ -n $target ]]; then
+    for p in "${protected[@]}"; do
+        if [[ $target == "$p" || ( -e $target && $target -ef $p ) ]]; then
+            refuse "$target"
+        fi
+    done
+fi
+
+unset TMUX TMUX_PANE
+if [[ -z $socket_name && -z $socket_path ]]; then
+    sid=${OPENCODE_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-shared}}
+    sid=${sid//[^A-Za-z0-9_.-]/_}
+    exec "$real" -L "agent-$sid" "$@"
+fi
+exec "$real" "$@"
