@@ -1,7 +1,6 @@
 import { watch } from 'vue'
-import { oneLine } from '../../lib/format'
+import { sessionLabel } from '../../lib/format'
 import { t } from '../../lib/i18n'
-import type { SessionSummary } from '../../protocol/generated'
 import { useApprovalsStore, type SessionAsk } from '../../stores/approvals'
 import { useLayoutStore } from '../../stores/layout'
 import { useSessionsStore } from '../../stores/sessions'
@@ -11,12 +10,6 @@ const BRAND = 'CandyCode'
 
 /** Statuses a session is "working" in; leaving them for `idle` is a finished turn. */
 const WORKING = new Set(['busy', 'waiting_permission'])
-
-export function sessionLabel(summary: SessionSummary | undefined, sessionId: string): string {
-  if (summary?.name) return summary.name
-  if (summary?.preview) return oneLine(summary.preview, 48)
-  return sessionId
-}
 
 export interface AttentionOptions {
   /** Whether the page is out of sight (a background tab, a minimised window). */

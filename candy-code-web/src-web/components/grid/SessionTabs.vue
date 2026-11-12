@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { t } from '../../lib/i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { sessionLabel } from '../approvals/attention'
+import { sessionLabel } from '../../lib/format'
 import { describe } from '../../stores/session'
 import { loadTabChord, matchesTabChord, nextTabChord, saveTabChord, tabChordLabel, tabDigit, type TabChord } from '../../lib/tabChord'
 import { useApprovalsStore } from '../../stores/approvals'

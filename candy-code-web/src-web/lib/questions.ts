@@ -1,5 +1,5 @@
 import { nextTick, onScopeDispose, ref, watch, type Ref } from 'vue'
-import { sessionLabel } from '../components/approvals/attention'
+import { sessionLabel } from './format'
 import { useApprovalsStore, type SessionAsk } from '../stores/approvals'
 import { useContextSourcesStore } from '../stores/contextSources'
 import { useSessionsStore } from '../stores/sessions'

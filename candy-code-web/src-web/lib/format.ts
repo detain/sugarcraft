@@ -1,5 +1,7 @@
 /** Small display helpers shared by the cards and the status bar. */
 
+import type { SessionSummary } from '../protocol/generated'
+
 /** The one argument that says what a tool call does, for its card header. */
 export function keyArgument(args: Record<string, unknown>): string {
   for (const name of ['command', 'file_path', 'path', 'pattern', 'url', 'query', 'description', 'task', 'prompt']) {
@@ -15,6 +17,17 @@ export function keyArgument(args: Record<string, unknown>): string {
 export function oneLine(text: string, max: number): string {
   const flat = text.replace(/\s+/g, ' ').trim()
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat
+}
+
+/**
+ * How a session is named wherever chrome points at it — a tab, a tile, a
+ * notification. Display shaping beside `oneLine`, its collaborator (n50):
+ * the approvals notifier was only ever the label's other caller.
+ */
+export function sessionLabel(summary: SessionSummary | undefined, sessionId: string): string {
+  if (summary?.name) return summary.name
+  if (summary?.preview) return oneLine(summary.preview, 48)
+  return sessionId
 }
 
 export function duration(ms: number | undefined): string {

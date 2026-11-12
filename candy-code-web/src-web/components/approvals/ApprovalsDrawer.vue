@@ -10,7 +10,7 @@ import { useLayoutStore } from '../../stores/layout'
 import { describe } from '../../stores/session'
 import { useSessionsStore } from '../../stores/sessions'
 import { NOTIFICATION_PROBLEM_TEXT, useSettingsStore } from '../../stores/settings'
-import { sessionLabel } from './attention'
+import { sessionLabel } from '../../lib/format'
 
 /**
  * The cross-session approvals drawer (Appendix O §7.4): every question open
