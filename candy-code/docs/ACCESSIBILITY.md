@@ -118,6 +118,11 @@ only the glyph stops advancing; elapsed-seconds movement still repaints.
   colour profile is ASCII (a poor palette), the spinner swaps to an
   ASCII frame set — braille dots a terminal cannot draw are not a
   fallback.
+- **`NO_COLOR` is honoured.** A truthy `NO_COLOR` (any non-empty value
+  other than `0` or `false`) drops the colour profile to ASCII, keeping
+  bold, faint and italic, per [no-color.org](https://no-color.org). It
+  outranks the force variables. The full rules, including `CLICOLOR`, are
+  in [ENVIRONMENT.md](ENVIRONMENT.md).
 
 ## See also
 
