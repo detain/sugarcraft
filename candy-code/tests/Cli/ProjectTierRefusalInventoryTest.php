@@ -358,9 +358,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
         // User-tier: rooted at `~`, so nobody but the user chose the location.
         'Agents/ForeignAgentPresetRegistry.php|.config/opencode' => self::USER,
         'Agents/Team.php|.candy-code/teams' => self::USER,
-        'Agents/TeamConfig.php|.candy-code/teams' => self::USER,
         'Agents/TeamManager.php|.candy-code/teams' => self::USER,
-        'Agents/Teammate.php|.candy-code/teams' => self::USER,
         // INT-4: the user's Claude Code settings file, read for its `hooks`
         // block at launch. Home-rooted like every entry around it —
         // `userClaudeSettingsFile()` derives it one level up from
@@ -608,7 +606,7 @@ final class ProjectTierRefusalInventoryTest extends TestCase
      *
      * This walks `src/` with `token_get_all()`, takes every string literal, and
      * pulls out every `.<dot-dir>/<segment>` it contains, KEYED BY THE FILE IT
-     * APPEARS IN. On this tree that is NINETY-SIX occurrences — one per entry
+     * APPEARS IN. On this tree that is NINETY-FOUR occurrences — one per entry
      * in {@see DOT_PATHS} — of SIXTY-FOUR distinct paths. THIRTY-SIX of those
      * occurrences are repository-chosen by this file's own definition
      * ({@see repositoryChosenPaths()}: class `REPOSITORY` or class `BOTH`), and
