@@ -6,7 +6,9 @@ namespace SugarCraft\Code\MCP;
 
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Code\Support\ContainedPath;
+use SugarCraft\Code\Support\HomeDirectory;
 use SugarCraft\Code\Support\ProcessContainment;
+use SugarCraft\Code\Support\WindowsShell;
 
 /**
  * Git command handlers for the Git MCP server.
@@ -1677,17 +1679,29 @@ final readonly class GitCommandHandlers
             unset($env[$name]);
         }
 
-        // git is located through the child's PATH; keep /usr/bin reachable
-        // for a stripped-down parent PATH without overriding a user's own
-        // git earlier on PATH.
-        $path = (string) ($env['PATH'] ?? '');
-        if (!in_array('/usr/bin', explode(':', $path), true)) {
-            $env['PATH'] = $path === '' ? '/usr/bin:/bin' : $path . ':/usr/bin';
+        // POSIX only: PATH is ':'-separated there. On Windows it is ';'-separated,
+        // so a ':/usr/bin' suffix would corrupt the last entry, and the POSIX
+        // directories do not exist to be appended anyway.
+        if (!WindowsShell::isWindows()) {
+            // git is located through the child's PATH; keep /usr/bin reachable
+            // for a stripped-down parent PATH without overriding a user's own
+            // git earlier on PATH.
+            $path = (string) ($env['PATH'] ?? '');
+            if (!in_array('/usr/bin', explode(':', $path), true)) {
+                $env['PATH'] = $path === '' ? '/usr/bin:/bin' : $path . ':/usr/bin';
+            }
         }
 
-        // git needs HOME to find ~/.gitconfig at all.
+        // git needs HOME to find ~/.gitconfig at all. The resolver answers from
+        // HOME, then USERPROFILE, then the passwd entry; /tmp is a POSIX-only
+        // last resort, never a Windows home.
         if ((string) ($env['HOME'] ?? '') === '') {
-            $env['HOME'] = '/tmp';
+            $home = HomeDirectory::resolved();
+            if ($home !== null) {
+                $env['HOME'] = $home;
+            } elseif (!WindowsShell::isWindows()) {
+                $env['HOME'] = '/tmp';
+            }
         }
 
         return $env;

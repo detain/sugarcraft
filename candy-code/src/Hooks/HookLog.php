@@ -6,6 +6,7 @@ namespace SugarCraft\Code\Hooks;
 
 use SugarCraft\Code\Diagnostics\RuntimeNoticeSink;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\WindowsShell;
 
 /**
  * The hook log: a bounded JSONL trail of configured hook RUNS
@@ -397,7 +398,15 @@ final class HookLog
     /** The fallback directory for a uid, AuditHook's naming family. */
     private static function directoryFor(?int $uid): string
     {
-        return sys_get_temp_dir() . '/' . self::DEFAULT_DIRECTORY_STEM . ($uid ?? 'noposix');
+        // Without a uid, Windows names the directory by the account: a shared
+        // literal would let every local user land in one temp directory.
+        $who = $uid !== null
+            ? (string) $uid
+            : (WindowsShell::isWindows()
+                ? (string) preg_replace('/[^A-Za-z0-9_.-]/', '_', get_current_user())
+                : 'noposix');
+
+        return sys_get_temp_dir() . '/' . self::DEFAULT_DIRECTORY_STEM . $who;
     }
 
     /**

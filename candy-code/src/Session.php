@@ -6,6 +6,7 @@ namespace SugarCraft\Code;
 
 use SugarCraft\Core\Util\AtomicJsonFile;
 use SugarCraft\Code\Support\HomeDirectory;
+use SugarCraft\Code\Support\WindowsShell;
 
 /**
  * Session persistence for candy-code.
@@ -211,7 +212,8 @@ final class Session
      */
     private static function homeDirectory(): string
     {
-        return HomeDirectory::resolved() ?? (getcwd() ?: '/tmp');
+        // '/tmp' is a POSIX path; on Windows the temp directory is the honest last resort.
+        return HomeDirectory::resolved() ?? (getcwd() ?: (WindowsShell::isWindows() ? sys_get_temp_dir() : '/tmp'));
     }
 
     /**
