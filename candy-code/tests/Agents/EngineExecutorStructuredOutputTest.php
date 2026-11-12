@@ -296,11 +296,11 @@ final class EngineExecutorStructuredOutputTest extends TestCase
     }
 
     /** @param list<Tool> $tools */
-    private function request(array $tools): CompleteRequest
+    private function request(?array $tools = null): CompleteRequest
     {
         return new CompleteRequest(
             model: 'm',
-            messages: [['role' => 'user', 'content' => 'review the lib']],
+            messages: [['role' => 'user', 'content' => 'check the lib']],
             tools: $tools,
         );
     }

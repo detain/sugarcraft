@@ -2615,12 +2615,6 @@ final class WorkflowEngine implements WorkflowEngineInterface
     }
 
     /**
-     * Withdraw the O1 per-stage resilience record at a clean terminal state
-     * (completed / failed / cancelled with no pause standing). A vanished
-     * file is success: an explicit resume() may have consumed it in the
-     * meantime, and the run's remembered result then carries the truth.
-     */
-    /**
      * P1-8: a clean terminal's record handling — withdrawn for a registry
      * run (O1), KEPT for a Workflow-tool plan run, rewritten as a clean record
      * stamped with how the run ended, so `/workflow status <runId>` reads the
@@ -2643,6 +2637,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
         }
     }
 
+    /**
+     * Withdraw the O1 per-stage resilience record at a clean terminal state
+     * (completed / failed / cancelled with no pause standing). A vanished
+     * file is success: an explicit resume() may have consumed it in the
+     * meantime, and the run's remembered result then carries the truth.
+     */
     private function withdrawPauseRecord(string $key): void
     {
         $pauseFile = $this->getPauseFilePath($key);

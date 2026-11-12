@@ -449,9 +449,6 @@ final class WorkflowLinter
     }
 
     /**
-     * @param list<array{severity: string, stage: string, message: string}> $findings
-     */
-    /**
      * P1-7 / P2-2 mirrors: a blank or non-string `announce:` (hand-built) is
      * an error; `{{budget.remaining}}` and a loop's `until: {budgetBelow: N}`
      * on a plan with no `config.maxTokens` mean something only when the run

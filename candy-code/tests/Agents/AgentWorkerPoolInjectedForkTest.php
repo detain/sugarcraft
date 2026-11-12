@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Agents;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentStatus;
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\ForksAskFreeAgents;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Providers\CompleteRequest;
+use SugarCraft\Code\Tests\Support\BuildsPoolSubAgentTrait;
 
 /**
  * P2-1: an injected executor that implements {@see ForksAskFreeAgents} is
@@ -20,6 +20,8 @@ use SugarCraft\Code\Providers\CompleteRequest;
  */
 final class AgentWorkerPoolInjectedForkTest extends TestCase
 {
+    use BuildsPoolSubAgentTrait;
+
     public function testClearedAgentsForkAndRefusedOnesRunInline(): void
     {
         if (!\function_exists('pcntl_fork')) {
@@ -141,24 +143,5 @@ final class AgentWorkerPoolInjectedForkTest extends TestCase
     private static function request(): CompleteRequest
     {
         return new CompleteRequest(model: 'test-model', messages: [['role' => 'user', 'content' => 'go']]);
-    }
-
-    private static function agent(string $id): SubAgent
-    {
-        return new SubAgent(
-            id: $id,
-            agent: new Agent(
-                name: 'P21Agent',
-                description: 'Test agent',
-                prompt: 'You are a test agent.',
-                model: 'test-model',
-                provider: 'test',
-                tools: [],
-                skillNames: [],
-                hooks: [],
-                isActive: true,
-            ),
-            task: 'Test task for ' . $id,
-        );
     }
 }

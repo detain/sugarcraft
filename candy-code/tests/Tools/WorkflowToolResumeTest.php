@@ -11,6 +11,7 @@ use SugarCraft\Code\Events\SubAgentActivity;
 use SugarCraft\Code\Providers\CompleteRequest;
 use SugarCraft\Code\Providers\CompleteResponse;
 use SugarCraft\Code\Tests\Support\ScriptedProvider;
+use SugarCraft\Code\Tests\Workflows\WorkflowPlanRunRecordTest;
 use SugarCraft\Code\Tools\BuiltIn\WorkflowTool;
 use SugarCraft\Code\Workflows\WorkflowEngine;
 use SugarCraft\Code\Workflows\WorkflowRegistry;
@@ -23,8 +24,6 @@ use SugarCraft\Code\Workflows\WorkflowRegistry;
 final class WorkflowToolResumeTest extends TestCase
 {
     private string $dir;
-
-    private const PLAN = "name: tri\nstages:\n  - name: a\n    prompt: do a\n  - name: b\n    prompt: 'do b after {{a.output}}'\n  - name: c\n    prompt: do c\n";
 
     protected function setUp(): void
     {
@@ -46,12 +45,12 @@ final class WorkflowToolResumeTest extends TestCase
 
     public function testARunReturnsItsRunIdAndLeavesARecordTheWorkflowCommandCanRead(): void
     {
-        $result = $this->tool($this->provider())->execute(['plan' => self::PLAN]);
+        $result = $this->tool($this->provider())->execute(['plan' => WorkflowPlanRunRecordTest::PLAN]);
 
         $this->assertFalse($result->isError(), $result->content());
         $document = WorkflowToolTest::document($result->content());
         $runId = $document['runId'];
-        $this->assertMatchesRegularExpression('/\Aplan-' . substr(hash('sha256', self::PLAN), 0, 8) . '-1\z/', $runId);
+        $this->assertMatchesRegularExpression('/\Aplan-' . substr(hash('sha256', WorkflowPlanRunRecordTest::PLAN), 0, 8) . '-1\z/', $runId);
         $this->assertStringContainsString("Run ID {$runId} (resumeFrom).", strtok($result->content(), "\n"));
         $this->assertFileExists($this->dir . '/workflows/.running/' . $runId . '.json');
         $this->assertFileExists($this->dir . '/workflows/.running/' . $runId . '.plan');
@@ -65,10 +64,10 @@ final class WorkflowToolResumeTest extends TestCase
     {
         $provider = $this->provider();
         $tool = $this->tool($provider);
-        $runId = WorkflowToolTest::document($tool->execute(['plan' => self::PLAN])->content())['runId'];
+        $runId = WorkflowToolTest::document($tool->execute(['plan' => WorkflowPlanRunRecordTest::PLAN])->content())['runId'];
         $this->assertCount(3, $provider->requests);
 
-        $edited = str_replace('do c', 'do C better', self::PLAN);
+        $edited = str_replace('do c', 'do C better', WorkflowPlanRunRecordTest::PLAN);
         $result = $tool->execute(['plan' => $edited, 'resumeFrom' => $runId]);
 
         $this->assertFalse($result->isError(), $result->content());
@@ -90,20 +89,20 @@ final class WorkflowToolResumeTest extends TestCase
     {
         $provider = $this->provider();
         foreach (['plan-00000000-1', 'deploy-1a2b3c4d'] as $id) {
-            $result = $this->tool($provider)->execute(['plan' => self::PLAN, 'resumeFrom' => $id]);
+            $result = $this->tool($provider)->execute(['plan' => WorkflowPlanRunRecordTest::PLAN, 'resumeFrom' => $id]);
             $this->assertTrue($result->isError());
             $this->assertStringStartsWith('Error: the plan was not resumed: ', $result->content());
         }
         $this->assertSame([], $provider->requests);
 
-        $bad = $this->tool($provider)->execute(['plan' => self::PLAN, 'resumeFrom' => 7]);
+        $bad = $this->tool($provider)->execute(['plan' => WorkflowPlanRunRecordTest::PLAN, 'resumeFrom' => 7]);
         $this->assertSame('Error: "resumeFrom" must be a runId string an earlier Workflow call returned.', $bad->content());
     }
 
     public function testEveryStageIsCapturedWithoutChangingWhatLaterStagesRead(): void
     {
         $provider = $this->provider();
-        $result = $this->tool($provider)->execute(['plan' => self::PLAN]);
+        $result = $this->tool($provider)->execute(['plan' => WorkflowPlanRunRecordTest::PLAN]);
         $document = WorkflowToolTest::document($result->content());
 
         foreach ($document['stages'] as $index => $row) {
@@ -120,7 +119,7 @@ final class WorkflowToolResumeTest extends TestCase
         $provider = $this->provider(tokens: 100);
         $tool = $this->tool($provider);
 
-        $paused = $tool->execute(['plan' => self::PLAN, 'budget' => 150]);
+        $paused = $tool->execute(['plan' => WorkflowPlanRunRecordTest::PLAN, 'budget' => 150]);
         $document = WorkflowToolTest::document($paused->content());
         $this->assertSame('paused', $document['status']);
         $this->assertSame(['tokens' => 150, 'spent' => 200], $document['budget']);
@@ -129,17 +128,17 @@ final class WorkflowToolResumeTest extends TestCase
         $this->assertCount(2, $provider->requests);
         $this->assertNotSame([], $document['announcements'], 'a budget stop always announces');
 
-        $resumed = $tool->execute(['plan' => self::PLAN, 'resumeFrom' => $document['runId'], 'budget' => 1000]);
+        $resumed = $tool->execute(['plan' => WorkflowPlanRunRecordTest::PLAN, 'resumeFrom' => $document['runId'], 'budget' => 1000]);
         $this->assertSame('completed', WorkflowToolTest::document($resumed->content())['status']);
         $this->assertCount(3, $provider->requests, 'only the stage the budget stopped ran');
 
         // The tighter of budget and config.maxTokens wins.
-        $plan = "config:\n  maxTokens: 120\n" . self::PLAN;
+        $plan = "config:\n  maxTokens: 120\n" . WorkflowPlanRunRecordTest::PLAN;
         $tight = WorkflowToolTest::document($tool->execute(['plan' => $plan, 'budget' => 5000])->content());
         $this->assertSame(120, $tight['budget']['tokens']);
 
         foreach ([0, -5, '100', 1.5] as $bad) {
-            $refused = $tool->execute(['plan' => self::PLAN, 'budget' => $bad]);
+            $refused = $tool->execute(['plan' => WorkflowPlanRunRecordTest::PLAN, 'budget' => $bad]);
             $this->assertSame('Error: "budget" must be a whole number of tokens, at least 1.', $refused->content());
         }
     }

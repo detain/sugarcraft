@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Agents;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentStatus;
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\ExecutorInterface;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Providers\CompleteRequest;
+use SugarCraft\Code\Tests\Support\BuildsPoolSubAgentTrait;
 use SugarCraft\Code\Support\ForkedChild;
 
 /**
@@ -43,6 +43,8 @@ use SugarCraft\Code\Support\ForkedChild;
  */
 final class AgentWorkerPoolForkFailureTest extends TestCase
 {
+    use BuildsPoolSubAgentTrait;
+
     private CompleteRequest $request;
 
     private string $logFile;
@@ -281,25 +283,6 @@ final class AgentWorkerPoolForkFailureTest extends TestCase
     {
         return (bool) (new \ReflectionMethod(AgentWorkerPool::class, 'hasResult'))
             ->invoke($pool, $agentId);
-    }
-
-    private static function agent(string $id): SubAgent
-    {
-        return new SubAgent(
-            id: $id,
-            agent: new Agent(
-                name: 'ForkFailureAgent',
-                description: 'Test agent',
-                prompt: 'You are a test agent.',
-                model: 'test-model',
-                provider: 'test',
-                tools: [],
-                skillNames: [],
-                hooks: [],
-                isActive: true,
-            ),
-            task: 'Test task for ' . $id,
-        );
     }
 
     /**

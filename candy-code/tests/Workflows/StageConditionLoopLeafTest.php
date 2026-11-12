@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Workflows;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\RefusesStageConditionTrait;
 use SugarCraft\Code\Workflows\StageCondition;
 
 /**
@@ -15,6 +16,8 @@ use SugarCraft\Code\Workflows\StageCondition;
  */
 final class StageConditionLoopLeafTest extends TestCase
 {
+    use RefusesStageConditionTrait;
+
     public function testWhenRefusesLoopLeavesByDefault(): void
     {
         foreach (['dry', 'budgetBelow'] as $op) {
@@ -166,16 +169,5 @@ final class StageConditionLoopLeafTest extends TestCase
         $this->assertFalse(StageCondition::evaluate(['op' => 'dry', 'value' => '2'], $context));
         $this->assertFalse(StageCondition::evaluate(['op' => 'budgetBelow'], $context));
         $this->assertFalse(StageCondition::evaluate(['op' => 'wet', 'value' => 1], $context));
-    }
-
-    private function refusal(array $clause, bool $allowLoopLeaves = false): string
-    {
-        try {
-            StageCondition::parse($clause, $allowLoopLeaves);
-        } catch (\InvalidArgumentException $error) {
-            return $error->getMessage();
-        }
-
-        $this->fail('parse() must refuse ' . json_encode($clause));
     }
 }

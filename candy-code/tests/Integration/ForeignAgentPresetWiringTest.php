@@ -484,6 +484,15 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // honoring a mode stays in Agent, so the read can only floor,
                 // never widen, a grant.
                 'Agents/CapabilityCard.php',
+                // wf-impl C4 (workflow `preset:`, P1-6): an Agent reader BY
+                // DESIGN, application side. A stage run as a preset hands the
+                // stage agent's (fromPreset-gated) mode to SubAgentGrantHook as
+                // the second gate ONLY when it is non-Default AND strictly
+                // stricter than the session gate's mode — the same
+                // stricter-of shape PrimaryAgent applies. A foreign preset's
+                // mode is already Default, so it never reaches the hook, and
+                // no preset can widen the session's grant through this read.
+                'Agents/EngineExecutor.php',
                 // C-AGT-4.a: an Agent reader BY DESIGN — PrimaryAgent is the
                 // application side of the gate `fromPreset()` opens. It reads
                 // the row's (already gated) mode only to apply a STRICTER-OF
@@ -491,6 +500,12 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // hands back the launch gate by identity; a foreign preset's
                 // Default can therefore never raise anything.
                 'Agents/PrimaryAgent.php',
+                // wf-impl C4: an Agent reader, copy only — StagePreset::fromAgent
+                // carries the roster Agent's mode (built by fromPreset, so a
+                // foreign preset's is Default) into the stage-preset DTO and
+                // decides nothing; WorkflowEngine and EngineExecutor below
+                // apply it.
+                'Agents/StagePreset.php',
                 // ISS-004: NOT an Agent reader — the needle also matches the
                 // runner's OWN promoted `$permissionMode`, the spawn config's
                 // top-level session mode the server named (the delegation
@@ -599,6 +614,14 @@ final class ForeignAgentPresetWiringTest extends TestCase
                 // session's (stricter-of, never wider), and fromPreset()
                 // already collapses a foreign preset's to Default.
                 'Tools/BuiltIn/TaskTool.php',
+                // wf-impl C4: the gate was decided. WorkflowEngine reads the
+                // StagePreset's (fromPreset-gated) mode in stageGate() and
+                // stageAgent(): the session gate is re-moded only when the
+                // preset's mode is STRICTLY stricter and the session is not
+                // bypass, so a preset can only tighten a stage — a foreign
+                // preset's Default can at most narrow an accept-edits/auto
+                // session to Default, never loosen anything.
+                'Workflows/WorkflowEngine.php',
             ],
             $readers,
             'a new reader of Agent::$permissionMode appeared (directly or via the permission_mode '

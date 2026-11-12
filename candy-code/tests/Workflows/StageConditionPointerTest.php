@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Workflows;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Code\Tests\Support\RefusesStageConditionTrait;
 use SugarCraft\Code\Workflows\StageCondition;
 use SugarCraft\Code\Workflows\WorkflowEngine;
 
@@ -15,6 +16,8 @@ use SugarCraft\Code\Workflows\WorkflowEngine;
  */
 final class StageConditionPointerTest extends TestCase
 {
+    use RefusesStageConditionTrait;
+
     private function context(): array
     {
         return [
@@ -238,16 +241,5 @@ final class StageConditionPointerTest extends TestCase
         $this->assertFalse(StageCondition::evaluate(['stage' => 'review', 'pointer' => '/fresh', 'op' => 'empty', 'value' => 'yes'], $context));
         $this->assertFalse(StageCondition::evaluate(['stage' => 'plain', 'op' => 'empty', 'value' => 1], $context));
         $this->assertFalse(StageCondition::evaluate(['stage' => 'review', 'pointer' => '/verdict', 'op' => 'equals', 'value' => 7], $context));
-    }
-
-    private function refusal(array $clause): string
-    {
-        try {
-            StageCondition::parse($clause);
-        } catch (\InvalidArgumentException $error) {
-            return $error->getMessage();
-        }
-
-        $this->fail('parse() must refuse ' . json_encode($clause));
     }
 }

@@ -209,6 +209,16 @@ final class InterpolationOpenerTokenTest extends TestCase
             . 'token_get_all() output, so no PHP opener token can reach it: the gap is in the '
             . 'selection, not in the walker — the same family as the Awk/Sed rows.',
         ],
+        // wf-impl C6: the headless `workflow run --param` splitter.
+        'src/Cli/Subcommands.php' => [
+            'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
+            'reason' =>
+            'parseParamPairs() counts `[`/`{` against `]`/`}` CHARACTERS of a `key:=<json>` '
+            . 'run-context value so a comma nested in the JSON is not taken as a pair '
+            . 'separator. Its input is a CLI ARGUMENT string, never token_get_all() output, so '
+            . 'no PHP opener token can reach it: the gap is in the selection, not in the walker '
+            . '— the same family as the Awk/Sed rows.',
+        ],
         'src/Permissions/SedCommand.php' => [
             'openers' => ['T_CURLY_OPEN', 'T_DOLLAR_OPEN_CURLY_BRACES'],
             'reason' =>

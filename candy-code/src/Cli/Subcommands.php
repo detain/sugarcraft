@@ -7305,8 +7305,7 @@ final class Subcommands
     /**
      * Text/JSON report of a finished, failed or escalated run, with its D4
      * exit code.
-     */
-    /**
+     *
      * @param ?array{errors: int, warnings: int, findings: list<string>} $lint
      *        the pre-run lint's warnings, carried as `result.lint` in JSON
      *        mode and as `lint warning:` lines under the text heading; null

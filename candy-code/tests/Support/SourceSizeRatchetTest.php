@@ -28,7 +28,7 @@ final class SourceSizeRatchetTest extends TestCase
      */
     private const CEILINGS = [
         'src/Chat.php' => 22_250,
-        'src/Cli/Bootstrap.php' => 12_060,
+        'src/Cli/Bootstrap.php' => 12_032,
     ];
 
     public function testNoRatchetedFileGrowsPastItsCeiling(): void

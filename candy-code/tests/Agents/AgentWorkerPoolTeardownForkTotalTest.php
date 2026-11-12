@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Code\Tests\Agents;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Code\Agents\Agent;
 use SugarCraft\Code\Agents\AgentResult;
 use SugarCraft\Code\Agents\AgentStatus;
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Agents\ExecutorInterface;
 use SugarCraft\Code\Agents\SubAgent;
 use SugarCraft\Code\Providers\CompleteRequest;
+use SugarCraft\Code\Tests\Support\BuildsPoolSubAgentTrait;
 
 /**
  * E687: THE POOL NOW COUNTS ITS FORK FAILURES OUT LOUD WHEN IT DIES.
@@ -47,6 +47,8 @@ use SugarCraft\Code\Providers\CompleteRequest;
  */
 final class AgentWorkerPoolTeardownForkTotalTest extends TestCase
 {
+    use BuildsPoolSubAgentTrait;
+
     private CompleteRequest $request;
 
     private string $logFile;
@@ -246,25 +248,6 @@ final class AgentWorkerPoolTeardownForkTotalTest extends TestCase
     {
         (new \ReflectionMethod(AgentWorkerPool::class, 'startAgent'))
             ->invoke($pool, self::agent($agentId), $this->request, $this->executor());
-    }
-
-    private static function agent(string $id): SubAgent
-    {
-        return new SubAgent(
-            id: $id,
-            agent: new Agent(
-                name: 'ForkFailureAgent',
-                description: 'Test agent',
-                prompt: 'You are a test agent.',
-                model: 'test-model',
-                provider: 'test',
-                tools: [],
-                skillNames: [],
-                hooks: [],
-                isActive: true,
-            ),
-            task: 'Test task for ' . $id,
-        );
     }
 
     /**

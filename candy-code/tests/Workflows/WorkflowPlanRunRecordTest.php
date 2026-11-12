@@ -64,7 +64,8 @@ final class WorkflowPlanRunRecordTest extends TestCase
         return new AgentResult(agentId: $agent->id, status: AgentStatus::Completed, output: 'OUT[' . $agent->task . ']', tokensUsed: 100, completedAt: new \DateTimeImmutable());
     }
 
-    private const PLAN = "name: tri\nstages:\n  - name: a\n    prompt: do a\n  - name: b\n    prompt: 'do b after {{a.output}}'\n  - name: c\n    prompt: do c\n";
+    /** Also the plan {@see \SugarCraft\Code\Tests\Tools\WorkflowToolResumeTest} runs: one provider, not two copies. */
+    public const PLAN = "name: tri\nstages:\n  - name: a\n    prompt: do a\n  - name: b\n    prompt: 'do b after {{a.output}}'\n  - name: c\n    prompt: do c\n";
 
     public function testAPlanRunGetsADigestIdAndKeepsItsCompletedRecordAndPlan(): void
     {
