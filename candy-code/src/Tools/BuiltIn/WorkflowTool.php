@@ -9,6 +9,7 @@ use SugarCraft\Code\Agents\EngineExecutor;
 use SugarCraft\Code\Backend\EngineBackend;
 use SugarCraft\Code\Cli\Bootstrap;
 use SugarCraft\Code\Events\SubAgentActivity;
+use SugarCraft\Code\Support\Log;
 use SugarCraft\Code\Tools\Catalog\BuildsFromCatalog;
 use SugarCraft\Code\Tools\Catalog\BuiltInTool;
 use SugarCraft\Code\Tools\Catalog\ToolBuildContext;
@@ -332,6 +333,13 @@ final readonly class WorkflowTool implements Tool, BuildsFromCatalog, DelegatesT
 
         $narration = new WorkflowNarration($this->subAgentEmitter, $toolCallId, $workflow->name);
         $workflows->setAnnouncementSink($narration->sink());
+        // Through Log::raw, not a bare STDERR write: in the TUI that lands in the
+        // error log file instead of over the alternate screen, and in -p it is
+        // stderr. Printed when the run is claimed, because a killed process never
+        // reaches the result that carries this ID.
+        $workflows->setRunStartedSink(static function (string $runId): void {
+            Log::raw(sprintf('workflow run %s started (resume: candy-code workflow resume %s)', $runId, $runId));
+        });
         $narration->started();
 
         try {

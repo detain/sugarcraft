@@ -547,6 +547,14 @@ final class WorkflowEngine implements WorkflowEngineInterface
      */
     private ?\Closure $announcementSink = null;
 
+    /**
+     * Fired once with the Workflow-tool run ID as soon as the run is claimed,
+     * before any stage executes ({@see setRunStartedSink()}).
+     *
+     * @var ?\Closure(string): void
+     */
+    private ?\Closure $runStartedSink = null;
+
     /** @var array<string, true> P2-2: mandatory notices already made this run, so a repeated refusal is announced once. */
     private array $announcedOnce = [];
 
@@ -1475,6 +1483,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $runId = $this->claimPlanRunId($planYaml, $context);
         $this->prunePlanRuns($runId);
+        $this->runStartedSink?->__invoke($runId);
 
         return $this->underBudget($budgetTokens, fn (): WorkflowResult => $this->runPlanFrom($runId, $workflow, $context, 0, [], $cancellation));
     }
@@ -1546,12 +1555,13 @@ final class WorkflowEngine implements WorkflowEngineInterface
 
         $sameContext = self::canonicalJson($context) === self::canonicalJson($storedContext);
         [$carry, $prior] = $data === null || !$sameContext ? [0, []] : $this->planPrefix($workflow, $data);
-        $runContext = $carry > 0
+        $runContext = $carry > 0 || isset($prior['loopRound'])
             ? [...self::withSanitizedResults(is_array($data['context'] ?? null) ? $data['context'] : []), ...$context]
             : $context;
 
         $this->storePlan($runId, $planYaml, $context);
         $this->planRuns[$runId] = true;
+        $this->runStartedSink?->__invoke($runId);
 
         return $this->underBudget(
             $budgetTokens,
@@ -1608,7 +1618,16 @@ final class WorkflowEngine implements WorkflowEngineInterface
             $carried[] = $row;
         }
 
-        if ($carried === []) {
+        // #26: a loop that was in flight after the carried prefix has no settled
+        // row, but its settled rounds still resume it — so the seed is built
+        // even when nothing carries.
+        // Only the loop sitting directly after the carried prefix can resume: its
+        // rounds were built on the outputs of stages that are all carried now.
+        $loopRound = is_array($data['loopRound'] ?? null) ? $data['loopRound'] : null;
+        if ($loopRound !== null && ($loopRound['stageIndex'] ?? null) !== count($carried)) {
+            $loopRound = null;
+        }
+        if ($carried === [] && $loopRound === null) {
             return [0, []];
         }
 
@@ -1629,6 +1648,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
             'agentsDispatched' => 0,
             'recordedResults' => [],
             'totalsCountRecordedRows' => true,
+            'loopRound' => $loopRound,
         ]];
     }
 
@@ -1842,6 +1862,20 @@ final class WorkflowEngine implements WorkflowEngineInterface
     public function setAnnouncementSink(?\Closure $sink): void
     {
         $this->announcementSink = $sink;
+    }
+
+    /**
+     * Tell the caller a Workflow-tool run's ID the moment it exists, while the
+     * run is still in flight. The ID otherwise reaches the caller only in the
+     * final result, so a process killed mid-run (the model path exits 143 with
+     * no pause record) would leave the user nothing to resume by. The plan is
+     * stored at claim time, so the ID is resumable from this point on.
+     *
+     * @param ?\Closure(string): void $sink
+     */
+    public function setRunStartedSink(?\Closure $sink): void
+    {
+        $this->runStartedSink = $sink;
     }
 
     /**
@@ -2141,6 +2175,9 @@ final class WorkflowEngine implements WorkflowEngineInterface
             // the carry adds, so a report may over-count but never deflate.
             'totalsCountRecordedRows' => is_numeric($data['totalTokens'] ?? null)
                 && is_numeric($data['totalCost'] ?? null),
+            // #26: an in-flight accumulate loop's settled rounds. An old record
+            // has none, and null is what starts that loop from round 1.
+            'loopRound' => is_array($data['loopRound'] ?? null) ? $data['loopRound'] : null,
         ]];
     }
 
@@ -2594,6 +2631,12 @@ final class WorkflowEngine implements WorkflowEngineInterface
         $planHashes = $slotToken === null ? [] : ($this->liveRuns[$slotToken]['planHashes'] ?? []);
         if ($planHashes !== []) {
             $data['planStageHashes'] = $planHashes;
+        }
+        // #26: an accumulate loop's settled rounds, while the loop is in flight.
+        // Absent once the loop settles, so a finished stage never carries one.
+        $loopRound = $slotToken === null ? null : ($this->liveRuns[$slotToken]['loopRound'] ?? null);
+        if ($loopRound !== null) {
+            $data['loopRound'] = $loopRound;
         }
         // P0-3: the run-wide dispatch count, so a resume keeps counting
         // against config.maxAgents instead of starting a fresh allowance.
@@ -3119,7 +3162,8 @@ final class WorkflowEngine implements WorkflowEngineInterface
                 // {{seen}}, {{fresh}}, like {{round}}) shadow same-named
                 // context keys only while the loop runs; the author's values
                 // come back afterwards. `accumulate:` keeps its deduped set
-                // here, in memory — a resume re-runs the whole loop.
+                // here, and mirrors each settled round onto the live record
+                // (`loopRound`) so a resume continues from the next round.
                 $loopName = (string) ($stage['name'] ?? 'unknown');
                 $accumulate = is_array($loop['accumulate'] ?? null) ? $loop['accumulate'] : null;
                 $accumulator = ['items' => [], 'keys' => [], 'index' => [], 'fresh' => [], 'dry' => 0];
@@ -3132,6 +3176,39 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     }
                     if ($accumulate !== null) {
                         $context[StageCondition::LOOP_DRY_ROUNDS_CONTEXT_KEY] = 0;
+                    }
+                }
+                // #26: a resumed accumulate loop picks up at the round after its
+                // last settled one, with the set it had. The restored context
+                // still holds the mid-loop tokens, so they are dropped here and
+                // the author's shadowed values come from the record instead.
+                $restoredLoop = $loop !== null && $accumulate !== null && $stageIndex === $currentStageIndex
+                    ? self::restoredLoopRound($prior['loopRound'] ?? null, $stageIndex, $loopName, self::stageInputHash($stage, $stageType), (int) $loop['max'])
+                    : null;
+                if ($restoredLoop !== null) {
+                    $restoredAccumulator = [
+                        'items' => $restoredLoop['accumulator']['items'],
+                        'keys' => $restoredLoop['accumulator']['keys'],
+                        'index' => array_fill_keys($restoredLoop['accumulator']['keys'], true),
+                        'fresh' => $restoredLoop['accumulator']['fresh'],
+                        'dry' => $restoredLoop['accumulator']['dry'],
+                    ];
+                    $restoredContext = $context;
+                    foreach (self::LOOP_TOKENS as $token) {
+                        unset($restoredContext[$token]);
+                    }
+                    $restoredContext[StageCondition::LOOP_DRY_ROUNDS_CONTEXT_KEY] = $restoredAccumulator['dry'];
+                    // A record whose loop had already met its `until:` (killed in
+                    // the instant before the stage settled) restarts the loop
+                    // rather than running a round the author's clause ruled out.
+                    if (!StageCondition::evaluate($loop['until'], $this->withBudgetRemaining($restoredContext))) {
+                        $round = $restoredLoop['completedRounds'] + 1;
+                        $accumulator = $restoredAccumulator;
+                        $shadowed = $restoredLoop['shadowed'];
+                        $context = $restoredContext;
+                        // Carried on the live slot so a pause before this loop's
+                        // next round still records the progress it resumed from.
+                        $this->liveRuns[$liveToken]['loopRound'] = $restoredLoop;
                     }
                 }
                 do {
@@ -3245,6 +3322,32 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     $totalTokens += $this->sumTokens($stageResult);
                     $totalCost += $this->sumCost($stageResult);
                     $round++;
+
+                    // #26: persist the settled rounds of an accumulate loop, so a
+                    // kill or pause before the stage settles resumes at the next
+                    // round with this set. Written best-effort, as the O1 refresh.
+                    if ($accumulate !== null) {
+                        $this->liveRuns[$liveToken]['loopRound'] = [
+                            'stage' => $loopName,
+                            'stageIndex' => $stageIndex,
+                            'hash' => self::stageInputHash($stage, $stageType),
+                            'completedRounds' => $round - 1,
+                            'accumulator' => [
+                                'items' => $accumulator['items'],
+                                'keys' => $accumulator['keys'],
+                                'fresh' => $accumulator['fresh'],
+                                'dry' => $accumulator['dry'],
+                            ],
+                            'shadowed' => $shadowed,
+                        ];
+                        if ($loadPath !== null) {
+                            try {
+                                $this->writePauseFile($interruptId, $snapshot(WorkflowStatus::Paused), $loadPath, false);
+                            } catch (\Throwable) {
+                                // Ignored: the next round's write or the settle retries.
+                            }
+                        }
+                    }
                 } while ($loop !== null
                     && $round <= $loop['max']
                     && $this->runCancellation?->isCancelled() !== true
@@ -3252,6 +3355,7 @@ final class WorkflowEngine implements WorkflowEngineInterface
                     && !StageCondition::evaluate($loop['until'], $this->withBudgetRemaining($context)));
 
                 if ($loop !== null) {
+                    unset($this->liveRuns[$liveToken]['loopRound']);
                     foreach (self::LOOP_TOKENS as $token) {
                         unset($context[$token]);
                     }
@@ -6348,6 +6452,44 @@ final class WorkflowEngine implements WorkflowEngineInterface
             'matched' => $matched,
             'dropped' => $dropped,
         ];
+    }
+
+    /**
+     * #26: the persisted settled-rounds state of an accumulate loop, when it is
+     * usable for the stage about to run: the same stage at the same index with
+     * an unchanged declaration, a well-formed set, and rounds still left under
+     * `max:`. Anything else is null, and the loop starts from round 1 as it
+     * always did — a record written before this state existed is that case.
+     *
+     * @return array{stage: string, stageIndex: int, hash: string, completedRounds: int, accumulator: array{items: list<mixed>, keys: list<string>, fresh: list<mixed>, dry: int}, shadowed: array<string, mixed>}|null
+     */
+    private static function restoredLoopRound(mixed $state, int $stageIndex, string $stageName, string $hash, int $max): ?array
+    {
+        if (!is_array($state)
+            || ($state['stageIndex'] ?? null) !== $stageIndex
+            || ($state['stage'] ?? null) !== $stageName
+            || !is_string($state['hash'] ?? null)
+            || !hash_equals($state['hash'], $hash)
+            || !is_int($state['completedRounds'] ?? null)
+            || $state['completedRounds'] < 1
+            || $state['completedRounds'] >= $max
+            || !is_array($state['shadowed'] ?? null)
+            || !is_array($state['accumulator'] ?? null)
+        ) {
+            return null;
+        }
+        $acc = $state['accumulator'];
+        if (!is_array($acc['items'] ?? null)
+            || !is_array($acc['keys'] ?? null)
+            || !is_array($acc['fresh'] ?? null)
+            || !is_int($acc['dry'] ?? null)
+            || count($acc['items']) !== count($acc['keys'])
+            || array_filter($acc['keys'], static fn (mixed $k): bool => !is_string($k)) !== []
+        ) {
+            return null;
+        }
+
+        return $state;
     }
 
     /**

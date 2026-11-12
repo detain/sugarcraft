@@ -489,11 +489,12 @@ A stage that uses all `max:` rounds with the clause still unsatisfied
 more. `loop:` means "try up to N times and move on", not "fail if it never
 happens" — the verdict of what was achieved belongs to the output and to the
 stages downstream. Only the final round is recorded: the cache door and the
-pause file see one row per stage, the last round's, and round numbers are
-never persisted. That means a resumed run re-runs a looped stage from round
-1 — whole-stage granularity, honest and disclosed — rather than replaying a
-half-loop. A cancel that lands mid-loop ends the loop immediately and the row
-settles `cancelled` like any in-flight stage's.
+pause file see one row per stage, the last round's. A plain loop's round
+number is not persisted, so a resumed plain loop re-runs from round 1 —
+whole-stage granularity, honest and disclosed — rather than replaying a
+half-loop. An `accumulate:` loop is the exception: its settled rounds are
+persisted (see below). A cancel that lands mid-loop ends the loop immediately
+and the row settles `cancelled` like any in-flight stage's.
 
 A `when:` guard can still skip the whole thing, and a `cache:` hit
 short-circuits every round (the door sits ahead of the loop).
@@ -547,9 +548,16 @@ kept.
   `{{find.rounds}}`, `when: {stage: find, pointer: /items, empty: false}`,
   `from: {stage: find, pointer: /items}`. A last round that failed settles the
   stage as that failure, as for plain loops.
-- **The set is not persisted.** A resumed run re-runs an accumulate loop from
-  the first round with an empty set (whole-stage granularity again); `cache: true` can
-  still carry the recorded `{"items":…}` row.
+- **The set is persisted per round.** Each settled round writes the
+  accumulated set (items, keys, the fresh set and the dry count) and the round
+  number into the run's pause or run record, so a resumed run continues at the
+  next round with the same `{{seen}}`, `{{fresh}}` and dry count — completed
+  rounds are not re-dispatched. The resume applies only when the record is for
+  this same stage at the same position, its declaration is unchanged, and the
+  loop still has rounds left under `max:` and has not met `until:`; otherwise
+  the loop starts from round 1 with an empty set. A record written before this
+  state existed resumes exactly as it always did, from round 1. `cache: true`
+  can still carry the recorded `{"items":…}` row.
 
 #### Loop-only `until:` leaves
 
