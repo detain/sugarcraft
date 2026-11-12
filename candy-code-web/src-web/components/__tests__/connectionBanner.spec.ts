@@ -71,4 +71,14 @@ describe('ConnectionBanner · the exhausted ladder (ISS-052)', () => {
     expect(wrapper.find('[data-testid="banner-reconnecting"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="banner-offline"]').exists()).toBe(false)
   })
+
+  it('names the last error on the hand-stopped banner (F-w1 stopped_error)', () => {
+    const connection = useConnectionStore()
+    connection.status = 'stopped'
+    connection.lastError = 'HTTP 401'
+    const wrapper = mount(ConnectionBanner)
+    const banner = wrapper.find('[data-testid="banner-stopped-error"]')
+    expect(banner.exists()).toBe(true)
+    expect(banner.text()).toContain('Disconnected: HTTP 401')
+  })
 })
