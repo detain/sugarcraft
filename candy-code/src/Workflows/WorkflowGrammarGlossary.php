@@ -33,7 +33,8 @@ final class WorkflowGrammarGlossary
         'name' => 'the plan\'s name (defaults to "plan" in the tool)',
         'description' => 'one line of intent',
         'stages' => 'the ordered stage list (required)',
-        'config' => '`{timeout: seconds per stage (default 3600), maxConcurrent: in-flight agent ceiling}`',
+        'config' => '`{timeout: seconds per stage (default 3600), maxConcurrent: in-flight agent width (unset = min(16, CPUs-2), 0 = no cap), maxAgents: run-wide dispatch ceiling counting retries and loop rounds (default ' . Workflow::DEFAULT_MAX_AGENTS . ')}`',
+        'schemas' => 'a map of name => object-rooted JSON Schema; any task\'s `outputSchema: {$ref: name}` resolves to it at load',
     ];
 
     /** @var array<string, string> keyed by every {@see Workflow::STAGE_TYPES} entry */
@@ -54,12 +55,13 @@ final class WorkflowGrammarGlossary
         'task' => 'verification only: the task map that does the work',
         'verifier' => 'verification only: the task map that judges it',
         'stages' => 'pipeline only: the nested list of step maps',
-        'from' => 'parallel fan-out source `{glob: "src/**/*.php", chunk: N}`: one task per matched file, `{{path}}` names it, `chunk` caps that stage\'s in-flight width',
-        'when' => 'skip the stage unless a clause over an earlier stage\'s output holds: `{stage: s, equals|contains|matches: v}`, or `{all|any: [leaves]}` (one nesting level); a stage that never ran is unsatisfied, and a skip is not a failure',
-        'loop' => 'plain stages only: `{max: N, until: <when-clause>}` re-runs the stage (seeing `{{round}}`) until the clause holds; hitting `max` completes with the last round',
+        'from' => 'parallel fan-out over exactly one source, one task per item from a template `prompt`: `{glob: "src/**/*.php"}` (files, `{{path}}`), `{stage: find, pointer: /findings, key: /id}` (an array in a prior stage\'s typed row; `key` dedups and names items) or `{context: files}` (a run-context list); `{{item}}`, `{{item.<pointer>}}`, `{{index}}` read the item, `chunk: N` caps in-flight width, `max: N` keeps the first N and lists the dropped rest (ceiling ' . Workflow::FAN_OUT_CEILING . ' items); an empty data list completes with no agents',
+        'when' => 'skip the stage unless a clause over an earlier stage\'s output holds: `{stage: s, equals|contains|matches: v}` or `{stage: s, empty: true|false}`, optionally `pointer: /leaf` to judge a schema\'d stage\'s JSON instead of its text, or `{all|any: [leaves]}` (one nesting level); a stage that never ran or a pointer that misses is unsatisfied, and a skip is not a failure',
+        'loop' => 'stage, parallel and verification stages: `{max: N, until: <when-clause>}` re-runs the stage (seeing `{{round}}` and, from round 2, `{{previous}}`) until the clause holds; hitting `max` completes with the last round. `accumulate: {pointer: /findings, key: /id}` keeps a deduped item set across rounds (`{{seen}}` keys, `{{fresh}}` last round\'s new items) and makes the stage\'s result `{"items":[…],"keys":[…],"rounds":n}`; `until: {dry: N}` stops after N rounds that added nothing new',
         'capture' => '`true` writes the full output to a file; later prompts get the path plus a 2 KiB preview',
         'cache' => '`true` lets a resumed run carry this stage\'s recorded successful result when its declaration is unchanged',
         'uses' => 'run another saved workflow (by name) as this stage\'s body; depth at most ' . WorkflowEngine::MAX_USES_DEPTH . ', no cycles',
+        'minSuccess' => 'parallel only: `N` agents or `"NN%"` must succeed (default all); when met the stage completes, lists its casualties and exposes them as `{{stage.failed}}`',
         'with' => 'with `uses:` only: context values handed to the included workflow (may interpolate, e.g. `"{{research.output}}"`)',
     ];
 
@@ -85,14 +87,20 @@ final class WorkflowGrammarGlossary
 
     /** @var array<string, string> interpolation form => what it resolves to */
     public const INTERPOLATION = [
-        '{{key}}' => 'a `context` value',
+        '{{key}}' => 'a `context` value (arrays and objects render as compact JSON)',
         '{{stage.output}}' => 'a prior stage\'s output (parallel: agent outputs joined by newlines)',
         '{{name.results}}' => 'one agent\'s output by result name (unnamed: `<stage>`, `<stage>_<n>` in parallel, `<stage>_verifier`)',
         '{{stage.<pointer>}}' => 'an RFC 6901 leaf of a schema\'d stage\'s JSON (`{{find.items/0/id}}`; dots do not nest)',
         '{{prevResult}}' => 'the previous task/step output in a `tasks:` list or pipeline, or the task\'s output inside a verifier',
         '{{input}}' => 'the `input:` join',
         '{{path}}' => 'the current file in a `from: {glob}` fan-out',
+        '{{item}}' => 'the current `from:` fan-out item (a string verbatim, anything else as JSON); `{{item.<pointer>}}` reads a leaf of it',
+        '{{index}}' => 'the 0-based position of the current `from:` fan-out item',
         '{{round}}' => 'the 1-based round inside a `loop:`',
+        '{{previous}}' => 'the prior round\'s stage output inside a `loop:` (left verbatim in round 1)',
+        '{{seen}}' => 'inside a `loop:` with `accumulate`: the JSON list of every dedup key collected so far',
+        '{{fresh}}' => 'inside a `loop:` with `accumulate`: the JSON list of the items the previous round added',
+        '{{stage.failed}}' => 'the JSON list of a `minSuccess` stage\'s failed agent names',
     ];
 
     /**
