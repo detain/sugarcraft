@@ -84,14 +84,17 @@ Worked, lint-clean versions of each ship in this tool's `examples/workflows/`
 
 - Project tier `.candy-code/workflows/*.yaml` (YAML only; it shadows the user tier). User tier
   `~/.candy-code/workflows/*.yaml|*.php`. A saved file needs `name:`; keep it equal to the file stem.
-- `/workflow run <name> key=val key2="two words"` (lints first, refuses on errors),
+- `/workflow run <name> key=val key2="two words" files:='["a.php","b.php"]'` (lints first,
+  refuses on errors),
   `/workflow lint <name|file>`, `/workflow pause|resume|status <runId|name>`, `/workflow list`.
-- Headless: `candy-code workflow run <name> --param k=v --format json`, then
+- Headless: `candy-code workflow run <name> --param k=v --param 'files:=["a.php"]' --format json`, then
   `candy-code workflow status|resume <id>`. Exit codes: 0 completed · 1 failed or refused (lint
   errors included) · 2 usage · 3 escalated, or paused by a signal.
-- `/workflow run` and `--param` values are **strings**. A plan that fans out over a list
-  (`from: {context: files}`) needs the Workflow tool's JSON `context` (or PHP `run()`); from the
-  slash command the stage fails with "… which is a string, not an array".
+- On both command lines `key=value` is a **string** and `key:=<json>` is a typed value (a list,
+  object, number, boolean or null). A plan that fans out over a list (`from: {context: files}`)
+  needs `files:='["src/A.php","src/B.php"]'` (single-quote the JSON so its own quotes survive);
+  a plain `files=…` is a string and the stage fails with "… which is a string, not an array".
+  Malformed JSON is refused naming the key, before anything runs.
 
 ## 3. Plan skeleton
 
@@ -105,6 +108,7 @@ config:                       # optional
   maxAgents: 300              # run-wide dispatch ceiling (default 1000); retries, rounds, votes count
   maxTokens: 400000           # hard token ceiling; a dispatch at or past it PAUSES the run
   maxCost: 5.00               # hard USD ceiling; same behaviour
+  stopOnFirstFailure: false   # true: a parallel/map stage stops at its first casualty (minSuccess stages exempt)
 schemas:                      # optional; named JSON Schemas, used as outputSchema: {$ref: findings}
   findings:
     type: object
@@ -131,11 +135,12 @@ stages:                       # a LIST; names unique, [a-zA-Z_][a-zA-Z0-9_]* to 
   `{$ref: name}` must be the only key in that `outputSchema`. An unknown `$ref` is a load error.
 - Give each finding a stable `id` (e.g. `<file>:<line>:<slug>`), so `key: /id` really merges
   duplicates.
-- **Stage and task maps refuse, never coerce.** An unknown key, a wrong type, a duplicate name, a
-  broken regex or a misplaced key fails the load naming the offender, and nothing is spent.
-  Unknown **top-level** and **`config:`** keys are the exception: they are ignored. So a typo
-  there (`maxToken:`) silently means "no ceiling"; check them by eye. `stopOnFirstFailure` has no
-  YAML spelling (PHP `->stopOnFirstFailure(true)` only).
+- **The loader refuses, never coerces.** An unknown key (top-level, `config:`, stage or task), a
+  wrong type, a duplicate name, a broken regex or a misplaced key fails the load naming the
+  offender and the supported keys, and nothing is spent. A typo such as `config: {maxToken: …}`
+  is a load error, not a silent "no ceiling". The top level takes only `name`, `description`,
+  `config`, `schemas`, `stages`; `config:` only `timeout`, `maxConcurrent`, `maxAgents`,
+  `maxTokens`, `maxCost`, `stopOnFirstFailure` (a real boolean: `'yes'` or `1` is refused).
 
 ## 4. Stage shapes
 
@@ -180,9 +185,9 @@ verification `task:`/`verifier:`.
 |---|---|
 | `name` | Result name, read as `{{name.results}}`. Use underscores: a hyphenated name is recorded but can't be referenced |
 | `agent` (`type` in `agents:`) | Display **label only** (default `coder`); it loads nothing |
-| `preset` | Run as an agent preset from the session's roster (built-ins `coder`, `reviewer`, `debugger`, `architect`, `tester`, `devops`, plus `.candy-code/agents/*.md`): its system prompt, tools, `disallowedTools`, model, effort, isolation and `maxTurns`. The task's own keys win (its `tools` when non-empty). The preset's permission mode applies only if **stricter** than the session's. Preset `skills` are not carried. An unknown name is a lint error, so the run is refused before anything is dispatched |
+| `preset` | Run as an agent preset from the session's roster (built-ins `coder`, `reviewer`, `debugger`, `architect`, `tester`, `devops`, plus `.candy-code/agents/*.md`): its system prompt, tools, `disallowedTools`, model, effort, isolation and `maxTurns`. The task's own keys win (its `tools` whenever written, so `tools: []` runs the preset with none). The preset's permission mode applies only if **stricter** than the session's. Preset `skills` are not carried. An unknown name is a lint error, so the run is refused before anything is dispatched |
 | `prompt` | The **entire** instruction; must be self-contained (§9) |
-| `tools` | Allowed tools, argument-scoping allowed: `[Read, Grep, "Bash(git *)", "Bash(vendor/bin/phpunit *)"]`. **Omitted and `[]` both mean the session's tools** (there is no toolless spelling, and neither form is policed by the grant), so give read-only stages an explicit narrow list such as `[Read]`. `Task` and `Workflow` are always withheld |
+| `tools` | Allowed tools, argument-scoping allowed: `[Read, Grep, "Bash(git *)", "Bash(vendor/bin/phpunit *)"]`. **Omitted means the session's tools; `[]` means no tools at all** (a schema'd agent still answers through StructuredOutput; any other call is refused). An explicit `[]` also overrides a preset's tools. Give read-only stages an explicit narrow list such as `[Read]`, and a pure judge that reads only its prompt `[]`. `Task` and `Workflow` are always withheld |
 | `outputSchema` | A JSON Schema (inline map, a `{…}` string, a file path, or `{$ref: name}`). **Enforced**: the agent must end with a `StructuredOutput` call whose arguments validate; a mismatch is sent back for correction; ending without it gets one re-prompt, then the agent fails. Enforced keywords: `type`, `properties`, `required`, `additionalProperties`, `items`, `enum`, `oneOf`, `$ref` into `$defs`, `maxItems`, `maxLength`, `minimum`, `maximum` (not `minItems`, `minLength`, `pattern`, `const`, `anyOf`, `allOf`, `format`). The output is the validated compact JSON, and the stage records a typed row |
 | `model` | Run this task on a named model; an unservable name fails the stage. Usually leave it unset |
 | `effort` | `low` · `medium` · `high` · `xhigh` · `max`. `low` for mechanical stages (collect, format, summarise); high tiers only for the hardest judges. Usually leave it unset |
@@ -489,8 +494,11 @@ failures at `high` behind a `when:`) and self-repair loops compose from the same
 - Common load errors: a `stages:` map instead of a list · `agent:` inside `agents:` (use
   `type:`) · `prompt:` beside `tasks:` · `reject:`/`votes:` outside a verifier · `loop:` on a
   pipeline or beside `uses:` · `{dry: N}` without `accumulate` · `input.from` or `from.stage`
-  naming a later stage · `minSuccess` on a plain stage · a quoted boolean (`capture: "true"`) ·
-  `equals: true` unquoted.
+  naming a later stage · `minSuccess` on a plain stage · a quoted boolean (`capture: "true"`,
+  `stopOnFirstFailure: 'yes'`) · `equals: true` unquoted · an unknown top-level or `config:` key.
+- The shared-checkout lint warning fires when two or more agents of one parallel stage can
+  write (tools omitted, or a write-class tool such as `Edit`/`Write`/`Bash`) outside
+  `isolation: worktree`. Read-only and `tools: []` agents never trigger it.
 
 ## 14. Anti-patterns
 
@@ -501,7 +509,8 @@ failures at `high` behind a `when:`) and self-repair loops compose from the same
   or `from: {stage, pointer}`.
 - Barrier → reshape → barrier. Use `map`.
 - `retries` on a fixer that edits files.
-- `tools: []` on a "toolless" judge: it gets the session's tools. Grant `[Read]`.
+- Leaving `tools:` out on a judge "because it only reads": that is the session's full set. Grant
+  `[Read]`, or `[]` when everything it needs is in its prompt.
 - An unbounded `from: {glob: "**/*"}` with no `max`/`chunk`, or `maxConcurrent: 0`.
 - Asking a stage to "remember what we discussed". It can't see the conversation.
 - `model:` or `effort: max` everywhere "to be safe". Inherit unless you have a reason.
