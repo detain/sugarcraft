@@ -61,20 +61,24 @@ Worked, lint-clean versions of each ship in this tool's `examples/workflows/`
 - **The plan is linted before anything runs.** Lint errors refuse the call with nothing
   dispatched; warnings ride the result. `dryRun: true` lints and returns the expanded stage
   table without dispatching — use it whenever a plan has more than a few stages or a big fan-out.
-- `budget` is a token ceiling for this run; it tightens `config.maxTokens` (the smaller wins).
+- `budget` is a token ceiling for this call; the tighter of it and `config.maxTokens` wins, and a
+  dispatch at or past it pauses the run (resume with a larger `budget`).
 - The result is a headline, any lint warnings, one line per failed stage, then a JSON block
-  `{status, runId, stages:[{name, status, error, attempts, tokens, cost, data?|output?, capture?, dispatch?}]}`
-  plus the run's announcements (truncations, casualties, budget stops, your `announce:` lines).
+  `{status, runId, carried, budget, announcements, stages:[{name, status, error, attempts, tokens, cost, carried?, data?|output?, capture?, dispatch?}]}`.
   - `data` is a schema'd stage's decoded answer, present when every task of the stage has an
     `outputSchema`. It replaces `output` and is never clipped.
-  - `output` is prose, its middle elided past 8 KiB; the marker names the capture file holding
-    the rest.
+  - `output` is prose, its middle elided past 8 KiB. **Every stage's full output is written to
+    its `capture` file** after the run; the elision marker names it. This is report-side only:
+    later stages still read the full text unless the stage itself declares `capture: true`.
   - `dispatch` (parallel stages) says which agents forked and which ran inline, and why.
-- `resumeFrom: <runId>` (ids look like `plan-<sha8>-<n>`) resumes a tool run: stages whose
-  declaration is unchanged are carried from the record at zero cost; the first edited stage and
-  everything after it run live. To iterate, edit the plan and resume from the same `runId`.
-- On tool runs `capture` defaults **on** (§6), so downstream prompts get a path plus a preview —
-  give consumers `Read`, or set `capture: false` on a stage whose text they must see inline.
+  - `announcements` holds your `announce:` lines plus every truncation, `minSuccess` casualty,
+    budget stop and agent-ceiling stop; they also stream live while the run works.
+- Every run returns a `runId` (`plan-<sha8>-<n>`). `resumeFrom: <runId>` resumes it with the
+  (possibly edited) plan: the longest prefix of stages that settled and whose declaration is
+  unchanged is **carried** at zero cost; the first changed, failed or unsettled stage and every
+  stage after it run live. Omit `context` to reuse the run's own; a different `context` carries
+  nothing. To iterate, edit the plan and resume from the same `runId`. `/workflow status|resume
+  <runId>` reach the same record.
 
 **Saved files.**
 
@@ -176,7 +180,7 @@ verification `task:`/`verifier:`.
 |---|---|
 | `name` | Result name, read as `{{name.results}}`. Use underscores: a hyphenated name is recorded but can't be referenced |
 | `agent` (`type` in `agents:`) | Display **label only** (default `coder`); it loads nothing |
-| `preset` | Run as an agent preset from the session's roster (built-ins `coder`, `reviewer`, `debugger`, `architect`, `tester`, `devops`, plus `.candy-code/agents/*.md`): its system prompt, tools, `disallowedTools`, model, effort, isolation and `maxTurns`. The task's own keys win (its `tools` when non-empty). The preset's permission mode applies only if **stricter** than the session's. Preset `skills` are not carried. An unknown name refuses the run before anything is dispatched |
+| `preset` | Run as an agent preset from the session's roster (built-ins `coder`, `reviewer`, `debugger`, `architect`, `tester`, `devops`, plus `.candy-code/agents/*.md`): its system prompt, tools, `disallowedTools`, model, effort, isolation and `maxTurns`. The task's own keys win (its `tools` when non-empty). The preset's permission mode applies only if **stricter** than the session's. Preset `skills` are not carried. An unknown name is a lint error, so the run is refused before anything is dispatched |
 | `prompt` | The **entire** instruction; must be self-contained (§9) |
 | `tools` | Allowed tools, argument-scoping allowed: `[Read, Grep, "Bash(git *)", "Bash(vendor/bin/phpunit *)"]`. **Omitted and `[]` both mean the session's tools** (there is no toolless spelling, and neither form is policed by the grant), so give read-only stages an explicit narrow list such as `[Read]`. `Task` and `Workflow` are always withheld |
 | `outputSchema` | A JSON Schema (inline map, a `{…}` string, a file path, or `{$ref: name}`). **Enforced**: the agent must end with a `StructuredOutput` call whose arguments validate; a mismatch is sent back for correction; ending without it gets one re-prompt, then the agent fails. Enforced keywords: `type`, `properties`, `required`, `additionalProperties`, `items`, `enum`, `oneOf`, `$ref` into `$defs`, `maxItems`, `maxLength`, `minimum`, `maximum` (not `minItems`, `minLength`, `pattern`, `const`, `anyOf`, `allOf`, `format`). The output is the validated compact JSON, and the stage records a typed row |
@@ -472,8 +476,9 @@ failures at `high` behind a `when:`) and self-repair loops compose from the same
 
 ## 13. Resume and debugging
 
-- Tool runs: call the tool again with the edited plan and `resumeFrom: <runId>`; the unchanged
-  prefix is carried, the rest runs live. Same plan + same context → everything is carried.
+- Tool runs: call the tool again with the edited plan and `resumeFrom: <runId>` (omit `context`
+  to reuse the run's own). The settled, unchanged prefix is carried; the rest runs live, and the
+  result's totals and `budget` count only this call's spend.
 - Saved runs: `/workflow pause|resume|status <runId|name>` (headless `candy-code workflow
   resume <id>`). Resume continues after the last successful stage; a budget pause resumes under a
   raised ceiling. Granularity is one whole stage: an interrupted parallel or map stage re-runs
