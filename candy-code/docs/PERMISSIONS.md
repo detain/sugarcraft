@@ -130,6 +130,16 @@ runs under `default` while a native (`.candy-code/agents`) preset rides through
 with its own mode (see
 [`AGENTS_AUTHORING.md`](AGENTS_AUTHORING.md#which-fields-reach-the-roster)).
 
+One call is exempt from all of it: a workflow stage agent's `StructuredOutput`
+call — the per-run tool through which a stage with an `outputSchema` hands in
+its answer — skips the gate, the stage's grant hook and every `PreToolUse`
+hook, in every mode. It writes nothing; it is the run's answer, and an
+unlisted tool that asks or is refused would strand a non-interactive stage.
+`Runtime::gate()` recognises it by tool *instance*, never by name, so a user
+or MCP tool that happens to be named `StructuredOutput` is gated like any
+other (see
+[`WORKFLOWS.md`](WORKFLOWS.md#outputschema-gives-a-stage-a-structured-verdict)).
+
 ---
 
 ## The six modes
@@ -641,6 +651,54 @@ does. Those counters are **mutated by `evaluate()`**, which
 is why the class has a second, read-only entry point — `refuses()` — for callers
 holding a `ToolDeclaration` rather than a real call. Asking a hypothetical
 question through `evaluate()` moved a counter a real call is judged by.
+
+### Could a declaration ask? `wouldAsk()`
+
+`refuses()` answers "is every call this declaration admits refused?". Its
+sibling `PermissionGate::wouldAsk(ToolDeclaration)` answers the other
+hypothetical: could **some** call the declaration admits be answered `Ask`?
+`askReason()` is the same judgement with the reason (`null` = never asks), and
+`wouldAsk()` is `askReason() !== null`. Both follow the `refuses()` purity law —
+no strike counter, no auto reason, no forced-ask mark moves — and `true` is
+the safe answer, so anything the declaration alone cannot settle resolves to
+"would ask". Its consumer is the `Workflow` tool, which forks a parallel
+stage's agent only when no gate would ask about any of its tools (see
+[`WORKFLOWS.md`](WORKFLOWS.md#model-authored-plans-the-workflow-tool)).
+
+A bare name (`Bash`) admits every call to the tool; an argument-scoped
+declaration (`Bash(vendor/bin/phpunit *)`) admits exactly what `Allow` on that
+pattern would grant; a name glob (`mcp__git__*`) and a malformed pattern are
+presumed to ask (except under `bypass-permissions`). The judgement mirrors
+`decide()`:
+
+1. `bypass-permissions` never asks.
+2. A channel-scope refusal, or a skill turn-deny covering the whole
+   declaration, refuses every call — a refusal is not a question.
+3. Rules, first match wins. A rule covering the **whole** declaration (a
+   name-only rule, or an argument pattern equal to the declaration's scope
+   after whitespace normalisation) settles it: `Allow`/`Deny` never ask, `Ask`
+   asks unless an "always" session answer or a turn grant covers it. A rule
+   covering only **some** of its calls asks if it is an `Ask`
+   (`an Ask rule "Bash(git *)" covers some Bash calls`) and otherwise leaves
+   the rest to the next rule. The shell and patch proxies apply as for real
+   calls (`Ask PtyRun(rm *)` binds `Bash`). There is no glob subsumption:
+   `Allow Bash(vendor/bin/*)` does not cover a `Bash(vendor/bin/phpunit *)`
+   declaration.
+4. The mode, for what no rule settled: `default` and `accept-edits` ask for
+   anything outside the read class; `plan` asks only where its own table says
+   `Ask` (Bash and the write tools are allowed or denied there, never asked);
+   `dont-ask` never asks; `auto` may ask for every non-read tool (`the "auto"
+   mode judges each Edit call and may ask`), for every tool when no classifier
+   is set, and for reads when a reviewer is set with `autoReviewScope: all`.
+   No-ask tools never ask, except `SendMessage`.
+5. An "always" answer or a turn grant answers the `Ask` — except a forced one
+   (`ShellSend`, `PtyRun`, and every `auto` ask).
+
+What it cannot see: hooks that ask on their own, such as the protect-files
+hook's question about a policy-file write or a user `PreToolUse` script that
+answers `ask`. A caller that acts on "would not ask" must therefore still fail
+closed when a question arrives anyway — a forked workflow agent's stray
+question is refused, never answered for you.
 
 ---
 

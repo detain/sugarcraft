@@ -844,7 +844,13 @@ resolved `advisorModel`) and `Task`, last, gated on the launch holding an
 `AgentManager` — plus one `McpToolBridge` per advertised MCP tool. The other
 two, `BoardReadTool` and `BoardPostTool`, are on no launch: `TaskTool` hands
 them, bound to the batch's shared board, to the runs of a parallel `Task`
-batch's members.
+batch's members. One more `Tool` lives outside this directory and outside the
+catalog on purpose: `Agents\StructuredOutputTool`, minted per run by
+`EngineExecutor` for a workflow stage agent whose task declares an
+`outputSchema` — its input schema IS that schema, it is how the agent hands in
+its validated answer, and `Runtime::gate()` exempts it (by instance) from the
+gate and the `PreToolUse` chain (see
+[`WORKFLOWS.md`](WORKFLOWS.md#outputschema-gives-a-stage-a-structured-verdict)).
 
 Domain matters here: **forty-four is the count of *wired* tools, not of *usable*
 ones.** `LspTool` is reachable on every launch but answers every call with a "no
@@ -1309,7 +1315,13 @@ embedder driving `AgentManager` directly. What is still NOT live: the three
 dispatch paths that do not fork — an injected `ExecutorInterface`, a build
 without `pcntl`, and a failed `fork()` — call `execute()` synchronously in the
 parent and publish no progress, so they block the loop and leave the pane
-blank for their duration.
+blank for their duration. The one injected executor that does fork is the
+`Workflow` tool's: an executor implementing `Agents\ForksAskFreeAgents` is
+asked per agent by `AgentWorkerPool::startAgent()`, and a parallel-stage agent
+it clears (none of its tools could ask permission —
+`PermissionGate::wouldAsk()`) takes the pool's ordinary fork path, through the
+pool's single `pcntl_fork()` site, which `tools/check-child-lifetimes.php`
+already accounts for.
 
 `WindowSizeMsg` is the size truth. Mouse tracking is on by default and has two
 escape hatches (`CANDY_CODE_DISABLE_MOUSE`, `CANDY_CODE_DISABLE_MOUSE_CLICKS`)

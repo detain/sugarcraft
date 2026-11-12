@@ -84,8 +84,15 @@ description: >                   # optional
   Review the change, fan out fixers, then verify.
 
 config:                          # optional
-  maxConcurrent: 3               # whole number >= 1, or 0 for no cap
+  maxConcurrent: 3               # whole number >= 1, or 0 for no cap; unset = min(16, CPUs - 2)
   timeout: 900                   # positive int; per-stage seconds
+  maxAgents: 200                 # whole number >= 1; run-wide dispatch ceiling (default 1000)
+
+schemas:                         # optional; named object-rooted schemas for outputSchema: {$ref: …}
+  verdict:
+    type: object
+    properties: {ok: {type: boolean}}
+    required: [ok]
 
 stages:                          # a LIST, never a map
   - name: lint                   # required, and unique across the file
@@ -115,9 +122,48 @@ stages:                          # a LIST, never a map
         retries: 0               # per agent in a parallel stage
 ```
 
-Defaults are `Workflow`'s own: `maxConcurrent` unset (no cap — every task of a
-parallel stage is dispatched at once), `timeout: 3600`,
+Defaults are `Workflow`'s own: `maxConcurrent` unset (the default width, below
+— never "no cap" unless you write `0`), `timeout: 3600`, `maxAgents: 1000`,
 `stopOnFirstFailure: false`.
+
+### Width, the fan-out ceiling and the agent budget
+
+Three rails keep one plan from forking a machine's worth of agents.
+
+- **`maxConcurrent` — how many agents of one stage run at once.** Unset, the
+  width is `min(16, max(1, CPUs - 2))` (`Workflow::defaultConcurrency()`):
+  two CPUs are left for the session and the provider I/O, and sixteen is the
+  point past which provider rate limits, not cores, are the bottleneck. The
+  CPU count is read without forking anything — `NUMBER_OF_PROCESSORS`, then
+  `/sys/devices/system/cpu/online`, then `/proc/cpuinfo` — and falls back to
+  4 (a width of 2) when none of them answers (`Workflows\CpuCount`). A
+  number `>= 1` is that width. **`0` is the explicit "no cap"**: every agent
+  of a parallel stage is dispatched at once, which is why the linter warns
+  on it. A negative value is refused. A fan-out's `from.chunk` can only
+  narrow the width, never widen it.
+- **The fan-out ceiling — 4096 items per `from:` stage**
+  (`Workflow::FAN_OUT_CEILING`). A `from:` expansion past it fails the stage
+  and dispatches nothing; the list is never silently truncated. The error
+  names the source and the fix: `Stage 'sweep' expanded 4097 files from
+  "*.txt"; the per-stage fan-out ceiling is 4096 — narrow the glob or set
+  from.max`. The check runs before the expansion is recorded for resume, so
+  a narrowed pattern is re-read on the next attempt, and a recorded list is
+  held to the same ceiling when it is replayed.
+- **`config.maxAgents` — a run-wide dispatch budget** (default 1000, a whole
+  number `>= 1`). One counter per outermost run counts every dispatch: each
+  sequential task, pipeline step, verification task and verifier round, every
+  agent of a parallel wave, every map step, every vote of a verifier panel,
+  and every loop round. A parallel wave (or a verifier panel) reserves all
+  its agents at once before any of them starts, so a wave that would cross
+  the ceiling starts none of them. Retries and stall restarts are added when
+  the stage settles (the pool cannot be stopped mid-retry), so they refuse
+  the NEXT dispatch. An included (`uses:`) workflow shares its parent's
+  counter and the outermost run's ceiling — the inner file's own
+  `maxAgents` is ignored — and a resumed run continues the count from the
+  pause record (`agentsDispatched`). Crossing it fails the stage, and the run
+  stops: `agent ceiling reached (1000): this run has dispatched 998 agents
+  and this stage needs 4 more; raise config.maxAgents or narrow the
+  fan-out`.
 
 ### `timeout` is a per-stage wall-clock budget
 
@@ -131,8 +177,9 @@ any other failed stage, so the run stops there.
   each step gets what the steps before it left, not a fresh allowance. A step
   reached with nothing left is settled `timed_out` without being started.
 - A **parallel** stage's agents all run against the same budget, queue time
-  included: when `maxConcurrent` bounds the stage, an agent still waiting for
-  one of those slots when the budget runs out never starts.
+  included: an agent still waiting for one of the stage's width slots when
+  the budget runs out never starts. A **map** stage's item chains share one
+  budget the same way.
 - A PHP task's own `timeout()` (below) bounds that one agent from its dispatch;
   the stage's budget still applies, and whichever expires first wins. The same
   bound is spellable in YAML: `timeout: 60` on a single-task stage, on an entry
@@ -243,7 +290,32 @@ output:
 ```
 
 The ops are `equals` (whole-string identity), `contains` (substring,
-case-sensitive) and `matches` (PCRE, validated at load exactly like `reject:`).
+case-sensitive), `matches` (PCRE, validated at load exactly like `reject:`) and
+`empty: true|false`. `empty` is exact, never trimmed: only `''` is empty, and
+whitespace is content (spell "blank" as `matches: '/^\s*$/'`). The value of
+`empty` must be a boolean; the other ops take strings (`equals: true` must be
+quoted).
+
+A leaf may add **`pointer:`** to judge one leaf of a schema'd stage's JSON
+answer instead of its text:
+
+```yaml
+    when: {stage: review, pointer: /verdict, equals: NEEDS_FIX}
+```
+
+The pointer is RFC 6901 (leading `/` optional, every `~` written `~0` or `~1`,
+checked at load) and reads the stage's **typed row** — the same row, under
+the same result name, that `{{review.verdict}}` reads (see
+[Pointing inside a schema'd result](#pointing-inside-a-schemad-result)). It
+never falls back to the text. The leaf compares by its string form: strings
+verbatim, booleans as `true`/`false`, numbers as interpolation splices them,
+JSON `null` as `null`, arrays and objects as compact JSON. Behind a pointer,
+`empty: true` also holds for `[]` and `{}`; a number, boolean or null leaf is
+neither empty nor non-empty, so both `empty: true` and `empty: false` are
+unsatisfied. A stage with no typed row (no `outputSchema`, or an answer that
+did not decode) and a pointer that misses are unsatisfied — fail-closed, like
+every other miss.
+
 A **combinator** node — `all:` or `any:` — carries a non-empty list of leaves;
 one layer of nesting is legal (an `any:` of `all:`s), and a combinator inside a
 combinator past that ceiling refuses the file. Everything else — an unknown
@@ -264,8 +336,10 @@ survives the pause file, the run prefix counts it, and the stage is never
 re-decided — re-evaluating a guard under outputs that changed since the file
 was written could run a stage its condition once refused.
 
-`when:` is stage-level in v1; there is no per-task clause inside a `tasks:`
-list. Give each conditional step its own stage.
+`when:` is stage-level, with one exception: a step of a
+[`type: map`](#type-map-streams-each-item-through-its-steps) stage carries its
+own `when:`, judged per item. There is no per-task clause inside a `tasks:`
+list; give each conditional step its own stage.
 
 ### `loop:` re-runs a stage until a clause holds
 
@@ -286,12 +360,20 @@ can say what has already been tried:
         contains: PASS
 ```
 
-`until:` is exactly the `when:` mini-grammar — same leaves, same combinators,
-validated the same way at load. And it refuses rather than coerces, like every
-other key here: a `loop:` that is not a map, a map with any key besides `max`
-and `until`, a missing half, a `max` that is not a whole number of at least 1,
-or a broken clause each fails the load naming the offender. `max` counts
-rounds, not seconds: it is a bounded iteration and holds no timer.
+`until:` is the `when:` mini-grammar — same leaves (`pointer:` and `empty:`
+included), same combinators, validated the same way at load — plus two
+loop-only leaves described below (`dry`, `budgetBelow`) that `when:` refuses.
+And it refuses rather than coerces, like every other key here: a `loop:` that
+is not a map, a map with any key besides `max`, `until` and `accumulate`, a
+missing `max` or `until`, a `max` that is not a whole number of at least 1, or
+a broken clause each fails the load naming the offender. `max` counts rounds,
+not seconds: it is a bounded iteration and holds no timer.
+
+From the second round on, every round also sees **`{{previous}}`**, the prior round's
+`<stage>.output` (in the first round the token is left as the context had it —
+normally verbatim). `{{round}}`, `{{previous}}` and the accumulate tokens below
+shadow same-named context keys only while the loop runs; your own values are
+restored after it.
 
 The clause reads the stage's most recent round — that round's output is what
 `{{stage.output}}` holds while the stage itself is being judged, so the usual
@@ -313,35 +395,148 @@ never persisted. That means a resumed run re-runs a looped stage from round
 half-loop. A cancel that lands mid-loop ends the loop immediately and the row
 settles `cancelled` like any in-flight stage's.
 
-`loop:` is stage-only in v1 in the narrow sense too: a `when:` guard can still
-skip the whole thing, a `cache:` hit short-circuits every round (the door sits
-ahead of the loop), and attaching a `loop:` to a `parallel:`, `pipeline:`, or
-verification stage refuses the load — as does a `loop:` beside a `uses:` stage,
-because v1 loops plain stages, not carried workflows. Give each repeating step
-its own plain stage.
+A `when:` guard can still skip the whole thing, and a `cache:` hit
+short-circuits every round (the door sits ahead of the loop).
+
+**What loops.** `loop:` attaches to plain, `parallel`, `verification` and `map`
+stages (`WorkflowBuilder::LOOPABLE_TYPES`). A looped parallel stage re-runs
+its whole fan-out each round; a looped verification stage re-runs task and
+verifier. It is refused on a `pipeline` stage (`"loop" cannot attach to a
+"pipeline" stage; stage, parallel, verification and map stages loop`) and
+beside `uses:`, because carried workflows are not looped. One caveat on a
+looped `from:` stage (parallel or map): every round after the first replays the first round's
+materialised item list from the fan-out record rather than re-reading the
+source.
+
+#### `accumulate:` — loop until nothing new turns up
+
+```yaml
+  - name: find
+    parallel: true
+    agents:
+      - {name: hunter_a, prompt: "Find bugs in src/. Already known: {{seen}}", outputSchema: {$ref: findings}}
+      - {name: hunter_b, prompt: "Find bugs in lib/. Already known: {{seen}}", outputSchema: {$ref: findings}}
+    loop:
+      max: 5
+      accumulate: {pointer: /findings, key: /id}
+      until: {dry: 2}
+```
+
+`accumulate: {pointer, key?}` keeps one deduplicated item set across the
+rounds. Each round, every completed **schema'd** agent's answer contributes —
+all agents of a parallel stage (in declaration order), all tasks of a `tasks:`
+stage, only the TASK slot of a verification stage (never the verifier), the
+map document of a map stage — and the array at `pointer` in each answer is
+folded in. An item's identity is its `key` leaf (a string, number or bool);
+without `key` it is the item itself (a scalar's text, otherwise its compact
+JSON). Dedup is against everything seen so far, first sighting wins, order is
+kept.
+
+- A contributing answer whose `pointer` is not an array fails the round
+  (`loop.accumulate: agent 'x' of stage 's' answered a string at "/f", not
+  an array`), as does a round with no schema'd answer to read and an item
+  with no key leaf. A failed round folds nothing and the loop continues, as a
+  plain loop does.
+- **`{{seen}}`** is the JSON list of every key collected so far and
+  **`{{fresh}}`** the JSON list of the items the previous round added; both
+  are `[]` in the first round.
+- **The recorded result** — when the last round did not fail — is one JSON
+  document under the stage's name, as both its output and its typed row:
+  `{"items":[…every distinct item, first-seen order…],"keys":[…],"rounds":N}`.
+  It is pointer-addressable like any schema'd answer: `{{find.items/0/id}}`,
+  `{{find.rounds}}`, `when: {stage: find, pointer: /items, empty: false}`,
+  `from: {stage: find, pointer: /items}`. A last round that failed settles the
+  stage as that failure, as for plain loops.
+- **The set is not persisted.** A resumed run re-runs an accumulate loop from
+  the first round with an empty set (whole-stage granularity again); `cache: true` can
+  still carry the recorded `{"items":…}` row.
+
+#### Loop-only `until:` leaves
+
+- **`{dry: N}`** (whole number `>= 1`) holds once N consecutive completed
+  rounds added nothing new to the accumulated set. It needs `accumulate:` —
+  without it the load is refused (`… uses {dry: N}, which counts rounds that
+  add nothing new to an accumulated set; add "accumulate: {pointer, key}" or
+  drop the dry leaf`) — and the linter warns when N is not below `max`.
+- **`{budgetBelow: N}`** (whole number `>= 1`) holds once the run's remaining
+  token budget is below N. It parses today, but it needs a token budget
+  (`config.maxTokens`), which lands with run budgets: until then nothing
+  supplies the remaining figure, the leaf is never satisfied, and the loop
+  simply runs to `max`.
+
+A loop leaf is a whole condition on its own — no `stage:`, no `pointer:` —
+and may sit inside `all:`/`any:`.
 
 ### `outputSchema` gives a stage a structured verdict
 
-`outputSchema:` on a stage (or on one agent of a parallel stage, or on one task
-in a `tasks:` list) — or `->outputSchema($schema)` on a PHP task — constrains
-that agent's terminal answer to a JSON schema, on the same leg as the headless
-`-p --json-schema` flag. The value is the same shape the flag accepts: a YAML
-map (written inline), a string of inline JSON starting with `{`, or a path to a
-readable file containing one. Anything else — a sequence, malformed JSON, an
-unreadable path — is refused at load or build time, never coerced.
+`outputSchema:` on any task surface — a one-task stage, one agent of a parallel
+stage, one task in a `tasks:` list, a pipeline or map step, either slot of a
+verification stage — or `->outputSchema($schema)` on a PHP task makes that
+agent's answer a JSON document that matches the schema. The value is a YAML
+map (written inline), a string of inline JSON starting with `{`, a path to a
+readable file containing one, or `{$ref: <name>}` naming a top-level
+[`schemas:`](#schemas-names-a-schema-once) entry. Anything else — a sequence,
+malformed JSON, an unreadable path — is refused at load or build time, never
+coerced.
 
-- **What the stage sees:** the agent's report is the schema-constrained JSON
-  document itself, byte for byte what `-p --json-schema` prints as the answer,
-  so `{{name.output}}` and `{{name.results}}` readers parse it directly.
-- **The schema rides the first request only** — exactly as it does headless: a
-  model that answers with a tool call ends the turn unconstrained. When that
-  happens the stage output carries the same disclosure the headless run prints
-  on stderr: `[the reply was not constrained to the output schema because the
-  model ran tools before answering]`. A prompt that wants a verdict, not a
-  change, says so; a reviewer whose tools list is empty cannot take that branch.
-- **Capability is checked before the run:** a provider that cannot honour a
-  JSON schema refuses the stage loudly (`was not started`) rather than billing
-  for a structured answer and collecting prose.
+**The answer is enforced through a tool call, not a request flag.** A
+schema'd agent's run gets one extra tool, `StructuredOutput`, whose input
+schema IS the task's schema (`Agents\StructuredOutputTool`, minted per run).
+Its system prompt is told to finish by calling it exactly once with the
+answer as its arguments.
+
+- **Every call is validated.** The arguments are checked against the schema;
+  a mismatch comes back to the agent as an error result listing each
+  violation (`$.verdict: must be one of pass, fail`, `$.ok: is required`), and
+  the agent corrects the call inside the same step budget. An accepted call
+  ends the run at that step — no further provider call.
+- **What the stage sees:** the validated document as compact JSON (an empty
+  object is written `{}`), so `{{name.output}}`, `{{name.results}}` and
+  pointer readers parse it directly. A schema whose root is not an object
+  (`{type: array}`, `{type: string}`) is wrapped on the wire as
+  `{value: …}` and unwrapped again, so the stage output is the bare value
+  (`["a","b"]`).
+- **A reply that is the document counts too.** A final reply that is itself
+  exactly a valid document — the whole reply, optionally inside one
+  ```` ```json ```` fence — is accepted without the call. Prose never is.
+- **One reminder, then failure.** A run that ends in prose (or blank) without
+  an accepted call is re-prompted once, inside what is left of its step
+  budget (at least one step), to make the call. If it still does not, the
+  agent FAILS: `agent "<name>" declares an outputSchema but ended without an
+  accepted StructuredOutput call, even after being told to make one, so it
+  produced no structured result (its last reply began: "…")`. Both attempts
+  are billed. Tools run before the answer no longer leave it unconstrained:
+  the old `[the reply was not constrained …]` disclosure is gone.
+- **Capability is checked before the run:** a provider that cannot make tool
+  calls refuses the stage loudly — `… cannot make tool calls, so it cannot
+  constrain the answer to a schema (the answer is enforced through the
+  StructuredOutput tool call); the run was not started` — rather than billing
+  for a structured answer and collecting prose. Native JSON-schema mode is
+  no longer required, and no longer used on this path: a request held to a
+  schema cannot carry tool calls, so it would forbid the very call (and every
+  read before it).
+- **The call bypasses the permission gate and every `PreToolUse` hook,** the
+  stage's `tools:` grant included. It is the run's answer, not an action — it
+  writes nothing — and under `default`, `plan` or `dont-ask` an unlisted tool
+  would otherwise ask or be refused and strand a non-interactive stage. The
+  exemption is by tool *instance*, never by name, so a user or MCP tool that
+  happens to be called `StructuredOutput` is still gated. No preset or
+  `tools:` list can grant or withhold it.
+- **Supported schema keywords.** Validation uses the session's own
+  `Protocol\Schema\SchemaValidator`, which enforces `type` (unions
+  included), `properties`, `required`, `additionalProperties` (`false` or a
+  schema), `items`, `enum`, `oneOf`, `$ref` into the schema's own `$defs`
+  (`#/$defs/<name>`), `maxItems`, `maxLength`, `minimum` and `maximum`. Other
+  keywords — `minItems`, `minLength`, `pattern`, `const`, `anyOf`, `allOf`,
+  `format`, … — are accepted in the schema but NOT enforced; check those in
+  a downstream stage if they matter.
+- **Notes stay off the answer.** A schema run's side notes (a kept worktree, a
+  resume note) go to the live activity stream, not the output, which must
+  stay a bare JSON document.
+- **Headless is unchanged.** `-p --json-schema` still rides the provider's JSON
+  mode with its `json_schema_applied` disclosure (see
+  [`FLEET-DRIVING.md`](FLEET-DRIVING.md#structured-answers---json-schema));
+  only workflow stage agents use `StructuredOutput`.
 - **And it composes:** a verification stage's accept/reject pattern and an
   `outputSchema` are independent features that stack — give the verifier a
   schema and its verdict arrives machine-readable, not pattern-matched prose.
@@ -350,6 +545,36 @@ unreadable path — is refused at load or build time, never coerced.
   single leaves — `{{build.summary}}`, `{{build.items/0/id}}` — while
   `{{build.output}}` and `{{build.results}}` keep showing the whole document.
   See `Interpolation` below.
+
+### `schemas:` names a schema once
+
+A top-level `schemas:` map declares named schemas that any task's
+`outputSchema: {$ref: <name>}` resolves to at load, on every task surface
+(the JSON-string spelling `'{"$ref":"verdict"}'` resolves too):
+
+```yaml
+schemas:
+  verdict:
+    type: object
+    properties: {refuted: {type: boolean}, why: {type: string}}
+    required: [refuted]
+stages:
+  - name: check
+    prompt: Is the claim in {{claim}} wrong?
+    outputSchema: {$ref: verdict}
+```
+
+- Names match `[A-Za-z_][A-Za-z0-9_-]*`; each schema must be a map with
+  `type: object` at its root, and a `required` list may name only keys of
+  its `properties`.
+- The reference is exactly the one key `{$ref: <name>}`. A `$ref` beside other
+  keys, a `$ref` that is not a string, an unknown name (the error lists the
+  declared ones) or a `$ref` in a file with no `schemas:` map is refused. A
+  `$ref` nested *inside* a schema is JSON Schema's own and is left alone.
+- The task carries the resolved document, so the `cache:` identity hash
+  digests the schema itself: a reference and the same schema written inline
+  hash alike, and editing the shared schema moves the hash.
+- PHP has no spelling for it — share a variable instead.
 
 ### `isolation` runs a stage agent in its own git worktree
 
@@ -481,6 +706,9 @@ billed again. The door defaults closed, and three things keep it honest.
   one single site. Edit the ask and the hash moves, so a stale answer is
   never reused for new work. The `capture:` and `cache:` keys are NOT part of
   the digest, so toggling them alone never invalidates a recorded answer.
+  Neither are a stage's `from:` and `loop:` specs nor a map step's `when:` (a
+  map hashes every step's prompt, model and schema in order): `cache: true`
+  on such a stage is the author's assertion that the source is stable.
 - **Missing, changed or forged means re-dispatch.** No recorded row, no
   recorded hash, a hash that does not match the declaration, or a
   non-successful row: every one falls through to an ordinary dispatch. A
@@ -503,8 +731,9 @@ always re-dispatched.
 
 A stage may carry an explicit `type:` beside its name. Absent means `type: stage`
 — the plain single-task or `tasks:`-list shape above. The accepted spellings are
-exactly `stage`, `parallel`, `pipeline`, and `verification`; anything else is
-refused at load, naming the offending word. `parallel: true` remains the flag
+exactly `stage`, `parallel`, `pipeline`, `verification` and `map` (the last has
+[its own section](#type-map-streams-each-item-through-its-steps)); anything
+else is refused at load, naming the offending word. `parallel: true` remains the flag
 form of `type: parallel` — carrying both spellings at once, or pairing
 `parallel: true` with one of the compound types, is a contradiction the loader
 refuses rather than resolves.
@@ -540,6 +769,79 @@ each step's `timeout:` bounds only itself. `reject:` belongs on a verifier:
 putting it on a plain task parses into the DTO, and the engine's pre-flight
 refuses the run naming the misuse — the parser refuses shapes, the engine owns
 placement policy.
+
+**A naming note, because it trips people.** A candy `pipeline` is a sequential
+chain of steps for ONE item. What the reference workflow tooling calls a
+per-item `pipeline()` — every item of a list flowing through the same steps on
+its own — is candy's [`type: map`](#type-map-streams-each-item-through-its-steps).
+
+### Verifier panels: `votes`, `lenses` and `quorum`
+
+One verifier is one opinion. A verification stage's `verifier:` may convene a
+panel instead:
+
+```yaml
+  - name: review
+    type: verification
+    task: {prompt: "Fix the finding in {{finding}}.", tools: [Read, Edit]}
+    verifier:
+      prompt: "Via the {{lens}} lens, try to REFUTE this fix: {{prevResult}}. Default to REJECT if uncertain."
+      reject: '/\bREJECT\b/'
+      votes: 3
+      lenses: [correctness, security, repro]
+      quorum: 2
+      retries: 1
+```
+
+- **`votes: N`** (whole number `>= 1`, default 1) dispatches N verifier agents
+  **concurrently** after the task has run once, on one fresh pool of width N
+  that spends what is left of the stage budget. The panel is reserved against
+  `config.maxAgents` as one wave before any vote starts, and each vote runs
+  with no retries of its own — the panel is the retry unit.
+- **`lenses: [...]`** gives each vote one lens name (non-empty strings, exactly
+  one per vote — a count that differs from `votes` is refused, and since
+  `votes` defaults to 1 a lone two-lens list is refused too). `{{lens}}` in
+  the verifier prompt becomes that vote's lens; without `lenses` it stays
+  verbatim (the linter warns).
+- **`quorum: K`** (1..`votes`, default the majority `floor(votes/2)+1`) is how
+  many votes must NOT reject for the verdict to pass.
+- **A vote rejects** when its completed output matches `reject:` (with
+  `rejectMinOccurrences:` exactly as for one verifier) — or when the vote
+  failed, timed out or never produced a result: a vote that could not attest
+  the claim counts against it, and is never pattern-scanned. A panel with no
+  `reject:` therefore only loses votes to failures, which the linter warns
+  about.
+- **Order of judgement:** an `ESCALATE:` line in ANY vote outranks everything,
+  a met quorum included — the stage fails at once, burns no retry, and says
+  which vote asked (`escalated: verifier vote 2 (security) asked for a human
+  decision on: "…"`). Then an uncompilable `reject:` pattern fails the stage
+  closed. Then the verdict passes iff the non-rejecting votes reach the
+  quorum.
+- **`retries: N` re-runs the whole panel** up to N more times after a missed
+  quorum; the task is not re-run.
+- **What the stage records.** Each vote's result is named
+  `<verifier name or <stage>_verifier>_<k>`, 1-based (`review_verifier_2`),
+  with a typed row when the verifier is schema'd. On a pass the stage output
+  is the task output followed by every vote's output; on a failure the error
+  counts the votes and quotes each rejection — `verdict rejected by the
+  panel: 1 of 3 votes passed and the quorum is 2; vote 1 (correctness)
+  matched /\bREJECT\b/ on: "…"; vote 3 (repro) timed out: …` (plus `[failed
+  on all 2 panel rounds]` after retries).
+- **`{{review.votes}}`** is the last round's votes as compact JSON,
+  `[{"lens": …|null, "rejected": true|false, "output": "…"}]` — `data` (the
+  decoded answer) in place of `output` when the verifier has an
+  `outputSchema` and the vote decoded. It is written whenever a panel ran,
+  even when the stage failed, and it rides the pause record.
+- **Placement.** The three keys parse on every task surface, like `reject:`,
+  and are legal only on the verifier slot of a verification stage (or of a
+  map verification step). Anywhere else the run is refused before anything is
+  dispatched: `votes, lenses and quorum convene a verifier panel and belong
+  on the verifier slot of a verification stage`. A verifier with none of the
+  three keys takes the single-verifier path, byte for byte as before; any
+  key set away from its default (`votes: 1` with `lenses: [x]` included)
+  convenes a panel.
+- PHP: `TaskBuilder::votes()`, `lenses()` and `quorum()`; the cross-key law
+  runs at `build()`.
 
 ### `uses:` / `with:` compose one workflow into another
 
@@ -601,38 +903,262 @@ leaves a cached include row carrying, the same author-stability law every other
     from:
       glob: src/**/*.php         # relative to the environment root, never the YAML's directory
       chunk: 4                   # optional; max agents of THIS stage in flight at once
+      max: 200                   # optional; keep the first N items, list the dropped rest
     prompt: Audit {{path}} and report findings.
+
+  - name: verify
+    parallel: true
+    from: {stage: find, pointer: /findings, key: /id, chunk: 8}
+    prompt: "Refute {{item.claim}} at {{item.file}}:{{item.line}} (#{{index}})"
+
+  - name: each
+    parallel: true
+    from: {context: files}       # a run-context value that is a JSON list
+    prompt: "Read {{item}}"
 ```
 
-A `parallel:` stage may carry `from:` instead of `agents:` or `tasks:` — the
-spelling is one at a time, refused at load otherwise. The stage's `prompt:` is
-the template; the engine expands the glob **once** when the stage is entered,
-against the run's environment root (the session project — not the directory the
-workflow file lives in). Every matching file becomes one task sharing the
-template's arms, named by its relative path, and `{{path}}` interpolates to
-that path per item (an unresolved `{{path}}` elsewhere is left as written, like
-any other token). `chunk` caps the stage's in-flight window — a ceiling, never
-a floor: it can narrow the workflow's `maxConcurrent` width, never widen it;
-omit it and the workflow's own width applies. The walk never follows symlinks —
-a linked file or directory is invisible to the expansion, and a name that would
-resolve outside the environment root is refused loudly rather than fanned out.
+A `parallel:` stage (or a [`type: map`](#type-map-streams-each-item-through-its-steps)
+stage) may carry `from:` instead of `agents:` or `tasks:` — the spelling is one
+at a time, refused at load otherwise. The stage's `prompt:` is the template:
+every item becomes one task sharing the template's arms (`tools`, `retries`,
+`timeout`, `stallTimeout`, `restarts`, `input`, `outputSchema`, …). `from:`
+reads **exactly one source** (`WorkflowRegistry::YAML_FROM_KEYS`):
 
-The expansion is the pause record's, not the disk's: the materialised file
-list rides every pause write, and a resume replays *that recorded list* — it
-never re-globs, because files that changed mid-run would otherwise silently
-fork different work from what was paused. A stage that paused *before* it ever
-expanded has no record yet, and its resume expands normally — that is entry,
-not replay. Once a record exists it is honoured exactly: the file list stands
-as recorded, a recorded `chunk` wins over the re-read YAML, and a record
-that is malformed — a broken file list, a broken chunk — fails the stage
-loudly instead of silently re-expanding. The single fallback is a recorded
+- **`glob:`** — files under the run's environment root (the session project —
+  not the directory the workflow file lives in), expanded **once** when the
+  stage is entered. Each match is one item, named by its relative path, and
+  `{{path}}` is that path. The walk never follows symlinks — a linked file or
+  directory is invisible to the expansion — and a name that would resolve
+  outside the environment root is refused loudly rather than fanned out. An
+  empty glob fails the stage, as the likely typo it is.
+- **`stage:` + `pointer:`** — the array at an RFC 6901 `pointer` (`""` is the
+  whole row) in a **prior** stage's typed row: a schema'd single-task stage
+  named `stage`, a [`loop.accumulate`](#accumulate--loop-until-nothing-new-turns-up)
+  stage's `{"items":…}` document, or a map stage's document. A parallel stage
+  without `accumulate` keeps its rows under `<stage>_<n>`, so it has no row
+  under its stage name to point into, and the fan-out fails loudly.
+- **`context:`** — a run-context key whose value is a JSON list (handed in
+  through the `Workflow` tool's `context`, or a PHP caller's array). The key
+  must not be empty or start with `@`.
+
+Optional keys beside the source:
+
+- **`key:`** (data sources only) — a pointer into each item. It dedups the
+  list (first occurrence wins, order kept) and names each item's task
+  `<stage>_<key>`, sanitised to `[a-zA-Z_][a-zA-Z0-9_]*` (other bytes become
+  `_`, a leading digit gets a `_` prefix, later collisions get `_2`, `_3`, …).
+  Without `key`, data items are neither deduped nor named and record as
+  `<stage>_<n>` (1-based).
+- **`chunk:`** caps the stage's in-flight window — a ceiling, never a floor:
+  it can narrow the workflow's width, never widen it; omit it and the
+  workflow's own width applies.
+- **`max:`** (1..4096) keeps the first N items — of the sorted expansion for a
+  glob, in source order for data — and drops the rest *visibly*. When it
+  drops anything the stage output is headed and tailed with the cut:
+
+  ```
+  [from: kept 2 of 5 matches (max: 2); 3 dropped, listed at the end of this output]
+  <agent outputs…>
+  dropped: c.txt
+  dropped: d.txt
+  dropped: e.txt
+  ```
+
+  The header sits on top so a `capture: true` preview always shows it; a
+  dropped data item is labelled by its key, or by its compact JSON clipped to
+  120 characters. Nothing dropped means byte-identical output to a stage
+  without `max`. Past 4096 items without `max`, the
+  [fan-out ceiling](#width-the-fan-out-ceiling-and-the-agent-budget) fails the
+  stage.
+
+**The item tokens.** In every fan-out (glob included) the template sees
+`{{item}}` — a string verbatim, a boolean as `true`/`false`, a number as text,
+anything else as compact JSON — `{{item.<pointer>}}` for one leaf of it
+(containers render as JSON, a miss stays verbatim) and `{{index}}`, the
+item's **0-based** position. They are spliced in after every other pass, so
+item data — usually some model's output — is never re-scanned for `{{…}}`, and
+the item wins over a context key or result named `item` or `index`. Inside a
+fan-out `{{item.output}}` and `{{item.results}}` are item pointers too.
+
+**Data sources fail loudly, except when empty.** A source that is not a JSON
+array fails the stage and dispatches nothing (`Stage 'v' fans out from stage
+'find' at "/f", which is an object, not an array`; `… from context 'files',
+which is nothing (the run was handed no such key)`), as do a missing typed
+row and an item with no string, number or bool at `key`. **An empty data list
+completes the stage with no agents and an empty output** — "nothing to
+verify" should flow on — while an empty glob still fails. A `minSuccess`
+stage then records `{{stage.failed}}` as `[]`.
+
+**The expansion is the pause record's, not the source's.** The materialised
+list rides every pause write — file paths for a glob, `{items, names, chunk}`
+(plus `max`, `matched` and the dropped list when `max` cut it) for data — and
+a resume replays *that recorded list*. It never re-globs or re-reads the
+stage or context, because a source that changed mid-run would otherwise
+silently fork different work from what was paused. A stage that paused
+*before* it ever expanded has no record yet, and its resume expands normally —
+that is entry, not replay. Once a record exists it is honoured exactly: the
+list stands as recorded, a recorded `chunk` wins over the re-read YAML, and a
+record that is malformed — a broken list, a broken chunk, a partial truncation
+record — fails the stage loudly (`… resumed with a dynamic-wave record it
+cannot replay — refusing to re-read stage 'find' at "/f", which may have
+changed`) instead of silently re-expanding. The single fallback is a recorded
 chunk written as null: that wave expanded without a ceiling, so its replay
 takes the ceiling from the current YAML, and a ceiling can only narrow the
 concurrency, never the work itself.
 
 Static and dynamic spellings feed the same machinery, so `retries:`, the stage
-`timeout:`, `stallTimeout:`, `restarts:`, and `stopOnFirstFailure` ride a
-fan-out unchanged.
+`timeout:`, `stallTimeout:`, `restarts:`, `minSuccess`, and
+`stopOnFirstFailure` ride a fan-out unchanged.
+
+### `minSuccess` tolerates casualties in a fan-out
+
+By default any failed or timed-out agent fails a parallel stage. `minSuccess`
+on a `parallel` stage (static `agents:` or `from:`) or a `map` stage says how
+many must succeed instead:
+
+```yaml
+  - name: verify
+    parallel: true
+    from: {stage: find, pointer: /findings, key: /id}
+    minSuccess: 90%              # or a count: minSuccess: 12
+    prompt: "Refute {{item.claim}}"
+```
+
+- The value is a whole number `>= 1` (a quoted integer is accepted) or
+  `"NN%"` with NN from 1 to 100. A percentage is of the agents actually
+  dispatched (after a `from:` expansion; for `map`, of the items), rounded
+  **up**, at least 1. A count above a static `agents:` list's length is
+  refused at load — it could never be met.
+- A casualty is an agent whose result is `failed` or `timed_out`, or that
+  never produced one (`cancelled`). With none, the output is unchanged. With
+  some, the output gains `[k of n agents failed: name (status), …]` after the
+  agents' outputs (and before any `from.max` dropped list).
+- **Met** → the stage completes with no error. **Not met** → it fails:
+  `minSuccess 90% not met: 8 of 10 agents succeeded and 9 were needed;
+  failed: verify_f3 (failed), verify_f7 (timed_out)`.
+- **`{{verify.failed}}`** is the JSON list of the casualties' result names
+  (`[]` when none failed; for `map`, the item keys, else `<stage>_<n>`). It is
+  written only for `minSuccess` stages, survives the pause record, and wins
+  over a typed row's own `failed` leaf only when it exists.
+- **`stopOnFirstFailure` does not apply** to a `minSuccess` stage: every
+  sibling runs so the tolerance is judged over all of them. The linter warns
+  when both are set.
+- It is refused on plain, pipeline, verification and `uses:` stages
+  (`carries "minSuccess", which only a parallel or map stage can tolerate
+  failures with`). PHP: `WorkflowBuilder::minSuccess(12)` or
+  `->minSuccess('90%')`, attached to the last stage.
+
+### `type: map` streams each item through its steps
+
+A `map` stage runs a short chain of steps **per item**, with no barrier
+between steps: item A can be on its verifier while item B is still being
+refuted. This is what the reference tooling calls a per-item `pipeline()`;
+candy's own `pipeline` is the sequential one-item chain (see the
+[naming note](#type-verification-and-type-pipeline-reach-the-compound-shapes-from-yaml)).
+
+```yaml
+  - name: per_finding
+    type: map
+    from: {stage: find, pointer: /findings, key: /id, max: 150}   # any from: source
+    minSuccess: 90%
+    steps:
+      - name: refute
+        prompt: "Refute {{item.claim}}. Default refuted=true if unsure."
+        outputSchema: {$ref: verdict}
+      - name: fix
+        when: {step: refute, pointer: /refuted, equals: "false"}
+        prompt: "Fix {{item.claim}}. Verdict: {{prevResult}}"
+        isolation: worktree
+      - name: check
+        type: verification
+        task: {prompt: "Run the tests for {{item.file}}"}
+        verifier: {prompt: "Via {{lens}}: REJECT if broken", reject: '/REJECT/', votes: 3, lenses: [a, b, c]}
+```
+
+- **Shape.** A map stage needs `from:` (any source, with `chunk`, `max`,
+  `key`, the 4096 ceiling and the prior-stage law exactly as for a parallel
+  fan-out) and a non-empty `steps:` list. Its stage keys are `name`, `type`,
+  `from`, `steps`, `minSuccess`, `when`, `loop`, `capture` and `cache`; a task
+  key at stage level (`prompt` belongs on a step), a body key (`agents`,
+  `tasks`, `task`, `verifier`, `stages`) and `parallel: true` are refused, as
+  is `steps:` on any other stage type.
+- **Steps.** Each step needs a `name`, unique within the map. A step is a task
+  map (task keys plus `when:`, optionally `type: stage`) or `type:
+  verification` with `task:`/`verifier:` sub-maps (whose verifier may be a
+  [panel](#verifier-panels-votes-lenses-and-quorum)). Parallel, map, pipeline
+  and `uses:` steps are refused in v1, as are `parallel`, `agents`, `tasks`,
+  `stages`, `from`, `steps`, `loop`, `minSuccess`, `capture`, `cache` and
+  `with` on a step.
+- **Per item, steps run in order on an item-scoped context**: the stage
+  context plus `{{item}}`, `{{item.<pointer>}}`, `{{index}}` (and `{{path}}`
+  for a glob). `{{prevResult}}` is the previous step of THIS item (`""` for
+  the first), and `{{<step>.results}}`, `{{<step>.output}}`,
+  `{{<step>.<pointer>}}` and `{{<step>.votes}}` read this item's earlier
+  steps. None of it leaks to other items or to later stages; a step named
+  like a global stage shadows that stage's `.output` inside the item.
+- **A step `when:`** is judged against the item context; its leaves may spell
+  `step: <name>` (a synonym of `stage:`, never both) and may read only earlier
+  steps or earlier stages. A skipped step records `{status: skipped}`,
+  **passes `{{prevResult}}` through unchanged**, and leaves its `.output`
+  token verbatim. A clause that misses skips the step.
+- **Failure drops the item.** The first failing step (a throw inside it — a
+  permission refusal, an unknown tool, the agent ceiling — included) ends
+  that item; its remaining steps never run and are absent from its row. The
+  other items carry on. Without `minSuccess` any dropped item fails the stage
+  (`Map stage 'per': 1 of 3 items failed: per_2 (step 'one' failed: b
+  broke)`); with it, the count is over ITEMS and `{{per_finding.failed}}`
+  lists the item keys (from `key:`, the path for a glob, else `<stage>_<n>`).
+  `stopOnFirstFailure` without `minSuccess` admits no item after the first
+  casualty, and in-flight chains stop before their next step as `cancelled`.
+  An agent-ceiling refusal stops admitting items and fails the stage whatever
+  `minSuccess` says; items not yet started record `cancelled`.
+- **Output.** The stage output, its typed row under the stage name and
+  `{{per_finding.results}}` are one JSON document:
+
+  ```
+  {"items":[{"key":<key|path|null>,"index":0,"status":"completed|failed|cancelled",
+             "steps":{"<name>":{"status":"completed|failed|skipped","output":"…",
+                                "data":{…}?,"votes":[…]?,"error":"…"?}},
+             "error":"step 'x' failed: …"?}],
+   "matched":M?, "dropped":[labels]?}
+  ```
+
+  `data` is the decoded answer of a schema'd task step (or a verification
+  step's task); `matched`/`dropped` appear only when `from.max` cut the list,
+  in place of the text notice, so the output stays JSON. It is
+  pointer-addressable: `{{per_finding.items/0/steps/fix/output}}`, `when:
+  {stage: per_finding, pointer: /items, empty: false}`, `from: {stage:
+  per_finding, pointer: /items}`. An empty data list completes with
+  `{"items":[]}`; an empty glob fails.
+- **Budget and keys.** Every step of every item shares the one stage clock
+  (`config.timeout`); per-step task keys (`retries`, `timeout`,
+  `stallTimeout`/`restarts`, `resource`, `isolation`, `model`,
+  `outputSchema`, `input`) work as on any task, and every step dispatch,
+  vote and retry counts against `config.maxAgents`.
+- `loop:` attaches to a map (`accumulate` reads the map document, e.g.
+  `pointer: /items`), and `cache:` hashes every step's prompt, model and
+  schema in order (not the step `when:` or the `from:` spec).
+- PHP: `WorkflowBuilder::map($name, $from, $steps)` with steps built from a
+  named `TaskBuilder`, `WorkflowBuilder::mapStep($task, when: …)` or
+  `WorkflowBuilder::mapVerification($name, $task, $verifier, when: …)`.
+
+Four limits to design around:
+
+- **Pause and resume are whole-stage.** The materialised item list rides the
+  pause record exactly as a parallel `from:` list does, but a pause mid-map
+  re-runs EVERY item on resume — there is no per-item credit yet.
+- **No per-step hooks.** The map announces `StageStarted` per round and one
+  `StageComplete`/`StageFail` like any stage — no per-item or per-step
+  events, by design.
+- **Width counts item chains, not agents.** Up to the stage width
+  (`maxConcurrent`, narrowed by `from.chunk`; `0` = every item) of chains are
+  in flight; a vote panel inside a step runs its votes together, so agents in
+  flight can reach width × votes.
+- **Inline executors serialise.** Chains interleave by suspending while their
+  agent runs on a forked worker. A dispatch that runs inline — an injected
+  executor that does not fork the agent (the `Workflow` tool's path for an
+  agent that may ask), or a build without `pcntl` — never yields, so its
+  chain runs to completion before the next item is admitted.
 
 ### Everything malformed is refused, not coerced
 
@@ -647,7 +1173,14 @@ of these rather than loading a workflow that quietly does less:
 - **two stages with the same name** — stage names are how `{{name.output}}`
   interpolates, so duplicates make every reference ambiguous.
 - `config:` not a map; `maxConcurrent` not a whole number >= 0 (0 means no cap);
-  `timeout` not a positive integer.
+  `timeout` not a positive integer; `maxAgents` not a whole number of at least
+  1 (`"config.maxAgents" must be at least 1, got 0`).
+- `schemas:` not a map of name => schema, a name outside
+  `[A-Za-z_][A-Za-z0-9_-]*`, a schema that is not a map or has no
+  `type: object` at its root, or a `required` that is not a list or names a
+  key its `properties` lacks; an `outputSchema: {$ref: …}` that names an
+  unknown schema, sits beside other keys, is not a string, or appears in a
+  file with no `schemas:` map.
 - `stallTimeout:` not a whole number of at least 1 (`stallTimeout: 0`,
   `stallTimeout: 2.5`).
 - `restarts:` not a whole number of at least 0 (`restarts: -1`,
@@ -655,16 +1188,46 @@ of these rather than loading a workflow that quietly does less:
 - `retries:` not a whole number of at least 0 (`retries: -1`, `retries: lots`).
 - `when:` outside the closed grammar: `when:` not a map, an unknown key in a
   condition (`gt:`), a leaf missing `stage:` or carrying more than one of
-  `equals`/`contains`/`matches`, a combinator other than `all:`/`any:` or one
-  nested past the two-layer ceiling, a list that is not non-empty, a
-  non-string value, or a broken `matches:` PCRE — each fails the load naming
-  the offender, so a half-meaningless guard never reaches a run.
-- `loop:` outside the closed pair: `loop:` not a map, a map carrying any key
-  besides `max` and `until` or missing either half, a `max:` that is not a
-  whole number of at least 1, an `until:` outside the `when:` grammar, a
-  `loop:` attached to a `parallel:`, `pipeline:`, or verification stage
-  (stage-only in v1), or a `loop:` beside a `uses:` stage (carried workflows
-  are not looped in v1) — each fails the load naming the offender.
+  `equals`/`contains`/`matches`/`empty`, a combinator other than
+  `all:`/`any:` or one nested past the two-layer ceiling, a list that is not
+  non-empty, a non-string value for a string op or a non-boolean `empty:`, a
+  `pointer:` that is not a non-empty string or not valid RFC 6901 (`~` must
+  be `~0` or `~1`), a broken `matches:` PCRE, or a loop-only leaf (`dry`,
+  `budgetBelow`) in a `when:` — each fails the load naming the offender, so a
+  half-meaningless guard never reaches a run.
+- `loop:` outside its closed roster: `loop:` not a map, a map carrying any key
+  besides `max`, `until` and `accumulate` or missing `max` or `until`, a
+  `max:` that is not a whole number of at least 1, an `until:` outside the
+  `when:` grammar plus its loop leaves, a `dry`/`budgetBelow` leaf that is not
+  a whole number of at least 1 or carries `stage:`/`pointer:`, `{dry: N}`
+  without `accumulate:`, an `accumulate:` that is not a map, lacks `pointer`,
+  carries a key besides `pointer` and `key`, or holds an invalid pointer, a
+  `loop:` attached to a `pipeline` stage, or a `loop:` beside a `uses:` stage
+  (carried workflows are not looped) — each fails the load naming the
+  offender.
+- `from:` with no source or more than one (`from carries "glob" and
+  "context"; a fan-out reads exactly one source`), an unknown key (the
+  roster is `glob`, `stage`, `context`, `pointer`, `key`, `chunk`, `max`), a
+  `stage:` that is not a stage declared before this one, a `stage:` without
+  `pointer:`, a `pointer:` beside `context:`, `key:`/`pointer:` beside
+  `glob:`, an invalid pointer, a `context:` that is empty or starts with `@`,
+  a `chunk` below 1, a `max` that is not a whole number from 1 to 4096, a
+  fan-out stage with no stage-level template `prompt`, or `from:` on a stage
+  that is neither parallel nor map (`carries "from", which only a parallel or
+  map stage can fan out`).
+- `minSuccess` that is not a whole number `>= 1` or a `"NN%"` from 1% to 100%,
+  a count above a static `agents:` list's length, or `minSuccess` on a stage
+  that is neither parallel nor map.
+- `votes:` not a whole number of at least 1, `lenses:` not a non-empty list
+  of non-empty strings or of a different length than `votes`, `quorum:` below
+  1 or above `votes` (placement off a verifier slot is the engine's
+  pre-flight refusal, like `reject:`).
+- a `type: map` stage without `from:` or `steps:`, a `steps:` that is not a
+  non-empty list, a step without a unique `name`, a refused step type or
+  step key, a step `when:` that reads its own or a later step or spells both
+  `step:` and `stage:`, a task key or body key at map stage level,
+  `parallel: true` beside `type: map`, or `steps:` on any other stage
+  type.
 - `outputSchema:` is not a schema-shaped value: a sequence, a bare number,
   malformed inline JSON, or a path that names no readable file (`WorkflowLoadException`
   at load; the same refusals fire at `build()` for `->outputSchema('…')` strings),
@@ -692,8 +1255,8 @@ of these rather than loading a workflow that quietly does less:
   `isset()`, so `prompt: ~` is refused as the wrong shape rather than silently
   taking the default: a key the author wrote is a key the author meant.
 - **an unknown key** — at stage level, inside a `tasks:` entry, a parallel
-  `agents:` entry, a `type: verification` sub-map, or a `type: pipeline` step,
-  a key the parser never reads now fails the load naming itself
+  `agents:` entry, a `type: verification` sub-map, a `type: pipeline` step or
+  a map step, a key the parser never reads now fails the load naming itself
   (`has unknown key "colour"; supported keys: …`) instead of being silently
   ignored. The supported set is the parsed-key roster itself
   (`WorkflowRegistry::YAML_TASK_KEYS`), so an arm and its refusal are added
@@ -702,27 +1265,44 @@ of these rather than loading a workflow that quietly does less:
   ignored. Placement of a *known* key on the wrong shape (a `prompt:` beside
   a `tasks:` list) stays the dedicated per-shape refusals' job.
 
-Stage numbering differs by surface. The loader's `stage #N` messages are
-**0-based** (the list index); the linter's `Stage #N` / `stage #N` and the
-`Workflow` tool report's `Stage N:` headings count from 1. That is worth knowing
-when reading an error.
+Every position number in a diagnostic counts from 1 — the loader's `stage #N`,
+`agent #N`, `task #N` and `step #N` (a duplicate name reads `(stages #1 and
+#3)`), the engine's `Stage 'x' task #N`, and the linter's `Stage #N` alike —
+so the number in an error is the one you count to in the file.
 
 ### Interpolation
 
-Four forms, substituted in this order (`WorkflowEngine::interpolateContext()`):
+Four passes, in this order (`WorkflowEngine::interpolateContext()`), after the
+item tokens of a fan-out have been lifted out (they are spliced back last, so
+item data is never re-scanned):
 
 | Form | Resolves to |
 |---|---|
 | `{{name.results}}` | one agent's output, by its result name (below) — any stage type |
 | `{{name.<pointer>}}` | one leaf inside a schema'd stage's JSON document (below) |
-| `{{stageName.output}}` | a prior stage's collected output (a parallel stage's is every agent's output joined by newlines) |
-| `{{variable}}` | a key from the context passed to `run()` (`/workflow run <name> key=val …`) |
+| `{{stage.failed}}` | a `minSuccess` stage's casualties as a JSON list ([`minSuccess`](#minsuccess-tolerates-casualties-in-a-fan-out)); claims the tail only when that stage recorded one |
+| `{{stage.votes}}` | a verifier panel's last round as JSON ([panels](#verifier-panels-votes-lenses-and-quorum)); claims the tail only when a panel ran |
+| `{{stageName.output}}` | a prior stage's collected output — every stage type writes it: a parallel stage's is every agent's output joined by newlines, a verification stage's the task and verifier output, a map stage's its JSON item document, an accumulate loop's its `{"items",…}` document |
+| `{{variable}}` | a key from the run context (`/workflow run <name> key=val …`, the `Workflow` tool's `context`); an array or object renders as compact JSON |
+
+The engine also injects tokens of its own, each only where it means something:
+
+| Token | Where | Resolves to |
+|---|---|---|
+| `{{prevResult}}` | a `tasks:` entry after the first, a pipeline step, a map step, a verifier | the previous task's or step's output (in a map, of THIS item; `""` for its first step), or the task's output inside a verifier |
+| `{{input}}` | a task carrying `input:` | the join ([below](#joining-prior-stages-with-input)) |
+| `{{path}}` | a `from: {glob}` fan-out or map | the item's file path |
+| `{{item}}`, `{{item.<pointer>}}` | any `from:` fan-out or map | the item (string verbatim, else JSON), or one leaf of it |
+| `{{index}}` | any `from:` fan-out or map | the item's 0-based position |
+| `{{round}}` | a looped stage | the 1-based round |
+| `{{previous}}` | a looped stage, from the second round | the prior round's `<stage>.output` |
+| `{{seen}}`, `{{fresh}}` | a loop with `accumulate:` | every dedup key so far / the items the previous round added, as JSON lists |
+| `{{lens}}` | a verifier panel vote with `lenses:` | that vote's lens |
 
 Names must match `[a-zA-Z_][a-zA-Z0-9_]*`. An **unresolved** reference is left
 as written, not blanked — so a typo appears verbatim in the prompt rather than
-vanishing. So is a context value that is not a string or a number (a PHP
-caller's array, say). Pipeline steps and a verifier also see `{{prevResult}}`,
-the previous step's or the task's output.
+vanishing. So is a context value that is neither text, a number, an array nor
+an object (a boolean, `null`).
 
 #### Pointing inside a schema'd result
 
@@ -757,8 +1337,12 @@ two unnamed stages on the default agent no longer overwrite each other, and
 | regular | its `name` | the stage's name |
 | `parallel: true` | the agent's `name` | `<stage>_<n>`, 1-based in declaration order (`fix_2`) |
 | `pipeline` step | the step task's `name` | the step's name (`WorkflowBuilder::pipeline()` names a step after its task name or agent type) |
+| `from:` fan-out item | — | the path (glob), `<stage>_<key>` (data with `key:`), else `<stage>_<n>` |
 | verification task | its `name` | the stage's name |
 | verification verifier | its `name` | `<stage>_verifier` |
+| verifier panel vote | `<verifier name>_<k>` | `<stage>_verifier_<k>`, 1-based |
+| map step | inside its item only: the step task's `name` or the step's name (verifier: `<step>_verifier`) | — |
+| map stage | — | the stage's name (the JSON item document) |
 
 - A parallel agent's result is matched to the agent it came from, whatever
   order the agents finished in. An agent cancelled before it produced a result
@@ -858,12 +1442,37 @@ flagged — errors flag the row, warnings surface in the verdict line only. A
 `.php` path is refused (it would execute at load); a `.yaml` or `.yml` path is
 read as DATA (`fromYamlString`); any other argument resolves the name from the
 registry. ERRORS: unsupported stage types, unknown or forward `.results` and
-`.output` references, duplicate result keys, `reject` outside the verifier
-slot, non-compiling PCRE, out-of-universe or unregistered tool declarations,
-a `uses:` chain that cycles or runs too deep, and bound violations. WARNINGS:
-bare unknown `{{token}}`, an empty prompt, an unnamed stage, a plan with no
-stages, a parallel stage whose agents all share the checkout, an unsatisfiable
-`rejectMinOccurrences`, and retries above the warn ceiling.
+`.output` references (every stage type writes `.output`), duplicate result
+keys, `reject` or panel keys (`votes`/`lenses`/`quorum`) outside the verifier
+slot, a panel whose lens count differs from `votes` or whose quorum is out of
+range, non-compiling PCRE, out-of-universe or unregistered tool declarations,
+a `uses:` chain that cycles or runs too deep, a `loop:` on a pipeline or
+`uses:` stage, `{dry: N}` without `accumulate:`, a `from.stage` that is not a
+prior stage, `minSuccess` off a parallel/map stage or above a static agent
+count, a `{{X.failed}}` reading a `minSuccess` stage at or after its own
+position, a map with no steps, no `from:` or a duplicate step name, a negative
+`maxConcurrent`, an unresolved `{$ref}`, and bound violations. WARNINGS: bare
+unknown `{{token}}`, an empty prompt, an unnamed stage, a plan with no stages,
+a parallel stage whose agents all share the checkout, an unsatisfiable
+`rejectMinOccurrences`, retries above the warn ceiling, `maxConcurrent: 0`
+(no cap), `{dry: N}` with N not below `max`, `stopOnFirstFailure` beside
+`minSuccess`, a panel with no `reject:`, `{{lens}}` with no lenses, a
+`{{X.failed}}` naming no `minSuccess` stage, and a map step `when:` that
+reads neither an earlier step nor an earlier stage. Engine-injected tokens
+(`{{input}}`, `{{prevResult}}`, `{{round}}`, `{{previous}}`, `{{seen}}`,
+`{{fresh}}`, `{{item}}`, `{{index}}`, `{{path}}`, `{{lens}}`) are known in
+the scopes listed under [Interpolation](#interpolation) and warn outside them.
+
+**`/workflow run` lints first.** Before anything is dispatched, `/workflow run
+<name>` — in the TUI and on the host (`serve`) surface alike — loads the name
+through the same tiers `/workflow lint` uses and lints it with the run's own
+`key=value` pairs as the context seed, the session's tool universe and the
+`uses:` resolver. Errors refuse the run with an error row naming them
+(``**Error:** workflow `<name>` was not run: lint found N error(s), M
+warning(s) (nothing was dispatched).`` followed by the findings) — no stage
+starts and the turn is not held. Warnings never block: they are listed under
+the run report's heading. A name that does not load in those tiers skips the
+lint, so the engine's own refusal speaks.
 
 `/workflow run <name> key=value …` seeds the run context from the pairs after
 the name. Pairs are split on whitespace outside quotes, and a `"…"` or `'…'`
@@ -1004,8 +1613,9 @@ name; both resolve to the same run.
   unreadable ledger fails soft: no columns, no crash. Path-shaped workflow
   identifiers are refused before any filesystem access.
 
-Granularity is still one whole stage. A `parallel` stage that is still running
-when an interrupt lands is re-run from scratch on resume. The run's context,
+Granularity is still one whole stage. A `parallel` or `map` stage that is still
+running when an interrupt lands is re-run from scratch on resume (every item of
+a map included; a `from:` list is replayed as recorded). The run's context,
 with every finished stage's `{{name.results}}` entries, is in the pause file,
 so the resumed stages interpolate exactly as they would have.
 
@@ -1047,8 +1657,8 @@ candy-code workflow resume <id-or-name> [--format json]
 ```
 
 `run` resolves `<name-or-path>` through the same tiers `WorkflowEngine::run()`
-uses, seeds the run context with the `--param` pairs, and prints one terminal
-verdict per stage. `status` reads the engine's liveness view
+uses, seeds the run context with the `--param` pairs, lints the plan, and prints
+one terminal verdict per stage. `status` reads the engine's liveness view
 (`WorkflowEngine::status()`); `resume` continues a paused run
 (`WorkflowEngine::resume()`).
 
@@ -1057,7 +1667,7 @@ verdict per stage. `status` reads the engine's liveness view
 | Code | Meaning |
 | --- | --- |
 | 0 | The run completed; every stage's verification passed. |
-| 1 | The run failed, or the request was refused (unknown name, unreadable file, a live pause elsewhere). |
+| 1 | The run failed, or the request was refused (unknown name, unreadable file, a live pause elsewhere, lint errors). |
 | 2 | Usage error — bad action, misplaced flag, missing operand. |
 | 3 | Stopped for a person: a verification stage answered `ESCALATE:` (its failure carries the engine's escalation marker), or a `SIGINT`/`SIGTERM` produced a cooperative pause. |
 
@@ -1068,6 +1678,26 @@ verb emits one final document — `status` `paused` plus the `pause_file` path �
 before exiting 3. `candy-code workflow resume <id>` picks it up. The TUI
 `/workflow` path and the model-mediated tool path keep the historical raw
 130/143 signal exits; nothing about them changes here.
+
+### Lint before dispatch
+
+`run` lints before it builds the engine, exactly as `/workflow run` does: the
+same tiers (`~/.candy-code/workflows`, then the project's
+`.candy-code/workflows`), the `--param` pairs as the context seed, the launch
+backend's tool names, and `uses:` resolved through that registry. A name that
+does not load skips the lint and lets the engine's refusal speak.
+
+- **Errors refuse the run with exit 1**, nothing dispatched. Text mode prints
+  `workflow run: <name> was not run: lint found N error(s), M warning(s)
+  (nothing was dispatched)` behind the verb's usual `candy-code:` prefix,
+  then the finding lines, on stderr. JSON
+  mode emits the usual document with `result.status` `refused`, a `refusal`
+  sentence, `lint: {errors, warnings, findings: ["- error [stage] …", …]}`,
+  empty `stages`, zero `totals` and `session_id: null`.
+- **Warnings never block.** Text mode prints one `  lint warning: [stage] …`
+  line per finding under the heading line; JSON mode adds `result.lint`
+  (`{errors: 0, warnings: N, findings: […]}`) — the key is absent on a clean
+  lint, so a clean run's document is unchanged.
 
 ### `--param` quoting
 
@@ -1083,8 +1713,9 @@ they collide with the engine-reserved context namespace.
 With `--format json` (or the global `--output-format json`) the verb emits one
 schema-versioned document: `verb` `workflow`, the `action`, and a `result` of
 `{workflow, status, stages: [{name, status, output, error, attempts}], totals:
-{tokens, cost, duration_ms}, session_id}`. `session_id` is honestly `null`:
-this verb mints no chat session.
+{tokens, cost, duration_ms}, session_id}`, plus `lint` when the pre-run lint
+found anything (above). `session_id` is honestly `null`: this verb mints no
+chat session.
 
 ### What the verb deliberately does not add
 
@@ -1105,8 +1736,11 @@ dispatched round of a stage, `StageComplete` when a stage settles without
 failing, `StageFail` when it settles failed, and `WorkflowComplete` once when
 the run reaches a natural terminal. A stage skipped by its `when:` clause
 announces only the complete, at round zero; a `loop:` announces one
-`StageStarted` per round but settles exactly once; a `cache:` stage carried
-from a record announces nothing at all. A run that pauses or cancels raises no
+`StageStarted` per round but settles exactly once; a `map` stage announces per
+round and settles once like any stage — there are no per-item or per-step
+events; a `cache:` stage carried from a record announces nothing at all; and a
+plan the pre-run lint refuses never reaches the engine, so it announces
+nothing either. A run that pauses or cancels raises no
 terminal — the resumed run announces its own when it finishes. These events are
 observe-only: whatever a hook answers, the engine discards, so a hook can watch
 a run but cannot steer it. An engine built without a hook chain raises nothing.
@@ -1144,28 +1778,95 @@ just leaves the working tree uncommitted while the workflow marches on.
 
 The model can run a workflow of its own: the built-in `Workflow` tool takes the
 same YAML as a `.yaml` file, as a string, plus an optional `context` object for
-`{{key}}` placeholders:
+`{{key}}` placeholders and an optional `dryRun` flag:
 
 ```json
 {"plan": "stages:\n  - name: survey\n    agent: explorer\n    prompt: List the callers of Foo::bar.\n    tools: [Read, Grep]\n  - name: fix\n    prompt: \"Update every caller: {{survey.output}}\"\n    tools: [Read, Edit, \"Bash(composer test*)\"]\n"}
 ```
 
+- **The description is the grammar.** The tool's description is generated
+  from the loader's own rosters (`WorkflowGrammarGlossary::grammar()`): every
+  stage type, stage key, task key and interpolation form, one gloss line
+  each, walked in the loader's order — a key the loader learns is printed
+  even before its gloss lands, and `WorkflowToolDescriptionDriftTest` holds
+  the glossary set-equal to the rosters. It ends by pointing the model at the
+  `workflow-authoring` skill for non-trivial plans.
 - **Same loader, same checks.** `WorkflowRegistry::fromYamlString()` runs the
   plan through the validation a file gets, so a plan and a file cannot mean two
   different things. The plan's `name` is optional (it defaults to `plan`); a
   syntax error is reported with the parser's message, which a file's error
   withholds because it would quote the file.
+- **Linted before anything runs.** After loading, the plan goes through
+  `WorkflowLinter` with the call's `context` as the seed, the session's tool
+  names and the registry's `uses:` resolver. Errors refuse the call — no
+  engine is built, nothing is dispatched — with an error result:
+  `Error: the plan was not run: lint found 1 error, 0 warnings (nothing was
+  dispatched).` followed by `- error [stage] …` lines. A declared tool the
+  session lacks is refused here, by the linter. Warnings never block; they
+  ride the result under its headline (`N lint warning(s):` plus the lines).
+- **`dryRun: true` lints without running.** It returns `Dry run of workflow
+  '<name>' (no agents dispatched): N stages.`, the linter's plan table, the
+  findings and a `Lint:` verdict line (`— a real run would be refused.` when
+  there are errors); the result is an error exactly when the lint has
+  errors. A `dryRun` that is not a boolean is refused (`Error: "dryRun" must
+  be true or false.`).
+- **`context` takes any JSON value.** Strings and numbers interpolate as
+  themselves, arrays and objects render as compact JSON in a `{{key}}`, and a
+  list feeds a `from: {context: key}` fan-out. A key starting with `@` is
+  refused (`Error: "context.<k>" is not allowed: keys starting with "@" are
+  reserved for the workflow engine.`), as is a value JSON cannot carry
+  (`Error: "context.<k>" must be a JSON value (string, number, boolean, null,
+  array or object).`).
 - **One engine per call, bound to the calling turn.** The tool builds its own
   `WorkflowEngine` and pool around an `EngineExecutor` bound to the engine that
   is running the current turn, and calls `WorkflowEngine::runWorkflow()`. It
   never re-binds the launch's `/workflow` engine, whose executor binding is
   shared.
-- **Stages run inside the turn.** The stage agents run synchronously in the
-  turn's own process, not in forked workers as `/workflow run` stages do. The
-  turn already runs off the TUI, and staying in its process is what lets a stage
-  agent's permission questions reach your prompt; the cost is that the agents
-  of a `parallel: true` stage take turns. Every stage agent beats the turn's
-  heartbeat, so a long plan is not mistaken for a hung turn.
+- **Stages run inside the turn — unless they cannot ask.** Stage agents run
+  synchronously in the turn's own process, not in forked workers as
+  `/workflow run` stages do: the turn already runs off the TUI, and staying in
+  its process is what lets a stage agent's permission questions reach your
+  prompt (the approver answers only in the process that built it). The
+  exception is a `parallel: true` stage (`from:` fan-outs included): an agent
+  there whose effective tools **could not put a permission question** runs in
+  a forked child, so those agents run concurrently up to the stage width.
+  Sequential stages, `tasks:` lists, pipeline, verification and map steps
+  always run inline (a map's chains therefore serialise on this path, see
+  [`type: map`](#type-map-streams-each-item-through-its-steps)).
+  - *Could not ask* means: for every tool actually on the agent's request
+    (after `Task`/`Workflow` are withheld), no judging gate — the session's
+    and the agent's own — would answer `Ask` under its mode, rules and grants
+    (`PermissionGate::wouldAsk()`, see
+    [`PERMISSIONS.md`](PERMISSIONS.md#could-a-declaration-ask-wouldask)). So a
+    read-only agent forks, and so does a `Bash` the session allows outright
+    by a name-only `Allow Bash` rule, or any agent under `bypass-permissions`
+    or `dont-ask`. A `tools:` entry that scopes a tool (`Bash(vendor/bin/phpunit
+    *)`) with no bare entry for it is judged by that scope, so an identical
+    `Allow` rule clears it; there is no glob subsumption between patterns.
+    `StructuredOutput` is always free; tools that relay asks or delegate to
+    the engine always count as asking. An agent with no `tools:` inherits the
+    session's tools, which nearly always include something that asks, so it
+    stays inline.
+  - On this path every agent of a parallel stage still runs on the FIRST
+    task's tool grant (the pool does not yet resolve a grant per agent), so
+    the whole stage is judged together today.
+  - **Hooks that ask on their own are not seen** by that judgement — a user
+    `PreToolUse` script answering `ask`, or the built-in protect-files hook's
+    question about a policy-file write. In a forked agent such a question
+    **fails closed**: that one call is refused, the agent reads the refusal
+    and carries on. Nothing runs unasked.
+  - Liveness and teardown: inline agents beat the turn's heartbeat
+    themselves; while forked ones run, the pool beats it from its idle poll,
+    so a long plan is not mistaken for a hung turn. A cancelled turn's tree
+    kill takes the forked agents with it, each one also stops at its next
+    step once its parent is gone, and an unwinding pool kills and reaps its
+    children — the pool's single fork site is reused, and
+    `php tools/check-child-lifetimes.php` accounts for it. A forked agent
+    keeps the turn's provider, tools, hooks, gate, root and model pin;
+    `outputSchema` and `isolation` apply as inline. Session-scoped
+    tool state and the sibling spend ledger are not carried back from a
+    child: each forked agent's spend-cap check starts from the turn's
+    baseline.
 - **What a stage agent may do.** This session's tool loop, hooks, permission
   gate and root, limited to its stage's `tools:` (argument-scoped entries
   included) or the session's tools when it declares none. `Task` and `Workflow`
@@ -1179,10 +1880,44 @@ same YAML as a `.yaml` file, as a string, plus an optional `context` object for
   write-capable, so it asks under `default` and is denied under `plan` and
   `dont-ask`, before any stage runs.
 
-The tool's result is a headline (status, stages succeeded, tokens, cost) and
-each stage that ran with its status, its error when it failed, and its output,
-whose middle is elided past 8 KB. A run that did not complete is returned as an
-error result.
+**The result.** A one-line headline — `Workflow '<name>' <status>: X of N
+stages succeeded, T tokens, $C.` — then the lint-warning block if any, one
+`Stage '<name>' <status>: <error>` line per failed stage (the reason stays
+readable unescaped), `K later stage(s) did not run.` when the run stopped
+early, and a fenced ```` ```json ```` document:
+
+```json
+{"status": "completed", "runId": null,
+ "stages": [{"name": "survey", "status": "completed", "error": null,
+             "attempts": 1, "tokens": 5120, "cost": 0.0123,
+             "data": {"callers": ["src/A.php"]}, "capture": "…", "dispatch": "…"}]}
+```
+
+- `attempts` is the most tries any one agent of the stage took (0 for a stage
+  refused before dispatch); `tokens` and `cost` sum the stage's agents.
+- `data` appears when **every** task the stage declares (a plain stage, a
+  `tasks:` list, a parallel stage) carries an `outputSchema` and the output
+  decodes to a JSON object or array (one whole-output ```` ```json ```` fence
+  is accepted). It **replaces** `output` and is never clipped — a clipped
+  document is a corrupt one. Pipeline and verification stages report
+  `output`.
+- `output` is the prose, its middle elided past 8192 bytes; the marker says
+  where the elided bytes are — `[… N bytes elided; the full output is in
+  <capture path> …]` on a `capture: true` stage, otherwise `[… N bytes
+  elided; re-run with capture: true on this stage to keep the full output
+  …]`.
+- `capture` is the capture file of a `capture: true` stage.
+- `dispatch` (parallel stages only) says how its agents ran:
+  `parallel: forked (3 ask-free agents)`, `parallel: inline (agent "shell"
+  may ask: Bash; 2 more inline)`, `parallel: inline (agent "a0" may ask: an
+  Ask rule "Read(*.env)" covers some Read calls)`, `parallel: 2 forked, 1
+  inline (…)`, or `parallel: inline (agent "x": pcntl_fork() is unavailable
+  in this process)` / `…: pcntl_fork() failed`.
+- `runId` is always `null` today: tool runs leave no resumable record yet,
+  and the key is in the shape now so a consumer written against it does not
+  change when they do.
+
+A run that did not complete is returned as an error result.
 
 ---
 
@@ -1194,9 +1929,9 @@ or a `tasks:` list in YAML, whose entries take the one-task stage's keys
 (every key of `WorkflowRegistry::YAML_TASK_KEYS`: `agent`, `name`, `prompt`,
 `tools`, `retries`, `outputSchema`, `isolation`, `model`, `resource`,
 `lockWaitSeconds`, `timeout`, `reject`, `rejectMinOccurrences`, `stallTimeout`,
-`restarts`, `input`); `capture`, `cache`, `when` and `loop` are the stage's own
-keys, not task keys, so they live on the stage map even when the stage lists
-`tasks:`:
+`restarts`, `input`, `votes`, `lenses`, `quorum`); `capture`, `cache`, `when`,
+`loop` and `minSuccess` are the stage's own keys, not task keys, so they live
+on the stage map even when the stage lists `tasks:`:
 
 ```yaml
 - name: fix
@@ -1217,7 +1952,8 @@ is checked before the first one runs. The stage's `{{<stage>.output}}` is the
 tasks' outputs, one per line. A `tasks:` stage takes everything from its
 entries, so a stage-level `agent`/`prompt`/`tools`/`retries` beside it is
 refused, as is an empty list. For tasks that should run at the same time, use
-`parallel: true` with `agents:`.
+`parallel: true` with `agents:`; for the same short chain run per item of a
+list, use [`type: map`](#type-map-streams-each-item-through-its-steps).
 
 **2. `agent:` / `type:` is a LABEL, not a preset reference.** `WorkflowEngine`
 contains no reference to `AgentPreset` or `AgentDefinition` at all. A stage
@@ -1245,7 +1981,10 @@ but the verifier's own task, and a lone `rejectMinOccurrences:` (no `reject:`
 to count) is refused at parse. So the verdict-gated stage behind
 `reject()` ([below](#reject-fails-a-stage-on-the-verifier-verdict)) lives in
 `.yaml` as a `type: verification` stage whose `verifier:` task carries
-`reject:` — the same shape `WorkflowBuilder::withVerification()` builds.
+`reject:` — the same shape `WorkflowBuilder::withVerification()` builds. The
+panel keys `votes`, `lenses` and `quorum` follow the same law: they parse on
+every task surface, and the same pre-flight refuses them anywhere but a
+verifier slot (a verification stage's, or a map verification step's).
 Unknown keys are never silently ignored: every parsed key answers to one
 fail-closed roster (`ae04d808c`).
 
@@ -1280,14 +2019,20 @@ return (new WorkflowBuilder())
 
 `TaskBuilder` carries `agent()`, `prompt()`, `tools()`, `timeout()`,
 `retries()`, `isolation()`, `name()`, `outputSchema()`, `model()`, `reject()`,
-`resource()`, `lockWaitSeconds()`, `stallTimeout()`, `restarts()` and
-`input()`. Every one has a YAML spelling — the keys of
+`resource()`, `lockWaitSeconds()`, `stallTimeout()`, `restarts()`, `input()`,
+`votes()`, `lenses()` and `quorum()`. Every one has a YAML spelling — the keys of
 `WorkflowRegistry::YAML_TASK_KEYS`, `agent:`/`type:` for `agent()` and
 `reject:` plus `rejectMinOccurrences:` for `reject()`'s pattern and
 `atLeast` — so a YAML-declared task reaches the same DTO fields a PHP one
 does. The stage-level flags are `WorkflowBuilder`'s: `capture` and `cache`
-are named arguments of `stage()`/`parallel()`/`pipeline()`/`withVerification()`/`uses()`,
-and `when()`/`loop()` attach to the stage added last. `WorkflowEngine` substitutes defaults for whatever a task
+are named arguments of `stage()`/`parallel()`/`pipeline()`/`withVerification()`/`uses()`/`map()`,
+and `when()`/`loop()`/`minSuccess()` attach to the stage added last
+(`loop()` takes `accumulate` beside `max` and `until`). `parallel()` takes
+`from:` as an array in any of the three source shapes, validated by the same
+`WorkflowBuilder::fromSource()` law the loader uses; `map()` builds a map stage
+from `mapStep()`/`mapVerification()` entries; `maxConcurrent()` and
+`maxAgents()` set the rails. Only `schemas:` has no builder spelling — share a
+PHP variable instead. `WorkflowEngine` substitutes defaults for whatever a task
 leaves unset when it builds the `SubAgent`:
 `$task->timeout ?? config.timeout` seconds, `$task->retries ?? 0`,
 `$task->isolation ?? Isolation::None`, `$task->stallTimeout ?? 0` and
@@ -1300,8 +2045,8 @@ seconds); see [`timeout` is a per-stage wall-clock budget](#timeout-is-a-per-sta
 `retries()` reaches `SubAgent::$maxRetries`, and the pool re-runs the agent as
 [`retries` re-runs a failed agent](#retries-re-runs-a-failed-agent) describes.
 `outputSchema()` — spelled `outputSchema:` in YAML — reaches
-`SubAgent::$outputSchema` decoded, and `EngineExecutor` puts it on the engine
-exactly as `-p --json-schema` does, as
+`SubAgent::$outputSchema` decoded, and `EngineExecutor` enforces it through the
+per-run `StructuredOutput` tool call, as
 [`outputSchema` gives a stage a structured verdict](#outputschema-gives-a-stage-a-structured-verdict)
 describes.
 `isolation()` — spelled `isolation:` in YAML — reaches `SubAgent::$isolation`,
@@ -1439,7 +2184,9 @@ Semantics, precisely:
   `Completed` verifier result — mechanical failures keep their verbatim paths.)
 - **A question outranks a verdict.** If the output both matches the `reject()`
   pattern and carries an `ESCALATE:` line, the stage fails as `escalated` —
-  retrying something a human needs to answer would waste the budget.
+  retrying something a human needs to answer would waste the budget. On a
+  [verifier panel](#verifier-panels-votes-lenses-and-quorum) the marker in
+  ANY vote outranks even a met quorum.
 - **Zero retries consumed.** Unlike a reject match (which re-dispatches until
   the shared `retries` budget is spent), an escalation fails on the **first**
   completed attempt: no re-dispatch, `retries(N)` untouched, and the reason

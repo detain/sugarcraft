@@ -542,7 +542,9 @@ at all.
 
 - **`StageStarted`** fires before each round of a stage is dispatched — round
   one for a plain stage, the round number for each round of a `loop:`. A stage
-  skipped by its `when:` clause never raises it.
+  skipped by its `when:` clause never raises it. A `type: map` stage raises it
+  once per round like any stage: there are no per-item or per-step events, by
+  design, so a thousand-item map does not raise thousands of hooks.
 - **`StageComplete`** fires when a stage settles without failing. It is the
   only announcement a skipped stage gets, and on a skip the `round` reads zero:
   no round ever ran. On a loop it fires once, after the last round settled.
@@ -552,7 +554,9 @@ at all.
   failed, a pre-flight refusal included. A run that pauses or cancels raises
   nothing — the resumed run announces its own terminal when it finishes. A
   `cache:` stage carried from a record raises nothing either: no dispatch
-  happened.
+  happened. Nor does a plan the pre-run lint refuses (`/workflow run`, the
+  `Workflow` tool and `candy-code workflow run` all lint first): it never
+  reaches the engine.
 - **Context.** `toolName` is `Workflow` (write the `matcher:` against it), the
   session id is the run's stamped identity (the workflow's name plus the mint's
   suffix), and `toolInput` is JSON: `{"workflow", "stage", "round"}` for
@@ -560,6 +564,17 @@ at all.
   `"status"` and `"error"`; the terminal carries `{"workflow", "status",
   "stages", "totalTokens", "totalCost"}`. Hooks run in the launch's project
   root.
+
+Two tool-call facts about stage agents belong here too. A schema'd stage
+agent's `StructuredOutput` call — the tool call that hands in its structured
+answer — bypasses the whole `PreToolUse` chain (and the permission gate): it
+is the run's answer, not an action, and it is matched by tool instance, so a
+same-named user or MCP tool is still hooked (see
+[`WORKFLOWS.md`](WORKFLOWS.md#outputschema-gives-a-stage-a-structured-verdict)).
+And a `Workflow`-tool parallel agent that runs forked (because none of its
+tools could ask permission) cannot relay a question: if a `PreToolUse` script
+answers `ask` for one of its calls, that call **fails closed** — refused, and
+the agent carries on — rather than running unasked.
 
 ---
 

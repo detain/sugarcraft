@@ -411,11 +411,15 @@ the tools — is in
 
 ## Workflows
 
-A workflow is a staged multi-agent pipeline — sequential stages, fan-out,
-chained pipelines and task-then-verifier — written in YAML or PHP and run with
-`/workflow run`, or written by the model itself as a YAML plan through the
-`Workflow` tool. Each stage agent runs the real tool loop under the session's
-hook chain and permission gate. A stage's `agent:` is a label, not a roster
+A workflow is a staged multi-agent pipeline — sequential stages, fan-out over
+files or data (`from:`), chained pipelines, per-item `map` chains, and
+task-then-verifier (optionally a voting verifier panel) — written in YAML or
+PHP and run with `/workflow run` or `candy-code workflow run`, or written by the
+model itself as a YAML plan through the `Workflow` tool. Every one of those
+doors lints the plan before anything is dispatched. Each stage agent runs the
+real tool loop under the session's hook chain and permission gate; a stage
+with an `outputSchema` hands in its answer through a validated
+`StructuredOutput` tool call. A stage's `agent:` is a label, not a roster
 preset. See [`WORKFLOWS.md`](WORKFLOWS.md).
 
 ## Not yet available

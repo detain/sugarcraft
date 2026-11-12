@@ -624,22 +624,24 @@ final class DocFigureProseDriftTest extends TestCase
         // array_key_exists, not `??`: the value the guard wants IS null, which
         // the coalescing operator would read as a missing key.
         self::assertArrayHasKey('maxConcurrent', $defaults, 'Workflow::$maxConcurrent no longer defaults at all');
-        self::assertNull($defaults['maxConcurrent'], 'Workflow::$maxConcurrent is no longer the opt-in width it shipped as');
+        // P0-3: null still defaults, but it now means UNSET (the computed
+        // default width), with an explicit 0 as the no-cap spelling.
+        self::assertNull($defaults['maxConcurrent'], 'Workflow::$maxConcurrent no longer defaults to unset (null)');
         self::assertSame(3600, $defaults['timeout'] ?? null, 'Workflow::$timeout default moved');
 
         $workflowDoc = (string) $constructor->getDocComment();
         self::assertSame(
             1,
-            preg_match('/null \(the default\) sets no cap\.\s*\n\s*\*\s*@param int\s+\$timeout\s+Per-stage timeout in seconds \(default (\d+) = 1 hour\)/s', $workflowDoc, $m),
-            'the @param block no longer spells the no-cap width next to the timeout default and its hour gloss',
+            preg_match('/0 is the explicit "no cap"[^\n]*\n\s*\*\s*@param int\s+\$timeout\s+Per-stage timeout in seconds \(default (\d+) = 1 hour\)/s', $workflowDoc, $m),
+            'the @param block no longer spells the explicit no-cap 0 next to the timeout default and its hour gloss',
         );
         self::assertSame((int) $m[1], $defaults['timeout'], '@param default drifted from the signature');
 
         $workflowsDoc = (string) file_get_contents(\dirname(__DIR__, 2) . '/docs/WORKFLOWS.md');
         self::assertSame(
             1,
-            preg_match('/Defaults are `Workflow`\'s own: `maxConcurrent` unset \(no cap[^)]*\), `timeout: (\d+)`,/', $workflowsDoc, $m),
-            'docs/WORKFLOWS.md no longer mirrors Workflow\'s own defaults — the width must read as unset/no cap',
+            preg_match('/Defaults are `Workflow`\'s own: `maxConcurrent` unset \(the default width[^)]*\), `timeout: (\d+)`,/', $workflowsDoc, $m),
+            'docs/WORKFLOWS.md no longer mirrors Workflow\'s own defaults — the width must read as unset (the default width)',
         );
         self::assertSame((int) $m[1], $defaults['timeout'], 'docs timeout figure drifted from the signature');
 
@@ -655,7 +657,9 @@ final class DocFigureProseDriftTest extends TestCase
 
         $engine = self::sourceOf('Workflows/WorkflowEngine.php');
         preg_match_all('/timeout: \$(?:task|verifier)->timeout \?\? ([^,]+),/', $engine, $engineTimeouts);
-        self::assertCount(5, $engineTimeouts[1], 'the engine no longer has five SubAgent dispatch sites carrying the $task->timeout fallback the docs describe');
+        // P1-4 (verifier panels) added the sixth site: each panel vote is
+        // dispatched with the verifier's own timeout fallback.
+        self::assertCount(6, $engineTimeouts[1], 'the engine no longer has six SubAgent dispatch sites carrying the $task->timeout fallback the docs describe');
         self::assertSame(
             ['$stageTimeout', '$workflow->timeout'],
             array_values(array_unique($engineTimeouts[1])),
@@ -669,7 +673,12 @@ final class DocFigureProseDriftTest extends TestCase
             // announce lines inside the same dispatch region shifted the third
             // arm's '$workflow->timeout);' to +10,066. The file carries exactly
             // three spellings tree-wide, so no fourth can enter the window.
-            preg_match_all('/\$workflow->timeout\);/', self::bodyExcerpt($engine, 'runGuardedFromWorkflow', 10_600)),
+            // wf-impl (2026-11-12) widened 10600 -> 20000: the map/minSuccess/
+            // agent-ceiling/budget arms ahead of the dispatch shifted the
+            // verification arm past +14,300, and P1-4 gave that arm a trailing
+            // `, null, $votes`. The other `$workflow->timeout` spellings in the
+            // file never close on `);`, so the wider window still admits three.
+            preg_match_all('/\$workflow->timeout(?:, null, \$votes)?\);/', self::bodyExcerpt($engine, 'runGuardedFromWorkflow', 20_000)),
             'runGuardedFromWorkflow() no longer hands Workflow::$timeout to the stage, pipeline and verification executors',
         );
         preg_match_all('/maxRetries: \$\w+->retries \?\? (\d+)/', $engine, $engineRetries);

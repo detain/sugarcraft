@@ -139,6 +139,12 @@ drivers decode twice. When the answer follows a tool result the provider may
 skip enforcement; that is exactly the case the `json_schema_applied: false`
 key flags, so always check it before trusting the shape.
 
+Workflow stages do not use this channel. A stage's `outputSchema` is enforced
+through a validated `StructuredOutput` tool call (re-prompted once, then the
+agent fails), so a stage answer is the schema's document or a loud failure —
+there is no `json_schema_applied` to check on that path (see
+[`WORKFLOWS.md`](WORKFLOWS.md#outputschema-gives-a-stage-a-structured-verdict)).
+
 ## Piped stdin is context, not input
 
 Running `-p` with stdin closed or empty is the normal shape. Piping bytes to
@@ -188,8 +194,10 @@ or prose of headless workflow runs: drive the stages yourself as N parallel
 engine directly — verification machinery, `ESCALATE:` scanning and
 `outputSchema` enforcement included — with gateable exit codes (0/1/2/3,
 exit 3 = stopped-for-a-person; see docs/WORKFLOWS.md "Running from the CLI
-(headless)"). The `-p '/workflow'` route above remains model-mediated by
-design.
+(headless)"). The verb lints the plan before dispatching anything: lint errors
+exit 1 with nothing spent (`result.status` `refused` plus `result.lint`), and
+lint warnings ride `result.lint` of a normal run without blocking it. The
+`-p '/workflow'` route above remains model-mediated by design.
 
 ## Killing workflow runs: the native verb pauses resumably; the model path does not
 
@@ -216,7 +224,9 @@ writes the cooperative pause record first, and the verb's pause observer
 3. Gate on exit code: `0` trust envelope; `1` read `error.type`; `2` fix the
    launcher. Check `json_schema_applied` when you asked for a schema. For
    `candy-code workflow`, `3` = stopped for a person (escalated verification
-   or signal pause — resume with `candy-code workflow resume <id>`).
+   or signal pause — resume with `candy-code workflow resume <id>`), and a
+   `1` whose `result.status` is `refused` with a `result.lint` block is a plan
+   the pre-run lint refused (fix the plan, not the lane).
 4. `session show --output-format json` and the usage rollup for post-hoc
    lineage and spend.
 5. Fan out with plain processes; no batch-mode flag exists.
