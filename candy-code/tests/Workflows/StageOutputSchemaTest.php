@@ -33,14 +33,17 @@ use SugarCraft\Code\Workflows\WorkflowTask;
 use SugarCraft\Code\Workflows\WorkflowStatus;
 
 /**
- * G3: a stage's `outputSchema` rides the SAME terminal-turn leg headless `-p
- * --json-schema` rides (EngineBackend::withJsonSchema → the one newRuntime()
- * construction site → Runtime::jsonSchemaFor), so a stage agent's settled
- * answer IS the structured JSON a driver can parse. Absent, the request is
+ * G3 + wf-impl P0-2: a stage's `outputSchema` is ENFORCED through a terminal
+ * `StructuredOutput` tool call whose input schema is the task's schema
+ * (src/Agents/StructuredOutputTool.php, minted per run by EngineExecutor) —
+ * not through the provider's JSON mode, which rode the first request only
+ * and lost the constraint the moment the agent called a tool. So a schema
+ * run's requests carry `jsonSchema: null`, a final reply that is itself a
+ * valid document is accepted, an answer delivered after tool use is the
+ * validated JSON with no disclosure tail, and a provider that cannot make
+ * tool calls refuses the run before a billable call. Absent, the request is
  * untouched and the stage reads byte-identical to before; a schema that
- * cannot be decoded fails CLOSED where it is declared, and a provider that
- * cannot honour it refuses the run rather than billing a structured answer
- * that arrives unconstrained.
+ * cannot be decoded fails CLOSED where it is declared.
  */
 final class StageOutputSchemaTest extends TestCase
 {
@@ -134,10 +137,10 @@ final class StageOutputSchemaTest extends TestCase
 
     // ------------------------------------------------------------------ engine executor legs
 
-    public function testTheSchemaRidesTheTerminalRequestAndTheReplyIsTheJson(): void
+    public function testAnExactDocumentReplyIsTheStageJsonAndNoJsonModeRidesTheRequest(): void
     {
         $schema = ['type' => 'object', 'properties' => ['verdict' => ['type' => 'string']], 'required' => ['verdict']];
-        $provider = $this->schemaCapable(new ScriptedProvider([
+        $provider = $this->decorated(new ScriptedProvider([
             new CompleteResponse(content: '{"verdict":"pass"}'),
         ]));
         $executor = new EngineExecutor(EngineBackend::new($provider, 'm'));
@@ -145,14 +148,22 @@ final class StageOutputSchemaTest extends TestCase
         $result = $executor->execute($this->stageAgent(outputSchema: $schema), $this->request());
 
         self::assertSame(AgentStatus::Completed, $result->status, (string) $result->error?->getMessage());
-        self::assertSame('{"verdict":"pass"}', $result->output, 'the stage result text IS the structured JSON');
-        self::assertCount(1, $provider->inner->requests);
-        self::assertSame($schema, $provider->inner->requests[0]->jsonSchema, 'the request carries the decoded schema, exactly as the -p run stamps it');
+        self::assertSame('{"verdict":"pass"}', $result->output, 'a reply that IS a valid document is accepted as the structured answer');
+        self::assertCount(1, $provider->inner->requests, 'an accepted document needs no StructuredOutput re-prompt');
+        self::assertNull(
+            $provider->inner->requests[0]->jsonSchema,
+            'P0-2: JSON mode would forbid the StructuredOutput call (and every read before it), so the stage path never stamps it',
+        );
+        self::assertContains(
+            'StructuredOutput',
+            array_map(static fn (Tool $tool): string => $tool->name(), $provider->inner->requests[0]->tools ?? []),
+            'the schema rides the wire as the terminal tool instead',
+        );
     }
 
     public function testAnAbsentSchemaLeavesTheRequestByteIdenticalToToday(): void
     {
-        $provider = $this->schemaCapable(new ScriptedProvider([
+        $provider = $this->decorated(new ScriptedProvider([
             new CompleteResponse(content: 'plain report'),
         ]));
         $executor = new EngineExecutor(EngineBackend::new($provider, 'm'));
@@ -164,39 +175,68 @@ final class StageOutputSchemaTest extends TestCase
         self::assertNull($provider->inner->requests[0]->jsonSchema, 'the leg is never entered when no task declares a schema');
     }
 
-    public function testAProviderWithoutTheCapabilityRefusesTheRunLoudly(): void
+    public function testAProviderThatCannotCallToolsRefusesTheRunLoudly(): void
     {
-        // Bare ScriptedProvider: supportsJsonSchema() is false by design.
-        $provider = new ScriptedProvider([new CompleteResponse(content: 'never asked')]);
+        // JSON-mode capability is no longer the gate; tool calls are.
+        $provider = $this->decorated(new ScriptedProvider([new CompleteResponse(content: 'never asked')]), functionCalling: false);
         $executor = new EngineExecutor(EngineBackend::new($provider, 'm'));
 
         $result = $executor->execute($this->stageAgent(outputSchema: ['type' => 'object']), $this->request());
 
         self::assertSame(AgentStatus::Failed, $result->status);
+        self::assertStringContainsString('cannot make tool calls', (string) $result->error?->getMessage());
         self::assertStringContainsString('cannot constrain the answer to a schema', (string) $result->error?->getMessage());
         self::assertStringContainsString('was not started', (string) $result->error?->getMessage());
-        self::assertSame([], $provider->requests, 'a schema the provider cannot honour is refused before a single billable call');
+        self::assertSame([], $provider->inner->requests, 'a schema the provider cannot honour is refused before a single billable call');
     }
 
-    public function testTheSettledReplyDisclosesWhenToolsAteTheTerminalTurn(): void
+    public function testAProviderWithoutJsonModeStillRunsASchemaStage(): void
+    {
+        // Bare ScriptedProvider: supportsJsonSchema() is false, tool calls are supported.
+        $provider = new ScriptedProvider([new CompleteResponse(content: '{"ok":true}')]);
+        $executor = new EngineExecutor(EngineBackend::new($provider, 'm'));
+
+        $result = $executor->execute($this->stageAgent(outputSchema: ['type' => 'object']), $this->request());
+
+        self::assertSame(AgentStatus::Completed, $result->status, (string) $result->error?->getMessage());
+        self::assertSame('{"ok":true}', $result->output);
+    }
+
+    public function testAnAnswerDeliveredAfterToolUseIsTheValidatedJsonWithNoDisclosureTail(): void
     {
         $probe = $this->probe();
-        $provider = $this->schemaCapable(new ScriptedProvider([
+        $schema = ['type' => 'object', 'properties' => ['verdict' => ['type' => 'string']], 'required' => ['verdict']];
+        $provider = $this->decorated(new ScriptedProvider([
             new CompleteResponse(content: '', toolCalls: [new ToolCall('call_1', 'probe', [])]),
-            new CompleteResponse(content: 'second pass'),
+            new CompleteResponse(content: '', toolCalls: [new ToolCall('call_2', 'StructuredOutput', ['verdict' => 'pass'])]),
         ]));
         $executor = new EngineExecutor(EngineBackend::new($provider, 'm')->withTools([$probe]));
 
-        $result = $executor->execute($this->stageAgent(outputSchema: ['type' => 'object']), $this->request(tools: [$probe]));
+        $result = $executor->execute($this->stageAgent(outputSchema: $schema), $this->request(tools: [$probe]));
 
         self::assertSame(AgentStatus::Completed, $result->status, (string) $result->error?->getMessage());
-        self::assertSame(
-            "second pass\n\n[the reply was not constrained to the output schema because the model ran tools before answering]",
-            $result->output,
-            'the honesty leg mirrors headless `json_schema_applied: false` — the driver reads it in-band',
-        );
-        self::assertSame(['type' => 'object'], $provider->inner->requests[0]->jsonSchema, 'the opening request carries it');
-        self::assertNull($provider->inner->requests[1]->jsonSchema, 'mid-loop the schema steps aside — same position gate the -p run uses');
+        self::assertSame('{"verdict":"pass"}', $result->output, 'the tool run no longer costs the constraint: the output is the accepted document');
+        self::assertStringNotContainsString('was not constrained', (string) $result->output);
+        self::assertSame(1, $probe->calls, 'the read before the answer really ran');
+        self::assertCount(2, $provider->inner->requests, 'the accepted call ends the run at that step boundary');
+        foreach ($provider->inner->requests as $i => $request) {
+            self::assertNull($request->jsonSchema, "request #{$i} carries no JSON mode");
+        }
+    }
+
+    public function testAProseAnswerIsRepromptedOnceAndThenFailsTheAgent(): void
+    {
+        $provider = $this->decorated(new ScriptedProvider([
+            new CompleteResponse(content: 'looks fine to me'),
+            new CompleteResponse(content: 'still prose'),
+        ]));
+        $executor = new EngineExecutor(EngineBackend::new($provider, 'm'));
+
+        $result = $executor->execute($this->stageAgent(outputSchema: ['type' => 'object']), $this->request());
+
+        self::assertSame(AgentStatus::Failed, $result->status);
+        self::assertStringContainsString('without an accepted StructuredOutput call', (string) $result->error?->getMessage());
+        self::assertCount(2, $provider->inner->requests, 'exactly one re-prompt, never a loop');
     }
 
     // ------------------------------------------------------------------ engine threading
@@ -475,14 +515,14 @@ final class StageOutputSchemaTest extends TestCase
     }
 
     /**
-     * ScriptedProvider is final and honestly reports NO schema capability;
-     * this decorator forwards every call to the inner provider and flips
-     * only that one answer — the shape of a real schema-capable backend.
+     * ScriptedProvider is final and honestly reports NO JSON-mode capability
+     * and full tool-call support; this decorator forwards every call to the
+     * inner provider and flips only those capability answers.
      */
-    private function schemaCapable(ScriptedProvider $inner): ProviderInterface
+    private function decorated(ScriptedProvider $inner, bool $functionCalling = true): ProviderInterface
     {
-        return new class ($inner) implements ProviderInterface {
-            public function __construct(public readonly ScriptedProvider $inner)
+        return new class ($inner, $functionCalling) implements ProviderInterface {
+            public function __construct(public readonly ScriptedProvider $inner, private readonly bool $functionCalling)
             {
             }
 
@@ -498,7 +538,7 @@ final class StageOutputSchemaTest extends TestCase
 
             public function supportsFunctionCalling(): bool
             {
-                return $this->inner->supportsFunctionCalling();
+                return $this->functionCalling;
             }
 
             public function supportsVision(): bool
