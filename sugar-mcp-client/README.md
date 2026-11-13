@@ -332,6 +332,13 @@ patterns are `fnmatch`-matched whole (broad, because a missed denial is a
 security hole), while an allow entry only globs when it contains `*`
 (strict, because a mis-globbed allowance is worse than a missed one).
 
+Tool-level hints are the same law one level down: `McpTool::$annotations`
+(the server's `readOnlyHint`, `destructiveHint`, `idempotentHint`,
+`openWorldHint`, `title` claims) is parsed off the wire and carried verbatim,
+and neither this client nor `McpRouter` ever consults it — a hint is an
+unverified server claim about itself, and enforcing it is the consumer's
+policy to write, not a behaviour to inherit.
+
 ## Failure reporting
 
 - `McpMessage::toJson()` throws `InvalidArgumentException` for an envelope
