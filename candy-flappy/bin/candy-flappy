@@ -112,7 +112,15 @@ if ($unknown !== []) {
         },
         $unknown
     );
-    fwrite(STDERR, "candy-flappy: unknown argument(s): " . implode(' ', $safe) . "\n\n" . $usage);
+    // flappy-72 (finding -062): one refusal line per bad argument, the
+    // minesweeper shape. The old "(s)" shorthand is untranslatable arithmetic
+    // (ar/ru/pl dual classes), and listing them on one line forced a reader
+    // (or a CI grep) to re-count a joined blob. Each echo keeps the N3
+    // sanitiser; the usage block prints once, after the lines.
+    foreach ($safe as $line) {
+        fwrite(STDERR, "candy-flappy: unknown argument: {$line}\n");
+    }
+    fwrite(STDERR, "\n" . $usage);
     exit(2);
 }
 

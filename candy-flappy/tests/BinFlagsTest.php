@@ -62,6 +62,20 @@ final class BinFlagsTest extends TestCase
         self::assertStringContainsString('unknown argument', $err);
         self::assertStringContainsString('--play-please', $err);
         self::assertStringContainsString('Usage:', $err);
+
+        // flappy-72 (finding -062): every bad argument gets its own refusal
+        // line — no joined blob to re-count — and the usage block still
+        // appears exactly once.
+        [$code, $out, $err] = self::drive(['--nope', '--also-bad']);
+        self::assertSame(2, $code);
+        self::assertSame(
+            2,
+            preg_match_all('/unknown argument:/', $err),
+            'two bad arguments must produce two refusal lines'
+        );
+        self::assertStringContainsString('unknown argument: --nope', $err);
+        self::assertStringContainsString('unknown argument: --also-bad', $err);
+        self::assertSame(1, substr_count($err, 'Usage:'), 'the usage block prints once');
     }
 
     public function testUnknownArgumentEchoCannotInjectTerminalEscapes(): void
