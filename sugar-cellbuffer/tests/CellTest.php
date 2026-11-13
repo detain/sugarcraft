@@ -451,4 +451,27 @@ final class CellTest extends TestCase
         $this->expectExceptionMessage('requires a rune exactly 5 display columns');
         $span->withWidth(5);
     }
+
+    public function testBlankAndContinuationFactoriesReturnSharedInstances(): void
+    {
+        // CB-35: the two preset shapes are canonical instances — every
+        // blank the fleet paints is one object. This asserts the SAFE
+        // half of the singleton law; the value-equality half (diff/encode
+        // never depend on identity) rides the full suite untouched.
+        self::assertSame(Cell::new(), Cell::blank());
+        self::assertSame(Cell::continuation(), Cell::continuation());
+        self::assertNotSame(Cell::new(), Cell::continuation());
+
+        // Non-default shapes are never coalesced into the shared blanks:
+        self::assertNotSame(Cell::new(), Cell::new('a'));
+        self::assertNotSame(Cell::blank(), Cell::new(' ', null, null, 2));
+        self::assertNotSame(Cell::blank(), Cell::new(' ', new Style(), null, 1));
+
+        // Serialized round-trips come back value-equal but as their own
+        // instances (the wire never carries identity).
+        $fresh = (new \ReflectionClass(Cell::class))->newInstanceWithoutConstructor();
+        $fresh->__unserialize(Cell::blank()->__serialize());
+        self::assertTrue($fresh->equals(Cell::blank()));
+        self::assertNotSame(Cell::blank(), $fresh);
+    }
 }

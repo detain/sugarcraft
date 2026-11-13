@@ -92,7 +92,20 @@ final class Cell implements \JsonSerializable
     }
 
     /**
-     * Default factory — blank cell.
+     * Shared blank-cell instance. The VO is deeply immutable (readonly
+     * scalar + readonly value-object fields), value-equality is the only
+     * equality the fleet uses (diff/encode go through valuesEqual/equals,
+     * no === identity leaks — grepped at CB-35), so one instance for all
+     * blanks is safe and collapses the erase/padding allocation churn
+     * (Buffer copy padding, placeWithPair rewrites, applyDiff clears).
+     */
+    private static ?self $blank = null;
+
+    /** Shared width-0 continuation instance (same immutability law). */
+    private static ?self $continuation = null;
+
+    /**
+     * Default factory — blank cell (shared instance, see property docblock).
      */
     public static function new(
         string $rune = ' ',
@@ -100,26 +113,31 @@ final class Cell implements \JsonSerializable
         ?Hyperlink $link = null,
         int $width = 1,
     ): self {
+        if ($rune === ' ' && $style === null && $link === null && $width === 1) {
+            return self::$blank ??= new self(' ', null, null, 1);
+        }
+
         return new self($rune, $style, $link, $width);
     }
 
     /**
      * Factory: a blank continuation cell for wide-char neighbours.
-     * Continuation cells have empty rune and zero width.
+     * Continuation cells have empty rune and zero width. Shared instance.
      */
     public static function continuation(): self
     {
-        return new self('', null, null, 0);
+        return self::$continuation ??= new self('', null, null, 0);
     }
 
     /**
      * Factory: the padding identity — one space, default style, no link,
      * width 1. Named preset so erase paths read as intent (Cell::blank())
-     * rather than as an argumentless default.
+     * rather than as an argumentless default. Same shared instance as the
+     * default {@see self::new()}.
      */
     public static function blank(): self
     {
-        return new self(' ', null, null, 1);
+        return self::$blank ??= new self(' ', null, null, 1);
     }
 
     /**
