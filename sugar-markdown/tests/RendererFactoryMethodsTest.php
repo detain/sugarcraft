@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Markdown\Tests;
 
 use SugarCraft\Markdown\Renderer;
+use SugarCraft\Markdown\Theme;
 use PHPUnit\Framework\TestCase;
 
 final class RendererFactoryMethodsTest extends TestCase
@@ -92,5 +93,52 @@ final class RendererFactoryMethodsTest extends TestCase
             Renderer::plain()->withStandardStyle('tokyonight'),
             'the alias spelling stays accepted'
         );
+    }
+
+    /**
+     * SM-S35: the factory set covers every stock theme Theme can mint,
+     * so the shortcut door can no longer be named differently from the
+     * long door. Identity of the supplied theme pins each wiring.
+     */
+    public function testThemeFactoriesCoverTheWholeStockSet(): void
+    {
+        $stock = [
+            'ansi'       => Theme::ansi(),
+            'plain'      => Theme::plain(),
+            'ascii'      => Theme::ascii(),
+            'notty'      => Theme::notty(),
+            'dark'       => Theme::dark(),
+            'light'      => Theme::light(),
+            'dracula'    => Theme::dracula(),
+            'tokyoNight' => Theme::tokyoNight(),
+            'pink'       => Theme::pink(),
+        ];
+        foreach ($stock as $method => $theme) {
+            $this->assertEquals($theme, Renderer::$method()->theme, "Renderer::{$method}() must carry Theme::{$method}()");
+            $this->assertInstanceOf(Renderer::class, Renderer::$method());
+        }
+    }
+
+    /**
+     * SM-S33: the (Theme $default) call shape was a TypeError — the
+     * caller's fallback could only be ansi. Unset, recognised and
+     * unrecognised env spellings must all keep the documented law:
+     * env wins, else the caller's theme, else ansi.
+     */
+    public function testFromEnvironmentForwardsTheDefaultTheme(): void
+    {
+        $style = getenv('GLAMOUR_STYLE');
+        putenv('GLAMOUR_STYLE');
+        $fallback = Theme::pink();
+        try {
+            $this->assertEquals(Theme::ansi(), Renderer::fromEnvironment()->theme, 'no default keeps the historic ansi floor');
+            $this->assertEquals($fallback, Renderer::fromEnvironment($fallback)->theme, 'unset env lands on the default');
+            putenv('GLAMOUR_STYLE=not-a-theme');
+            $this->assertEquals($fallback, Renderer::fromEnvironment($fallback)->theme, 'unrecognised env lands on the default');
+            putenv('GLAMOUR_STYLE=notty');
+            $this->assertEquals(Theme::notty(), Renderer::fromEnvironment($fallback)->theme, 'the env still wins over the default');
+        } finally {
+            putenv($style === false ? 'GLAMOUR_STYLE' : "GLAMOUR_STYLE={$style}");
+        }
     }
 }

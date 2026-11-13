@@ -259,6 +259,12 @@ final class Renderer
     public static function ansi(): self  { return new self(Theme::ansi());  }
     public static function plain(): self { return new self(Theme::plain()); }
     public static function ascii(): self { return new self(Theme::ascii()); }
+    public static function notty(): self { return new self(Theme::notty()); }
+    public static function dark(): self  { return new self(Theme::dark());  }
+    public static function light(): self { return new self(Theme::light()); }
+    public static function dracula(): self     { return new self(Theme::dracula()); }
+    public static function tokyoNight(): self  { return new self(Theme::tokyoNight()); }
+    public static function pink(): self        { return new self(Theme::pink()); }
 
     /**
      * Top-level convenience: render Markdown with a one-shot
@@ -571,13 +577,15 @@ final class Renderer
 
     /**
      * Build a Renderer whose theme is selected by the `GLAMOUR_STYLE`
-     * environment variable. Falls back to {@see Theme::ansi()} when the
-     * env var is unset / unrecognised. Mirrors glamour's
-     * `RenderWithEnvironmentConfig`.
+     * environment variable. Unset or unrecognised falls back to
+     * `$default` — and to {@see Theme::ansi()} when no default was
+     * supplied (SM-S33: the caller's fallback was previously forced to
+     * be ansi, which could not be expressed through this door).
+     * Mirrors glamour's `RenderWithEnvironmentConfig`.
      */
-    public static function fromEnvironment(): self
+    public static function fromEnvironment(?Theme $default = null): self
     {
-        return new self(Theme::fromEnvironment());
+        return new self(Theme::fromEnvironment($default));
     }
 
     public function withTheme(Theme $theme): self
