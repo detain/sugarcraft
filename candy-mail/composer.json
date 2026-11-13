@@ -9,6 +9,7 @@
         "resend",
         "mailer",
         "send",
+        "pop",
         "sugarcraft"
     ],
     "homepage": "https://github.com/sugarcraft/candy-mail",
