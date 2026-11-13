@@ -297,4 +297,32 @@ final class RegionTest extends TestCase
             $this->assertSame($bottom - $row + 1, $got->height());
         }
     }
+
+    // ─── equals (sugar-cellbuffer-044) ─────────────────────────────────
+
+    public function testRegionEqualsComparesOriginAndExtents(): void
+    {
+        $a = Region::new(Position::new(1, 2), 3, 4);
+
+        $this->assertTrue($a->equals(Region::new(Position::new(1, 2), 3, 4)));
+        $this->assertTrue(Region::new(Position::new(-5, 0), 0, 7)->equals(Region::new(Position::new(-5, 0), 0, 7)));
+
+        $this->assertFalse($a->equals(Region::new(Position::new(2, 2), 3, 4))); // origin x shifted
+        $this->assertFalse($a->equals(Region::new(Position::new(1, 3), 3, 4))); // origin y shifted
+        $this->assertFalse($a->equals(Region::new(Position::new(1, 2), 4, 4))); // width shifted
+        $this->assertFalse($a->equals(Region::new(Position::new(1, 2), 3, 5))); // height shifted
+    }
+
+    public function testRegionEqualsReadsTheIntersectResultItWasBuiltFor(): void
+    {
+        // The idiom consumers will use: compare the CLIPPED blit window
+        // between frames without re-deriving corner math.
+        $grid = Region::new(Position::new(0, 0), 10, 4);
+        $hand = $grid->intersect(Region::new(Position::new(7, 2), 3, 2));
+        $replay = $grid->intersect(Region::new(Position::new(7, 2), 6, 6));
+
+        $this->assertNotNull($hand);
+        $this->assertNotNull($replay);
+        $this->assertTrue($hand->equals($replay));
+    }
 }

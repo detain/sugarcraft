@@ -105,6 +105,18 @@ final class Region implements \JsonSerializable
     }
 
     /**
+     * Value equality of the rectangle: origin corner plus extents (the
+     * inclusive right/bottom edges follow from those, so equal here means
+     * equal corners and edges). Consumer idiom: "did the selection move?"
+     */
+    public function equals(self $other): bool
+    {
+        return $this->origin()->equals($other->origin())
+            && $this->width() === $other->width()
+            && $this->height() === $other->height();
+    }
+
+    /**
      * Serialization hook for caching/IPC use cases.
      *
      * @return array{origin: array{col: int, row: int}, width: int, height: int}

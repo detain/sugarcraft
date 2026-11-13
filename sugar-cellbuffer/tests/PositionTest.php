@@ -98,4 +98,17 @@ final class PositionTest extends TestCase
         $this->assertSame($original->col(), $reconstituted->col());
         $this->assertSame($original->row(), $reconstituted->row());
     }
+
+    public function testEqualsComparesBothAxesByValue(): void
+    {
+        $a = Position::new(3, 4);
+
+        $this->assertTrue($a->equals(Position::new(3, 4)));
+        $this->assertTrue($a->equals(new Position(3, 4))); // same factory-less shape
+        $this->assertTrue(Position::new(-1, -2)->equals(Position::new(-1, -2)));
+
+        $this->assertFalse($a->equals(Position::new(4, 4))); // col shifted one
+        $this->assertFalse($a->equals(Position::new(3, 5))); // row shifted one
+        $this->assertFalse($a->equals(Position::new(4, 5))); // both shifted
+    }
 }

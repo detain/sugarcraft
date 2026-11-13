@@ -31,6 +31,15 @@ final class Position implements \JsonSerializable
     public function row(): int { return $this->row; }
 
     /**
+     * Value equality — the same coordinate spelled by a different call
+     * site is the same place (consumer idiom: "did the selection move?").
+     */
+    public function equals(self $other): bool
+    {
+        return $this->col === $other->col && $this->row === $other->row;
+    }
+
+    /**
      * Serialization hook for caching/IPC use cases.
      *
      * @return array{col: int, row: int}
