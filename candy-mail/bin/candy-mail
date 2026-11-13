@@ -526,7 +526,7 @@ function portFromEnvironment(): int
         return 587;
     }
 
-    if (!\ctype_digit($raw) || (int) $raw < 1 || (int) $raw > 65535) {
+    if (!\ctype_digit($raw) || !SmtpTransport::isValidPort((int) $raw)) {
         throw new \InvalidArgumentException(Lang::t('cli.invalid_port', ['port' => $raw]));
     }
 
@@ -686,7 +686,7 @@ function timeoutSeconds(mixed $raw): int
         return 30;
     }
 
-    if (!\ctype_digit($value) || (int) $value < 1 || (int) $value > 3600) {
+    if (!\ctype_digit($value) || !SmtpTransport::isValidTimeout((int) $value)) {
         throw new \InvalidArgumentException(Lang::t('cli.invalid_timeout', ['timeout' => $value]));
     }
 

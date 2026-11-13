@@ -70,4 +70,7 @@ return [
     'cli.invalid_transport' => '未知的 --transport 值 {transport}（允许：smtp、resend）',
     'cli.resend_key_required' => '--transport=resend 需要 API 密钥：请设置 RESEND_API_KEY（此覆盖会忽略 SMTP 主机）',
     'cli.stdin_too_large' => 'STDIN 输入超过了 {limit} 字节上限；请缩减输入或将其作为文件附件。',
+    'smtp.invalid_host' => 'SMTP 主机 {host} 不是有效的主机名或地址（仅限字母、数字、点和连字符）',
+    'smtp.invalid_port' => 'SMTP 端口 {port} 超出范围（必须介于 1 和 65535 之间）',
+    'smtp.invalid_timeout' => 'SMTP 超时 {timeout} 不是 1 到 3600 之间的秒数',
 ];

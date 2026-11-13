@@ -634,9 +634,15 @@ final class SmtpSecurityTest extends TestCase
     public function testResponseDeadlineBreachesLoudlyEvenWithValidBytes(): void
     {
         // M-E: the whole reply is bounded by the configured timeout, not just
-        // each read. timeout=0 makes the deadline already-passed, so even a
-        // perfectly-formed greeting must abort instead of lulling the client.
-        $transport = new SmtpTransport('smtp.example.com', 587, '', '', 0);
+        // each read. A zero budget makes the deadline already-passed, so even
+        // a perfectly-formed greeting must abort instead of lulling the
+        // client. The constructor now floors timeout at 1, so the past
+        // deadline is staged through reflection on purpose: this test pins
+        // the deadline math, not a construction shape.
+        $transport = new SmtpTransport('smtp.example.com', 587);
+        $timeoutProp = new \ReflectionProperty($transport, 'timeout');
+        $timeoutProp->setAccessible(true);
+        $timeoutProp->setValue($transport, 0);
         $sock      = \fopen('php://memory', 'r+');
         \fwrite($sock, "220 fake ESMTP ready\r\n");
         \rewind($sock);

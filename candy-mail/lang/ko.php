@@ -70,4 +70,7 @@ return [
     'cli.invalid_transport' => '알 수 없는 --transport 값 {transport} (허용: smtp, resend)',
     'cli.resend_key_required' => '--transport=resend에는 API 키가 필요합니다. RESEND_API_KEY를 설정하세요(이 재정의는 SMTP 호스트를 무시합니다)',
     'cli.stdin_too_large' => 'STDIN 입력이 {limit}바이트 상한을 초과했습니다. 입력을 줄이거나 파일로 첨부하세요.',
+    'smtp.invalid_host' => 'SMTP 호스트 {host}은(는) 유효한 호스트 이름 또는 주소가 아닙니다(문자, 숫자, 점, 하이픈만)',
+    'smtp.invalid_port' => 'SMTP 포트 {port}가 범위를 벗어났습니다(1~65535 사이여야 함)',
+    'smtp.invalid_timeout' => 'SMTP 타임아웃 {timeout}이 1~3600 사이의 초 값이 아닙니다',
 ];

@@ -66,6 +66,30 @@ final class SmtpTransport implements Transport
     /** enable_crypto bitmask: TLS 1.2|1.3 only, not the legacy TLS_CLIENT auto set. */
     private const TLS_CRYPTO_METHODS = \STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | \STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT;
 
+    /**
+     * Construction-time input floors — one home for the bounds.
+     *
+     * The heloHost grammar is the precedent: a value the conversation cannot
+     * legally carry is refused at construction, not garbled later by the
+     * connect layer. The host class admits RFC 1123 hostnames AND IPv4/IPv6
+     * literals by character set; the CLI range arms are thin wrappers over
+     * these validators so the bounds cannot drift apart.
+     */
+    public static function isValidHost(string $host): bool
+    {
+        return \preg_match('/^[A-Za-z0-9.\-]{1,253}$/', $host) === 1;
+    }
+
+    public static function isValidPort(int $port): bool
+    {
+        return $port >= 1 && $port <= 65535;
+    }
+
+    public static function isValidTimeout(int $timeout): bool
+    {
+        return $timeout >= 1 && $timeout <= 3600;
+    }
+
     public function __construct(
         string $host,
         int $port = 587,
@@ -85,6 +109,20 @@ final class SmtpTransport implements Transport
         // legally carry is refused loudly. '' keeps the gethostname() default.
         if ($heloHost !== '' && \preg_match('/^[A-Za-z0-9.\-]{1,253}$/', $heloHost) !== 1) {
             throw new \InvalidArgumentException(Lang::t('smtp.invalid_helo_host', ['helo' => $heloHost]));
+        }
+        // Construction is the choke for every input the wire grammar
+        // cannot recover from: an empty or illegal host used to surface as an
+        // opaque stream_socket_client URL error, a zero timeout produced the
+        // split infinite-connect/instant-read personality, and an out-of-range
+        // port dialled garbage. Refuse all three loudly, named, here.
+        if ($host === '' || !self::isValidHost($host)) {
+            throw new \InvalidArgumentException(Lang::t('smtp.invalid_host', ['host' => $host]));
+        }
+        if (!self::isValidPort($port)) {
+            throw new \InvalidArgumentException(Lang::t('smtp.invalid_port', ['port' => (string) $port]));
+        }
+        if (!self::isValidTimeout($timeout)) {
+            throw new \InvalidArgumentException(Lang::t('smtp.invalid_timeout', ['timeout' => (string) $timeout]));
         }
         $this->host        = $host;
         $this->port        = $port;

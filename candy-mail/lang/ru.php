@@ -70,4 +70,7 @@ return [
     'cli.invalid_transport' => 'Неизвестное значение --transport: {transport} (допустимы: smtp, resend)',
     'cli.resend_key_required' => '--transport=resend требует ключ API: установите RESEND_API_KEY (SMTP-хост при этом перекрёстном указании игнорируется)',
     'cli.stdin_too_large' => 'Вывод STDIN превысил лимит в {limit} байт; сократите входные данные или приложите их как файл.',
+    'smtp.invalid_host' => 'Хост SMTP {host} — не допустимое имя хоста и не допустимый адрес (только буквы, цифры, точки и дефисы)',
+    'smtp.invalid_port' => 'Порт SMTP {port} вне диапазона (должен быть от 1 до 65535)',
+    'smtp.invalid_timeout' => 'Тайм-аут SMTP {timeout} — не число секунд от 1 до 3600',
 ];

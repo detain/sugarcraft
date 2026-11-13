@@ -70,4 +70,7 @@ return [
     'cli.invalid_transport' => 'Neznámá hodnota --transport {transport} (povoleny: smtp, resend)',
     'cli.resend_key_required' => '--transport=resend vyžaduje API klíč: nastavte RESEND_API_KEY (host SMTP je tímto přepínačem ignorován)',
     'cli.stdin_too_large' => 'Vstup ze STDIN překročil limit {limit} bajtů; zkraťte vstup, nebo jej přiložte jako soubor.',
+    'smtp.invalid_host' => 'Hostitel SMTP {host} není platný název hostitele ani adresa (pouze písmena, číslice, tečky a pomlčky)',
+    'smtp.invalid_port' => 'Port SMTP {port} je mimo rozsah (musí být mezi 1 a 65535)',
+    'smtp.invalid_timeout' => 'Timeout SMTP {timeout} není počet sekund mezi 1 a 3600',
 ];

@@ -138,4 +138,37 @@ final class SmtpTransportTest extends TestCase
 
         $this->assertStringContainsString("Content-Transfer-Encoding: 8bit\r\n", $mime);
     }
+
+    public function testConstructorRefusesIllegalHostShapes(): void
+    {
+        foreach (['', 'bad host!', 'me@somewhere.example'] as $host) {
+            try {
+                new SmtpTransport($host);
+                $this->fail('host ' . var_export($host, true) . ' should not construct');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('not a valid hostname', $e->getMessage());
+            }
+        }
+    }
+
+    public function testConstructorRefusesOutOfRangePort(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/port 0 is out of range/');
+        new SmtpTransport('ok.example', 0);
+    }
+
+    public function testConstructorRefusesOutOfRangeTimeout(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/timeout 3601 is not a number of seconds/');
+        new SmtpTransport('ok.example', 587, '', '', 3601);
+    }
+
+    public function testLegalHostShapesStillConstruct(): void
+    {
+        foreach (['ok.example', '127.0.0.1', 'localhost', 'smtp.invalid.example'] as $host) {
+            $this->assertInstanceOf(SmtpTransport::class, new SmtpTransport($host));
+        }
+    }
 }

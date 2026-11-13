@@ -70,4 +70,7 @@ return [
     'cli.invalid_transport' => 'Bilinmeyen --transport değeri: {transport} (izin verilenler: smtp, resend)',
     'cli.resend_key_required' => '--transport=resend bir API anahtarı ister: RESEND_API_KEY ayarlayın (bu geçersiz kılma SMTP hostunu yok sayar)',
     'cli.stdin_too_large' => 'STDIN girdisi {limit} bayt sınırını aştı; girdiyi kısaltın ya da dosya olarak ekleyin.',
+    'smtp.invalid_host' => 'SMTP ana makinesi {host} geçerli bir ana makinesi adı veya adresi değil (yalnızca harf, rakam, nokta ve tire)',
+    'smtp.invalid_port' => 'SMTP bağlantı noktası {port} kapsam dışında (1 ile 65535 arasında olmalı)',
+    'smtp.invalid_timeout' => 'SMTP zaman aşımı {timeout}, 1 ile 3600 arasında bir saniye sayısı değil',
 ];

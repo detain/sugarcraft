@@ -70,4 +70,7 @@ return [
     'cli.invalid_transport' => 'Onbekende --transport-waarde {transport} (toegestaan: smtp, resend)',
     'cli.resend_key_required' => '--transport=resend heeft een API-sleutel nodig: stel RESEND_API_KEY in (de SMTP-host wordt hierbij genegeerd)',
     'cli.stdin_too_large' => 'De STDIN-invoer overschreed de limiet van {limit} bytes; verkort de invoer of voeg deze toe als bestand.',
+    'smtp.invalid_host' => 'SMTP-host {host} is geen geldige hostnaam of adres (alleen letters, cijfers, punten en koppeltekens)',
+    'smtp.invalid_port' => 'SMTP-poort {port} valt buiten het bereik (moet tussen 1 en 65535 liggen)',
+    'smtp.invalid_timeout' => 'SMTP-timeout {timeout} is geen aantal seconden tussen 1 en 3600',
 ];

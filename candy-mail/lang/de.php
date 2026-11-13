@@ -77,4 +77,7 @@ return [
     'cli.invalid_transport' => 'Unbekannter --transport-Wert {transport} (zulässig: smtp, resend)',
     'cli.resend_key_required' => '--transport=resend benötigt einen API-Schlüssel: RESEND_API_KEY setzen (der SMTP-Host wird von dieser Einstellung ignoriert)',
     'cli.stdin_too_large' => 'Die STDIN-Eingabe hat die Grenze von {limit} Byte überschritten; Eingabe kürzen oder als Datei anhängen.',
+    'smtp.invalid_host' => 'SMTP-Host {host} ist kein gültiger Hostname und keine gültige Adresse (nur Buchstaben, Ziffern, Punkte und Bindestriche)',
+    'smtp.invalid_port' => 'SMTP-Port {port} liegt außerhalb des Bereichs (muss zwischen 1 und 65535 liegen)',
+    'smtp.invalid_timeout' => 'SMTP-Timeout {timeout} ist keine Anzahl Sekunden zwischen 1 und 3600',
 ];

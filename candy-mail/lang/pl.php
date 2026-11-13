@@ -70,4 +70,7 @@ return [
     'cli.invalid_transport' => 'Nieznana wartość --transport: {transport} (dozwolone: smtp, resend)',
     'cli.resend_key_required' => '--transport=resend wymaga klucza API: ustaw RESEND_API_KEY (host SMTP jest przy tej opcji ignorowany)',
     'cli.stdin_too_large' => 'Dane ze STDIN przekroczyły limit {limit} bajtów; skróć wejście lub dołącz je jako plik.',
+    'smtp.invalid_host' => 'Host SMTP {host} nie jest prawidłową nazwą hosta ani adresem (dozwolone są tylko litery, cyfry, kropki i myślniki)',
+    'smtp.invalid_port' => 'Port SMTP {port} jest poza zakresem (musi być między 1 a 65535)',
+    'smtp.invalid_timeout' => 'Limit czasu SMTP {timeout} nie jest liczbą sekund od 1 do 3600',
 ];
