@@ -55,6 +55,18 @@ final class FakeConPtyApi implements ConPtyApi
      */
     public array $readQueue = [];
 
+    /**
+     * The pipe handles each pseudo console was wired to, by HPCON.
+     *
+     * Recorded apart from the transcript (whose open() lines are pinned
+     * verbatim) so the direction law is assertable: the console must get the
+     * input pipe's READ end and the output pipe's WRITE end. Before this map
+     * existed the inversion was invisible off Windows.
+     *
+     * @var array<int, array{input: int, output: int}>
+     */
+    public array $consoleWiring = [];
+
     /** Live pseudo-console handles. */
     private array $pseudoConsoles = [];
 
@@ -144,6 +156,7 @@ final class FakeConPtyApi implements ConPtyApi
         $this->guardLive($output, 'pipe');
         $handle = $this->issue('createPseudoConsole', \sprintf('%dx%d', $width, $height));
         $this->pseudoConsoles[$handle] = ['width' => $width, 'height' => $height];
+        $this->consoleWiring[$handle] = ['input' => $input, 'output' => $output];
 
         return $handle;
     }
@@ -158,6 +171,7 @@ final class FakeConPtyApi implements ConPtyApi
     public function closePseudoConsole(int $pseudoConsole): void
     {
         $this->guard($this->pseudoConsoles, $pseudoConsole, 'pseudo-console', 'closePseudoConsole');
+        $this->transcript[] = \sprintf('closePseudoConsole(%d)', $pseudoConsole);
         unset($this->pseudoConsoles[$pseudoConsole]);
     }
 

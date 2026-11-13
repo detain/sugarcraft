@@ -45,6 +45,26 @@ final class ConPtyMasterPtyTest extends TestCase
         );
     }
 
+    public function testCloseReleasesThePipesBeforeThePseudoConsole(): void
+    {
+        // Before Windows 11 24H2, ClosePseudoConsole blocks until its final
+        // frame is written to the output pipe, and nothing drains that pipe
+        // while the call blocks. With the master's read end closed first, the
+        // write fails fast and teardown cannot deadlock. The console-side ends
+        // were closed at open(), so only the master's two remain to close.
+        $this->master->close();
+
+        $tail = \array_values(\array_filter(
+            $this->api->transcript,
+            static fn (string $line): bool => \str_starts_with($line, 'close'),
+        ));
+
+        self::assertSame(
+            ['closeHandle(100)', 'closeHandle(103)', 'closeHandle(0)', 'closeHandle(101)', 'closeHandle(102)', 'closeHandle(0)', 'closePseudoConsole(104)'],
+            $tail,
+        );
+    }
+
     public function testReadNeverOverdeliversBeyondItsLength(): void
     {
         $this->api->readQueue[] = 'abcdef';

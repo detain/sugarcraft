@@ -83,6 +83,37 @@ final class ConPtySystemTest extends TestCase
         self::assertSame(['peekNamedPipe(102)'], $api->callsMatching('peekNamedPipe(102)'));
     }
 
+    public function testPseudoConsoleTakesTheEndsTheMasterDoesNotUse(): void
+    {
+        // CreatePseudoConsole(hInput, hOutput): the console READS keystrokes
+        // from the input pipe's read end (100) and WRITES the screen to the
+        // output pipe's write end (103). The inverted wiring, write end 101 and
+        // read end 102, handed the console the master's own handles. On
+        // Windows that timed out every live read, and a blocking ReadFile on
+        // the shared end hung the CI cell for six hours.
+        $api = new FakeConPtyApi();
+
+        (new ConPtySystem($api))->open(80, 24);
+
+        self::assertSame([104 => ['input' => 100, 'output' => 103]], $api->consoleWiring);
+    }
+
+    public function testParentCopiesOfTheConsoleEndsAreClosedRightAfterCreation(): void
+    {
+        // ConPTY duplicates the ends it is given. A parent still holding the
+        // output write end keeps the output pipe from ever reporting EOF, so
+        // both console-side copies must be closed as soon as the console
+        // exists, and the master's ends (101, 102) must stay open.
+        $api = new FakeConPtyApi();
+
+        (new ConPtySystem($api))->open(80, 24);
+
+        self::assertSame(
+            ['closeHandle(100)', 'closeHandle(103)'],
+            \array_slice($api->transcript, 5),
+        );
+    }
+
     public function testSlavePathNamesThePseudoConsoleHandle(): void
     {
         $api = new FakeConPtyApi();
@@ -257,9 +288,11 @@ final class ConPtySystemTest extends TestCase
         );
 
         $created = $api->callsMatching('createProcess(')[0];
-        // Empty application name, flags = NEW_PROCESS_GROUP | NO_WINDOW, and the
-        // binding's own EXTENDED_STARTUPINFO_PRESENT bit (mirrored by the fake).
-        self::assertStringContainsString('flags=0x8080200', $created);
+        // Empty application name, flags = NEW_PROCESS_GROUP and NEVER NO_WINDOW
+        // (that flag detaches the child from the pseudoconsole — no output
+        // ever arrives), plus the binding's own EXTENDED_STARTUPINFO_PRESENT
+        // bit (mirrored by the fake).
+        self::assertStringContainsString('flags=0x80200', $created);
         self::assertStringStartsWith('createProcess(,', $created);
         // PTY-20: no argument is null = INHERIT; the collapsed-to-[] shape
         // (env=[0], the empty block) belongs to the explicit empty map, not

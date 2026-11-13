@@ -109,7 +109,12 @@ final class ConPtySlavePty implements SlavePty
                     $attributeList,
                     $env,
                     '',
-                    ConPtyApi::CREATE_NEW_PROCESS_GROUP | ConPtyApi::CREATE_NO_WINDOW,
+                    // NOT CREATE_NO_WINDOW: that flag leaves the child with no
+                    // console handle at all, so it never attaches to the
+                    // pseudoconsole and the output pipe stays silent (measured
+                    // on Windows 11 / PHP 8.4.27). There is no window for it to
+                    // suppress anyway — a pseudoconsole child has none.
+                    ConPtyApi::CREATE_NEW_PROCESS_GROUP,
                     $job,
                 );
             } finally {

@@ -880,6 +880,15 @@ private arrow-key or Ctrl-key buffering.
   rest of the suite is POSIX-pinned (libc FFI, `/dev/ptmx`, signals) and
   cannot pass on a Windows cell; `tests\Windows` carries the ConPTY
   primitives and adapter arms, and its live legs skip below PHP 8.4.
+  The live legs (spawn, explicit environment, resize, exit code) were
+  first measured green on Windows 11 / PHP 8.4.27 on 2026-11-13. Until
+  then no live spawn had ever worked: the attribute call, the pipe-end
+  wiring, the creation flags, the std-handle inheritance and the Unicode
+  environment flag were each wrong (see `CALIBER_LEARNINGS.md`). A
+  pseudoconsole child is not given `CREATE_NO_WINDOW` (that flag detaches
+  it from the console), and `ConPtyMasterPty::close()` releases its pipe
+  ends before `ClosePseudoConsole`, which on hosts before Windows 11 24H2
+  blocks until the output pipe drains.
 
 ### ext-ffi is required — and distro PHP often ships it switched off
 

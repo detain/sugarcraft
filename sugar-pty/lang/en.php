@@ -77,7 +77,7 @@ return [
     'windows.k32.resume_thread' => 'ResumeThread failed with win32 error {error}; the suspended child was terminated',
     'windows.k32.set_job_info' => 'SetInformationJobObject(KILL_ON_JOB_CLOSE) failed with win32 error {error}',
     'windows.k32.terminate_job' => 'TerminateJobObject failed with win32 error {error}',
-    'windows.k32.update_attr_forensics' => 'UpdateProcThreadAttribute(PSEUDOCONSOLE) failed with win32 error {error} [byPtr err={byPtrError}, blobAddr=0x{blobAddr}, align={align}, magic=0x{magic}, hpcn=0x{hpcn}, probeHr=0x{probeHr}, probeErr={probeErr}, cbSize={cbSize}]',
+    'windows.k32.update_attr' => 'UpdateProcThreadAttribute(PSEUDOCONSOLE, hpcon=0x{hpcn}) failed with win32 error {error}',
     'windows.master.closed' => 'the ConPTY master is closed',
     'windows.master.no_blocking' => 'a ConPTY master has no POSIX blocking mode; bound your pumps with read($len, $timeout) polling',
     'windows.master.no_fd' => 'a ConPTY master has no POSIX file descriptor (Win32 pipe handles are not fds)',

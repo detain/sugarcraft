@@ -601,75 +601,35 @@ CDEF;
         }
 
         $ffi = $this->ffi();
-        $size = $ffi->new('SIZE_T');
-        $list = $this->attributeLists[$attributeList];
-        $cbSize = \FFI::sizeof($ffi->new('intptr_t'));
 
-        // Shape A — the handle passed BY VALUE, as the MSDN CreateProcess
-        // sample spells it (lpValue carries the HPCON itself).
+        // The handle passed BY VALUE — lpValue IS the HPCON, as MSDN's
+        // CreateProcess sample spells it (HPCON is itself a pointer type).
+        //
+        // lpPreviousValue and lpReturnSize are both documented "reserved and
+        // must be NULL", and kernelbase enforces it: a non-NULL lpReturnSize
+        // answers FALSE with ERROR_INVALID_PARAMETER (87) whatever the value
+        // shape. Measured on Windows 11 / PHP 8.4.27: this exact call with a
+        // SIZE_T out-pointer in that slot was the "win32 error 87" every
+        // Windows 8.4 cell carried, and it succeeds with NULL there.
+        //
+        // There is deliberately no pointer-to-handle fallback. With NULL in
+        // the reserved slot kernelbase accepts &slot too — and then stores the
+        // slot's ADDRESS as the HPCON, attaching the child to a console that
+        // does not exist. A second shape could only turn a loud refusal here
+        // into a silent wrong attach later.
         $ok = $ffi->UpdateProcThreadAttribute(
-            $list,
+            $this->attributeLists[$attributeList],
             0,
             self::PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
             $ffi->cast('void *', $pseudoConsole),
-            $cbSize,
+            \FFI::sizeof($ffi->type('intptr_t')),
             null,
-            \FFI::addr($size),
+            null,
         );
-        // Capture the code BEFORE any other call can touch it — the
-        // diagnosis must name the error Update actually left behind.
-        $byValueError = $this->lastError();
 
         if (!$ok) {
-            // Shape B — a POINTER TO the HPCON slot. kernelbase's path for
-            // PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE has shipped in both
-            // spellings across Windows builds (copy-the-handle vs
-            // dereference-lpValue); a build that dereferences a bare handle
-            // faults internally and answers FALSE without calling
-            // SetLastError — exactly the "win32 error 0" signature this leg
-            // carried at CI run 42955157728 even after the allocator fix.
-            // Both shapes are attempted per call; whichever the build accepts
-            // wins, and a pointer stored in an already-populated list entry
-            // is harmless to the other shape (an overwrite, not a conflict).
-            $slot = $ffi->new('intptr_t');
-            $slot->cdata = $pseudoConsole;
-            $ok = $ffi->UpdateProcThreadAttribute(
-                $list,
-                0,
-                self::PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
-                \FFI::addr($slot),
-                $cbSize,
-                null,
-                \FFI::addr($size),
-            );
-        }
-
-        if (!$ok) {
-            $byPtrError = $this->lastError();
-
-            // The spawn is already dying here, so the refusal path spends its
-            // one roundtrip on forensics the kernel can answer: which of the
-            // two sides is actually dead. blobAddr is the list's real address
-            // — an (int) cast of a void* CData yields the wrapper's stored
-            // handle, not the pointer, which is why an early run reported the
-            // blob as 0x1. The first word inside the blob is kernelbase's own
-            // bookkeeping; reading it says whether the list we initialized is
-            // still the list we allocated. ResizePseudoConsole is the cheap
-            // oracle for the pseudo-console handle: S_OK means the handle both
-            // attach shapes were refused is ALIVE, which indicts the attribute
-            // list; any other answer means the handle went stale upstream in
-            // ConPtySystem and Update honestly rejected it.
-            $blobAddr = (int) \FFI::cast('intptr_t', $list)->cdata;
-            $magicWord = $ffi->new('SIZE_T');
-            \FFI::memcpy(\FFI::addr($magicWord), $list, \FFI::sizeof($magicWord));
-            $coord = $ffi->new('COORD');
-            $coord->X = 80;
-            $coord->Y = 24;
-            $probeResult = (int) $ffi->ResizePseudoConsole($pseudoConsole, $coord);
-            $probeError = $this->lastError();
-
             throw new PtyException(
-                Lang::t('windows.k32.update_attr_forensics', ['error' => $byValueError, 'byPtrError' => $byPtrError, 'blobAddr' => \sprintf('%016X', $blobAddr), 'align' => $blobAddr % 16, 'magic' => \sprintf('%016X', (int) $magicWord->cdata), 'hpcn' => \sprintf('%016X', $pseudoConsole), 'probeHr' => \sprintf('%08X', $probeResult), 'probeErr' => $probeError, 'cbSize' => $cbSize]),
+                Lang::t('windows.k32.update_attr', ['error' => $this->lastError(), 'hpcn' => \sprintf('%016X', $pseudoConsole)]),
             );
         }
     }
@@ -730,7 +690,16 @@ CDEF;
         // wShowWindow + the flag that makes it mean anything: a ConPTY child left
         // with the default show-state opens a console window on a desktop.
         $startup->StartupInfo->wShowWindow = self::SW_HIDE;
-        $startup->StartupInfo->dwFlags = self::STARTF_USESHOWWINDOW;
+        // STARTF_USESTDHANDLES with all three handles left NULL (FFI::new
+        // zero-fills) is what makes the child's stdio THE PSEUDOCONSOLE.
+        // Without it a console child is handed the parent's standard handles
+        // whenever those are redirected — measured on Windows 11 / PHP 8.4.27
+        // under a piped phpunit: `cmd /c echo` wrote its line straight into
+        // the PARENT's stdout and the ConPTY output pipe carried only the
+        // console's mode-set preamble, so every read timed out waiting for
+        // bytes that had gone around it. Interactive hosts never see this
+        // (their std handles ARE a console); CI and any captured run do.
+        $startup->StartupInfo->dwFlags = self::STARTF_USESHOWWINDOW | self::STARTF_USESTDHANDLES;
 
         $info = $ffi->new('PROCESS_INFORMATION');
 

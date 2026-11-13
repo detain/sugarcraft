@@ -227,8 +227,19 @@ final class ConPtyMasterPty implements MasterPty
     }
 
     /**
-     * Idempotent, total release: pseudo console first (its close is what
-     * breaks the child's console connection), then all four pipe handles.
+     * Idempotent, total release: the master's pipe ends FIRST, then the
+     * pseudo console.
+     *
+     * The order matters. Before Windows 11 24H2, ClosePseudoConsole blocks
+     * until the console's final frame is written to the output pipe (MSDN's
+     * ClosePseudoConsole remarks), and this class cannot drain the pipe from a
+     * second thread while that call blocks. With the output read end already
+     * gone, that write fails at once with a broken pipe and the close returns.
+     * Closing the pseudo console first, as an earlier revision did, could
+     * deadlock teardown on any host whose child had written more than the
+     * pipe buffer holds. The console-side ends were closed by
+     * {@see ConPtySystem::open()} and arrive here as 0, which closeHandle()
+     * skips.
      */
     public function close(): void
     {
@@ -238,11 +249,11 @@ final class ConPtyMasterPty implements MasterPty
 
         $this->closed = true;
 
-        $this->api->closePseudoConsole($this->pseudoConsole);
         $this->api->closeHandle($this->inputPipe['read']);
         $this->api->closeHandle($this->inputPipe['write']);
         $this->api->closeHandle($this->outputPipe['read']);
         $this->api->closeHandle($this->outputPipe['write']);
+        $this->api->closePseudoConsole($this->pseudoConsole);
     }
 
     public function isClosed(): bool

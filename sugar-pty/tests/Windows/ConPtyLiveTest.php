@@ -85,4 +85,52 @@ final class ConPtyLiveTest extends TestCase
             $master->close();
         }
     }
+
+    /**
+     * An explicit environment reaches the child, decoded as UTF-16.
+     *
+     * The round trip above inherits (env null), so it never set
+     * CREATE_UNICODE_ENVIRONMENT. That constant once carried the wrong value,
+     * and every spawn with a map failed with win32 error 203. candy-code always
+     * passes a scrubbed map, so every pty run it made on Windows died there.
+     */
+    public function testExplicitEnvironmentReachesTheChild(): void
+    {
+        if (\PHP_OS_FAMILY !== 'Windows' || \PHP_VERSION_ID < 80400 || !\extension_loaded('ffi')) {
+            $this->markTestSkipped('the live ConPTY binding needs Windows with PHP 8.4+ and ffi');
+        }
+
+        $value = 'env-' . \bin2hex(\random_bytes(6));
+        // A one-entry block on purpose: cmd's echo needs nothing else, and the
+        // smallest map is the sharpest proof that the block itself is decoded.
+        $env = ['SUGAR_PTY_LIVE_PROBE' => $value];
+
+        $pair = (new ConPtySystem())->open(100, 30);
+        $master = $pair->master();
+
+        try {
+            $child = $pair->slave()->spawn(['cmd', '/c', 'echo %SUGAR_PTY_LIVE_PROBE%'], $env);
+
+            $received = '';
+            $deadline = \microtime(true) + self::LIVE_CEILING_SECONDS;
+
+            while (!\str_contains($received, $value)) {
+                if (\microtime(true) >= $deadline) {
+                    self::fail('the child never echoed the variable it was given; got: ' . \json_encode($received));
+                }
+
+                $chunk = $master->read(8192, 0.25);
+
+                if ($chunk === '') {
+                    self::fail('the ConPTY output pipe closed before the variable appeared; got: ' . \json_encode($received));
+                }
+
+                $received .= (string) $chunk;
+            }
+
+            self::assertSame(0, $child->wait());
+        } finally {
+            $master->close();
+        }
+    }
 }

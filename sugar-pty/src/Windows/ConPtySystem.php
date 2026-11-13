@@ -79,11 +79,12 @@ final class ConPtySystem implements PtySystem
         }
 
         try {
-            // The pseudo console takes the WRITE end of the parent→child
-            // pipe and the READ end of the child→parent pipe; the master
-            // keeps the other ends. closePseudoConsole does NOT close the
-            // pipes, so ownership of all four handles moves to the master.
-            $pc = $api->createPseudoConsole($cols, $rows, $input['write'], $output['read']);
+            // The pseudo console takes the READ end of the parent→child pipe
+            // (it reads keystrokes) and the WRITE end of the child→parent
+            // pipe (it writes the screen); the master keeps the other two.
+            // See ConPtyApi::createPseudoConsole() for the measured history
+            // of getting this backwards.
+            $pc = $api->createPseudoConsole($cols, $rows, $input['read'], $output['write']);
         } catch (\Throwable $e) {
             self::closePipe($api, $input);
             self::closePipe($api, $output);
@@ -91,7 +92,23 @@ final class ConPtySystem implements PtySystem
             throw $e;
         }
 
-        return new ConPtyPair(new ConPtyMasterPty($api, $pc, $input, $output, $cols, $rows));
+        // ConPTY duplicated the console-side ends; the parent's copies must
+        // go now. Holding the output write end is what keeps the output pipe
+        // from ever answering EOF after the console is gone, so a reader
+        // waiting for closure would spin forever. 0 is the "no handle" value
+        // closeHandle() already skips, so the master's teardown stays a
+        // plain close-everything without double-closing these two.
+        $api->closeHandle($input['read']);
+        $api->closeHandle($output['write']);
+
+        return new ConPtyPair(new ConPtyMasterPty(
+            $api,
+            $pc,
+            ['read' => 0, 'write' => $input['write']],
+            ['read' => $output['read'], 'write' => 0],
+            $cols,
+            $rows,
+        ));
     }
 
     /**

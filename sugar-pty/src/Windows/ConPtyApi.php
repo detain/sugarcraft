@@ -77,13 +77,26 @@ interface ConPtyApi
     /** `EXTENDED_STARTUPINFO_PRESENT` — required whenever `STARTUPINFOEXW` is passed. */
     public const EXTENDED_STARTUPINFO_PRESENT = 0x00080000;
 
-    /** `CREATE_UNICODE_ENVIRONMENT` — pairs with {@see EnvBlock::encode()}. */
-    public const CREATE_UNICODE_ENVIRONMENT = 0x00040000;
+    /**
+     * `CREATE_UNICODE_ENVIRONMENT` — pairs with {@see EnvBlock::encode()}.
+     *
+     * 0x400 per WinBase.h. An earlier revision carried 0x00040000, which is
+     * CREATE_PROTECTED_PROCESS: the UTF-16 block then went in unflagged, was
+     * parsed as ANSI, and every spawn with an explicit environment failed with
+     * win32 error 203 (ERROR_ENVVAR_NOT_FOUND). That broke every candy-code
+     * pty run on Windows. All values here are pinned against the SDK in
+     * Kernel32ConPtyTest::testWin32ConstantsCarryTheirSdkValues().
+     */
+    public const CREATE_UNICODE_ENVIRONMENT = 0x00000400;
 
     /** `CREATE_NEW_PROCESS_GROUP` — keeps the child off this process's Ctrl+C line. */
     public const CREATE_NEW_PROCESS_GROUP = 0x00000200;
 
-    /** `CREATE_NO_WINDOW` — a ConPTY child must not get its own console window. */
+    /**
+     * `CREATE_NO_WINDOW` — NEVER for a ConPTY child: it leaves the process with
+     * no console handle, so the pseudoconsole attach never happens and no
+     * output reaches the pipe. Kept for non-pseudoconsole spawns only.
+     */
     public const CREATE_NO_WINDOW = 0x08000000;
     /** Start the child suspended so containment can be fitted before it runs. */
     public const CREATE_SUSPENDED = 0x00000004;
@@ -175,10 +188,18 @@ interface ConPtyApi
     /**
      * `CreatePseudoConsole` — the ConPTY itself, wired between two pipe ends.
      *
-     * `$input` is the write end of the parent→child pipe, `$output` the read end
-     * of the child→parent pipe; ConPTY reads keystrokes from `$input` and writes
-     * screen output to `$output`, which is the direction inversion that trips up
-     * every first reading of this API.
+     * `$input` is the READ end of the parent→child pipe and `$output` the WRITE
+     * end of the child→parent pipe: ConPTY reads keystrokes from `$input` and
+     * writes screen output to `$output`, so it takes the ends the parent does
+     * NOT use. The parent keeps the input pipe's write end and the output
+     * pipe's read end. ConPTY duplicates both handles it is given, and the
+     * caller must close its copies once this returns: an output write end left
+     * open in the parent means the output pipe never reports EOF.
+     *
+     * An earlier revision documented (and wired) the opposite ends, so the
+     * console and the master shared the same two handles. Every live round
+     * trip then timed out on Windows, and a blocking ReadFile on the shared
+     * end hung the CI cell for six hours.
      *
      * @return int HPCON handle
      * @throws \SugarCraft\Pty\PtyException on a non-`S_OK` HRESULT

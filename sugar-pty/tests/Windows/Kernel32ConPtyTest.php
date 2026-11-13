@@ -796,6 +796,41 @@ final class Kernel32ConPtyTest extends TestCase
         }
     }
 
+    /**
+     * Every Win32 constant the binding hands the kernel, against its SDK
+     * header value. Runs on every host: a wrong flag is invisible to the fake
+     * and only surfaces as a live failure with an unrelated error code.
+     * CREATE_UNICODE_ENVIRONMENT once carried 0x00040000 (that is
+     * CREATE_PROTECTED_PROCESS), and every env-carrying spawn died with win32
+     * error 203.
+     */
+    public function testWin32ConstantsCarryTheirSdkValues(): void
+    {
+        $sdk = [
+            'PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE' => 0x00020016, // ProcThreadAttributePseudoConsole(22) | PROC_THREAD_ATTRIBUTE_INPUT
+            'EXTENDED_STARTUPINFO_PRESENT' => 0x00080000,
+            'CREATE_UNICODE_ENVIRONMENT' => 0x00000400,
+            'CREATE_NEW_PROCESS_GROUP' => 0x00000200,
+            'CREATE_NO_WINDOW' => 0x08000000,
+            'CREATE_SUSPENDED' => 0x00000004,
+            'STARTF_USESTDHANDLES' => 0x00000100,
+            'STARTF_USESHOWWINDOW' => 0x00000001,
+            'SW_HIDE' => 0,
+            'WAIT_OBJECT_0' => 0x00000000,
+            'WAIT_TIMEOUT' => 0x00000102,
+            'WAIT_FAILED' => 0xFFFFFFFF,
+            'INFINITE' => 0xFFFFFFFF,
+            'STILL_ACTIVE' => 259,
+            'S_OK' => 0,
+            'JOB_OBJECT_EXTENDED_LIMIT_INFORMATION' => 9,
+            'JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE' => 0x00002000,
+        ];
+
+        foreach ($sdk as $name => $value) {
+            self::assertSame($value, \constant(ConPtyApi::class . '::' . $name), $name . ' drifted from its SDK value');
+        }
+    }
+
     // ─── Windows-gated ──────────────────────────────────────────────────────
 
     public function testTheWholeCdefResolvesAgainstKernel32(): void
@@ -819,27 +854,39 @@ final class Kernel32ConPtyTest extends TestCase
         $in = $api->createPipe();
         $out = $api->createPipe();
 
-        $console = $api->createPseudoConsole(80, 24, $in['write'], $out['read']);
+        // The console takes the ends the parent does NOT use: it reads from the
+        // input pipe's read end and writes to the output pipe's write end. The
+        // inverted wiring that used to sit here shared the parent's own ends
+        // with the console, and the unconditional ReadFile below then blocked
+        // forever on a pipe nobody wrote to: the six-hour Windows 8.4 CI hang.
+        $console = $api->createPseudoConsole(80, 24, $in['read'], $out['write']);
+        // ConPTY duplicated them; the parent's copies go now, as in ConPtySystem::open().
+        self::assertTrue($api->closeHandle($in['read']));
+        self::assertTrue($api->closeHandle($out['write']));
         $api->resizePseudoConsole($console, 100, 30);
 
         $written = $api->writeFile($in['write'], "echo\r\n");
         self::assertIsInt($written, 'writeFile to the console input pipe failed');
         self::assertSame(6, $written);
 
-        // What the child's end of the console produces is host-dependent, so the
-        // real assertions here are that the READ path answers at all: a peek that
-        // returns null and a read that returns false together would mean the
-        // pseudo-console was never wired to the pipes.
-        $peeked = $api->peekNamedPipe($out['write']);
-        self::assertTrue($peeked === null || isset($peeked['available']));
-        $read = $api->readFile($out['read'], 4096);
-        self::assertTrue($read === false || \is_string($read));
+        // The read path answers without blocking: the peek sees a live pipe
+        // (the console holds the write end), and ReadFile runs ONLY when the
+        // peek reports bytes. A synchronous read of an anonymous pipe that has
+        // live writers and no data never returns, and nothing in-process can
+        // interrupt it. A console with no client attached paints nothing
+        // (measured, Windows 11), so there is no byte to wait for here; the
+        // end-to-end direction proof is ConPtyLiveTest's spawn round trip.
+        $peeked = $api->peekNamedPipe($out['read']);
+        self::assertNotNull($peeked, 'the output pipe is broken while the console still holds its write end');
 
-        $api->closePseudoConsole($console);
-
-        foreach ([$in['read'], $in['write'], $out['read'], $out['write']] as $handle) {
-            self::assertTrue($api->closeHandle($handle));
+        if ($peeked['available'] > 0) {
+            self::assertIsString($api->readFile($out['read'], $peeked['available']));
         }
+
+        // Pipes before the console: see ConPtyMasterPty::close() for why.
+        self::assertTrue($api->closeHandle($in['write']));
+        self::assertTrue($api->closeHandle($out['read']));
+        $api->closePseudoConsole($console);
 
         // And the sizes the Linux-side derivation predicts, confirmed where they are
         // load-bearing.
