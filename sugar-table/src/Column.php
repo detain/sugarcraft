@@ -166,11 +166,16 @@ final class Column
     /**
      * Build the header cell content, padded to $totalWidth.
      *
+     * Part of the Table render pipeline — the canvas walk calls it per
+     * header cell; host code should drive output through Table::View(),
+     * not compose header strings by hand (audit ST-29).
+     *
+     * @internal
      * @return string
      */
-    public function renderHeader(int $totalWidth = 0, bool $forMarkedFrames = false): string
+    public function renderHeader(?int $totalWidth = null, bool $forMarkedFrames = false): string
     {
-        $w = $totalWidth > 0 ? $totalWidth : $this->width;
+        $w = ($totalWidth !== null && $totalWidth > 0) ? $totalWidth : $this->width;
         // Sanitize title; pad() handles display-width truncation via Width
         // helpers. $forMarkedFrames routes the ST-47 strictening threaded by
         // Table for hosts compositing the frame into zone/image arenas.
@@ -189,12 +194,14 @@ final class Column
      * write the escape characters as literal cells, destroying the content
      * (audit finding #2).
      *
+     * @internal Part of the Table render pipeline (audit ST-29); hosts supply
+     *           data and styles, View() drives this.
      * @param mixed $value
      * @return list<string> One or more plain-text lines, padded to $w
      */
-    public function renderCell(mixed $value, int $width = 0, bool $forMarkedFrames = false): array
+    public function renderCell(mixed $value, ?int $width = null, bool $forMarkedFrames = false): array
     {
-        $w = $width > 0 ? $width : $this->width;
+        $w = ($width !== null && $width > 0) ? $width : $this->width;
         $str = \is_object($value) && method_exists($value, '__toString') ? (string) $value : (\is_scalar($value) ? (string) $value : '');
         // Sanitize before wrapping; \n is PRESERVED here because renderCell
         // itself is the newline authority: each "\n" segment is a hard line
@@ -269,7 +276,9 @@ final class Column
      * Single source of truth for the clip rule: Column's no-wrap path AND
      * Table's single-line rows (WrapMode governs multiline rows only —
      * clamping wrapped content to one line IS a truncation and must be
-     * marked) both route through here (audit findings #6/#7/#8).
+     * marked) both route through here (audit findings #6/#7/#8). Hosts do
+     * not need to call it: View() clips everything you feed it (audit
+     * ST-29 note).
      */
     public static function clipToWidth(string $text, int $width): string
     {

@@ -602,4 +602,38 @@ final class ColumnTest extends TestCase
     {
         return [...self::validClusterTexts(), ...self::malformedClusterTexts()];
     }
+    // ---- ST-29: render-pipeline surface -------------------------------------
+
+    public function testRenderPipelineMethodsExistAndAreMarkedInternal(): void
+    {
+        // The Table canvas walk calls these; the reflection test is the
+        // public-surface contract — they must not disappear, and they must
+        // stay marked as pipeline internals.
+        $rc = new \ReflectionClass(Column::class);
+
+        foreach (['renderHeader', 'renderCell'] as $method) {
+            $this->assertTrue($rc->hasMethod($method), "{$method} vanished from the pipeline");
+            $doc = $rc->getMethod($method)->getDocComment();
+            $this->assertIsString($doc);
+            $this->assertStringContainsString('@internal', $doc, "{$method} lost its @internal mark");
+        }
+
+        // The magic-0 defaults are gone: both width params read null-me-own.
+        $headerWidth = $rc->getMethod('renderHeader')->getParameters()[0];
+        $cellWidth = $rc->getMethod('renderCell')->getParameters()[1];
+        $this->assertTrue($headerWidth->isDefaultValueAvailable() && $headerWidth->getDefaultValue() === null);
+        $this->assertTrue($cellWidth->isDefaultValueAvailable() && $cellWidth->getDefaultValue() === null);
+    }
+
+    public function testNullWidthFallsBackToOwnWidthExactlyLikeTheOldZeroDid(): void
+    {
+        $col = Column::new('k', 'Key', 6);
+
+        // null, omitted and the legacy 0 all mean "own width" — same bytes.
+        $this->assertSame($col->renderHeader(6), $col->renderHeader());
+        $this->assertSame($col->renderHeader(6), $col->renderHeader(0));
+        $this->assertSame($col->renderCell('ab', 6), $col->renderCell('ab'));
+        $this->assertSame($col->renderCell('ab', 6), $col->renderCell('ab', 0));
+    }
+
 }
