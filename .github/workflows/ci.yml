@@ -741,7 +741,7 @@ jobs:
 
   # macOS test job — verifies POSIX PTY paths on Darwin. The matrix
   # source is MACOS_LIBS in scripts/affected-libs.php, currently
-  # sugar-core and sugar-ssh-server: both exercise the same
+  # sugar-core, sugar-ssh-server and candy-top: the first two exercise the same
   # posix_openpt + grantpt + TIOCSWINSZ chain sugar-pty's libc FFI
   # drives (posix_openpt / grantpt / unlockpt / ptsname_r / ioctl and
   # the macOS TIOCSWINSZ / TIOCGWINSZ constants that diverge from

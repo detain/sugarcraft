@@ -52,6 +52,13 @@ const MACOS_LIBS = [
     // tests fail visibly enough to flag regressions).
     'sugar-core',
     'sugar-ssh-server',
+    // candy-top (S-X05): the Darwin leg of the platform-split collectors.
+    // Its suites read fixture trees through injected roots, so the macOS
+    // run proves the suite is host-neutral and that Darwin gets the honest
+    // "no collector family" path (Platform::for('Darwin')), not that a
+    // Darwin collector exists. The pty tests skip themselves where
+    // sugar-pty cannot open a pty (see the sugar-pty hold-out above).
+    'candy-top',
 ];
 
 /** PHP versions every lib's PHPUnit suite runs against. */

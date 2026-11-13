@@ -273,10 +273,30 @@ final class BinTest extends TestCase
      * @param array<string, string> $env locale overrides merged over the inherited environment
      * @return array{int, string, string}
      */
+    /**
+     * The coreutils `timeout` guard that keeps a regressed gate from hanging
+     * the run. macOS has none by default (Homebrew ships it as `gtimeout`);
+     * without either the child runs bare, bounded only by the CI job limit.
+     *
+     * @return list<string>
+     */
+    private static function timeoutPrefix(): array
+    {
+        foreach (['timeout', 'gtimeout'] as $tool) {
+            foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $dir) {
+                if ($dir !== '' && is_executable($dir . '/' . $tool)) {
+                    return [$tool, '20'];
+                }
+            }
+        }
+
+        return [];
+    }
+
     private static function invoke(array $args, array $env = []): array
     {
         $proc = proc_open(
-            ['timeout', '20', PHP_BINARY, __DIR__ . '/../bin/candy-top', ...$args],
+            [...self::timeoutPrefix(), PHP_BINARY, __DIR__ . '/../bin/candy-top', ...$args],
             [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
             null,
