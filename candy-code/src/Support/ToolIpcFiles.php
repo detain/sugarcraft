@@ -6,6 +6,8 @@ namespace SugarCraft\Code\Support;
 
 use SugarCraft\Code\Agents\AgentWorkerPool;
 use SugarCraft\Code\Background\BackgroundSupervisor;
+use SugarCraft\Code\Providers\ClaudeCodeInvocation;
+use SugarCraft\Code\Providers\CodexInvocation;
 
 /**
  * The temp files a forked tool child hands its result back through, and the
@@ -96,6 +98,9 @@ final class ToolIpcFiles
      * contention.
      */
     private const STALE_AFTER_SECONDS = 3600;
+
+    /** Age at which a stranded provider spill file (system prompt, Codex schema) is reaped. */
+    private const STALE_SPILL_AFTER_SECONDS = 86400;
 
     /**
      * S_IFMT / S_IFREG, spelled out because PHP exposes neither: a planted
@@ -367,12 +372,22 @@ final class ToolIpcFiles
         if (!SafeDelete::baseIsSane($dir)) {
             return 0;
         }
-        $cutoff = $olderThanSeconds ?? self::STALE_AFTER_SECONDS;
         $uid = function_exists('posix_geteuid') ? posix_geteuid() : null;
         $now = time();
 
         $removed = 0;
-        foreach ([self::RUNTIME_PREFIX, self::CHAT_PREFIX, self::HOOK_PAYLOAD_PREFIX] as $prefix) {
+        // The provider spill files (a >64 KiB system prompt, a Codex output
+        // schema) are handed to a long-lived child CLI by path, so they get a
+        // day, not an hour: a file that old cannot belong to a live turn.
+        $prefixes = [
+            self::RUNTIME_PREFIX => self::STALE_AFTER_SECONDS,
+            self::CHAT_PREFIX => self::STALE_AFTER_SECONDS,
+            self::HOOK_PAYLOAD_PREFIX => self::STALE_AFTER_SECONDS,
+            ClaudeCodeInvocation::SYSTEM_PROMPT_FILE_PREFIX => self::STALE_SPILL_AFTER_SECONDS,
+            CodexInvocation::OUTPUT_SCHEMA_FILE_PREFIX => self::STALE_SPILL_AFTER_SECONDS,
+        ];
+        foreach ($prefixes as $prefix => $defaultCutoff) {
+            $cutoff = $olderThanSeconds ?? $defaultCutoff;
             foreach (glob($dir . '/' . $prefix . '*') ?: [] as $path) {
                 $stat = @lstat($path);
                 if ($stat === false || ($stat['mode'] & self::STAT_TYPE_MASK) !== self::STAT_REGULAR_FILE) {

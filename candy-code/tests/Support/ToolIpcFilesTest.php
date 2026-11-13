@@ -178,6 +178,29 @@ final class ToolIpcFilesTest extends TestCase
     }
 
     /**
+     * S-P09: the Claude system-prompt spill and the Codex output-schema temp
+     * are stranded when candy-code is killed mid-turn; a day-old planted one
+     * is swept, a fresh (or hour-old) foreign one is not.
+     */
+    public function testSweepReapsDayOldProviderSpillFilesAndSparesFreshOnes(): void
+    {
+        $oldCc = $this->stale(\SugarCraft\Code\Providers\ClaudeCodeInvocation::SYSTEM_PROMPT_FILE_PREFIX . 'old');
+        $oldCodex = $this->stale(\SugarCraft\Code\Providers\CodexInvocation::OUTPUT_SCHEMA_FILE_PREFIX . 'old');
+        $fresh = $this->dir . '/' . \SugarCraft\Code\Providers\ClaudeCodeInvocation::SYSTEM_PROMPT_FILE_PREFIX . 'fresh';
+        file_put_contents($fresh, 'x');
+        $hourOld = $this->dir . '/' . \SugarCraft\Code\Providers\CodexInvocation::OUTPUT_SCHEMA_FILE_PREFIX . 'hour';
+        file_put_contents($hourOld, 'x');
+        touch($hourOld, time() - 7200);
+
+        self::assertSame(2, ToolIpcFiles::sweep($this->dir));
+
+        self::assertFileDoesNotExist($oldCc);
+        self::assertFileDoesNotExist($oldCodex);
+        self::assertFileExists($fresh);
+        self::assertFileExists($hourOld);
+    }
+
+    /**
      * The whole safety of an age-based sweep. A payload belonging to a LIVE
      * run — this process's, or another candy-code on the same box, which is
      * indistinguishable from here — must survive, or a leak becomes a lost
