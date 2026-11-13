@@ -240,11 +240,20 @@ be its own follow-up. This index will link them where they land.</p>
 
 <script src="js/main.js"></script>
 
-<div class="search-modal" id="search-modal" role="dialog" aria-modal="true" aria-label="Search the site" hidden>
-    <div class="search-modal-box">
-        <input class="search-input" id="search-input" type="text" placeholder="Search libraries, tools, topics..." autocomplete="off" spellcheck="false">
-        <ul class="search-results" id="search-results" role="listbox" aria-label="Search results"></ul>
-        <div class="search-hint"><kbd>Ctrl+K</kbd> to open · <kbd>Esc</kbd> to close · <kbd>↵</kbd> to search GitHub</div>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries and apps" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list" aria-label="Search libraries and apps">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox" aria-label="Search results"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
     </div>
 </div>
 <script src="js/search.js" defer></script>
