@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\ColorProfile\Tests;
 
 use SugarCraft\ColorProfile\Color;
+use SugarCraft\ColorProfile\ColorProfile;
 use SugarCraft\ColorProfile\Profile;
 use SugarCraft\ColorProfile\StandardColors;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -375,5 +376,41 @@ final class ColorTest extends TestCase
     {
         $this->assertSame(30, Color::ansi16Sgr(0, false));
         $this->assertSame(107, Color::ansi16Sgr(15, true));
+    }
+
+    /**
+     * CP-48 boundary pin (-058): toAscii and isDark read ONE threshold now.
+     * Exact-128 gray has perceivedBrightness() == 128.0 — inside the old
+     * disagreement band where isDark said "not dark" yet toAscii/Fgbg/NoTTY
+     * mapped to black. The band [127.5, 128] is the single disclosed
+     * byte-class flip (no existing golden covered it: the Ascii-rung tests
+     * use 255,0,0 and 137/250 grays, both outside the band — verified by
+     * suite-wide grep, this suite went green unchanged before this pin was
+     * added, so the flip is new behaviour answering a NEW assertion, not a
+     * re-pinned old one).
+     */
+    public function testAsciiRungAndIsDarkAgreeAtTheSharedBrightnessThreshold(): void
+    {
+        $exact128 = new Color(128, 128, 128);
+        // The BT.601 weights sum to 1.0 only in decimal; in binary the
+        // "exact" 128 gray lands at 128 - 1.4e-14 — it could NEVER clear the
+        // old `> 128` white gate, which is exactly the band this pin holds
+        // shut: not-dark by isDark, black by toAscii, before the shared rung.
+        $this->assertEqualsWithDelta(128.0, $exact128->perceivedBrightness(), 1e-9);
+        $this->assertLessThan(128.0, $exact128->perceivedBrightness(), 'the epsilon is the disclosed flip itself');
+        $this->assertFalse($exact128->isDark(), 'exact-128 must not be dark by either face');
+        $white = $exact128->convert(ColorProfile::Ascii);
+        $this->assertSame([255, 255, 255], [$white->r, $white->g, $white->b], 'not-dark maps to the white rung');
+
+        $below = new Color(127, 127, 127);
+        $this->assertTrue($below->isDark());
+        $black = $below->convert(ColorProfile::Ascii);
+        $this->assertSame([0, 0, 0], [$black->r, $black->g, $black->b]);
+
+        // Fgbg and NoTTY share the door — one rung, all three faces.
+        $fgbg = $exact128->convert(ColorProfile::Fgbg);
+        $this->assertSame([255, 255, 255], [$fgbg->r, $fgbg->g, $fgbg->b]);
+        $noTty = $exact128->convert(ColorProfile::NoTTY);
+        $this->assertSame([255, 255, 255], [$noTty->r, $noTty->g, $noTty->b]);
     }
 }

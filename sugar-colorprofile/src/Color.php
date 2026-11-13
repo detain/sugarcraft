@@ -83,7 +83,7 @@ final class Color
     /**
      * Convert this color to the closest approximation representable in $profile.
      *
-     * - TrueColor: returns a copy unchanged (already at max fidelity)
+     * - TrueColor: returns the same instance (immutable — already at max fidelity)
      * - Ansi256:  rounds to the nearest 216-color cube or 24-step gray ramp
      * - Ansi240:  same quantiser — it lands exclusively on slots 16-255 by
      *             construction, which IS the chafa INDEXED_240 promise)
@@ -441,11 +441,22 @@ final class Color
         return new self($r, $g, $b, $this->a);
     }
 
+    /**
+     * Mid-gray line of {@see self::perceivedBrightness()} shared by
+     * toAscii() and isDark() — the two faces must agree on which rungs are
+     * dark or every consumer that composes them (legibility painting) gets
+     * a contradiction at exactly 128-class grays (-058).
+     */
+    private const BRIGHTNESS_DARK_THRESHOLD = 127.5;
+
     private function toAscii(): self
     {
-        // Map to near-black or near-white for legibility
+        // Map to near-black or near-white for legibility — the SAME rung
+        // isDark() reads (one shared threshold, -058: the old `> 128` vs
+        // `< 127.5` pair called brightness ∈ [127.5, 128] "not dark" yet
+        // mapped it to black).
         $brightness = $this->perceivedBrightness();
-        if ($brightness > 128) {
+        if ($brightness >= self::BRIGHTNESS_DARK_THRESHOLD) {
             return new self(0xff, 0xff, 0xff, $this->a);
         }
         return new self(0, 0, 0, $this->a);
@@ -486,7 +497,7 @@ final class Color
      */
     public function isDark(): bool
     {
-        return $this->perceivedBrightness() < 127.5;
+        return $this->perceivedBrightness() < self::BRIGHTNESS_DARK_THRESHOLD;
     }
 
     /**

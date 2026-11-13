@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\ColorProfile;
 
-use SugarCraft\ColorProfile\Lang;
-
 /**
  * Standard 16-color ANSI palette as named {@see Color} objects.
  *
@@ -137,7 +135,10 @@ final class StandardColors
 }
 
 // Static initialization — typed statics have no default, so the objects
-// are seeded eagerly at file load (first possible use).
+// are seeded eagerly at file load (first possible use). Decision note
+// (-060): no re-include seeding guard ships — composer autoload loads this
+// file exactly once per process, a manual double-include resetting consumer
+// overrides is exotic, and the guard costs more than it saves; revisit at 2.0.
 StandardColors::$black       = new Color(0x00, 0x00, 0x00);
 StandardColors::$red         = new Color(0xcd, 0x00, 0x00);
 StandardColors::$green       = new Color(0x00, 0xcd, 0x00);
