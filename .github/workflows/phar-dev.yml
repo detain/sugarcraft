@@ -251,9 +251,11 @@ jobs:
             --out "${RUNNER_TEMP:-/tmp}/pins-$APP.json"
 
       - name: Install production dependencies
+        env:
+          APP: ${{ matrix.app }}
         run: |
           set -euo pipefail
-          cd "${{ matrix.app }}"
+          cd "$APP"
           # Linked-mode local checkouts can carry a path-repo lock; CI starts
           # from git, and build-phar REFUSES symlinked sibling vendors as the
           # second line of defence against frozen sibling WIP. The injected
@@ -296,9 +298,11 @@ jobs:
 
       - name: Build the archive
         id: build
+        env:
+          APP: ${{ matrix.app }}
         run: |
           set -euo pipefail
-          app='${{ matrix.app }}'
+          app="$APP"
           short="$(git rev-parse --short=7 HEAD)"
           # SOURCE_DATE_EPOCH pins metadata['built_at'] to the commit date
           # (the same DST-1 discipline as the release pipelines); the
@@ -334,7 +338,6 @@ jobs:
         # not about whether the app's CLI happens to print it.
         run: |
           set -euo pipefail
-          app='${{ matrix.app }}'
           want="$WANT_STAMP"
           php -r '
             $phar = getenv("PHAR_PATH");
@@ -355,9 +358,11 @@ jobs:
         # headline artifact is a signature over this sidecar's body, so the
         # sidecar has to exist first. The .sha256 names the bytes this job
         # built (integrity); the trust leg is the signature below.
+        env:
+          APP: ${{ matrix.app }}
         run: |
           set -euo pipefail
-          app='${{ matrix.app }}'
+          app="$APP"
           (cd dist && sha256sum "$app.phar" > "$app.phar.sha256")
           cat "dist/$app.phar.sha256"
 
@@ -377,7 +382,7 @@ jobs:
         # In keyless state all three are skipped together: one early-exit step.
         run: |
           set -euo pipefail
-          app='${{ matrix.app }}'
+          app="$APP"
           if [ -z "${SUGARCRAFT_SIGNING_KEY:-}" ]; then
             echo "::notice::SUGARCRAFT_SIGNING_KEY secret not set — shipping unsigned (keyless state)"
             exit 0
@@ -412,7 +417,7 @@ jobs:
         # pass-by-omission.
         run: |
           set -euo pipefail
-          app='${{ matrix.app }}'
+          app="$APP"
           stamp="$STEP_STAMP"
           fake_home="$(mktemp -d)"
           out="$(HOME="$fake_home" php "dist/$app.phar" --version)"
@@ -433,6 +438,7 @@ jobs:
             fi
           fi
         env:
+          APP: ${{ matrix.app }}
           STEP_STAMP: dev-${{ steps.build.outputs.short }}
 
       - name: Publish rolling dev release
@@ -445,7 +451,7 @@ jobs:
         # already-exists path too, never skipped.
         run: |
           set -euo pipefail
-          app='${{ matrix.app }}'
+          app="$APP"
           stamp="$STEP_STAMP"
           git tag -f "$app/dev" "$GITHUB_SHA"
           git push -f origin "refs/tags/$app/dev"
@@ -468,6 +474,7 @@ jobs:
               --notes "$(printf '%b' "$notes")"
           fi
         env:
+          APP: ${{ matrix.app }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_SHA: ${{ github.sha }}
           STEP_STAMP: dev-${{ steps.build.outputs.short }}
