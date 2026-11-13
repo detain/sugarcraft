@@ -307,7 +307,7 @@ final class StoreTest extends TestCase
         /** @var \SQLite3 $sqlite */
         $sqlite = $prop->getValue($db);
 
-        $past = (new \DateTimeImmutable('-1 hour'))->format(\DATE_ATOM);
+        $past = \time() - 3600;
         $stmt = $sqlite->prepare(
             'INSERT INTO entries (key, value, binary, created, modified, expires_at)
              VALUES (:key, :value, 0, :now, :now, :expires_at)'
@@ -315,7 +315,7 @@ final class StoreTest extends TestCase
         $stmt->bindValue(':key', 'old-entry', \SQLITE3_TEXT);
         $stmt->bindValue(':value', 'old-value', \SQLITE3_TEXT);
         $stmt->bindValue(':now', (new \DateTimeImmutable())->format(\DATE_ATOM), \SQLITE3_TEXT);
-        $stmt->bindValue(':expires_at', $past, \SQLITE3_TEXT);
+        $stmt->bindValue(':expires_at', $past, \SQLITE3_INTEGER);
         $stmt->execute();
         $stmt->close();
 

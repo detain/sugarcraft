@@ -28,7 +28,13 @@ use SugarCraft\Kv\Support\Ttl;
  * compare lexicographically, NOT by instant — a '+02:00' stamp read on
  * a '-05:00' box expired early or late depending on the local clock
  * text. Legacy DBs whose expires_at column holds DATE_ATOM strings are
- * converted once on open (see migrateExpiryColumn).
+ * converted once on open (see migrateExpiryColumn), and any db whose
+ * column still carries TEXT affinity — the ALTER-add lineage, which
+ * gives one logical column two physical schemas — is rebuilt to the
+ * canonical INTEGER column once as well (see rebuildForIntegerAffinity).
+ * Affinity is what makes the comparison laws self-enforcing: SQLite
+ * coerces digit-like writes to numeric storage, so no reader needs the
+ * old CAST bridge and `expires_at` can carry a partial index.
  *
  * The database file is a secrets store: it is chmod'ed to 0600 on open,
  * tightening any pre-existing world/group-readable file in place.
@@ -41,8 +47,10 @@ final class Database
      * current version skip every detection scan, so a completed migration
      * never turns into a forever-repeating O(rows) heuristic walk. Future
      * schema changes append a numbered step and raise this ceiling.
+     *   1 — expiry VALUE normalisation (legacy DATE_ATOM cells → epoch)
+     *   2 — expiry AFFINITY rebuild (TEXT-affinity ALTER lineage → INTEGER)
      */
-    public const SCHEMA_VERSION = 1;
+    public const SCHEMA_VERSION = 2;
 
     private \SQLite3 $db;
     private string $name;
@@ -138,7 +146,10 @@ final class Database
             // Born current: stamp immediately, no migration work exists.
             $this->db->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
         } elseif ($this->schemaVersion() < self::SCHEMA_VERSION) {
-            // Legacy lineage (pre-versioning databases arrive unstamped).
+            // Legacy lineage (pre-versioning databases arrive unstamped;
+            // version-1 files paid the value normalisation but still carry
+            // the ALTER-add TEXT affinity). Both steps are idempotent, so
+            // paying them in one pass is safe at any stamp below the top.
             // Migrate legacy schema (no expires_at column) first.
             $result = $this->db->query('PRAGMA table_info(entries)');
             $columns = [];
@@ -146,15 +157,30 @@ final class Database
                 $columns[] = $row['name'];
             }
             if (!\in_array('expires_at', $columns, true)) {
+                // The historical spelling of the ALTER-add (TEXT): matched
+                // against the real legacy files, then normalised on the
+                // rebuild below — future majors delete this TEXT branch
+                // entirely (kv-128).
                 $this->db->exec('ALTER TABLE entries ADD COLUMN expires_at TEXT');
             }
             $this->migrateExpiryColumn();
-            // Stamp after the commit: a crash between the two costs one
+            $this->rebuildForIntegerAffinity();
+            // Stamp after the commits: a crash between the two costs one
             // idempotent rescan, never a skipped step.
             $this->db->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
         }
 
         $this->db->exec('PRAGMA journal_mode = WAL');
+        // Partial index on the expiry column (kv-079): every liveness
+        // predicate is now a bare comparison against numeric storage (the
+        // affinity rebuild retired the CAST bridge that made every TTL
+        // walk unindexable), so prune's `IS NOT NULL AND < :now` arm
+        // seeks directly. The `expires_at IS NOT NULL` qualifier keeps the
+        // index off the forever rows — the majority in a personal vault —
+        // so it stays small. IF NOT EXISTS: opens pay the build once.
+        $this->db->exec(
+            'CREATE INDEX IF NOT EXISTS entries_expires ON entries (expires_at) WHERE expires_at IS NOT NULL'
+        );
         // 64,000 KiB (62.5 MiB) page-cache cap per connection (negative spelling is KiB):
         // list/glob/pattern walks on large stores reread the same pages, and
         // the cap lets them land in cache instead of disk. It is a ceiling,
@@ -188,8 +214,9 @@ final class Database
      * dynamic typing means the column may hold a mix. Rows whose text is
      * not already canonical integer spelling are parsed and rewritten —
      * an integer in fresh INTEGER-affinity columns, numeric text in legacy
-     * TEXT-affinity columns (SQLite column affinity); the read predicates
-     * CAST either shape to the same integer comparison.
+     * TEXT-affinity columns (SQLite column affinity), which the affinity
+     * rebuild immediately below then converts to numeric storage as part
+     * of the same open.
      *
      * The whole pass runs inside one `BEGIN IMMEDIATE`: the snapshot is
      * taken AFTER the write lock (kv-027), so no concurrent commit can
@@ -335,6 +362,78 @@ final class Database
     }
 
     /**
+     * Give the expiry column its canonical INTEGER affinity exactly once.
+     *
+     * Two physical schemas served one logical column (kv-128): databases
+     * created current arrived with `expires_at INTEGER`, while every
+     * pre-column database got the ALTER-add's TEXT affinity forever. The
+     * divergence forced a CAST bridge onto every TTL predicate — and a
+     * CAST predicate can never be served by an index, so all list/count/
+     * prune walks were permanent full scans (kv-079). SQLite's write-time
+     * affinity conversion is the enforcement no bridge can match: under
+     * INTEGER affinity, digit-like writes land numeric no matter who
+     * wrote them.
+     *
+     * The rebuild is a classic create-copy-swap inside ONE `BEGIN
+     * IMMEDIATE`: a mid-flight failure rolls back to the untouched
+     * original, and because the schema stamp is only raised after this
+     * method commits, a crash costs one idempotent redo, never a skipped
+     * step. The copy casts values that the value normalisation above has
+     * already reduced to NULL or canonical epoch text — CAST is exact on
+     * both shapes. No-op when the column already carries INTEGER affinity
+     * (fresh lineage, or a file that already paid this step).
+     */
+    private function rebuildForIntegerAffinity(): void
+    {
+        $type = $this->db->querySingle(
+            "SELECT type FROM pragma_table_info('entries') WHERE name = 'expires_at'"
+        );
+        if (\strcasecmp((string) $type, 'INTEGER') === 0) {
+            return;
+        }
+
+        try {
+            $this->db->exec('BEGIN IMMEDIATE');
+        } catch (\Throwable $e) {
+            throw new \RuntimeException(
+                \sprintf("Cannot start the affinity rebuild for database '%s': %s", $this->name, $e->getMessage()),
+                0,
+                $e
+            );
+        }
+
+        try {
+            $this->db->exec('
+                CREATE TABLE entries_migrated (
+                    key         TEXT PRIMARY KEY,
+                    value       TEXT NOT NULL,
+                    binary      INTEGER NOT NULL DEFAULT 0,
+                    created     TEXT NOT NULL,
+                    modified    TEXT NOT NULL,
+                    expires_at  INTEGER
+                )
+            ');
+            $this->db->exec('
+                INSERT INTO entries_migrated
+                    SELECT key, value, binary, created, modified,
+                           CAST(expires_at AS INTEGER)
+                    FROM entries
+            ');
+            $this->db->exec('DROP TABLE entries');
+            $this->db->exec('ALTER TABLE entries_migrated RENAME TO entries');
+            $this->db->exec('COMMIT');
+        } catch (\Throwable $e) {
+            // The original failure is the reportable one; a ROLLBACK that
+            // itself fails (connection already dead) must not mask it.
+            try {
+                $this->db->exec('ROLLBACK');
+            } catch (\Throwable) {
+            }
+            throw $e;
+        }
+    }
+
+    /**
      * Get a single entry by key.
      * Returns null if not found or if the entry has expired.
      */
@@ -344,7 +443,7 @@ final class Database
             'SELECT key, value, binary, created, modified, expires_at
              FROM entries
              WHERE key = :key
-               AND (expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now)'
+               AND (expires_at IS NULL OR expires_at >= :now)'
         );
         $stmt->bindValue(':key', $key, \SQLITE3_TEXT);
         $stmt->bindValue(':now', \time(), \SQLITE3_INTEGER);
@@ -464,7 +563,7 @@ final class Database
         $stmt = $this->db->prepare(
             'DELETE FROM entries
              WHERE key = :key
-               AND (expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now)'
+               AND (expires_at IS NULL OR expires_at >= :now)'
         );
         $stmt->bindValue(':key', $key, \SQLITE3_TEXT);
         $stmt->bindValue(':now', \time(), \SQLITE3_INTEGER);
@@ -511,7 +610,7 @@ final class Database
         } else {
             $sql = "SELECT key, value, binary, created, modified, expires_at
                     FROM entries
-                    WHERE expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now
+                    WHERE expires_at IS NULL OR expires_at >= :now
                     ORDER BY key {$order}";
             $bindings = [':now' => $now];
         }
@@ -547,7 +646,7 @@ final class Database
             // expired rows are dead and must not inflate the total.
             $stmt = $this->db->prepare(
                 'SELECT COUNT(*) FROM entries
-                 WHERE expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now'
+                 WHERE expires_at IS NULL OR expires_at >= :now'
             );
             $stmt->bindValue(':now', $now, \SQLITE3_INTEGER);
             $r = $stmt->execute();
@@ -563,7 +662,7 @@ final class Database
         $like = $this->globToLike($pattern);
         $stmt = $this->db->prepare(
             'SELECT COUNT(*) FROM entries WHERE key LIKE :pat ESCAPE \'\\\''
-                . ' AND (expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now)'
+                . ' AND (expires_at IS NULL OR expires_at >= :now)'
         );
         $stmt->bindValue(':pat', $like, \SQLITE3_TEXT);
         $stmt->bindValue(':now', $now, \SQLITE3_INTEGER);
@@ -592,7 +691,7 @@ final class Database
         $like = $this->globToLike($pattern);
         $stmt = $this->db->prepare(
             'DELETE FROM entries WHERE key LIKE :pat ESCAPE \'\\\''
-                . ' AND (expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now)'
+                . ' AND (expires_at IS NULL OR expires_at >= :now)'
         );
         $stmt->bindValue(':pat', $like, \SQLITE3_TEXT);
         $stmt->bindValue(':now', \time(), \SQLITE3_INTEGER);
@@ -615,7 +714,7 @@ final class Database
     {
         $stmt = $this->db->prepare(
             'DELETE FROM entries
-             WHERE expires_at IS NOT NULL AND CAST(expires_at AS INTEGER) < :now'
+             WHERE expires_at IS NOT NULL AND expires_at < :now'
         );
         $stmt->bindValue(':now', \time(), \SQLITE3_INTEGER);
         $stmt->execute();
@@ -690,7 +789,7 @@ final class Database
         $now = \time();
         $stmt = $this->db->prepare(
             'SELECT key FROM entries
-             WHERE expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now
+             WHERE expires_at IS NULL OR expires_at >= :now
              ORDER BY key ASC'
         );
         $stmt->bindValue(':now', $now, \SQLITE3_INTEGER);
@@ -811,7 +910,7 @@ final class Database
             "SELECT key, value, binary, created, modified, expires_at
              FROM entries
              WHERE key LIKE :pat ESCAPE '\\'
-               AND (expires_at IS NULL OR CAST(expires_at AS INTEGER) >= :now)
+               AND (expires_at IS NULL OR expires_at >= :now)
              ORDER BY key {$order}",
             [':pat' => $like, ':now' => $now],
         ];

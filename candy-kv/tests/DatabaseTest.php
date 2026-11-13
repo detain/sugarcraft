@@ -175,14 +175,16 @@ final class DatabaseTest extends TestCase
 
         // Force 'doomed' into the past: no public API can stamp a past
         // expiry (negative TTLs clamp to never-expire), so rewrite the row
-        // through the live SQLite handle.
-        $expired = (new \DateTimeImmutable())->modify('-1 hour')->format(\DATE_ATOM);
+        // through the live SQLite handle. The cell is bound as an epoch
+        // INTEGER — the storage contract the affinity rebuild (kv-128)
+        // enforces; TEXT expiry cells no longer compare as expiries.
+        $expired = \time() - 3600;
         $prop = new \ReflectionProperty(\SugarCraft\Kv\Database::class, 'db');
         $prop->setAccessible(true);
         /** @var \SQLite3 $sqlite */
         $sqlite = $prop->getValue($this->db);
         $stmt = $sqlite->prepare('UPDATE entries SET expires_at = :t WHERE key = :k');
-        $stmt->bindValue(':t', $expired, \SQLITE3_TEXT);
+        $stmt->bindValue(':t', $expired, \SQLITE3_INTEGER);
         $stmt->bindValue(':k', 'doomed', \SQLITE3_TEXT);
         $stmt->execute();
         $stmt->close();
@@ -256,7 +258,7 @@ final class DatabaseTest extends TestCase
         /** @var \SQLite3 $sqlite */
         $sqlite = $prop->getValue($this->db);
 
-        $past = (new \DateTimeImmutable('-1 hour'))->format(\DATE_ATOM);
+        $past = \time() - 3600;
         $stmt = $sqlite->prepare(
             'INSERT INTO entries (key, value, binary, created, modified, expires_at)
              VALUES (:key, :value, 0, :now, :now, :expires_at)'
@@ -264,7 +266,7 @@ final class DatabaseTest extends TestCase
         $stmt->bindValue(':key', 'expired-key', \SQLITE3_TEXT);
         $stmt->bindValue(':value', 'should-not-see', \SQLITE3_TEXT);
         $stmt->bindValue(':now', (new \DateTimeImmutable())->format(\DATE_ATOM), \SQLITE3_TEXT);
-        $stmt->bindValue(':expires_at', $past, \SQLITE3_TEXT);
+        $stmt->bindValue(':expires_at', $past, \SQLITE3_INTEGER);
         $stmt->execute();
         $stmt->close();
 
@@ -321,7 +323,7 @@ final class DatabaseTest extends TestCase
         /** @var \SQLite3 $sqlite */
         $sqlite = $prop->getValue($this->db);
 
-        $past = (new \DateTimeImmutable('-1 hour'))->format(\DATE_ATOM);
+        $past = \time() - 3600;
         $stmt = $sqlite->prepare(
             'INSERT INTO entries (key, value, binary, created, modified, expires_at)
              VALUES (:key, :value, 0, :now, :now, :expires_at)'
@@ -329,7 +331,7 @@ final class DatabaseTest extends TestCase
         $stmt->bindValue(':key', 'expired', \SQLITE3_TEXT);
         $stmt->bindValue(':value', 'v', \SQLITE3_TEXT);
         $stmt->bindValue(':now', (new \DateTimeImmutable())->format(\DATE_ATOM), \SQLITE3_TEXT);
-        $stmt->bindValue(':expires_at', $past, \SQLITE3_TEXT);
+        $stmt->bindValue(':expires_at', $past, \SQLITE3_INTEGER);
         $stmt->execute();
         $stmt->close();
 

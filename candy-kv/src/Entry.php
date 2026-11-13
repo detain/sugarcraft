@@ -47,8 +47,10 @@ final class Entry
      * box reads with the same true instant everywhere. THE ONE liveness
      * rule: a row is expired exactly when its epoch is strictly before the
      * integer-second "now" — SQL readers apply `expires_at IS NULL OR
-     * CAST(expires_at AS INTEGER) >= :now` and pruneExpired deletes the
-     * complement; this method carries the same rule at DateTime precision.
+     * expires_at >= :now` (the column's INTEGER affinity makes the bare
+     * comparison total; kv-128's rebuild retired the old CAST bridge) and
+     * pruneExpired deletes the complement; this method carries the same
+     * rule at DateTime precision.
      * At the exact expiry second the integer-second SQL comparison keeps
      * the row while a sub-second-aware read here may already call it
      * expired — a same-second boundary of at most one second, resolved in

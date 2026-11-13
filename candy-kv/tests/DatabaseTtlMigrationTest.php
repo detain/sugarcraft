@@ -111,9 +111,9 @@ final class DatabaseTtlMigrationTest extends TestCase
         $this->assertNull($db->get('dead'));
         $this->assertNotNull($db->get('no-expiry'));
 
-        // The one-time rewrite actually happened: expiry cells are pure digits
-        // (a legacy TEXT-affinity column stores the epoch as numeric text; a
-        // fresh INTEGER column stores an integer — both compare numerically).
+        // The one-time rewrite actually happened: expiry cells are numeric
+        // epochs (the value pass converts the text, the affinity rebuild
+        // converts the storage class — kv-128).
         $prop = new \ReflectionProperty(Database::class, 'db');
         $prop->setAccessible(true);
         /** @var \SQLite3 $sqlite */
@@ -241,13 +241,14 @@ final class DatabaseTtlMigrationTest extends TestCase
         $this->assertNull($db->get('ancient'), 'epoch -86400 is a true past instant');
         $this->assertNotNull($db->get('other'), 'the rest of the vault stays reachable');
 
-        // Canonical signed spelling is already correct: no rewrite was
-        // needed and none happened (CAST compares it numerically as-is).
+        // Canonical signed spelling is already correct as a VALUE: no text
+        // rewrite was needed. The affinity rebuild still moves the STORAGE
+        // class to the canonical integer (kv-128): -86400 as an integer.
         $prop = new \ReflectionProperty(Database::class, 'db');
         $prop->setAccessible(true);
         /** @var \SQLite3 $sqlite */
         $sqlite = $prop->getValue($db);
-        $this->assertSame('-86400', $sqlite->querySingle("SELECT expires_at FROM entries WHERE key = 'ancient'"));
+        $this->assertSame(-86400, $sqlite->querySingle("SELECT expires_at FROM entries WHERE key = 'ancient'"));
         $this->assertSame(1, $db->pruneExpired(), 'and the expired signed row prunes');
         $db->close();
     }
@@ -450,12 +451,12 @@ final class DatabaseTtlMigrationTest extends TestCase
         $this->assertStringNotContainsString('dead', $listing['stdout']);
 
         // The binary's own open persisted the one-time rewrite: expiry cells
-        // are pure digits afterwards (TEXT affinity may keep them numeric
-        // text — what matters is they no longer carry offset strings).
+        // are numeric epoch storage afterwards (value pass + affinity
+        // rebuild) — they no longer carry offset strings in any shape.
         $sqlite = new \SQLite3($xdg . '/skate/default.db');
         $raw = (string) $sqlite->querySingle("SELECT expires_at FROM entries WHERE key='alive'");
         $sqlite->close();
-        $this->assertMatchesRegularExpression('/^[0-9]+$/', $raw, 'the tip binary must re-encode legacy expiries on open');
+        $this->assertMatchesRegularExpression('/^-?[0-9]+$/', $raw, 'the tip binary must re-encode legacy expiries on open');
         $this->assertSame((new \DateTimeImmutable($future))->getTimestamp(), (int) $raw, 'the rewritten epoch preserves the original instant');
     }
 
@@ -469,5 +470,174 @@ final class DatabaseTtlMigrationTest extends TestCase
     {
         // spawnKv closes stdin so `set` never blocks waiting on a terminal.
         return self::spawnKv($args, $xdg);
+    }
+
+    // -------------------------------------------------------------------------
+    // kv-128 / kv-079: the affinity rebuild (schema step 2)
+    // -------------------------------------------------------------------------
+
+    private function openHandle(Database $db): \SQLite3
+    {
+        $prop = new \ReflectionProperty(Database::class, 'db');
+        $prop->setAccessible(true);
+        /** @var \SQLite3 $sqlite */
+        return $prop->getValue($db);
+    }
+
+    public function testLegacyTextAffinityColumnIsRebuiltToInteger(): void
+    {
+        $future = (new \DateTimeImmutable('+1 hour'))->format(\DATE_ATOM);
+        $path = $this->createLegacyDb('affinity', [
+            ['key' => 'alive', 'expires' => $future],
+            ['key' => 'never', 'expires' => null],
+            ['key' => 'digits', 'expires' => (string) (time() + 7200)],
+        ]);
+
+        // Pre-state: the ALTER-add lineage really is a TEXT column.
+        $raw = new \SQLite3($path);
+        $this->assertSame('TEXT', $raw->querySingle(
+            "SELECT type FROM pragma_table_info('entries') WHERE name = 'expires_at'"
+        ));
+        $raw->close();
+
+        $db = new Database($path, 'affinity');
+        $sqlite = $this->openHandle($db);
+
+        // Post-state (acceptance: PRAGMA table_info differs pre/post): the
+        // column carries the canonical INTEGER affinity, one logical schema
+        // for every lineage.
+        $this->assertSame('INTEGER', $sqlite->querySingle(
+            "SELECT type FROM pragma_table_info('entries') WHERE name = 'expires_at'"
+        ));
+        // Storage CLASSES converted, not just spellings: migrated cells are
+        // numeric integers, forever cells stay NULL.
+        $this->assertSame('integer', $sqlite->querySingle(
+            "SELECT typeof(expires_at) FROM entries WHERE key = 'alive'"
+        ));
+        $this->assertSame('null', $sqlite->querySingle(
+            "SELECT typeof(expires_at) FROM entries WHERE key = 'never'"
+        ));
+        // The rebuild preserved the instant AND every other column...
+        $alive = $db->get('alive');
+        $this->assertNotNull($alive);
+        $this->assertSame((new \DateTimeImmutable($future))->getTimestamp(), $alive->expiresAt?->getTimestamp());
+        $this->assertSame('v-digits', $db->get('digits')?->value);
+        // ...and the PRIMARY KEY survived the create-copy-swap.
+        $this->assertSame(
+            Database::SCHEMA_VERSION,
+            (int) $sqlite->querySingle('PRAGMA user_version'),
+            'the rebuild rides the raised stamp'
+        );
+        $this->expectException(\SQLite3Exception::class);
+        $sqlite->exec("INSERT INTO entries (key, value, binary, created, modified) VALUES ('alive','dupe',0,'now','now')");
+        $db->close();
+    }
+
+    public function testAffinityIsPermanentEnforcementEvenForRawWriters(): void
+    {
+        // WHY the rebuild beats the old CAST bridge: affinity converts at
+        // WRITE time, so after the schema stamp no writer — not even one
+        // bypassing the library with a raw handle — can store digit text
+        // in the expiry cell. The bridge only papered over the legacy
+        // shape; the column now refuses to hold it.
+        $path = $this->createLegacyDb('sticks', [
+            ['key' => 'alive', 'expires' => (new \DateTimeImmutable('+1 hour'))->format(\DATE_ATOM)],
+        ]);
+        $db = new Database($path, 'sticks');
+        $sqlite = $this->openHandle($db);
+
+        $sqlite->exec("UPDATE entries SET expires_at = '2000000000' WHERE key = 'alive'");
+        $this->assertSame('integer', $sqlite->querySingle(
+            "SELECT typeof(expires_at) FROM entries WHERE key = 'alive'"
+        ));
+        $db->close();
+
+        // And the stamped re-open neither re-runs the migration nor touches
+        // the numeric cell (no forever-repeating heuristic walk, kv-028).
+        $again = new Database($path, 'sticks');
+        $this->assertSame(2000000000, (int) $this->openHandle($again)->querySingle(
+            "SELECT expires_at FROM entries WHERE key = 'alive'"
+        ));
+        $again->close();
+    }
+
+    public function testFreshDatabaseCarriesIntegerAffinityAndExpiryIndex(): void
+    {
+        $path = $this->tmpDir . '/fresh-affinity.db';
+        $db = new Database($path, 'fresh-affinity');
+        $db->set('x', 'v', false, 3600);
+        $sqlite = $this->openHandle($db);
+
+        $this->assertSame('INTEGER', $sqlite->querySingle(
+            "SELECT type FROM pragma_table_info('entries') WHERE name = 'expires_at'"
+        ));
+        // Both lineages now share ONE physical schema (kv-128 was born of
+        // them diverging), and both carry the partial TTL index.
+        $this->assertSame('1', (string) $sqlite->querySingle(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'entries_expires'"
+        ));
+        $db->close();
+    }
+
+    public function testPruneSeeksTheExpiryIndex(): void
+    {
+        // kv-079's scaling wall: prune used to be an unindexable CAST
+        // predicate — a full-table O(N) DELETE holding the exclusive write
+        // lock. The bare comparison under INTEGER affinity lets the partial
+        // index answer it. Pinned via the planner's own output.
+        $path = $this->tmpDir . '/index-prune.db';
+        $db = new Database($path, 'index-prune');
+        $sqlite = $this->openHandle($db);
+        for ($i = 0; $i < 50; $i++) {
+            $db->set(\sprintf('k%02d', $i), 'v', false, $i % 2 === 0 ? 3600 : null);
+        }
+
+        $plan = '';
+        $result = $sqlite->query(
+            'EXPLAIN QUERY PLAN DELETE FROM entries WHERE expires_at IS NOT NULL AND expires_at < ' . (time() + 1)
+        );
+        while ($row = $result->fetchArray(\SQLITE3_ASSOC)) {
+            $plan .= $row['detail'] . "\n";
+        }
+        $this->assertStringContainsString('entries_expires', $plan, 'prune must seek the partial expiry index, plan: ' . $plan);
+        $this->assertStringNotContainsString('SCAN entries', $plan, 'a full-scan plan would re-widen the write-lock window (kv-079)');
+
+        $db->close();
+    }
+
+    public function testReadPredicatesCarryNoCastBridge(): void
+    {
+        // kv-079's index win only holds while the liveness predicates stay
+        // bare comparisons. The planner optimises `CAST(col AS INTEGER)`
+        // away when the affinity already matches (mutation-verified), so an
+        // EXPLAIN-only pin could not see a reintroduced bridge spread back
+        // over the file; the source itself is pinned instead. The CAST may
+        // survive ONLY inside the migration machinery: the value pass's
+        // canonical-spelling scan and the rebuild's one-time copy.
+        $src = (string) \file_get_contents((new \ReflectionClass(Database::class))->getFileName());
+
+        $this->assertSame(
+            2,
+            \preg_match_all('/CAST\(expires_at AS INTEGER\)/', $src),
+            'only the rebuild copy and the scan-inner CAST may exist; a bridge back into any predicate re-widens the scan'
+        );
+        $this->assertSame(
+            1,
+            \preg_match_all('/CAST\(CAST\(expires_at/', $src),
+            'exactly one scan-side double-CAST may exist (the value pass detection)'
+        );
+        // The bare liveness arms: seven `IS NULL OR >= :now` readers/writers
+        // (get, delete, list, count-null, count-glob, deleteMany, allKeys,
+        // buildGlobQuery share the shape) plus prune's strict `<` complement.
+        $this->assertGreaterThanOrEqual(
+            8,
+            \preg_match_all('/expires_at >= :now/', $src),
+            'liveness readers must compare the bare integer column'
+        );
+        $this->assertSame(
+            1,
+            \preg_match_all('/expires_at < :now/', $src),
+            "prune must delete the bare comparison's exact complement"
+        );
     }
 }
