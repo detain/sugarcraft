@@ -52,9 +52,9 @@ final class Column
         bool $filterable = false,
         bool $alignLeft = false,
         string $style = '',
-        ColumnWidth $columnWidth = null,
+        ?ColumnWidth $columnWidth = null,
         float $percentValue = 0.0,
-        WrapMode $wrapMode = null,
+        ?WrapMode $wrapMode = null,
     ) {
         $this->key           = $key;
         $this->title         = $title;

@@ -465,4 +465,24 @@ final class ColumnTest extends TestCase
         $this->assertSame(WrapMode::None, $col->wrapMode);
         $this->assertSame(WrapMode::WordWrap, $col2->wrapMode);
     }
+
+    /**
+     * ST-01 guard: the enum-with-default ctor params must carry an EXPLICIT
+     * `?` — an implicit nullable (type + null default, no ?) is deprecated in
+     * PHP 8.4. Reflection cannot tell the two forms apart (both report
+     * nullable), and the 8.3 host never emits the deprecation, so the pin is
+     * a source scan: every typed param defaulting to null must be written ?T.
+     */
+    public function testCtorNullableParamsAreExplicitlyNullable(): void
+    {
+        $source = (string) file_get_contents(\dirname(__DIR__) . '/src/Column.php');
+
+        $this->assertStringContainsString('?ColumnWidth $columnWidth = null', $source);
+        $this->assertStringContainsString('?WrapMode $wrapMode = null', $source);
+        $this->assertDoesNotMatchRegularExpression(
+            '/(?:^|[^?\w])(ColumnWidth|WrapMode)\s+\$\w+\s*=\s*null/m',
+            $source,
+            'no implicit-nullable parameter declaration may return (8.4 E_DEPRECATED)'
+        );
+    }
 }
