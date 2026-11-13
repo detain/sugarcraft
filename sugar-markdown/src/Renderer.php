@@ -128,9 +128,10 @@ final class Renderer
     private ?array $seedReferences = null;
     /**
      * The options in effect, readable after construction (SM-S12): the
-     * constructor normalises them once (a non-positive wrapWidth becomes
-     * null) and every `with*()` builder rebuilds through the same gate,
-     * so these properties answer "what will this renderer actually do".
+     * constructor is their single gate (SM-S50: a non-positive wrapWidth
+     * is refused, not normalised) and every `with*()` builder rebuilds
+     * through it, so these properties answer "what will this renderer
+     * actually do".
      * They are public readonly instead of bare accessors because the
      * short-form builder aliases already occupy the bare names
      * (`wordWrap()`, `sanitize()`, … are setters), and PHP method names
@@ -191,7 +192,14 @@ final class Renderer
         ?StyleSheet $styleSheetOverride = null,
     ) {
         $this->theme = $theme ?? Theme::ansi();
-        $this->wrapWidth = ($wrapWidth !== null && $wrapWidth > 0) ? $wrapWidth : null;
+        // SM-S50: a zero/negative width is not "off" — off is null. Fail
+        // fast at the boundary instead of silently normalising a bug away.
+        if ($wrapWidth !== null && $wrapWidth <= 0) {
+            throw new \InvalidArgumentException(
+                'word wrap width must be a positive column count, or null to disable wrapping; got ' . $wrapWidth
+            );
+        }
+        $this->wrapWidth = $wrapWidth;
         $this->emitHyperlinks = $emitHyperlinks;
         $this->baseUrl = $baseUrl;
         $this->tableWrap = $tableWrap;
@@ -581,7 +589,7 @@ final class Renderer
      * Wrap paragraph + blockquote + list-item bodies at `$cols` cells.
      * Headings, code blocks and tables are never wrapped (they carry
      * their own width semantics; heading passthrough matches glamour).
-     * Pass null or 0 to disable wrapping.
+     * Pass null to disable wrapping; 0 or a negative count throws.
      *
      * Mirrors glamour's `WithWordWrap`.
      */

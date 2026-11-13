@@ -961,8 +961,8 @@ MD;
         self::assertFalse($full->sanitize);
         self::assertTrue($full->defersStreaming(), 'preservedNewLines reads through to the stream law');
 
-        // The constructor's one clamp: a non-positive width is no wrap.
-        self::assertNull((new Renderer(wrapWidth: -5))->wrapWidth);
+        // SM-S50 covers the refusal door; positive widths pass straight through.
+        self::assertSame(1, (new Renderer(wrapWidth: 1))->wrapWidth);
 
         // Builders rebuild through the same gate; the readback follows.
         $chained = $bare->withWordWrap(80)->withHyperlinks(false)->withSanitize(false);
@@ -970,5 +970,27 @@ MD;
         self::assertNull($bare->wrapWidth, 'the source instance is untouched');
         self::assertFalse($chained->emitHyperlinks);
         self::assertFalse($chained->sanitize);
+    }
+
+    public function testANonPositiveWidthIsRefusedAtBothDoors(): void
+    {
+        // SM-S50: 'off' has a name — null. A zero or negative column count
+        // is a bug at the call site, and the house law is to halt there
+        // loudly, not normalise it into silence.
+        foreach ([0, -1, -120] as $bad) {
+            try {
+                new Renderer(wrapWidth: $bad);
+                self::fail("the constructor accepted width $bad");
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringContainsString('positive column count', $e->getMessage());
+                self::assertStringContainsString((string) $bad, $e->getMessage());
+            }
+            try {
+                (new Renderer())->withWordWrap($bad);
+                self::fail("withWordWrap accepted width $bad");
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringContainsString('positive column count', $e->getMessage());
+            }
+        }
     }
 }

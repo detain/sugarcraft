@@ -504,20 +504,25 @@ final class RegressionCoverageTest extends TestCase
 
     public function testWordWrapWithZeroWidth(): void
     {
-        // Zero wrap width should disable wrapping (null stored).
-        $r = Renderer::plain()->withWordWrap(0);
-        $out = $r->render('one two three four five six seven eight nine ten');
-        $this->assertStringContainsString('one', $out);
-        $this->assertStringContainsString('ten', $out);
+        // SM-S50: zero is no longer "off" (null is) — it is refused loudly.
+        $this->expectException(\InvalidArgumentException::class);
+        Renderer::plain()->withWordWrap(0);
     }
 
     public function testWordWrapWithNegativeWidth(): void
     {
-        // Negative wrap width should disable wrapping (null stored).
-        $r = Renderer::plain()->withWordWrap(-5);
+        // SM-S50: negative widths are refused too.
+        $this->expectException(\InvalidArgumentException::class);
+        Renderer::plain()->withWordWrap(-5);
+    }
+
+    public function testWordWrapNullStaysTheDisableDoor(): void
+    {
+        // SM-S50 names the one way to turn wrapping off: null.
+        $r = Renderer::plain()->withWordWrap(null);
         $out = $r->render('one two three four five six seven eight nine ten');
-        $this->assertStringContainsString('one', $out);
-        $this->assertStringContainsString('ten', $out);
+        $this->assertNull($r->wrapWidth);
+        $this->assertStringNotContainsString("\n", trim($out));
     }
 
     // ---- Description list rendering ---------------------------------------
