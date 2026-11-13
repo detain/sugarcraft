@@ -77,7 +77,7 @@ return [
     'score.save.failed' => 'candy-tetris: не удалось сохранить рекорды ({problem})',
     'keys.ignored' => 'candy-tetris: нечитаемый файл клавиш игнорируется ({problem})',
     'scores.ignored' => 'candy-tetris: нечитаемый файл рекордов игнорируется ({problem})',
-    'config.problem' => 'candy-tetris: {detail} в {path}',
+    'config.problem' => '{detail} в {path}',
     'cli.refusal' => 'candy-tetris требуется интерактивный терминал (TTY).
 Играет без цвета: установите NO_COLOR.',
     'cli.too_small' => 'candy-tetris требуется терминал {size}; этот — {actual}.

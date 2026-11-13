@@ -77,7 +77,7 @@ return [
     'score.save.failed' => 'candy-tetris: 无法保存成绩 ({problem})',
     'keys.ignored' => 'candy-tetris: 忽略无法读取的按键文件 ({problem})',
     'scores.ignored' => 'candy-tetris: 忽略无法读取的成绩文件 ({problem})',
-    'config.problem' => 'candy-tetris: {path} 中：{detail}',
+    'config.problem' => '{path} 中：{detail}',
     'cli.refusal' => 'candy-tetris 需要交互式终端 (TTY)。
 无色也能玩：设置 NO_COLOR。',
     'cli.too_small' => 'candy-tetris 需要 {size} 的终端；当前为 {actual}。

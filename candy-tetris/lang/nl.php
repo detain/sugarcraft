@@ -77,7 +77,7 @@ Gebruik: candy-tetris [opties]
     'score.save.failed' => 'candy-tetris: kon scores niet opslaan ({problem})',
     'keys.ignored' => 'candy-tetris: niet-leesbaar toetsenbestand genegeerd ({problem})',
     'scores.ignored' => 'candy-tetris: niet-leesbaar scorebestand genegeerd ({problem})',
-    'config.problem' => 'candy-tetris: {detail} in {path}',
+    'config.problem' => '{detail} in {path}',
     'cli.refusal' => 'candy-tetris heeft een interactieve terminal nodig (een TTY).
 Speelt zonder kleur: stel NO_COLOR in.',
     'cli.too_small' => 'candy-tetris heeft een {size}-terminal nodig; deze is {actual}.

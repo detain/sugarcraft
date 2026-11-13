@@ -77,7 +77,7 @@ return [
     'score.save.failed' => 'candy-tetris: تعذر حفظ النتائج ({problem})',
     'keys.ignored' => 'candy-tetris: تجاهل ملف المفاتيح غير المقروء ({problem})',
     'scores.ignored' => 'candy-tetris: تجاهل ملف النتائج غير المقروء ({problem})',
-    'config.problem' => 'candy-tetris: {detail} في {path}',
+    'config.problem' => '{detail} في {path}',
     'cli.refusal' => 'candy-tetris يحتاج طرفية تفاعلية (TTY).
 يعمل بلا ألوان: اضبط NO_COLOR.',
     'cli.too_small' => 'candy-tetris يتطلب طرفية بمقاس {size}؛ الحالية {actual}.

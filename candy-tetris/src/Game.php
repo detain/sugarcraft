@@ -419,18 +419,10 @@ final class Game implements Model
         } catch (\Throwable $problem) {
             // Loud, and only loud: the session keeps its honest banner and
             // the untouched old file still holds the true record.
-            fwrite(STDERR, Lang::t('score.save.failed', ['problem' => self::cliVisible($problem->getMessage())]) . "\n");
+            fwrite(STDERR, Lang::t('score.save.failed', ['problem' => Support\CliVisible::clamp($problem->getMessage())]) . "\n");
         }
 
         return $pair;
-    }
-
-    /** Trim a failure message to one visible, control-character-free line. */
-    private static function cliVisible(string $raw): string
-    {
-        $clean = preg_replace('/[\x00-\x1f\x7f]/', '?', $raw);
-
-        return strlen($clean) > 40 ? substr($clean, 0, 39) . '…' : $clean;
     }
 
     /**
@@ -461,7 +453,7 @@ final class Game implements Model
                     try {
                         $next->save($closed->scoresPath);
                     } catch (\Throwable $problem) {
-                        fwrite(STDERR, Lang::t('score.save.failed', ['problem' => self::cliVisible($problem->getMessage())]) . "\n");
+                        fwrite(STDERR, Lang::t('score.save.failed', ['problem' => Support\CliVisible::clamp($problem->getMessage())]) . "\n");
                     }
                 }
                 return [$closed, null];

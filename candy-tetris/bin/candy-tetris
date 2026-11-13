@@ -10,6 +10,7 @@ use SugarCraft\Tetris\Game;
 use SugarCraft\Tetris\LaunchMode;
 use SugarCraft\Tetris\Support\Version;
 use SugarCraft\Tetris\Support\Bindings;
+use SugarCraft\Tetris\Support\CliVisible;
 use SugarCraft\Tetris\Support\KeyMap;
 use SugarCraft\Tetris\Support\Paths;
 use SugarCraft\Tetris\Support\Scores;
@@ -80,17 +81,6 @@ use SugarCraft\Tetris\VsGame;
     exit(1);
 })();
 
-/**
- * One-line clamp for startup notices (mirrors the candy-minesweeper
- * stats-notice shape): control bytes are replaced so a filename from
- * the environment can never smuggle escapes into the terminal.
- */
-function cliVisible(string $raw): string
-{
-    $clean = preg_replace('/[\x00-\x1f\x7f]/', '?', $raw);
-    return strlen($clean) > 40 ? substr($clean, 0, 39) . '…' : $clean;
-}
-
 // UI language from $LANG / $LC_ALL. Fifteen non-en catalogues ship, so
 // this is load-bearing today; the 'en' values stay byte-identical to the
 // literals the first i18n pass replaced.
@@ -131,7 +121,7 @@ $seed = LaunchMode::resolveSeed($argv);
 try {
     $bindings = KeyMap::load(Paths::keys(), Bindings::table());
 } catch (Throwable $problem) {
-    fwrite(STDERR, \SugarCraft\Tetris\Lang::t('keys.ignored', ['problem' => cliVisible($problem->getMessage())]) . "\n");
+    fwrite(STDERR, \SugarCraft\Tetris\Lang::t('keys.ignored', ['problem' => CliVisible::clamp($problem->getMessage())]) . "\n");
     $bindings = Bindings::table();
 }
 
@@ -145,7 +135,7 @@ if ($scoresPath !== null) {
     try {
         $scores = Scores::load($scoresPath) ?? new Scores();
     } catch (Throwable $problem) {
-        fwrite(STDERR, \SugarCraft\Tetris\Lang::t('scores.ignored', ['problem' => cliVisible($problem->getMessage())]) . "\n");
+        fwrite(STDERR, \SugarCraft\Tetris\Lang::t('scores.ignored', ['problem' => CliVisible::clamp($problem->getMessage())]) . "\n");
         $scores = new Scores();
     }
 }

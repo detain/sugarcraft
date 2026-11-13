@@ -68,13 +68,13 @@ final class Scores
             return null;
         }
         if (($slot['mode'] & 0o170000) !== 0o100000) {
-            throw new \RuntimeException('candy-tetris: score store is not a regular file in ' . $path);
+            throw new \RuntimeException('score store is not a regular file in ' . $path);
         }
 
         try {
             $envelope = AtomicJsonFile::new($path)->read();
         } catch (\JsonException) {
-            throw new \RuntimeException('candy-tetris: invalid persistence format in ' . $path);
+            throw new \RuntimeException('invalid persistence format in ' . $path);
         }
 
         if (
@@ -83,7 +83,7 @@ final class Scores
             || $envelope['version'] !== self::VERSION
             || !is_array($envelope['data'])
         ) {
-            throw new \RuntimeException('candy-tetris: invalid persistence format in ' . $path);
+            throw new \RuntimeException('invalid persistence format in ' . $path);
         }
 
         $data = $envelope['data'];
@@ -94,7 +94,7 @@ final class Scores
         $versusLosses = self::expectInt($data, 'versusLosses', $path);
 
         if (!array_key_exists('onboarded', $data) || !is_bool($data['onboarded'])) {
-            throw new \RuntimeException('candy-tetris: invalid persistence format in ' . $path);
+            throw new \RuntimeException('invalid persistence format in ' . $path);
         }
 
         // Coherence: a record that counts negative games or reports fewer
@@ -102,7 +102,7 @@ final class Scores
         // broken file is refused LOUDLY rather than trusted or zeroed.
         foreach ([$soloBest, $soloGames, $versusWins, $versusLosses] as $value) {
             if ($value !== null && $value < 0) {
-                throw new \RuntimeException('candy-tetris: invalid persistence counters in ' . $path);
+                throw new \RuntimeException('invalid persistence counters in ' . $path);
             }
         }
 
@@ -172,7 +172,7 @@ final class Scores
     private static function expectInt(array $data, string $key, string $path): int
     {
         if (!array_key_exists($key, $data) || !is_int($data[$key])) {
-            throw new \RuntimeException('candy-tetris: invalid persistence format in ' . $path);
+            throw new \RuntimeException('invalid persistence format in ' . $path);
         }
 
         return $data[$key];
@@ -182,13 +182,13 @@ final class Scores
     private static function expectNullableInt(array $data, string $key, string $path): ?int
     {
         if (!array_key_exists($key, $data)) {
-            throw new \RuntimeException('candy-tetris: invalid persistence format in ' . $path);
+            throw new \RuntimeException('invalid persistence format in ' . $path);
         }
         if ($data[$key] === null) {
             return null;
         }
         if (!is_int($data[$key])) {
-            throw new \RuntimeException('candy-tetris: invalid persistence format in ' . $path);
+            throw new \RuntimeException('invalid persistence format in ' . $path);
         }
 
         return $data[$key];

@@ -81,8 +81,8 @@ final class KeyMap
                 // The help card, the versus strip and the on-ramp label all
                 // print the LIVE token verbatim (Bindings::helpCard,
                 // Bindings::vsStrip, Game::introBeginLabel). The stderr
-                // notice channel clamps control bytes through the binary's
-                // cliVisible(); the frame had no matching door, so a crafted
+                // notice channel clamps control bytes through
+                // Support\CliVisible::clamp() the frame had no matching door, so a crafted
                 // keys.json carrying ESC bytes would paint raw escape
                 // sequences into the terminal every render. Control bytes
                 // (\x00-\x1f, \x7f) and over-long tokens are refused at the

@@ -530,18 +530,10 @@ final class VsGame implements Model
         try {
             $next->save($this->scoresPath);
         } catch (\Throwable $problem) {
-            fwrite(STDERR, Lang::t('score.save.failed', ['problem' => self::cliVisible($problem->getMessage())]) . "\n");
+            fwrite(STDERR, Lang::t('score.save.failed', ['problem' => Support\CliVisible::clamp($problem->getMessage())]) . "\n");
         }
 
         return $this->mutate($changes);
-    }
-
-    /** Trim a failure message to one visible, control-character-free line. */
-    private static function cliVisible(string $raw): string
-    {
-        $clean = preg_replace('/[\x00-\x1f\x7f]/', '?', $raw);
-
-        return strlen($clean) > 40 ? substr($clean, 0, 39) . '…' : $clean;
     }
 
     /**

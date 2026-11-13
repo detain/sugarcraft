@@ -77,7 +77,7 @@ Uso: candy-tetris [opzioni]
     'score.save.failed' => 'candy-tetris: impossibile salvare i punteggi ({problem})',
     'keys.ignored' => 'candy-tetris: file dei tasti illeggibile ignorato ({problem})',
     'scores.ignored' => 'candy-tetris: file dei punteggi illeggibile ignorato ({problem})',
-    'config.problem' => 'candy-tetris: {detail} in {path}',
+    'config.problem' => '{detail} in {path}',
     'cli.refusal' => 'candy-tetris richiede un terminale interattivo (un TTY).
 Funziona senza colori: imposta NO_COLOR.',
     'cli.too_small' => 'candy-tetris richiede un terminale {size}; questo è {actual}.

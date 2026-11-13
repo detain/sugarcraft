@@ -77,7 +77,7 @@ Použití: candy-tetris [volby]
     'score.save.failed' => 'candy-tetris: nelze uložit skóre ({problem})',
     'keys.ignored' => 'candy-tetris: nečitelný soubor klíčů ignorován ({problem})',
     'scores.ignored' => 'candy-tetris: nečitelný soubor skóre ignorován ({problem})',
-    'config.problem' => 'candy-tetris: {detail} v {path}',
+    'config.problem' => '{detail} v {path}',
     'cli.refusal' => 'candy-tetris potřebuje interaktivní terminál (TTY).
 Hraje bez barev: nastavte NO_COLOR.',
     'cli.too_small' => 'candy-tetris potřebuje terminál {size}; tento má {actual}.

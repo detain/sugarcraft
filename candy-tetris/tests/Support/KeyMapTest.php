@@ -115,7 +115,7 @@ final class KeyMapTest extends TestCase
     {
         // m23: the help card, the versus strip and the on-ramp label print
         // the LIVE token verbatim. The stderr notice channel clamps control
-        // bytes through the binary's cliVisible(); the frame had no matching
+        // bytes through Support\CliVisible::clamp(); the frame had no matching
         // door, so a crafted keys.json carrying ESC bytes would paint raw
         // escape sequences into the terminal on every render. The refusal
         // closes the asymmetry at the validation gate instead.

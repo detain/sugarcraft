@@ -77,7 +77,7 @@ return [
     'score.save.failed' => 'candy-tetris: スコアを保存できませんでした ({problem})',
     'keys.ignored' => 'candy-tetris: 読み込めないキーファイルを無視しました ({problem})',
     'scores.ignored' => 'candy-tetris: 読み込めないスコアファイルを無視しました ({problem})',
-    'config.problem' => 'candy-tetris: {path} — {detail}',
+    'config.problem' => '{path} — {detail}',
     'cli.refusal' => 'candy-tetris は対話型端末 (TTY) が必要です。
 色なしでもプレイできます: NO_COLOR を設定。',
     'cli.too_small' => 'candy-tetris には {size} の端末が必要です。現在は {actual} です。

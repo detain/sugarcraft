@@ -77,7 +77,7 @@ Aufruf: candy-tetris [Optionen]
     'score.save.failed' => 'candy-tetris: Punkte konnten nicht gespeichert werden ({problem})',
     'keys.ignored' => 'candy-tetris: nicht lesbare Tastaturdatei ignoriert ({problem})',
     'scores.ignored' => 'candy-tetris: nicht lesbare Punktedatei ignoriert ({problem})',
-    'config.problem' => 'candy-tetris: {detail} in {path}',
+    'config.problem' => '{detail} in {path}',
     'cli.refusal' => 'candy-tetris braucht ein interaktives Terminal (ein TTY).
 Es spielt ohne Farbe: NO_COLOR setzen.',
     'cli.too_small' => 'candy-tetris benötigt ein {size}-Terminal; dieses hier ist {actual}.

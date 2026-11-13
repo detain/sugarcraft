@@ -77,7 +77,7 @@ Kullanım: candy-tetris [seçenekler]
     'score.save.failed' => 'candy-tetris: puanlar kaydedilemedi ({problem})',
     'keys.ignored' => 'candy-tetris: okunamayan tuş dosyası yoksayılıyor ({problem})',
     'scores.ignored' => 'candy-tetris: okunamayan puan dosyası yoksayılıyor ({problem})',
-    'config.problem' => 'candy-tetris: {path} içinde: {detail}',
+    'config.problem' => '{path} içinde: {detail}',
     'cli.refusal' => 'candy-tetris etkileşimli bir terminal gerektirir (TTY).
 Renksiz çalışır: NO_COLOR ayarlayın.',
     'cli.too_small' => 'candy-tetris {size} boyutunda bir terminal ister; bu {actual}.

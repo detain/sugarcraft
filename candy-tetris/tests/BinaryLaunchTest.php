@@ -24,7 +24,7 @@ final class BinaryLaunchTest extends TestCase
     private const DEADLINE_SECONDS = 10.0;
 
     /** @return array{0: int, 1: string, 2: string} */
-    private function runBinary(array $args, string $stdinData = ''): array
+    private function runBinary(array $args, string $stdinData = '', array $extraEnv = []): array
     {
         $binary = realpath(__DIR__ . '/../bin/candy-tetris');
         self::assertNotFalse($binary, 'bin/candy-tetris must exist');
@@ -40,7 +40,11 @@ final class BinaryLaunchTest extends TestCase
         // The force variables are dropped too: a truthy CLICOLOR_FORCE or
         // FORCE_COLOR in the developer's shell would change what the launcher
         // decides about a piped stdout.
+        // $extraEnv sits before the inherited environment so a test can
+        // steer the directories the launcher resolves (XDG_CONFIG_HOME);
+        // the locale trio still wins, and the force variables are excluded.
         $environment = ['LC_ALL' => 'C', 'LC_MESSAGES' => 'C', 'LANG' => 'C']
+            + $extraEnv
             + array_diff_key(getenv(), ['CLICOLOR_FORCE' => 1, 'FORCE_COLOR' => 1]);
         $process = proc_open(
             [\PHP_BINARY, $binary, ...$args],
@@ -206,6 +210,50 @@ final class BinaryLaunchTest extends TestCase
         self::assertSame(1, $exit, 'TERM=dumb must be refused with exit 1, got: ' . $this->printable($output));
         self::assertStringNotContainsString("\x1b", $output, 'a dumb terminal must receive zero escape bytes');
         self::assertStringContainsString('needs an interactive terminal', $output);
+    }
+
+    /**
+     * candy-tetris-014/-068/-075: the loud stderr channel as it really
+     * leaves the launcher. This is the test the clamped-notice pin lacks —
+     * the old 40-byte head-slice ate exactly the path tail asserted here,
+     * and the KeyMap/Scores payloads used to carry a second app-name
+     * prefix into the wrapper sentence that names the app once already.
+     */
+    public function testMalformedConfigFilesAnnounceOnceWithClampedPayloadTails(): void
+    {
+        // Paths.dir() appends '/candy-tetris' to XDG_CONFIG_HOME; the deep
+        // prefix pushes the composed payload past the clamp budget so the
+        // elision is exercised end-to-end, not just in the unit pins.
+        $xdgBase = $this->home . '/.config/' . str_repeat('deep-', 16);
+        $config = $xdgBase . '/candy-tetris';
+        mkdir($config, 0700, true);
+        self::assertNotFalse(file_put_contents($config . '/keys.json', '{"move": [""]}'));
+        self::assertNotFalse(file_put_contents($config . '/scores.json', '{"version": 2, "data": []}'));
+
+        [$exit, $stdout, $stderr] = $this->runBinary(
+            [],
+            '',
+            ['HOME' => $this->home, 'XDG_CONFIG_HOME' => $xdgBase],
+        );
+
+        self::assertSame(1, $exit, 'the no-terminal refusal still ends the launch');
+        self::assertSame('', $stdout, 'notices belong on stderr only');
+        self::assertStringNotContainsString("\x1b", $stderr, 'no control byte from a crafted config may reach the terminal');
+
+        self::assertSame(1, substr_count($stderr, 'ignoring unreadable keys file'), 'the key-file refusal is announced exactly once');
+        self::assertSame(1, substr_count($stderr, 'ignoring unreadable scores file'), 'the score-record refusal is announced exactly once');
+        self::assertStringNotContainsString('candy-tetris: candy-tetris:', $stderr, 'the wrapper sentence owns the app-name leg — once');
+
+        $lines = explode("\n", $stderr);
+        self::assertSame(1, preg_match('/^candy-tetris: ignoring unreadable keys file \([^\x00-\x1f]*\)$/', $lines[0]), 'one visible line, one wrapper, the payload in parens: ' . $this->printable($lines[0]));
+        self::assertSame(1, substr_count($lines[0], 'candy-tetris:'), 'the app name appears exactly once in the keys notice');
+        self::assertStringContainsString('token for "move" is not a single key in', $lines[0], 'the leading diagnosis survives the clamp');
+        self::assertStringEndsWith('keys.json)', $lines[0], 'the tail of the path survives — the bytes the old head-slice ate first');
+        self::assertStringNotContainsString($config . '/keys.json', $lines[0], 'an over-long payload is elided, not printed whole');
+
+        self::assertSame(1, preg_match('/^candy-tetris: ignoring unreadable scores file \([^\x00-\x1f]*\)$/', $lines[1]), 'one visible line, one wrapper, the payload in parens: ' . $this->printable($lines[1]));
+        self::assertStringContainsString('invalid persistence format in', $lines[1], 'the leading diagnosis survives the clamp');
+        self::assertStringEndsWith('scores.json)', $lines[1], 'the tail of the path survives');
     }
 
     private string $home = '';

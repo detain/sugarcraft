@@ -77,7 +77,7 @@ return [
     'score.save.failed' => 'candy-tetris: 점수를 저장할 수 없습니다 ({problem})',
     'keys.ignored' => 'candy-tetris: 읽을 수 없는 키 파일 무시 ({problem})',
     'scores.ignored' => 'candy-tetris: 읽을 수 없는 점수 파일 무시 ({problem})',
-    'config.problem' => 'candy-tetris: {path}에서: {detail}',
+    'config.problem' => '{path}에서: {detail}',
     'cli.refusal' => 'candy-tetris는 대화형 터미널(TTY)이 필요합니다.
 색상 없이도 실행됩니다: NO_COLOR를 설정하세요.',
     'cli.too_small' => 'candy-tetris에는 {size} 크기의 터미널이 필요합니다. 현재: {actual}.

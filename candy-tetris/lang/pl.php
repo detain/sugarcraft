@@ -77,7 +77,7 @@ Użycie: candy-tetris [opcje]
     'score.save.failed' => 'candy-tetris: nie udało się zapisać wyników ({problem})',
     'keys.ignored' => 'candy-tetris: pomijam nieczytelny plik klawiszy ({problem})',
     'scores.ignored' => 'candy-tetris: pomijam nieczytelny plik wyników ({problem})',
-    'config.problem' => 'candy-tetris: {detail} w {path}',
+    'config.problem' => '{detail} w {path}',
     'cli.refusal' => 'candy-tetris wymaga terminala interaktywnego (TTY).
 Działa bez koloru: ustaw NO_COLOR.',
     'cli.too_small' => 'candy-tetris wymaga terminala {size}; ten ma {actual}.

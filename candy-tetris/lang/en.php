@@ -90,7 +90,7 @@ return [
     'score.save.failed' => 'candy-tetris: could not save scores ({problem})',
     'keys.ignored' => 'candy-tetris: ignoring unreadable keys file ({problem})',
     'scores.ignored' => 'candy-tetris: ignoring unreadable scores file ({problem})',
-    'config.problem' => 'candy-tetris: {detail} in {path}',
+    'config.problem' => '{detail} in {path}',
     'cli.refusal' => "candy-tetris needs an interactive terminal (a TTY).\nIt plays without colour: set NO_COLOR.",
     'cli.too_small' => "candy-tetris needs a {size} terminal; this one is {actual}.\nResize the window and the game resumes right here.",
     'cli.too_small_vs' => "candy-tetris VS needs a {size} terminal; this one is {actual}.\nResize the window and the match resumes right here.",

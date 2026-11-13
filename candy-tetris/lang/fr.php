@@ -70,7 +70,7 @@ quitter',
     'score.save.failed' => 'candy-tetris: impossible denregistrer les scores ({problem})',
     'keys.ignored' => 'candy-tetris: fichier de touches illisible ignoré ({problem})',
     'scores.ignored' => 'candy-tetris: fichier de scores illisible ignoré ({problem})',
-    'config.problem' => 'candy-tetris: {detail} dans {path}',
+    'config.problem' => '{detail} dans {path}',
     'cli.refusal' => 'candy-tetris a besoin d\'un terminal interactif (un TTY).
 Il joue sans couleur : définissez NO_COLOR.',
     'cli.too_small' => 'candy-tetris exige un terminal {size} ; celui-ci fait {actual}.
