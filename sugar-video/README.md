@@ -110,7 +110,14 @@ These demos resolve the autoloader from a repo checkout (the library's own `vend
 | `sixel` | Sixel graphics protocol (DEC) | Sixel-capable |
 | `kitty` | Kitty graphics protocol (APC `\x1b_G`) | Kitty-compatible — recognised via the `TERM=xterm-kitty` environment surrogate, no protocol handshake |
 | `iterm2` | iTerm2 inline image (OSC 1337) | iTerm2 / WezTerm |
-| `auto` | Selector, not a ninth mode: resolves the terminal from its environment at open and picks the best mode it can render — a lookup table, no protocol negotiation. There is no `Mode::Auto` case — `Mode::from('auto')` throws a `ValueError` | — |
+| `auto` | Selector, not a ninth mode: resolves the terminal from its environment at open and picks the best mode it can render — a lookup table, no protocol negotiation. There is no `Mode::Auto` case — `Mode::from('auto')` throws a `ValueError`; `Mode::AUTO_WIRE` carries the token and `Mode::wires()` the full accepted list | — |
+
+Each row's mode column is that case's exact wire token: `Mode::wireName()`
+returns it, and it equals `strtolower($mode->name)` for every case (pinned),
+so a host that persisted the lower-cased enum name re-imports verbatim with
+`Mode::from($mode->wireName())`. `Mode::wires()` — `auto` first, then the
+eight case tokens — is the single source the CLI validates against; there
+are no further aliases.
 
 Auto mode does not negotiate with the terminal. `Mosaic::diagnose()` (for
 sixel/kitty/iTerm2) delegates to sugar-colorprofile's `TerminalProbe`: a

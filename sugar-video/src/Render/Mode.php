@@ -35,6 +35,44 @@ enum Mode: string
     /** iTerm2 inline image protocol. */
     case Iterm2 = 'iterm2';
 
+    /**
+     * The accepted wire token that is NOT a case (SV-M36).
+     *
+     * `auto` is the selector hosts accept at the CLI boundary
+     * (examples/play.php is that host), yet {@see self::from()} throws a
+     * ValueError for it — auto is not a ninth mode, it means "resolve via
+     * the AutoMode::new() path at open time". The discoverability cliff
+     * stays documented, not smoothed over: the README mode table and the
+     * round-trip pins in ModeTest spell the asymmetry out.
+     */
+    public const AUTO_WIRE = 'auto';
+
+    /**
+     * The exact wire token this mode accepts (SV-M36).
+     *
+     * Equal to `strtolower($mode->name)` for every case — pinned — so a
+     * host that persisted the lower-cased enum name re-imports verbatim:
+     * `Mode::from($mode->wireName()) === $mode`. There are no further
+     * aliases; the historical ghost 'color' vocabulary is dead and stays
+     * refused.
+     */
+    public function wireName(): string
+    {
+        return $this->value;
+    }
+
+    /**
+     * The complete accepted-token list: `auto` first, then every case
+     * token. The CLI validates against this single source (SV-M36), so no
+     * hand-written token list can drift from the enum.
+     *
+     * @return list<string>
+     */
+    public static function wires(): array
+    {
+        return [self::AUTO_WIRE, ...\array_map(static fn (self $mode): string => $mode->value, self::cases())];
+    }
+
     /** Source pixel-rows consumed per terminal cell. Half/quarter-block pack 2; graphics modes resolve in the renderer (treated as 1 here). */
     public function rowsPerCell(): int
     {

@@ -104,14 +104,16 @@ if (str_starts_with($pathArg, '-')) {
     fwrite(STDERR, "unknown option: {$pathArg}\n");
     exit(1);
 }
-$modeArg = $arg2 === '' ? 'auto' : $arg2;
+$modeArg = $arg2 === '' ? Mode::AUTO_WIRE : $arg2;
 
-if (!in_array($modeArg, ['auto', 'ascii', 'ansi256', 'truecolor', 'halfblock', 'quarterblock', 'sixel', 'kitty', 'iterm2'], true)) {
+// The enum owns the vocabulary (SV-M36): Mode::wires() is the accepted token
+// list, so a new case arrives at the CLI without anyone editing this file.
+if (!in_array($modeArg, Mode::wires(), true)) {
     help($prog);
     exit(1);
 }
 
-$mode = $modeArg === 'auto'
+$mode = $modeArg === Mode::AUTO_WIRE
     ? null
     : Mode::from($modeArg);
 
