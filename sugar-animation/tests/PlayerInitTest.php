@@ -19,7 +19,7 @@ final class PlayerInitTest extends TestCase
     {
         $f = [];
         for ($i = 0; $i < $n; $i++) {
-            $f[] = new Frame([[[($i * 30) % 255, 0, 0]]], delay: 10);
+            $f[] = Frame::new([[[($i * 30) % 255, 0, 0]]], delay: 10);
         }
         return $f;
     }
@@ -78,7 +78,7 @@ final class PlayerInitTest extends TestCase
         // Three cells in a row, all the same mid-gray colour.
         // In density mode the ramp index is identical for all three,
         // so the second and third cell should go through glyphOnly().
-        $f = new Frame([[[128, 128, 128], [128, 128, 128], [128, 128, 128]]]);
+        $f = Frame::new([[[128, 128, 128], [128, 128, 128], [128, 128, 128]]]);
         $r = Renderer::withConstraints(1, 3);
         $out = $r->renderFrame($f, Renderer::PRESET_DENSITY);
 
@@ -102,7 +102,7 @@ final class PlayerInitTest extends TestCase
      */
     public function testViewAlwaysIncludesStatusLine(): void
     {
-        $f = new Frame([[[255, 0, 0], [0, 255, 0], [0, 0, 255]]]);
+        $f = Frame::new([[[255, 0, 0], [0, 255, 0], [0, 0, 255]]]);
         $r = Renderer::withConstraints(1, 2); // clamp columns to 2
         $p = new Player([$f], renderer: $r);
         $view = $p->view();

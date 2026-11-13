@@ -41,7 +41,7 @@ final class PlayerScheduleTest extends TestCase
     {
         $frames = [];
         foreach ($delaysCs as $delay) {
-            $frames[] = new Frame([[0, 0, 0]], $delay);
+            $frames[] = Frame::new([[0, 0, 0]], $delay);
         }
 
         return new Player($frames, now: function (): float {

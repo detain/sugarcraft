@@ -20,7 +20,7 @@ final class AdaptiveSizeTest extends TestCase
     public function testCreateReturnsUnconstrainedRenderer(): void
     {
         $r = Renderer::new();
-        $f = new Frame([[[255, 0, 0]]]);
+        $f = Frame::new([[[255, 0, 0]]]);
 
         // Without adaptive constraints, all cells are emitted.
         $out = $r->renderFrame($f);
@@ -31,7 +31,7 @@ final class AdaptiveSizeTest extends TestCase
     {
         // Use reflection to construct with specific adaptive sizes.
         $r = $this->createAdaptiveRenderer(2, 100);
-        $f = new Frame([
+        $f = Frame::new([
             [[255, 0, 0]],
             [[0, 255, 0]],
             [[0, 0, 255]], // should be clamped out
@@ -46,7 +46,7 @@ final class AdaptiveSizeTest extends TestCase
     public function testRenderFrameClampsColumnCount(): void
     {
         $r = $this->createAdaptiveRenderer(100, 1);
-        $f = new Frame([
+        $f = Frame::new([
             [[255, 0, 0], [0, 255, 0], [0, 0, 255]],
         ]);
 
@@ -61,7 +61,7 @@ final class AdaptiveSizeTest extends TestCase
         $r = $this->createAdaptiveRenderer(2, 2);
         // Frame: 4 rows × 3 cols. With maxRows=2 and maxCols=2, only
         // row 0 (cols 0,1) and row 1 (cols 0,1) should appear.
-        $f = new Frame([
+        $f = Frame::new([
             [[255, 0, 0], [0, 255, 0], [0, 0, 255]],
             [[64, 0, 0], [0, 64, 0], [0, 0, 64]],
             [[128, 0, 0], [0, 128, 0], [0, 0, 128]],
@@ -85,7 +85,7 @@ final class AdaptiveSizeTest extends TestCase
     public function testStaticRenderStillWorks(): void
     {
         // Backward-compatibility: Renderer::render() still callable statically.
-        $f = new Frame([[[0, 0, 0]]]);
+        $f = Frame::new([[[0, 0, 0]]]);
         $out = Renderer::render($f);
         $this->assertStringContainsString("\033[48;2;0;0;0m", $out);
     }

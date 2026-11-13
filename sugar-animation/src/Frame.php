@@ -47,7 +47,7 @@ final class Frame
      * @param int $rgbaWidth  Canvas width the `$rgba` buffer is sized for (0 without capture)
      * @param int $rgbaHeight Canvas height the `$rgba` buffer is sized for (0 without capture)
      */
-    public function __construct(
+    private function __construct(
         public readonly array $cells,
         public readonly int $delay = 10,
         public readonly int $disposal = self::DISPOSAL_NONE,
@@ -56,6 +56,47 @@ final class Frame
         public readonly int $rgbaWidth = 0,
         public readonly int $rgbaHeight = 0,
     ) {}
+
+    /**
+     * Mint a frame through the geometry door (SA-V1 -021): the optional
+     * RGBA triple must AGREE. The bare constructor let any caller pair a
+     * buffer with mismatched (or zero) dimensions, after which `hasRgba()`
+     * answered true for a lying geometry and every byte-length consumer
+     * inherited the lie. Bytes without dimensions, or dimensions without
+     * bytes, are the same contradiction read from the other side — both
+     * refuse at construction, so nothing downstream re-validates.
+     *
+     * @param list<list<array{0:int,1:int,2:int}|null>> $cells
+     *
+     * @throws \LogicException when the rgba buffer and its geometry disagree
+     */
+    public static function new(
+        array $cells,
+        int $delay = 10,
+        int $disposal = self::DISPOSAL_NONE,
+        bool $transparent = false,
+        ?string $rgba = null,
+        int $rgbaWidth = 0,
+        int $rgbaHeight = 0,
+    ): self {
+        if ($rgba === null) {
+            if ($rgbaWidth !== 0 || $rgbaHeight !== 0) {
+                throw new \LogicException(
+                    "Frame geometry lies: rgbaWidth/rgbaHeight ($rgbaWidth x $rgbaHeight) named without an rgba buffer."
+                );
+            }
+        } elseif ($rgbaWidth <= 0 || $rgbaHeight <= 0 || strlen($rgba) !== $rgbaWidth * $rgbaHeight * 4) {
+            throw new \LogicException(sprintf(
+                'Frame geometry lies: %d rgba bytes do not fill a %dx%d canvas (%d expected).',
+                strlen($rgba),
+                $rgbaWidth,
+                $rgbaHeight,
+                max(0, $rgbaWidth) * max(0, $rgbaHeight) * 4,
+            ));
+        }
+
+        return new self($cells, $delay, $disposal, $transparent, $rgba, $rgbaWidth, $rgbaHeight);
+    }
 
     /**
      * Whether this frame carries the full-canvas RGBA capture (E-07).
@@ -88,11 +129,21 @@ final class Frame
         return $this->rgba;
     }
 
+    /**
+     * @deprecated SA-V1 -030: the promoted readonly properties (`->rgbaWidth`)
+     *             are the single reach convention. These methods predate them
+     *             and survive only because sugar-image's frozen consumer
+     *             (`ImageSource.php:1222`) still calls them; removal is a
+     *             filed rider once that seat moves to the property.
+     */
     public function rgbaWidth(): int
     {
         return $this->rgbaWidth;
     }
 
+    /**
+     * @deprecated same rider as {@see self::rgbaWidth()}.
+     */
     public function rgbaHeight(): int
     {
         return $this->rgbaHeight;

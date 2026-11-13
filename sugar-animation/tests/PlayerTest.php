@@ -19,7 +19,7 @@ final class PlayerTest extends TestCase
     {
         $f = [];
         for ($i = 0; $i < $n; $i++) {
-            $f[] = new Frame([[[($i * 30) % 255, 0, 0]]], delay: 10);
+            $f[] = Frame::new([[[($i * 30) % 255, 0, 0]]], delay: 10);
         }
         return $f;
     }
@@ -27,7 +27,7 @@ final class PlayerTest extends TestCase
     private function framesWithDelays(array $delays): array
     {
         return \array_map(
-            fn(int $d) => new Frame([[[255, 0, 0]]], delay: $d),
+            fn(int $d) => Frame::new([[[255, 0, 0]]], delay: $d),
             $delays
         );
     }
@@ -107,7 +107,7 @@ final class PlayerTest extends TestCase
     public function testViewClampsToRendererConstraints(): void
     {
         // 4-column frame with 4 distinct colours so each cell is different.
-        $frame = new Frame([
+        $frame = Frame::new([
             [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0]],
         ]);
         // Clamp to 2 cols.
@@ -134,7 +134,7 @@ final class PlayerTest extends TestCase
      */
     public function testWindowSizeMsgReclampsRenderer(): void
     {
-        $frame = new Frame([
+        $frame = Frame::new([
             [[255, 0, 0], [255, 0, 0], [255, 0, 0]],
         ]);
         // Start with unconstrained renderer.

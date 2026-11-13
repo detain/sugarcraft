@@ -34,7 +34,7 @@ final class PlayerLoopStopTest extends TestCase
     {
         $frames = [];
         for ($i = 0; $i < $count; $i++) {
-            $frames[] = new Frame(cells: ['xx'], delay: $delay);
+            $frames[] = Frame::new(cells: ['xx'], delay: $delay);
         }
 
         return $frames;

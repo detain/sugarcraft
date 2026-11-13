@@ -40,7 +40,7 @@ final class GoldenRenderTest extends TestCase
             [[0, 255, 0], null, [0, 128, 0]],
             [[0, 0, 255], [0, 0, 128], [0, 0, 64]],
         ];
-        $frame = new Frame($cells, delay: 10, disposal: Frame::DISPOSAL_NONE, transparent: true);
+        $frame = Frame::new($cells, delay: 10, disposal: Frame::DISPOSAL_NONE, transparent: true);
 
         // Constrain output to 3×3 so it doesn't depend on terminal size.
         $renderer = Renderer::withConstraints(3, 3);

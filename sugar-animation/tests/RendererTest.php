@@ -12,7 +12,7 @@ final class RendererTest extends TestCase
 {
     public function testSolidPresetEmitsBgEscape(): void
     {
-        $f = new Frame([
+        $f = Frame::new([
             [[255, 0, 0], [0, 255, 0]],
             [[0, 0, 255], [128, 128, 128]],
         ]);
@@ -25,7 +25,7 @@ final class RendererTest extends TestCase
     public function testDensityPresetPicksGlyphFromRamp(): void
     {
         // White cell → top of ramp (`@`); black → bottom (` `).
-        $f = new Frame([
+        $f = Frame::new([
             [[0, 0, 0], [255, 255, 255]],
         ]);
         $out = Renderer::render($f, Renderer::PRESET_DENSITY);
@@ -35,7 +35,7 @@ final class RendererTest extends TestCase
 
     public function testRendererTerminatesEachLineWithReset(): void
     {
-        $f = new Frame([
+        $f = Frame::new([
             [[0, 0, 0]],
             [[255, 255, 255]],
         ]);
@@ -49,7 +49,7 @@ final class RendererTest extends TestCase
 
     public function testFrameDimensionsExposed(): void
     {
-        $f = new Frame([
+        $f = Frame::new([
             [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
             [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
         ]);
@@ -65,7 +65,7 @@ final class RendererTest extends TestCase
     public function testCoalescesAdjacentRuns(): void
     {
         // 3 solid cells in a row, all the same red colour.
-        $f = new Frame([[[255, 0, 0], [255, 0, 0], [255, 0, 0]]]);
+        $f = Frame::new([[[255, 0, 0], [255, 0, 0], [255, 0, 0]]]);
         $r = Renderer::withConstraints(1, 3);
         $out = $r->renderFrame($f, Renderer::PRESET_SOLID);
 
@@ -86,7 +86,7 @@ final class RendererTest extends TestCase
     public function testTransparentCellBreaksRun(): void
     {
         // Row: red, transparent, red (same colour on both sides of null).
-        $f = new Frame([[[255, 0, 0], null, [255, 0, 0]]]);
+        $f = Frame::new([[[255, 0, 0], null, [255, 0, 0]]]);
         $r = Renderer::withConstraints(1, 3);
         $out = $r->renderFrame($f, Renderer::PRESET_SOLID);
 

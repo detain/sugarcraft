@@ -20,7 +20,7 @@ final class PlayerWindowSizeFloorTest extends TestCase
 {
     private function player(): Player
     {
-        return new Player([new Frame([[0, 0, 0]], 10), new Frame([[1, 1, 1]], 10)]);
+        return new Player([Frame::new([[0, 0, 0]], 10), Frame::new([[1, 1, 1]], 10)]);
     }
 
     public function testZeroRowWindowSizeMsgFloorsTheRendererRowAtZero(): void

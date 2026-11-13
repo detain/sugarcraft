@@ -170,7 +170,7 @@ final class DecodeBytesParityTest extends TestCase
      */
     public function testFrameWithoutCaptureRefuses(): void
     {
-        $frame = new Frame([[[1, 2, 3]]]);
+        $frame = Frame::new([[[1, 2, 3]]]);
 
         $this->assertFalse($frame->hasRgba());
         try {

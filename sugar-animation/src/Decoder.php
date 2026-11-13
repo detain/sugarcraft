@@ -555,6 +555,12 @@ final class Decoder
                 // Grab the composited canvas BEFORE downsampling (E-07): the
                 // lossless pre-cell representation, chicle-style.
                 $rgba = $withCanvasRgba ? self::grabCanvasRgba($canvas, $screenW, $screenH) : null;
+                // Geometry travels WITH the buffer as one coherent triple —
+                // the Frame construction door (SA-V1 -021) refuses the
+                // buffer-less pair, which is what the rgbaWidth docblock has
+                // always promised ("0 without capture").
+                $capW = $rgba === null ? 0 : $screenW;
+                $capH = $rgba === null ? 0 : $screenH;
 
                 // Sample the composited canvas into this frame's cell grid —
                 // incrementally: only the cells the canvas writes could have
@@ -568,7 +574,7 @@ final class Decoder
                     $sampler->resampleRect($canvas, $dirtyX0, $dirtyY0, $dirtyX1, $dirtyY1);
                 }
 
-                yield new Frame($sampler->cells(), $info['delay'], $info['disposal'], $info['transparent'], $rgba, $screenW, $screenH);
+                yield Frame::new($sampler->cells(), $info['delay'], $info['disposal'], $info['transparent'], $rgba, $capW, $capH);
                 $emitted++;
 
                 $prevInfo = $info;
@@ -1074,7 +1080,7 @@ final class Decoder
             $rows[] = $row;
         }
         imagedestroy($img);
-        return new Frame($rows, $delay, $disposal, $transparent, $rgba, $rgbaWidth, $rgbaHeight);
+        return Frame::new($rows, $delay, $disposal, $transparent, $rgba, $rgbaWidth, $rgbaHeight);
     }
 
     /**

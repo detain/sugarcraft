@@ -28,7 +28,7 @@ final class PlayerRateDocblockTest extends TestCase
     {
         $frames = [];
         foreach ($delays as $delay) {
-            $frames[] = new \SugarCraft\Animation\Frame([[0, 0, 0]], $delay);
+            $frames[] = \SugarCraft\Animation\Frame::new([[0, 0, 0]], $delay);
         }
 
         return new Player($frames, now: function (): float {

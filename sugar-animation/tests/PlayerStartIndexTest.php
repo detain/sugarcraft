@@ -23,7 +23,7 @@ final class PlayerStartIndexTest extends TestCase
     {
         $out = [];
         for ($i = 0; $i < $n; $i++) {
-            $out[] = new Frame([[$i, $i, $i]], 10);
+            $out[] = Frame::new([[$i, $i, $i]], 10);
         }
         return $out;
     }
