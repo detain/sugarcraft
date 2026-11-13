@@ -40,8 +40,8 @@ Markdown sample, so the snippet itself is fenced with tildes — a
 marker different from the inner fence it contains, which is what
 makes the nesting legal under CommonMark.
 
-> Note: `render()` ends without a trailing newline on purpose — that byte
-> sequence is exactly what `stream()` yields for a one-chunk document.
+> Note: `render()`'s output deliberately carries no trailing newline — a
+> one-chunk document renders through `stream()` to exactly those same bytes.
 > The example's `echo` supplies its own `"\n"` as a second operand —
 > `echo` itself appends nothing. `write()` and `Writer` follow the
 > same law.
