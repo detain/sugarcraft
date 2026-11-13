@@ -67,15 +67,19 @@ final class FilterModelTest extends TestCase
         $this->assertSame('banana', $m->selected());
     }
 
-    public function testEnterWithNoMatchesIsNoOp(): void
+    public function testEnterWithNoMatchesSubmitsEmpty(): void
     {
+        // scriptui-11 (finding 003, gate G2 default posture): Enter on a
+        // zero-match filter ends the session with an EMPTY selection and
+        // exit 0 — never the old silent freeze, never a fabricated pick.
         $m = $this->model();
         foreach (str_split('xyz') as $c) {
             [$m, ] = $m->update(new KeyMsg(KeyType::Char, $c));
         }
         [$m, $cmd] = $m->update(new KeyMsg(KeyType::Enter));
-        $this->assertFalse($m->isSubmitted());
-        $this->assertNull($cmd);
+        $this->assertTrue($m->isSubmitted());
+        $this->assertNotNull($cmd);
+        $this->assertNull($m->selected());
     }
 
     public function testArrowMovesCursorWhilePreservingFilterText(): void

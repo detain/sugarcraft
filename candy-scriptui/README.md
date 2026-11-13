@@ -357,7 +357,7 @@ success (`0`) rather than specific non-zero values.
 | Key | Effect |
 |-----|--------|
 | ↑ / ↓ | Move the highlighted item / cursor line. |
-| Enter | Submit `choose`, `confirm`, `filter`, `input` (in `write`, inserts a newline). |
+| Enter | Submit `choose`, `confirm`, `filter`, `input` (in `write`, inserts a newline). In `filter`, Enter with zero matches submits the empty selection and exits `0` — the session always ends on Enter. |
 | y / n | Answer `confirm` directly. |
 | ← / → · h / l | Toggle the `confirm` answer (like `Tab` there); in `pager`, `h`/`l` scroll sideways. |
 | Ctrl+D | Submit `write` (end-of-input convention). |

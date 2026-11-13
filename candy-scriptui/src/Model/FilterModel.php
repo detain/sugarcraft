@@ -159,10 +159,14 @@ final class FilterModel implements Model
                 return [$this->copy(aborted: true, interrupted: $msg->ctrl), Cmd::quit()];
             }
             if ($msg->type === KeyType::Enter) {
-                $visible = $this->fuzzy ? $this->fuzzyVisibleItems() : $this->list->visibleItems();
-                if ($visible === []) {
-                    return [$this, null];
-                }
+                // scriptui-11: Enter always ends the session. When nothing
+                // is highlighted there is nothing to fabricate — the empty
+                // selection submits with exit 0 (gum's empty-answer posture,
+                // gate G2 default). The old shape froze forever on an empty
+                // list (finding 003) and, in fuzzy mode, resolved a typed
+                // zero-match query through fuzzyVisibleItems()'s all-items
+                // fallback — confidently printing an item nobody selected
+                // while the screen said "No matches." (finding 012).
                 return [$this->copy(submitted: true), Cmd::quit()];
             }
             // Multi-select: Tab toggles the highlight (Space is consumed
@@ -383,7 +387,13 @@ final class FilterModel implements Model
     private function fuzzySelectedItem(): ?Item
     {
         if ($this->fuzzyResults === []) {
-            return $this->allItems[0] ?? null;
+            if ($this->list->filterValue() !== '') {
+                // scriptui-11 (finding 012): a typed filter with zero scored
+                // matches paints "No matches." — there is no selection.
+                return null;
+            }
+            // No filter typed: the full list is painted; the cursor row wins.
+            return $this->allItems[$this->list->index()] ?? null;
         }
         $cursor = $this->list->index();
         $visible = $this->fuzzyVisibleItems();

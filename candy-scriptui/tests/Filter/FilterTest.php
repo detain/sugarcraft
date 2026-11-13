@@ -250,9 +250,10 @@ final class FilterTest extends TestCase
     }
 
     /**
-     * Test that Enter with no visible matches does nothing.
+     * Test that Enter with no visible matches submits the empty
+     * selection and ends (scriptui-11, gate G2 default posture).
      */
-    public function testEnterWithNoMatchesDoesNothing(): void
+    public function testEnterWithNoMatchesSubmitsEmpty(): void
     {
         $model = FilterModel::fromOptions(['apple', 'banana', 'cherry']);
 
@@ -262,7 +263,7 @@ final class FilterTest extends TestCase
         [$model, ] = $model->update(new KeyMsg(KeyType::Char, 'z'));
 
         [$model, ] = $model->update(new KeyMsg(KeyType::Enter));
-        $this->assertFalse($model->isSubmitted());
+        $this->assertTrue($model->isSubmitted());
         $this->assertNull($model->selected());
     }
 
@@ -503,9 +504,10 @@ final class FilterTest extends TestCase
     }
 
     /**
-     * Test Enter on empty filtered list does nothing.
+     * Test Enter on empty filtered list submits the empty selection
+     * and ends (scriptui-11, gate G2 default posture).
      */
-    public function testEnterOnEmptyFilteredListDoesNothing(): void
+    public function testEnterOnEmptyFilteredListSubmitsEmpty(): void
     {
         $model = FilterModel::fromOptions(['apple', 'banana']);
 
@@ -513,7 +515,8 @@ final class FilterTest extends TestCase
         [$model, ] = $model->update(new KeyMsg(KeyType::Char, 'x'));
         [$model, ] = $model->update(new KeyMsg(KeyType::Enter));
 
-        $this->assertFalse($model->isSubmitted());
+        $this->assertTrue($model->isSubmitted());
+        $this->assertNull($model->selected());
     }
 
     /**
