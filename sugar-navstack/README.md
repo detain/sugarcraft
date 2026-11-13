@@ -198,11 +198,13 @@ $output = $bc->render($stack);
 // the row (SugarCraft\Mouse\Scan::strip($output)) before painting it to a
 // terminal — or the sentinels leak onto screen as garbage cells.
 
-// Feed the rendered row to the owned scanner. Pass the terminal's viewport
-// width so zones clamp to it: cells past the edge stay UNCLICKABLE even
-// when the emulator visually wraps the row. Pass the 1-based row the bar
-// is painted on when that is not row 1 — from here on hit()/hitItem()
-// take ABSOLUTE terminal coordinates. Both values are host-owned state:
+// Feed the rendered row to the owned scanner. The terminal's viewport
+// width is REQUIRED (NS-20): zones clamp to it, so cells past the edge
+// stay UNCLICKABLE even when the emulator visually wraps the row — the
+// nullable-width shim was rejected as a lie of optionality. Pass the
+// 1-based row the bar is painted on when that is not row 1 — from here on
+// hit()/hitItem() take ABSOLUTE terminal coordinates. Both values are
+// host-owned state:
 $cols = 80; // current terminal width
 $row = 1;   // 1-based row the trail occupies
 $bc->scan($output, viewportWidth: $cols, row: $row);
@@ -224,12 +226,15 @@ if ($item !== null) {
 ```
 
 `hit($col, $row)` stays available when you want the `Zone` itself rather
-than the item. Failure shapes are asymmetric on purpose: without a scanner,
-`hit()`/`hitItem()` return `null` QUIETLY (every lookup dead-ends), while
-`scan()` throws `LogicException` — a missing `withScanner()` surfaces loudly
-at the scan call, not at the first click. With a scanner attached but the
-current render unscanned, both lookups throw too: every `set*` mutation only
-takes effect on the NEXT `render()`, and each render clears the scanned flag
+than the item. The failure shapes form ONE rule table (mirrored in the
+`scan()`/`hit()` docblocks): no scanner attached — `scan()` THROWS,
+`hit()`/`hitItem()` answer `null` QUIETLY (optional-mouse hosts must not
+crash on a stray click; the missing `withScanner()` surfaces loudly at the
+scan call, not at the first click); scanner attached but the current render
+unscanned — both lookups THROW (stale geometry would misroute); scanned —
+geometry live until the next render. Omitting the viewport width at `scan()`
+is now a `TypeError`, not a policy (NS-20 made it required). Every `set*` mutation takes
+effect only on the NEXT `render()`, and each render clears the scanned flag
 — render, then scan, then hit, and never trust zones across a re-render.
 
 Three guarantees make that recipe safe under truncation:

@@ -24,7 +24,7 @@ final class BreadcrumbTest extends TestCase
         $rendered = $bc->render($s);
 
         // The scanner should be able to scan this rendered output
-        $bc->scan($rendered);
+        $bc->scan($rendered, 10_000);
         $zone = $bc->hit(1, 1);
 
         // With scanner attached, rendering wraps crumbs in zone markers
@@ -58,7 +58,7 @@ final class BreadcrumbTest extends TestCase
         // scan() with no scanner is a programming error, not a silent
         // no-op — it would record nothing and every later hit() dead-ends.
         $this->expectException(\LogicException::class);
-        $bc->scan($rendered);
+        $bc->scan($rendered, 10_000);
     }
 
     // ─── scan() / hit() zone detection ────────────────────────────────────
@@ -74,7 +74,7 @@ final class BreadcrumbTest extends TestCase
         $rendered = $bc->render($s);
 
         // After rendering, scan the output to register zones
-        $bc->scan($rendered);
+        $bc->scan($rendered, 10_000);
 
         // hit() should find a zone (crumb-1 for "Child" which is at index 1)
         $zone = $bc->hit(1, 1);
@@ -91,7 +91,7 @@ final class BreadcrumbTest extends TestCase
         $s->push('Home')->push('Settings');
 
         $rendered = $bc->render($s);
-        $bc->scan($rendered);
+        $bc->scan($rendered, 10_000);
 
         // Coordinates far outside any crumb zone should return null
         $zone = $bc->hit(999, 999);
@@ -107,7 +107,7 @@ final class BreadcrumbTest extends TestCase
         $s->push('A');
         $rendered = $bc->render($s);
 
-        $result = $bc->scan($rendered);
+        $result = $bc->scan($rendered, 10_000);
         $this->assertSame($bc, $result);
     }
 
@@ -254,7 +254,7 @@ final class BreadcrumbTest extends TestCase
         // Wide enough that BOTH crumbs stay visible (width 'A › B › C' = 9).
         $bc = (new Breadcrumb())->withScanner($scanner)->setMaxWidth(20);
         $rendered = $bc->render($s);
-        $bc->scan($rendered);
+        $bc->scan($rendered, 10_000);
 
         // Two visible crumbs → exactly two zones (crumb-0, crumb-1), NOT three
         // despite the separator inside 'A › B'. The caller's scanner stays
@@ -278,7 +278,7 @@ final class BreadcrumbTest extends TestCase
         // Narrow enough that only 'C' survives (width 'A › B › C' = 9 > 5).
         $bc = (new Breadcrumb())->withScanner($scanner)->setMaxWidth(5);
         $rendered = $bc->render($s);
-        $bc->scan($rendered);
+        $bc->scan($rendered, 10_000);
 
         $owned = $bc->scanner();
         \assert($owned !== null);
@@ -422,7 +422,7 @@ final class BreadcrumbTest extends TestCase
 
         $bc = (new Breadcrumb())->withScanner(Scanner::new())->setMaxWidth(12);
         $rendered = $bc->render($s);
-        $bc->scan($rendered);
+        $bc->scan($rendered, 10_000);
 
         $owned = $bc->scanner();
         \assert($owned !== null);
@@ -452,7 +452,7 @@ final class BreadcrumbTest extends TestCase
 
         $bc = (new Breadcrumb())->withScanner($caller);
         $rendered = $bc->render($s);
-        $bc->scan($rendered);
+        $bc->scan($rendered, 10_000);
 
         // Zones land in the breadcrumb's OWN copy, never the caller's instance.
         $this->assertCount(0, $caller->prefixed('crumb-'));
@@ -473,8 +473,8 @@ final class BreadcrumbTest extends TestCase
 
         $wideOut  = $wide->render($s);
         $tightOut = $tight->render($s);
-        $wide->scan($wideOut);
-        $tight->scan($tightOut);
+        $wide->scan($wideOut, 10_000);
+        $tight->scan($tightOut, 10_000);
 
         $this->assertNotSame($wide->scanner(), $tight->scanner());
         $this->assertCount(3, $wide->scanner()->prefixed('crumb-'));

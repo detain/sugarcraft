@@ -37,7 +37,7 @@ final class ZoneGeometryTest extends TestCase
         $bc = (new Breadcrumb())->withScanner(new Scanner());
         $out = $bc->render($stack);
 
-        $bc->scan($out, row: 3);
+        $bc->scan($out, 10_000, row: 3);
 
         self::assertSame('crumb-0', $bc->hit(1, 3)?->id);
         // Rows above the bar, and rows past its single line, are dead cells.
@@ -52,7 +52,7 @@ final class ZoneGeometryTest extends TestCase
         $stack = $this->stackWith('Home', 'Settings');
         $bc = (new Breadcrumb())->withScanner(new Scanner());
         $out = $bc->render($stack);
-        $bc->scan($out, row: 5);
+        $bc->scan($out, 10_000, row: 5);
 
         $event = MouseEvent::press(9, 5);
         $clicked = $bc->hit($event->x, $event->y);
@@ -77,7 +77,7 @@ final class ZoneGeometryTest extends TestCase
     {
         $stack = $this->stackWith('Home');
         $bc = (new Breadcrumb())->withScanner(new Scanner());
-        $bc->scan($bc->render($stack));
+        $bc->scan($bc->render($stack), 10_000);
         self::assertNotNull($bc->hit(1, 1));
 
         $bc->render($stack); // geometry recomputed; the old scan is history now
@@ -92,7 +92,7 @@ final class ZoneGeometryTest extends TestCase
         $stack = $this->stackWith('Home', 'Settings', 'Display');
         $bc = (new Breadcrumb())->withScanner(new Scanner());
         $out = $bc->render($stack);
-        $bc->scan($out);
+        $bc->scan($out, 10_000);
 
         // 'Home › Settings › Display' — the gutter after 'Home' (cols 6-7) is
         // part of the Home zone, not a dead cell.
@@ -112,7 +112,7 @@ final class ZoneGeometryTest extends TestCase
     {
         $bc = (new Breadcrumb())->withScanner(new Scanner())->setZonePrefix('nav2');
         $stack = $this->stackWith('Home', 'Settings');
-        $bc->scan($bc->render($stack));
+        $bc->scan($bc->render($stack), 10_000);
 
         $ids = array_keys($bc->scanner()->prefixed('nav2-'));
         sort($ids);
@@ -177,7 +177,7 @@ final class ZoneGeometryTest extends TestCase
         $stack = $this->stackWith('old-entry', 'a2', 'Current');
         $bc = (new Breadcrumb())->withScanner(new Scanner())->setMaxWidth(8);
         $out = $bc->render($stack);
-        $bc->scan($out);
+        $bc->scan($out, 10_000);
 
         // Zones == surviving crumbs exactly ('… ' rides the first surviving zone).
         self::assertCount(1, $bc->scanner()->prefixed('crumb-'));
@@ -201,7 +201,7 @@ final class ZoneGeometryTest extends TestCase
         // scan used to resolve the OLD zones against NEW contents silently.
         $stack = $this->stackWith('Home', 'Settings');
         $bc    = (new Breadcrumb())->withScanner(new Scanner());
-        $bc->scan($bc->render($stack));
+        $bc->scan($bc->render($stack), 10_000);
 
         $stack->push('Mutated'); // no re-render follows
 
@@ -220,7 +220,7 @@ final class ZoneGeometryTest extends TestCase
         self::assertSame(1, $filtered->depth()); // QA alone; renumbered to crumb-0
 
         $bc = (new Breadcrumb())->withScanner(new Scanner());
-        $bc->scan($bc->render($filtered));
+        $bc->scan($bc->render($filtered), 10_000);
 
         $this->expectException(\LogicException::class);
         $bc->hitItem($original, 1, 1);
@@ -230,7 +230,7 @@ final class ZoneGeometryTest extends TestCase
     {
         $stack = $this->stackWith('Home', 'Settings', 'Display');
         $bc    = (new Breadcrumb())->withScanner(new Scanner());
-        $bc->scan($bc->render($stack));
+        $bc->scan($bc->render($stack), 10_000);
 
         self::assertSame('Home', $bc->hitItem($stack, 1, 1)?->title);
         // Untouched-stack repeat dispatch keeps working (no false refusal):
@@ -243,7 +243,7 @@ final class ZoneGeometryTest extends TestCase
         // existing quiet-null contract even when the stack has moved on.
         $stack = $this->stackWith('Home', 'Settings');
         $bc    = (new Breadcrumb())->withScanner(new Scanner());
-        $bc->scan($bc->render($stack));
+        $bc->scan($bc->render($stack), 10_000);
         $stack->push('Later');
 
         self::assertNull($bc->hitItem($stack, 100, 1));
@@ -257,8 +257,39 @@ final class ZoneGeometryTest extends TestCase
         // host's honor.
         $stack = $this->stackWith('Home', 'Settings');
         $bc    = (new Breadcrumb())->withScanner(new Scanner());
-        $bc->scan($bc->renderTitles(['Alpha', 'Beta']));
+        $bc->scan($bc->renderTitles(['Alpha', 'Beta']), 10_000);
 
         self::assertSame('Home', $bc->hitItem($stack, 1, 1)?->title);
+    }
+    /**
+     * NS-20 (sugar-navstack-033): the viewport width is REQUIRED whenever a
+     * scanner is attached — zones past the terminal edge must clamp, never
+     * mint phantom clicks. Enforced by signature, not policy: null (the old
+     * "forgot to clamp" value) and omission both fatal before the scanner
+     * ever sees the string.
+     */
+    public function testViewportWidthIsRequiredBySignature(): void
+    {
+        $bc = (new Breadcrumb())->withScanner(new Scanner());
+        $out = $bc->render($this->stackWith('Home', 'Settings'));
+
+        try {
+            $bc->scan($out, null);
+            self::fail('null viewport width accepted');
+        } catch (\TypeError $e) {
+            self::assertStringContainsString('viewportWidth', $e->getMessage());
+        }
+
+        try {
+            $bc->scan($out);
+            self::fail('omitted viewport width accepted');
+        } catch (\ArgumentCountError $e) {
+            self::assertStringContainsString('Too few arguments', $e->getMessage());
+        }
+
+        // The clamping leg itself stays reachable and honest: a zone that
+        // would run past the edge is cut at it (phantom clicks blocked).
+        $bc->scan($out, 5);
+        self::assertNull($bc->hit(9_999, 1), 'cells past the viewport edge must not resolve');
     }
 }

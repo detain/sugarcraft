@@ -295,18 +295,33 @@ final class Breadcrumb
      * subsequent hit-testing can determine which crumb zone contains
      * a given coordinate pair.
      *
-     * Call this after render() returns, before calling hit(). Pass the
-     * terminal's viewport width so sugar-mouse clamps zone extents the
-     * same way the emulator will wrap the row, and `$row` when the
-     * breadcrumb is not painted on terminal row 1 — hit() then takes
-     * absolute terminal coordinates. `$row` is 1-based: `0` is coerced to
-     * the same offset as `1` (the first row), never a "no row" sentinel.
+     * Scanner failure shapes (NS-20 rule table — three behaviors, one
+     * place, no memorization tax):
+     *   no scanner attached ...... scan() THROWS; hit()/hitItem() null
+     *   scanner, not scanned ..... hit()/hitItem() THROW (stale geometry)
+     *   scanned .................. geometry live until the next render()
+     * hit()'s quiet null without a scanner is DELIBERATE — hosts wire
+     * mouse support optionally and a stray click must not crash them;
+     * scan() is an explicit opt-in call, so its no-scanner leg fails
+     * loudly. {@see hit()} and {@see hitItem()} repeat this table.
+     *
+     * Call this after render() returns, before calling hit().
+     * $viewportWidth — the terminal's column count — is REQUIRED (NS-20):
+     * sugar-mouse clamps zone extents to it the same way the emulator
+     * wraps the row, so cells past the edge stay UNCLICKABLE instead of
+     * minting the phantom clicks the README Click-Region section warns
+     * about. A nullable width was rejected outright: unclamped zones are
+     * exactly that bug class, and an optional parameter that must not
+     * stay unset is a lie of optionality. Pass `$row` when the breadcrumb
+     * is not painted on terminal row 1 — hit() then takes absolute
+     * terminal coordinates. `$row` is 1-based: `0` is coerced to the same
+     * offset as `1` (the first row), never a "no row" sentinel.
      *
      * @throws \LogicException When no scanner is attached (the call would
      *                         silently record nothing and every later
      *                         hit() would dead-end)
      */
-    public function scan(string $rendered, ?int $viewportWidth = null, int $row = 1): self
+    public function scan(string $rendered, int $viewportWidth, int $row = 1): self
     {
         if ($this->scanner === null) {
             throw new \LogicException('Breadcrumb::scan() requires a scanner attached via withScanner()');
@@ -319,12 +334,14 @@ final class Breadcrumb
 
     /**
      * Return the zone at the given ABSOLUTE terminal coordinate, or null
-     * if no crumb zone contains that cell. Without a scanner attached this
-     * is a QUIET null no-op (every lookup dead-ends); the loud failure for a
-     * missing scanner lives in {@see scan()}.
+     * if no crumb zone contains that cell.
      *
-     * Requires scan() of the current render; {@see render()} and
-     * {@see renderTitles()} invalidate the geometry.
+     * Failure shapes follow the scan() rule table (NS-20): no scanner ->
+     * QUIET null (optional-mouse hosts must not crash on a stray click);
+     * scanner attached but scan() not run for the current render ->
+     * THROWS, because {@see render()} and {@see renderTitles()}
+     * invalidate the geometry and a hit against stale bounds would
+     * misroute.
      *
      * @throws \LogicException  When a scanner is attached but scan() has
      *                          not run for the current render (a hit

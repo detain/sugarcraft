@@ -43,7 +43,7 @@ final class TitleForgeryTest extends TestCase
         $rendered = $bc->render($s);
 
         // Exactly the two legitimate zones — no forgery, no duplicate.
-        $bc->scan($rendered);
+        $bc->scan($rendered, 10_000);
         $zones = $bc->scanner()?->prefixed('crumb-') ?? [];
         $ids = \array_keys($zones);
         sort($ids);
