@@ -30,12 +30,12 @@ final class ToastBorderTest extends TestCase
         return $lines;
     }
 
-    /** First line that begins with the top-border corner. */
+    /** First line that begins with the top-border corner (ASCII chrome: '+-'). */
     private function topBorder(array $rows): string
     {
         foreach ($rows as $r) {
             $clean = \rtrim(Ansi::strip($r), ' ');
-            if (\str_starts_with($clean, '╭')) {
+            if (\str_starts_with($clean, '╭') || \str_starts_with($clean, '+-')) {
                 return $clean;
             }
         }
@@ -273,5 +273,33 @@ final class ToastBorderTest extends TestCase
         $this->assertSame($widthAscii, $widthNerd,
             'Ascii and NerdFont produced different widths for identical messages '
             . '(pre-fix bug: enum-name length drove width calculation)');
+    }
+
+    public function testAsciiSetPaintsZeroNonAsciiChromeAndKeepsNonAsciiGoldensStable(): void
+    {
+        // TST-ASCII code leg: borders `+ - |`, bar `# .`; other sets byte-stable.
+        $build = static fn (SymbolSet $set): Toast => Toast::new(24)
+            ->withPosition(Position::TopLeft)
+            ->withSymbolSet($set)
+            ->progressToast('info', 'plain', 0.5);
+        $ascii = Ansi::strip($build(SymbolSet::Ascii)->view('', 40, 6));
+        $this->assertDoesNotMatchRegularExpression('/[^\x00-\x7f]/', $ascii);
+        $this->assertStringContainsString('+----', $ascii);
+        $this->assertStringContainsString('|', $ascii);
+        $this->assertMatchesRegularExpression('/\|#+\.+\|/', $ascii);
+
+        foreach ([SymbolSet::Unicode, SymbolSet::NerdFont] as $set) {
+            $plain = Ansi::strip($build($set)->view('', 40, 6));
+            $this->assertStringContainsString('╭', $plain);
+            $this->assertStringContainsString('█', $plain);
+            $this->assertStringNotContainsString('+---', $plain);
+        }
+    }
+
+    public function testAsciiBorderColourStillAppliesToTheAsciiFrame(): void
+    {
+        $t = Toast::new(20)->withPosition(Position::TopLeft)->withSymbolSet(SymbolSet::Ascii)
+            ->push(new \SugarCraft\Toast\Alert(\SugarCraft\Toast\ToastType::Info, 'x', borderColor: \SugarCraft\Core\Util\Color::hex('#ff0000')));
+        $this->assertStringContainsString('38;2;255;0;0', $t->view('', 30, 5));
     }
 }

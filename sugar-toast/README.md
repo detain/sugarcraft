@@ -17,10 +17,10 @@ sugar-toast — a floating alert notification component for terminal UIs on PHP 
 - **9 positions**: TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight, MiddleLeft, MiddleCenter, MiddleRight
 - **4 alert types**: Error, Warning, Info, Success — severity carried by icon + colour (add `withAccessibleText()` for a plain-text word; box shape and border glyphs are the same across types)
 - **Dynamic width**: full `maxWidth` by default; auto-fit to content engages ONLY via `withMinWidth(n>0)` — stacked boxes then anchor at ragged per-message offsets (shrink-to-fit vs stack-alignment trade)
-- **Symbol sets**: NerdFont (icons), Unicode (symbols), Ascii (plain-text icons).
-  Ascii selects the icon channel only: the frame keeps its box-drawing
-  glyphs (`╭ ─ ╮ │ ╰ ╯`) and the progress bar its blocks (`█ ░`) — sugar-toast
-  renders assume UTF-8 output.
+- **Symbol sets**: NerdFont (icons), Unicode (symbols), Ascii (plain text end
+  to end). Ascii routes the whole frame through ASCII: icons `[E]` `[W]` `[I]`
+  `[S]`, borders `+ - |` and the progress bar `# .`. NerdFont and Unicode keep
+  the rounded box-drawing frame (`╭ ─ ╮ │ ╰ ╯`) and block bar (`█ ░`).
 - **Auto-dismiss**: time-based expiry, pruned by the host tick
 - **Multiple alerts**: queue of toasts rendered in order
 - **Progress toasts**: inline progress bar (0–100%) beneath the message body
@@ -307,7 +307,7 @@ live as bare keys in `lang/en.php`; the `toast` lookup namespace is baked into
 
 The fold and truncation markers (`+N more`, ` …[truncated]`) are
 deliberately **not** lang keys: they are locale-neutral chrome, in the same
-class as the box-drawing glyphs that frame the overlay. They stay byte-stable
+class as the border glyphs that frame the overlay. They stay byte-stable
 across every locale, which is what lets the cap tests pin them exactly.
 
 **Available keys** (`lang/en.php`):
@@ -521,8 +521,8 @@ Environment policy: `REDUCE_MOTION`/`PREFERS_REDUCED_MOTION` drop blink and
 non-spec-literal edges are spelled out in the Features list above). When the
 coloured icon is dropped by suppression, severity retreats to the plain
 `[E]`/`[W]`/`[I]`/`[S]` ASCII prefix — the meaning survives the channel loss
-(see Styled Alerts); the `Ascii` symbol set keeps the icon ASCII end-to-end.
-Box-drawing chrome assumes UTF-8 output.
+(see Styled Alerts); the `Ascii` symbol set keeps icon, border and progress bar
+ASCII end-to-end. The other two sets assume UTF-8 output.
 
 Stacked frames can occlude: an older sibling's message or action row may sit
 visually covered with no signal in the frame, and expiry reflow moves boxes,
@@ -568,7 +568,7 @@ already over the new cap survive until the next push evicts them.
 | `->withDuration(?float $seconds)` | Default TTL inherited by queueing doors; `null` never expires, non-finite/`<= 0` throw — see Persistent Alerts |
 | `->withMaxWidth(int)` | Width cap in cells; `<= 0` throws (the refusal message names the reason) — see Features |
 | `->withMinWidth(int)` | Fit-content floor — master switch: `0` (default) FIXED-WIDTH full cap, positive engages auto-fit; negative throws — see Features |
-| `->withSymbolSet(SymbolSet)` | Icon glyph set (NerdFont/Unicode/Ascii) — icons only; borders and bar stay box-drawing |
+| `->withSymbolSet(SymbolSet)` | Glyph set (NerdFont/Unicode/Ascii) — Ascii also swaps borders for `+ - |` and the bar for `# .` |
 | `->withAllowEscToClose(bool)` | Preference flag the host reads to decide Escape dismissal (the renderer handles no input) — see Accessibility |
 | `->withAccessibleText(bool $on = true)` | Opt-in text channel: severity word in the header + percentage on progress rows; default off keeps frames byte-identical — see Accessibility |
 | `->withHostZoneCarry(bool $on = true)` | Carry the host's U+E000..U+E001 zone markers through the composite; `off` blits opaque chrome — see Security & Trust Boundary |

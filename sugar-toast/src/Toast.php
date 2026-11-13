@@ -1443,8 +1443,10 @@ final class Toast
 
         // Top / bottom borders: '─' is a 3-byte UTF-8 grapheme but one
         // display cell, so repeat it $inner times for $inner cells.
-        $top    = '╭' . \str_repeat('─', $inner) . '╮';
-        $bottom = '╰' . \str_repeat('─', $inner) . '╯';
+        $chrome = $this->chrome();
+        $v      = $chrome['v'];
+        $top    = $chrome['tl'] . \str_repeat($chrome['h'], $inner) . $chrome['tr'];
+        $bottom = $chrome['bl'] . \str_repeat($chrome['h'], $inner) . $chrome['br'];
 
         $middleLines = [];
 
@@ -1481,7 +1483,7 @@ final class Toast
         $headerWrap = $this->wordWrap($message ?? '', \max(1, $inner - $iconCells));
         $firstWord  = \array_shift($headerWrap) ?? '';
         $headerBody = $prefix . $firstWord;
-        $middleLines[] = '│' . Width::padRight(Width::truncateAnsi($headerBody, $inner), $inner) . '│';
+        $middleLines[] = $v . Width::padRight(Width::truncateAnsi($headerBody, $inner), $inner) . $v;
 
         // Remaining wrapped message lines, indented one cell.
         foreach ($headerWrap as $wl) {
@@ -1489,7 +1491,7 @@ final class Toast
             // icon: at inner<=2 the indent would itself truncate a chunk's
             // last character (delete, not ellipsize).
             $body = ($inner <= 2 ? '' : ' ') . $wl;
-            $middleLines[] = '│' . Width::padRight(Width::truncateAnsi($body, $inner), $inner) . '│';
+            $middleLines[] = $v . Width::padRight(Width::truncateAnsi($body, $inner), $inner) . $v;
         }
 
         // Render progress bar if set
@@ -1511,9 +1513,9 @@ final class Toast
                 // button that cannot fit shows '…', not silence. Styling is
                 // dropped on this edge path — a truncated button is already
                 // degraded, and cell-exact width beats colour there.
-                $middleLines[] = '│' . Width::padRight(Width::truncateMiddle(Ansi::strip($label), $inner), $inner) . '│';
+                $middleLines[] = $v . Width::padRight(Width::truncateMiddle(Ansi::strip($label), $inner), $inner) . $v;
             } else {
-                $middleLines[] = '│' . Width::padRight(Width::truncateAnsi($label, $inner), $inner) . '│';
+                $middleLines[] = $v . Width::padRight(Width::truncateAnsi($label, $inner), $inner) . $v;
             }
         }
         if ($hiddenActions > 0) {
@@ -1525,10 +1527,10 @@ final class Toast
             // locale-neutral chrome (README i18n section), byte-stable
             // across every locale.
             $more = '+' . $hiddenActions . ' more';
-            $middleLines[] = '│' . "\x1b[2m" . Width::padRight(
+            $middleLines[] = $v . "\x1b[2m" . Width::padRight(
                 Width::truncateMiddle($more, $inner),
                 $inner
-            ) . "\x1b[0m" . '│';
+            ) . "\x1b[0m" . $v;
         }
 
         $lines = [$top, ...$middleLines, $bottom];
@@ -1609,6 +1611,22 @@ final class Toast
     }
 
     /**
+     * Box chrome glyphs for the active symbol set. Ascii means ASCII all the
+     * way down — borders `+ - |` and bar `# .` — so LANG=C / TERM=dumb hosts
+     * that opted out of non-ASCII glyphs do not get box-drawing back through
+     * the frame (bubbleup's approach). NerdFont/Unicode keep the rounded
+     * box-drawing frame and block bar, byte-stable.
+     *
+     * @return array{tl:string,h:string,tr:string,v:string,bl:string,br:string,fill:string,empty:string}
+     */
+    private function chrome(): array
+    {
+        return $this->symbols === SymbolSet::Ascii
+            ? ['tl' => '+', 'h' => '-', 'tr' => '+', 'v' => '|', 'bl' => '+', 'br' => '+', 'fill' => '#', 'empty' => '.']
+            : ['tl' => '╭', 'h' => '─', 'tr' => '╮', 'v' => '│', 'bl' => '╰', 'br' => '╯', 'fill' => '█', 'empty' => '░'];
+    }
+
+    /**
      * Overlay a queued Alert's optional bg/fg/border colours onto its grid:
      * every box cell gains the background fill; box-drawing glyphs
      * (╭ ─ ╮ │ ╰ ╯) take the border colour; remaining interior text takes
@@ -1635,7 +1653,11 @@ final class Toast
             return $grid;
         }
 
-        static $borderGlyphs = ['╭' => true, '─' => true, '╮' => true, '│' => true, '╰' => true, '╯' => true];
+        $chrome = $this->chrome();
+        $borderGlyphs = [
+            $chrome['tl'] => true, $chrome['h'] => true, $chrome['tr'] => true,
+            $chrome['v'] => true, $chrome['bl'] => true, $chrome['br'] => true,
+        ];
 
         $bg     = $alert->backgroundColor !== null ? $this->colorToRgb($alert->backgroundColor) : null;
         $fg     = $alert->foregroundColor !== null ? $this->colorToRgb($alert->foregroundColor) : null;
@@ -2101,6 +2123,8 @@ final class Toast
         // right border fell off mid-box.
         $width = \max(1, $width);
         $progress = \max(0.0, \min(1.0, $progress));
+        $chrome = $this->chrome();
+        $v = $chrome['v'];
 
         if ($percent !== '' && Width::string($percent) + 2 <= $width) {
             // Accessible numeric read-out: the percentage label plus one space is
@@ -2109,17 +2133,17 @@ final class Toast
             // degrade is the plain bar — every cell the box has is content.
             $barWidth = $width - Width::string($percent) - 1;
             $barFilled = \max(0, \min($barWidth, (int) \round($progress * $barWidth)));
-            return '│' . $percent . ' '
-                . \str_repeat('█', $barFilled) . \str_repeat('░', $barWidth - $barFilled) . '│';
+            return $v . $percent . ' '
+                . \str_repeat($chrome['fill'], $barFilled) . \str_repeat($chrome['empty'], $barWidth - $barFilled) . $v;
         }
         $filled = (int) \round($progress * $width);
         $filled = \max(0, \min($width, $filled));
         $empty = $width - $filled;
 
-        // Each block glyph (█ / ░) is one display cell; build exactly
+        // Each bar glyph is one display cell; build exactly
         // $width cells so the bar aligns flush with the borders.
-        $bar = \str_repeat('█', $filled) . \str_repeat('░', $empty);
-        return '│' . $bar . '│';
+        $bar = \str_repeat($chrome['fill'], $filled) . \str_repeat($chrome['empty'], $empty);
+        return $v . $bar . $v;
     }
 
     /**
