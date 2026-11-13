@@ -261,4 +261,106 @@ final class QuickPickSigwinchTest extends TestCase
 
         $this->assertSame([132, 43], $forwarded, 'the geometry half must still reach the callback');
     }
+
+    /**
+     * S-31/-026: sugar-pty is SUGGESTED, not required. The installer seam
+     * must compose the exact same handler semantics over any delivery: the
+     * fake receives the named descriptor, a working geometry probe, and the
+     * composed handler — and running that handler invalidates the shared
+     * memo AND forwards to $onResize.
+     */
+    public function testTheInstallerSeamComposesTheFullHandlerOverAnyDelivery(): void
+    {
+        $forwarded = null;
+        $model = QuickPick::new(['a'])->withOnResize(
+            static function (int $cols, int $rows) use (&$forwarded): void {
+                $forwarded = [$cols, $rows];
+            },
+        );
+
+        $seen = [];
+        $installed = $model->attachSigwinch(
+            static function (int $fd, callable $probe, \Closure $handler) use (&$seen): bool {
+                $seen = ['fd' => $fd, 'probe' => $probe, 'handler' => $handler];
+                return true;
+            },
+        );
+
+        $this->assertTrue($installed, 'a successful custom install must report true');
+        $this->assertSame(0, $seen['fd'], 'the seam receives the named descriptor');
+        $probeSize = ($seen['probe'])();
+        $this->assertSame(
+            ['cols', 'rows'],
+            array_keys($probeSize),
+            'the probe answers the SignalForwarder geometry shape',
+        );
+
+        $memo = new ReflectionProperty(QuickPick::class, 'widthMemo');
+        $memo->setAccessible(true);
+        $model->show()->view(str_repeat(str_repeat(' ', 40) . "\n", 5));
+        $this->assertNotNull($memo->getValue($model)->width, 'render must populate the memo');
+
+        ($seen['handler'])(99, 33);
+
+        $this->assertNull($memo->getValue($model)->width, 'the delivered handler must clear the memo');
+        $this->assertSame([99, 33], $forwarded, 'and forward geometry to the callback');
+    }
+
+    /**
+     * S-31/-026: with sugar-pty installed in dev there is no way to run the
+     * class_exists-false arm at runtime — pin the guard textually so
+     * "unconditional SignalForwarder call" cannot creep back in. The arm's
+     * contract is documented: attachSigwinch() returns false and the host
+     * uses invalidateAutoWidth() (pinned below).
+     */
+    public function testTheDefaultInstallGuardsTheOptionalSignalForwarder(): void
+    {
+        $this->assertStringContainsString(
+            'class_exists(SignalForwarder::class)',
+            self::attachSigwinchBody(),
+            'the sugar-pty touchpoint must stay guarded (suggest, not require)',
+        );
+    }
+
+    /**
+     * S-31/-026: manifest shape, read as JSON (never via composer):
+     * sugar-pty gone from require, named in suggest, kept in require-dev so
+     * the dev-side real-signal pins still run.
+     */
+    public function testComposerManifestKeepsSugarPtyOptional(): void
+    {
+        $manifest = json_decode(
+            (string) file_get_contents(dirname(__DIR__) . '/composer.json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+
+        $this->assertIsArray($manifest);
+        $this->assertArrayNotHasKey('sugarcraft/sugar-pty', $manifest['require'] ?? []);
+        $this->assertArrayHasKey('sugarcraft/sugar-pty', $manifest['suggest'] ?? []);
+        $this->assertArrayHasKey('sugarcraft/sugar-pty', $manifest['require-dev'] ?? []);
+    }
+
+    /**
+     * S-31/-026: the manual-invalidate contract — one public call drops the
+     * memoized width for the WHOLE clone family (shared holder, S-10), so a
+     * host owning its own SIGWINCH delivery needs no sugar-pty at all.
+     */
+    public function testInvalidateAutoWidthClearsTheSharedHolderAcrossTheFamily(): void
+    {
+        $model = QuickPick::new(['alpha'])->show();
+        $model->view(str_repeat(str_repeat(' ', 40) . "\n", 5));
+
+        $memo = new ReflectionProperty(QuickPick::class, 'widthMemo');
+        $memo->setAccessible(true);
+        $this->assertNotNull($memo->getValue($model)->width, 'render must populate the memo');
+
+        $later = $model->withOffset(2, 0);
+
+        $model->invalidateAutoWidth();
+
+        $this->assertNull($memo->getValue($model)->width, 'the call must clear the memo');
+        $this->assertNull($memo->getValue($later)->width, 'and reach clones through the shared holder');
+    }
 }

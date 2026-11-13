@@ -28,14 +28,15 @@
         "php": "^8.3",
         "sugarcraft/sugar-core": "dev-master",
         "sugarcraft/sugar-fuzzy": "dev-master",
-        "sugarcraft/sugar-style": "dev-master",
-        "sugarcraft/sugar-pty": "dev-master"
+        "sugarcraft/sugar-style": "dev-master"
     },
     "suggest": {
-        "ext-pcntl": "Required for QuickPick::attachSigwinch() to re-render the overlay on SIGWINCH terminal resizes."
+        "ext-pcntl": "Required for QuickPick::attachSigwinch() to re-render the overlay on SIGWINCH terminal resizes.",
+        "sugarcraft/sugar-pty": "Installs the SIGWINCH handler automatically in QuickPick::attachSigwinch() (its SignalForwarder; brings an ext-ffi install floor with it). Without it attachSigwinch() returns false and the host drives resizes itself via QuickPick::invalidateAutoWidth() or its own installer callable."
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "sugarcraft/sugar-pty": "dev-master"
     },
     "autoload": {
         "psr-4": {

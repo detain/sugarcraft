@@ -572,8 +572,24 @@ final class QuickPick
      * Delegates to {@see SignalForwarder::attachSigwinchToFd()}; signal
      * dispositions are process-global, so detach them with
      * `SignalForwarder::reset()` at session teardown.
+     *
+     * ## sugar-pty is OPTIONAL (suggest, not require)
+     *
+     * SignalForwarder is the ONLY sugar-pty symbol this class touches, and
+     * only on this opt-in path — a hard require made an FFI-less host unable
+     * to install a string renderer it uses completely (-026). Without
+     * sugar-pty the default install returns false; the host then either
+     * calls {@see self::invalidateAutoWidth()} from its own SIGWINCH hook
+     * (the shared width holder makes one call reach the whole clone
+     * family), or passes its own $installer.
+     *
+     * @param (callable(int $fd, callable():array{cols:int,rows:int}, \Closure): bool)|null $installer
+     *                          custom delivery: receives the descriptor to
+     *                          watch, the geometry probe, and the composed
+     *                          handler; answers whether it installed. When
+     *                          null, SignalForwarder is used if present.
      */
-    public function attachSigwinch(): bool
+    public function attachSigwinch(?callable $installer = null): bool
     {
         if ($this->onResize === null) {
             return false;
@@ -585,13 +601,39 @@ final class QuickPick
         // deliberately does NOT go through $model — it routes through the shared
         // WidthMemo handle, so every clone in the family sees the resize.
         $model = $this;
+        $probe = static fn(): array => $model->ttySize();
+
+        if ($installer !== null) {
+            return (bool) $installer(self::STDIN_DESCRIPTOR, $probe, $this->sigwinchHandler());
+        }
+
+        if (\class_exists(SignalForwarder::class) === false) {
+            // Manual-invalidate mode, documented above: sugar-pty absent.
+            return false;
+        }
+
         return SignalForwarder::attachSigwinchToFd(
             // A DESCRIPTOR, not `(int) \STDIN` — see self::STDIN_DESCRIPTOR for
             // why the cast silently targeted STDOUT instead.
             self::STDIN_DESCRIPTOR,
-            static fn(): array => $model->ttySize(),
+            $probe,
             $this->sigwinchHandler(),
         );
+    }
+
+    /**
+     * Drop the memoized auto width so the next view() re-measures.
+     *
+     * The public half of manual-invalidate mode: hosts that deliver their
+     * own SIGWINCH (event-loop signal watcher, poll fallback, plain
+     * terminal-driver knowledge) call this once per resize instead of
+     * depending on sugar-pty. The width holder is SHARED across the clone
+     * family (S-10), so one call here invalidates every live clone — no
+     * need to thread it through the fluent pipeline.
+     */
+    public function invalidateAutoWidth(): void
+    {
+        $this->widthMemo->invalidate();
     }
 
     /**

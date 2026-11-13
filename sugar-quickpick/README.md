@@ -28,19 +28,20 @@ composer require sugarcraft/sugar-quickpick
 
 ## Requirements
 
-- **PHP 8.3+** and **ext-ffi — required at install time.** The library
-  hard-requires `sugarcraft/sugar-pty`, whose own manifest hard-requires
-  `ext-ffi`, so `composer require` fails on an FFI-less PHP build even
-  though quickpick touches exactly one sugar-pty symbol,
-  `SignalForwarder`, and only when you call `attachSigwinch()`. An ordinary
-  `view()`-only integration never executes FFI — the floor is a packaging
-  fact, not a runtime behavior of the renderer.
+- **PHP 8.3+.** No hard extension floor. `sugarcraft/sugar-pty` is a
+  *suggested* dependency: it supplies `SignalForwarder`, the automatic
+  SIGWINCH installer used by `attachSigwinch()`, and it brings an
+  `ext-ffi` install floor with it. Skip it entirely if you do not want
+  auto-attached resize signals — everything else in the library is pure
+  string rendering. When sugar-pty is absent `attachSigwinch()` returns
+  `false` and you drive resizes yourself (see below).
 - **ext-pcntl** — only for `attachSigwinch()`, the opt-in SIGWINCH
-  re-render attach. Without it `attachSigwinch()` returns `false` and
-  everything else keeps working. On a resized terminal the auto width then
-  re-probes only when some width-affecting mutation (`withPrompt`,
-  `withItems`, `type()`, …) drops the memoized computed width — force a
-  re-measure by applying one, or build a fresh instance.
+  re-render attach. Without it (or without sugar-pty) `attachSigwinch()`
+  returns `false` and everything else keeps working. On a resized terminal
+  the auto width then re-probes only when some width-affecting mutation
+  (`withPrompt`, `withItems`, `type()`, …) drops the memoized computed
+  width — or call `invalidateAutoWidth()` yourself once per resize (one
+  call invalidates the whole clone family; the width holder is shared).
 - **A UTF-8 capable terminal** — the built-in chrome draws U+2195 `↕`
   (overflow marker), U+2500 `─` (separator), U+258F `▏` (filter caret) and
   U+22EF `⋯` (filter-cap overflow); a legacy non-UTF-8 terminal shows them
@@ -605,10 +606,34 @@ $h = QuickPick::new($items)
 // attachSigwinch() returns bool — whether the handler installed — not the
 // QuickPick, so call it on its own line rather than continuing the chain.
 if ($h->attachSigwinch() === false) {
-    // A genuine install failure: no ext-pcntl, no SIGWINCH support, the OS
-    // refused pcntl_signal(), or no withOnResize() callback was registered.
+    // A genuine install failure: no sugar-pty (suggested, not required), no
+    // ext-pcntl, no SIGWINCH support, the OS refused pcntl_signal(), or no
+    // withOnResize() callback was registered.
     // Poll the size yourself, or simply carry on without resize events.
 }
+```
+
+Two ways to live without sugar-pty. The plain one: handle the signal in
+your own runtime and tell the picker its cached width is stale — one call
+covers the whole clone family because the width holder is shared:
+
+```php
+$loop->addSignal(SIGWINCH, function () use (&$h): void {
+    $h->invalidateAutoWidth();   // next view() re-measures from the terminal
+});
+```
+
+The wired one: pass an installer callable. It receives the descriptor to
+watch, the geometry probe, and the composed handler (invalidation + your
+`withOnResize` callback), and answers whether it installed — reuse the
+library's exact semantics over any delivery mechanism you have:
+
+```php
+$h->attachSigwinch(
+    fn(int $fd, callable $probe, \Closure $handler): bool => my_signal_registry::watch(SIGWINCH,
+        static fn(): void => $handler(...$probe()),
+    ),
+);
 ```
 
 Installing and reporting are separate facts. A `true` return only says the
@@ -627,7 +652,8 @@ re-registered by the old handler.
 
 Signals are process-global. In a long-lived host (PHP-FPM worker, ReactPHP
 daemon, test suite) detach them at session teardown with
-`SugarCraft\Pty\SignalForwarder::reset()`.
+`SugarCraft\Pty\SignalForwarder::reset()` — when you used the default
+installer; your own `$installer` owns its teardown.
 
 ## Composition contract — QuickPickHost
 
