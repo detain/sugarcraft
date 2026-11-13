@@ -113,11 +113,13 @@ final class Theme
          * value to override (glamour stock dark / light themes use 4).
          */
         public readonly int $listLevelIndent = 0,
-        /** Glyph rendered for a checked task list item (`[x]`). */
+        /** Glyph rendered for a checked task list item (`[x]`). Drawn
+         *  even by `plain()`/`notty()`; settable for pure-ASCII output
+         *  (see README ## Accessibility). */
         public readonly string $taskTickedGlyph = '☑',
-        /** Glyph rendered for an unchecked task list item (`[ ]`). */
+        /** Glyph rendered for an unchecked task list item (`[ ]`). Plain()-surviving like the ticked one. */
         public readonly string $taskUntickedGlyph = '☐',
-        /** Glyph repeated to draw a thematic break / horizontal rule. */
+        /** Glyph repeated to draw a thematic break / horizontal rule. Plain()-surviving like the task glyphs. */
         public readonly string $horizontalRuleGlyph = '─',
         /** Cells the thematic-break glyph repeats across. Default 40. */
         public readonly int $horizontalRuleLength = 40,
@@ -281,7 +283,9 @@ final class Theme
         );
     }
 
-    /** Plain-text theme: every Style is a no-op. Useful for snapshot tests. */
+    /** Plain-text theme: every Style is a no-op. Colour-free, not
+     * glyph-free — the decorative glyphs still draw (see README
+     * ## Accessibility). Useful for snapshot tests. */
     public static function plain(): self
     {
         if (isset(self::$stockInstances['plain'])) {
@@ -434,9 +438,12 @@ final class Theme
      * `auto` (matching glamour's convention) returns {@see notty()} when
      * STDOUT is not a TTY and {@see dark()} otherwise. Falls back to
      * `$default` (default `ansi()`) when no variable applies or the name
-     * is unrecognised. Note that `new Renderer()` keeps its own `ansi()`
-     * hard default — honouring the environment is exactly what this
-     * channel is for.
+     * is unrecognised. `auto` probes `stream_isatty(STDOUT)` only — it
+     * never reads `TERM`, so dumb terminals and screen-reader pipes
+     * behind a PTY must pin `notty`/`ascii` explicitly (README
+     * ## Accessibility). Note that `new Renderer()` keeps its own
+     * `ansi()` hard default — honouring the environment is exactly what
+     * this factory is for.
      */
     public static function fromEnvironment(?self $default = null): self
     {
@@ -779,7 +786,9 @@ final class Theme
      * The JSON shape is one object per element, each carrying a subset of
      * `foreground` / `background` (hex `#rrggbb` or `ansi:N` or
      * `ansi256:N`) and the standard boolean attribute flags (`bold`,
-     * `italic`, `underline`, `strike`, `faint`, `blink`, `reverse`).
+     * `italic`, `underline`, `strike`, `faint`, `blink`, `reverse`) —
+     * `blink` is accepted for glamour parity and discouraged for
+     * WCAG 2.2.2 reasons (README ## Accessibility).
      * Missing elements default to the plain Style.
      *
      * $maxBytes is the hostile-workspace guard: a stat probe refuses an

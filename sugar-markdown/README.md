@@ -137,7 +137,8 @@ JSON shape (flat): an object keyed by element name (`heading1`–`heading6`, `pa
 `definitionTerm`, `definitionDescription`, `text`, `autolink`); each
 value carries `foreground` / `background` (hex / `ansi:N` /
 `ansi256:N`) plus the SGR flags (`bold`, `italic`, `underline`,
-`strike`, `faint`, `blink`, `reverse`).
+`strike`, `faint`, `blink` — parity-supported, discouraged, see
+Accessibility — `reverse`).
 
 ## Word-wrap + OSC 8 hyperlinks
 
@@ -193,6 +194,42 @@ Everything else holds regardless of the flag: encoding repair
 (malformed UTF-8, stray C1 bytes) runs before parsing unconditionally,
 raw HTML blocks and inline HTML stay control-stripped, and URL
 stripping is likewise always on. See the fleet-wide trust model in
+[docs/TRUST-BOUNDARY.md](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md).
+
+## Accessibility
+
+The posture this library takes, consolidated (each point expands the
+region it cross-references):
+
+- **Colour is the first thing to go.** `Theme::fromEnvironment()` lets
+  `NO_COLOR` win over every other input, and the stock `plain()` /
+  `ascii()` themes drop SGR colour by construction — emphasis in
+  `ascii()` survives on bold/italic/underline alone.
+- **`auto` trusts `isatty` and nothing else.** It never reads `TERM`,
+  so a `TERM=dumb` terminal or a screen-reader pipe sitting behind a
+  PTY still receives full SGR from `GLAMOUR_STYLE=auto`. Pin
+  `GLAMOUR_STYLE=notty` (or `ascii` when structure-emphasis matters)
+  explicitly for those pipelines.
+- **Link text stays visible.** The OSC-8 envelope wraps visible
+  `text (url)` — a non-clicking terminal loses nothing (Word-wrap +
+  OSC 8 hyperlinks). The one exception: `withInlineTableLinks(false)`
+  discards table-cell destinations entirely (no `(url)` fallback), so
+  avoid it for accessible output.
+- **Alt text always renders.** `![alt](src)` keeps `alt`
+  unconditionally — the same screen-reader and print fallback posture
+  the refused-scheme link text gets via its visible `(url)` suffix
+  ("images (alt + url)" under What it renders).
+- **Colour-free is not glyph-free.** `plain()` and `notty()` no-op the
+  Style slots but still draw the decorative glyphs (▎ ─ ☐ • …);
+  screen readers voice them inconsistently, and every glyph is a
+  constructor-settable string (the slot roster under Renderer options)
+  if you need pure-ASCII output.
+- **`blink` is accepted, discouraged.** It lives in the theme-JSON
+  flag vocabulary for glamour parity; WCAG 2.2.2 asks you not to ship
+  it.
+
+The what-you-can-trust boundary (refused schemes as a deny-list, raw
+control characters behind the loud flag) is documented fleet-wide in
 [docs/TRUST-BOUNDARY.md](https://github.com/detain/sugarcraft/blob/master/docs/TRUST-BOUNDARY.md).
 
 ## Streaming
