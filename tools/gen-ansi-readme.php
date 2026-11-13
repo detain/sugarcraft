@@ -384,7 +384,7 @@ foreach ([$jsonPath, $mdPath] as $required) {
 }
 
 /** @var array<string,array<string,mixed>> $index */
-$index = json_decode((string) file_get_contents($jsonPath), true, 512, JSON_THROW_ON_ERROR);
+$index = readJsonData($jsonPath);
 
 // The .ansi files on disk are the ultimate authority on WHAT EXISTS; the JSON is the
 // authority on what each one IS. A file present in one and not the other is drift that
@@ -482,3 +482,25 @@ if ($problems !== []) {
 
 printf("ansi.json and ansi/README.md agree across %d pieces\n", count($index));
 exit(0);
+
+/**
+ * RT-40: the repo contract for corrupt committed data is exit 2 naming the
+ * path — a bare JSON_THROW_ON_ERROR turned a broken data file into a 255 with
+ * a stack trace, off-contract for callers (CI legs and sibling tools) that
+ * key on clean rc codes.
+ */
+function readJsonData(string $path): array
+{
+    try {
+        $decoded = json_decode((string) @file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+    } catch (JsonException $e) {
+        fwrite(STDERR, "gen-ansi-readme: unreadable JSON data file {$path}: {$e->getMessage()}\n");
+        exit(2);
+    }
+    if (!is_array($decoded)) {
+        fwrite(STDERR, "gen-ansi-readme: {$path} must contain a JSON object or array\n");
+        exit(2);
+    }
+
+    return $decoded;
+}

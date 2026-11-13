@@ -229,7 +229,7 @@ foreach ($slugs as $slug) {
         }
         continue;
     }
-    $meta = json_decode((string) file_get_contents("$dataDir/$slug.json"), true, 512, JSON_THROW_ON_ERROR);
+    $meta = readJsonData("$dataDir/$slug.json");
     $body = (string) file_get_contents("$dataDir/$slug.body.html");
     $html = generate_one($slug, $types[$slug], $meta, $body, $nLib, $nApp);
     $target = "$libDir/$slug.html";
@@ -466,7 +466,7 @@ function redirect_stubs(string $root, string $dataDir): array
     if (!is_file($path)) {
         return [];                                  // fixture trees without the map get no stubs
     }
-    $decoded = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+    $decoded = readJsonData($path);
     $entries = is_array($decoded['entries'] ?? null) ? $decoded['entries'] : [];
 
     $stubs = [];
@@ -1286,7 +1286,7 @@ function build_search_index(array $slugs, array $types, string $dataDir, string 
         if (!isset($types[$slug])) {
             continue;
         }
-        $meta = json_decode((string) file_get_contents("$dataDir/$slug.json"), true, 512, JSON_THROW_ON_ERROR);
+        $meta = readJsonData("$dataDir/$slug.json");
         $entries[] = [
             'name'        => (string) ($meta['displayName'] ?? $meta['title'] ?? $slug),
             'slug'        => $slug,
@@ -1365,4 +1365,26 @@ function doc_page_description(string $html, string $page): string
     }
 
     return trim(html_entity_decode($m[1], ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+}
+
+/**
+ * RT-40: the repo contract for corrupt committed data is exit 2 naming the
+ * path — a bare JSON_THROW_ON_ERROR turned a broken data file into a 255 with
+ * a stack trace, off-contract for callers (CI legs and sibling tools) that
+ * key on clean rc codes.
+ */
+function readJsonData(string $path): array
+{
+    try {
+        $decoded = json_decode((string) @file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+    } catch (JsonException $e) {
+        fwrite(STDERR, "gen-docs: unreadable JSON data file {$path}: {$e->getMessage()}\n");
+        exit(2);
+    }
+    if (!is_array($decoded)) {
+        fwrite(STDERR, "gen-docs: {$path} must contain a JSON object or array\n");
+        exit(2);
+    }
+
+    return $decoded;
 }
