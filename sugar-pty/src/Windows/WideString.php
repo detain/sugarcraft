@@ -62,12 +62,7 @@ final class WideString
             return '';
         }
 
-        if (!\mb_check_encoding($utf8, 'UTF-8')) {
-            throw new PtyException(\sprintf(
-                'cannot encode a path or command line as UTF-16LE: the value is not valid UTF-8 (%d bytes)',
-                \strlen($utf8),
-            ));
-        }
+        self::requireValidUtf8($utf8);
 
         $wide = \mb_convert_encoding($utf8, 'UTF-16LE', 'UTF-8');
 
@@ -145,17 +140,46 @@ final class WideString
      */
     public static function codeUnits(string $utf8): int
     {
-        // strlen(utf16le)/2 is the unit count; fromUtf8() has already refused
-        // anything that is not valid UTF-8, so the length is trustworthy.
-        return \intdiv(\strlen(self::fromUtf8($utf8)), 2);
+        self::requireValidUtf8($utf8);
+
+        // Arithmetic over the UTF-8 byte structure — no transcode to measure.
+        // A lead byte's range names its sequence length; a 1-3 byte sequence is
+        // exactly one UTF-16 code unit and a 4-byte (astral) sequence exactly
+        // two. So units = bytes - continuationBytes + astralLeads: identical to
+        // strlen(fromUtf8())/2 (pinned testCodeUnitsMatchesTheTranscodeOracle),
+        // without allocating a wide copy of every string just to size it. On a
+        // long environment block the old shape transcoded the whole buffer once
+        // per measurement; this one is three O(n) scans and no allocation.
+        $continuation = \preg_match_all('/[\x80-\xBF]/', $utf8);
+        $astral = \preg_match_all('/[\xF0-\xF4]/', $utf8);
+
+        return \strlen($utf8) - $continuation + $astral;
     }
 
     /**
-     * Byte length of the wide form of `$utf8` (two per code unit).
+     * Byte length of the wide form of `$utf8` (two per code unit), EXCLUDING
+     * any NUL terminator — callers that need a C string add {@see NUL_UNIT}
+     * themselves (via {@see terminate()} or the block's explicit double NUL).
      */
     public static function byteLength(string $utf8): int
     {
         return self::codeUnits($utf8) * 2;
+    }
+
+    /**
+     * The one validity question, asked the one way that keeps every entry
+     * point's contract identical: invalid UTF-8 is refused before it can be
+     * measured, encoded or trusted (a size computed from unvalidated bytes
+     * would launder a broken path into an undersized buffer).
+     */
+    private static function requireValidUtf8(string $utf8): void
+    {
+        if ($utf8 !== '' && !\mb_check_encoding($utf8, 'UTF-8')) {
+            throw new PtyException(\sprintf(
+                'cannot encode a path or command line as UTF-16LE: the value is not valid UTF-8 (%d bytes)',
+                \strlen($utf8),
+            ));
+        }
     }
 
     /**

@@ -78,6 +78,34 @@ final class WideStringTest extends TestCase
         self::assertSame(10, WideString::byteLength('🎉abc'));
     }
 
+    /**
+     * PTY-22 rewired codeUnits() from transcode-and-measure to arithmetic
+     * over the UTF-8 byte structure. The identity pin keeps both formulas
+     * married: for every sample the new count must equal what a real
+     * UTF-16LE conversion occupies (the oracle stays conversion-based here —
+     * slow is correct in a test), and invalid UTF-8 must still be refused
+     * at the measuring door, never laundered into a size.
+     */
+    public function testCodeUnitsMatchesTheTranscodeOracleOverTheWholePlaneSample(): void
+    {
+        $samples = [
+            '', 'a', 'ab', '\x00', "line1\nline2", 'é', '€', '文', '🎉',
+            '🎉🎉', '🎉abc', 'aé文🎉',
+            \mb_chr(0x007F), \mb_chr(0x0080), \mb_chr(0x07FF),
+            \mb_chr(0x0800), \mb_chr(0xFFFF), \mb_chr(0x10000),
+            \mb_chr(0x10FFFF), str_repeat('x🎉', 40),
+        ];
+
+        foreach ($samples as $s) {
+            $oracle = \intdiv(\strlen(WideString::fromUtf8($s)), 2);
+            self::assertSame($oracle, WideString::codeUnits($s), 'units of ' . \json_encode($s));
+            self::assertSame($oracle * 2, WideString::byteLength($s), 'bytes of ' . \json_encode($s));
+        }
+
+        $this->expectException(PtyException::class);
+        WideString::codeUnits("\xF0\x9F");
+    }
+
     public function testTerminateAppendsExactlyOneNulUnit(): void
     {
         $terminated = WideString::terminate('a');
