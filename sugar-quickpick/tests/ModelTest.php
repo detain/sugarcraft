@@ -4,192 +4,93 @@ declare(strict_types=1);
 
 namespace SugarCraft\QuickPick\Tests;
 
-use SugarCraft\QuickPick\{FilteredItem, QuickPick, Item, Model};
 use PHPUnit\Framework\TestCase;
+use SugarCraft\QuickPick\{Model, QuickPick};
 
 /**
- * Model is an interface, which the covers annotation cannot target
- * (PHPUnit warns under a coverage run) — so point it at the concrete
- * class the tests drive instead.
+ * The Model contract, pinned honestly (-015).
+ *
+ * The previous file drove anonymous doubles that only re-asserted their own
+ * match() arms (`assertSame($model, $newModel)` on a double that returns
+ * `$this` is a pure self-assert with zero library code), and re-exercised
+ * cursorDown/type/backspace primitives already pinned in QuickPickTest.
+ * Both mirrors are gone. What remains is exactly what a contract test may
+ * claim: (1) the interface SHAPE — the two methods and their signatures,
+ * which every host compiles against; and (2) ONE host-owned loop over a
+ * REAL QuickPick, proving the documented protocol composes end to end.
  *
  * @covers \SugarCraft\QuickPick\QuickPick
  */
 final class ModelTest extends TestCase
 {
-    public function testUpdateHandlesDownMessage(): void
+    public function testInterfaceShapeIsPinned(): void
     {
-        $model = new class implements Model {
-            public function update(QuickPick $h, string $msg): Model
-            {
-                return match ($msg) {
-                    'down' => $this,
-                    default => $this,
-                };
-            }
+        $reflection = new \ReflectionClass(Model::class);
 
-            public function view(QuickPick $h): string
-            {
-                return $h->view('');
-            }
-        };
+        self::assertTrue($reflection->isInterface());
+        self::assertSame(
+            ['update', 'view'],
+            \array_map(static fn(\ReflectionMethod $m): string => $m->getName(), $reflection->getMethods()),
+            'the contract is exactly update() + view() — a third member is a silent break for implementing hosts',
+        );
 
-        $items = [
-            new FilteredItem(1, 'apple'),
-            new FilteredItem(2, 'banana'),
-        ];
-        $hermit = QuickPick::new($items)->show();
-        $newModel = $model->update($hermit, 'down');
+        $update = $reflection->getMethod('update');
+        $params = $update->getParameters();
+        self::assertCount(2, $params);
+        self::assertSame(QuickPick::class, (string) $params[0]->getType());
+        self::assertSame('string', (string) $params[1]->getType());
+        self::assertSame(Model::class, (string) $update->getReturnType());
 
-        self::assertSame($model, $newModel);
+        $view = $reflection->getMethod('view');
+        self::assertSame(QuickPick::class, (string) $view->getParameters()[0]->getType());
+        self::assertSame('string', (string) $view->getReturnType());
     }
 
-    public function testUpdateMapsDownToCursorDown(): void
+    public function testHostOwnedLoopDrivesRealQuickPickThroughTheProtocol(): void
     {
-        $model = new class implements Model {
-            private QuickPick $hermit;
+        $host = new class implements Model {
+            public QuickPick $pick;
 
-            public function update(QuickPick $h, string $msg): Model
+            public function update(QuickPick $model, string $msg): Model
             {
-                $this->hermit = match ($msg) {
-                    'down' => $h->cursorDown(),
-                    'backspace' => $h->backspace(),
-                    default => $h,
+                $this->pick = match (true) {
+                    $msg === 'down'      => $model->cursorDown(),
+                    $msg === 'backspace' => $model->backspace(),
+                    $msg === 'enter'     => $model, // host-vocabulary token — the library decodes nothing
+                    \str_starts_with($msg, 'type:') => $model->type(\substr($msg, 5)),
+                    default              => $model,
                 };
-
                 return $this;
             }
 
-            public function view(QuickPick $h): string
+            public function view(QuickPick $model): string
             {
-                return $h->view('');
-            }
-
-            public function hermit(): QuickPick
-            {
-                return $this->hermit;
+                return $model->view(\str_repeat('.', 40));
             }
         };
 
-        $items = [
-            new FilteredItem(1, 'apple'),
-            new FilteredItem(2, 'banana'),
-            new FilteredItem(3, 'cherry'),
-        ];
-        $hermit = QuickPick::new($items)->show();
-        $result = $model->update($hermit, 'down');
-
-        self::assertSame(1, $result->hermit()->cursor());
-    }
-
-    public function testUpdateMapsTypeMessage(): void
-    {
-        $model = new class implements Model {
-            private QuickPick $hermit;
-
-            public function update(QuickPick $h, string $msg): Model
-            {
-                if (str_starts_with($msg, 'type:')) {
-                    $this->hermit = $h->type(substr($msg, 5));
-                } else {
-                    $this->hermit = $h;
-                }
-
-                return $this;
-            }
-
-            public function view(QuickPick $h): string
-            {
-                return $h->view('');
-            }
-
-            public function hermit(): QuickPick
-            {
-                return $this->hermit;
-            }
-        };
-
-        $items = [
-            new FilteredItem(1, 'apple'),
-            new FilteredItem(2, 'banana'),
-            new FilteredItem(3, 'cherry'),
-        ];
-        $hermit = QuickPick::new($items)->show();
-        $result = $model->update($hermit, 'type:ban');
-
-        self::assertSame(1, $result->hermit()->itemCount());
-        self::assertSame('banana', $result->hermit()->selected()->value());
-    }
-
-    public function testViewReturnsRenderedString(): void
-    {
-        $items = [
-            new FilteredItem(1, 'apple'),
-        ];
-        $hermit = QuickPick::new($items)
-            ->setWindowWidth(40)
+        $start = QuickPick::new(['apple', 'banana', 'cherry'])
+            ->setWindowWidth(20)
             ->setWindowHeight(5)
-            ->setOffset(0, 0)
             ->show();
 
-        // Render over a proper background (matching QuickPickRankerTest pattern)
-        $bg = implode("\n", array_fill(0, 5, str_repeat(' ', 40)));
-        $view = $hermit->view($bg);
+        $returned = $host->update($start, 'type:a');
+        self::assertSame($host, $returned, 'update() carries the host back');
+        self::assertSame(2, $host->pick->itemCount(), "type:a keeps apple + banana (cherry has no 'a')");
 
-        self::assertIsString($view);
-        // A shown QuickPick should render the overlay onto the background
-        self::assertStringContainsString('apple', $view);
-    }
+        $host->update($host->pick, 'down');
+        self::assertSame(1, $host->pick->cursor());
+        self::assertSame('banana', $host->pick->selected()?->value());
 
-    public function testRoundTripSequence(): void
-    {
-        $model = new class implements Model {
-            private QuickPick $hermit;
+        $host->update($host->pick, 'enter');
+        self::assertSame('a', $host->pick->filterText(), 'an unmapped host token is identity, not a reset');
 
-            public function update(QuickPick $h, string $msg): Model
-            {
-                $this->hermit = match (true) {
-                    $msg === 'down' => $h->cursorDown(),
-                    $msg === 'backspace' => $h->backspace(),
-                    str_starts_with($msg, 'type:') => $h->type(substr($msg, 5)),
-                    default => $h,
-                };
+        $host->update($host->pick, 'backspace');
+        self::assertSame('', $host->pick->filterText());
+        self::assertSame(3, $host->pick->itemCount(), 'the full corpus returns');
 
-                return $this;
-            }
-
-            public function view(QuickPick $h): string
-            {
-                return $h->view('');
-            }
-
-            public function hermit(): QuickPick
-            {
-                return $this->hermit;
-            }
-        };
-
-        $items = [
-            new FilteredItem(1, 'apple'),
-            new FilteredItem(2, 'banana'),
-            new FilteredItem(3, 'cherry'),
-        ];
-
-        // Initial state: type 'a' → apple, banana (cherry has no 'a')
-        $hermit = QuickPick::new($items)->show();
-        $model = $model->update($hermit, 'type:a');
-        self::assertSame(2, $model->hermit()->itemCount()); // apple, banana
-
-        // Move down
-        $model = $model->update($model->hermit(), 'down');
-        self::assertSame(1, $model->hermit()->cursor());
-
-        // Backspace to clear filter → all 3 items restored
-        $model = $model->update($model->hermit(), 'backspace');
-        self::assertSame('', $model->hermit()->filterText());
-        self::assertSame(3, $model->hermit()->itemCount());
-
-        // Full round-trip: view produces a string
-        $view = $model->view($model->hermit());
-        self::assertIsString($view);
+        $frame = $host->view($host->pick);
+        self::assertStringContainsString('apple', $frame, 'the loop renders through QuickPick::view()');
+        self::assertStringContainsString('─', $frame, 'the separator belongs to the overlay, not the background dots');
     }
 }
