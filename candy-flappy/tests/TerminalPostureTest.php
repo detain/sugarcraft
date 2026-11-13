@@ -54,21 +54,30 @@ final class TerminalPostureTest extends TestCase
 
     public function testTooSmallViewportGetsNoticeAndFreezesTheWorld(): void
     {
-        $g = $this->sized(40, 10);
+        // flappy-19: stand down is exercised on a LIVE board (the ready
+        // card stands down on its own gate now, which would blur which
+        // clause the null answers).
+        [$g,] = $this->sized(80, 24)->update(new KeyMsg(KeyType::Space, ''));
+        [$g,] = $g->update(new WindowSizeMsg(40, 10));
         $view = $g->view();
         $this->assertStringContainsString('needs a 62x21 terminal', $view);
         $this->assertStringContainsString('40x10', $view);
         $this->assertStringNotContainsString('score:', $view);
         // M6: nothing to see, nothing to simulate — the tick stands down.
-        $this->assertSame([], $g->subscriptions()->all());
+        $this->assertNull($g->subscriptions());
     }
 
     public function testGrowingBackResumesTheCadence(): void
     {
-        [$g,] = $this->sized(40, 10)->update(new WindowSizeMsg(80, 24));
+        [$g,] = $this->sized(80, 24)->update(new KeyMsg(KeyType::Space, ''));
+        [$g,] = $g->update(new WindowSizeMsg(40, 10));
+        $this->assertNull($g->subscriptions(), 'the shrunken live board stands down first');
+        [$g,] = $g->update(new WindowSizeMsg(80, 24));
         $this->assertSame(80, $g->frameCols);
+        $subs = $g->subscriptions();
+        $this->assertNotNull($subs);
         $ids = [];
-        foreach ($g->subscriptions()->all() as $s) {
+        foreach ($subs->all() as $s) {
             $ids[] = $s->id;
         }
         $this->assertSame([Game::TICK_SUBSCRIPTION], $ids);
@@ -84,7 +93,9 @@ final class TerminalPostureTest extends TestCase
             ->update(new ColorProfileMsg(ColorProfile::NoTty));
         $this->assertStringContainsString('interactive terminal', $g->view());
         $this->assertStringNotContainsString("\x1b[", $g->view());
-        $this->assertSame([], $g->subscriptions()->all());
+        // flappy-19: the stand-down is allocation-free null now (the board
+        // is both ready AND refused — either clause answers "arm nothing").
+        $this->assertNull($g->subscriptions());
         $this->assertNotNull($cmd, 'NoTty must dispatch a quit, not hang until killed');
         $this->assertInstanceOf(QuitMsg::class, $cmd());
     }

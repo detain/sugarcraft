@@ -698,7 +698,10 @@ final class GameTest extends TestCase
 
     public function testAliveGameSubscribesToOneStableTickChain(): void
     {
+        // flappy-19: the tick chain now belongs to a LIVE board — the ready
+        // card stands down, so the probe board must flap once first.
         $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
+        [$g, ] = $g->update(new KeyMsg(KeyType::Space, ''));
         $subs = $g->subscriptions();
         $this->assertNotNull($subs);
         $all = $subs->all();
@@ -706,6 +709,27 @@ final class GameTest extends TestCase
         $this->assertSame('game-tick', $all[0]->id);
         $this->assertSame(\SugarCraft\Core\Kind::Tick, $all[0]->kind);
         $this->assertSame(Game::TICK_SECONDS, $all[0]->params['seconds']);
+    }
+
+    /**
+     * flappy-19 (finding -019): the ready board stands the tick pipeline
+     * down completely. The board drops every TickMsg (M10 freeze), yet the
+     * pre-19 subscription still armed a 30 Hz timer — burning CPU and a
+     * full redraw every frame to animate nothing. The null answer is the
+     * dispatch-count pin: with no subscription registered there is no
+     * source a TickMsg could arrive from before the first flap, and the
+     * flap-arms-one-chain sibling above owns the post-start cadence.
+     */
+    public function testReadyBoardStandsDownTheTickPipelineEntirely(): void
+    {
+        $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
+        $this->assertFalse($g->started);
+        $this->assertNull($g->subscriptions(), 'a frozen ready card must arm nothing');
+
+        [$live, ] = $g->update(new KeyMsg(KeyType::Space, ''));
+        $subs = $live->subscriptions();
+        $this->assertNotNull($subs, 'the first flap re-arms the cadence');
+        $this->assertSame(['game-tick'], array_map(static fn($s): string => $s->id, $subs->all()));
     }
 
     public function testCrashedGameWantsNoTickSubscription(): void
@@ -727,12 +751,18 @@ final class GameTest extends TestCase
     public function testRestartWhileAliveEmitsNoFreshTimerChain(): void
     {
         $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
+        [$g, ] = $g->update(new KeyMsg(KeyType::Space, '')); // flappy-19: r is tested on a LIVE board
         [$next, $cmd] = $g->update(new KeyMsg(KeyType::Char, 'r'));
         $this->assertFalse($next->crashed);
-        // A restart must emit no timer at all: the Program keeps the single
-        // already-running 'game-tick' subscription because the id is stable.
+        // A restart must emit no timer at all: the update path never carries
+        // a re-arm Cmd. Under flappy-19 the fresh READY board stands its own
+        // cadence down (null), and the first flap re-arms exactly the one
+        // stable 'game-tick' id — so reconcile can never stack a second
+        // chain across the restart boundary.
         $this->assertNull($cmd);
-        $subs = $next->subscriptions();
+        $this->assertNull($next->subscriptions(), 'the ready board after r arms nothing');
+        [$live, ] = $next->update(new KeyMsg(KeyType::Space, ''));
+        $subs = $live->subscriptions();
         $this->assertNotNull($subs);
         $this->assertSame(['game-tick'], array_map(static fn($s): string => $s->id, $subs->all()));
     }

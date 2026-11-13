@@ -638,14 +638,22 @@ final class Game implements Model
     {
         // The single source of the game cadence (C1/M11). A stable id means
         // Program's per-cycle reconcile keeps exactly one chain alive across
-        // restarts, and an empty set on the crashed board cancels it (m31).
-        // The world also stands down when it cannot be seen or drawn (M6/M7):
-        // a too-small viewport gets a notice screen, a NoTty profile gets the
-        // refusal — neither should burn ticks — and the next WindowSizeMsg or
-        // profile change re-reconciles the cadence back to life.
+        // restarts, and a stand-down cancels it (m31: no idle chains after
+        // death). The world also stands down when it cannot be seen or drawn
+        // (M6/M7) — a too-small viewport gets a notice, a NoTty profile gets
+        // the refusal — and flappy-19 (finding -019) extends the file's own
+        // "nothing to see, nothing to simulate" law to the READY card: a
+        // frozen-by-design board that drops every TickMsg on the floor must
+        // not burn a 30 Hz timer and its redraws just to hover. All four
+        // stand-downs return null — the allocation-free shape (minesweeper
+        // Game::subscriptions precedent): Program reconciles "no
+        // subscriptions" exactly like the old empty set, so the cancel
+        // behaviour is unchanged and the null doubles as the dispatch-count
+        // pin — with no subscription there is no source a TickMsg could ever
+        // arrive from pre-start.
         if ($this->crashed === true || $this->tooSmall() === true
-            || $this->colorProfile === ColorProfile::NoTty) {
-            return new Subscriptions();
+            || $this->colorProfile === ColorProfile::NoTty || $this->started === false) {
+            return null;
         }
         return (new Subscriptions())->withTick(
             self::TICK_SUBSCRIPTION,
