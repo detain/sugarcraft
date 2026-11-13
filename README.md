@@ -175,9 +175,13 @@ final class Counter implements Model
 
 ## Status
 
-Every library in the table above ships at **v1**, each with its own composer
-package and PHPUnit suite, and CI publishes per-library coverage to Codecov;
-the rendering libraries pin their output with snapshot-ANSI tests. The
+Per-package port status is tracked in [docs/MATCHUPS.md](./docs/MATCHUPS.md);
+🟢 ready packages ship a complete public API, tests, docs, and demo — each
+with its own composer package and PHPUnit suite — while 🟡/🔴 rows list the
+remaining gaps in their Notes. CI publishes per-library coverage to Codecov,
+and the rendering libraries pin their output with snapshot-ANSI tests.
+Artifacts publish from `dev-master` until first version tags are cut: only
+`candy-code` and `candy-top` carry v-tags (v0.1.x) so far. The
 [website](https://sugarcraft.github.io/) library matrix carries live
 per-package status, and each library's `README.md` documents its full public
 API.
