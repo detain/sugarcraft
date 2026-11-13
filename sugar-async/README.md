@@ -64,6 +64,12 @@ may pick the branch.
 1. The flag is flipped (idempotent)
 2. All callbacks registered via `onCancel()` fire in registration order, exactly once
 
+For type-hints the rule is short: accept `?CancellationToken` in operations that
+may be cancelled, and reach for the `Cancellable` interface when you hold the
+firing side — the `isCancelled()`/`cancel()`/`onCancel()` triad every handle in
+this package implements — so generic teardown code can cancel work it did not
+create.
+
 This pattern propagates cancellation from the owner. The boundary is
 trigger-restricted by convention, not by visibility: `notifyCancellation()` and
 `fireCallbacks()` carry only an `@internal` marker and are public, so a consumer
