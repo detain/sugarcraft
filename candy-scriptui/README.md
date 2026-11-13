@@ -411,7 +411,12 @@ precedence order:
 and renders its UI and hint strings in that language — a handful of
 programmer-facing diagnostics (the `format` unknown-value refusal
 scaffolding, the `find()` did-you-mean suggestions) are English-only by
-design. Seventeen catalogs ship
+design, and so are the `confirm` button labels' `Yes`/`No` defaults: they
+are the upstream-compatible answer values that `--show-output` prints, so
+that surface localizes through `--affirmative`/`--negative` rather than
+through the catalogs. The boot warning for a deprecated `CANDYSHELL_*`
+environment variable is localized (it fires after the locale wiring
+above). Seventeen catalogs ship
 with the package; a territory spelling falls back to its base language
 (`de_DE.UTF-8` → `de`) and then to English. `C`/`POSIX` stay English.
 Traditional Chinese is its own catalog (`zh-tw`, Taiwan usage) rather than

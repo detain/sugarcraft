@@ -44,4 +44,5 @@ return [
     'runtime.empty_items' => 'لم يتم توفير عناصر؛ مررها كوسائط أو عبر --item.',
     'runtime.conflicting_flags' => 'لا يمكن دمج الخيارين {first} و{second} بقيم مختلفة.',
     'runtime.empty_selection' => 'لم يتم تحديد أي عنصر — اضغط مسافة لتحديد عنصر واحد على الأقل قبل الإدخال.',
+    'runtime.legacy_env'        => '{var} أصبح قديمًا؛ استخدم {replacement} بدلاً منه.',
 ];

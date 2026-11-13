@@ -59,4 +59,5 @@ return [
     'runtime.empty_items' => 'No items supplied — pass them as arguments or repeat --item.',
     'runtime.conflicting_flags' => 'Flags {first} and {second} cannot be combined with different values.',
     'runtime.empty_selection' => 'No item selected — press Space to tick at least one item before Enter.',
+    'runtime.legacy_env'        => '{var} is deprecated; set {replacement} instead.',
 ];

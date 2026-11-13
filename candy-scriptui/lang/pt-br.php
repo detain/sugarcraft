@@ -44,4 +44,5 @@ return [
     'runtime.empty_items' => 'Nenhum item fornecido; passe os itens como argumentos ou com --item.',
     'runtime.conflicting_flags' => 'As opções {first} e {second} não podem ser combinadas com valores diferentes.',
     'runtime.empty_selection' => 'Nenhum item selecionado — pressione Espaço para marcar pelo menos um item antes de Enter.',
+    'runtime.legacy_env'        => '{var} está obsoleto; configure {replacement} em vez disso.',
 ];

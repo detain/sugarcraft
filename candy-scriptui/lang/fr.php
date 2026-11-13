@@ -57,4 +57,5 @@ return [
     'runtime.empty_items' => 'Aucun élément fourni — passez-les en arguments ou avec --item.',
     'runtime.conflicting_flags' => 'Les options {first} et {second} ne peuvent pas être combinées avec des valeurs différentes.',
     'runtime.empty_selection' => 'Aucun élément sélectionné — appuyez sur Espace pour cocher au moins un élément avant Entrée.',
+    'runtime.legacy_env'        => '{var} est obsolète ; définissez {replacement} à la place.',
 ];

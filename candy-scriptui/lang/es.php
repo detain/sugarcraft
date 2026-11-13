@@ -57,4 +57,5 @@ return [
     'runtime.empty_items' => 'No se proporcionaron elementos; páselos como argumentos o con --item.',
     'runtime.conflicting_flags' => 'Las opciones {first} y {second} no se pueden combinar con valores diferentes.',
     'runtime.empty_selection' => 'Ningún elemento seleccionado — pulse Espacio para marcar al menos un elemento antes de Intro.',
+    'runtime.legacy_env'        => '{var} está obsoleto; establezca {replacement} en su lugar.',
 ];

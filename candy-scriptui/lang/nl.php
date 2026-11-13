@@ -44,4 +44,5 @@ return [
     'runtime.empty_items' => 'Geen items opgegeven; geef ze als argumenten of met --item.',
     'runtime.conflicting_flags' => 'De opties {first} en {second} kunnen niet worden gecombineerd met verschillende waarden.',
     'runtime.empty_selection' => 'Geen item geselecteerd — druk op Spatie om minstens één item aan te vinken vóór Enter.',
+    'runtime.legacy_env'        => '{var} is verouderd; stel in plaats daarvan {replacement} in.',
 ];

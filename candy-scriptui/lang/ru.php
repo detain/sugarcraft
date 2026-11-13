@@ -44,4 +44,5 @@ return [
     'runtime.empty_items' => 'Элементы не заданы — передайте их аргументами или параметром --item.',
     'runtime.conflicting_flags' => 'Флаги {first} и {second} нельзя комбинировать с разными значениями.',
     'runtime.empty_selection' => 'Элемент не выбран — нажмите Пробел, чтобы отметить хотя бы один элемент перед Enter.',
+    'runtime.legacy_env'        => '{var} устарело; установите вместо него {replacement}.',
 ];

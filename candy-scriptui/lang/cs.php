@@ -44,4 +44,5 @@ return [
     'runtime.empty_items' => 'Nebyly zadány žádné položky; zadejte je jako argumenty nebo s --item.',
     'runtime.conflicting_flags' => 'Příznaky {first} a {second} nelze kombinovat s různými hodnotami.',
     'runtime.empty_selection' => 'Není vybrána žádná položka — před stiskem Enter alespoň jednu označte mezníkem.',
+    'runtime.legacy_env'        => '{var} je zastaralý; místo něj nastavte {replacement}.',
 ];

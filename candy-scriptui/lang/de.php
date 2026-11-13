@@ -57,4 +57,5 @@ return [
     'runtime.empty_items' => 'Keine Elemente angegeben — übergeben Sie sie als Argumente oder mit --item.',
     'runtime.conflicting_flags' => 'Die Optionen {first} und {second} können nicht mit unterschiedlichen Werten kombiniert werden.',
     'runtime.empty_selection' => 'Kein Eintrag ausgewählt — drücken Sie Leertaste, um vor Enter mindestens einen Eintrag zu markieren.',
+    'runtime.legacy_env'        => '{var} ist veraltet; setzen Sie stattdessen {replacement}.',
 ];

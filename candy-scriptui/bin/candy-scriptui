@@ -79,10 +79,17 @@ if (!isset($_SERVER['LC_ALL']) && getenv('LC_ALL') === false
 // exports under the new CANDY_SCRIPTUI_* name (new name always wins), then
 // warn once per var.
 // @rename-keep
+// scriptui-58 (finding 134): this warning fires after the locale wiring
+// above, so it answers in the user's language like every runtime refusal;
+// the autoload-failure writes at the top of this file correctly stay
+// English (the machinery is not loaded there).
 foreach (\SugarCraft\Core\Util\LegacyEnv::import([
     'CANDYSHELL_' => 'CANDY_SCRIPTUI_', // @rename-keep
 ]) as $legacyVar) {
-    fwrite(STDERR, sprintf("candy-scriptui: %s is deprecated; set CANDY_SCRIPTUI_%s instead.\n", $legacyVar, substr($legacyVar, strlen('CANDYSHELL_')))); // @rename-keep
+    fwrite(STDERR, 'candy-scriptui: ' . \SugarCraft\ScriptUi\Lang::t('runtime.legacy_env', [ // @rename-keep
+        'var'         => $legacyVar,
+        'replacement' => 'CANDY_SCRIPTUI_' . substr($legacyVar, strlen('CANDYSHELL_')), // @rename-keep
+    ]) . "\n");
 }
 
 // Application::run() returns the process exit code; forwarding it is the

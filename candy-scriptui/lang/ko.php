@@ -44,4 +44,5 @@ return [
     'runtime.empty_items' => '항목이 없습니다. 인자 또는 --item으로 전달하세요.',
     'runtime.conflicting_flags' => '{first} 및 {second} 플래그는 다른 값과 함께 사용할 수 없습니다.',
     'runtime.empty_selection' => '선택된 항목이 없습니다 — Enter 전에 Space로 최소 한 항목을 표시하십시오.',
+    'runtime.legacy_env'        => '{var}은(는) 더 이상 사용되지 않습니다. 대신 {replacement}을(를) 설정하세요.',
 ];

@@ -48,4 +48,5 @@ return [
     'runtime.empty_items' => '未提供項目；請將它們作為位置參數傳遞或使用 --item。',
     'runtime.conflicting_flags' => '不能將 {first} 與 {second} 以不同的值同時使用。',
     'runtime.empty_selection' => '未選擇任何條目——請在按 Enter 前用空格鍵勾選至少一個條目。',
+    'runtime.legacy_env'        => '{var} 已棄用；請改用 {replacement}。',
 ];

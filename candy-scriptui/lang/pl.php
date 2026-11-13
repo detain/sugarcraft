@@ -44,4 +44,5 @@ return [
     'runtime.empty_items' => 'Nie podano elementów — przekaż je jako argumenty lub opcją --item.',
     'runtime.conflicting_flags' => 'Opcji {first} i {second} nie można łączyć z różnymi wartościami.',
     'runtime.empty_selection' => 'Nie wybrano żadnego elementu — naciśnij Spację, aby zaznaczyć co najmniej jeden element przed Enterem.',
+    'runtime.legacy_env'        => '{var} jest przestarzałe; ustaw zamiast tego {replacement}.',
 ];

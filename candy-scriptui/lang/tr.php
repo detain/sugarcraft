@@ -44,4 +44,5 @@ return [
     'runtime.empty_items' => 'Öğe verilmedi; bunları argüman olarak veya --item ile geçin.',
     'runtime.conflicting_flags' => '{first} ve {second} bayrakları farklı değerlerle birleştirilemez.',
     'runtime.empty_selection' => 'Öğe seçilmedi — Enter öncesi en az bir öğeyi işaretlemek için Space tuşuna basın.',
+    'runtime.legacy_env'        => '{var} artık önerilmiyor; bunun yerine {replacement} ayarlayın.',
 ];
