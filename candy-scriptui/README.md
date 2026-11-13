@@ -262,6 +262,17 @@ command:
 - `--limit N` / `--no-limit` / `--selected="a,b"` — multi-select on
   `choose` and `filter`; `--selected` is repeatable and comma-separated
   lists are split into separate items.
+- `--cursor` on `choose` defaults to gum's arrow, `→ ` (repeatable; the
+  glyph list cycles per row). Earlier builds drew `> `; pass `--cursor "> "`
+  to keep the old look. `filter`'s `--cursor` stays `> `.
+- `pager --hard-wrap` breaks long lines at exactly the pager width,
+  mid-word (`--soft-wrap` breaks on word boundaries; the two are
+  mutually exclusive) and `pager --fade N` dims the last N visible rows
+  while more content lies below.
+- `format --code` is shorthand for `--type code`; `--foreground` /
+  `--background` layer a base colour (hex, 0-255 index, or colour name)
+  under the rendered output, through the same capability gate as every
+  other colour flag (so `NO_COLOR` / `--no-ansi` drop them).
 - `--ordered` — keep selection order instead of click order on `choose`
   only (`filter` has no such flag).
 - `--strict` / `--fuzzy` / `--no-fuzzy` — matching mode on `filter`.
@@ -271,7 +282,8 @@ command:
   exists on `write` only, while `--show-line-numbers` exists on both `write`
   and `pager`.
 - `--affirmative "Yes"` / `--negative "No"` / `--default=yes|no` /
-  `--show-output` on `confirm`. `--default` also accepts the one-letter
+  `--show-output` / `--pointer "›"` (marker drawn before the chosen
+  answer) on `confirm`. `--default` also accepts the one-letter
   spellings `y` / `n` (case-insensitive); any other value is refused
   (exit `1`) rather than silently treated as "no".
 - `--show-output` / `--show-error` (aliased `--show-stdout` /
@@ -305,9 +317,17 @@ re-quantise colours to that depth.
   The interactive frames' hand-composed emphasis — cursor-row reverse
   video, fuzzy-match bold, pager highlight — rides the same gate, so a
   `NoTty` frame is entirely escape-free.
-  `--ansi` overrides the environment tiers only.
-- **`NO_COLOR`** (any truthy value) disables colour; decoration (bold,
-  underline, …) and layout survive.
+  `--ansi` overrides the environment tiers only, and pins the 16-colour
+  tier (the one every ANSI terminal renders) rather than TrueColor;
+  colour flags that name a richer tier are clamped down to it.
+- **`NO_COLOR`** (any **non-empty** value, `0` and `false` included, per
+  no-color.org) disables colour; decoration (bold, underline, reverse, …)
+  and layout survive. An empty `NO_COLOR` is ignored. The selection
+  marks (reverse video, bold matches) are decoration, so they stay;
+  set `CANDY_SCRIPTUI_NO_DECORATION=1` for the stricter tier — no
+  escapes at all, the cursor row identified by its glyph alone. It
+  yields only to `--ansi`, `--no-ansi` (which is stricter still) and the
+  force variables.
 - **`CLICOLOR=0`** disables colour when stdout is not a TTY; when stdout
   is a TTY, colour stays on.
 - **`CLICOLOR_FORCE=1`** keeps full colour even when stdout is piped or
@@ -315,10 +335,18 @@ re-quantise colours to that depth.
 - **`FORCE_COLOR=1|2|3`** forces a specific tier (16 / 256 /
   TrueColor) and wins over every other env rule.
 - **`TERM=dumb`** (or an empty/unset `TERM`) emits plain bytes (the
-  no-escape tier) — but it is the **last** tier checked: `NO_COLOR` or
-  `CLICOLOR=0` resolve earlier to the decoration-kept tier (colour off,
-  bold/underline survive), and `FORCE_COLOR` / `CLICOLOR_FORCE` outrank
-  the dumb ladder entirely.
+  no-escape tier) — but it is checked after the explicit switches:
+  `NO_COLOR` or `CLICOLOR=0` resolve earlier to the decoration-kept
+  tier (colour off, bold/underline survive), and `FORCE_COLOR` /
+  `CLICOLOR_FORCE` outrank the dumb ladder entirely.
+- **Otherwise the terminal family decides.** When no variable above
+  decides, the tier follows what the terminal advertises (sugar-core's
+  `ColorProfile` ladder, minus the TTY probe): `COLORTERM=truecolor|24bit`
+  or a `*-direct` / `*truecolor` `TERM` is TrueColor, a `*256*` `TERM` is
+  256 colours, `xterm` / `screen` / `tmux` / `linux` / `*color*` is the
+  16-colour tier, and a colourless `TERM` such as `vt100` keeps
+  decoration only. So `TERM=screen` no longer receives `38;2;…` sequences
+  it would ignore.
 
 Being a pipe does not by itself strip colour — styled bytes flow to
 redirected output as always. Set `CLICOLOR=0` to disable colour when

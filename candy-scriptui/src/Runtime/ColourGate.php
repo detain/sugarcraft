@@ -23,9 +23,10 @@ use Symfony\Component\Console\Input\InputInterface;
  *   - `NoTty`  emits no escape sequences at all;
  *   - `Ansi` / `Ansi256` / `TrueColor` re-quantise colours to the tier.
  *
- * Precedence (first decisive rule wins): `--no-ansi` > `--ansi` >
- * `FORCE_COLOR` > `CLICOLOR_FORCE` > `NO_COLOR` > `CLICOLOR=0` >
- * `TERM=dumb` > default. Being a pipe does NOT disable colour on its
+ * Precedence (first decisive rule wins): `--no-ansi` > `--ansi` (16-colour
+ * tier) > `FORCE_COLOR` > `CLICOLOR_FORCE` > `CANDY_SCRIPTUI_NO_DECORATION`
+ * (no escapes at all) > `NO_COLOR` (any non-empty value) > `CLICOLOR=0` >
+ * `TERM=dumb` > the TERM/COLORTERM family ladder. Being a pipe does NOT disable colour on its
  * own — styled bytes flow to redirected output like they always have;
  * `CLICOLOR=0` opts into the pipe-aware behaviour instead.
  *
@@ -40,6 +41,9 @@ final class ColourGate
     public const FORCE_COLOR_256   = '2';
     public const FORCE_COLOR_TC    = '3';
 
+    /** Opt-in escape-free posture (stricter than NO_COLOR); read here, not an option fallback. */
+    public const NO_DECORATION_ENV = 'CANDY_SCRIPTUI_NO_DECORATION';
+
     /**
      * The narrowest colour capability in force for this invocation.
      * `ColorProfile::TrueColor` means "no restriction".
@@ -51,7 +55,11 @@ final class ColourGate
                 return ColorProfile::NoTty;
             }
             if ($input->hasParameterOption('--ansi')) {
-                return ColorProfile::TrueColor;
+                // scriptui-35: the escape hatch asks for escapes, not for a
+                // tier the terminal may ignore — the 16-colour tier is the
+                // one every ANSI terminal renders. (Palette/RGB flags that
+                // pin their own tier are clamped DOWN to it.)
+                return ColorProfile::Ansi;
             }
         }
 
@@ -68,7 +76,20 @@ final class ColourGate
             return ColorProfile::TrueColor;
         }
 
-        if (self::truthy(self::env('NO_COLOR'))) {
+        // scriptui-35 (finding 113): the stricter-than-NO_COLOR posture.
+        // NO_COLOR drops colour but keeps bold/underline/reverse — the very
+        // channels this UI uses to mark the selection. Operators who want
+        // plain bytes with no escapes at all opt in here; sits below the
+        // force vars and --ansi, above everything that merely narrows colour.
+        if (self::truthy(self::env(self::NO_DECORATION_ENV))) {
+            return ColorProfile::NoTty;
+        }
+
+        // no-color.org: ANY non-empty value disables colour — `NO_COLOR=0`
+        // and `NO_COLOR=false` included (gum/termenv/chalk agree). Only the
+        // FORCE_* family keeps the falsy-word reading.
+        $noColor = self::env('NO_COLOR');
+        if ($noColor !== null && $noColor !== '') {
             return ColorProfile::Ascii;
         }
 
@@ -81,7 +102,38 @@ final class ColourGate
             return ColorProfile::NoTty;
         }
 
-        return ColorProfile::TrueColor;
+        return self::ladder();
+    }
+
+    /**
+     * scriptui-35 (finding 055): when no gate variable decides, believe the
+     * terminal's own advertisement instead of assuming TrueColor —
+     * `TERM=screen` / `vt100` used to receive `CSI 38;2;…` they ignore.
+     * Delegates to sugar-core's TERM/COLORTERM ladder with NO tty probe:
+     * a pipe still carries styled bytes (see the class note), it is only
+     * the terminal FAMILY that narrows the tier.
+     */
+    public static function ladder(): ColorProfile
+    {
+        $env = [];
+        foreach (['TERM', 'COLORTERM', 'TERM_PROGRAM', 'WT_SESSION', 'CI', 'GITHUB_ACTIONS', 'GITLAB_CI', 'BUILDKITE'] as $name) {
+            $value = self::env($name);
+            if ($value !== null) {
+                $env[$name] = $value;
+            }
+        }
+        $profile = ColorProfile::detect($env);
+        if ($profile === ColorProfile::Ascii) {
+            // Classic 16-colour consoles the generic ladder does not name.
+            $term = strtolower($env['TERM'] ?? '');
+            foreach (['linux', 'rxvt', 'konsole', 'cygwin', 'ansi'] as $family) {
+                if ($term === $family || str_starts_with($term, $family . '-')) {
+                    return ColorProfile::Ansi;
+                }
+            }
+        }
+
+        return $profile;
     }
 
     /**
