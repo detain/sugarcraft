@@ -151,10 +151,13 @@ $renderer = (new Renderer(Theme::dark()))
 echo $renderer->render("# Word wrap\n");
 ```
 
-`withHyperlinks(true)` (default) wraps every `[text](url)` in
-`OSC 8 ; ; URL ST text OSC 8 ; ; ST` so terminals that support it
-render real clickable links. The visible text is `text (url)` in both
-modes — the toggle adds or removes only the OSC-8 envelope around it.
+`withHyperlinks(true)` (default) wraps every `[text](url)` in an OSC-8
+hyperlink: the escape is framed `ESC ] 8 ; <params> ; <URI> ESC \` and
+this renderer emits it with empty params (`ESC ] 8 ; ; <URI> ESC \`)
+before the text, then closes with an empty reset (`ESC ] 8 ; ; ESC \`),
+so terminals that support it render real clickable links. The visible
+text is `text (url)` in both modes — the toggle adds or removes only
+the OSC-8 envelope around it.
 
 ### Link safety
 
@@ -162,9 +165,11 @@ Only the OSC-8 envelope is actionable; the `(url)` suffix is plain
 text. A refused scheme — `javascript:`, `data:`, `vbscript:` — never
 opens an OSC-8 target, so a hostile document cannot execute code
 through a click: the link text and its `(url)` suffix still render,
-visible and inert. Every other scheme passes to the terminal's opener
-**unfiltered** — treat non-`http(s)` / `mailto` targets the way you
-would treat a raw terminal. Control bytes (C0, DEL, ESC, BEL) are
+visible and inert. Every other scheme passes the scheme gate
+**untouched** — the only universal transformation is the control-byte
+strip below — and reaches the terminal's opener as-is: treat non-
+`http(s)` / `mailto` targets the way you would treat a raw terminal.
+Control bytes (C0, DEL, ESC, BEL) are
 stripped from every URL unconditionally, and so are the invisible
 formatting characters (soft hyphen, Mongolian vowel separator, zero
 width space, word joiner, BOM, right-to-left override) before the
@@ -248,7 +253,7 @@ $writer->close();
   text letter-wraps; bytes are never dropped, and output grows linearly
   with the document, never per level.
 - Sanitisation is **on** by default (`$sanitize = true` in the
-  `Renderer` constructor): it gates the `stripControls` sweep of
+  `Renderer` constructor): it gates the control-character sweep over
   rendered text, code spans, and indented and fenced code. Raw-HTML
   and URL control-stripping run regardless of the flag; see
   Link safety above. The opt-out carries a loud name:
