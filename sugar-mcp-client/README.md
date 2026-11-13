@@ -21,8 +21,8 @@ server that omits the field is allowed to proceed). Later revisions' optional
 purpose — forward-compat with spec `2025-03-26` is deliberate, and this
 client consults none of them. The Quick start below
 launches the reference server through `npx`, so running it verbatim needs
-Node.js on PATH; substitute any stdio MCP server command for a
-dependency-free trial.
+Node.js on PATH; for a trial with nothing to install or download,
+`php examples/echo.php` completes the same round trip (see *Examples*).
 
 Extracted from the [candy-code](https://github.com/sugarcraft/candy-code)
 MCP stack, where these classes carry its entire stdio server lifecycle. The
@@ -74,13 +74,28 @@ $server->stop();                     // also runs automatically on destruct
 
 The example needs Node.js/npx on PATH (it spawns
 `npx -y @modelcontextprotocol/server-everything`); any other stdio MCP server
-is the same three constructor arguments — name, command, argv list.
+is the same three constructor arguments — name, command, argv list — and
+`examples/echo.php` shows exactly that with a server that needs nothing
+installed.
 
 `callTool()` answers with the tool's result envelope — normally
 `['content' => [['type' => 'text', 'text' => ...], ...], 'isError' => bool]`
 as the server shaped it (a non-array (scalar) result is wrapped into a
 one-item `content` list for you) — or, on failure, `['error' => 'why']`. It never
 throws for a call that merely failed; see *Failure shapes*.
+
+## Examples
+
+```sh
+php examples/echo.php        # full round trip, zero dependencies beyond PHP
+```
+
+`examples/echo.php` is self-contained: run plainly it is a client
+(initialize → tools/list → tools/call, printed), and under `--serve` it is
+the stdio server it spawns as its own child — the same three constructor
+arguments the Quick start uses, with nothing fetched from the network.
+The suite runs this example headless (`ExamplesTest`), so the promise
+cannot rot.
 
 ## Trust boundary
 

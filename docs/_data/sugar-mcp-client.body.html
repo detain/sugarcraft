@@ -24,7 +24,7 @@ $result = $server->callTool('echo', ['message' => 'hi']);
 
 $server->stop();               // close pipes first, then TERM→KILL→reap — bounded teardown (see Fork safety for the SIGKILLed-owner residual).
 // __destruct calls stop() for you if you forget.</code></pre>
-    <p style="margin-top: 12px;">The example spawns <code>npx -y @modelcontextprotocol/server-everything</code>, so it needs Node.js on PATH; the library itself depends only on PHP 8.3 and sugar-core — substitute any stdio MCP server command (name, command, argv list) for a dependency-free trial.</p>
+    <p style="margin-top: 12px;">The example spawns <code>npx -y @modelcontextprotocol/server-everything</code>, so it needs Node.js on PATH; the library itself depends only on PHP 8.3 and sugar-core — substitute any stdio MCP server command (name, command, argv list) for a dependency-free trial, or run <code>php examples/echo.php</code>, which is the whole trial in one file: it acts as the client when run plainly and as the stdio server when run with <code>--serve</code>, with nothing to install or download.</p>
 
     <h3 style="margin-top: 32px;">The model</h3>
     <div class="feature-grid">
