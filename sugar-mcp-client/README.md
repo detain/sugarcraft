@@ -13,9 +13,13 @@ agent or editor embeds to spawn and talk to an MCP SERVER process. You run it
 inside your application; the server is the child it launches.
 
 Requires PHP >= 8.3; the only runtime dependency beyond PHP is
-`sugarcraft/sugar-core`. Speaks protocol revision `2024-11-05` and refuses a
+`sugarcraft/sugar-core`. Speaks MCP `2024-11-05`
+(<https://modelcontextprotocol.io/specification/2024-11-05>) and refuses a
 server that answers the handshake claiming a different revision (a legacy
-server that omits the field is allowed to proceed). The Quick start below
+server that omits the field is allowed to proceed). Later revisions' optional
+`annotations` members on tool definitions are parsed and carried verbatim on
+purpose — forward-compat with spec `2025-03-26` is deliberate, and this
+client consults none of them. The Quick start below
 launches the reference server through `npx`, so running it verbatim needs
 Node.js on PATH; substitute any stdio MCP server command for a
 dependency-free trial.

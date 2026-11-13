@@ -40,6 +40,10 @@ final class McpTool
      *        `idempotentHint`, `openWorldHint`, `title`), carried verbatim so
      *        a consumer can apply its own policy to the server's claims —
      *        nothing here verifies them. Empty when the server sent none.
+     *        `annotations` arrived with spec `2025-03-26` while this client
+     *        speaks `2024-11-05`: accepting it from a 2024-11-05 server is
+     *        deliberate forward-compat, and hint keys from any future
+     *        revision ride through the same verbatim law untouched.
      */
     public function __construct(
         public readonly string $name,

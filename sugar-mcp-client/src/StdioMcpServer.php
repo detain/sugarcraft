@@ -130,7 +130,11 @@ use SugarCraft\Core\Util\Proc\BoundedShutdown;
  */
 final class StdioMcpServer implements McpServer
 {
-    /** Protocol version advertised in the initialize handshake. */
+    /**
+     * Speaks MCP 2024-11-05 (https://modelcontextprotocol.io/specification/2024-11-05):
+     * advertised in the initialize handshake; a server negotiating a different
+     * revision is refused, a legacy server omitting the field is allowed.
+     */
     public const PROTOCOL_VERSION = '2024-11-05';
 
     /**
