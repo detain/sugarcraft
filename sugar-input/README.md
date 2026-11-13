@@ -429,11 +429,12 @@ field as hostile bytes:
   anything inside it, or close one you did not start. Use paste framing for
   convenience (bulk text without keymap side effects), never as an
   authenticity boundary between "typed" and "pasted".
-- **Caps never reinterpret.** When a sequence or paste overflows its cap the
-  excess is discarded and counted (`discardedPasteBytes()`), never pushed
-  back into the stream for a second parse; an oversized frame cannot surface
-  as synthesized keys, and an oversized paste body cannot masquerade as
-  keystrokes after its announce.
+- **Caps never reinterpret.** A sequence that overflows its cap is refused
+  with one counted drop (`droppedUnknownCount()`); paste bytes past the cap
+  are discarded and counted by `discardedPasteBytes()` — the paste-only
+  counter. Neither is ever pushed back into the stream for a second parse:
+  an oversized frame cannot surface as synthesized keys, and an oversized
+  paste body cannot masquerade as keystrokes after its announce.
 - The fleet's private-use-area arena (zone sentinels U+E000/U+E001 and the
   image-marker block from U+E002) passes through decoding byte-identical — a
   hostile paste can forge marker bytes. Frame-marked composites should sweep

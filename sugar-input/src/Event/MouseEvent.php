@@ -8,7 +8,7 @@ use SugarCraft\Input\Event;
 use SugarCraft\Input\KeyModifier;
 
 /**
- * A mouse event (SGR 1006 / X10).
+ * A mouse event (SGR 1006/1016, urxvt 1015, X10 1000).
  *
  * Mirrors charmbracelet/bubbletea's input handling.
  * @readonly
