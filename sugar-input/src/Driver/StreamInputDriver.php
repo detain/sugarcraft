@@ -71,6 +71,23 @@ final class StreamInputDriver implements InputDriver
             $this->restoresBlocking = true;
         }
         stream_set_blocking($this->stream, false);
+
+        // Windows has no reliable stream_select() for the fd types PHP
+        // exposes there, so that leg reads the already-non-blocking stream
+        // directly — which is only safe if the non-blocking switch actually
+        // took. A stream that cannot be made non-blocking would silently
+        // freeze the poll loop inside fread(): the one unacceptable shape is
+        // silence, so this fails loudly instead (POSIX keeps stream_select's
+        // own guard and is not forced to answer this question).
+        if (PHP_OS_FAMILY === 'Windows') {
+            $meta = @stream_get_meta_data($this->stream);
+            if (($meta['blocked'] ?? true) === true) {
+                throw new \RuntimeException(
+                    'StreamInputDriver could not put its stream into non-blocking mode;'
+                    . ' the Windows direct-read fallback would block the poll loop.',
+                );
+            }
+        }
     }
 
     /**
@@ -189,14 +206,35 @@ final class StreamInputDriver implements InputDriver
 
     /**
      * Read available bytes from the stream without blocking.
+     *
+     * Returns '' when the stream is simply idle (nothing readable right now)
+     * and false only when fread found an EOF-shaped end. A hard stream_select
+     * error is neither: it throws rather than laundering into "idle", or the
+     * poll loop would spin forever believing a broken fd was just quiet.
      */
     private function readNonBlocking(): string|false
     {
+        // Windows: stream_select() on PHP's non-socket streams is documented
+        // as unreliable there — the honest fallback is to fread the stream
+        // that the constructor already made non-blocking, which returns
+        // immediately with bytes or ''. (Blocking that could not be lifted
+        // was refused loudly at construction, never silently here.)
+        if (PHP_OS_FAMILY === 'Windows') {
+            return fread($this->stream, 8192);
+        }
+
         $read = [$this->stream];
         $write = null;
         $except = null;
         $changed = @stream_select($read, $write, $except, 0, 0);
-        if ($changed === false || $changed === 0) {
+        if ($changed === false) {
+            // select returned an ERROR (0 means "nothing readable") — surface
+            // it once instead of reporting idle.
+            throw new \RuntimeException(
+                'StreamInputDriver: stream_select failed; the input stream cannot be polled.',
+            );
+        }
+        if ($changed === 0) {
             return '';
         }
 

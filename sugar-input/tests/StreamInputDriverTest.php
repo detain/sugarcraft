@@ -263,6 +263,39 @@ final class StreamInputDriverTest extends TestCase
         $this->assertGreaterThanOrEqual(1, $driver->escapeDecoder()->droppedUnknownCount());
     }
 
+    public function testSelectErrorAndIdleAreDistinguishableBranches(): void
+    {
+        // SI-04: the POSIX leg must split stream_select's `false` (hard
+        // select error — surfaced) from its `0` (idle — ''), and the Windows
+        // leg must bypass stream_select for a direct fread. A real select
+        // error is not injectable on Linux (PHP 8 raises TypeError on dead
+        // resources before select ever answers), so the branch shape is
+        // pinned from the genuine method source.
+        $ref = new \ReflectionMethod(StreamInputDriver::class, 'readNonBlocking');
+        $src = implode('', array_slice(
+            file($ref->getFileName()),
+            $ref->getStartLine() - 1,
+            $ref->getEndLine() - $ref->getStartLine() + 1,
+        ));
+
+        $this->assertStringContainsString('if ($changed === false) {', $src, 'false arm must be its own branch');
+        $this->assertStringContainsString('throw new \\RuntimeException', $src, 'the false arm must surface, not launder into idle');
+        $this->assertStringNotContainsString('$changed === false || $changed === 0', $src);
+        $this->assertStringContainsString("PHP_OS_FAMILY === 'Windows'", $src, 'Windows must skip stream_select entirely');
+        $this->assertLessThan(
+            strpos($src, '$read = [$this->stream];'),
+            strpos($src, "PHP_OS_FAMILY === 'Windows'"),
+            'the Windows direct-read arm must precede the select arm',
+        );
+
+        // Idle really still reads as idle (no throw) on a live quiet stream.
+        [$r, $w] = $this->createPipe();
+        $driver = new StreamInputDriver($r);
+        $this->assertNull($driver->read());
+        fclose($w);
+        fclose($r);
+    }
+
     /**
      * Create a non-blocking pipe pair for testing.
      *

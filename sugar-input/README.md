@@ -100,6 +100,23 @@ default branch regardless. Use the plain form once a stable tag exists.
   event stream. The sibling `sugarcraft/sugar-core` is hard-required too —
   the `Lang` facade extends `Core\I18n\Lang`.
 
+### Platforms
+
+POSIX is the primary platform. Windows status per driver:
+
+- `StreamInputDriver` — supported: its read loop falls back to a direct
+  `fread` on the non-blocking stream, because `stream_select` is unreliable
+  for PHP's non-socket streams on Windows. Construction throws rather than
+  accept a stream it could not make non-blocking.
+- `ReactInputDriver` — follows whatever the wrapped `react/stream` resource
+  supports (the socket/stream rules of the ReactPHP layer).
+- `SignalResizeDriver` — POSIX-only: resize detection rides SIGWINCH, which
+  has no Windows equivalent here; `arm()` returns `false` without pcntl.
+
+BSDs follow the POSIX leg. Note that this lib does not currently run
+Windows CI legs in the monorepo matrix; the driver contracts above are the
+code-side truth until it does.
+
 ## API
 
 ### EscapeDecoder
