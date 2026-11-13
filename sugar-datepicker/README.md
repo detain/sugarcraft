@@ -111,12 +111,17 @@ boundary is a no-op. The cursor index is re-clamped into the new month on
 every navigation step: it keeps its grid position whenever that position is a
 day cell of the new month, so a step into a shorter month lands on its last
 day only when the old index falls past the new month's day-cell window.
-The mirror edge exists at the top: an unbounded picker stepping past year 9999
-enters year 10000, whose grid date fails the strict four-digit `!Y-m-d` parse
-(`%04d` is only a minimum width, so the formatted year is the literal
-five-digit `10000`), leaving the date unresolvable — `view()` still renders
-(reporting year 10000), but `dateAtCursor()` is `null` and `selectDate()`
-refuses. This tolerated upper edge never crashes.
+The mirror edge exists at the top, symmetric: forward stepping at December
+9999 is a no-op, exactly like backward stepping at January 0001. Year 10000
+cannot round-trip the strict four-digit `!Y-m-d` grid encoding, so the view
+ceiling refuses to enter it. (Historical note: until 2026-11 this edge
+degraded instead — the view rendered year `10000` with a `null` cursor date
+and a refusing `selectDate()`, never crashing, and QA pinned that tolerated
+behaviour; the clamp restates the same safety as design rather than accident.)
+The bounds setters enforce the same window at the boundary:
+`withMinDate`/`withMaxDate` throw `InvalidArgumentException` naming the date
+when it lies outside `0001-01-01..9999-12-31` — a zero date (classic MySQL
+empty-row value) can no longer floor the view into an all-dim dead month.
 
 ## Selection
 

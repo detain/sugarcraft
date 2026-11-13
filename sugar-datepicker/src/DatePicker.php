@@ -73,6 +73,14 @@ final class DatePicker
      */
     private const VIEW_FLOOR_POS = 12;
 
+    /**
+     * December 9999 — the calendar ceiling, mirror of VIEW_FLOOR_POS
+     * (9999*12 + 11). Year 10000 cannot round-trip the strict four-digit
+     * `!Y-m-d` grid encoding, so forward stepping clamps here exactly as it
+     * clamps against the floor.
+     */
+    private const VIEW_CEILING_POS = 119999;
+
     /** Largest cursor grid index (the 6×7 day grid minus one cell). */
     private const DAY_INDEX_MAX = 41;
 
@@ -259,11 +267,14 @@ final class DatePicker
     /**
      * Clamp a target year/month (optionally shifted by $deltaMonths) into
      * the viewable window: never outside the configured min/max months, and
-     * finally never below January 0001.
+     * finally inside January 0001 .. December 9999 (symmetric calendar
+     * edges — forward stepping at Dec 9999 no-ops exactly as backward
+     * stepping no-ops at Jan 0001).
      *
-     * The calendar floor is applied LAST so a `maxDate` earlier than year 1
-     * can never drag the view under it into an unrepresentable month (a zero
-     * date is exactly what bare MySQL/hosting rows yield). Pure — reads only.
+     * The calendar floor/ceiling are applied LAST, after the bounds clamp,
+     * so no bound or drift can drag the view out of the representable
+     * window; the bounds setters already reject unrepresentable dates, this
+     * is the defense-in-depth seam. Pure — reads only.
      *
      * @return array{0:int,1:int} [viewYear, viewMonth]
      */
@@ -276,21 +287,22 @@ final class DatePicker
         if ($this->maxDate !== null) {
             $pos = min($pos, self::monthPos($this->maxDate));
         }
-        $pos = max(self::VIEW_FLOOR_POS, $pos);
+        $pos = min(self::VIEW_CEILING_POS, max(self::VIEW_FLOOR_POS, $pos));
 
         return [intdiv($pos, 12), ($pos % 12) + 1];
     }
 
     /**
-     * Floor a raw year/month pair to the calendar floor (January 0001) and a
-     * valid month. Used at construction where no bounds exist yet.
+     * Clamp a raw year/month pair into the representable calendar window
+     * (January 0001 .. December 9999) and a valid month. Used at
+     * construction where no bounds exist yet.
      *
      * @return array{0:int,1:int} [viewYear, viewMonth]
      */
     private static function flooredView(int $year, int $month): array
     {
         $pos = $year * 12 + ($month - 1);
-        $pos = max(self::VIEW_FLOOR_POS, $pos);
+        $pos = min(self::VIEW_CEILING_POS, max(self::VIEW_FLOOR_POS, $pos));
 
         return [intdiv($pos, 12), ($pos % 12) + 1];
     }
@@ -316,10 +328,12 @@ final class DatePicker
      * Set the earliest selectable date. If the current view is before the
      * bound's month it is pulled back into the window.
      *
-     * @throws \InvalidArgumentException if $min falls after the current maxDate.
+     * @throws \InvalidArgumentException if $min falls outside the
+     *         representable calendar window, or after the current maxDate.
      */
     public function withMinDate(\DateTimeImmutable $min): self
     {
+        self::assertRepresentableBound('minDate', $min);
         if ($this->maxDate !== null && self::dayKey($min) > self::dayKey($this->maxDate)) {
             throw new \InvalidArgumentException('minDate must not be after maxDate');
         }
@@ -337,15 +351,34 @@ final class DatePicker
      * Set the latest selectable date. If the current view is after the
      * bound's month it is pulled back into the window.
      *
-     * @throws \InvalidArgumentException if $max falls before the current minDate.
+     * @throws \InvalidArgumentException if $max falls outside the
+     *         representable calendar window, or before the current minDate.
      */
     public function withMaxDate(\DateTimeImmutable $max): self
     {
+        self::assertRepresentableBound('maxDate', $max);
         if ($this->minDate !== null && self::dayKey($max) < self::dayKey($this->minDate)) {
             throw new \InvalidArgumentException('maxDate must not be before minDate');
         }
 
         return $this->withBounds($this->minDate, $max);
+    }
+
+    /**
+     * Fail-fast on bounds the component can never honour (dp-32): a date
+     * outside 0001-01-01 .. 9999-12-31 either floors the view into an
+     * all-dim dead month (zero dates, MySQL-era rows) or degrades the grid
+     * past the `!Y-m-d` four-digit encode. The window is parseable at this
+     * boundary so every internal seam can trust it.
+     */
+    private static function assertRepresentableBound(string $label, \DateTimeImmutable $date): void
+    {
+        $year = (int) $date->format('Y');
+        if ($year < 1 || $year > 9999) {
+            throw new \InvalidArgumentException(
+                $label . ' ' . $date->format('Y-m-d') . ' lies outside the representable calendar window 0001-01-01..9999-12-31'
+            );
+        }
     }
 
     /** Remove the upper selection bound. */

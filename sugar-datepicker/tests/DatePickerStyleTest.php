@@ -546,13 +546,17 @@ final class DatePickerStyleTest extends TestCase
         $this->assertIsString($dp->handleKey('enter')->view());
     }
 
-    public function testMaxDateBelowFloorCannotDragViewUnderYearOne(): void
+    public function testMaxDateBelowFloorIsRefusedAtTheSetter(): void
     {
-        // D6 variant: a maxDate earlier than the calendar floor must not pull
-        // the view under it — the floor is applied LAST.
-        $dp = $this->dp->withMaxDate(\DateTimeImmutable::createFromFormat('Y-m-d', '0000-06-15'));
-        $this->assertGreaterThanOrEqual(1, $dp->viewYear());
-        $this->assertIsString($dp->view());
+        // D6 variant, superseded by dp-32 (sugar-datepicker-056): a maxDate
+        // earlier than the calendar floor used to be accepted and floored the
+        // view into an all-dim dead month (the floor-applied-LAST defence is
+        // still there, now unreachable through the public API). The setter
+        // fails fast and names the offending date.
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('0000-06-15 lies outside');
+
+        $this->dp->withMaxDate(\DateTimeImmutable::createFromFormat('Y-m-d', '0000-06-15'));
     }
 
     public function testHomeAndEndLandOnRealDays(): void

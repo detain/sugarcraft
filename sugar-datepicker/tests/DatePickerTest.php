@@ -620,24 +620,71 @@ final class DatePickerTest extends TestCase
         $this->assertTrue($selected->isSelecting());
     }
 
-    public function testNavigatingPastYear9999DoesNotCrash(): void
+    public function testSteppingPastDecember9999ClampsSymmetrically(): void
     {
-        // 2026-10-23 (docs-fix-1023 E2 / M4): year 10000 cannot be written as
-        // %04d, so createFromFormat returns false there. The clamp path must
-        // survive it (5-digit years only arise from unbounded GoToNextYear in
-        // an unbounded picker — this pin documents the tolerated upper edge).
-        $dp = DatePicker::new(new \DateTimeImmutable('9999-12-31'));
-        $dp = $dp->goToNextYear();
+        // dp-32 (sugar-datepicker-047): the ceiling mirrors the January-0001
+        // floor. This replaces the docs-fix-1023-era pin that TOLERATED a
+        // degraded year-10000 view (rendered "10000", null cursor date,
+        // refusing Enter) — same safety, now enforced as a clamp by design.
+        $dp = DatePicker::new(new \DateTimeImmutable('9999-12-31'))
+            ->goToNextYear();
 
-        $this->assertSame(10000, $dp->viewYear());
-        // Rendering must not throw and must produce a string.
-        $this->assertIsString($dp->view());
-        // The cursor date is unresolvable, so selection falls back to the
-        // first-of-month probe which is also null → SelectDate REFUSES.
-        $this->assertNull($dp->dateAtCursor());
-        $refused = $dp->selectDate();
-        $this->assertFalse($refused->isSelecting());
-        $this->assertNull($refused->selectedDate());
+        $this->assertSame(9999, $dp->viewYear());
+        $this->assertSame(12, $dp->viewMonth());
+        $this->assertSame('9999-12-31', $dp->dateAtCursor()?->format('Y-m-d'));
+
+        $more = $dp->goToNextMonth()->goToNextMonth()->goToNextYear();
+        $this->assertSame([9999, 12], [$more->viewYear(), $more->viewMonth()], 'further stepping is a no-op at the ceiling');
+
+        // Enter now succeeds at the edge instead of refusing an unresolvable date.
+        $selected = $dp->selectDate();
+        $this->assertTrue($selected->isSelecting());
+        $this->assertNotNull($selected->selectedDate());
+
+        // Construction past the ceiling is clamped on the way in (symmetric
+        // with the zero-date constructor floor pin in DatePickerStyleTest).
+        $ctor = DatePicker::new((new \DateTimeImmutable('9999-12-31'))->modify('+1 day'));
+        $this->assertSame([9999, 12], [$ctor->viewYear(), $ctor->viewMonth()]);
+        $this->assertIsString($ctor->view());
+    }
+
+    /**
+     * @return array<string, array{0: 'min'|'max', 1: \DateTimeImmutable}>
+     */
+    public static function unrepresentableBoundProvider(): array
+    {
+        return [
+            'zero-date max (MySQL empty row)' => ['max', \DateTimeImmutable::createFromFormat('Y-m-d', '0000-06-15')],
+            'zero-date min' => ['min', \DateTimeImmutable::createFromFormat('Y-m-d', '0000-01-01')],
+            'year-10000 max' => ['max', (new \DateTimeImmutable('9999-12-31'))->modify('+1 day')],
+            'year-10026 min' => ['min', (new \DateTimeImmutable('2026-05-01'))->modify('+8000 years')],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unrepresentableBoundProvider')]
+    public function testUnrepresentableBoundsAreRefusedAtTheSetter(string $which, \DateTimeImmutable $bound): void
+    {
+        // dp-32 (sugar-datepicker-056): a bound outside the representable
+        // window used to be ACCEPTED and then floor the view into an all-dim
+        // dead month with zero signal. Fail-fast at the boundary instead.
+        $picker = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage($bound->format('Y-m-d') . ' lies outside');
+
+        $which === 'max' ? $picker->withMaxDate($bound) : $picker->withMinDate($bound);
+    }
+
+    public function testEdgeBoundsInsideTheWindowRemainAccepted(): void
+    {
+        // The window is inclusive: 0001-01-01 and 9999-12-31 are legal bounds.
+        $picker = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+        $tight = $picker
+            ->withMinDate(new \DateTimeImmutable('0001-01-01'))
+            ->withMaxDate(new \DateTimeImmutable('9999-12-31'));
+
+        $this->assertSame('0001-01-01', $tight->minDate()?->format('Y-m-d'));
+        $this->assertSame('9999-12-31', $tight->maxDate()?->format('Y-m-d'));
     }
 
     public function testViewWidthIsClampedNotRejected(): void
