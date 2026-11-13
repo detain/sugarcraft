@@ -23,7 +23,9 @@ use SugarCraft\Charts\Legend\Legend;
  * one column: a vertical wick spanning low → high, with a thicker
  * body covering open ↔ close. Bullish bars (close > open) and bearish
  * bars (close < open) use distinct glyphs and colors so the
- * direction of motion is obvious at a glance.
+ * direction of motion is obvious at a glance. Doji bars (open == close,
+ * a no-change period) carry their own glyph and color arm (sugar-charts-101)
+ * instead of silently bearing the bearish body.
  *
  * Mirrors ntcharts' `linechart/timeseries/candlestick` and the canvas/graph
  * `drawCandlestick` helper.
@@ -58,6 +60,7 @@ final class OHLCChart implements ChromeAccessors
      */
     public readonly string $bodyBullish;
     public readonly string $bodyBearish;
+    public readonly string $bodyDoji;
     public readonly string $wick;
     /**
      * @param list<Bar>                            $bars
@@ -71,9 +74,11 @@ final class OHLCChart implements ChromeAccessors
         public readonly ?float $max,
         string $bodyBullish,
         string $bodyBearish,
+        string $bodyDoji,
         string $wick,
         public readonly ?Color $bullishColor,
         public readonly ?Color $bearishColor,
+        public readonly ?Color $dojiColor,
         public readonly bool $showLegend = false,
         public readonly Position $legendPosition = Position::Right,
         public readonly ?string $legendIndicatorChar = null,
@@ -92,7 +97,7 @@ final class OHLCChart implements ChromeAccessors
         }
         // pinned price range must be finite and ordered.
         Range::pin($min, $max, 'Y');
-        // sugar-charts-003/-064: one sweep point for the three candle
+        // sugar-charts-003/-064: one sweep point for the four candle
         // runes and the bar element type, covering new(), push(),
         // withBars()/bars() and withBodyRunes()/withWickRune() rebuilds.
         foreach ($bars as $bar) {
@@ -104,6 +109,7 @@ final class OHLCChart implements ChromeAccessors
         }
         $this->bodyBullish = Rune::cell($bodyBullish, 'OHLC bullish body rune');
         $this->bodyBearish = Rune::cell($bodyBearish, 'OHLC bearish body rune');
+        $this->bodyDoji    = Rune::cell($bodyDoji, 'OHLC doji body rune');
         $this->wick        = Rune::cell($wick, 'OHLC wick rune');
     }
 
@@ -118,21 +124,44 @@ final class OHLCChart implements ChromeAccessors
             max:           null,
             bodyBullish:   '█',
             bodyBearish:   '▒',
+            bodyDoji:      '─',
             wick:          '│',
             bullishColor:  Color::ansi(10),  // bright green
             bearishColor:  Color::ansi(9),   // bright red
+            dojiColor:     Color::ansi(7),   // white — the no-change period
         );
     }
 
-    /** @param list<Bar> $bars */
+    /**
+     * Replace the full bar set (the explicit replace door — it stores
+     * exactly what is given, windowing applies to {@see push()} only).
+     *
+     * @param list<Bar> $bars
+     */
     public function withBars(array $bars): self
     {
         return $this->copy(bars: array_values($bars));
     }
 
+    /**
+     * Append one bar, windowing the stored history to the chart width
+     * (sugar-charts-062, mirroring LineChart::push's sliding window): the
+     * renderer already paints only the last `$width` bars, so older bars
+     * were retained as history the chart could never show — streamed
+     * pushes grew the stored list without bound while the render slice
+     * kept discarding the same prefix. Documented semantic change: after
+     * the window fills, the oldest bar is dropped at push time rather
+     * than at render time. Growing `$width` later cannot resurrect
+     * dropped bars; {@see withBars()} is the full-replace door.
+     */
     public function push(Bar $bar): self
     {
-        return $this->copy(bars: [...$this->bars, $bar]);
+        $bars   = [...$this->bars, $bar];
+        $window = $this->width > 0 ? $this->width : 1;
+        if (count($bars) > $window) {
+            $bars = array_slice($bars, -$window);
+        }
+        return $this->copy(bars: $bars);
     }
 
     public function withSize(int $w, int $h): self
@@ -145,13 +174,22 @@ final class OHLCChart implements ChromeAccessors
 
     public function withMin(?float $m): self  { return $this->copy(min: $m, minSet: true); }
     public function withMax(?float $m): self  { return $this->copy(max: $m, maxSet: true); }
-    public function withBodyRunes(string $bull, string $bear): self
+    /**
+     * Set the candle body glyphs. `$doji` (sugar-charts-101) covers the
+     * no-change arm; pass null to keep the currently stored doji rune.
+     */
+    public function withBodyRunes(string $bull, string $bear, ?string $doji = null): self
     {
-        return $this->copy(bodyBullish: $bull, bodyBearish: $bear);
+        return $this->copy(bodyBullish: $bull, bodyBearish: $bear, bodyDoji: $doji);
     }
     public function withWickRune(string $rune): self
     {
         return $this->copy(wick: $rune);
+    }
+    /** Set the doji (open == close) stroke color; null paints it unstyled. */
+    public function withDojiColor(?Color $doji): self
+    {
+        return $this->copy(dojiColor: $doji, dojiColorSet: true);
     }
     public function withColors(?Color $bullish, ?Color $bearish): self
     {
@@ -223,8 +261,9 @@ final class OHLCChart implements ChromeAccessors
     public function axes(bool $on = true): self                 { return $this->withAxes($on); }
     public function min(?float $m): self                       { return $this->withMin($m); }
     public function max(?float $m): self                       { return $this->withMax($m); }
-    public function bodyRunes(string $bull, string $bear): self { return $this->withBodyRunes($bull, $bear); }
+    public function bodyRunes(string $bull, string $bear, ?string $doji = null): self { return $this->withBodyRunes($bull, $bear, $doji); }
     public function wickRune(string $rune): self               { return $this->withWickRune($rune); }
+    public function dojiColor(?Color $doji): self              { return $this->withDojiColor($doji); }
     public function colors(?Color $bullish, ?Color $bearish): self { return $this->withColors($bullish, $bearish); }
     public function legend(bool $on = true): self              { return $this->withLegend($on); }
     public function legendPos(Position $pos): self             { return $this->withLegendPosition($pos); }
@@ -315,9 +354,15 @@ final class OHLCChart implements ChromeAccessors
             $bodyTop  = $rowFor($bar->bodyTop());
             $bodyBot  = $rowFor($bar->bodyBottom());
 
-            $bull = $bar->isBullish();
-            $color = $bull ? $this->bullishColor : $this->bearishColor;
-            $body  = $bull ? $this->bodyBullish  : $this->bodyBearish;
+            // sugar-charts-101: three arms — bullish, doji (open == close,
+            // satisfies neither direction predicate), bearish. Before the
+            // doji arm existed, a no-change period bore the bearish ▒ in
+            // red and read as a down period.
+            $isDoji = !$bar->isBullish() && !$bar->isBearish();
+            $color  = $isDoji ? $this->dojiColor
+                : ($bar->isBullish() ? $this->bullishColor : $this->bearishColor);
+            $body   = $isDoji ? $this->bodyDoji
+                : ($bar->isBullish() ? $this->bodyBullish : $this->bodyBearish);
             $style = $color !== null ? Style::new()->foreground($color) : null;
 
             // Wick: high → low, with body cells overwritten.
@@ -359,11 +404,14 @@ final class OHLCChart implements ChromeAccessors
         bool $maxSet = false,
         ?string $bodyBullish = null,
         ?string $bodyBearish = null,
+        ?string $bodyDoji = null,
         ?string $wick = null,
         ?Color $bullishColor = null,
         bool $bullishColorSet = false,
         ?Color $bearishColor = null,
         bool $bearishColorSet = false,
+        ?Color $dojiColor = null,
+        bool $dojiColorSet = false,
         ?bool $showLegend = null,
         ?Position $legendPosition = null,
         ?string $legendIndicatorChar = null,
@@ -386,9 +434,11 @@ final class OHLCChart implements ChromeAccessors
             max:                $maxSet ? $max : $this->max,
             bodyBullish:        $bodyBullish        ?? $this->bodyBullish,
             bodyBearish:        $bodyBearish        ?? $this->bodyBearish,
+            bodyDoji:           $bodyDoji           ?? $this->bodyDoji,
             wick:               $wick               ?? $this->wick,
             bullishColor:       $bullishColorSet ? $bullishColor : $this->bullishColor,
             bearishColor:       $bearishColorSet ? $bearishColor : $this->bearishColor,
+            dojiColor:          $dojiColorSet ? $dojiColor : $this->dojiColor,
             showLegend:         $showLegend         ?? $this->showLegend,
             legendPosition:     $legendPosition     ?? $this->legendPosition,
             legendIndicatorChar: ($legendIndicatorCharSet || $legendIndicatorChar !== null) ? $legendIndicatorChar : $this->legendIndicatorChar,

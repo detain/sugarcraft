@@ -130,10 +130,11 @@ final class AliasCompletenessTest extends TestCase
         // withTheme/withLineStyle/withSeriesColorFn/withYLabels/withMin/
         // withMax/withYRange/withPoint/withAxes) added by CH-05 +
         // Scatter::withAxes / OHLCChart::withAxes added by CH-09
-        // (sugar-charts-033 default endpoint gutters), including
-        // every documented deviation. A count collapse here would mean the
-        // reflection silently stopped seeing withers.
-        $this->assertSame(151, $checked, 'wither census count drifted from the documented 151');
+        // (sugar-charts-033 default endpoint gutters) +
+        // OHLCChart::withDojiColor added by CH-10 (sugar-charts-101 doji arm),
+        // including every documented deviation. A count collapse here would
+        // mean the reflection silently stopped seeing withers.
+        $this->assertSame(152, $checked, 'wither census count drifted from the documented 152');
         $this->assertGreaterThanOrEqual(5, $exception, 'documented alias deviations must all be present');
     }
 

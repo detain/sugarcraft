@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\Tests\OHLC;
 use SugarCraft\Charts\OHLC\Bar;
 use SugarCraft\Charts\OHLC\OHLCChart;
 use SugarCraft\Charts\Chart\Position;
+use SugarCraft\Core\Util\Color;
 use PHPUnit\Framework\TestCase;
 
 final class OHLCChartTest extends TestCase
@@ -408,5 +409,93 @@ final class OHLCChartTest extends TestCase
         $out = OHLCChart::new([$bar], 3, 16)->view();
         // Should still render without division-by-zero
         $this->assertNotEmpty($out);
+    }
+
+    // ─── CH-10 (sugar-charts-020/-062/-101) ─────────────────────────────
+
+    private static function plain(string $out): string
+    {
+        return preg_replace('/\x1b\[[0-9;]*m/', '', $out) ?? '';
+    }
+
+    public function testWithBarsReplacesEntireSet(): void
+    {
+        // sugar-charts-020: the replace door was unpinned — a copy that
+        // merged instead of replaced would sail through CI.
+        $bull = new Bar(open: 100, high: 110, low: 90, close: 105);
+        $bear = new Bar(open: 100, high: 110, low: 90, close: 95);
+        $chart    = OHLCChart::new([$bull, $bull], 8, 6);
+        $replaced = $chart->withBars([$bear, $bear]);
+        // A replace equals a fresh chart built from the new set alone.
+        self::assertSame(OHLCChart::new([$bear, $bear], 8, 6)->view(), $replaced->view());
+        $plain = self::plain($replaced->view());
+        self::assertStringNotContainsString('█', $plain, 'old set leaked into the replace');
+        self::assertStringContainsString('▒', $plain);
+        self::assertNotSame(self::plain($chart->view()), $plain);
+        // Non-sequential keys normalize to a list at the door.
+        self::assertSame([$bear, $bear], array_values($replaced->bars));
+    }
+
+    public function testPushWindowsStoredBarsToWidth(): void
+    {
+        // sugar-charts-062: push() keeps a sliding window sized to the
+        // chart width (mirrors LineChart::push) instead of unbounded history
+        // the renderer slices away anyway.
+        $bars = [];
+        for ($i = 0; $i < 7; $i++) {
+            $bars[] = new Bar((float) $i, (float) $i + 2, (float) $i - 1, (float) $i + 1);
+        }
+        $c = OHLCChart::new([], 3, 8);
+        foreach ($bars as $b) {
+            $c = $c->push($b);
+        }
+        self::assertCount(3, $c->bars);
+        self::assertSame([$bars[4], $bars[5], $bars[6]], $c->bars);
+        self::assertSame(OHLCChart::new([$bars[4], $bars[5], $bars[6]], 3, 8)->view(), $c->view());
+        // The replace door stays exact: withBars stores what it is given.
+        self::assertCount(7, $c->withBars($bars)->bars);
+    }
+
+    public function testDojiCarriesItsOwnGlyphArm(): void
+    {
+        // sugar-charts-101: open == close used to satisfy neither direction
+        // predicate yet render the bearish ▒ — a no-change period read as a
+        // down period. Bullish ≠ doji ≠ bearish bytes.
+        $bull = new Bar(open: 100, high: 110, low: 90, close: 105);
+        $doji = new Bar(open: 100, high: 110, low: 90, close: 100);
+        $bear = new Bar(open: 100, high: 110, low: 90, close: 95);
+        $plainBull = self::plain(OHLCChart::new([$bull], 8, 7)->view());
+        $plainDoji = self::plain(OHLCChart::new([$doji], 8, 7)->view());
+        $plainBear = self::plain(OHLCChart::new([$bear], 8, 7)->view());
+        self::assertStringContainsString('█', $plainBull);
+        self::assertStringContainsString('─', $plainDoji, 'doji lost its dedicated glyph');
+        self::assertStringContainsString('▒', $plainBear);
+        self::assertStringNotContainsString('▒', $plainDoji, 'doji silently bears the bearish body again');
+        self::assertStringNotContainsString('─', $plainBear);
+        self::assertStringNotContainsString('─', $plainBull);
+        self::assertNotSame($plainBull, $plainDoji);
+        self::assertNotSame($plainDoji, $plainBear);
+    }
+
+    public function testDojiColorArmHonoredPerColumn(): void
+    {
+        // Identical runes for every arm: any color difference on an 'X' is
+        // the selection arm, nothing else. ansi(10)=92 bullish, ansi(7)=37
+        // doji, ansi(9)=91 bearish.
+        $bull = new Bar(open: 100, high: 110, low: 90, close: 105);
+        $doji = new Bar(open: 100, high: 110, low: 90, close: 100);
+        $bear = new Bar(open: 100, high: 110, low: 90, close: 95);
+        $chart = OHLCChart::new([$bull, $doji, $bear], 24, 8)
+            ->withBodyRunes('X', 'X', 'X')
+            ->withWickRune('o');
+        $out = $chart->view();
+        self::assertStringContainsString("\x1b[92mX", $out);
+        self::assertStringContainsString("\x1b[37mX", $out);
+        self::assertStringContainsString("\x1b[91mX", $out);
+        $swapped = $chart->withDojiColor(Color::ansi(12))->view();
+        self::assertStringContainsString("\x1b[94mX", $swapped, 'withDojiColor did not reach the doji arm');
+        self::assertStringNotContainsString("\x1b[37mX", $swapped);
+        self::assertStringContainsString("\x1b[92mX", $swapped, 'swap leaked into the bullish arm');
+        self::assertStringContainsString("\x1b[91mX", $swapped, 'swap leaked into the bearish arm');
     }
 }
