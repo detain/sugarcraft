@@ -61,7 +61,7 @@ final class PushSubscriptionStore
      */
     private const MAX_ROWS = 64;
 
-    /** @var array<string, array{endpoint: string, p256dh: string, auth: string, principal: string, name: bool}>|null loaded rows, dirty only through this instance's writes */
+    /** @var array<string, array{endpoint: string, p256dh: string, auth: string, principal: string, name: bool, owner: string}>|null loaded rows, dirty only through this instance's writes */
     private ?array $rows = null;
 
     /**
@@ -90,6 +90,17 @@ final class PushSubscriptionStore
     }
 
     /**
+     * What a row records of the ONE credential that subscribed it: the digest
+     * of a viewer grant's public id or of a cookie session's id. Digested like
+     * the endpoint key, so the session id — itself a credential — never sits in
+     * push.json, and {@see pruneCredential()} can still find the rows by it.
+     */
+    public static function ownerKey(string $credential): string
+    {
+        return \substr(\hash('sha256', 'push-owner:' . $credential), 0, 32);
+    }
+
+    /**
      * Store (or replace) $subscription's row under $principal. True only when
      * the disk now holds it; an unusable state directory costs durability,
      * never the connection — the client's own retry re-subscribes.
@@ -100,13 +111,14 @@ final class PushSubscriptionStore
      * The per-put rewrite is paid for by {@see self::MAX_ROWS} keeping the
      * file small instead.
      */
-    public function put(PushSubscription $subscription, string $principal, bool $withName): bool
+    public function put(PushSubscription $subscription, string $principal, bool $withName, ?string $credential = null): bool
     {
         $rows = $this->fresh();
         $rows[self::keyHash($subscription->endpoint)] = [
             ...$subscription->toArray(),
             'principal' => $principal,
             'name' => $withName,
+            'owner' => $credential === null || $credential === '' ? '' : self::ownerKey($credential),
         ];
         while (\count($rows) > self::MAX_ROWS) {
             unset($rows[\array_key_first($rows)]);
@@ -152,12 +164,37 @@ final class PushSubscriptionStore
     }
 
     /**
+     * Drop every row the ONE credential $credential (a viewer grant's id or a
+     * cookie session's id) subscribed, and report how many went. The finer
+     * sibling of {@see prunePrincipal()}: revoking a single share grant or
+     * signing one browser out must not take the other viewers' or the owner's
+     * rows with it, and a class-wide prune cannot say that. Rows written before
+     * the owner was recorded carry none and are never matched here — they age
+     * out with the next rotation's class prune.
+     */
+    public function pruneCredential(string $credential): int
+    {
+        if ($credential === '') {
+            return 0;
+        }
+        $owner = self::ownerKey($credential);
+        $rows = $this->fresh();
+        $kept = array_filter($rows, static fn (array $row): bool => $row['owner'] !== $owner);
+        $dropped = \count($rows) - \count($kept);
+        if ($dropped === 0) {
+            return 0;
+        }
+
+        return $this->persist($kept) ? $dropped : 0;
+    }
+
+    /**
      * The rows as the disk holds them NOW. Every writer starts here, not at
      * the per-instance cache: the token-rotation prune runs on a second
      * store instance (the server's), and a writer holding a stale cache
      * would rewrite the just-pruned rows back onto disk.
      *
-     * @return array<string, array{endpoint: string, p256dh: string, auth: string, principal: string, name: bool}>
+     * @return array<string, array{endpoint: string, p256dh: string, auth: string, principal: string, name: bool, owner: string}>
      */
     private function fresh(): array
     {
@@ -195,7 +232,7 @@ final class PushSubscriptionStore
      * The rows on disk: parsed and stripped of anything malformed. A file
      * that disagrees with its own shape is treated as absent.
      *
-     * @return array<string, array{endpoint: string, p256dh: string, auth: string, principal: string, name: bool}>
+     * @return array<string, array{endpoint: string, p256dh: string, auth: string, principal: string, name: bool, owner: string}>
      */
     private function load(): array
     {
@@ -247,6 +284,7 @@ final class PushSubscriptionStore
                 'auth' => $row['auth'],
                 'principal' => $row['principal'],
                 'name' => $row['name'] === true,
+                'owner' => \is_string($row['owner'] ?? null) ? $row['owner'] : '',
             ];
         }
         if ($dropped > 0) {
@@ -264,7 +302,7 @@ final class PushSubscriptionStore
      * will re-establish is worth less than a request that fails on an I/O
      * accident.
      *
-     * @param array<string, array{endpoint: string, p256dh: string, auth: string, principal: string, name: bool}> $rows
+     * @param array<string, array{endpoint: string, p256dh: string, auth: string, principal: string, name: bool, owner: string}> $rows
      */
     private function persist(array $rows): bool
     {

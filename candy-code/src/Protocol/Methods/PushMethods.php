@@ -87,7 +87,13 @@ final class PushMethods
             throw RpcError::of(ErrorCode::InvalidParams, $shape->getMessage(), 'endpoint_refused');
         }
 
-        if (!$call->server->pushStore()->put($subscription, $call->client->principal(), $withName)) {
+        // The ONE credential behind this socket (S-O14): a viewer grant's id or
+        // a cookie session's id, so revoking that grant or signing that browser
+        // out can drop exactly the rows it subscribed.
+        $credential = $call->client->principal() === 'viewer'
+            ? $call->client->tokenId()
+            : $call->client->connection()->cookieSession();
+        if (!$call->server->pushStore()->put($subscription, $call->client->principal(), $withName, $credential)) {
             throw RpcError::of(ErrorCode::Internal, 'the subscription could not be persisted', 'push_store_unavailable');
         }
 

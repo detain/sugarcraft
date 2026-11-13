@@ -217,6 +217,7 @@ final class Server
         });
         $api = new ApiController($this->auth, $this->config, $credentials, function (string $session): void {
             unset($this->sessionLastUsed[$session]);
+            $this->pruneCredentialPush($session);
             $this->closeSessionSockets($session, 'you have signed out');
         }, $this->webhooks, $this->static);
         $upgrade = new Upgrade(
@@ -348,6 +349,7 @@ final class Server
         if (!$this->revokeHooked) {
             $this->revokeHooked = true;
             $this->auth->viewerTokens->onRevoked(function (string $id): void {
+                $this->pruneCredentialPush($id);
                 $this->closeViewerSockets($id);
                 $this->credentialsRevoked($id);
             });
@@ -452,6 +454,22 @@ final class Server
         }
     }
 
+    /**
+     * Drop the push rows ONE retired credential subscribed — a revoked viewer
+     * grant, a signed-out or expired cookie session (S-O14). Without it a
+     * client that can no longer sign in keeps being notified, and every
+     * grant/sign-in leaves a row behind for the cap to age out. Never throws:
+     * it runs from revocation callbacks and the sweep timer.
+     */
+    private function pruneCredentialPush(string $credential): void
+    {
+        try {
+            PushSubscriptionStore::forStateDir($this->config->stateDir, $this->log)->pruneCredential($credential);
+        } catch (\Throwable $e) {
+            ($this->log)(ErrorLog::line($e, 'push prune after credential retirement failed'));
+        }
+    }
+
     /** Every principal class a token rotation revokes; their push rows go with them. */
     private const ROTATION_REVOKED_PRINCIPALS = ['bearer', 'subprotocol', 'ticket', 'cookie', 'viewer'];
 
@@ -515,6 +533,7 @@ final class Server
         foreach ($this->connections as $connection) {
             $id = $connection->tokenId();
             if ($id !== null && !$this->auth->viewerTokens->live($id)) {
+                $this->pruneCredentialPush($id);
                 $connection->close(self::CLOSE_SIGNED_OUT, 'this share token expired');
                 ++$closed;
             }
@@ -541,6 +560,7 @@ final class Server
                 continue;
             }
             if ($now - ($this->sessionLastUsed[$session] ?? $now) > CookieSessions::LIFETIME_SECONDS) {
+                $this->pruneCredentialPush($session);
                 $connection->close(self::CLOSE_SIGNED_OUT, 'your sign-in expired; sign in again');
                 ++$closed;
             }

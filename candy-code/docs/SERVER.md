@@ -1049,6 +1049,10 @@ registers a push subscription first. Three methods cover the lifecycle
 - A token rotation (`serve token --rotate`) signs every credential class out
   and drops the push rows those classes owned, so rotations never accumulate
   rows for clients that can no longer sign in.
+- Revoking one viewer grant, a grant expiring, a browser signing out, or its
+  sign-in expiring drops only the push rows that one credential subscribed (a
+  row records a digest of the grant id or session id, never the credential);
+  the owner's and every other viewer's rows stay.
 
 Triggers: a question waiting for an answer and a finished turn each send one
 notification — and only while **no client is following that session**, the
