@@ -115,13 +115,19 @@ final class PreviewQuery
      *
      * @param list<array{name:string, type:string, elide:bool}> $columns
      */
-    public static function build(Flavor $flavor, string $table, array $columns, int $limit = self::DEFAULT_LIMIT): string
+    public static function build(Flavor $flavor, string $table, array $columns, int $limit = self::DEFAULT_LIMIT, int $offset = 0): string
     {
         $limit = max(1, $limit);
+        $offset = max(0, $offset);
         $tbl = Identifier::quote($flavor, $table);
+        // SQL-O11: the browse window is (limit, offset) — every shipped driver
+        // speaks the dialect-safe `LIMIT n OFFSET o` spelling (same wording
+        // DatabaseInterface::rows() standardised on). Offset 0 renders the
+        // byte-identical pre-O11 statement so single-page previews never churn.
+        $window = $offset === 0 ? "LIMIT {$limit}" : "LIMIT {$limit} OFFSET {$offset}";
 
         if ($columns === []) {
-            return sprintf('SELECT * FROM %s LIMIT %d', $tbl, $limit);
+            return sprintf('SELECT * FROM %s %s', $tbl, $window);
         }
 
         $select = [];
@@ -132,7 +138,7 @@ final class PreviewQuery
                 : $id;
         }
 
-        return sprintf('SELECT %s FROM %s LIMIT %d', implode(', ', $select), $tbl, $limit);
+        return sprintf('SELECT %s FROM %s %s', implode(', ', $select), $tbl, $window);
     }
 
     private static function isElided(Flavor $flavor, string $type): bool

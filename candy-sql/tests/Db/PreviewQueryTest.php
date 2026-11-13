@@ -37,6 +37,34 @@ final class PreviewQueryTest extends TestCase
         $this->assertStringContainsString('FROM `asset_media` LIMIT 100', $sql);
     }
 
+    public function testOffsetWindowIsDialectSafeAndZeroIsByteStable(): void
+    {
+        $cols = PreviewQuery::classify(Flavor::MySQL, [
+            ['COLUMN_NAME' => 'n', 'DATA_TYPE' => 'int'],
+        ]);
+
+        // SQL-O11: paging rides the same `LIMIT n OFFSET o` spelling every
+        // shipped driver's rows() already standardised on.
+        $sql = PreviewQuery::build(Flavor::MySQL, 'bulk', $cols, 100, 100);
+        $this->assertStringContainsString('FROM `bulk` LIMIT 100 OFFSET 100', $sql);
+
+        $pg = PreviewQuery::build(Flavor::Postgres, 'bulk', [
+            PreviewQuery::classify(Flavor::Postgres, [['column_name' => 'n', 'data_type' => 'integer']])[0],
+        ], 100, 200);
+        $this->assertStringContainsString('FROM "bulk" LIMIT 100 OFFSET 200', $pg);
+
+        $lite = PreviewQuery::build(Flavor::Sqlite, 'bulk', [
+            PreviewQuery::classify(Flavor::Sqlite, [['name' => 'n', 'type' => 'INTEGER']])[0],
+        ], 100, 200);
+        $this->assertStringContainsString('FROM "bulk" LIMIT 100 OFFSET 200', $lite);
+
+        // Offset 0 must not churn the pre-paging statement bytes.
+        $this->assertStringNotContainsString('OFFSET', PreviewQuery::build(Flavor::MySQL, 'bulk', $cols, 100));
+        $this->assertStringNotContainsString('OFFSET', PreviewQuery::build(Flavor::Sqlite, 'bulk', $cols, 100, 0));
+        // Negative offsets clamp to the first page, never a syntax error.
+        $this->assertStringNotContainsString('OFFSET', PreviewQuery::build(Flavor::MySQL, 'bulk', $cols, 100, -50));
+    }
+
     public function testMysqlElidesEveryBlobBinarySpatialAndLargeTextType(): void
     {
         foreach (['tinyblob', 'blob', 'mediumblob', 'longblob', 'binary', 'varbinary', 'mediumtext', 'longtext', 'json', 'geometry'] as $type) {

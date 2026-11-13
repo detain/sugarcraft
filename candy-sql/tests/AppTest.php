@@ -403,6 +403,91 @@ final class AppTest extends TestCase
         $this->assertStringContainsString('Tables: 3', $a->view(), 'and returns to the plain total after abandon');
     }
 
+    /** A 250-row table beside the two small ones — the paging fixture. */
+    private function bulkDb(): Database
+    {
+        $a = $this->db();
+        $db = $a;
+        $db->exec('CREATE TABLE bulk (n INTEGER PRIMARY KEY)');
+        foreach (range(1, 250) as $n) {
+            $db->exec('INSERT INTO bulk (n) VALUES (' . $n . ')');
+        }
+        return $db;
+    }
+
+    public function testPgDnWalksThePreviewInServerPages(): void
+    {
+        $a = App::start($this->bulkDb());
+        $this->assertSame('bulk', $a->browse->selectedTable);
+        $this->assertCount(100, $a->browse->rows, 'page 1 holds exactly the 100-row window');
+        $this->assertSame('page 1 (rows 1–100)', $a->ui->status);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::PageDown, ''));
+        $this->assertSame(100, $a->browse->pageOffset);
+        $this->assertCount(100, $a->browse->rows);
+        $this->assertSame(101, (int) $a->browse->rows[0]['n'], 'row 101 is the first of page 2');
+        $this->assertSame('page 2 (rows 101–200)', $a->ui->status);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::PageDown, ''));
+        $this->assertSame(200, $a->browse->pageOffset);
+        $this->assertCount(50, $a->browse->rows, 'the tail page carries the remaining 50');
+        $this->assertSame(201, (int) $a->browse->rows[0]['n']);
+        $this->assertSame('page 3 (rows 201–250)', $a->ui->status);
+
+        // A short page IS the end — forward presses answer honestly, no fetch.
+        [$a, $cmd] = $a->update(new KeyMsg(KeyType::PageDown, ''));
+        $this->assertNull($cmd, 'no phantom probe past the tail page');
+        $this->assertSame(200, $a->browse->pageOffset, 'the end guard does not move the window');
+        $this->assertSame('end of table — no further page', $a->ui->status);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::PageUp, ''));
+        $this->assertSame(100, $a->browse->pageOffset);
+        $this->assertSame(101, (int) $a->browse->rows[0]['n'], 'back to page 2');
+        $this->assertSame('page 2 (rows 101–200)', $a->ui->status);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::PageUp, ''));
+        [$a, $cmd] = $a->update(new KeyMsg(KeyType::PageUp, ''));
+        $this->assertSame(0, $a->browse->pageOffset);
+        $this->assertNull($cmd, 'back from page 1 is a no-op');
+        $this->assertSame('already at the first page', $a->ui->status);
+    }
+
+    public function testPagingKeysStayInertOnQueryResults(): void
+    {
+        $app = new App(
+            ConnectionState::new(new FakeDatabase(), Flavor::MySQL),
+            BrowseState::new()
+                ->withTables(['posts', 'users'])
+                ->withSelectedTable('(query)')
+                ->withRows(array_fill(0, 100, ['n' => 1])),
+        );
+        [$next, $cmd] = $app->update(new KeyMsg(KeyType::PageDown, ''));
+
+        $this->assertNull($cmd, 'a buffered query result has no next server page to fetch');
+        $this->assertSame('(query)', $next->browse->selectedTable);
+        $this->assertSame(0, $next->browse->pageOffset);
+    }
+
+    public function testEmptyAsyncPageRewindsToTheLastFullOne(): void
+    {
+        // The exactly-divisible-table race: PgDn dispatched page 2, the table
+        // ends at row 200, the answer is empty. The fold must not park the
+        // user on a blank pane — it rewinds and re-fetches page 1.
+        $app = new App(
+            ConnectionState::new(new FakeDatabase(), Flavor::MySQL),
+            BrowseState::new()
+                ->withTables(['posts', 'users'])
+                ->withSelectedTable('users')
+                ->withRowsLoading(true)
+                ->withPageOffset(100),
+        );
+        [$next, $cmd] = $app->update(new TableRowsLoadedMsg('users', [], null, 0));
+
+        $this->assertSame(0, $next->browse->pageOffset, 'the walk back landed on page 1');
+        $this->assertTrue($next->browse->rowsLoading, 'the rewind is itself a load');
+        $this->assertNotNull($cmd, 'the re-fetch rides the async Cmd');
+    }
+
     /**
      * SQL-O10: cursor movement through the tables list is a pure local edit —
      * the highlighted table's rows load ONLY on Enter/Space. The old arm

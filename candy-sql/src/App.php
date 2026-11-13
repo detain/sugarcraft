@@ -228,7 +228,7 @@ final class App implements Model
         }
         if ($msg instanceof TableRowsLoadedMsg) {
             // An async browse fetch finished — fold its rows (or error) in.
-            return [$this->applyLoadedRows($msg), null];
+            return $this->applyLoadedRows($msg);
         }
         if ($msg instanceof QueryRowsLoadedMsg) {
             // An async query finished — fold its rows (or error) into the result table.
@@ -334,6 +334,18 @@ final class App implements Model
                 ];
             }
             return [$this->withPane($nextPane), null];
+        }
+        // SQL-O11: PgDn/PgUp page the TABLE PREVIEW (the browse window), in
+        // either browser pane. A query-pane result is a full buffer, not a
+        // preview — the sentinel selection '(query)' marks exactly that case
+        // and the keys stay inert for it.
+        if (($msg->type === KeyType::PageDown || $msg->type === KeyType::PageUp)
+            && ($this->ui->pane === Pane::Tables || $this->ui->pane === Pane::Rows)
+            && $this->browse->selectedTable !== null
+            && $this->browse->selectedTable !== '(query)'
+            && !$this->browse->rowsLoading
+            && !$this->browse->filterMode) {
+            return $this->beginPageShift($msg->type === KeyType::PageDown);
         }
         if ($this->ui->pane === Pane::Query) {
             if (($msg->ctrl && ($msg->rune === 'r' || $msg->rune === 'e'))
@@ -929,10 +941,10 @@ final class App implements Model
      *
      * @return array{self, ?Cmd}
      */
-    private function beginLoadTable(string $name): array
+    private function beginLoadTable(string $name, int $pageOffset = 0): array
     {
         if (!$this->asyncTransportAvailable()) {
-            return [$this->loadTable($name), null];
+            return [$this->loadTable($name, $pageOffset), null];
         }
         // client-012: bump the load generation before dispatch. Re-selecting the
         // SAME table leaves selectedTable unchanged, so the name guard in the
@@ -944,12 +956,42 @@ final class App implements Model
             ->withRowCursor(0)
             ->withResultTable(null)
             ->withRowsLoading(true)
-            ->withIncrementedLoadGen();
+            ->withIncrementedLoadGen()
+            ->withPageOffset($pageOffset);
         $loading = $this->mutate([
             'browse' => $browse,
             'ui' => $this->ui->withError(null)->withStatus('loading…'),
         ]);
-        return [$loading, Cmd::promise(fn () => $this->createRowsPromise($name, $browse->loadGen))];
+        return [$loading, Cmd::promise(fn () => $this->createRowsPromise($name, $browse->loadGen, $pageOffset))];
+    }
+
+    /**
+     * SQL-O11: PgDn/PgUp on a live preview. Forward is only possible while the
+     * current page is full (a short page IS the table end — claiming more
+     * would lie); backward from page 1 says so instead of re-fetching it.
+     * The fetch itself reuses the browse load leg, so sync (SQLite) and async
+     * (MySQL/Postgres) entry flavors page identically.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function beginPageShift(bool $forward): array
+    {
+        $limit = PreviewQuery::DEFAULT_LIMIT;
+        $table = (string) $this->browse->selectedTable;
+        if ($forward) {
+            if (count($this->browse->rows) < $limit) {
+                return [$this->mutate([
+                    'ui' => $this->ui->withStatus('end of table — no further page'),
+                ]), null];
+            }
+            return $this->beginLoadTable($table, $this->browse->pageOffset + $limit);
+        }
+        if ($this->browse->pageOffset === 0) {
+            return [$this->mutate([
+                'ui' => $this->ui->withStatus('already at the first page'),
+            ]), null];
+        }
+        return $this->beginLoadTable($table, max(0, $this->browse->pageOffset - $limit));
     }
 
     /**
@@ -1018,23 +1060,32 @@ final class App implements Model
      * (out-of-order settle — client-012), is stale and dropped, leaving the
      * current in-flight load's spinner untouched.
      */
-    private function applyLoadedRows(TableRowsLoadedMsg $msg): self
+    private function applyLoadedRows(TableRowsLoadedMsg $msg): array
     {
         if ($msg->table !== $this->browse->selectedTable) {
-            return $this;
+            return [$this, null];
         }
         // Re-selecting the same table keeps selectedTable unchanged; only the
         // generation can tell the older in-flight leg from the current one.
         if ($msg->loadGen !== $this->browse->loadGen) {
-            return $this;
+            return [$this, null];
         }
         if ($msg->error !== null) {
-            return $this->mutate([
+            return [$this->mutate([
                 'browse' => $this->browse->withRows([])->withRowsLoading(false),
                 'ui' => $this->ui->withError($msg->error)->withStatus(null),
-            ]);
+            ]), null];
         }
-        return $this->mutate([
+        // SQL-O11: a PgDn onto an exactly-full last table answers with an
+        // empty page. That is the far edge we just walked past — rewind to the
+        // last non-empty page and re-fetch it rather than parking the user on
+        // an empty pane.
+        if ($msg->rows === [] && $this->browse->pageOffset > 0) {
+            $lastFull = $this->browse->pageOffset - PreviewQuery::DEFAULT_LIMIT;
+
+            return $this->beginLoadTable($msg->table, max(0, $lastFull));
+        }
+        return [$this->mutate([
             'browse' => $this->browse
                 ->withRows($msg->rows)
                 ->withRowCursor(0)
@@ -1045,8 +1096,8 @@ final class App implements Model
                 // ENTRY, not the pane).
                 ->withResultTable(ResultTable::fromRows($msg->rows))
                 ->withRowsLoading(false),
-            'ui' => $this->ui->withError(null)->withStatus(self::rowsSummary(count($msg->rows))),
-        ]);
+            'ui' => $this->ui->withError(null)->withStatus(self::browseSummary(count($msg->rows), $this->browse->pageOffset)),
+        ]), null];
     }
 
     /**
@@ -1055,7 +1106,7 @@ final class App implements Model
      * metadata query nor the row fetch blocks the UI. Reuses the same pooled
      * async connection as the admin pane (same DSN → same connection key).
      */
-    private function createRowsPromise(string $name, int $loadGen): \React\Promise\PromiseInterface
+    private function createRowsPromise(string $name, int $loadGen, int $pageOffset = 0): \React\Promise\PromiseInterface
     {
         try {
             $context = $this->connection->serverContext ?? $this->createContext();
@@ -1090,9 +1141,9 @@ final class App implements Model
         }
 
         return $connection->query(PreviewQuery::columnsSql($flavor, $name))
-            ->then(function (array $colRows) use ($connection, $flavor, $name): \React\Promise\PromiseInterface {
+            ->then(function (array $colRows) use ($connection, $flavor, $name, $pageOffset): \React\Promise\PromiseInterface {
                 $columns = PreviewQuery::classify($flavor, $colRows);
-                return $connection->query(PreviewQuery::build($flavor, $name, $columns));
+                return $connection->query(PreviewQuery::build($flavor, $name, $columns, PreviewQuery::DEFAULT_LIMIT, $pageOffset));
             })
             ->then(
                 static fn (array $rows): TableRowsLoadedMsg => new TableRowsLoadedMsg($name, $rows, null, $loadGen),
@@ -1107,7 +1158,7 @@ final class App implements Model
      * yet) and for SQLite browsing. The preview never selects BLOB/large-text
      * bytes — see {@see PreviewQuery} — so even a media table loads cheaply.
      */
-    private function loadTable(string $name): self
+    private function loadTable(string $name, int $pageOffset = 0): self
     {
         try {
             // SQL-C11: the startup/SQLite browse legs join the run leg under
@@ -1119,11 +1170,13 @@ final class App implements Model
                 ) ?? [],
             );
             $rows = $this->syncTimeout()->run(
-                fn (): ?array => $this->connection->db->query(PreviewQuery::build($this->connection->flavor, $name, $columns)),
+                fn (): ?array => $this->connection->db->query(
+                    PreviewQuery::build($this->connection->flavor, $name, $columns, PreviewQuery::DEFAULT_LIMIT, $pageOffset),
+                ),
             ) ?? [];
             return $this->mutate([
                 'browse' => $this->browse
-                    ->withTableCursor(array_search($name, $this->browse->tables, true) ?: 0)
+                    ->withTableCursor(array_search($name, $this->browse->visibleTables(), true) ?: 0)
                     ->withSelectedTable($name)
                     ->withRows($rows)
                     ->withRowCursor(0)
@@ -1131,8 +1184,9 @@ final class App implements Model
                     // join the async one on the SAME grid object — entry flavor
                     // must not decide whether h/l scrolls.
                     ->withResultTable(ResultTable::fromRows($rows))
-                    ->withRowsLoading(false),
-                'ui' => $this->ui->withError(null)->withStatus(self::rowsSummary(count($rows))),
+                    ->withRowsLoading(false)
+                    ->withPageOffset($pageOffset),
+                'ui' => $this->ui->withError(null)->withStatus(self::browseSummary(count($rows), $pageOffset)),
             ]);
         } catch (\PDOException | ReconnectException | StatementTimeoutException $e) {
             return $this->mutate([
@@ -1346,6 +1400,29 @@ final class App implements Model
     private static function rowsSummary(int $count): string
     {
         return $count === 1 ? '1 row' : $count . ' rows';
+    }
+
+    /**
+     * SQL-O11: the browse status line as a page counter. Small tables (all
+     * rows on one unfiltered page) keep the plain 'N rows' summary; anything
+     * windowed reads 'page X (rows a–b)' — absolute table coordinates, no
+     * claim about the total the page never saw.
+     */
+    private static function browseSummary(int $count, int $pageOffset): string
+    {
+        $limit = PreviewQuery::DEFAULT_LIMIT;
+        if ($pageOffset === 0 && $count < $limit) {
+            return self::rowsSummary($count);
+        }
+        if ($count === 0) {
+            return self::rowsSummary(0);
+        }
+
+        $page = intdiv($pageOffset, $limit) + 1;
+        $first = $pageOffset + 1;
+        $last = $pageOffset + $count;
+
+        return "page {$page} (rows {$first}–{$last})";
     }
 
     public function editor(): TextArea

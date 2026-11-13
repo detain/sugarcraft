@@ -325,6 +325,8 @@ KEYBOARD SHORTCUTS (TUI)
                loads, Backspace edits, Esc abandons and clears
   Enter        Load selected table's rows
   Space        Load selected table's rows (alias for Enter)
+  PgDn / PgUp  (Tables/Rows pane, on a table preview) page the preview in
+               100-row windows — the browse cap became a page size
   Ctrl+Enter   Execute the current query
   Ctrl+R       Execute the current query
   Ctrl+E       Execute the current query

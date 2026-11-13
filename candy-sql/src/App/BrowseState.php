@@ -31,6 +31,7 @@ final class BrowseState
         public readonly int $loadGen = 0,
         public readonly string $filterText = '',
         public readonly bool $filterMode = false,
+        public readonly int $pageOffset = 0,
     ) {}
 
     public static function new(): self
@@ -59,6 +60,16 @@ final class BrowseState
     public function withFilterMode(bool $filterMode): self
     {
         return $this->mutate(['filterMode' => $filterMode]);
+    }
+
+    /**
+     * Server-side row window of the current table preview (SQL-O11): the
+     * OFFSET part of the browse LIMIT/OFFSET pair, always a multiple of
+     * {@see \SugarCraft\Sql\Db\PreviewQuery::DEFAULT_LIMIT}.
+     */
+    public function withPageOffset(int $pageOffset): self
+    {
+        return $this->mutate(['pageOffset' => $pageOffset]);
     }
 
     /**
