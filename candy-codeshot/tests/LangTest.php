@@ -53,12 +53,17 @@ final class LangTest extends TestCase
         $this->assertTrue($reflection->isFinal());
     }
 
-    public function testTranslationLookupReturnsString(): void
+    public function testRealKeyResolvesToItsEnglishCopy(): void
     {
+        // candy-codeshot-062 (cs-31) vacuous cure: the old leg keyed on
+        // `app.title`, which en.php does not carry — the raw-key fallback
+        // always answers with a string, so the is_string pin could never
+        // fail. A key the library actually owns resolves to its copy.
         $lang = new Lang();
-        $result = $lang->t('app.title');
+        $usage = $lang->t('cli.usage');
 
-        $this->assertIsString($result);
+        $this->assertStringStartsWith('candy-codeshot - render code', $usage);
+        $this->assertNotSame('cli.usage', $usage);
     }
 
     public function testTranslationLookupFallsBackToRawKeyWhenNotFound(): void
@@ -69,12 +74,15 @@ final class LangTest extends TestCase
         $this->assertSame('codeshot.nonexistent.translation.key', $result);
     }
 
-    public function testTranslationWithPlaceholders(): void
+    public function testInterpolationFillsThePlaceholders(): void
     {
+        // -062: placeholders on a REAL key with a real interpolated value;
+        // the old app.title leg interpolated the raw-key fallback and pinned
+        // nothing.
         $lang = new Lang();
-        // The codeshot.lang.not_found key might exist or fall back
-        $result = $lang->t('app.title', ['name' => 'Test']);
+        $message = $lang->t('cli.missing_value', ['option' => '--theme']);
 
-        $this->assertIsString($result);
+        $this->assertSame('candy-codeshot: --theme requires a value', $message);
+        $this->assertStringNotContainsString('{option}', $message);
     }
 }

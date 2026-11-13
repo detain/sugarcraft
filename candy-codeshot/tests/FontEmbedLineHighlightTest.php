@@ -222,6 +222,15 @@ final class FontEmbedLineHighlightTest extends TestCase
 
     public function testHighlightRectPositionAlignedWithLines(): void
     {
+        // candy-codeshot-061 (cs-31) vacuous cure: the old leg admitted it
+        // "can't easily test exact coordinates" and re-asserted the fill —
+        // already proven above — while the coordinates are perfectly
+        // parseable. Pinned geometry for line 2 (index 1) on the dark theme
+        // (fontSize 14, lineHeight 1.4, padding default 24, no window/shadow):
+        //   cellH = 14 * 1.4 = 19.6
+        //   y     = textY0 + 1*cellH - fontSize = (24 + 14) + 19.6 - 14 = 43.6
+        //   x     = padding = 24
+        //   height = cellH = 19.6 ; width = longest line (5 cells) * 8.4 = 42
         $text = "line1\nline2\nline3\n";
         $svg = SvgRenderer::dark()
             ->withHighlight(2, 2, '#ffff00')
@@ -231,10 +240,16 @@ final class FontEmbedLineHighlightTest extends TestCase
             ->withBorder(false)
             ->render($text);
 
-        // Each line is fontSize * lineHeight tall.
-        // The highlight should appear behind line 2.
-        // We can't easily test exact coordinates but we verify the rect exists.
-        $this->assertStringContainsString('fill="#ffff00"', $svg);
+        $count = preg_match_all(
+            '/<rect x="(\d+)" y="([\d.]+)" width="(\d+)" height="([\d.]+)" fill="#ffff00" \/>/',
+            $svg,
+            $m,
+        );
+        $this->assertSame(1, $count, 'exactly the requested line may carry a highlight rect');
+        $this->assertSame('24', $m[1][0]);
+        $this->assertSame('43.60', $m[2][0]);
+        $this->assertSame('42', $m[3][0]);
+        $this->assertSame('19.60', $m[4][0]);
     }
 
     public function testHighlightAndFontEmbeddingTogether(): void

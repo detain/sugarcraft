@@ -53,4 +53,26 @@ final class VersionTest extends TestCase
         self::assertSame('9.9.9', Version::resolve('/nonexistent-file.phar', '9.9.9'));
         self::assertSame(Version::CURRENT, Version::resolve(''));
     }
+
+    public function testResolveFallsBackForAnExistingNonPharFile(): void
+    {
+        // candy-codeshot-063 (cs-31): the two wild arms of resolve() were
+        // unpinned. A real file that is not an archive makes Phar throw; the
+        // catch-Throwable door must turn that into the fallback, not a fatal.
+        $tmp = tempnam(sys_get_temp_dir(), 'notphar');
+        self::assertIsString($tmp);
+        file_put_contents($tmp, 'plain bytes, no Phar signature at all');
+        try {
+            self::assertSame('FALLBACK', Version::resolve($tmp, 'FALLBACK'));
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testResolveFallsBackForAnExistingDirectory(): void
+    {
+        // The other wild arm: a directory passes file_exists-era intuition
+        // but is_file refuses it before Phar is ever constructed.
+        self::assertSame('FALLBACK', Version::resolve(sys_get_temp_dir(), 'FALLBACK'));
+    }
 }

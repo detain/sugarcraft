@@ -90,4 +90,33 @@ final class OptionsRosterTest extends TestCase
             'README "### Flags" and the argv parser disagree on the flag roster',
         );
     }
+
+    public function testTtyGuardsAreStructurallyPinned(): void
+    {
+        // candy-codeshot-064 (cs-31): both stream_isatty refusals are
+        // unreachable to this suite through runCli — it pipes every standard
+        // handle, so a real TTY shape cannot exist in-process, and a PTY leg
+        // is out of the sandbox's reach. Structural pins keep the contract
+        // honest: the guard exists, reads the handle the finding named, and
+        // reports through the Lang key that carries its message. QA exercises
+        // the live-TTY legs by hand (reviewer note per the plan).
+        $bin = file_get_contents(__DIR__ . '/../bin/candy-codeshot');
+        self::assertIsString($bin);
+
+        self::assertMatchesRegularExpression(
+            '/\$inputPath === null && stream_isatty\(STDIN\)\)\s*\{\s*fwrite\(STDERR, Lang::t\(\'cli\.stdin_tty\'\)/',
+            $bin,
+            'the interactive-stdin notice must guard STDIN and speak through cli.stdin_tty',
+        );
+        self::assertMatchesRegularExpression(
+            '/\$format === \'png\' && stream_isatty\(STDOUT\)\)\s*\{.*?Lang::t\(\'cli\.png_to_tty\'\).*?exit\(2\);/s',
+            $bin,
+            'the png-to-tty refusal must guard STDOUT, speak through cli.png_to_tty, and exit 2',
+        );
+
+        $en = require __DIR__ . '/../lang/en.php';
+        self::assertIsArray($en);
+        self::assertArrayHasKey('cli.stdin_tty', $en);
+        self::assertArrayHasKey('cli.png_to_tty', $en);
+    }
 }
