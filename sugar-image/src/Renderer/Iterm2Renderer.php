@@ -48,13 +48,26 @@ final class Iterm2Renderer implements Renderer
             if (!imageistruecolor($img)) {
                 imagepalettetotruecolor($img);
             }
+            $ok = false;
+            $pngBytes = '';
             try {
                 // imagepng() with no path writes to STDOUT and returns bool —
                 // capture the bytes via an output buffer instead (otherwise the
                 // raw PNG is dumped to the terminal and the image is empty).
+                // The reap belongs in a finally, not in the straight line: an
+                // encode that THROWS mid-capture (a memory exhaustion inside
+                // the deflate, say) would otherwise leave the buffer open on
+                // the stack, where PHP flushes its half-PNG fragment into the
+                // caller's stream at shutdown — a corrupt frame as an output
+                // side effect of an error. Discard always; hand the exception
+                // back unchanged.
                 ob_start();
-                $ok = imagepng($img);
-                $pngBytes = (string) ob_get_clean();
+                try {
+                    $ok = imagepng($img);
+                    $pngBytes = (string) ob_get_contents();
+                } finally {
+                    ob_end_clean();
+                }
             } finally {
                 imagedestroy($img);
             }

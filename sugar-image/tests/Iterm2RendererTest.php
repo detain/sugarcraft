@@ -127,4 +127,38 @@ final class Iterm2RendererTest extends TestCase
 
         $this->assertStringContainsString('inline=1', $out);
     }
+
+    public function testCaptureReapSitsInAFinallyShapePin(): void
+    {
+        // The law is structural. A forced in-process throw cannot be staged
+        // honestly here: memory_limit exhaustion is an UNcatchable fatal
+        // (it would kill the test worker, not exercise the finally), and the
+        // renderer is final with no production seam — so the shape itself is
+        // the pinned contract, house idiom (cf. SI-20's exclusive-create
+        // guard and SI-09's banded-sampler census).
+        $src = (string) file_get_contents((new \ReflectionClass(Iterm2Renderer::class))->getFileName());
+
+        $this->assertStringNotContainsString('ob_get_clean', $src, 'the skippable straight-line reap is dead');
+
+        $start = (int) strpos($src, 'ob_start();');
+        $this->assertNotFalse($start);
+        $window = substr($src, $start, (int) strpos(substr($src, $start), 'ob_end_clean();'));
+        $this->assertStringContainsString('} finally {', $window, 'the reap must run on every exit path, throw included');
+    }
+
+    public function testNoSrcCaptureUsesTheSkippableReapIdiom(): void
+    {
+        // The library-wide census: anywhere src/ opens an output buffer, the
+        // straight-line ob_get_clean() reap that a throw can skip must not
+        // reappear. One walk, exact-token grep, fail loud naming the file.
+        $offenders = [];
+        $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(\dirname(__DIR__) . '/src', \FilesystemIterator::SKIP_DOTS));
+        foreach ($files as $file) {
+            if ($file->isFile() && str_ends_with($file->getFilename(), '.php') && str_contains((string) file_get_contents($file->getPathname()), 'ob_get_clean')) {
+                $offenders[] = $file->getFilename();
+            }
+        }
+
+        $this->assertSame([], $offenders, 'output-buffer captures must reap in a finally (ob_end_clean), never on the throw-skippable straight line');
+    }
 }
