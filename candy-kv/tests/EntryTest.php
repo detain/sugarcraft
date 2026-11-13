@@ -83,6 +83,45 @@ final class EntryTest extends TestCase
 
     // ─── fromRow ─────────────────────────────────────────────────────────────
 
+    public function testFromRowCorruptExpiryRefusesInTheKeyedShape(): void
+    {
+        // candy-kv-066: one corruption, one error class. The date
+        // constructor's bare exception named nothing; a corrupt expiry now
+        // raises the sibling rawValue refusal's shape — a RuntimeException
+        // that can be acted on because it says WHICH entry.
+        $row = self::row(['expires_at' => 'not a moment in time']);
+        try {
+            Entry::fromRow($row);
+            $this->fail('corrupt expiry must refuse');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString("Entry 'row-key' does not hold a valid expiry date", $e->getMessage());
+            $this->assertStringContainsString('not a moment in time', $e->getMessage());
+            $this->assertInstanceOf(\Exception::class, $e->getPrevious(), 'the date engine\'s reason stays in the chain');
+        }
+    }
+
+    public function testFromRowCorruptCreatedDateRefusesInTheSameShape(): void
+    {
+        $row = self::row(['created' => '###not-a-date###']);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage("Entry 'row-key' does not hold a valid created date");
+        Entry::fromRow($row);
+    }
+
+    /** A complete valid row with named overrides — the fromRow corpus shape. */
+    private static function row(array $overrides = []): array
+    {
+        $now = (new \DateTimeImmutable())->format(\DATE_ATOM);
+        return array_merge([
+            'key' => 'row-key',
+            'value' => 'row-value',
+            'binary' => 0,
+            'created' => $now,
+            'modified' => $now,
+            'expires_at' => null,
+        ], $overrides);
+    }
+
     public function testFromRowWithExpiry(): void
     {
         $now = (new \DateTimeImmutable())->format(\DATE_ATOM);

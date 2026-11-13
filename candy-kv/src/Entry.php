@@ -72,19 +72,60 @@ final class Entry
      * and raw() keep working; a future rewrite of the column happens on
      * Database open.
      *
+     * Every date cell that cannot be read raises the SAME shape as the
+     * sibling corruption (rawValue's base64 refusal): a RuntimeException
+     * naming the key — candy-kv-066. A bare date Exception from the
+     * constructor gave a corruption in a keyed row no key to be named by,
+     * and `get`'s CAST predicate hides such rows while `raw()` walks
+     * straight into them; construction is where both paths meet, so one
+     * wrap covers every accessor.
+     *
      * @param array{key:string,value:string,binary:int,created:string,modified:string,expires_at?:int|string|null} $row
      */
     public static function fromRow(array $row): self
     {
-        $expiresAt = self::parseExpiry($row['expires_at'] ?? null);
         return new self(
             $row['key'],
             $row['value'],
             (bool) $row['binary'],
-            new \DateTimeImmutable($row['created']),
-            new \DateTimeImmutable($row['modified']),
-            $expiresAt,
+            self::dateOrFail('created', $row['key'], $row['created']),
+            self::dateOrFail('modified', $row['key'], $row['modified']),
+            self::expiryOrFail($row['key'], $row['expires_at'] ?? null),
         );
+    }
+
+    /**
+     * Read one mandatory date cell, refusing corruption in the keyed-row
+     * shape: name the entry, never dress corruption up as content.
+     */
+    private static function dateOrFail(string $field, string $key, string $raw): \DateTimeImmutable
+    {
+        try {
+            return new \DateTimeImmutable($raw);
+        } catch (\Exception $e) {
+            throw new \RuntimeException(
+                \sprintf("Entry '%s' does not hold a valid %s date: '%s'.", $key, $field, $raw),
+                0,
+                $e,
+            );
+        }
+    }
+
+    /**
+     * parseExpiry with the same refusal shape (the key is only knowable
+     * here, at the keyed-row boundary).
+     */
+    private static function expiryOrFail(string $key, int|string|null $raw): ?\DateTimeImmutable
+    {
+        try {
+            return self::parseExpiry($raw);
+        } catch (\Exception $e) {
+            throw new \RuntimeException(
+                \sprintf("Entry '%s' does not hold a valid expiry date: '%s'.", $key, (string) $raw),
+                0,
+                $e,
+            );
+        }
     }
 
     /**

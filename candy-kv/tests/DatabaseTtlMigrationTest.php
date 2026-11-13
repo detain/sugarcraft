@@ -287,6 +287,32 @@ final class DatabaseTtlMigrationTest extends TestCase
         $again->close();
     }
 
+    public function testAHandPoisonedCellAtCurrentStampReadsAsKeyedCorruption(): void
+    {
+        // candy-kv-066 through the Database door: with the detection scan
+        // correctly silent at the current stamp (test above), a hand-written
+        // unparseable cell SURVIVES on disk — but every accessor that
+        // constructs the entry must refuse with the keyed RuntimeException,
+        // not a bare date fault that names no entry and not a silent pass.
+        $path = $this->createLegacyDb('poison', [
+            ['key' => 'alive', 'expires' => (new \DateTimeImmutable('+1 hour'))->format(\DATE_ATOM)],
+        ]);
+        $db = new Database($path, 'poison');
+        $prop = new \ReflectionProperty(Database::class, 'db');
+        $prop->setAccessible(true);
+        /** @var \SQLite3 $sqlite */
+        $sqlite = $prop->getValue($db);
+        $sqlite->exec("UPDATE entries SET expires_at = 'unparseable by design' WHERE key = 'alive'");
+
+        try {
+            $db->get('alive');
+            $this->fail('a constructed read of a poisoned cell must refuse, not launder');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString("Entry 'alive' does not hold a valid expiry date", $e->getMessage());
+        }
+        $db->close();
+    }
+
     public function testCasSkipsACellThatChangedUnderTheSnapshot(): void
     {
         // kv-027 belt: the per-rewrite compare-and-set. Drive the exact

@@ -199,8 +199,8 @@ final class CliContractTest extends TestCase
 
         $typo = $this->runKv(['get', 'token@passwrods']);
         $this->assertSame(1, $typo['exit']);
-        $this->assertStringContainsString('database not found: passwrods', $typo['stderr']);
-        $this->assertStringContainsString("did you mean database 'passwords'", $typo['stderr'],
+        $this->assertStringContainsString('Database not found: passwrods', $typo['stderr']);
+        $this->assertStringContainsString("Did you mean database 'passwords'", $typo['stderr'],
             'the typo answer must name the vault that exists, before any key hint');
 
         $typoScopedList = $this->runKv(['list', '@passwrods']);
@@ -216,7 +216,7 @@ final class CliContractTest extends TestCase
 
         $gone = $this->runKv(['delete-db', 'notes']);
         $this->assertSame(1, $gone['exit'], 're-deleting a retired database is a miss, not a second success');
-        $this->assertStringContainsString('database not found', $gone['stderr']);
+        $this->assertStringContainsString('Database not found', $gone['stderr']);
     }
 
     public function testDeleteDatabaseRefusesTheReservedNameThroughTheWriteDoor(): void
@@ -236,7 +236,7 @@ final class CliContractTest extends TestCase
         $run = $this->runKv(['get', 'tken@notes']);
         $this->assertSame(1, $run['exit']);
         $this->assertStringContainsString('did you mean', $run['stderr']);
-        $this->assertStringNotContainsString('database not found', $run['stderr']);
+        $this->assertStringNotContainsString('Database not found', $run['stderr']);
     }
 
     public function testTextForcedNulValueIsRefusedAndBinaryDoorRoundTrips(): void
@@ -753,7 +753,7 @@ final class CliContractTest extends TestCase
     {
         $run = $this->runKv(['get', 'zzz-no-such-thing-xyz']);
         $this->assertSame(1, $run['exit']);
-        $this->assertStringContainsString('key not found: zzz-no-such-thing-xyz', $run['stderr']);
+        $this->assertStringContainsString('Key not found: zzz-no-such-thing-xyz', $run['stderr']);
     }
 
     public function testGetMissSuggestsCloseKey(): void

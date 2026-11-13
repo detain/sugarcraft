@@ -325,7 +325,7 @@ final class YamlDialect
     {
         $raw = \base64_decode($b64, true);
         if ($raw === false) {
-            throw new \RuntimeException(\sprintf("Binary entry '%s' is not valid base64.", $key));
+            throw new \RuntimeException(\sprintf("Binary entry '%s' does not hold valid base64.", $key));
         }
 
         return $raw;

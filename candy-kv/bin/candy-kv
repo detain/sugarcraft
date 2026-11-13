@@ -137,7 +137,7 @@ if (!in_array($argv[1], ['set', 'get', 'list', 'delete', 'list-dbs', 'delete-db'
 // reachable without either: help text is the repair instructions.
 foreach (['sqlite3', 'mbstring'] as $requiredExtension) {
     if (!\extension_loaded($requiredExtension)) {
-        fwrite(STDERR, "candy-kv requires the PHP extension \"{$requiredExtension}\".\n");
+        fwrite(STDERR, "candy-kv: requires the PHP extension \"{$requiredExtension}\".\n");
         exit(1);
     }
 }
