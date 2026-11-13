@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 return [
     'launcher.exec_failed'     => '{bin} çalıştırılamadı',
+    'launcher.transport_not_executable' => 'taşıma ikilisi bulunamadı veya çalıştırılabilir değil: {bin}',
+    'launcher.transport_dropped' => 'candy-ssh-launcher: uç nokta {endpoint}: özel taşıma {legs} öğelerini yok sayar',
     'config.not_found'         => 'wishlist yapılandırması bulunamadı: {path}',
     'config.json_top_level'    => 'wishlist json: üst düzey değer bir dizi olmalıdır',
     'config.json_entry_object' => 'wishlist json: her giriş bir nesne olmalıdır',

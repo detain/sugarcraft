@@ -41,6 +41,14 @@ final class Endpoint
         /** @var list<string> ssh(1) flag letters (`t`, `N`), emitted as `-t`, `-N` */
         public readonly array         $flags = [],
         public readonly ?string       $remoteCommand = null,
+        /**
+         * -027: per-endpoint transport binary (upstream wishlist's `command:`),
+         * replacing the global `--ssh` for this row — the mosh-style lane.
+         * Not an argv token: it becomes `pcntl_exec`'s path argument, judged
+         * by the same exists-and-executable gate that `--ssh` passes, so the
+         * leading-dash option-injection family does not apply to it.
+         */
+        public readonly ?string       $command = null,
     ) {
         self::assertPort($name, $port);
         // -023: README documents `name` as required (non-empty) — mirror the
@@ -179,6 +187,67 @@ final class Endpoint
             $argv[] = $this->remoteCommand;
         }
         return $argv;
+    }
+
+    /**
+     * Build the argv list for a custom transport (-027): binary, the
+     * `-p` port leg when it is not 22, the raw flag lane, then the
+     * destination — nothing else. The ssh-only machinery
+     * (`-i`/`-J`/`-o` legs and the remote-command positional) is left
+     * out because mosh-class transports reject it; {@see
+     * transportIncompatibles()} names what was set but dropped so the
+     * launcher can warn instead of silently trimming. The `flags` lane
+     * rides verbatim by design — the user picked a custom binary
+     * precisely to speak its dialect.
+     *
+     * @return list<string>
+     */
+    public function toTransportArgv(string $binary): array
+    {
+        $argv = [$binary];
+        if ($this->port !== 22) {
+            $argv[] = '-p';
+            $argv[] = (string) $this->port;
+        }
+        foreach ($this->flags as $flag) {
+            if ($flag === '') {
+                continue;
+            }
+            $this->assertNotOption('flag', $flag);
+            $argv[] = '-' . $flag;
+        }
+        $dest = $this->user !== null && $this->user !== ''
+            ? "{$this->user}@{$this->host}"
+            : $this->host;
+        $this->assertNotOption('host', $dest);
+        $argv[] = $dest;
+        return $argv;
+    }
+
+    /**
+     * The fixed field names whose values would be silently lost by
+     * {@see toTransportArgv()} — computed from what is actually set, so
+     * a plain mosh row (`command: /usr/bin/mosh` and nothing else)
+     * carries no warning debt.
+     *
+     * @return list<string>
+     */
+    public function transportIncompatibles(): array
+    {
+        $dropped = [];
+        if ($this->identityFiles !== []) {
+            $dropped[] = 'identityFiles';
+        }
+        if ($this->proxyJump !== null && $this->proxyJump !== '') {
+            $dropped[] = 'proxyJump';
+        }
+        if ($this->options !== []) {
+            $dropped[] = 'options';
+        }
+        if ($this->remoteCommand !== null && $this->remoteCommand !== '') {
+            $dropped[] = 'remoteCommand';
+        }
+        return $dropped;
     }
 
     /**
@@ -329,5 +398,11 @@ final class Endpoint
     {
         // Null is valid here (plain interactive session, no command positional).
         return $this->mutate(['remoteCommand' => $remoteCommand]);
+    }
+
+    public function withCommand(?string $command): self
+    {
+        // -027: null restores the global ssh binary for this row.
+        return $this->mutate(['command' => $command]);
     }
 }

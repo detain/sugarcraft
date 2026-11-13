@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 return [
     'launcher.exec_failed'     => 'wykonanie {bin} nie powiodło się',
+    'launcher.transport_not_executable' => 'binarny plik transportu nie znaleziony lub nie jest wykonywalny: {bin}',
+    'launcher.transport_dropped' => 'candy-ssh-launcher: punkt końcowy {endpoint}: własny transport ignoruje {legs}',
     'config.not_found'         => 'Nie znaleziono konfiguracji wishlist: {path}',
     'config.json_top_level'    => 'wishlist json: wartość najwyższego poziomu musi być tablicą',
     'config.json_entry_object' => 'wishlist json: każdy wpis musi być obiektem',

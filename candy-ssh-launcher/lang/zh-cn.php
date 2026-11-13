@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 return [
     'launcher.exec_failed'     => '执行 {bin} 失败',
+    'launcher.transport_not_executable' => '未找到传输程序或不可执行：{bin}',
+    'launcher.transport_dropped' => 'candy-ssh-launcher：端点 {endpoint}：自定义传输将忽略 {legs}',
     'config.not_found'         => '未找到 wishlist 配置：{path}',
     'config.json_top_level'    => 'wishlist json：顶层值必须是数组',
     'config.json_entry_object' => 'wishlist json：每个条目必须是对象',

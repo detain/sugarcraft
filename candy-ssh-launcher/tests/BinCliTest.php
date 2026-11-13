@@ -952,4 +952,131 @@ final class BinCliTest extends TestCase
     {
         return addcslashes(substr($bytes, -600), "\0..\37\177");
     }
+
+    // -------------------------------------------------------------------------
+    // -027: by-name connect + per-endpoint transport
+    // -------------------------------------------------------------------------
+
+    public function testExactNameDispatchesWithoutATerminal(): void
+    {
+        $cfg = $this->writeFixture(implode("\n", [
+            '- name: prod',
+            '  host: p.test',
+            '  port: 2200',
+            '  user: ops',
+            '- name: box',
+            '  host: b.test',
+        ]) . "\n");
+
+        // runBin drives the process with pipes — pre -027 this shape died on
+        // the terminal gate; the exact-name lane must never need a terminal.
+        [$code, $out, $err] = $this->runBin(['--config', $cfg, '--ssh', '/bin/echo', 'prod']);
+
+        $this->assertSame(0, $code, 'stdout: ' . $out . ' stderr: ' . $err);
+        $this->assertStringContainsString('ops@p.test', $out, 'echo proves the dispatched destination');
+        $this->assertStringContainsString('-p 2200', $out, 'the port leg rides');
+        $this->assertStringNotContainsString('b.test', $out, 'the unchosen endpoint must not appear');
+    }
+
+    public function testSecondBareTokenIsRefusedAsAnUnknownArgument(): void
+    {
+        $cfg = $this->writeFixture("- name: prod\n  host: p.test\n");
+        [$code, $out, $err] = $this->runBin(['--config', $cfg, 'prod', 'box']);
+
+        $this->assertSame(2, $code, 'stdout: ' . $out . ' stderr: ' . $err);
+        $this->assertStringContainsString('unknown arg', $err);
+        $this->assertStringContainsString('box', $err, 'the refusal names the surplus token');
+    }
+
+    public function testPositionalAfterTheTerminatorStaysIgnored(): void
+    {
+        // -027 kept `--` a terminator, not a positional introducer: the
+        // documented contract (end of options, remainder unread) holds.
+        $cfg = $this->writeFixture("- name: prod\n  host: p.test\n");
+        [$code, $out, $err] = $this->runBin(['--config', $cfg, '--ssh', '/bin/true', '--', 'prod']);
+
+        $this->assertSame(2, $code, 'stdout: ' . $out . ' stderr: ' . $err);
+        $this->assertStringContainsString('interactive terminal', $err, 'the picker path, not the name lane');
+    }
+
+    public function testAmbiguousNameOpensThePickerFilteredToTheMatches(): void
+    {
+        $cfg = $this->writeFixture(implode("\n", [
+            '- name: prod',
+            '  host: p1.test',
+            '- name: prod',
+            '  host: p2.test',
+            '- name: other',
+            '  host: o.test',
+        ]) . "\n");
+
+        // Esc cancels; the row list seen BEFORE cancel proves which pool
+        // opened: the full config has three rows, so an absent `other` row
+        // can only be the -027 pre-filter at work (the count row is
+        // filter-state-only and stays hidden on an empty query).
+        [$code2, $output2] = $this->runUnderPty(['--config', $cfg, '--ssh', '/bin/echo', 'prod'], selectKey: "\x1b");
+        $this->assertSame(130, $code2, 'pty output: ' . $this->printable($output2));
+        $this->assertStringContainsString('p1.test', $output2);
+        $this->assertStringContainsString('p2.test', $output2);
+        $this->assertStringNotContainsString('o.test', $output2, 'ambiguous name must pre-filter to the two matches');
+    }
+
+    public function testUnknownNameFallsBackToTheFullPicker(): void
+    {
+        $cfg = $this->writeFixture(implode("\n", [
+            '- name: prod',
+            '  host: p1.test',
+            '- name: other',
+            '  host: o.test',
+        ]) . "\n");
+
+        [$code, $output] = $this->runUnderPty(['--config', $cfg, '--ssh', '/bin/echo', 'nope'], selectKey: "\x1b");
+
+        $this->assertSame(130, $code, 'pty output: ' . $this->printable($output));
+        $this->assertStringContainsString('p1.test', $output);
+        $this->assertStringContainsString('o.test', $output, 'a typo name must not pre-filter to nothing');
+    }
+
+    public function testCustomTransportWinsOverTheSshBinary(): void
+    {
+        $cfg = $this->writeFixture(implode("\n", [
+            '- name: mob',
+            '  host: m.test',
+            '  port: 6000',
+            '  user: ops',
+            '  command: /bin/echo',
+            '  identityFiles:',
+            '    - /tmp/id_ed25519',
+            '  options:',
+            '    - "ServerAliveInterval=30"',
+        ]) . "\n");
+
+        // --ssh /bin/false: if the global binary won, exec fails loudly or
+        // prints nothing; echo output proves the TRANSPORT ran instead.
+        [$code, $out, $err] = $this->runBin(['--config', $cfg, '--ssh', '/bin/false', 'mob']);
+
+        $this->assertSame(0, $code, 'stdout: ' . $out . ' stderr: ' . $err);
+        $this->assertStringContainsString('ops@m.test', $out);
+        $this->assertStringContainsString('-p 6000', $out, 'the port leg survives the transport subset');
+        $this->assertStringNotContainsString('-i', $out, 'identityFiles must not reach a mosh-class argv');
+        $this->assertStringNotContainsString('-o', $out, 'options must not reach a mosh-class argv');
+        $this->assertStringContainsString('the custom transport ignores identityFiles, options', $err,
+            'every dropped leg is announced, never silently trimmed');
+    }
+
+    public function testCustomTransportNonExecutableRefusedByName(): void
+    {
+        // A plain 0644 fixture file exists and is NOT executable — exactly
+        // the gate's refusal shape, without depending on host paths.
+        $bad = $this->makeTempDir('sshl27') . '/not-an-elf';
+        file_put_contents($bad, "data\n");
+        chmod($bad, 0644);
+        $cfg = $this->writeFixture("- name: mob\n  host: m.test\n  command: $bad\n");
+
+        [$code, $out, $err] = $this->runBin(['--config', $cfg, '--ssh', '/bin/echo', 'mob']);
+
+        $this->assertSame(3, $code, 'stdout: ' . $out . ' stderr: ' . $err);
+        $this->assertStringContainsString($bad, $err, 'the refusal names the vetted path');
+        $this->assertStringContainsString('not executable', $err);
+    }
 }

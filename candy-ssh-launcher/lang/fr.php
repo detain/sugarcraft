@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 return [
     'launcher.exec_failed'     => 'échec de l\'exécution de {bin}',
+    'launcher.transport_not_executable' => 'binaire de transport introuvable ou non exécutable : {bin}',
+    'launcher.transport_dropped' => 'candy-ssh-launcher: endpoint {endpoint}: le transport personnalisé ignore {legs}',
     'config.not_found'         => 'Configuration wishlist introuvable : {path}',
     'config.json_top_level'    => 'wishlist json : la valeur de premier niveau doit être un tableau',
     'config.json_entry_object' => 'wishlist json : chaque entrée doit être un objet',

@@ -55,7 +55,7 @@ final class Config
      */
     private const KNOWN_FIELDS = [
         'name', 'host', 'port', 'user', 'description', 'options',
-        'identityFiles', 'proxyJump', 'flags', 'remoteCommand',
+        'identityFiles', 'proxyJump', 'flags', 'remoteCommand', 'command',
     ];
 
     /**
@@ -80,7 +80,8 @@ final class Config
      * (canonical wins when both are present): `proxy_jump`/`identity_files`
      * are the upstream array spellings (-004's migration footgun),
      * `identity_file`/`identityFile` the historically accepted singulars,
-     * `remote_command` the ssh-config-ish snake of `remoteCommand` (-007).
+     * `remote_command` the ssh-config-ish snake of `remoteCommand` (-007),
+     * `transport` the readable synonym of `command` (-027, the custom-transport lane).
      *
      * @var array<string,string>
      */
@@ -90,6 +91,7 @@ final class Config
         'identityFile'   => 'identityFiles',
         'proxy_jump'     => 'proxyJump',
         'remote_command' => 'remoteCommand',
+        'transport'      => 'command',
     ];
 
     /**
@@ -607,6 +609,15 @@ final class Config
         if ($remoteCommand !== null) {
             self::assertScalar('remoteCommand', $remoteCommand);
         }
+        // -027: the custom-transport binary. Scalar-only (a list would cast
+        // to "Array" in the exec path); `transport` is the accepted synonym
+        // behind the canonical key.
+        $command = isset($row['command']) && $row['command'] !== null
+            ? $row['command']
+            : ($row['transport'] ?? null);
+        if ($command !== null) {
+            self::assertScalar('command', $command);
+        }
         $identityFiles = [];
         // F-4: a leading ~ on an identity path expands here, against $HOME
         // (passwd fallback, loud refusal) — the same semantics the ssh_config
@@ -642,6 +653,7 @@ final class Config
             options:      $opts,
             flags:        $flags,
             remoteCommand: $remoteCommand !== null ? (string) $remoteCommand : null,
+            command:      $command !== null ? (string) $command : null,
         );
     }
 

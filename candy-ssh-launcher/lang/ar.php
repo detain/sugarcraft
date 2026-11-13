@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 return [
     'launcher.exec_failed'     => "فشل تنفيذ \u{2066}{bin}\u{2069}",
+    'launcher.transport_not_executable' => "ثنائي النقل غير موجود أو غير قابل للتنفيذ: \u{2066}{bin}\u{2069}",
+    'launcher.transport_dropped' => "candy-ssh-launcher: نقطة النهاية \u{2066}{endpoint}\u{2069}: النقل المخصص يتجاهل {legs}",
     'config.not_found'         => "تكوين wishlist غير موجود: \u{2066}{path}\u{2069}",
     'config.json_top_level'    => 'wishlist json: القيمة عالية المستوى يجب أن تكون مصفوفة',
     'config.json_entry_object' => 'wishlist json: كل إدخال يجب أن يكون كائنًا',

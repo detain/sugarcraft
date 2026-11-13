@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 return [
     'launcher.exec_failed'     => 'spuštění {bin} selhalo',
+    'launcher.transport_not_executable' => 'binární soubor transportu nenalezen nebo není spustitelný: {bin}',
+    'launcher.transport_dropped' => 'candy-ssh-launcher: endpoint {endpoint}: vlastní transport ignoruje {legs}',
     'config.not_found'         => 'Konfigurace wishlist nenalezena: {path}',
     'config.json_top_level'    => 'wishlist json: hodnota nejvyšší úrovně musí být pole',
     'config.json_entry_object' => 'wishlist json: každá položka musí být objekt',

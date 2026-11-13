@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 return [
     'launcher.exec_failed'     => '{bin} 실행 실패',
+    'launcher.transport_not_executable' => '트랜스포트 바이너리를 찾을 수 없거나 실행 가능하지 않습니다: {bin}',
+    'launcher.transport_dropped' => 'candy-ssh-launcher: 엔드포인트 {endpoint}: 사용자 지정 트랜스포트가 {legs}을(를) 무시합니다',
     'config.not_found'         => 'wishlist 구성을 찾을 수 없음: {path}',
     'config.json_top_level'    => 'wishlist json: 최상위 값은 배열이어야 합니다',
     'config.json_entry_object' => 'wishlist json: 각 항목은 객체여야 합니다',

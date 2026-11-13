@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 return [
     'launcher.exec_failed'     => 'uitvoeren van {bin} mislukt',
+    'launcher.transport_not_executable' => 'transportbinairbestand niet gevonden of niet uitvoerbaar: {bin}',
+    'launcher.transport_dropped' => 'candy-ssh-launcher: endpoint {endpoint}: het eigen transport negeert {legs}',
     'config.not_found'         => 'wishlist-configuratie niet gevonden: {path}',
     'config.json_top_level'    => 'wishlist json: bovenste waarde moet een array zijn',
     'config.json_entry_object' => 'wishlist json: elke entry moet een object zijn',

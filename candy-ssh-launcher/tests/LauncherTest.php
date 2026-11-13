@@ -69,6 +69,104 @@ final class LauncherTest extends TestCase
     }
 
     /**
+     * -027: `command` replaces the ssh binary for one row and the argv
+     * shrinks to the transport-safe subset — no `--` boundary either
+     * (mosh-class binaries do not speak it), identity/proxyJump/options
+     * and the remote command dropped, port and destination kept.
+     */
+    public function testCustomTransportBuildsTheRestrictedArgv(): void
+    {
+        $captured = null;
+        $launcher = new Launcher(function (string $bin, array $args) use (&$captured): void {
+            $captured = ['bin' => $bin, 'args' => $args];
+        });
+        $e = new Endpoint(
+            name: 'mob', host: 'm.test', port: 6000, user: 'ops',
+            identityFiles: ['/tmp/id'], options: ['ServerAliveInterval=30'],
+            remoteCommand: 'uptime', command: '/bin/echo',
+        );
+        $launcher->dispatch($e, '/bin/false'); // global ssh must be ignored
+
+        $this->assertSame('/bin/echo', $captured['bin']);
+        $this->assertSame(['-p', '6000', 'ops@m.test'], $captured['args']);
+    }
+
+    public function testCustomTransportAnnouncesEveryDroppedLeg(): void
+    {
+        $capture = fopen('php://memory', 'w+');
+        $this->assertIsResource($capture);
+        $launcher = new Launcher(function (string $bin, array $args): void {
+        });
+        $launcher->setWarningStream($capture);
+        $e = new Endpoint(
+            name: 'mob', host: 'm.test', proxyJump: 'j.test',
+            command: '/bin/echo',
+        );
+        $launcher->dispatch($e, '/usr/bin/ssh');
+
+        rewind($capture);
+        $notice = (string) stream_get_contents($capture);
+        $this->assertStringContainsString('the custom transport ignores proxyJump', $notice);
+        $this->assertStringContainsString('mob', $notice, 'the notice names the endpoint');
+    }
+
+    public function testPlainSshEndpointCarriesNoTransportNotice(): void
+    {
+        $capture = fopen('php://memory', 'w+');
+        $this->assertIsResource($capture);
+        $launcher = new Launcher(function (string $bin, array $args): void {
+        });
+        $launcher->setWarningStream($capture);
+        $launcher->dispatch(new Endpoint(name: 'a', host: 'a.test'), '/bin/echo');
+
+        rewind($capture);
+        $this->assertSame('', (string) stream_get_contents($capture), 'nothing was trimmed, nothing may be announced');
+    }
+
+    /**
+     * -027: the transport binary passes the same exists-and-executable
+     * gate as --ssh — an existing but non-executable file is refused by
+     * name (nothing is exec'd), instead of surfacing as an ENOEXEC-style
+     * failure from pcntl_exec.
+     */
+    public function testCustomTransportNonExecutableThrowsByName(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'sshl27-') . '.bin';
+        file_put_contents($path, "data\n");
+        chmod($path, 0644);
+        try {
+            $launcher = new Launcher(function (string $bin, array $args): void {
+                $this->fail('the executor must not run for an unvetted transport: ' . $bin);
+            });
+            $e = new Endpoint(name: 'mob', host: 'm.test', command: $path);
+            $thrown = null;
+            try {
+                $launcher->dispatch($e, '/bin/echo');
+            } catch (\RuntimeException $ex) {
+                $thrown = $ex;
+            }
+            $this->assertNotNull($thrown, 'a non-executable transport must throw, never exec');
+            $this->assertStringContainsString($path, $thrown->getMessage(), 'the refusal names the path');
+            $this->assertStringContainsString('not executable', $thrown->getMessage());
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testEmptyCommandStringBehavesAsUnset(): void
+    {
+        $captured = null;
+        $launcher = new Launcher(function (string $bin, array $args) use (&$captured): void {
+            $captured = $bin;
+        });
+        $e = new Endpoint(name: 'a', host: 'a.test', command: '');
+
+        $launcher->dispatch($e, '/bin/echo');
+
+        $this->assertSame('/bin/echo', $captured, 'an empty command is config noise, not a transport');
+    }
+
+    /**
      * -080: the default executor must splice the recorded OS reason
      * into the exec_failed throw instead of losing it to a vanished
      * E_WARNING. A nonexistent binary is deterministic ENOENT.

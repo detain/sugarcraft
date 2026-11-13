@@ -89,19 +89,20 @@ If step 2 exits `1` with a "no config found" refusal, the launcher never saw the
 ## Usage
 
 ```
-candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list] [-h|--help] [-v|--version]
+candy-ssh-launcher [--config <path>] [--ssh <ssh-binary>] [--list] [-h|--help] [-v|--version] [--] [endpoint]
 ```
 
 | Argument | Meaning |
 |----------|---------|
+| `endpoint` (positional) | Connect by name. Exactly one endpoint with that name dispatches it directly — no terminal needed, all dispatch guards honored. An ambiguous name (duplicates are loaded with a warning, not refused) opens the picker pre-filtered to the matches; an unknown name opens the full picker. A second bare token is refused as an unknown argument. |
 | `--config <path>` | Read this config file and skip the search. Accepts `--config <path>` and `--config=<path>`; a missing value is refused. |
-| `--ssh <path>` | ssh binary to exec. Must be an **existing executable path** — `pcntl_exec` performs no `$PATH` search, so a bare `ssh` is rejected; relative paths resolve against the current directory. Accepts `--ssh <path>` and `--ssh=<path>`. Without the flag the binary resolves through the environment variable `SSH_LAUNCHER_SSH`, then the candidate list (`/usr/bin/ssh`, `/run/current-system/sw/bin/ssh`, `/opt/homebrew/bin/ssh` — first existing executable wins), then the default `/usr/bin/ssh`. |
+| `--ssh <path>` | ssh binary to exec. Must be an **existing executable path** — `pcntl_exec` performs no `$PATH` search, so a bare `ssh` is rejected; relative paths resolve against the current directory. Accepts `--ssh <path>` and `--ssh=<path>`. Without the flag the binary resolves through the environment variable `SSH_LAUNCHER_SSH`, then the candidate list (`/usr/bin/ssh`, `/run/current-system/sw/bin/ssh`, `/opt/homebrew/bin/ssh` — first existing executable wins), then the default `/usr/bin/ssh`. A config row may override this for itself with `command:` (see the field table). |
 | `--list` | Print the resolved endpoints to stdout as TAB-joined `name`, `host:port`, `user` columns (an unset or empty user prints as a literal `-`; a name that occurs more than once is suffixed with its 1-based config index, `dup#1`/`dup#3`), and exit `0` — no terminal, no ssh, no picker, and no `--ssh` executability check. Control and line bytes in every column are folded to spaces, so the output is exactly one physical row per endpoint and safe to `awk -F'\t'`. |
 | `-h`, `--help` | Print the usage line and exit `0`. |
 | `-v`, `--version` | Print `candy-ssh-launcher <version>` and exit `0` — reads no config, touches no terminal. |
-| `--` | End of options — remaining arguments are ignored (there are no positional arguments). |
+| `--` | End of options — remaining arguments are ignored (the terminator ends option parsing; it does not introduce the positional). |
 
-Unrecognized flags **or arguments**, and options given without their value, exit `2` and name the offending argument. Flags that take no value ignore a glued `=value` portion: `--list=x` behaves as `--list`, and `-h=junk` prints help.
+Unrecognized flags, a second bare positional, and options given without their value exit `2` and name the offending argument. Flags that take no value ignore a glued `=value` portion: `--list=x` behaves as `--list`, and `-h=junk` prints help.
 
 ### Exit codes
 
@@ -110,7 +111,7 @@ Unrecognized flags **or arguments**, and options given without their value, exit
 | `0` | `--help` / `-h` or `--version` / `-v` printed, or `--list` succeeded |
 | `1` | • no config file found • config unreadable or invalid • config valid but with **no endpoints**, on the picker path (`--list` on such a config prints nothing and exits `0`) • the composer autoload is missing • `--ssh` names a path that is not an executable file — except that `--list` skips this last check |
 | `2` | Unknown flag **or argument**, or `--config`/`--ssh` given without a value |
-| `3` | The selected endpoint was refused at dispatch time (a guard-rejected field: a leading-dash `host`, `user`, `proxyJump`, `options` entry, `identityFiles` item, `flags` item, or `remoteCommand`) or the ssh binary could not be exec'd; stderr names the sanitized reason |
+| `3` | The selected endpoint was refused at dispatch time (a guard-rejected field: a leading-dash `host`, `user`, `proxyJump`, `options` entry, `identityFiles` item, `flags` item, or `remoteCommand`), or a `command:` transport that is not an executable file, or the binary could not be exec'd; stderr names the sanitized reason |
 | `130` | Quit from the picker (Esc / Ctrl+C — SIGINT restores the terminal before exiting; stdin EOF at the picker reads as quit too, the typical cause being a terminal that died, while a container started without `-i` never reaches the picker — the exit-`2` non-TTY gate answers it) |
 
 ### Finding your config
@@ -169,6 +170,7 @@ Flat list of endpoint objects (YAML subset or JSON). The parser is chosen by the
 | `options` | list, optional | Passed verbatim as repeated `-o Key=Value`; a bare scalar is accepted as a one-item list; an empty item is refused at dispatch. |
 | `flags` | list, optional | Extra ssh(1) flag letters (`-A`, `-t`, `-T`, `-N`, `-f`, `-X` are not `-o`-able): pass `t`, `N` — the dash is added at argv build, before the destination. An entry that itself starts with a dash is refused at dispatch (the option-injection guard), and an empty item is skipped. |
 | `remoteCommand` | string, optional; alias `remote_command` | The ssh(1) command positional: appended after the destination per the `ssh [options] destination [command]` synopsis, so tunnel/kubectl/tmux-attach endpoints are expressible. Leading-dash values are refused at dispatch; an empty value behaves as no command. |
+| `command` | string, optional; alias `transport` | Custom transport binary for this row (upstream's mosh lane, generalized): replaces `--ssh` when this endpoint dispatches. It must be an **existing executable path** — the same gate `--ssh` passes — and it is refused by name at dispatch (exit `3`) otherwise; it never rides argv, so the leading-dash guard family does not apply to it. The transport argv is the restricted ssh-shaped subset: binary, `-p <port>` when not 22, the raw `flags` lane, destination — `identityFiles`, `proxyJump`, `options` and `remoteCommand` are not mosh-class speak, so if the row sets any of them they are dropped **with one stderr line naming the endpoint and every dropped field** — never trimmed in silence. An empty value behaves as no command. |
 
 Limits of the embedded YAML reader: flat entries only, and a nested list is written one `- item` line at a time — any number of items accumulates, but each must be a scalar. An optional field can be left out entirely or written `key: null` / `key: ~` — both read as omitted; a bare `key:` is never an omission: on a list field it opens the `- item` block, and on a scalar field it is refused by name as a non-scalar. **Inline flow collections** (`options: [a, b]`) are refused with a message that names the fix — write the nested list form; block mappings indented under a list field are refused by name, field and line. A `#` after whitespace starts a comment, and stripping is quote-aware: outside quotes only, so `description: "fix #1"` keeps its hash. Files saved **with a UTF-8 BOM load fine** (the mark is stripped at the read); **UTF-16 files are refused by name** with a re-save-as-UTF-8 hint — the reader never guesses an encoding. Booleans are refused at any string field rather than reaching ssh as `"1"` — and the boolean set is YAML 1.2 core only (`true/True/TRUE`, `false/False/FALSE`): `yes`, `no`, `on`, `off` are ordinary strings, so a host genuinely named `yes` loads as `yes`.
 
@@ -242,6 +244,8 @@ Import surprises worth knowing:
 **Your config file is trusted input** — exactly like `~/.ssh/config` itself. Whatever a config declares, the launcher passes to ssh: `options:` entries become real `-o` settings verbatim, and OpenSSH options such as `ProxyCommand` / `LocalCommand` **execute arbitrary commands at connect time**. Keep configs (and `~/.ssh/config`) owned by you with `0600`/`0644` permissions and do not accept endpoint files from strangers; see the fleet-wide [trust boundary](../docs/TRUST-BOUNDARY.md). Within that posture, the host-key-trust-destruction family is still named before launch: `-o` requests for `StrictHostKeyChecking` (no/never/accept-new), `UserKnownHostsFile`, `GlobalKnownHostsFile`, `LogLevel` (quiet/error/fatal), `IdentityAgent`, or `CertificateFile` print one stderr line per hit describing what it costs, so a MITM payload inside an otherwise-legit config never looks like a plain login (notice only — lab configs legitimately pin `StrictHostKeyChecking=no`).
 
 Untrusted bytes are fenced where they only reach the *display* path: every picker row, the filter echo, and the `--list` columns pass through the canonical sanitizer (`Sanitize::untrusted()` plus its display policy `untrustedForDisplay()`) — escape sequences, C0 controls and encoded-C1 shims are removed, invisible formatting is marked as a visible sentinel, and CR/LF/TAB are folded to spaces so no field can forge an extra row. Fields that reach ssh as arguments are REFUSED, not stripped: a leading-dash `host`, `user`, `proxyJump`, `options` entry, `identityFiles` item, `flags` item, or `remoteCommand` aborts with a named error (`Endpoint::assertNotOption family`) rather than being altered into a safe shape — every argv value passes the same guard, identity slots included (the old `-i` exemption assumed an OpenSSH-only contract; dropbear/busybox re-parse a leading-dash value after `-i` as an option).
+
+A row's `command:` transport is the one field that never joins argv as a value — it *is* the exec path, and it must pass the same exists-and-executable gate as `--ssh` before anything runs (refusal by name, exit `3`). The ssh-only legs it forces the launcher to drop are announced on stderr with the endpoint and field names, so a trimmed argv is never a silent surprise.
 
 ## Internationalization
 

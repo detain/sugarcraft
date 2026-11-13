@@ -324,6 +324,50 @@ final class ConfigTest extends TestCase
         }
     }
 
+    // -027: `command` ingest (canonical key, `transport` synonym behind
+    // it, scalars only — the same shapes as every other ssh-ish field).
+    public function testCommandFieldIngest(): void
+    {
+        $endpoints = Config::parse("- name: mob\n  host: m.test\n  command: /usr/bin/mosh\n", 'wishlist.yml');
+        $this->assertSame('/usr/bin/mosh', $endpoints[0]->command);
+    }
+
+    public function testCommandNullWhenUnset(): void
+    {
+        $endpoints = Config::parse("- name: a\n  host: a.test\n", 'wishlist.yml');
+        $this->assertNull($endpoints[0]->command);
+    }
+
+    public function testTransportIsTheDocumentedCommandSynonym(): void
+    {
+        $endpoints = Config::parse("- name: mob\n  host: m.test\n  transport: /usr/bin/mosh\n", 'wishlist.yml');
+        $this->assertSame('/usr/bin/mosh', $endpoints[0]->command);
+    }
+
+    public function testCanonicalCommandWinsBehindTheAliasLadder(): void
+    {
+        $endpoints = Config::parse(
+            "- name: mob\n  host: m.test\n  command: /usr/bin/mosh\n  transport: /usr/bin/ssh\n",
+            'wishlist.yml',
+        );
+        $this->assertSame('/usr/bin/mosh', $endpoints[0]->command);
+    }
+
+    public function testCommandMustBeScalar(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('command');
+        Config::parse("- name: mob\n  host: m.test\n  command:\n    - /usr/bin/mosh\n", 'wishlist.yml');
+    }
+
+    public function testCommandMustBeScalarNotBool(): void
+    {
+        // `command: true` — the upstream mosh-flag habit — must not become
+        // the literal host binary "1" (the assertScalar bool law).
+        $this->expectException(\InvalidArgumentException::class);
+        Config::parse("- name: mob\n  host: m.test\n  command: true\n", 'wishlist.yml');
+    }
+
     public function testLoadMissingFileThrows(): void
     {
         $this->expectException(\RuntimeException::class);

@@ -274,4 +274,48 @@ final class EndpointArgvSafetyTest extends TestCase
         ]);
         $this->assertSame([], $e->unsafeOptions());
     }
+
+    // -027: the transport lane keeps the option-injection guard on the
+    // destination and carries only the subset a mosh-class binary speaks.
+    public function testTransportArgvCarriesFlagsAndDestinationOnly(): void
+    {
+        $e = new Endpoint(
+            name: 'mob', host: 'm.test', port: 6000, user: 'ops',
+            flags: ['t'], command: '/usr/bin/mosh',
+        );
+        $this->assertSame(
+            ['/usr/bin/mosh', '-p', '6000', '-t', 'ops@m.test'],
+            $e->toTransportArgv('/usr/bin/mosh'),
+        );
+    }
+
+    public function testTransportArgvOmitsDefaultPortAndEmptyFlags(): void
+    {
+        $e = new Endpoint(name: 'mob', host: 'm.test', flags: [''], command: '/usr/bin/mosh');
+        $this->assertSame(['/usr/bin/mosh', 'm.test'], $e->toTransportArgv('/usr/bin/mosh'));
+    }
+
+    public function testLeadingDashHostIsRefusedOnTheTransportLaneToo(): void
+    {
+        $e = new Endpoint(name: 'mob', host: '-oProxyCommand=evil', command: '/usr/bin/mosh');
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('field [host]');
+        $e->toTransportArgv('/usr/bin/mosh');
+    }
+
+    public function testTransportIncompatiblesListOnlyWhatIsSet(): void
+    {
+        $plain = new Endpoint(name: 'a', host: 'a.test');
+        $this->assertSame([], $plain->transportIncompatibles());
+
+        $full = new Endpoint(
+            name: 'a', host: 'a.test', proxyJump: 'j.test', options: ['X=y'],
+            identityFiles: ['~/.ssh/id'], remoteCommand: 'uptime',
+        );
+        $this->assertSame(
+            ['identityFiles', 'proxyJump', 'options', 'remoteCommand'],
+            $full->transportIncompatibles(),
+            'the notice lists fields in fixed documented order',
+        );
+    }
 }

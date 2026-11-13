@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 return [
     'launcher.exec_failed'     => 'не удалось выполнить {bin}',
+    'launcher.transport_not_executable' => 'двоичный файл транспорта не найден или не исполняемый: {bin}',
+    'launcher.transport_dropped' => 'candy-ssh-launcher: эндпоинт {endpoint}: собственный транспорт игнорирует {legs}',
     'config.not_found'         => 'Конфигурация wishlist не найдена: {path}',
     'config.json_top_level'    => 'wishlist json: значение верхнего уровня должно быть массивом',
     'config.json_entry_object' => 'wishlist json: каждая запись должна быть объектом',

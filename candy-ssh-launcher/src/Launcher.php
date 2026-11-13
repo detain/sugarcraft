@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\SshLauncher;
 
+use SugarCraft\Core\Util\Sanitize;
+
 /**
  * Replaces the current PHP process with `ssh(1)` connecting to the
  * chosen {@see Endpoint}. Uses `pcntl_exec()` so file descriptors,
@@ -72,6 +74,22 @@ final class Launcher
     private $executor;
 
     /**
+     * -027: transport-drop notices ride here (STDERR unless a test swaps
+     * in a capture handle — the house Config::setWarningStream pattern,
+     * warnings must never need a call-site opt-in).
+     * @var resource|null
+     */
+    private $warningStream = null;
+
+    /**
+     * @param resource $stream
+     */
+    public function setWarningStream($stream): void
+    {
+        $this->warningStream = $stream;
+    }
+
+    /**
      * @param (callable(string,list<string>): void)|null $executor
      */
     public function __construct(?callable $executor = null)
@@ -104,10 +122,39 @@ final class Launcher
      * Dispatch into the chosen endpoint. On success, the PHP
      * process is replaced and this method does not return; on
      * failure the executor throws.
+     *
+     * -027: an endpoint carrying `command` replaces the ssh binary for
+     * itself — same exists-and-executable gate `--ssh` passes at the
+     * CLI edge (a refusal throws by name instead of handing `pcntl_exec`
+     * a path nobody vetted), and every ssh-only leg it would have to
+     * drop (`-i`/`-J`/`-o`/remote command) gets one stderr line naming
+     * the endpoint and the dropped fields, so a silently trimmed argv
+     * never reaches the wire.
      */
     public function dispatch(Endpoint $e, string $sshBinary = self::DEFAULT_SSH): void
     {
-        $argv = $e->toSshArgv($sshBinary);
+        $command = $e->command !== null && $e->command !== '' ? $e->command : null;
+        if ($command === null) {
+            $argv = $e->toSshArgv($sshBinary);
+            ($this->executor)($argv[0], array_slice($argv, 1));
+            return;
+        }
+        if (!is_file($command) || !is_executable($command)) {
+            throw new \RuntimeException(
+                Lang::t('launcher.transport_not_executable', ['bin' => $command])
+            );
+        }
+        $dropped = $e->transportIncompatibles();
+        if ($dropped !== []) {
+            fwrite(
+                $this->warningStream ?? STDERR,
+                Lang::t('launcher.transport_dropped', [
+                    'endpoint' => Sanitize::untrustedForDisplay($e->name),
+                    'legs'     => implode(', ', $dropped),
+                ]) . "\n",
+            );
+        }
+        $argv = $e->toTransportArgv($command);
         ($this->executor)($argv[0], array_slice($argv, 1));
     }
 }
