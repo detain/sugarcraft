@@ -8,9 +8,12 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Kv\Support\Version;
 
 /**
- * The phar packaging contract, pinned WITHOUT building an archive inside the
- * suite (a real build seals the whole vendor tree — the smoke bar runs in
- * tools/build-phar.php by hand). Three laws:
+ * The phar packaging contract, pinned WITHOUT sealing the real vendor tree
+ * inside the suite (a full build freezes the whole vendor/ — the smoke bar
+ * runs in tools/build-phar.php by hand). The renamed-download law is the one
+ * exception: it is proved with a MINIMAL fixture archive (real stub bytes +
+ * a one-line vendor/autoload.php) sealed into a temp dir, which needs no
+ * Guard-2-clean tree. Three laws plus that door:
  *
  *  1. bin/candy-kv is a VALID STUB: the build script refuses any other shape,
  *     and the archive guard candidate is what makes `php candy-kv.phar` find
@@ -51,6 +54,98 @@ final class PharBuildScriptTest extends TestCase
         self::assertSame(2, $exit, 'an unknown option must refuse with exit 2, got: ' . $err);
         self::assertStringContainsString('unrecognized option --nope', $err);
         self::assertSame('', $out, 'refusals are stderr-only; stdout stays clean');
+    }
+
+    public function testTheRenamedPharDoorIsPinnedOnBothSides(): void
+    {
+        // The renamed-download identity (README quick start `wget … -O candy-kv`)
+        // boots through Phar::mapPhar(); the guard literal and the build's
+        // archive alias are a PAIR — candy-code C-SES-6.a measures that one
+        // without the other is dead code, so both sides pin here.
+        $bin = file_get_contents(__DIR__ . '/../bin/candy-kv');
+        self::assertIsString($bin);
+        self::assertStringContainsString("\\Phar::mapPhar('candy-kv.phar')", $bin);
+
+        $build = file_get_contents(__DIR__ . '/../tools/build-phar.php');
+        self::assertIsString($build);
+        self::assertStringContainsString("new Phar(\$outArg, 0, 'candy-kv.phar')", $build);
+    }
+
+    public function testARenamedArchiveBootsThroughTheMapPharDoor(): void
+    {
+        // Full-vendor builds are skipped inside the suite by design (see the
+        // class docblock), and a repo-wide dirty tree makes the real build's
+        // Guard 2 refuse even a fixture run. The load-bearing byte of a build
+        // for THIS law is the stub — bin/candy-kv verbatim + __HALT_COMPILER
+        // — plus the archive's own vendor/autoload.php, so the fixture seals
+        // exactly those against the real alias and loses the `.phar` suffix,
+        // reproducing the README recipe (measured pre-fix: both invocations
+        // answer "cannot find composer autoload.php" with rc 1).
+        if (!extension_loaded('phar')) {
+            self::markTestSkipped('ext-phar unavailable');
+        }
+
+        $dir = sys_get_temp_dir() . '/kv-renamed-phar-' . bin2hex(random_bytes(6));
+        self::assertTrue(mkdir($dir, 0o700, true), 'fixture dir must be creatable');
+        $repoAutoload = realpath(__DIR__ . '/../vendor/autoload.php');
+        self::assertIsString($repoAutoload, 'sanity: the checkout vendor exists');
+        $archive = $dir . '/candy-kv.phar';
+        try {
+            $gen = $dir . '/gen.php';
+            file_put_contents($gen, implode("\n", [
+                '<' . '?php',
+                '$phar = new Phar($argv[3], 0, "candy-kv.phar");',
+                '$phar->startBuffering();',
+                '$phar->addFromString("vendor/autoload.php", "<" . "?php require " . var_export($argv[2], true) . ";");',
+                '$phar->setStub(file_get_contents($argv[1]) . ' . "'__HALT_COMPILER();'" . ');',
+                '$phar->stopBuffering();',
+                'echo "built\\n";',
+            ]) . "\n");
+
+            [$exit, $out, $err] = self::runPhp(['-d', 'phar.readonly=0', $gen, realpath(__DIR__ . '/../bin/candy-kv'), $repoAutoload, $archive]);
+            self::assertSame(0, $exit, "fixture build must succeed, got: $err$out");
+
+            $bare = $dir . '/candy-kv';
+            self::assertTrue(rename($archive, $bare), 'renaming the archive away from .phar is the whole scenario');
+
+            [$exit, $out] = self::runPhp([$bare, '--version']);
+            self::assertSame(0, $exit, 'php <bare-name> must boot via mapPhar');
+            self::assertStringContainsString('candy-kv', $out);
+
+            if (PHP_OS_FAMILY !== 'Windows') {
+                self::assertTrue(chmod($bare, 0o755), 'fixture must be executable');
+                [$exit, $out, $err] = self::runPhp([$bare, '--version']);
+                self::assertSame(0, $exit, "the shebang exec of a renamed archive must boot, got: $err");
+                self::assertStringContainsString('candy-kv', $out);
+            }
+        } finally {
+            foreach (glob($dir . '/*') ?: [] as $leftover) {
+                @unlink($leftover);
+            }
+            @rmdir($dir);
+        }
+    }
+
+    /**
+     * @param list<string> $args
+     *
+     * @return array{0: int, 1: string, 2: string}
+     */
+    private static function runPhp(array $args): array
+    {
+        $proc = proc_open(
+            [PHP_BINARY, ...$args],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc);
+        fclose($pipes[0]);
+        $out = (string) stream_get_contents($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($proc), $out, $err];
     }
 
     public function testVersionAnswersCurrentOutsideAnArchiveAndNullForUnopenablePaths(): void

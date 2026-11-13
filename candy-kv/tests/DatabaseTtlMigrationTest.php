@@ -241,13 +241,23 @@ final class DatabaseTtlMigrationTest extends TestCase
     {
         $path = $this->tmpDir . '/fresh.db';
         $db = new Database($path, 'fresh');
+        // set() binds time()+ttl at WRITE time; re-reading the clock after the
+        // round-trip would race the second boundary (observed as a one-flake-in-
+        // many suite red). Pin to the integer seconds bracketing the write —
+        // still exact second-precision, still caught by the DATE_ATOM mutation.
+        $before = \time();
         $db->set('t', 'v', false, 3600);
+        $after = \time();
         $db->close();
 
         $db = new Database($path, 'fresh');
         $entry = $db->get('t');
         $this->assertNotNull($entry);
-        $this->assertSame((int) \time() + 3600, $entry->expiresAt?->getTimestamp(), 'expiry lands on the integer second');
+        $this->assertContains(
+            $entry->expiresAt?->getTimestamp(),
+            [$before + 3600, $after + 3600],
+            'expiry lands on the integer second',
+        );
         $db->close();
     }
 

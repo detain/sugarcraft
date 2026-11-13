@@ -26,18 +26,35 @@ namespace SugarCraft\Kv;
     // Guard shape measured on PHP 8.3.6: when `php candy-kv.phar` runs, THIS
     // file is the archive's stub and the process is NOT inside the archive —
     // Phar::running() answers '' there, and a bare '/x.phar/entry' path fails
-    // is_file()/require for every caller. Two identities cover the two phar
-    // shapes: the stub names itself in __FILE__, and a require-from-inside
-    // names the archive in Phar::running(). Both are addressed the only way
-    // that works, as a phar:// URI. When an archive identity exists, the
-    // archive's own vendor is the ONLY root — a stray vendor beside (or
-    // above) a downloaded phar must never boot the app with code from
-    // outside the frozen archive. In every composer-mode checkout both
-    // probes answer nothing and the filesystem candidates are untouched.
+    // is_file()/require for every caller. Three identities cover the three
+    // phar shapes: the stub names itself in __FILE__, a require-from-inside
+    // names the archive in Phar::running(), and a RENAMED download — the
+    // README quick start's `wget … -O candy-kv` — hands PHP an ordinary
+    // script whose bytes seal an archive, invisible to both doors above
+    // because PHP's phar:// layer is extension-gated (is_file of a phar://
+    // URI onto the bare name measures false even in stub context, measured
+    // on 8.3). Phar::mapPhar() is the oracle for that third shape: it loads
+    // the archive sealed inside the running script under the build's alias
+    // (tools/build-phar.php pairs with the literal below), and throws
+    // PharException on every UNSEALED script — a composer checkout's own bin
+    // included — so no pre-gate is needed and the filesystem candidates
+    // stand untouched there. When an archive identity exists, the archive's
+    // own vendor is the ONLY root — a stray vendor beside (or above) a
+    // downloaded phar must never boot the app with code from outside the
+    // frozen archive, renamed or not.
     $candidates = [__DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'];
-    $archive = \Phar::running(false) !== ''
-        ? 'phar://' . \Phar::running(false)
+    $running = \Phar::running(false);
+    $archive = $running !== ''
+        ? 'phar://' . $running
         : (str_ends_with(__FILE__, '.phar') ? 'phar://' . __FILE__ : '');
+    if ($archive === '') {
+        try {
+            \Phar::mapPhar('candy-kv.phar');
+            $archive = 'phar://candy-kv.phar';
+        } catch (\PharException) {
+            // Not a sealed script — the filesystem candidates above stand.
+        }
+    }
     if ($archive !== '') {
         $candidates = [$archive . '/vendor/autoload.php'];
     }
