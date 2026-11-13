@@ -7,7 +7,6 @@ namespace SugarCraft\Charts\Tests\LineChart;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Charts\LineChart\LineChart;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 
 /**
  * candy-top L1: per-point color resolver on LineChart, layered over the
@@ -58,7 +57,7 @@ final class LineChartSeriesColorFnTest extends TestCase
     {
         $out = LineChart::new([], 20, 6)
             ->withDataset('cpu', [10, 15, 20, 80, 90, 95])
-            ->withCanvas(BrailleCanvas::new(80, 24))
+            ->withBraille(true)
             ->withSeriesColorFn(self::heat())
             ->view();
 
@@ -75,7 +74,7 @@ final class LineChartSeriesColorFnTest extends TestCase
     {
         $base = LineChart::new([], 20, 6)
             ->withDataset('cpu', [10, 15, 20, 80, 90, 95])
-            ->withCanvas(BrailleCanvas::new(80, 24));
+            ->withBraille(true);
         $highOnly = static fn(string $d, int $x, float $v): ?Color => $v > 50 ? Color::rgb(255, 0, 0) : null;
 
         $out = $base->withSeriesColorFn($highOnly)->view();
@@ -94,7 +93,7 @@ final class LineChartSeriesColorFnTest extends TestCase
         $cell = LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->withDataset('b', [7, 3, 6, 1])->withFill();
         $this->assertSame($cell->view(), $cell->withSeriesColorFn($nil)->view());
 
-        $braille = $cell->withCanvas(BrailleCanvas::new(80, 24));
+        $braille = $cell->withBraille(true);
         $this->assertSame($braille->view(), $braille->withSeriesColorFn($nil)->view());
     }
 
@@ -143,7 +142,7 @@ final class LineChartSeriesColorFnTest extends TestCase
         // tail-slice to the last 8, so x must run 4..11 — the full-series
         // index, not the 0..7 dot-window index.
         LineChart::new(range(0, 11), 4, 3)
-            ->withCanvas(BrailleCanvas::new(80, 24))
+            ->withBraille(true)
             ->withSeriesColorFn($spy)
             ->view();
 

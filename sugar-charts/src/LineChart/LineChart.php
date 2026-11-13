@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\LineChart;
 use SugarCraft\Charts\Chart\Chart;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\Support\CellGrid;
 use SugarCraft\Charts\MarkLine;
 use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Support\UntrustedText;
@@ -122,7 +123,8 @@ final class LineChart extends Chart
         public readonly ?array $lineStyle = null,
         public readonly array $markLines = [],
         public readonly bool $unicodeConnectors = false,
-        ?object $brailleCanvas = null,
+        ?CellGrid $canvas = null,
+        bool $braille = false,
         ?Theme $theme = null,
         public readonly ?\Closure $seriesColorFn = null,
     ) {
@@ -141,7 +143,8 @@ final class LineChart extends Chart
             legendItems: $legendItems,
             animationProgress: $animationProgress,
             animationDuration: $animationDuration,
-            brailleCanvas: $brailleCanvas,
+            canvas: $canvas,
+            braille: $braille,
             theme: $theme,
         );
 
@@ -542,14 +545,27 @@ final class LineChart extends Chart
     }
 
     /**
-     * Render the series as braille dot-matrix (2x horizontal, 4x vertical
-     * resolution) instead of one cell per sample. The canvas object is not
-     * mutated — LineChart rasterizes into its own grid on every render and
-     * the instance merely selects braille mode (its dimensions are ignored).
+     * Paint the render into the provided cell grid (sugar-charts-007: a
+     * real bridge — the chart's grid is rasterized into this object at
+     * the chart's declared size; writes beyond the grid's bounds are
+     * dropped by the grid). Null clears back to a fresh internal canvas.
+     * Braille dot-matrix mode is chosen separately with {@see
+     * withBraille()}; the two compose.
      */
-    public function withCanvas(?object $canvas = null): self
+    public function withCanvas(?CellGrid $canvas = null): self
     {
-        return $this->lineChartCopy(brailleCanvas: $canvas, brailleCanvasSet: true);
+        return $this->lineChartCopy(canvas: $canvas, canvasSet: true);
+    }
+
+    /**
+     * Render the series as braille dot-matrix (2x horizontal, 4x vertical
+     * resolution) instead of one cell per sample. The raster is painted
+     * into the {@see withCanvas()} target when one is set, otherwise into
+     * the internal canvas.
+     */
+    public function withBraille(bool $on = true): self
+    {
+        return $this->lineChartCopy(braille: $on);
     }
 
     /**
@@ -681,7 +697,7 @@ final class LineChart extends Chart
             return (new Canvas($this->width, $this->height))->view();
         }
 
-        $canvas = new Canvas($this->width, $this->height);
+        $canvas = $this->canvas ?? new Canvas($this->width, $this->height);
 
         // Compute a global axis range covering every series so each
         // line stays comparable on the same scale.
@@ -738,7 +754,7 @@ final class LineChart extends Chart
 
         // Plot primary + named series on the same axes.
         $allSeries = [self::PRIMARY_SERIES => $this->data] + $this->datasets;
-        if ($this->brailleCanvas !== null) {
+        if ($this->braille) {
             // braille mode — series rasterize into a dot grid
             // (2×4 dots per cell) so per-dataset legend colors reach the
             // strokes. MarkLines and the axis frame still compose in cell
@@ -866,8 +882,9 @@ final class LineChart extends Chart
      * cell exactly once, carrying the series' legend color as the cell
      * style — so dataset colors actually reach the strokes and the render
      * is one batched walk instead of sugar-dashboard `BrailleCanvas::setPoint`'s
-     * copy-on-write-per-dot cost. The `$brailleCanvas` instance only
-     * selects this mode; its own buffer is never read or mutated.
+     * copy-on-write-per-dot cost. The raster is painted into the render
+     * target grid — the caller's canvas when {@see withCanvas()} set one,
+     * otherwise the internal canvas.
      *
      * Animation cutoff and area fill mirror the ASCII loop: dots appear in
      * the same sample order, and fill paints the vertical dot run from each
@@ -876,7 +893,7 @@ final class LineChart extends Chart
      * @param array<string,list<int|float>> $allSeries
      */
     private function renderBrailleSeries(
-        Canvas $canvas,
+        CellGrid $canvas,
         array $allSeries,
         float $min,
         float $max,
@@ -1202,8 +1219,9 @@ final class LineChart extends Chart
         bool $lineStyleSet = false,
         ?array $markLines = null,
         ?bool $unicodeConnectors = null,
-        ?object $brailleCanvas = null,
-        bool $brailleCanvasSet = false,
+        ?CellGrid $canvas = null,
+        bool $canvasSet = false,
+        ?bool $braille = null,
         ?Theme $theme = null,
         bool $themeSet = false,
         ?\Closure $seriesColorFn = null,
@@ -1243,7 +1261,8 @@ final class LineChart extends Chart
             lineStyle:         $lineStyleSet ? $lineStyle : $this->lineStyle,
             markLines:         $markLines        ?? $this->markLines,
             unicodeConnectors: $unicodeConnectors ?? $this->unicodeConnectors,
-            brailleCanvas:     ($brailleCanvasSet || $brailleCanvas !== null) ? $brailleCanvas : $this->brailleCanvas,
+            canvas:            ($canvasSet || $canvas !== null) ? $canvas : $this->canvas,
+            braille:           $braille ?? $this->braille,
             theme:             ($themeSet || $theme !== null) ? $theme : $this->theme,
             seriesColorFn:     $seriesColorFnSet ? $seriesColorFn : $this->seriesColorFn,
         );
@@ -1261,7 +1280,7 @@ final class LineChart extends Chart
      * {@see Waveline::connectorRune()}). `$style` is the per-point style
      * of the segment's starting sample (null = unstyled).
      */
-    private static function drawConnector(Canvas $c, int $x1, int $y1, int $x2, int $y2, bool $unicode, ?Style $style = null): void
+    private static function drawConnector(CellGrid $c, int $x1, int $y1, int $x2, int $y2, bool $unicode, ?Style $style = null): void
     {
         if ($x2 < $x1) {
             return;

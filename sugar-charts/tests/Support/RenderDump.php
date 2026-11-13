@@ -42,7 +42,6 @@ use SugarCraft\Charts\OHLC\OHLCChart;
 use SugarCraft\Charts\Scatter\Scatter;
 use SugarCraft\Charts\Sparkline\Sparkline;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 use SugarCraft\Style\Style;
 use SugarCraft\Style\Theme;
 
@@ -53,8 +52,8 @@ $out['line_plain'] = LineChart::new($line, 30, 6)->view();
 $out['line_axes'] = LineChart::new($line, 30, 6)->withAxes()->view();
 $out['line_fill'] = LineChart::new($line, 30, 6)->withFill()->view();
 $out['line_ds'] = LineChart::new($line, 30, 6)->withDataset('b', [3, 1, 4, 1, 5, 9, 2, 6, 5, 3])->view();
-$out['line_braille'] = LineChart::new($line, 30, 6)->withCanvas(new BrailleCanvas(80, 24))->view();
-$out['line_braille_ds'] = LineChart::new($line, 30, 6)->withCanvas(new BrailleCanvas(80, 24))->withDataset('b', [3, 1, 4, 1, 5, 9, 2, 6, 5, 3])->view();
+$out['line_braille'] = LineChart::new($line, 30, 6)->withBraille(true)->view();
+$out['line_braille_ds'] = LineChart::new($line, 30, 6)->withBraille(true)->withDataset('b', [3, 1, 4, 1, 5, 9, 2, 6, 5, 3])->view();
 $out['line_legend'] = LineChart::new($line, 30, 6)->withDataset('b', [3, 1, 4, 1, 5, 9, 2, 6, 5, 3])->withLegend()->view();
 $out['line_unicode'] = LineChart::new($line, 30, 6)->withUnicodeConnectors()->view();
 $out['line_title'] = LineChart::new($line, 30, 6)->withTitle('T')->withXLabel('x')->withYLabel('y')->view();

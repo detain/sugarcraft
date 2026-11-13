@@ -6,6 +6,7 @@ namespace SugarCraft\Charts\Chart;
 
 use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\Support\CellGrid;
 use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Core\Util\Color;
@@ -44,7 +45,8 @@ abstract class Chart implements ChromeAccessors
         private float $animationProgress = 1.0,
         /** @var int Animation duration in milliseconds (0 = instant) */
         private int $animationDuration = 0,
-        ?object $brailleCanvas = null,
+        ?CellGrid $canvas = null,
+        bool $braille = false,
         ?Theme $theme = null,
     ) {
         if ($width < 0 || $height < 0) {
@@ -53,12 +55,16 @@ abstract class Chart implements ChromeAccessors
         if ($titlePosition === Position::Left || $titlePosition === Position::Right) {
             throw new \InvalidArgumentException(Lang::t('chart.title_side', ['side' => strtolower($titlePosition->name)]));
         }
-        $this->brailleCanvas = $brailleCanvas;
+        $this->canvas = $canvas;
+        $this->braille = $braille;
         $this->theme = $theme;
     }
 
-    /** @var object|null Alternative braille-rendered canvas (a sugar-dashboard BrailleCanvas in practice) */
-    public readonly ?object $brailleCanvas;
+    /** @var CellGrid|null grid the render is painted into (sugar-charts-007: a real bridge, not a flag) */
+    public readonly ?CellGrid $canvas;
+
+    /** @var bool render the series as braille dot-matrix instead of character cells */
+    public readonly bool $braille;
 
     /** @var Theme|null Named color theme for rendering */
     public readonly ?Theme $theme;
@@ -307,22 +313,31 @@ abstract class Chart implements ChromeAccessors
     }
 
     /**
-     * Select braille dot-matrix rendering (2x horizontal, 4x vertical
-     * resolution) instead of standard character cells.
+     * Paint the render into the provided cell grid instead of an internal
+     * canvas (sugar-charts-007: this is a bridge, not a mode flag). The
+     * chart is drawn at its declared size; writes beyond the grid's own
+     * bounds are dropped by the grid. Null (the default) renders into a
+     * fresh internal Canvas, as before. Braille dot-matrix mode is selected
+     * by {@see withBraille()}, independently of the grid choice — the two
+     * compose: a braille raster can be painted into any grid.
      *
      * Honored by LineChart, the only class extending this base; the
      * ChartExtras renderers (BarChart, Scatter, OHLCChart) carry no
-     * canvas surface at all. Null clears the mode
-     * back to cell rendering. The canvas object is not mutated — the
-     * chart rasterizes into its own internal grid on every render and the
-     * instance merely selects the braille mode (its dimensions are not
-     * consulted). Typed as object because the null-check is the whole
-     * contract; a sugar-dashboard Plot/Braille canvas is what callers
-     * pass in practice.
+     * canvas surface at all.
      */
-    public function withCanvas(?object $canvas = null): self
+    public function withCanvas(?CellGrid $canvas = null): self
     {
-        return $this->copy(brailleCanvas: $canvas, brailleCanvasSet: true);
+        return $this->copy(canvas: $canvas, canvasSet: true);
+    }
+
+    /**
+     * Select braille dot-matrix rendering (2x horizontal, 4x vertical
+     * resolution) instead of standard character cells. Honored by
+     * LineChart, like {@see withCanvas()}.
+     */
+    public function withBraille(bool $on = true): self
+    {
+        return $this->copy(braille: $on);
     }
 
     /**
@@ -361,7 +376,9 @@ abstract class Chart implements ChromeAccessors
     /** Short-form alias for {@see withTitle()}. */
     public function title(string $t, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
     /** Short-form alias for {@see withCanvas()}. */
-    public function canvas(?object $canvas = null): self { return $this->withCanvas($canvas); }
+    public function canvas(?CellGrid $canvas = null): self { return $this->withCanvas($canvas); }
+    /** Short-form alias for {@see withBraille()}. */
+    public function braille(bool $on = true): self { return $this->withBraille($on); }
     /** Short-form alias for {@see withTheme()}. */
     public function theme(Theme $theme): self { return $this->withTheme($theme); }
 
@@ -439,14 +456,15 @@ abstract class Chart implements ChromeAccessors
         ?array $legendItems = null,
         ?float $animationProgress = null,
         ?int $animationDuration = null,
-        ?object $brailleCanvas = null,
+        ?CellGrid $canvas = null,
+        ?bool $braille = null,
         ?Theme $theme = null,
         bool $legendIndicatorCharSet = false,
         bool $titleSet = false,
         bool $xLabelSet = false,
         bool $yLabelSet = false,
         bool $dataLabelFormatterSet = false,
-        bool $brailleCanvasSet = false,
+        bool $canvasSet = false,
         bool $themeSet = false,
     ): self {
         return new static(
@@ -464,7 +482,8 @@ abstract class Chart implements ChromeAccessors
             legendItems:        $legendItems        ?? $this->legendItems,
             animationProgress:  $animationProgress  ?? $this->animationProgress,
             animationDuration:  $animationDuration  ?? $this->animationDuration,
-            brailleCanvas:      ($brailleCanvasSet || $brailleCanvas !== null)   ?      $brailleCanvas : $this->brailleCanvas,
+            canvas:             ($canvasSet || $canvas !== null)  ?      $canvas : $this->canvas,
+            braille:            $braille ?? $this->braille,
             theme:              ($themeSet || $theme !== null)           ?              $theme : $this->theme,
         );
     }

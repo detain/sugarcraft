@@ -6,21 +6,26 @@ namespace SugarCraft\Charts\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Charts\LineChart\LineChart;
-use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 use SugarCraft\Style\Theme;
 
 final class BrailleChartTest extends TestCase
 {
     public function testLineChartWithBrailleCanvas(): void
     {
-        $canvas = BrailleCanvas::new(80, 24);
+        // CH-04: braille mode is selected by withBraille(); the render
+        // target is an optional CellGrid bridge, not a mode flag.
+        $canvas = new \SugarCraft\Charts\Canvas\Canvas(80, 24);
         $chart = LineChart::new([1, 4, 2, 8, 6, 3, 7], 40, 8)
+            ->withBraille(true)
             ->withCanvas($canvas);
 
-        $this->assertNotNull($chart->brailleCanvas);
+        $this->assertTrue($chart->braille);
+        $this->assertSame($canvas, $chart->canvas);
         $output = $chart->view();
         // Braille rendering produces braille unicode characters
-        $this->assertIsString($output);
+        $this->assertMatchesRegularExpression('/[\x{2800}-\x{28FF}]/u', $output);
+        // CH-04 bridge: the render actually landed in the provided grid.
+        $this->assertSame($output, $canvas->view());
     }
 
     public function testLineChartWithTheme(): void
@@ -34,12 +39,14 @@ final class BrailleChartTest extends TestCase
 
     public function testLineChartWithBothCanvasAndTheme(): void
     {
-        $canvas = BrailleCanvas::new(80, 24);
+        $canvas = new \SugarCraft\Charts\Canvas\Canvas(80, 24);
         $chart = LineChart::new([1, 4, 2, 8, 6, 3, 7], 40, 8)
+            ->withBraille(true)
             ->withCanvas($canvas)
             ->withTheme(Theme::oneDark());
 
-        $this->assertNotNull($chart->brailleCanvas);
+        $this->assertNotNull($chart->canvas);
+        $this->assertTrue($chart->braille);
         $this->assertNotNull($chart->theme);
     }
 
@@ -89,7 +96,7 @@ final class BrailleChartTest extends TestCase
     public function testBrailleModeRendersBrailleRunes(): void
     {
         $chart = LineChart::new([1, 4, 2, 8, 6, 3, 7], 40, 8)
-            ->withCanvas(BrailleCanvas::new(80, 24));
+            ->withBraille(true);
         $out = $chart->view();
         $this->assertSame(1, preg_match('/[\x{2800}-\x{28FF}]/u', $out), 'expected at least one braille rune');
         $this->assertStringNotContainsString('*', $out);
@@ -107,23 +114,24 @@ final class BrailleChartTest extends TestCase
     {
         $chart = LineChart::new([], 40, 8)
             ->withDataset('up', [1, 4, 2, 8, 6, 3, 7])
-            ->withCanvas(BrailleCanvas::new(80, 24));
+            ->withBraille(true);
         $out = $chart->view();
         $this->assertSame(1, preg_match('/[\x{2800}-\x{28FF}]/u', $out));
         $this->assertStringContainsString("\x1b[38;2;0;0;238m", $out, 'blue SGR expected on the first dataset stroke');
     }
 
     /**
-     * Audit F11 (batched rasterizer law): the canvas instance handed to
-     * withCanvas is never mutated — the chart rasterizes internally and
-     * the object only selects the rendering mode (docblocked contract).
+     * CH-04 (inverts audit F11's old "never mutated" confession): the grid
+     * handed to withCanvas IS the render target — its content equals the
+     * chart's view(), and braille mode composes with the bridge.
      */
-    public function testBrailleModeDoesNotMutateTheGivenCanvas(): void
+    public function testBrailleModePaintsTheGivenCanvas(): void
     {
-        $canvas = BrailleCanvas::new(80, 24);
-        $before = $canvas->render();
-        LineChart::new([1, 4, 2, 8, 6, 3, 7], 40, 8)->withCanvas($canvas)->view();
-        $this->assertSame($before, $canvas->render());
+        $canvas = new \SugarCraft\Charts\Canvas\Canvas(80, 24);
+        $blank = (new \SugarCraft\Charts\Canvas\Canvas(80, 24))->view();
+        $out = LineChart::new([1, 4, 2, 8, 6, 3, 7], 40, 8)->withBraille(true)->withCanvas($canvas)->view();
+        $this->assertSame($out, $canvas->view());
+        $this->assertNotSame($blank, $canvas->view(), 'the provided grid received the render');
     }
 
     private function getThemeName(Theme $theme): string

@@ -41,7 +41,7 @@
     },
     "suggest": {
         "ext-intl": "Enables grapheme-cluster splitting in BufferHelper/Canvas so combining marks and ZW sequences keep exact display widths.",
-        "sugarcraft/sugar-dashboard": "Provides BrailleCanvas for LineChart braille mode — an optional display helper, not a runtime dependency (withCanvas() only uses the object as a mode flag)."
+        "sugarcraft/sugar-dashboard": "Optional display helpers whose BrailleGrid/Plot widgets pair with LineChart's braille mode — not a runtime dependency: withBraille() and the withCanvas() CellGrid bridge are self-contained to this lib (sugar-charts-007)."
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",

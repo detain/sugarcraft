@@ -17,7 +17,7 @@ use SugarCraft\Style\Style;
  * The canvas is mutable in place — cheaper for hot rendering paths than
  * building a new grid per draw call.
  */
-final class Canvas
+final class Canvas implements \SugarCraft\Charts\Support\CellGrid
 {
     /** @var array<int, array<int, Cell>> [row][col] */
     private array $cells;
@@ -30,6 +30,16 @@ final class Canvas
             throw new \InvalidArgumentException(Lang::t('canvas.dim_nonneg'));
         }
         $this->clear();
+    }
+
+    public function width(): int
+    {
+        return $this->width;
+    }
+
+    public function height(): int
+    {
+        return $this->height;
     }
 
     /**

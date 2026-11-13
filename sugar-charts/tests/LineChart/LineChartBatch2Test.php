@@ -93,20 +93,22 @@ final class LineChartBatch2Test extends TestCase
         $this->assertSame(['*', '+', 'o', 'x', '#', '.'], $runes);
     }
 
-    public function testBrailleModeAcceptsAnyObjectAndClearsWithNull(): void
+    public function testBrailleModeSelectsRasterAndCanvasRejectsForeignObjects(): void
     {
-        // M1: the canvas is a pure discriminant — anything object-shaped
-        // selects braille mode, and (post-M10) null clears back to cell
-        // mode. stdClass cannot be a real BrailleCanvas, proving no
-        // dash-specific method is ever called.
+        // CH-04: braille is a boolean mode; the canvas seat is typed
+        // CellGrid — an arbitrary object no longer selects anything and is
+        // refused at the door. withCanvas(null) clears the bridge.
         $cell = LineChart::new([1.0, 5.0, 2.0, 8.0], 10, 4);
-        $braille = $cell->withCanvas(new \stdClass());
+        $braille = $cell->withBraille(true);
         $this->assertNotSame($cell->view(), $braille->view());
-        $this->assertNotNull($braille->brailleCanvas);
+        $this->assertTrue($braille->braille);
 
-        $cleared = $braille->withCanvas(null);
-        $this->assertNull($cleared->brailleCanvas);
+        $cleared = $braille->withBraille(false);
+        $this->assertFalse($cleared->braille);
         $this->assertSame($cell->view(), $cleared->view());
+
+        $this->expectException(\TypeError::class);
+        $cell->withCanvas(new \stdClass());
     }
 
     public function testSourceCarriesNoDashboardRuntimeDependency(): void

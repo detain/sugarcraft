@@ -7,7 +7,6 @@ namespace SugarCraft\Charts\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Charts\LineChart\LineChart;
-use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
 use SugarCraft\Style\Theme;
 
 /**
@@ -75,7 +74,7 @@ final class ThemeRenderTest extends TestCase
     {
         $dracula = Theme::dracula();
         $themed  = LineChart::new(self::DATA, 40, 8)
-            ->withCanvas(BrailleCanvas::new(80, 24))
+            ->withBraille(true)
             ->withTheme($dracula)
             ->view();
 

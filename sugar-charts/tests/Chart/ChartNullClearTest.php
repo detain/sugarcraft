@@ -40,15 +40,15 @@ final class ChartNullClearTest extends TestCase
         $c = LineChart::new([1.0, 2.0])
             ->withLegendStyle('#')
             ->withTheme(Theme::dark())
-            ->withCanvas(new \stdClass());
+            ->withCanvas(new \SugarCraft\Charts\Canvas\Canvas(20, 8));
         $cleared = $c->withLegendStyle(null);
         $this->assertNull($cleared->legendIndicatorChar);
 
         $noTheme = $c->withTheme(null);
         $this->assertNull($noTheme->theme);
 
-        $this->assertNotNull($c->brailleCanvas);
-        $this->assertNull($c->withCanvas(null)->brailleCanvas);
+        $this->assertNotNull($c->canvas);
+        $this->assertNull($c->withCanvas(null)->canvas);
 
         $fmt = $c->withDataLabelFormatter(fn (float $v): string => (string) $v);
         $this->assertNotNull($fmt->dataLabelFormatter);

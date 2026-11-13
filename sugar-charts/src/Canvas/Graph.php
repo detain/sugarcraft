@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Canvas;
 
+use SugarCraft\Charts\Support\CellGrid;
 use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Core\Util\Width;
@@ -82,7 +83,7 @@ final class Graph
      * Draw a horizontal line at row `$y` from column `$x0` to `$x1`
      * (inclusive). `$rune` defaults to the thin horizontal `─`.
      */
-    public static function drawHLine(Canvas $c, int $y, int $x0, int $x1, ?Style $style = null, string $rune = '─'): void
+    public static function drawHLine(CellGrid $c, int $y, int $x0, int $x1, ?Style $style = null, string $rune = '─'): void
     {
         // sugar-charts-013: single-cell rune door (covers the whole
         // horizontal family — drawHorizontalLineLeft/Right and drawRows
@@ -95,7 +96,7 @@ final class Graph
     }
 
     /** Draw a vertical line at column `$x` from row `$y0` to `$y1`. */
-    public static function drawVLine(Canvas $c, int $x, int $y0, int $y1, ?Style $style = null, string $rune = '│'): void
+    public static function drawVLine(CellGrid $c, int $x, int $y0, int $y1, ?Style $style = null, string $rune = '│'): void
     {
         // sugar-charts-013: single-cell rune door (covers the whole
         // vertical family — drawColumn, drawVerticalLineUp/Down,
@@ -117,7 +118,7 @@ final class Graph
      * @param array<string,string> $runes  one of LINE_THIN / THICK / DOUBLE / ROUNDED
      */
     public static function drawXYAxis(
-        Canvas $c,
+        CellGrid $c,
         int $xOrigin,
         int $yOrigin,
         int $xLen,
@@ -140,7 +141,7 @@ final class Graph
      * @param list<string> $yLabels  drawn top-to-bottom to the left of the Y axis
      */
     public static function drawXYAxisLabel(
-        Canvas $c,
+        CellGrid $c,
         int $xOrigin,
         int $yOrigin,
         int $xLen,
@@ -189,7 +190,7 @@ final class Graph
      * Multi-byte safe. Delegates to {@see Canvas::setString()}, the single
      * cluster-splitting walker.
      */
-    public static function drawString(Canvas $c, int $x, int $y, string $s, ?Style $style = null): void
+    public static function drawString(CellGrid $c, int $x, int $y, string $s, ?Style $style = null): void
     {
         $c->setString($x, $y, $s, $style);
     }
@@ -441,7 +442,7 @@ final class Graph
      * ntcharts' `DrawVerticalLineUp`.
      */
     public static function drawVerticalLineUp(
-        Canvas $c,
+        CellGrid $c,
         int $x,
         int $yTop,
         int $yBottom,
@@ -453,7 +454,7 @@ final class Graph
 
     /** Mirror of {@see drawVerticalLineUp()} for the down direction (semantically identical). */
     public static function drawVerticalLineDown(
-        Canvas $c,
+        CellGrid $c,
         int $x,
         int $yTop,
         int $yBottom,
@@ -465,7 +466,7 @@ final class Graph
 
     /** Mirror of {@see drawHLine()} with explicit left-to-right direction. */
     public static function drawHorizontalLineLeft(
-        Canvas $c,
+        CellGrid $c,
         int $y,
         int $xLeft,
         int $xRight,
@@ -477,7 +478,7 @@ final class Graph
 
     /** Mirror of {@see drawHorizontalLineLeft()} for the right direction. */
     public static function drawHorizontalLineRight(
-        Canvas $c,
+        CellGrid $c,
         int $y,
         int $xLeft,
         int $xRight,
@@ -496,7 +497,7 @@ final class Graph
      * @param list<array{0:int,1:int}> $dots
      */
     public static function drawBrailleRune(
-        Canvas $c,
+        CellGrid $c,
         int $x,
         int $y,
         array $dots,
@@ -527,7 +528,7 @@ final class Graph
      * @param list<list<array{0:int,1:int}>> $patterns
      */
     public static function drawBraillePatterns(
-        Canvas $c,
+        CellGrid $c,
         int $x,
         int $y,
         array $patterns,
@@ -546,7 +547,7 @@ final class Graph
      * @param list<int> $heights
      */
     public static function drawColumns(
-        Canvas $c,
+        CellGrid $c,
         int $x,
         int $yBottom,
         array $heights,
@@ -569,7 +570,7 @@ final class Graph
      * @param list<int> $widths
      */
     public static function drawRows(
-        Canvas $c,
+        CellGrid $c,
         int $xLeft,
         int $y,
         array $widths,
@@ -590,7 +591,7 @@ final class Graph
      * with `$wick`. Coordinates are canvas rows (top = 0).
      */
     public static function drawCandlestick(
-        Canvas $c,
+        CellGrid $c,
         int $x,
         int $high,
         int $open,

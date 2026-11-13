@@ -21,7 +21,7 @@ use SugarCraft\Charts\OHLC\OHLCChart;
 use SugarCraft\Charts\Picture\Picture;
 use SugarCraft\Charts\Scatter\Scatter;
 use SugarCraft\Charts\Sparkline\Sparkline;
-use SugarCraft\Dashboard\Plot\Braille\BrailleCanvas;
+use SugarCraft\Charts\Canvas\Canvas;
 
 /**
  * Alias-completeness registry (BL-4).
@@ -117,17 +117,18 @@ final class AliasCompletenessTest extends TestCase
         }
 
         $this->assertSame([], $missing, "Alias gaps detected:\n" . implode("\n", $missing));
-        // The registry is meaningful: it must cover the full 133-wither surface
+        // The registry is meaningful: it must cover the full 135-wither surface
         // (123 from BL-4 + withMarkLines added by B2 + withUnicodeConnectors
         // added by B3 + LineChart::withSeriesColorFn / BarChart::withBarColor
         // added by candy-top L1 + BarChart::withDataLabels/withDataLabelFormatter
         // added by docs-fix-1023 B2 + Heatmap::withMonoRamp added by the
         // lib-reviews-1103 fix wave + Chart::withLegendItems /
         // LineChart::withLegendItems / BarChart::withAxes added by CH-02
-        // chrome convergence), including every documented
+        // chrome convergence + Chart::withBraille / LineChart::withBraille
+        // added by CH-04 canvas bridge), including every documented
         // deviation. A count collapse here would mean the reflection silently
         // stopped seeing withers.
-        $this->assertSame(133, $checked, 'wither census count drifted from the documented 133');
+        $this->assertSame(135, $checked, 'wither census count drifted from the documented 135');
         $this->assertGreaterThanOrEqual(5, $exception, 'documented alias deviations must all be present');
     }
 
@@ -234,7 +235,7 @@ final class AliasCompletenessTest extends TestCase
         );
 
         // Chart::canvas() alias delegates to withCanvas() and keeps subclass identity.
-        $canvas = new BrailleCanvas(20, 8);
+        $canvas = new Canvas(20, 8);
         $chart  = LineChart::new([1.0, 2.0])->size(20, 8);
         $this->assertInstanceOf(
             LineChart::class,
