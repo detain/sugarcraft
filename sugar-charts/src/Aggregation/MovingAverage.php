@@ -84,6 +84,8 @@ final class MovingAverage
     /**
      * Append a single value.
      *
+     * Building by repeated add() is O(n²) (each call clones state) — batch with addMany().
+     *
      * @throws \InvalidArgumentException when $value is NaN or ±INF
      */
     public function add(int|float $value): self

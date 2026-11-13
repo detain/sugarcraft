@@ -129,6 +129,8 @@ final class BarChart implements ChromeAccessors
      * a `[label, value]` tuple, or a `label => value` pair (when called
      * via `push(['Apple', 12])` or `push(new Bar('Apple', 12))`).
      * Mirrors ntcharts' `BarChart::Push(BarData)`. Immutable.
+     *
+     * Building by repeated push() is O(n²) (each call clones state) — batch with pushAll().
      */
     public function push(Bar|array $bar): self
     {

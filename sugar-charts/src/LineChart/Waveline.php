@@ -109,6 +109,11 @@ final class Waveline
         return new self(self::ingestAll($points), $this->width, $this->height, $this->xMin, $this->xMax, $this->yMin, $this->yMax, $this->point);
     }
 
+    /**
+     * Append one point.
+     *
+     * Building by repeated push() is O(n²) (each call clones state) — batch with pushAll().
+     */
     public function push(int|float $x, int|float $y): self
     {
         // The door validates what it adds — the ctor sweep it used to

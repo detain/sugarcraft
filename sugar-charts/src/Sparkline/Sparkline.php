@@ -164,6 +164,8 @@ final class Sparkline
      * keeps only the last `width` points, so callers can append
      * indefinitely without trimming.
      *
+     * Building by repeated push() is O(n²) (each call clones state) — batch with pushAll().
+     *
      * WHY THIS COSTS O(n): the instance is immutable and `data` is a
      * public property holding the FULL recorded history (pinned by
      * SparklineTest), so every push materializes a fresh history copy.

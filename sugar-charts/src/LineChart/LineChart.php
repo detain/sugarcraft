@@ -681,6 +681,9 @@ final class LineChart extends Chart
      * Append a single value using a sliding window sized to the chart width.
      * When the window is full, the oldest point is dropped before the new
      * one is added — giving live streaming behavior.
+     *
+     * Building by repeated push() is O(n²) (each call clones state) — batch a
+     * full rebuild through withData()/withDataset() instead.
      */
     public function push(float $value): self
     {

@@ -66,6 +66,11 @@ final class Streamline
     }
 
     /** Append a sample on the right, dropping the oldest if the window is full. */
+    /**
+     * Append one sample.
+     *
+     * Building by repeated push() is O(n²) (each call clones state) — batch with pushAll().
+     */
     public function push(int|float $value): self
     {
         Finite::assert($value);

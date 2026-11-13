@@ -136,7 +136,12 @@ final class TimeSeries
         return new self(array_values($points), $this->width, $this->height, $this->timeFormat, $this->xLabelCount, $this->rangeStart, $this->rangeEnd, $this->inner);
     }
 
-    /** Push a single sample on the right; convenience over withPoints. */
+    /**
+     * Push a single sample on the right; convenience over withPoints.
+     *
+     * Building by repeated push() is O(n²) (each call clones state) — batch with
+     * withPoints().
+     */
     public function push(\DateTimeImmutable $when, int|float $value): self
     {
         return new self(

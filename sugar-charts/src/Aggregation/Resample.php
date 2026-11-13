@@ -149,6 +149,8 @@ final class Resample
         /**
      * Add a single timestamped point.
      *
+     * Building by repeated add() is O(n²) (each call clones state) — batch with addMany().
+     *
      * @throws \InvalidArgumentException when $value is NaN or ±INF
      */
     public function add(int $timestamp, int|float $value): self
