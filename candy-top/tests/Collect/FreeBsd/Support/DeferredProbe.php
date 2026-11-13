@@ -28,6 +28,11 @@ final class DeferredProbe implements Probe
     {
     }
 
+    public function advance(): void
+    {
+        $this->inner->advance();
+    }
+
     public function sysctl(array $names): array
     {
         ++$this->blocked;

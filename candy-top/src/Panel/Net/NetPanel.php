@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel\Net;
 
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
@@ -22,6 +23,7 @@ use SugarCraft\Top\Panel\Panel;
 use SugarCraft\Top\Panel\PanelContext;
 use SugarCraft\Top\Panel\PanelFrame;
 use SugarCraft\Top\Panel\PanelResult;
+use SugarCraft\Top\Source\AsyncSource;
 use SugarCraft\Top\Source\Source;
 use SugarCraft\Top\View\Region;
 
@@ -190,8 +192,15 @@ final class NetPanel implements Panel, ClickCapture
     public function collect(PanelContext $context): ?\Closure
     {
         $source = $this->source;
+        $async = $source instanceof AsyncSource && $source->isAsync();
 
-        return static function () use ($source): Msg {
+        return static function () use ($source, $async): Msg {
+            if ($async) {
+                // S-P02: netstat/ifconfig run on the loop, never on the update path.
+                return Cmd::promise(static fn () => $source->sampleAsync()->then(
+                    static fn (array $r): Msg => new SampledMsg('net', $r[0], $r[1]),
+                ))();
+            }
             [$snapshot, $next] = $source->sample();
 
             return new SampledMsg('net', $snapshot, $next);

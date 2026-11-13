@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect\FreeBsd;
 
+use SugarCraft\Top\Collect\AsyncSampling;
 use SugarCraft\Top\Collect\NetInterface;
 use SugarCraft\Top\Collect\NetSnapshot;
 use SugarCraft\Top\Collect\Sentinel;
@@ -36,8 +37,10 @@ use SugarCraft\Top\Collect\Sentinel;
  * (a failed probe is never memoized, so a recovering ifconfig is
  * consulted on the very next sample) — the Linux carrier-memo precedent.
  */
-final class Net
+final class Net implements AsyncSampling
 {
+    use ProbedAsyncSampling;
+
     /** Seconds an `ifconfig -a` answer is reused (IFF_RUNNING is near-static). */
     private const RUNNING_TTL = 5.0;
 

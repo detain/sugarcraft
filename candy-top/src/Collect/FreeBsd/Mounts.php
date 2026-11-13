@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect\FreeBsd;
 
+use SugarCraft\Top\Collect\AsyncSampling;
 use SugarCraft\Top\Collect\Mount;
 use SugarCraft\Top\Collect\MountSelection;
 use SugarCraft\Top\Collect\MountsSnapshot;
@@ -31,8 +32,10 @@ use SugarCraft\Top\Collect\SelectableMounts;
  *
  * One mount child per sample.
  */
-final class Mounts implements SelectableMounts
+final class Mounts implements SelectableMounts, AsyncSampling
 {
+    use ProbedAsyncSampling;
+
     /** Never storage: btop's in-memory list + bind/union mounts + network shares. */
     public const array NOT_PHYSICAL = [
         'autofs', 'devfs', 'fdescfs', 'linprocfs', 'linsysfs', 'procfs', 'tmpfs',

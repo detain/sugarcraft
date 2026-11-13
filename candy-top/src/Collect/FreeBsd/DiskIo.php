@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Collect\FreeBsd;
 
+use SugarCraft\Top\Collect\AsyncSampling;
 use SugarCraft\Top\Collect\DiskDevice;
 use SugarCraft\Top\Collect\DiskIoSnapshot;
 use SugarCraft\Top\Collect\Sentinel;
@@ -31,8 +32,10 @@ use SugarCraft\Top\Collect\Sentinel;
  * Rates are UNMEASURED on a device's first sample. One iostat child per
  * sample (-c 1: one report, no interval sleep).
  */
-final class DiskIo
+final class DiskIo implements AsyncSampling
 {
+    use ProbedAsyncSampling;
+
     private const array VIRTUAL = ['pass', 'md', 'ses'];
 
     /**

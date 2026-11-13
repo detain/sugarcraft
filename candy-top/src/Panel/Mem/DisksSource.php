@@ -9,10 +9,15 @@ use SugarCraft\Top\Collect\MountSelection;
 use SugarCraft\Top\Collect\MountsSnapshot;
 use SugarCraft\Top\Collect\Platform;
 use SugarCraft\Top\Collect\SelectableMounts;
+use React\Promise\PromiseInterface;
+use SugarCraft\Top\Source\AsyncSource;
 use SugarCraft\Top\Source\CollectorSource;
 use SugarCraft\Top\Source\Fake\FakeDiskIo;
 use SugarCraft\Top\Source\Fake\FakeMounts;
 use SugarCraft\Top\Source\Source;
+
+use function React\Promise\all;
+use function React\Promise\resolve;
 
 /**
  * The disks section's one Source: Mounts (space) and DiskIo (throughput)
@@ -29,7 +34,7 @@ use SugarCraft\Top\Source\Source;
  * Deviation: ZFS pool IO (`/proc/spl/kstat/zfs/<pool>/...`) is not read;
  * zfs mounts show space only.
  */
-final class DisksSource implements Source
+final class DisksSource implements AsyncSource
 {
     /**
      * @param \Closure(string): string $kernelName mount device -> kernel block device name
@@ -90,10 +95,36 @@ final class DisksSource implements Source
         return $this->mounts;
     }
 
+    public function isAsync(): bool
+    {
+        return ($this->mounts instanceof AsyncSource && $this->mounts->isAsync())
+            || ($this->io instanceof AsyncSource && $this->io->isAsync());
+    }
+
+    /** Mounts and io sampled at once (S-P02), folded exactly as {@see sample()} folds them. */
+    public function sampleAsync(): PromiseInterface
+    {
+        return all([
+            $this->mounts instanceof AsyncSource ? $this->mounts->sampleAsync() : resolve($this->mounts->sample()),
+            $this->io instanceof AsyncSource ? $this->io->sampleAsync() : resolve($this->io->sample()),
+        ])->then(fn (array $r): array => $this->fold($r[0], $r[1]));
+    }
+
     public function sample(): array
     {
-        [$mounts, $nextMounts] = $this->mounts->sample();
-        [$io, $nextIo] = $this->io->sample();
+        return $this->fold($this->mounts->sample(), $this->io->sample());
+    }
+
+    /**
+     * @param array{0: object, 1: Source} $mountsResult
+     * @param array{0: object, 1: Source} $ioResult
+     *
+     * @return array{0: DisksSample, 1: self}
+     */
+    private function fold(array $mountsResult, array $ioResult): array
+    {
+        [$mounts, $nextMounts] = $mountsResult;
+        [$io, $nextIo] = $ioResult;
         $list = $mounts instanceof MountsSnapshot ? $mounts->mounts : [];
         $devices = $io instanceof DiskIoSnapshot ? $io->devices : [];
         $paired = [];

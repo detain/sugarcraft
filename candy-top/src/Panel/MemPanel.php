@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Panel;
 
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
@@ -90,7 +91,15 @@ final class MemPanel implements Panel, ClickCapture
     {
         $sampling = $this->sources->with('disks', $this->disks?->source($context));
 
-        return static function () use ($sampling): Msg {
+        $async = $sampling->isAsync();
+
+        return static function () use ($sampling, $async): Msg {
+            if ($async) {
+                // S-P02: the FreeBSD children run on the loop, never on the update path.
+                return Cmd::promise(static fn () => $sampling->sampleAsync()->then(
+                    static fn (array $r): Msg => new SampledMsg('mem', $r[0], $r[1]),
+                ))();
+            }
             [$snapshot, $next] = $sampling->sample();
 
             return new SampledMsg('mem', $snapshot, $next);
