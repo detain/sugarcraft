@@ -1172,21 +1172,53 @@ final class SugarPanels
 
         // Title: overlay on top border row, clipped to available interior width.
         // Only render when there is room for corners + at least 1 title cell ($w >= 4).
-        // Uses setChar per grapheme (visualCells/strWidth) to handle wide glyphs.
+        // Uses setChar per grapheme (visualCells/strWidth) to handle wide glyphs, and
+        // folds zero-width graphemes exactly like placeLine does (see below) so every
+        // painted title cell carries a visible base — the write-unit invariant
+        // bufferFromGrid() charges width against.
         if ($title !== '' && $w >= 4) {
             $maxTitleLen = $w - 2; // interior width (cols between corners)
             ['cells' => $segments, 'trailing' => $trailing] = $this->visualCells($title);
             $col       = 0;
-            $lastCell  = -1;
+            $lastCell  = -1;   // absolute column of the last base cell written, -1 before any
+            $carry     = '';   // zero-width graphemes awaiting a base cell
+            $marks     = 0;    // zero-width bytes already attached to the current base cell
             $styleOpen = false;
             foreach ($segments as $seg) {
                 $gw = $this->strWidth($seg);
+
+                // Zero-width grapheme (orphan combining mark / lone joiner): fold it
+                // onto the previous title cell, else carry it onto the next visible
+                // base. Writing it on its own would REPLACE a base cell with a glyph
+                // that paints no column (or open a zero-width-only cell), so the
+                // grid would claim a column the terminal never shows — the same
+                // desync placeLine's carry model exists to prevent. Fail SOFT at the
+                // per-cell byte budget, matching the content path's MAX_CARRY rule.
+                if ($gw <= 0) {
+                    if ($lastCell >= 0) {
+                        if ($marks < self::MAX_CARRY) {
+                            $keep = $this->clipCodepoints($seg, self::MAX_CARRY - $marks);
+                            $this->appendCell($lastCell, $y, $keep, $cells);
+                            $marks += \strlen($keep);
+                        }
+                    } else {
+                        if (\strlen($carry) < self::MAX_CARRY) {
+                            $carry .= $this->clipCodepoints($seg, self::MAX_CARRY - \strlen($carry));
+                        }
+                    }
+                    $styleOpen = $this->sgrLeavesStyleOpen($seg, $styleOpen);
+                    continue;
+                }
+
                 if ($col + $gw > $maxTitleLen) break;
-                // A title cell is a payload like any other cell: a single grapheme
-                // cluster can carry thousands of combining marks, and the border
-                // row is not exempt from the per-cell byte budget the content path
-                // applies. Clipping keeps one hostile title from inflating the row.
-                $this->setChar($x + 1 + $col, $y, $this->clipCodepoints($seg, self::MAX_CARRY + 64), $cells);
+                // A title cell is a payload like any other cell: the pending carry is
+                // folded in ahead of the base, and a single cluster can still ride with
+                // thousands of combining marks. The border row is not exempt from the
+                // content path's per-cell byte budget, so clipping keeps one hostile
+                // title from inflating a cell without bound.
+                $this->setChar($x + 1 + $col, $y, $this->clipCodepoints($carry . $seg, self::MAX_CARRY + 64), $cells);
+                $carry     = '';
+                $marks     = 0;
                 $styleOpen = $this->sgrLeavesStyleOpen($seg, $styleOpen);
                 $lastCell  = $x + 1 + $col;
                 // Blank continuation cells for wide graphemes
@@ -1492,10 +1524,12 @@ final class SugarPanels
      * Build a Buffer from a rendered cell grid.
      *
      * Each grid slot holds exactly one logical cell: the visible grapheme plus
-     * any escape sequences / zero-width carry riding on it (placeLine's write
-     * unit). The slot's display width is therefore its VISIBLE width — 2 for a
-     * wide glyph (whose continuation slot is the empty string → width 0, the
-     * pairing Buffer::diff() requires), 1 otherwise. All cells carry a null
+     * any escape sequences / zero-width carry riding on it. The producer path is
+     * placeLine (content) and drawBorder's title loop (border); both fold every
+     * zero-width grapheme onto its base cell, so a non-continuation slot always
+     * carries at least one visible column. The slot's display width is therefore
+     * its VISIBLE width — 2 for a wide glyph (whose continuation slot is the
+     * empty string → width 0, the pairing Buffer::diff() requires), 1 otherwise. All cells carry a null
      * style: style changes still diff correctly because the raw escape bytes
      * ride inside the rune and break cell equality.
      *

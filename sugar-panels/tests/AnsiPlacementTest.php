@@ -416,4 +416,24 @@ final class AnsiPlacementTest extends TestCase
         $this->assertSame($secondFull, $rebuilt);
         $this->assertSame('cAX   ', self::strip($rebuilt));
     }
+
+    public function testATitleOfOnlyZeroWidthGlyphsLeaksNoPhantomColumn(): void
+    {
+        // A title is painted onto the top border row through drawBorder, not the
+        // content path. A lone combining mark (no base to fuse with) is one
+        // zero-width grapheme; if the title loop wrote it into a cell on its own,
+        // bufferFromGrid would charge that slot width 1 (a non-empty cell) while
+        // the terminal paints 0 columns there — a grid/screen desync, and the mark
+        // would also overwrite the border dash it sat on. The loop now folds it
+        // like placeLine does: with no base cell to carry onto it is dropped, so
+        // the border stays whole and the row paints exactly its declared width.
+        $node  = Node::leaf('x')->withBorder(true)->withTitle("\u{0301}");
+        $frame = self::body($this->panels->render($node, 8, 3));
+        $top   = \explode("\n", $frame)[0];
+
+        // ╭ + six interior dashes + ╮ — the title contributed no visible column.
+        $this->assertSame("╭──────╮", self::strip($top));
+        // Model (8-cell row) and terminal (painted visible width) agree exactly.
+        $this->assertSame(8, Width::string(self::strip($top)));
+    }
 }
