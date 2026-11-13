@@ -17,6 +17,7 @@ use SugarCraft\Top\Panel\Proc\ProcUnits;
 use SugarCraft\Top\View\Rect;
 use SugarCraft\Top\View\Region;
 use SugarCraft\Top\View\Symbols;
+use SugarCraft\Top\View\Untrusted;
 
 /**
  * One guest's card on the VM dashboard:
@@ -78,7 +79,7 @@ final class VmCard
         ]);
         $specW = Width::string($spec);
         $room = $card->width - 6 - ($specW + 3 <= $card->width - 12 ? $specW + 3 : 0);
-        $name = Width::truncate($g->name, max(1, $room));
+        $name = Width::truncate(Untrusted::text($g->name), max(1, $room));
         $nameSgr = $selected ? $ink->bg('selected_bg') . $ink->fg('selected_fg') : $ink->fg('title');
         $o->embed($r, $card, $card->x + 2, $card->y, Symbols::BOLD . $nameSgr . $name, $border, false, $hi);
         if ($specW + 3 <= $card->width - 12) {

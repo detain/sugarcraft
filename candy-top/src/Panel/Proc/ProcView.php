@@ -20,6 +20,7 @@ use SugarCraft\Top\View\Ink;
 use SugarCraft\Top\View\Rect;
 use SugarCraft\Top\View\Region;
 use SugarCraft\Top\View\Symbols;
+use SugarCraft\Top\View\Untrusted;
 
 /**
  * Paints the proc box: title-row buttons, column labels, the process rows,
@@ -844,7 +845,7 @@ final class ProcView
     {
         $c = $e->process->container;
 
-        return $c === null ? '' : '[' . $c->engine . ':' . $c->name . ']';
+        return $c === null ? '' : '[' . Untrusted::text($c->engine) . ':' . Untrusted::text($c->name) . ']';
     }
 
     private static function metric(Ink $ink, int $v, int $calc, int $selectMax, bool $gradient): string
@@ -947,9 +948,10 @@ final class ProcView
     /** Control characters (C0, DEL, C1) become spaces so columns stay aligned. */
     public static function cleanText(string $s): string
     {
-        $s = mb_scrub($s, 'UTF-8');
-
-        return preg_replace('/[\x{00}-\x{1F}\x{7F}-\x{9F}]/u', ' ', $s) ?? '';
+        // candy-top-096: one sink policy for every list field — control bytes
+        // to spaces (unchanged) plus the visible marking of invisible
+        // bidi/zero-width formatters.
+        return Untrusted::text($s);
     }
 
     private static function ljust(string $s, int $w): string

@@ -19,6 +19,7 @@ use SugarCraft\Top\Panel\PanelFrame;
 use SugarCraft\Top\Panel\Proc\ProcUnits;
 use SugarCraft\Top\Panel\Proc\ProcView;
 use SugarCraft\Top\View\FrameBuilder;
+use SugarCraft\Top\View\Untrusted;
 use SugarCraft\Top\View\Rect;
 use SugarCraft\Top\View\Region;
 use SugarCraft\Top\View\Symbols;
@@ -278,11 +279,11 @@ final class CtrView
             $right = Lang::t('ctr.cpu_guest', ['host' => $host, 'guest' => self::cpuText($guest), 'n' => $c->vm->vcpus]);
             $left = $dw - 1 - Width::string($right);
             if ($left >= 8) {
-                return Just::left($c->name . ' ' . $c->engine, $left) . $right;
+                return Just::left(Untrusted::text($c->name) . ' ' . Untrusted::text($c->engine), $left) . $right;
             }
         }
 
-        return Just::left($c->name . ' ' . $c->engine . self::vcpus($c), $dw - 11) . Just::right($host, 10);
+        return Just::left(Untrusted::text($c->name) . ' ' . Untrusted::text($c->engine) . self::vcpus($c), $dw - 11) . Just::right($host, 10);
     }
 
     /** btop: `{:.1f}`, or `{:.0f}` from 99.95 up. */
@@ -316,8 +317,8 @@ final class CtrView
         }
 
         $head = "\x1b[0m" . $prefix
-            . Just::left($c->name, $geo['name']) . ' '
-            . ($geo['engine'] > 0 ? Just::left($c->engine, $geo['engine']) . ' ' : '')
+            . Just::left(Untrusted::text($c->name), $geo['name']) . ' '
+            . ($geo['engine'] > 0 ? Just::left(Untrusted::text($c->engine), $geo['engine']) . ' ' : '')
             . Just::right((string) $c->procs, 6) . ' '
             . $mColor . Just::right(ProcUnits::human($c->mem, true, 0, false, $mega), 5) . $end . ' '
             . ($selected ? '' : $ink->fg('inactive_fg')) . str_repeat($bg, 5);
