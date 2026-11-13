@@ -1304,9 +1304,18 @@ final class Program
         $bytes = @fread($stream, 4096);
         if ($bytes === false || $bytes === '') {
             // Real EOF: drop the watcher so the loop doesn't spin
-            // delivering readable notifications for a closed pipe.
+            // delivering readable notifications for a closed pipe — and
+            // then QUIT through the cooperative path (sugar-core-006).
+            // Removing the watcher alone strands the program: the render
+            // tick timer keeps the loop alive forever, so `echo | app`
+            // (or any closed stdin pipe) hangs instead of ending — a
+            // killed-by-timeout rc=137 in every scripted runner. send()
+            // is the same vocabulary quit()/SIGINT use: recorder gets
+            // its quit marker, teardown runs, the loop stops through the
+            // normal arm — never a raw loop->stop().
             if (feof($stream)) {
                 $this->loop->removeReadStream($stream);
+                $this->send(new QuitMsg());
             }
             return false;
         }
