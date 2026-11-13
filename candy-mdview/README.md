@@ -63,14 +63,20 @@ a pager opened on a URL watches and names nothing.
 Flags:
 - `--theme {ansi|ascii|plain|notty|dark|light|dracula|tokyo-night|pink|solarized|monokai|github}`
   — picks a SugarMarkdown preset; aliases `no`, `auto-no`, `tokyonight` are
-  accepted, and names match case-insensitively with `_` accepted in place of
-  `-` (`DRACULA` and `Tokyo_Night` work). Pass `auto` to run the implicit
-  ladder explicitly. `solarized`, `monokai`, and `github` load JSON theme files from
-  `themes/`. With `--theme` omitted: **ansi** on a color-capable terminal,
-  **ascii** when color is off (bold/italic survive, color does not), **plain**
-  when stdout is not a terminal or `--no-ansi` vetoes the stream. The mirror
+  accepted — `no` resolves to `plain`, `auto-no` to `notty`, `tokyonight` to
+  `tokyo-night` — and names match case-insensitively with `_` accepted in
+  place of `-` (`DRACULA` and `Tokyo_Night` work). Pass `auto` to run the
+  implicit ladder explicitly. Each built-in name maps one-to-one onto the
+  same-named SugarMarkdown preset (`Theme::ansi()`, `Theme::notty()`,
+  `Theme::dracula()`, …); `solarized`, `monokai`, and `github` load JSON theme
+  files from `themes/`. The three tiers: **ansi** is the terminal-native
+  palette, **ascii** keeps structure — bold/italic survive, color does not —
+  and **plain** is undecorated bytes. With `--theme` omitted: **ansi** on a
+  color-capable terminal, **ascii** when color is off, **plain** when stdout
+  is not a terminal or `--no-ansi` vetoes the stream. The mirror
   edge: forcing decoration (`--ansi` / `CLICOLOR_FORCE` / `FORCE_COLOR`) yields
-  a decorated tier even on a pipe.
+  a decorated tier even on a pipe. To compare the palettes side by side, run
+  `./examples/render-readme.sh [file]` over this README.
 - `--style` / `-s` — glamour-compat alias for `--theme`: it takes theme
   *names*, not style files (JSON goes through `--theme-config`). When both
   flags are given and name different themes, `--style` wins and a
@@ -82,10 +88,18 @@ Flags:
   apart.
 - `--theme-config <path>` — load a custom JSON theme (up to 1 MB). Two shapes
   are detected automatically: a **glamour** config (top-level `"document"`
-  block with nested element/chroma maps) is mapped by `GlamourTheme` onto a
-  SugarMarkdown `Theme`; the historic flat colour map goes through
-  `Theme::fromJsonString`. (`Theme::fromJson` takes a *path* and is used for
-  the three bundled JSON themes.) Overrides `--theme`. The path must be a
+  block with nested element/chroma maps, the shape of
+  [charmbracelet/glamour's style files](https://github.com/charmbracelet/glamour/tree/master/styles))
+  is mapped by `GlamourTheme` onto a SugarMarkdown `Theme`; the historic flat
+  colour map goes through `Theme::fromJsonString`. (`Theme::fromJson` takes a
+  *path* and is used for the three bundled JSON themes.) In the flat shape the
+  accepted top-level keys are exactly the `Theme` element slots —
+  `heading1`…`heading6`, `paragraph`, `bold`, `italic`, `code`, `codeBlock`,
+  `link`, `blockquote`, `listMarker`, `rule`, `keyword`, `string`, `number`,
+  `comment`, `strike`, `linkText`, `image`, `htmlBlock`, `htmlSpan`,
+  `definitionTerm`, `definitionDescription`, `text`, `autolink` — each one a
+  style object; `themes/solarized.json` is a worked flat starting point.
+  Overrides `--theme`. The path must be a
   regular file — a directory, FIFO or device refuses under the same heading
   instead of warning, reading unbounded, or hanging — and the payload must
   satisfy one of the two shapes: scalars, JSON lists and objects that match
@@ -153,12 +167,14 @@ opened on a file, the header row
 shows `file · scroll%` (plus `↻N` after N auto-reloads); a stdin pager has no
 header row.
 
+![pager](.vhs/pager.gif)
+
 | Key | Action |
 |---|---|
 | `↑` / `k` | line up |
-| `↓` / `j` | line down |
+| `↓` / `j` | line down (`Alt+j` too) |
 | mouse wheel | 3 lines per notch, either direction |
-| `PgUp` / `b` | page up |
+| `PgUp` / `b` | page up (`Ctrl+B` too) |
 | `PgDn` / `space` / `f` | page down |
 | `Ctrl+U` / `Ctrl+D` | half page |
 | `Home` / `g` | top |
@@ -167,10 +183,11 @@ header row.
 | `r` | force a reload of the watched file (unmodified only) |
 | `q` / `Esc` / `Ctrl+C` | exit (`Shift+q`, `Alt+q` and `Ctrl+q` do not) |
 
-Only an unmodified `q` quits. The scrolling letter keys are the exception to
-that caution: they fire even with modifiers held — `Ctrl+B` pages up and
-`Alt+j` scrolls — while `Ctrl+U` / `Ctrl+D` are the deliberate half-page
-chords.
+Only an unmodified `q` quits. The scroll letter keys are the exception: they
+are matched on their rune alone, so they fire even with modifiers held —
+which is why `Ctrl+B` and `Alt+j` share the table rows above with plain `b`
+and `j`, while `Ctrl+U` / `Ctrl+D` are distinct bindings, the deliberate
+half-page chords.
 
 When the pager is opened on a file (not stdin) it **auto-reloads**: a fixed
 0.5 s tick runs one non-blocking (mtime, size) probe through
@@ -184,6 +201,34 @@ invisible to the tuple; press `r` to force a reload in that case. Refused
 replacements (oversize, device swap, binary) and throwing re-renders never
 blank the screen: the last good frame stays and the header marks `↻!` until
 the next accepted reload.
+
+The pager is fully keyboard-driven: the alt screen and mouse tracking are
+armed unconditionally, but every mouse action has a key twin in the table, so
+a basic terminal that cannot answer either loses nothing usable — with
+`TERM=dumb` (or no mouse support) prefer the plain stdout mode and drop `-p`
+if you would rather keep your own scrollback.
+
+## Accessibility
+
+Color is an environment fact before it is anything else, so reduced-color
+setups need no special build: a non-empty `NO_COLOR`, `CLICOLOR=0`, or
+`TERM=dumb` drops the implicit theme to **ascii** on a terminal — structure
+survives, hue does not — and a stdout that is not a terminal lands on
+**plain** bytes with no decoration at all. The `ascii`, `plain`, `dark`, and
+`light` themes are the high-contrast picks.
+
+Screen-reader, braille, and copy-paste recipe — one plain stream, no escape
+sequences anywhere in it:
+
+```sh
+candy-mdview --no-ansi --no-hyperlinks notes.md
+```
+
+`--no-ansi` closes the decoration gate (no SGR anywhere on the stream), and
+`--no-hyperlinks` suppresses the OSC 8 link envelopes even where decoration
+stays open. Reduced motion is the default posture: nothing animates — the
+pager jumps to its target in a single frame, and auto-reloads land on the
+fixed 0.5 s tick rather than a transition.
 
 ## Exit codes & errors
 
@@ -243,7 +288,27 @@ The pager's Model (init/update/view over sugar-core's Program): `fromContent()`
 builds it from already-rendered text at a given size, `withDocument()` prepends
 the status header row (name · scroll% · reload marker), `withWatch()` arms
 auto-reload from disk via the `FileWatcher` tuple API, and `isWatching()`
-reports whether a watch is armed.
+reports whether a watch is armed. Driving it is a few lines — render, wrap
+the model in a `Program`, run:
+
+```php
+use SugarCraft\Core\MouseMode;
+use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\MdView\MdViewModel;
+use SugarCraft\Markdown\Renderer;
+
+$rendered = (new Renderer())->withWordWrap(80)->render((string) file_get_contents('notes.md'));
+$model    = MdViewModel::fromContent($rendered, 80, 24)->withDocument('notes.md');
+
+(new Program($model, new ProgramOptions(
+    useAltScreen:    true,
+    hideCursor:      true,
+    catchInterrupts: true,
+    mouseMode:       MouseMode::CellMotion,
+    openTty:         true,
+)))->run();
+```
 
 ### FileWatcher
 

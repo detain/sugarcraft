@@ -10,6 +10,9 @@ use SugarCraft\MdView\RenderCommand;
 use SugarCraft\Markdown\Renderer;
 use SugarCraft\Markdown\Theme;
 use SugarCraft\Core\I18n\T;
+use SugarCraft\Core\MouseMode;
+use SugarCraft\Core\Program;
+use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\Width;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -125,6 +128,48 @@ final class RenderCommandTest extends TestCase
         $this->assertInstanceOf(Theme::class, RenderCommand::pickTheme('pink'));
         // Underscores accepted as separators.
         $this->assertInstanceOf(Theme::class, RenderCommand::pickTheme('tokyo_night'));
+    }
+
+    public function testThemeGlossaryInReadmeResolvesForEveryDocumentedName(): void
+    {
+        // The flags bullet advertises the set as a brace list; every name it
+        // prints must actually resolve (finding 028's single-source rule).
+        $readme = (string) file_get_contents(__DIR__ . '/../README.md');
+        $this->assertSame(1, preg_match('/--theme \{([a-z|-]+)\}/', $readme, $m));
+        $documented = explode('|', $m[1]);
+        $this->assertContains('notty', $documented);
+        foreach ($documented as $name) {
+            $this->assertInstanceOf(Theme::class, RenderCommand::pickTheme($name), "documented theme '{$name}' must resolve");
+        }
+        // The alias sentence promises exactly three resolutions.
+        $this->assertSame(RenderCommand::pickTheme('plain'), RenderCommand::pickTheme('no'));
+        $this->assertEquals(RenderCommand::pickTheme('notty'), RenderCommand::pickTheme('auto-no'));
+        $this->assertEquals(RenderCommand::pickTheme('tokyo-night'), RenderCommand::pickTheme('tokyonight'));
+    }
+
+    public function testLibraryApiExampleConstructsAsDocumented(): void
+    {
+        // The README's Pager-as-a-library snippet must stay constructible
+        // exactly as printed (signature drift turns this red).
+        $readme = (string) file_get_contents(__DIR__ . '/../README.md');
+        foreach ([
+            'MdViewModel::fromContent($rendered, 80, 24)->withDocument',
+            'mouseMode:       MouseMode::CellMotion',
+            'openTty:         true',
+        ] as $line) {
+            $this->assertStringContainsString($line, $readme, 'README snippet line drifted: ' . $line);
+        }
+
+        $rendered = (new Renderer())->withWordWrap(80)->render("# hi\n");
+        $model    = MdViewModel::fromContent($rendered, 80, 24)->withDocument('notes.md');
+        $program  = new Program($model, new ProgramOptions(
+            useAltScreen:    true,
+            hideCursor:      true,
+            catchInterrupts: true,
+            mouseMode:       MouseMode::CellMotion,
+            openTty:         true,
+        ));
+        $this->assertInstanceOf(Program::class, $program);
     }
 
     public function testPickThemeNotty(): void
