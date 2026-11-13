@@ -331,7 +331,13 @@ final class StdioPipe
                 // Pending client -> child bytes (one CHUNK_BYTES feed per
                 // tick: the full-buffer fwrite re-copied the whole pile on
                 // every partial accept — quadratic against a stalled child).
-                if ($childInOpen && $toChild !== '') {
+                // Windows: never feed stdin while git has output waiting. That
+                // is the state where git may be blocked writing, and a pipe
+                // write then could park this process past every deadline; the
+                // reads above drain it first, and the write waits a tick.
+                $childBacklogged = $windows
+                    && (WindowsPipes::available($pipes[1]) > 0 || WindowsPipes::available($pipes[2]) > 0);
+                if ($childInOpen && $toChild !== '' && !$childBacklogged) {
                     $n = @\fwrite($pipes[0], \substr($toChild, 0, $windows ? WindowsPipes::PIPE_BUFFER_BYTES : self::CHUNK_BYTES));
                     if ($n === false) {
                         $childInOpen = false; // child closed its stdin
