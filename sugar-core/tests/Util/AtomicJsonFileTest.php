@@ -404,15 +404,15 @@ final class AtomicJsonFileTest extends TestCase
     {
         $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Util/AtomicJsonFile.php');
 
-        $write = self::methodBody($src, 'public function write');
+        $write = self::methodBody($src, 'private function publish');
         $settler = self::methodBody($src, 'private function applyPermissions');
 
         $rename = strpos($write, 'rename($tmp, $this->path)');
         $settle = strpos($write, '$this->applyPermissions($tmp)');
         $payload = strpos($write, 'fwrite($handle, $payload)');
 
-        $this->assertIsInt($rename, 'write() no longer publishes with rename($tmp, $this->path)');
-        $this->assertIsInt($settle, 'write() no longer settles permissions via applyPermissions($tmp)');
+        $this->assertIsInt($rename, 'publish() no longer publishes with rename($tmp, $this->path)');
+        $this->assertIsInt($settle, 'publish() no longer settles permissions via applyPermissions($tmp)');
         $this->assertIsInt($payload);
 
         $this->assertLessThan($rename, $settle, 'permissions must be settled BEFORE the publish rename');
@@ -438,14 +438,14 @@ final class AtomicJsonFileTest extends TestCase
     {
         $src = (string) file_get_contents(\dirname(__DIR__, 2) . '/src/Util/AtomicJsonFile.php');
 
-        $write = self::methodBody($src, 'public function write');
+        $write = self::methodBody($src, 'private function publish');
         $rename = strpos($write, 'rename($tmp, $this->path)');
         $payloadSync = strpos($write, 'fsync($handle)');
         $dirSync = strpos($write, '$this->syncDirectory($dir)');
 
         $this->assertIsInt($rename);
-        $this->assertIsInt($payloadSync, 'write() no longer fsyncs the payload temp before publishing');
-        $this->assertIsInt($dirSync, 'write() no longer fsyncs the directory after the publish rename');
+        $this->assertIsInt($payloadSync, 'publish() no longer fsyncs the payload temp before publishing');
+        $this->assertIsInt($dirSync, 'publish() no longer fsyncs the directory after the publish rename');
 
         $this->assertLessThan($rename, $payloadSync, 'payload bytes must reach storage before the rename publishes them');
         $this->assertLessThan($dirSync, $rename, 'the directory sync must follow the rename whose entry it flushes');
@@ -472,5 +472,134 @@ final class AtomicJsonFileTest extends TestCase
         }
 
         return substr($src, $start, $end - $start);
+    }
+
+    public function testMutateSeesCurrentStateAndPublishesResult(): void
+    {
+        $dir = sys_get_temp_dir() . '/ajf-mutate-' . bin2hex(random_bytes(4));
+        $store = AtomicJsonFile::new($dir . '/s.json');
+        try {
+            $first = $store->mutate(static fn (array $c): array => $c + ['n' => 1]);
+            self::assertSame(['n' => 1], $first);
+            $second = $store->mutate(static fn (array $c): array => ['n' => $c['n'] + 1]);
+            self::assertSame(['n' => 2], $second);
+            self::assertSame(['n' => 2], $store->read());
+        } finally {
+            self::rm($dir);
+        }
+    }
+
+    public function testMutateReturningNullLeavesFileUntouched(): void
+    {
+        $dir = sys_get_temp_dir() . '/ajf-mutate-' . bin2hex(random_bytes(4));
+        $store = AtomicJsonFile::new($dir . '/s.json');
+        try {
+            self::assertNull($store->mutate(static fn (array $c): ?array => null));
+            self::assertFalse($store->exists());
+            $store->write(['a' => 1]);
+            self::assertNull($store->mutate(static fn (array $c): ?array => null));
+            self::assertSame(['a' => 1], $store->read());
+        } finally {
+            self::rm($dir);
+        }
+    }
+
+    public function testMutateThrowsOnCorruptFileWithoutNormaliser(): void
+    {
+        $dir = sys_get_temp_dir() . '/ajf-mutate-' . bin2hex(random_bytes(4));
+        mkdir($dir, 0700, true);
+        file_put_contents($dir . '/s.json', '{not json');
+        try {
+            $this->expectException(\JsonException::class);
+            AtomicJsonFile::new($dir . '/s.json')->mutate(static fn (array $c): array => $c);
+        } finally {
+            self::rm($dir);
+        }
+    }
+
+    public function testMutateNormaliserCoercesGarbage(): void
+    {
+        $dir = sys_get_temp_dir() . '/ajf-mutate-' . bin2hex(random_bytes(4));
+        mkdir($dir, 0700, true);
+        file_put_contents($dir . '/s.json', '{not json');
+        try {
+            $seen = null;
+            $out = AtomicJsonFile::new($dir . '/s.json')->mutate(
+                static fn (array $c): array => ['ok' => true],
+                static function (mixed $raw) use (&$seen): array {
+                    $seen = $raw;
+                    return is_array($raw) ? $raw : [];
+                },
+            );
+            self::assertNull($seen);
+            self::assertSame(['ok' => true], $out);
+        } finally {
+            self::rm($dir);
+        }
+    }
+
+    public function testMutateHoldsTheLockAcrossReadAndWrite(): void
+    {
+        $dir = sys_get_temp_dir() . '/ajf-mutate-' . bin2hex(random_bytes(4));
+        $store = AtomicJsonFile::new($dir . '/s.json');
+        try {
+            $store->write(['n' => 0]);
+            $contended = null;
+            $store->mutate(function (array $c) use ($dir, &$contended): array {
+                $h = fopen($dir . '/.s.json.lock', 'cb');
+                $contended = !flock($h, LOCK_EX | LOCK_NB);
+                fclose($h);
+                return $c;
+            });
+            self::assertTrue($contended, 'a second descriptor must not get the lock inside the closure');
+            // and the lock is gone afterwards
+            $h = fopen($dir . '/.s.json.lock', 'cb');
+            self::assertTrue(flock($h, LOCK_EX | LOCK_NB));
+            fclose($h);
+        } finally {
+            self::rm($dir);
+        }
+    }
+
+    public function testMutateReleasesLockWhenClosureThrows(): void
+    {
+        $dir = sys_get_temp_dir() . '/ajf-mutate-' . bin2hex(random_bytes(4));
+        $store = AtomicJsonFile::new($dir . '/s.json');
+        try {
+            try {
+                $store->mutate(static function (array $c): array {
+                    throw new \LogicException('boom');
+                });
+                self::fail('expected throw');
+            } catch (\LogicException) {
+            }
+            $h = fopen($dir . '/.s.json.lock', 'cb');
+            self::assertTrue(flock($h, LOCK_EX | LOCK_NB));
+            fclose($h);
+        } finally {
+            self::rm($dir);
+        }
+    }
+
+    public function testMutateHonoursPermissions(): void
+    {
+        $dir = sys_get_temp_dir() . '/ajf-mutate-' . bin2hex(random_bytes(4));
+        $store = AtomicJsonFile::new($dir . '/s.json')->withPermissions(0600);
+        try {
+            $store->mutate(static fn (array $c): array => ['k' => 'v']);
+            self::assertSame(0600, fileperms($dir . '/s.json') & 0777);
+        } finally {
+            self::rm($dir);
+        }
+    }
+
+    private static function rm(string $dir): void
+    {
+        foreach (glob($dir . '/{,.}*', GLOB_BRACE) ?: [] as $f) {
+            if (is_file($f)) {
+                @unlink($f);
+            }
+        }
+        @rmdir($dir);
     }
 }

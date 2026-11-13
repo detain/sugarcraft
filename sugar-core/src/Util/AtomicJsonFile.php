@@ -178,23 +178,101 @@ final class AtomicJsonFile
      */
     public function write(array $data): void
     {
-        $dir = \dirname($this->path);
-        $this->ensureDirectory($dir);
+        $this->ensureDirectory(\dirname($this->path));
 
-        $payload = json_encode(
+        $payload = $this->encode($data);
+
+        $this->withWriteLock(function () use ($payload): void {
+            $this->publish($payload);
+        });
+    }
+
+    /**
+     * Read-modify-write under ONE exclusive lock: the closure's decision is
+     * made on state read while the lock is held, so a concurrent writer's
+     * update cannot be lost between a caller's read and its write (the
+     * hand-rolled `read(); ...; write()` pair locks only the write half).
+     *
+     * `$change` receives the current decoded state (`[]` when the file is
+     * missing) and returns the next state, or null to write nothing — the
+     * file is then left untouched and mutate() returns null. A non-null
+     * result is published exactly as {@see write()} would (temp + fsync +
+     * rename, permissions, directory sync) and returned.
+     *
+     * `$normalise`, when given, replaces the strict decode: it receives the
+     * raw `json_decode()` value (null for a missing, empty or malformed file)
+     * and answers the array `$change` sees. That lets a caller that must
+     * tolerate hand-edited garbage (a card store) coerce it, where the default
+     * is {@see read()}'s loud throw on a corrupt file — silently treating
+     * garbage as `[]` would drop live data on the next write.
+     *
+     * @param \Closure(array<mixed>): (array<mixed>|null) $change
+     * @param \Closure(mixed): array<mixed>|null          $normalise
+     *
+     * @return array<mixed>|null The published state, or null when $change declined.
+     *
+     * @throws \RuntimeException On any filesystem failure or a corrupt file with no $normalise.
+     * @throws \JsonException    On malformed JSON with no $normalise, or an unencodable result.
+     */
+    public function mutate(\Closure $change, ?\Closure $normalise = null): ?array
+    {
+        $this->ensureDirectory(\dirname($this->path));
+
+        $next = null;
+        $this->withWriteLock(function () use ($change, $normalise, &$next): void {
+            $current = $this->readUnderLock($normalise);
+            $decided = $change($current);
+            if ($decided === null) {
+                return;
+            }
+            $this->publish($this->encode($decided));
+            $next = $decided;
+        });
+
+        return $next;
+    }
+
+    /**
+     * @param \Closure(mixed): array<mixed>|null $normalise
+     *
+     * @return array<mixed>
+     */
+    private function readUnderLock(?\Closure $normalise): array
+    {
+        if ($normalise === null) {
+            return $this->read();
+        }
+
+        $raw = is_file($this->path) ? @file_get_contents($this->path) : false;
+        $decoded = $raw === false || $raw === '' ? null : json_decode($raw, true);
+
+        return $normalise($decoded);
+    }
+
+    /**
+     * @param array<mixed> $data
+     *
+     * @throws \JsonException
+     */
+    private function encode(array $data): string
+    {
+        return json_encode(
             $data,
             JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES,
         );
+    }
 
-        // Mutual exclusion rides a STABLE inode. The temp file below carries a
-        // fresh random name per write, so an flock() on it is a lock nobody
-        // else ever takes; the .<basename>.lock sidecar below is the one path
-        // every writer of this store agrees on, so it is what serialises the
-        // critical section. 'cb' creates it once; the sidecar holds no
-        // payload, so it is 0600 regardless of the published file's requested
-        // mode (the
-        // chmod is best-effort: an existing sidecar's bits are not ours to
-        // police, and failing here would fail a write over a metadata nicety).
+    /**
+     * Run $critical holding the exclusive sidecar lock; released on every
+     * exit path. The lock rides a STABLE inode (see {@see lockPath()}): the
+     * temp file carries a fresh random name per write, so an flock() on it
+     * would be a lock nobody else ever takes. 'cb' creates the sidecar once;
+     * it holds no payload, so it is 0600 regardless of the published file's
+     * mode (chmod is best-effort: an existing sidecar's bits are not ours to
+     * police, and failing here would fail a write over a metadata nicety).
+     */
+    private function withWriteLock(\Closure $critical): void
+    {
         $lockPath = $this->lockPath();
         $lockHandle = @fopen($lockPath, 'cb');
         if ($lockHandle === false) {
@@ -202,15 +280,30 @@ final class AtomicJsonFile
         }
         @chmod($lockPath, 0600);
 
+        try {
+            if (!flock($lockHandle, \LOCK_EX)) {
+                throw new \RuntimeException("Failed to acquire write lock: {$lockPath}");
+            }
+            $critical();
+        } finally {
+            // Released only after the publish: a writer that grabbed the lock
+            // second must rename on top of the first one's settled file.
+            $this->releaseWriteLock($lockHandle);
+        }
+    }
+
+    /**
+     * Temp + flush + fsync + rename + directory sync of $payload. The caller
+     * holds the write lock. The temp is removed on any failure.
+     */
+    private function publish(string $payload): void
+    {
+        $dir = \dirname($this->path);
         $tmp = $dir . \DIRECTORY_SEPARATOR . '.' . basename($this->path) . '.tmp.' . bin2hex(random_bytes(8));
 
         $handle = null;
 
         try {
-            if (!flock($lockHandle, \LOCK_EX)) {
-                throw new \RuntimeException("Failed to acquire write lock: {$lockPath}");
-            }
-
             $handle = @fopen($tmp, 'wb');
             if ($handle === false) {
                 throw new \RuntimeException("Failed to open temp file: {$tmp}");
@@ -266,14 +359,8 @@ final class AtomicJsonFile
             if (is_file($tmp)) {
                 @unlink($tmp);
             }
-            $this->releaseWriteLock($lockHandle);
-
             throw $e;
         }
-
-        // Released only after the publish: a writer that grabbed the lock
-        // second must rename on top of the first one's settled file.
-        $this->releaseWriteLock($lockHandle);
     }
 
     /**
