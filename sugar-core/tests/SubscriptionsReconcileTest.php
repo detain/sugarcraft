@@ -6,10 +6,20 @@ namespace SugarCraft\Core\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Cmd;
+use SugarCraft\Core\Component;
+use SugarCraft\Core\Composite;
 use SugarCraft\Core\Kind;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Lang;
+use SugarCraft\Core\Model;
+use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\QuitMsg;
+use SugarCraft\Core\Panes;
+use SugarCraft\Core\Pane;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\Rect;
 use SugarCraft\Core\Subscription;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\SubscriptionCapable;
@@ -412,7 +422,13 @@ final class SubscriptionsReconcileTest extends TestCase
      * hazard sugar-query once tripped over), and duplicate ids inside a
      * single set start exactly one timer.
      */
-    public function testSameIdDifferentClosureKeepsTheFirstHandle(): void
+    /**
+     * sc-08 (sugar-core-009) superseded this pin: same-id re-register with a
+     * different producer/interval now stops the old arm and lives with the
+     * new one (retune without unregister), and a duplicate id in one batch
+     * is a named refusal instead of a silent first-wins collapse.
+     */
+    public function testSameIdDifferentSignatureReplacesTheArm(): void
     {
         [$in, $out, $writer] = $this->pipes();
         $program = new Program($this->nullModel(), new ProgramOptions(
@@ -428,17 +444,29 @@ final class SubscriptionsReconcileTest extends TestCase
         $first = static fn () => null;
         $second = static fn () => null;
         $reconcile->invoke($program, (new Subscriptions())->withTick('same', 1.0, $first));
-        $reconcile->invoke($program, (new Subscriptions())->withTick('same', 2.0, $second));
-
         $active = $activeProp->getValue($program);
-        self::assertCount(1, $active, 'same-id re-reconcile does not start a second timer');
-        self::assertSame(1.0, $active['same'][1]->params['seconds'], 'the FIRST handle stays live');
+        $originalHandle = $active['same'][0];
 
+        $reconcile->invoke($program, (new Subscriptions())->withTick('same', 2.0, $second));
+        $active = $activeProp->getValue($program);
+        self::assertCount(1, $active, 'a retune does not leave two live arms under one id');
+        self::assertSame(2.0, $active['same'][1]->params['seconds'], 'the NEW subscription is the live one');
+        self::assertNotSame($originalHandle, $active['same'][0], 'the old timer was replaced, not kept');
+
+        // Unchanged signature keeps the exact same arm objects (no churn).
+        $retunedHandle = $active['same'][0];
+        $retunedSub = $active['same'][1];
+        $reconcile->invoke($program, (new Subscriptions())->withTick('same', 2.0, $second));
+        $active = $activeProp->getValue($program);
+        self::assertSame($retunedHandle, $active['same'][0], 'stable signatures must not churn the timer');
+        self::assertSame($retunedSub, $active['same'][1], 'stable signatures must not swap the stored Subscription');
+
+        // Duplicate ids in a single batch are a named refusal (sugar-core-009).
         $dupes = (new Subscriptions())->withTick('x', 3.0, $first)->withTick('x', 4.0, $second);
         self::assertCount(2, $dupes->all());
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage(Lang::t('program.subscription_duplicate_id', ['id' => 'x']));
         $reconcile->invoke($program, $dupes);
-        $active = $activeProp->getValue($program);
-        self::assertSame(3.0, $active['x'][1]->params['seconds'], 'duplicate ids collapse to the first entry');
 
         fclose($writer);
         fclose($in);
@@ -563,6 +591,340 @@ final class SubscriptionsReconcileTest extends TestCase
         );
 
         pcntl_signal(SIGUSR1, SIG_DFL);
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /**
+     * sugar-core-009: re-registering the SAME id with a different producer
+     * (or interval) must stop the old arm and live with the new one — a
+     * retune without an explicit unregister. Producers here tick counters
+     * directly, so the counters also attribute which closure is armed.
+     */
+    public function testRetuneSameIdSwapsProducerWithoutUnregister(): void
+    {
+        $a = 0;
+        $b = 0;
+        $producerA = static function () use (&$a) { $a++; return null; };
+        $producerB = static function () use (&$b) { $b++; return null; };
+        $model = new class ($producerA, $producerB) implements Model {
+            use SubscriptionCapable;
+            public Subscriptions $wanted;
+            private \Closure $second;
+            public function __construct(\Closure $first, \Closure $second)
+            {
+                $this->wanted = (new Subscriptions())->withTick('t', 0.02, $first);
+                $this->second = $second;
+            }
+            public function init(): ?\Closure { return null; }
+            public function update(Msg $msg): array
+            {
+                if ($msg instanceof KeyMsg && $msg->rune === 'r') {
+                    $this->wanted = (new Subscriptions())->withTick('t', 0.02, $this->second);
+                }
+                return [$this, null];
+            }
+            public function view(): string { return ''; }
+            public function subscriptions(): ?Subscriptions { return $this->wanted; }
+        };
+
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $program = new Program($model, new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+        ));
+        $loop->addTimer(0.08, static function () use ($program): void {
+            $program->send(new KeyMsg(KeyType::Char, 'r'));
+        });
+        $loop->addTimer(0.3, static fn () => $loop->stop());
+        $program->run();
+
+        $this->assertGreaterThanOrEqual(1, $a, 'the original producer must have fired');
+        $this->assertGreaterThanOrEqual(1, $b, 'the retuned producer must take over under the same id');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /**
+     * sugar-core-009: an unchanged signature must NOT churn the live arm —
+     * same timer object, same Subscription instance across update cycles.
+     */
+    public function testStableSignatureKeepsTheSameLiveArm(): void
+    {
+        $model = new class implements Model {
+            use SubscriptionCapable;
+            public Subscriptions $wanted;
+            public function __construct()
+            {
+                $this->wanted = (new Subscriptions())->withTick('steady', 0.05, static fn () => null);
+            }
+            public function init(): ?\Closure { return null; }
+            public function update(Msg $msg): array { return [$this, null]; }
+            public function view(): string { return ''; }
+            public function subscriptions(): ?Subscriptions { return $this->wanted; }
+        };
+
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $program = new Program($model, new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+        ));
+        $arms = new \ReflectionProperty(Program::class, 'activeSubscriptions');
+        $seen = [];
+        $grab = static function () use ($program, $arms, &$seen): void {
+            $active = $arms->getValue($program);
+            $seen[] = [$active['steady'][0], $active['steady'][1]];
+        };
+        $loop->addTimer(0.03, $grab);
+        $loop->addTimer(0.06, static function () use ($program): void {
+            $program->send(new KeyMsg(KeyType::Char, 'n'));
+        });
+        $loop->addTimer(0.13, $grab);
+        $loop->addTimer(0.2, static fn () => $loop->stop());
+        $program->run();
+
+        $this->assertCount(2, $seen);
+        $this->assertSame($seen[0][0], $seen[1][0], 'the timer handle must survive an unchanged reconcile');
+        $this->assertSame($seen[0][1], $seen[1][1], 'the Subscription object must survive an unchanged reconcile');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testDuplicateIdInOneBatchIsNamedRefusal(): void
+    {
+        $model = new class implements Model {
+            use SubscriptionCapable;
+            public function init(): ?\Closure { return null; }
+            public function update(Msg $msg): array { return [$this, null]; }
+            public function view(): string { return ''; }
+            public function subscriptions(): ?Subscriptions
+            {
+                return new Subscriptions([
+                    new Subscription('dup', Kind::Tick, ['seconds' => 0.05], static fn () => null),
+                    new Subscription('dup', Kind::Tick, ['seconds' => 0.05], static fn () => null),
+                ]);
+            }
+        };
+
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $program = new Program($model, new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+        ));
+        // Watchdog: if the refusal regresses to a silent arm, the test must
+        // fail with "expected exception not thrown" — never hang the suite.
+        $loop->addTimer(0.3, static fn () => $loop->stop());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage(Lang::t('program.subscription_duplicate_id', ['id' => 'dup']));
+        $program->run();
+    }
+
+    /**
+     * @return array<string, array{0: array<string,mixed>}>
+     */
+    public static function badTickParams(): array
+    {
+        return [
+            'missing seconds' => [[]],
+            'zero seconds'    => [['seconds' => 0.0]],
+            'negative'        => [['seconds' => -1.0]],
+            'non-numeric'     => [['seconds' => 'abc']],
+        ];
+    }
+
+    /**
+     * sugar-core-009: Tick arms without a positive numeric `seconds` are a
+     * named refusal at arming time — no undefined-index null fed to
+     * addPeriodicTimer, no busy-spin at zero.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('badTickParams')]
+    public function testBadTickIntervalIsNamedRefusal(array $params): void
+    {
+        $model = new class ($params) implements Model {
+            use SubscriptionCapable;
+            /** @param array<string,mixed> $params */
+            public function __construct(private array $params) {}
+            public function init(): ?\Closure { return null; }
+            public function update(Msg $msg): array { return [$this, null]; }
+            public function view(): string { return ''; }
+            public function subscriptions(): ?Subscriptions
+            {
+                return new Subscriptions([
+                    new Subscription('bad', Kind::Tick, $this->params, static fn () => null),
+                ]);
+            }
+        };
+
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $program = new Program($model, new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+        ));
+        $loop->addTimer(0.3, static fn () => $loop->stop());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage(Lang::t('program.subscription_interval_invalid', [
+            'id' => 'bad', 'param' => 'seconds',
+        ]));
+        $program->run();
+    }
+
+    /**
+     * sugar-core-015: a Component child of a Composite that declares a tick
+     * must actually get it armed — before the fix only the ROOT model was
+     * consulted and nested declarations were structurally dead.
+     */
+    public function testCompositeChildTickArms(): void
+    {
+        $childTicks = 0;
+        $produce = static function () use (&$childTicks) { $childTicks++; return null; };
+        $child = new class ($produce) implements Component {
+            use SubscriptionCapable;
+            public function __construct(private \Closure $produce) {}
+            public function init(): ?\Closure { return null; }
+            public function update(Msg $msg): array { return [$this, null]; }
+            public function view(): string { return ''; }
+            public function onMount(): ?\Closure { return null; }
+            public function onUnmount(): ?\Closure { return null; }
+            public function subscriptions(): ?Subscriptions
+            {
+                return (new Subscriptions())->withTick('child-tick', 0.02, $this->produce);
+            }
+        };
+
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $program = new Program(new Composite(['kid' => $child]), new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+        ));
+        $loop->addTimer(0.15, static fn () => $loop->stop());
+        $program->run();
+
+        $this->assertGreaterThanOrEqual(2, $childTicks, 'a nested Component subscription must arm and fire');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /**
+     * sugar-core-015: same pin for the Panes composition.
+     */
+    public function testPaneModelTickArms(): void
+    {
+        $paneTicks = 0;
+        $produce = static function () use (&$paneTicks) { $paneTicks++; return null; };
+        $paneModel = new class ($produce) implements Model {
+            use SubscriptionCapable;
+            public function __construct(private \Closure $produce) {}
+            public function init(): ?\Closure { return null; }
+            public function update(Msg $msg): array { return [$this, null]; }
+            public function view(): string { return ''; }
+            public function subscriptions(): ?Subscriptions
+            {
+                return (new Subscriptions())->withTick('pane-tick', 0.02, $this->produce);
+            }
+        };
+
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $program = new Program(new Panes([new Pane($paneModel, new Rect(0, 0, 80, 24))]), new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+        ));
+        $loop->addTimer(0.15, static fn () => $loop->stop());
+        $program->run();
+
+        $this->assertGreaterThanOrEqual(2, $paneTicks, 'a Pane model subscription must arm and fire');
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    /**
+     * sugar-core-013: Kind::Key is a fixed-interval poll. The interval is
+     * the exposed tuning seam and the docblocks must say POLL — the
+     * event-driven rework stays an owner decision.
+     */
+    public function testKeyPollIntervalSeamAndDocHonesty(): void
+    {
+        $default = (new Subscriptions())->withKey('k', static fn () => null)->all()[0];
+        $this->assertSame(['interval' => 0.1], $default->params);
+        $tuned = (new Subscriptions())->withKey('k', static fn () => null, 0.25)->all()[0];
+        $this->assertSame(['interval' => 0.25], $tuned->params);
+
+        $kindSrc = (string) file_get_contents(dirname(__DIR__) . '/src/Kind.php');
+        $subsSrc = (string) file_get_contents(dirname(__DIR__) . '/src/Subscriptions.php');
+        $progSrc = (string) file_get_contents(dirname(__DIR__) . '/src/Program.php');
+        $this->assertStringContainsString('fixed-interval POLL', $kindSrc, 'Kind::Key must be documented as a poll');
+        $this->assertStringContainsString('fixed-interval POLL', $subsSrc, 'withKey must be documented as a poll');
+        $this->assertStringContainsString("periodicInterval(\$sub, 'interval', 0.1)", $progSrc, 'the Key arm must read the interval seam');
+
+        $polls = 0;
+        $produce = static function () use (&$polls) { $polls++; return null; };
+        $model = new class ($produce) implements Model {
+            use SubscriptionCapable;
+            public function __construct(private \Closure $produce) {}
+            public function init(): ?\Closure { return null; }
+            public function update(Msg $msg): array { return [$this, null]; }
+            public function view(): string { return ''; }
+            public function subscriptions(): ?Subscriptions
+            {
+                return (new Subscriptions())->withKey('fast-poll', $this->produce, 0.02);
+            }
+        };
+
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+        $program = new Program($model, new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+        ));
+        $loop->addTimer(0.25, static fn () => $loop->stop());
+        $program->run();
+
+        $this->assertGreaterThanOrEqual(4, $polls, 'the tuned 20 ms poll must beat the 100 ms default inside 250 ms');
+
         fclose($writer);
         fclose($in);
         fclose($out);

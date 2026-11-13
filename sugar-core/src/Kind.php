@@ -11,9 +11,18 @@ namespace SugarCraft\Core;
  */
 enum Kind
 {
-    /** Wall-clock tick at a given interval. */
+    /**
+     * Wall-clock tick at a given interval. Requires a positive numeric
+     * `seconds` param (sugar-core-009: missing/zero/negative is a named
+     * refusal, so the timer can never busy-spin).
+     */
     case Tick;
-    /** Keyboard event subscription. */
+    /**
+     * Keyboard subscription. Shipped as a fixed-interval POLL (default
+     * 100 ms), not an edge-triggered key event (sugar-core-013); the
+     * optional `interval` param is the tuning seam. Event-driven rework
+     * is owner-gated.
+     */
     case Key;
     /** System signal subscription. */
     case Signal;

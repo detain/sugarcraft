@@ -11,7 +11,9 @@ namespace SugarCraft\Core;
  * Models return an instance from their {@see Model::subscriptions()} method.
  * The runtime diffs the old set against the new one on each update cycle,
  * starting new subscriptions, cancelling dropped ones, and leaving stable
- * ones untouched.
+ * ones untouched — stable means the kind+params+producer signature matches,
+ * so re-registering an id with a new producer or interval retunes the live
+ * arm (stop-old, arm-new) instead of no-oping.
  */
 final class Subscriptions
 {
@@ -37,15 +39,20 @@ final class Subscriptions
     }
 
     /**
-     * Add a key subscription — fires `produce` on keyboard events.
+     * Add a key subscription — `produce` runs on a fixed-interval POLL
+     * (every `$intervalSeconds`, default 100 ms), not on keyboard events
+     * (sugar-core-013). The poll is the shipped mechanism: an event-driven
+     * key subscription would need the input reader to fan out to
+     * subscribers, a redesign the owner gates. Produce closures should be
+     * cheap; the interval is the tuning seam.
      *
      * @param non-empty-string $id
      * @param \Closure(): Msg $produce
      */
-    public function withKey(string $id, \Closure $produce): self
+    public function withKey(string $id, \Closure $produce, float $intervalSeconds = 0.1): self
     {
         return new self(array_merge($this->subscriptions, [
-            new Subscription($id, Kind::Key, [], $produce),
+            new Subscription($id, Kind::Key, ['interval' => $intervalSeconds], $produce),
         ]));
     }
 

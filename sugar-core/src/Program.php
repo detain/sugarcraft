@@ -2465,7 +2465,41 @@ final class Program
         // subscription declarations structurally dead).
         return $this->options->subscriptions !== null
             ? ($this->options->subscriptions)($this->model)
-            : $this->activeModel()->subscriptions();
+            : $this->collectSubscriptions($this->activeModel());
+    }
+
+    /**
+     * Gather subscriptions declared anywhere in the active model tree
+     * (sugar-core-015): the model itself plus, for a {@see Composite},
+     * every child (recursively — children may themselves compose), and for
+     * a {@see Panes} root, every pane's model. Before the fix the reconcile
+     * walk consulted the ROOT only, so `SubscriptionCapable` on a non-root
+     * model was structurally dead: the child's tick could never arm.
+     * Ids are unique across the whole tree — a collision is the named
+     * duplicate refusal in {@see reconcileSubscriptions()}.
+     */
+    private function collectSubscriptions(Model $model): ?Subscriptions
+    {
+        $list = [];
+        $collect = function (Model $node) use (&$collect, &$list): void {
+            $subs = $node->subscriptions();
+            if ($subs !== null) {
+                foreach ($subs->all() as $sub) {
+                    $list[] = $sub;
+                }
+            }
+            if ($node instanceof Composite) {
+                foreach ($node->children() as $child) {
+                    $collect($child);
+                }
+            } elseif ($node instanceof Panes) {
+                foreach ($node->panes() as $pane) {
+                    $collect($pane->model);
+                }
+            }
+        };
+        $collect($model);
+        return $list === [] ? null : new Subscriptions($list);
     }
 
     /**
@@ -2487,30 +2521,77 @@ final class Program
     /**
      * Diff the currently-active subscriptions against the wanted set
      * and reconcile: cancel any not in $wanted, start any new ones.
+     * Re-registration under the same id reconciles by signature, not by
+     * blind skip (sugar-core-009): kind+params+producer identical keeps the
+     * live arm untouched; any difference stops the old arm and arms the new
+     * one, so a model can retune an interval or swap a producer without an
+     * explicit unregister. A model that rebuilds fresh closures on every
+     * update cycle therefore re-arms every cycle (its timer restarts) — hold
+     * the Subscription stable when a steady cadence matters. Two live ids
+     * in one batch are a named refusal, not a silent dead arm.
      */
     private function reconcileSubscriptions(Subscriptions $wanted): void
     {
-        $wantedIds = [];
+        /** @var array<string, string> $signatures */
+        $signatures = [];
         foreach ($wanted->all() as $sub) {
-            $wantedIds[$sub->id] = true;
-            if (isset($this->activeSubscriptions[$sub->id]) === false) {
-                $this->activeSubscriptions[$sub->id] = [
-                    $this->startSubscription($sub),
-                    $sub,
-                ];
+            if (isset($signatures[$sub->id])) {
+                throw new \InvalidArgumentException(Lang::t('program.subscription_duplicate_id', ['id' => $sub->id]));
             }
+            $signatures[$sub->id] = $this->subscriptionSignature($sub);
+            $arm = $this->activeSubscriptions[$sub->id] ?? null;
+            if ($arm !== null && $this->subscriptionSignature($arm[1]) === $signatures[$sub->id]) {
+                continue; // same id, same signature: the live arm stays put
+            }
+            if ($arm !== null) {
+                $this->cancelSubscriptionArm($arm); // retune: stop-old, then arm-new
+            }
+            $this->activeSubscriptions[$sub->id] = [$this->startSubscription($sub), $sub];
         }
         // Cancel subscriptions that are no longer wanted.
-        foreach ($this->activeSubscriptions as $id => [$timer, $activeSub]) {
-            if (!isset($wantedIds[$id])) {
-                if ($activeSub->kind === Kind::Signal) {
-                    $this->cancelSignalSubscription($activeSub);
-                } else {
-                    $this->loop->cancelTimer($timer);
-                }
+        foreach ($this->activeSubscriptions as $id => $arm) {
+            if (!isset($signatures[$id])) {
+                $this->cancelSubscriptionArm($arm);
                 unset($this->activeSubscriptions[$id]);
             }
         }
+    }
+
+    /**
+     * Tear down one live arm from {@see $activeSubscriptions} — signal
+     * subscriptions restore their displaced handler, timers get cancelled.
+     *
+     * @param array{0: mixed, 1: Subscription} $arm
+     */
+    private function cancelSubscriptionArm(array $arm): void
+    {
+        [$timer, $sub] = $arm;
+        if ($sub->kind === Kind::Signal) {
+            $this->cancelSignalSubscription($sub);
+        } else {
+            $this->loop->cancelTimer($timer);
+        }
+    }
+
+    /**
+     * Reconcile identity for sugar-core-009: kind + params digest +
+     * producer object id. Closures carry no value equality, so a rebuilt
+     * producer is (correctly) a different subscription by design.
+     *
+     * @return non-empty-string
+     */
+    private function subscriptionSignature(Subscription $sub): string
+    {
+        $params = $sub->params;
+        ksort($params);
+        $encoded = json_encode($params);
+        if ($encoded === false) {
+            $encoded = serialize(array_map(
+                static fn ($v) => is_scalar($v) || $v === null ? $v : gettype($v),
+                $params,
+            ));
+        }
+        return $sub->kind->name . '|' . $encoded . '|' . spl_object_id($sub->produce);
     }
 
     /**
@@ -2522,7 +2603,7 @@ final class Program
     {
         return match ($sub->kind) {
             Kind::Tick => $this->loop->addPeriodicTimer(
-                $sub->params['seconds'],
+                $this->periodicInterval($sub, 'seconds', null),
                 function () use ($sub): void {
                     $msg = $this->userProduce($sub->produce);
                     if ($msg !== null) {
@@ -2531,7 +2612,7 @@ final class Program
                 },
             ),
             Kind::Key => $this->loop->addPeriodicTimer(
-                0.1,
+                $this->periodicInterval($sub, 'interval', 0.1),
                 function () use ($sub): void {
                     $msg = $this->userProduce($sub->produce);
                     if ($msg !== null) {
@@ -2541,7 +2622,7 @@ final class Program
             ),
             Kind::Signal => $this->installSignalSubscription($sub),
             Kind::Custom => $this->loop->addPeriodicTimer(
-                $sub->params['interval'] ?? 1.0,
+                $this->periodicInterval($sub, 'interval', 1.0),
                 function () use ($sub): void {
                     $msg = $this->userProduce($sub->produce);
                     if ($msg !== null) {
@@ -2550,6 +2631,35 @@ final class Program
                 },
             ),
         };
+    }
+
+    /**
+     * Validate a periodic-interval parameter before arming (sugar-core-009).
+     * A missing key yields the kind's documented default; a present-but-bad
+     * value (non-numeric, zero, negative) is a named refusal — before the
+     * fix a zero/negative `seconds` produced a busy-spin the user could not
+     * switch off, and a hand-built Tick without `seconds` only surfaced as
+     * an undefined-index notice feeding addPeriodicTimer(null).
+     */
+    private function periodicInterval(Subscription $sub, string $key, ?float $default): float
+    {
+        $value = $sub->params[$key] ?? null;
+        if ($value === null && !array_key_exists($key, $sub->params)) {
+            if ($default !== null) {
+                return $default;
+            }
+            throw new \InvalidArgumentException(Lang::t('program.subscription_interval_invalid', [
+                'id'    => $sub->id,
+                'param' => $key,
+            ]));
+        }
+        if (!is_numeric($value) || (float) $value <= 0) {
+            throw new \InvalidArgumentException(Lang::t('program.subscription_interval_invalid', [
+                'id'    => $sub->id,
+                'param' => $key,
+            ]));
+        }
+        return (float) $value;
     }
 
     /**
