@@ -24,7 +24,6 @@ return [
     'cli.db_not_found'           => 'databáze nenalezena: {db}',
     'cli.db_did_you_mean'        => 'mysleli jste databázi \'{db}\'?',
     'store.did_you_mean'         => 'klíč nenalezen; mysleli jste \'{key}\'?',
-    'database.query_failed'      => 'Dotaz do databáze selhal.',
     'cli.key_not_found'          => 'klíč nenalezen: {key}',
     'cli.deleted_one'            => 'Smazána 1 položka.',
     'cli.imported_one'           => 'Importována 1 položka.',

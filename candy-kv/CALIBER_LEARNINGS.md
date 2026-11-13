@@ -54,8 +54,26 @@ Accumulated patterns and gotchas discovered during porting and auditing.
 
 ## i18n scope
 
-- Localised surface: the `bin/candy-kv` usage/diagnostic lines routed through `Lang::t('cli.usage_*')` / `cli.deleted_n` / `cli.deleted_none` / `cli.pattern_not_supported` / `cli.unknown_command`, plus `store.cannot_read` / `store.did_you_mean` (the typo suggestion is translated since D4; it previously bypassed i18n with a hardcoded English `fwrite`) / `database.entry_unreadable` / `database.query_failed`.
-- Intentionally UNTRANSLATED (English by design, ruled in the 2026-10-01 audit fix wave): the runtime stdout/stderr feedback inside `ImportCommand`/`ExportCommand` ("Imported N entries.", "File not found: …", …) and RuntimeException texts in the importers/`Database` (programmer-facing exception details). If a future wave localises them, `cli.import_success`/`cli.export_success` were deleted as dead keys in that pass — re-add them to en.php AND all 16 locales in one commit.
+- Localised surface (re-scoped to the Lang::t census 2026-11-13): the CLI's own
+  answers — `Lang::t('cli.usage_*')`, `cli.unknown_command`, `cli.key_not_found` /
+  `store.did_you_mean` (the typo suggestion is translated since D4; it previously
+  bypassed i18n with a hardcoded English `fwrite`), `cli.pattern_not_supported`,
+  the success counts `cli.deleted_one/_n`, `cli.would_delete_one/_n`,
+  `cli.imported_one/_n`, `cli.overwrote_one/_n`, `cli.pruned_one/_n/none`,
+  `cli.db_deleted` / `cli.db_not_found` / `cli.db_did_you_mean` — plus exactly
+  TWO catalog-keyed library throws: `store.cannot_read` and
+  `database.entry_unreadable`. (`database.query_failed` was struck with the
+  dead `execute() === false` arms it described; no key joins this list without
+  a live `Lang::t` call site pinning it.)
+- Intentionally UNTRANSLATED (English by design): `--help`, the
+  `src/Cli/ArgParser.php` parse errors, the import/export failure wrappers
+  ("File not found: …", "Import failed: …") and every importer/`Store`/
+  `Database` validation RuntimeException (programmer-facing exception
+  details). The success counts moved INTO the catalogue — the old row naming
+  "Imported N entries." as English is stale by design and its
+  `cli.import_success`/`cli.export_success` re-add note is void (if a future
+  wave localises the failure surfaces, new keys land in en.php AND all 16
+  locales in one commit, per the parity law).
 - Locale parity is ENFORCED: `tests/LocaleParityTest.php` re-derives the en key set from `lang/` and fails on missing/extra keys per locale, on dropped/invented `{placeholders}`, and on empty values. The locale list is the `lang/*.php` glob, so new locales auto-join the guard.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.

@@ -26,7 +26,6 @@ return [
     'cli.db_not_found'           => 'base de données introuvable : {db}',
     'cli.db_did_you_mean'        => 'vouliez-vous dire la base de données \'{db}\' ?',
     'store.did_you_mean'         => 'clé introuvable ; vouliez-vous dire \'{key}\' ?',
-    'database.query_failed'      => 'La requête base de données a échoué.',
     'cli.key_not_found'          => 'clé introuvable : {key}',
     'cli.deleted_one'            => '1 entrée supprimée.',
     'cli.imported_one'           => '1 entrée importée.',

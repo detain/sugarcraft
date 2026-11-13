@@ -566,8 +566,9 @@ function help(string $bin): void
              <binary N bytes>.
 
     Language:
-      Diagnostics and success lines follow LC_ALL/LC_MESSAGES/LANG. Help and
-      parse errors stay English by design.
+      Usage lines, miss diagnostics, suggestions and success counts follow
+      LC_ALL/LC_MESSAGES/LANG (16 locales). Help, parse errors and the
+      import/export failure diagnostics stay English by design.
 
     HELP;
 }

@@ -26,7 +26,6 @@ return [
     'cli.db_not_found'           => 'datenbank nicht gefunden: {db}',
     'cli.db_did_you_mean'        => 'meinst du die datenbank \'{db}\'?',
     'store.did_you_mean'         => 'Schlüssel nicht gefunden; meinst du \'{key}\'?',
-    'database.query_failed'      => 'Die Datenbankabfrage ist fehlgeschlagen.',
     'cli.key_not_found'          => 'Schlüssel nicht gefunden: {key}',
     'cli.deleted_one'            => '1 Eintrag gelöscht.',
     'cli.imported_one'           => '1 Eintrag importiert.',

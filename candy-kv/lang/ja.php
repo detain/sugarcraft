@@ -24,7 +24,6 @@ return [
     'cli.db_not_found'           => 'データベースが見つかりません: {db}',
     'cli.db_did_you_mean'        => 'データベース「{db}」のことですか?',
     'store.did_you_mean'         => 'キーが見つかりません: \'{key}\' のことですか?',
-    'database.query_failed'      => 'データベースクエリが失敗しました。',
     'cli.key_not_found'          => 'キーが見つかりません: {key}',
     'cli.deleted_one'            => '1 件を削除しました。',
     'cli.imported_one'           => '1 件をインポートしました。',

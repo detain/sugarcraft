@@ -24,7 +24,6 @@ return [
     'cli.db_not_found'           => 'قاعدة البيانات غير موجودة: {db}',
     'cli.db_did_you_mean'        => 'هل قصدتم قاعدة البيانات \'{db}\'؟',
     'store.did_you_mean'         => 'المفتاح غير موجود؛ هل قصدت \'{key}\'؟',
-    'database.query_failed'      => 'فشل استعلام قاعدة البيانات.',
     'cli.key_not_found'          => 'المفتاح غير موجود: {key}',
     'cli.deleted_one'            => 'تم حذف مدخل واحد.',
     'cli.imported_one'           => 'تم استيراد مدخل واحد.',

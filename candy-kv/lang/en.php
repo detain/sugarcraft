@@ -26,7 +26,6 @@ return [
     'cli.db_not_found'          => 'database not found: {db}',
     'cli.db_did_you_mean'       => 'did you mean database \'{db}\'?',
     'store.did_you_mean'        => 'key not found; did you mean \'{key}\'?',
-    'database.query_failed'     => 'The database query failed.',
     'cli.key_not_found'          => 'key not found: {key}',
     'cli.deleted_one'            => 'Deleted 1 entry.',
     'cli.imported_one'           => 'Imported 1 entry.',

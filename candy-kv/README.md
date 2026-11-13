@@ -483,18 +483,21 @@ CLI diagnostics and success lines are localized: the binary selects a locale
 from `LC_ALL` → `LC_MESSAGES` → `LANG` at start-up (16 shipped locales, see
 `lang/`). The missing-argument usage line is part of that translated surface —
 `usage()` emits `Lang::t('cli.usage_*')` before exit 2, so `LANG=fr candy-kv
-get` answers `Usage : candy-kv get <clé>`. Three surfaces stay English by
+get` answers `Usage : candy-kv get <clé>`. The translated set is the CLI's
+own answers: usage lines, the key/database miss diagnostics and their
+suggestions, and the success counts (`Deleted …`, `Imported … Overwrote …`,
+`pruned …`, `Deleted database …`). Four surfaces stay English by
 design: `candy-kv --help` (a fixed
 heredoc — its flag needles are pinned by `CliContractTest`), `src/Cli/ArgParser.php`'s
 own parse errors (unknown option, surplus positional — the one surface quoted
-verbatim by the test suite), and the import/export
-runtime diagnostics — importer refusals and failure lines such as
-`File not found: <path>` throw plain English from outside the catalogs, a
-design the `src/Cli/ImportCommand.php` docblock states outright. The rest of
-the library surface is catalog-keyed like the CLI — `store.cannot_read`,
-`database.entry_unreadable`, and `database.query_failed` carry the throw
-messages, so those exceptions follow the active locale too. English
-exceptions are the two named surfaces above, not the library as a whole.
+verbatim by the test suite), the import/export failure diagnostics —
+refusal wrappers such as `File not found: <path>` and the importers'
+RuntimeException texts, a design the `src/Cli/ImportCommand.php` docblock
+states outright — and the library's own validation throws (`Store` key
+routing, `Database` writes, expiry laws). Exactly two library exceptions are
+catalog-keyed, so they follow the active locale: `store.cannot_read` and
+`database.entry_unreadable`. Everything else English above is English on
+purpose, not drift.
 
 ## Demos
 

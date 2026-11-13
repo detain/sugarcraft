@@ -24,7 +24,6 @@ return [
     'cli.db_not_found'           => 'database non trovato: {db}',
     'cli.db_did_you_mean'        => 'intendevi il database \'{db}\'?',
     'store.did_you_mean'         => 'chiave non trovata; intendevi \'{key}\'?',
-    'database.query_failed'      => 'La query del database non è riuscita.',
     'cli.key_not_found'          => 'chiave non trovata: {key}',
     'cli.deleted_one'            => '1 voce eliminata.',
     'cli.imported_one'           => '1 voce importata.',

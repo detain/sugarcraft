@@ -24,7 +24,6 @@ return [
     'cli.db_not_found'           => 'veritabanı bulunamadı: {db}',
     'cli.db_did_you_mean'        => '\'{db}\' veritabanını mı kastettiniz?',
     'store.did_you_mean'         => 'anahtar bulunamadı; \'{key}\' mi demek istediniz?',
-    'database.query_failed'      => 'Veritabanı sorgusu başarısız oldu.',
     'cli.key_not_found'          => 'anahtar bulunamadı: {key}',
     'cli.deleted_one'            => '1 kayıt silindi.',
     'cli.imported_one'           => '1 kayıt içe aktarıldı.',

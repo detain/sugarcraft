@@ -24,7 +24,6 @@ return [
     'cli.db_not_found'           => 'databank niet gevonden: {db}',
     'cli.db_did_you_mean'        => 'bedoelde u databank \'{db}\'?',
     'store.did_you_mean'         => 'sleutel niet gevonden; bedoelde je \'{key}\'?',
-    'database.query_failed'      => 'De databasequery is mislukt.',
     'cli.key_not_found'          => 'sleutel niet gevonden: {key}',
     'cli.deleted_one'            => '1 item verwijderd.',
     'cli.imported_one'           => '1 item geïmporteerd.',

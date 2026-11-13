@@ -24,7 +24,6 @@ return [
     'cli.db_not_found'           => 'база данных не найдена: {db}',
     'cli.db_did_you_mean'        => 'вы имели в виду базу данных \'{db}\'?',
     'store.did_you_mean'         => 'ключ не найден; вы имели в виду \'{key}\'?',
-    'database.query_failed'      => 'Запрос к базе данных выполнен с ошибкой.',
     'cli.key_not_found'          => 'ключ не найден: {key}',
     'cli.deleted_one'            => 'Удалена 1 запись.',
     'cli.imported_one'           => 'Импортирована 1 запись.',

@@ -24,7 +24,6 @@ return [
     'cli.db_not_found'           => '데이터베이스를 찾을 수 없습니다: {db}',
     'cli.db_did_you_mean'        => '\'{db}\' 데이터베이스를 의미하셨나요?',
     'store.did_you_mean'         => '키를 찾을 수 없습니다; \'{key}\'을(를) 의미했나요?',
-    'database.query_failed'      => '데이터베이스 쿼리가 실패했습니다.',
     'cli.key_not_found'          => '키를 찾을 수 없습니다: {key}',
     'cli.deleted_one'            => '1개를 삭제했습니다.',
     'cli.imported_one'           => '1개를 가져왔습니다.',

@@ -24,7 +24,6 @@ return [
     'cli.db_not_found'           => 'banco de dados não encontrado: {db}',
     'cli.db_did_you_mean'        => 'você quis dizer o banco de dados \'{db}\'?',
     'store.did_you_mean'         => 'chave não encontrada; você quis dizer \'{key}\'?',
-    'database.query_failed'      => 'A consulta ao banco de dados falhou.',
     'cli.key_not_found'          => 'chave não encontrada: {key}',
     'cli.deleted_one'            => '1 entrada excluída.',
     'cli.imported_one'           => '1 entrada importada.',

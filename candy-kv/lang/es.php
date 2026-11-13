@@ -26,7 +26,6 @@ return [
     'cli.db_not_found'           => 'base de datos no encontrada: {db}',
     'cli.db_did_you_mean'        => '¿quería decir la base de datos \'{db}\'?',
     'store.did_you_mean'         => 'clave no encontrada; ¿quiso decir \'{key}\'?',
-    'database.query_failed'      => 'La consulta a la base de datos falló.',
     'cli.key_not_found'          => 'clave no encontrada: {key}',
     'cli.deleted_one'            => '1 entrada eliminada.',
     'cli.imported_one'           => '1 entrada importada.',

@@ -24,7 +24,6 @@ return [
     'cli.db_not_found'           => '未找到数据库：{db}',
     'cli.db_did_you_mean'        => '您是指数据库「{db}」吗？',
     'store.did_you_mean'         => '未找到键；您是想要 \'{key}\' 吗？',
-    'database.query_failed'      => '数据库查询失败。',
     'cli.key_not_found'          => '未找到键：{key}',
     'cli.deleted_one'            => '已删除 1 个条目。',
     'cli.imported_one'           => '已导入 1 个条目。',

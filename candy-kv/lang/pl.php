@@ -24,7 +24,6 @@ return [
     'cli.db_not_found'           => 'nie znaleziono bazy danych: {db}',
     'cli.db_did_you_mean'        => 'czy chodziło o bazę danych \'{db}\'?',
     'store.did_you_mean'         => 'nie znaleziono klucza; czy chodziło o \'{key}\'?',
-    'database.query_failed'      => 'Zapytanie do bazy danych nie powiodło się.',
     'cli.key_not_found'          => 'nie znaleziono klucza: {key}',
     'cli.deleted_one'            => 'Usunięto 1 wpis.',
     'cli.imported_one'           => 'Zaimportowano 1 wpis.',
