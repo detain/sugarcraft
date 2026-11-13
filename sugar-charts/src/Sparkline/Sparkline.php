@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Sparkline;
 
+use SugarCraft\Charts\Support\MemoizesRender;
 use SugarCraft\Charts\Buffer\BufferHelper;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
@@ -34,6 +35,7 @@ use SugarCraft\Style\Style;
  */
 final class Sparkline
 {
+    use MemoizesRender;
     /** Index 0 = empty, 1..8 = ▁..█. */
     private const GLYPHS = [' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
@@ -219,6 +221,14 @@ final class Sparkline
     }
 
     public function view(): string
+    {
+        // CH-34 (sugar-charts-112): compose once, serve repeats from the
+        // per-instance memo; mutate paths build new objects and start
+        // empty. These renderers have no caller-owned canvas bridge.
+        return $this->memoizedRender(fn(): string => $this->composeView());
+    }
+
+    private function composeView(): string
     {
         $prepared = $this->prepared();
         if ($prepared === null) {

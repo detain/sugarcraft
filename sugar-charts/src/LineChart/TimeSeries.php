@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\LineChart;
 
+use SugarCraft\Charts\Support\MemoizesRender;
 use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\FrameSize;
@@ -28,6 +29,7 @@ use SugarCraft\Style\Theme;
  */
 final class TimeSeries
 {
+    use MemoizesRender;
     /**
      * Point tuples as validated by the constructor door
      * (sugar-charts-064): `[DateTimeImmutable, numeric]` pairs only, so a
@@ -329,6 +331,14 @@ final class TimeSeries
     }
 
     public function view(): string
+    {
+        // CH-34 (sugar-charts-112): compose once, serve repeats from the
+        // per-instance memo; mutate paths build new objects and start
+        // empty. These renderers have no caller-owned canvas bridge.
+        return $this->memoizedRender(fn(): string => $this->composeView());
+    }
+
+    private function composeView(): string
     {
         // CH-08 (sugar-charts-087): zero dims are no longer a renderable
         // size (Canvas refuses <1×1) — the honest answer is ''.

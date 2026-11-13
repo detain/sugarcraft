@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\BarChart;
 
+use SugarCraft\Charts\Support\MemoizesRender;
 use SugarCraft\Charts\Chart\ChartExtras;
 use SugarCraft\Charts\Chart\ChromeAccessors;
 use SugarCraft\Charts\Chart\Position;
@@ -56,6 +57,7 @@ use SugarCraft\Style\Style;
  */
 final class BarChart implements ChromeAccessors
 {
+    use MemoizesRender;
     use ChartExtras;
     /**
      * @param list<Bar>                        $bars
@@ -436,6 +438,14 @@ final class BarChart implements ChromeAccessors
      * per-class shapes are pinned by EmptyRenderContractTest.
      */
     public function view(): string
+    {
+        // CH-34 (sugar-charts-112): compose once, serve repeats from the
+        // per-instance memo; mutate paths build new objects and start
+        // empty. These renderers have no caller-owned canvas bridge.
+        return $this->memoizedRender(fn(): string => $this->composeView());
+    }
+
+    private function composeView(): string
     {
         if ($this->bars === [] || $this->width === 0 || $this->height === 0) {
             return '';

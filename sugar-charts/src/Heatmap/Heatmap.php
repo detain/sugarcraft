@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Heatmap;
 
+use SugarCraft\Charts\Support\MemoizesRender;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Support\FrameSize;
@@ -38,6 +39,7 @@ use SugarCraft\Style\Style;
  */
 final class Heatmap
 {
+    use MemoizesRender;
     /**
      * Fill rune as stored after the {@see \SugarCraft\Charts\Support\Rune}
      * ingress door (sugar-charts-013): declared and assigned in the
@@ -330,6 +332,14 @@ final class Heatmap
     }
 
     public function view(): string
+    {
+        // CH-34 (sugar-charts-112): compose once, serve repeats from the
+        // per-instance memo; mutate paths build new objects and start
+        // empty. These renderers have no caller-owned canvas bridge.
+        return $this->memoizedRender(fn(): string => $this->composeView());
+    }
+
+    private function composeView(): string
     {
         if ($this->grid === [] || $this->width === 0 || $this->height === 0) {
             return '';

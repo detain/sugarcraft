@@ -7,6 +7,7 @@ namespace SugarCraft\Charts\Chart;
 use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\CellGrid;
+use SugarCraft\Charts\Support\MemoizesRender;
 use SugarCraft\Charts\Support\UntrustedText;
 use SugarCraft\Charts\Support\Rune;
 use SugarCraft\Core\Util\Color;
@@ -26,6 +27,7 @@ use SugarCraft\Style\Theme;
 abstract class Chart implements ChromeAccessors
 {
     use ChartExtras;
+    use MemoizesRender;
 
     protected function __construct(
         protected int $width,
@@ -87,6 +89,18 @@ abstract class Chart implements ChromeAccessors
      * '[no points in range]' notice for a filtered-empty window.
      */
     public function view(): string
+    {
+        // CH-34 (sugar-charts-112): the composed string is memoized per
+        // instance — BUT the CH-07 canvas bridge is a side-effect surface
+        // (a caller may clear or steal the grid between calls), so a
+        // render with an attached grid re-composes every time.
+        if ($this->canvas !== null) {
+            return $this->composeView();
+        }
+        return $this->memoizedRender(fn(): string => $this->composeView());
+    }
+
+    private function composeView(): string
     {
         $chart = $this->renderChart();
 

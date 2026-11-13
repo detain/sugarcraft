@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Picture;
 
+use SugarCraft\Charts\Support\MemoizesRender;
 use SugarCraft\Core\Util\Color;
 
 /**
@@ -35,6 +36,7 @@ use SugarCraft\Core\Util\Color;
  */
 final class Picture
 {
+    use MemoizesRender;
     /**
      * @param ?list<list<Color>>      $pixels  raw RGB grid (optional)
      * @param string                  $png     pre-encoded PNG bytes (optional)
@@ -188,6 +190,14 @@ final class Picture
     }
 
     public function view(): string
+    {
+        // CH-34 (sugar-charts-112): compose once, serve repeats from the
+        // per-instance memo; mutate paths build new objects and start
+        // empty. These renderers have no caller-owned canvas bridge.
+        return $this->memoizedRender(fn(): string => $this->composeView());
+    }
+
+    private function composeView(): string
     {
         $protocol = $this->protocol ?? self::detect();
         if ($protocol === null) {

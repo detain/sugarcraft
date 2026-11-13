@@ -56,17 +56,21 @@ final class LineChartRangeScanTest extends TestCase
         // timing claim about the scan, not about different renders.
         $this->assertSame($auto->view(), $pinned->view());
 
-        $best = static function (LineChart $c): float {
-            $t = PHP_FLOAT_MAX;
-            for ($i = 0; $i < 3; $i++) {
-                $s = hrtime(true);
-                $c->view();
-                $t = min($t, (hrtime(true) - $s) / 1e6);
-            }
-            return $t;
-        };
-        $pinnedMs = $best($pinned);
-        $autoMs   = $best($auto);
+        // CH-34 note: the per-instance memo makes repeat view() calls on
+        // one object meaningless here — each timing sample must be a
+        // FRESH composition. A mutation-derived clone (arrays are COW,
+        // so this is cheap) avoids rebuilding the 200k array per sample.
+        $pinnedMs = PHP_FLOAT_MAX;
+        $autoMs = PHP_FLOAT_MAX;
+        $base = LineChart::new($big, 40, 8);
+        for ($i = 0; $i < 5; $i++) {
+            $s = hrtime(true);
+            $base->withYRange(1.0, 200_000.0)->withXLabel('pinned' . $i)->view();
+            $pinnedMs = min($pinnedMs, (hrtime(true) - $s) / 1e6);
+            $s = hrtime(true);
+            $base->withXLabel('auto' . $i)->view();
+            $autoMs = min($autoMs, (hrtime(true) - $s) / 1e6);
+        }
         // The 200k-sample float compare pass is strictly additive on the
         // auto side; the short-circuit arm must land well under it even
         // with shared-machine headroom (4x guard).

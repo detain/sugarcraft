@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Scatter;
 
+use SugarCraft\Charts\Support\MemoizesRender;
 use SugarCraft\Charts\Chart\ChartExtras;
 use SugarCraft\Charts\Chart\ChromeAccessors;
 use SugarCraft\Charts\Chart\Position;
@@ -40,6 +41,7 @@ use SugarCraft\Core\Util\Width;
  */
 final class Scatter implements ChromeAccessors
 {
+    use MemoizesRender;
     use ChartExtras;
     /**
      * Point glyph as stored after the {@see \SugarCraft\Charts\Support\Rune}
@@ -241,6 +243,14 @@ final class Scatter implements ChromeAccessors
      * EmptyRenderContractTest).
      */
     public function view(): string
+    {
+        // CH-34 (sugar-charts-112): compose once, serve repeats from the
+        // per-instance memo; mutate paths build new objects and start
+        // empty. These renderers have no caller-owned canvas bridge.
+        return $this->memoizedRender(fn(): string => $this->composeView());
+    }
+
+    private function composeView(): string
     {
         if ($this->points === [] || $this->width === 0 || $this->height === 0) {
             return '';
