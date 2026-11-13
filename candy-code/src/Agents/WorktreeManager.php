@@ -623,7 +623,7 @@ final class WorktreeManager
                 // that is exactly the launch whose relative include path can no
                 // longer be anchored to anything.
                 $anchor === '' ? '<unresolvable>' : $anchor,
-            ]));
+            ]), Lang::t('agents.notice.include_file_refused.detail'));
 
             return;
         }
@@ -1143,7 +1143,10 @@ final class WorktreeManager
                 // survives, the registry entry stands: a thing the caller
                 // asked removed and did not get, which belongs on the
                 // transcript and not only inside a returned count.
-                RuntimeNoticeSink::warn(Lang::t('agents.notice.stale_cleanup_skipped', ['agent' => $agentId, 'reason' => $e->getMessage()]));
+                RuntimeNoticeSink::warn(
+                    Lang::t('agents.notice.stale_cleanup_skipped', ['agent' => $agentId, 'reason' => $e->getMessage()]),
+                    Lang::t('agents.notice.stale_cleanup_skipped.detail'),
+                );
             }
         }
 

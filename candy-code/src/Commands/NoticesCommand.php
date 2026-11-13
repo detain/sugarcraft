@@ -108,6 +108,11 @@ final class NoticesCommand
 
         $lines[] = Lang::t('cmd.notices.grants', ['count' => \count($grantWarnings)]);
         $lines = self::appendEntries($lines, $grantWarnings);
+        if ($grantWarnings !== []) {
+            // The collector's rows are the short lead (S-A01); the doctrine they
+            // all share is said once here, where the whole record is wanted.
+            $lines[] = '  ' . Lang::t('agents.notice.grant_narrowed.detail');
+        }
 
         return implode("\n", $lines);
     }

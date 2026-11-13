@@ -8649,6 +8649,9 @@ public static function useMaxCost(?string $maxCost): void
         foreach ($warnings as $warning) {
             self::warnPermissionConfigOnce($warning);
         }
+        // The shared doctrine half of the lead/detail split, once on stderr —
+        // the transcript carries the aggregate, `/notices` carries the same line.
+        self::warnPermissionConfigOnce(Lang::t('agents.notice.grant_narrowed.detail'));
 
         foreach (self::narrowedGrantNoticeRows($warnings) as $row) {
             self::warnPermissionConfigInTranscript($row);

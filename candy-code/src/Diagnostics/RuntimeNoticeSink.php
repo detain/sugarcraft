@@ -435,11 +435,14 @@ final class RuntimeNoticeSink
      * on a real fd 2 by
      * {@see \SugarCraft\Code\Tests\Diagnostics\RuntimeNoticeSinkStderrTest}.
      */
-    public static function warn(string $message): void
+    public static function warn(string $message, ?string $detail = null): void
     {
         $sink = self::current();
+        // $detail is the lead's doctrine half (S-A01 lead/detail split): the
+        // transcript row is resent to the model every turn, so it carries the
+        // short lead only, while the complete log record keeps both.
         if (!($sink->hasTransport() && TuiErrorLog::destinationIsStderr(ini_get('error_log')))) {
-            Log::raw($message);
+            Log::raw($detail === null ? $message : $message . ' ' . $detail);
         }
         $sink->record($message);
     }

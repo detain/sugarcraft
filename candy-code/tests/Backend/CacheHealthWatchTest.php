@@ -195,7 +195,7 @@ final class CacheHealthWatchTest extends TestCase
 
         $this->assertSame([null, null, null], array_slice($raised, 0, 3));
         $this->assertIsString($raised[3]);
-        $this->assertStringContainsString('2 requests in a row', $raised[3]);
+        $this->assertStringContainsString('2 consecutive requests', $raised[3]);
         $this->assertNull($raised[4], 'once per session');
         $this->assertCount(1, RuntimeNoticeSink::drain());
         $this->assertSame(3, $watch->cacheBreaks());

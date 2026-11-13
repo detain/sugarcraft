@@ -210,7 +210,7 @@ final class PermissionWarningDrainTest extends TestCase
         // The transcript holds the aggregate, never the flood: no row carries
         // the sentence tail that only the full warnings have.
         foreach ($probe['notices1'] as $row) {
-            self::assertStringNotContainsString(' if that is not the configuration', $row);
+            self::assertStringNotContainsString(' If that is not the configuration', $row);
         }
 
         // stderr is the complete record: all N originals whole, plus the
@@ -355,14 +355,7 @@ final class PermissionWarningDrainTest extends TestCase
      */
     private static function grantSentence(string $agent, string $tool, string $field = 'tools'): string
     {
-        return sprintf(
-            'agent "%s" declares "%s" in %s, which this session\'s allowedTools/disabledTools removed '
-                . 'from the model-facing tool set — the grant survives, narrowed; if that is not the '
-                . 'configuration you meant, check disabledTools/allowedTools.',
-            $agent,
-            $tool,
-            $field,
-        );
+        return \SugarCraft\Code\Lang::t('agents.notice.grant_narrowed', ['agent' => $agent, 'declaration' => $tool, 'field' => $field]);
     }
 
     /**

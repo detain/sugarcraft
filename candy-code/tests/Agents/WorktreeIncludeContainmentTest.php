@@ -172,7 +172,7 @@ final class WorktreeIncludeContainmentTest extends TestCase
 
         $logged = is_file($log) ? (string) file_get_contents($log) : '';
 
-        $this->assertStringContainsString('refusing worktreeIncludeFile', $logged);
+        $this->assertStringContainsString('worktreeIncludeFile', $logged);
         $this->assertStringNotContainsString(
             '../../secret/id_rsa',
             $logged,
@@ -269,7 +269,7 @@ final class WorktreeIncludeContainmentTest extends TestCase
 
         $logged = is_file($log) ? (string) file_get_contents($log) : '';
 
-        $this->assertStringContainsString('refusing worktreeIncludeFile', $logged);
+        $this->assertStringContainsString('worktreeIncludeFile', $logged);
         $this->assertStringContainsString(
             'the process working directory',
             $logged,

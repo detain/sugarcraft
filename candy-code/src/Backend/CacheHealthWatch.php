@@ -157,7 +157,7 @@ final class CacheHealthWatch
             'from' => $this->lastBreak['from'],
             'to' => $this->lastBreak['to'],
         ]);
-        RuntimeNoticeSink::warn($warning);
+        RuntimeNoticeSink::warn($warning, Lang::t('agents.notice.cache_break.detail'));
 
         return $warning;
     }
