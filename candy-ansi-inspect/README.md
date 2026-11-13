@@ -285,7 +285,7 @@ cancelled prelude can now reappear inside one.
 
 ## Localization
 
-Sixteen locale files ship in `lang/`, and the two messages the tool prints
+Seventeen locale files ship in `lang/`, and the two messages the tool prints
 itself (usage, the not-a-file refusal) route through `Lang::t()`. The bin
 entry calls `T::setLocale(T::detect())`, so locale *selection* is live
 (`LC_ALL` → `LC_MESSAGES` → `LANG`, `fr_FR.UTF-8` normalises to `fr`, fallback

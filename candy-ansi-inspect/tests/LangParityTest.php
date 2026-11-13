@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * Catalogue-parity guard for the `lang/` directory (step AIP-18).
  *
- * WHY: the README advertises sixteen shipped catalogues whose keys and
+ * WHY: the README advertises seventeen shipped catalogues whose keys and
  * `{placeholder}` tokens mirror `en.php`, and the CLI routes both
  * tool-printed messages through `Lang::t()` in the caller's locale.
  * None of that was pinned: a dropped key, a renamed placeholder, or a

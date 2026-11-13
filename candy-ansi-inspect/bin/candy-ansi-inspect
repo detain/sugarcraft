@@ -21,7 +21,7 @@ foreach ($autoloadCandidates as $autoload) {
 }
 
 // Locale selection from $LC_ALL / $LC_MESSAGES / $LANG (the order
-// T::detect() actually walks): sixteen catalogues ship and both
+// T::detect() actually walks): seventeen catalogues ship and both
 // tool-printed messages route through Lang::t(), so this bin-entry
 // line (house precedent: candy-tetris, candy-minesweeper, candy-git) is
 // what makes that routing live. Report labels stay English-built inside

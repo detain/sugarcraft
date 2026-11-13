@@ -264,7 +264,7 @@ final class CliTest extends TestCase
         [$code, $stdout] = self::runCli('--help', ['LC_ALL' => 'de']);
         $this->assertSame(0, $code);
         $this->assertStringContainsString($usage, $stdout);
-        $this->assertStringNotContainsString('usage: candy-ansi-inspect [file]', $stdout);
+        $this->assertStringNotContainsString('Usage: candy-ansi-inspect [file]', $stdout);
     }
 
     public function testHelpFlagPrintsUsageOnStdoutAndExitsZero(): void
@@ -382,7 +382,7 @@ final class CliTest extends TestCase
         $code = proc_close($proc);
 
         $this->assertSame(1, $code, $stdout);
-        $this->assertStringContainsString('usage: candy-ansi-inspect', $stdout);
+        $this->assertStringContainsString('Usage: candy-ansi-inspect', $stdout);
     }
 
     public function testStreamedStdinBytesEqualTheFileArgumentReport(): void
@@ -478,7 +478,7 @@ final class CliTest extends TestCase
         [$code, $stdout, $stderr] = self::runCliWithStdin('', ['--']);
         $this->assertSame(1, $code);
         $this->assertSame('', $stdout);
-        $this->assertStringContainsString('usage:', $stderr);
+        $this->assertStringContainsString('Usage:', $stderr);
     }
 
     public function testExecArmCarriesAChildFailureThrough(): void
