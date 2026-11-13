@@ -217,6 +217,19 @@ final class CheckChildLifetimes
                 . 'before proc_close() and __destruct() calls close() (E366); the fd≥3 exposure '
                 . 'stands for sugar-video to own.',
         ],
+        'sugar-releases/src/WindowsSwap.php::launch' => [
+            'count' => 1,
+            'kind' => 'reap-bounded',
+            'reason' => 'the detached Windows swap helper (php -r <fixed literal> <pid> <new> <phar>), '
+                . 'which MUST outlive the self-update verb: on NT the rename onto the running image '
+                . 'only succeeds after the verb exits, so the handle is deliberately dropped '
+                . '(proc_close would WAIT for the very process the helper waits out). The scanner '
+                . 'reads it as UNCLASSIFIED because the handle goes to is_resource(). Bounded by '
+                . 'construction: all three stdio descriptors are the kernel null device (zero parent '
+                . 'descriptors inherited), the helper retries every 200 ms for at most 60 s then '
+                . 'exits 1 leaving the staged .new for a manual swap. Extracted verbatim from '
+                . 'candy-code\'s Cli/WindowsSwap (accounted in its DescriptorInheritanceGuardTest).',
+        ],
         'sugar-mcp-client/src/StdioMcpServer.php::start' => [
             'count' => 1,
             'kind' => 'fd-open',

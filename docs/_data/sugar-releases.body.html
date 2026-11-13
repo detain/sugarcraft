@@ -1,0 +1,67 @@
+<p class="lede" style="margin-top: 28px;">The self-update machinery a phar-shipped SugarCraft app needs, extracted from candy-code so every app rides the same laws: <strong>pick the right release from a shared GitHub release stream, verify the bytes BEFORE the rename, keep a one-shot <code>.old</code> undo copy, and tell the user at launch when a newer release exists</strong>. Everything app-specific — repository, tag prefix, asset names, pinned public key, Composer package, display name — is one <code>ReleaseSource</code> value; the host parses its own argv and supplies its running version. First-party — there is no upstream Go port.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code class="language-shell">composer require sugarcraft/sugar-releases</code></pre>
+
+    <h3 id="quickstart" style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code class="language-php">use SugarCraft\Releases\ReleaseSource;
+use SugarCraft\Releases\SelfUpdate;
+use SugarCraft\Releases\UpdateCheck;
+use SugarCraft\Releases\UpdateOptions;
+
+$source = ReleaseSource::new('acme/tools', 'widget')   // tags widget/v1.2.3, asset widget.phar
+    ->withComposerPackage('acme/widget')
+    ->withPublicKey($base64Ed25519PublicKey);          // '' = keyless state
+
+// `widget self-update --check` / bare / --rollback / --channel=dev
+$exit = SelfUpdate::new($source)->run(UpdateOptions::new()->withCheck(), $currentVersion);
+
+// at launch: refresh a 24 h cache over the event loop, paint the PREVIOUS check's answer
+$check = UpdateCheck::new($source, $stateDir, $currentVersion);
+$check->refreshIfStale();
+echo $check->cachedNotice() ?? '';</code></pre>
+    <p style="margin-top: 12px;">Exit codes: 0 up to date / swapped / rolled back; 1 refusals and failures (and <code>--check</code> finding an update); 2 usage errors. Report lines go to STDERR through a translator seam.</p>
+
+    <h3 style="margin-top: 32px;">The laws</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Verify before rename</strong><span>The sha256 sidecar is fetched first and must be a lowercase 64-hex digest naming the phar; the phar streams to a temp file beside the target, is hashed with hash_equals(), and only then renamed. Every download leg judges HTTP status.</span></div>
+      <div class="feature"><strong>Pinned-key Ed25519</strong><span>With a key pinned, a release without a verifying signature is refused; the stream-safe signature over the sidecar body is preferred, the legacy raw-bytes asset is accepted behind a deprecation notice. <code>--allow-unsigned</code> never skips the sha256 gate.</span></div>
+      <div class="feature"><strong>Two channels</strong><span>Stable: newest non-draft <code>&lt;app&gt;/v*</code> release carrying both assets, ordered numerically. Dev: the rolling <code>&lt;app&gt;/dev</code> release judged by commit identity against a <code>dev-&lt;sha&gt;</code> stamp — indecidable is a refusal, never a guess.</span></div>
+      <div class="feature"><strong>One-shot rollback</strong><span>The running phar is copied to <code>.old</code> before the swap; <code>--rollback</code> renames it back, consuming it, with no network. The live file's mode is carried onto both halves.</span></div>
+      <div class="feature"><strong>Windows relaunch dance</strong><span>NT refuses to rename over a running image, so the verified bytes stage at <code>.new</code> and a detached helper retries the rename until the process exits, logging to <code>.swap.log</code>. The helper source is a fixed literal; paths travel as argv data.</span></div>
+      <div class="feature"><strong>Never blocks, never spams</strong><span>The launch notice reads only the previous check's cache (two-launch shape by design), re-validates the cached version at paint time, follows only same-origin release-list links, and degrades every failure to "no notice".</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Phar apps in a shared release stream</strong> — per-app tag prefixes keep one tool's releases from being confused with a sibling's.</li>
+      <li><strong>Adopting the same laws in a second app</strong> — candy-code is the reference consumer, candy-top the second.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-releases">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-releases/blob/master/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-releases/blob/master/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<caption>API surface</caption>
+<thead><tr><th scope="col">Class</th><th scope="col">Method</th><th scope="col">Description</th></tr></thead>
+<tr><td>ReleaseSource</td><td>static new(string $repo, string $app): self</td><td>Where an app publishes and what its artifacts are called; derives tag prefix <code>&lt;app&gt;/</code>, asset <code>&lt;app&gt;.phar</code> and the sidecar/signature names</td></tr>
+<tr><td>ReleaseSource</td><td>withTagPrefix() / withPharAsset() / withPublicKey() / withComposerPackage() / withUserAgent()</td><td>Immutable overrides; an empty public key is the keyless state</td></tr>
+<tr><td>SelfUpdate</td><td>static new(ReleaseSource $source): self / run(UpdateOptions $options, string $currentVersion): int</td><td>The verb: verify-before-rename swap, <code>--check</code>, <code>--rollback</code>, channel selection; returns the exit code</td></tr>
+<tr><td>SelfUpdate</td><td>withHttp() / withReleasesUrl() / withPharPath() / withPublicKey() / withWindows() / withErrorStream() / withTranslator() / withSwapLauncher()</td><td>Seams for the host and the suite; every one defaults to the production behaviour</td></tr>
+<tr><td>SelfUpdate</td><td>composerRefusal(?string $rootPackage = null): string</td><td>The loud composer-mode refusal naming the command that fits the install shape</td></tr>
+<tr><td>UpdateOptions</td><td>new() / withCheck() / withRollback() / withAllowUnsigned() / withChannel() / withOperands() / validate()</td><td>The parsed verb flags, free of any CLI framework; validate() names the first usage violation as a translation key</td></tr>
+<tr><td>UpdateCheck</td><td>static new(ReleaseSource $source, string $stateDir, string $currentVersion): self / refreshIfStale(): void / cachedNotice(): ?string</td><td>The launch-time notice: async 24 h refresh into <code>&lt;stateDir&gt;/update-check.json</code> (0600), notice read from the previous check's cache</td></tr>
+<tr><td>ReleaseSelector</td><td>for(ReleaseSource $source) / selectRelease() / selectDevRelease() / devDecision() / parseSidecar() / sidecarName()</td><td>Pure selection over a decoded GitHub release list, independent of transport</td></tr>
+<tr><td>Version</td><td>parse() / compare() / isComparable() / isDev() / devShaOf()</td><td>Strict <code>v?X.Y.Z</code> ordering (null = cannot order) and the <code>dev-&lt;sha&gt;</code> classifier</td></tr>
+<tr><td>Signature</td><td>verifyDetached(string $payload, string $signatureBody, string $publicKeyBase64): bool</td><td>Ed25519 detached verification; every malformed shape answers false</td></tr>
+<tr><td>WindowsSwap</td><td>launch(int $parentPid, string $new, string $phar, ?\Closure $spawnSpec = null, ?array $env = null): bool / launchCommand()</td><td>Spawns the detached rename-retry helper (60 s budget, 200 ms cadence)</td></tr>
+</table>
+  </div>
+</section>

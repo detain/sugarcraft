@@ -73,6 +73,7 @@ ships as `App\` — called out in the table below.
 | **SugarFlexbox** (`sugar-flexbox/`) | 🟢 ready | FlexBox layout engine + delta-rendering Table (sort/filter/cursor) + sticky Viewport + Scrollbar — ratio-based sizing, gap, align, per-column styling. |
 | **SugarDiff** (`sugar-diff/`) | 🟢 ready | Unified-diff engine — LCS line diff, context hunks, GNU `diff -u` writer + line-number scanner. Extracted from candy-code (BuildsUnifiedDiff; candy-code's DiffGutter delegates its scan half here). |
 | **Sugar MCP Client** (`sugar-mcp-client/`) | 🟢 ready | MCP client core — JSON-RPC 2.0 codec + envelopes, stdio transport (newline framing, bounded lifecycle via sugar-core BoundedShutdown), initialize/tools handshake, deny-before-allow SERVER narrowing (tool rosters follow servers). Extracted from candy-code MCP stack; protocol per Model Context Protocol spec. |
+| **SugarReleases** (`sugar-releases/`) | 🟢 ready | Phar self-update engine + launch-time update notice — GitHub release selection (stable + rolling dev channel), sha256-sidecar + Ed25519 verification before the swap, one-shot `.old` rollback, Windows relaunch-dance swap helper. Extracted from candy-code's `SelfUpdate`/`UpdateCheck`/`WindowsSwap` (owner decision G-10=A); candy-top is the second consumer. |
 
 ## Apps
 
@@ -201,6 +202,7 @@ reference projects supplied the ideas, not the code.
 | SugarGallery (sugar-gallery/) | [bubbles](https://github.com/charmbracelet/bubbles) (list/viewport) · phlix web media grid (loosely) |
 | CandyMdview (candy-mdview/) | [glow](https://github.com/charmbracelet/glow) |
 | Sugar MCP Client (sugar-mcp-client/) | none — first-party |
+| SugarReleases (sugar-releases/) | none — first-party |
 | CandyMail (candy-mail/) | [pop](https://github.com/charmbracelet/pop) |
 | SugarForms (sugar-forms/) | [huh](https://github.com/charmbracelet/huh) |
 | SugarReadline (sugar-readline/) | [promptkit](https://github.com/erikgeiser/promptkit) |

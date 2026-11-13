@@ -100,7 +100,9 @@ final class ChildLifetimesToolTest extends TestCase
         // the site as long-lived/exposed; its own honest fd-open row went
         // into ACCOUNTED with this change (the candy-top AsyncCommand
         // precedent shape), and the site count stayed 30 (no new spawn).
-        $this->assertStringContainsString('13 findings', $out);
+        // 13 -> 14 on 2026-11-12: sugar-releases/src/WindowsSwap.php::launch (the detached
+        // swap helper extracted from candy-code) is a new reap-bounded row and a new site.
+        $this->assertStringContainsString('14 findings', $out);
         // Frozen literal: counts every @proc_open site tree-wide — flip it in the SAME commit that adds a site.
         // 33 -> 30 re-derived live with the tool on 2026-11-04: net -3 of tree
         // drift since 0bcc4346b (the pin predates later spawn consolidation,
@@ -113,7 +115,7 @@ final class ChildLifetimesToolTest extends TestCase
         // without minting a replacement.
         // 29 -> 30 re-derived live with the tool on 2026-11-12: scriptui-01
         // minted the candy-scriptui RealProcess::spawn site described above.
-        $this->assertStringContainsString('30 proc_open sites', $out);
+        $this->assertStringContainsString('31 proc_open sites', $out);
     }
 
     /**
@@ -337,7 +339,7 @@ final class ChildLifetimesToolTest extends TestCase
         // long-lived by construction — its fd-open row vouches for the
         // bounded dying interval, not for a reaped exit path.
         // Re-derive with the tool if a row changes dimension.
-        $this->assertSame(['reap-bounded' => 5, 'fd-open' => 8], $counts);
+        $this->assertSame(['reap-bounded' => 6, 'fd-open' => 8], $counts);
     }
 
     /**

@@ -1,0 +1,11 @@
+{
+    "title": "SugarCraft — SugarReleases",
+    "description": "SugarReleases: phar self-update engine and launch-time update notice — GitHub release selection (stable + rolling dev channel), sha256 sidecar and pinned-key Ed25519 verification before the swap, one-shot rollback, Windows relaunch-dance swap. Extracted from candy-code; first-party.",
+    "ogTitle": "SugarCraft — SugarReleases",
+    "ogDescription": "One fail-closed self-update engine for every phar-shipped SugarCraft app: pick the right release from a shared GitHub release stream, verify the bytes before the rename, keep a one-shot undo copy, and tell the user at launch when a newer release exists.",
+    "emoji": "",
+    "displayName": "SugarReleases",
+    "tagline": "Phar self-update engine — verify before the swap, one-shot rollback",
+    "phpVersion": "8.3+",
+    "detailMeta": "          <span class=\"tag-chip accent\">first-party</span>\n          <span class=\"tag-chip\">self-update</span>\n          <span class=\"tag-chip\">ed25519</span>\n          <span class=\"tag-chip\">ext-sodium (optional)</span>"
+}

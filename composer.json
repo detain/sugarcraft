@@ -90,6 +90,7 @@
         "sugarcraft/sugar-gallery": "dev-master",
         "sugarcraft/candy-mdview": "dev-master",
         "sugarcraft/sugar-mcp-client": "dev-master",
+        "sugarcraft/sugar-releases": "dev-master",
         "sugarcraft/candy-mail": "dev-master",
         "sugarcraft/sugar-readline": "dev-master",
         "sugarcraft/sugar-video": "dev-master",
@@ -444,6 +445,13 @@
         {
             "type": "path",
             "url": "sugar-mcp-client",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-releases",
             "options": {
                 "symlink": true
             }

@@ -1,0 +1,55 @@
+{
+    "name": "sugarcraft/sugar-releases",
+    "description": "Phar self-update engine and launch-time update notice for SugarCraft apps: GitHub release selection (stable + rolling dev channel), sha256 sidecar + Ed25519 verification before the swap, one-shot .old rollback, Windows relaunch-dance swap helper. Extracted from candy-code.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "self-update",
+        "phar",
+        "releases",
+        "github-releases",
+        "ed25519",
+        "updater",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/sugar-releases",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/sugar-releases/issues",
+        "source": "https://github.com/sugarcraft/sugar-releases",
+        "docs": "https://sugarcraft.github.io/lib/sugar-releases.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "guzzlehttp/guzzle": "^7.12.1",
+        "react/event-loop": "^1.6",
+        "react/http": "^1.11",
+        "react/promise": "^3.3",
+        "react/socket": "^1.16",
+        "sugarcraft/sugar-core": "dev-master"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "suggest": {
+        "ext-sodium": "Ed25519 verification of release signatures; with a key pinned and no sodium, every update is refused (fail-closed)."
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Releases\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Releases\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
