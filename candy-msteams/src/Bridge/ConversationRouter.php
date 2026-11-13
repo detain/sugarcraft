@@ -167,7 +167,14 @@ final class ConversationRouter
             return;
         }
 
-        $this->sessionFor($key, $ref)->then(function (string $sessionId) use ($key, $ref, $text, $isMention, $channel, $images, $documents): void {
+        $this->sessionFor($key, $ref)->then(function (string $sessionId) use ($key, $ref, $text, $isMention, $channel, $images, $documents, $platform, $inboundId): void {
+            // msteams-25: confirm at enqueue (the discord twin's choice) — the
+            // claim only becomes permanent once dispatch is underway. A crash
+            // before this line re-admits the redelivery inside the grace
+            // window; after it, duplicates stay suppressed.
+            if ($inboundId !== null) {
+                $this->map->confirmInbound($platform, $inboundId);
+            }
             $this->map->rememberConversation($sessionId, $key, $ref);
             $this->dispatch($channel, $ref, $sessionId, $key, $text, $isMention, $images, $documents);
         }, fn (\Throwable $e) => $this->failWith($channel, $ref, Lang::t('channels.msteams.session.could_not_open', ['error' => $e->getMessage()])));

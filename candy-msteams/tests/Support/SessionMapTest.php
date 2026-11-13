@@ -106,6 +106,68 @@ final class SessionMapTest extends TestCase
         self::assertNotNull($map->lastConversation('sess-fresh'), 'the live reply address must ride');
     }
 
+    /** msteams-25: an unconfirmed redelivery INSIDE the grace window is still a duplicate. */
+    public function testRedeliveryInsideTheGraceWindowStaysSuppressed(): void
+    {
+        $map = $this->map();
+        self::assertTrue($map->claimInbound('msteams', 'm-grace-1'));
+        self::assertFalse($map->claimInbound('msteams', 'm-grace-1'), 'the first dispatch may still be in flight');
+    }
+
+    /**
+     * msteams-25: the crash arm — claim won, enqueue never confirmed (the
+     * process died between them). Past the grace window Teams' redelivery
+     * must get back in, or the message dies silently with the dead process.
+     */
+    public function testAnUnconfirmedClaimPastTheGraceWindowReprocesses(): void
+    {
+        $map = $this->map();
+        self::assertTrue($map->claimInbound('msteams', 'm-crash-1'));
+
+        $db = new \PDO('sqlite:' . $this->path);
+        $db->exec('UPDATE seen_inbound SET seen_at = seen_at - ' . (SessionMap::CLAIM_GRACE_SECONDS + 60));
+        $db = null;
+
+        self::assertTrue($map->claimInbound('msteams', 'm-crash-1'), 'a dead claim must not black-hole the redelivery');
+        self::assertFalse($map->claimInbound('msteams', 'm-crash-1'), 'the re-claimed row is owned again');
+    }
+
+    /** msteams-25: confirmation makes suppression permanent — grace or no grace. */
+    public function testAConfirmedClaimIsSuppressedForever(): void
+    {
+        $map = $this->map();
+        self::assertTrue($map->claimInbound('msteams', 'm-ok-1'));
+        $map->confirmInbound('msteams', 'm-ok-1');
+
+        $db = new \PDO('sqlite:' . $this->path);
+        $db->exec('UPDATE seen_inbound SET seen_at = seen_at - ' . (SessionMap::CLAIM_GRACE_SECONDS + 60));
+        $db = null;
+
+        self::assertFalse($map->claimInbound('msteams', 'm-ok-1'), 'an enqueued prompt must never run twice');
+    }
+
+    /** msteams-25: the v1 ledger (no state column) migrates on open, dedupe intact. */
+    public function testAVOneLedgerGainsTheStateColumnOnOpen(): void
+    {
+        $map = $this->map();
+        self::assertTrue($map->claimInbound('msteams', 'm-v1-1'));
+
+        // Rewind the file to the v1 shape: drop the column, clear the stamp.
+        $db = new \PDO('sqlite:' . $this->path);
+        $db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $db->exec('PRAGMA busy_timeout = 5000');
+        $db->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+        $db->exec('ALTER TABLE seen_inbound DROP COLUMN confirmed_at');
+        $db->exec('PRAGMA user_version = 1');
+        $db = null;
+        unset($map);
+
+        $reopened = $this->map();
+        self::assertFalse($reopened->claimInbound('msteams', 'm-v1-1'), 'the migrated row must still suppress the duplicate');
+        $db = new \PDO('sqlite:' . $this->path);
+        self::assertSame(2, (int) $db->query('PRAGMA user_version')->fetchColumn());
+    }
+
     /**
      * The M-7 keystone: re-binding a key onto a fresh session resets
      * its cursor, so the fresh session's low seqs stay deliverable.

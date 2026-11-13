@@ -30,10 +30,18 @@ namespace CandyCode\Bundles\MsTeams\Support;
 final class SessionMap
 {
     /** msteams-22: the schema this code writes (see the user_version door). */
-    public const SCHEMA_VERSION = 1;
+    public const SCHEMA_VERSION = 2;
 
     /** msteams-22: idle bindings/reply-addresses older than this are pruned. */
     public const BINDING_KEEP_DAYS = 180;
+
+    /**
+     * msteams-25: how long a CLAIMED-but-unconfirmed inbound id stays owned.
+     * Teams delivers at-least-once; a bundle killed between claim and enqueue
+     * must let the redelivery back in, but not while the first dispatch is
+     * plausibly still in flight.
+     */
+    public const CLAIM_GRACE_SECONDS = 300;
 
     private \PDO $db;
 
@@ -72,7 +80,8 @@ final class SessionMap
             }
             // v0 -> v1 migration is the schema settle itself: every statement
             // below is IF NOT EXISTS over the legacy shape, so stamping is all
-            // a legacy file needs.
+            // a legacy file needs. v1 -> v2 (msteams-25) is a real ladder step:
+            // the two-state claim adds a column to the dedupe ledger.
             $db->exec(<<<'SQL'
                 CREATE TABLE IF NOT EXISTS bindings (
                     key        TEXT PRIMARY KEY,
@@ -106,9 +115,20 @@ final class SessionMap
                     platform  TEXT NOT NULL,
                     inbound_id TEXT NOT NULL,
                     seen_at   INTEGER NOT NULL,
+                    confirmed_at INTEGER,
                     PRIMARY KEY (platform, inbound_id)
                 )
                 SQL);
+            if ($version < 2) {
+                // The one v1 ledger the fleet shipped has no state column.
+                $hasState = \count(\array_filter(
+                    (array) $db->query('PRAGMA table_info(seen_inbound)')->fetchAll(\PDO::FETCH_ASSOC),
+                    static fn (array $col): bool => ($col['name'] ?? '') === 'confirmed_at',
+                )) === 1;
+                if (!$hasState) {
+                    $db->exec('ALTER TABLE seen_inbound ADD COLUMN confirmed_at INTEGER');
+                }
+            }
             $db->exec('PRAGMA user_version = ' . self::SCHEMA_VERSION);
         } finally {
             \umask($priorUmask);
@@ -287,20 +307,45 @@ final class SessionMap
     }
 
     /**
-     * First delivery wins for one platform message id (Teams retries a
-     * webhook POST when the answer is slow — at-least-once + bridge restarts
-     * both re-present the same activity id).
+     * msteams-25: the two-state claim. Teams retries a webhook POST when the
+     * answer is slow — at-least-once + bridge restarts both re-present the
+     * same activity id. INSERT wins the pending row; a redelivery is
+     * suppressed while the first dispatch is plausibly in flight, and stays
+     * suppressed once confirmed. An UNCONFIRMED row older than the grace
+     * window is a crash between claim and enqueue — the redelivery
+     * reprocesses rather than the message silently dying with the process.
      */
     public function claimInbound(string $platform, string $inboundId): bool
     {
         $now = \time();
         $stmt = $this->db->prepare(
-            'INSERT INTO seen_inbound (platform, inbound_id, seen_at) VALUES (:p, :i, :now)
+            'INSERT INTO seen_inbound (platform, inbound_id, seen_at, confirmed_at) VALUES (:p, :i, :now, NULL)
              ON CONFLICT(platform, inbound_id) DO NOTHING',
         );
         $stmt->execute(['p' => $platform, 'i' => $inboundId, 'now' => $now]);
+        if ($stmt->rowCount() === 1) {
+            return true;
+        }
 
-        return $stmt->rowCount() === 1;
+        $reclaim = $this->db->prepare(
+            'UPDATE seen_inbound SET seen_at = :now
+             WHERE platform = :p AND inbound_id = :i AND confirmed_at IS NULL AND seen_at < :stale',
+        );
+        $reclaim->execute([
+            'now' => $now,
+            'p' => $platform,
+            'i' => $inboundId,
+            'stale' => $now - self::CLAIM_GRACE_SECONDS,
+        ]);
+
+        return $reclaim->rowCount() === 1;
+    }
+
+    /** msteams-25: the enqueue settled — this inbound id is owned for good. */
+    public function confirmInbound(string $platform, string $inboundId): void
+    {
+        $this->db->prepare('UPDATE seen_inbound SET confirmed_at = :now WHERE platform = :p AND inbound_id = :i')
+            ->execute(['now' => \time(), 'p' => $platform, 'i' => $inboundId]);
     }
 
     /** Trim the dedupe ledger to $keep days so the sidecar stays bounded. */

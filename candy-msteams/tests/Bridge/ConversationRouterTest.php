@@ -513,6 +513,43 @@ final class ConversationRouterTest extends TestCase
         self::assertStringNotContainsString('not_connected', $chunks[0] ?? '', 'wire text stays log-only');
     }
 
+    /**
+     * msteams-25: the end-to-end claim law. First delivery enqueues and
+     * confirms; a redelivery of the same activity id stays suppressed while
+     * the claim is fresh, a CRASHED (unconfirmed, past-grace) claim lets the
+     * redelivery back in exactly once, and the re-confirmed row is silent
+     * again after that.
+     */
+    public function testClaimStatesDecideWhetherARedeliveryDispatches(): void
+    {
+        $this->boot();
+        $this->inboundDm('crash probe', false, 'm-claim-1');
+        self::assertSame(1, $this->serve->sendSeen);
+
+        $this->inboundDm('crash probe', false, 'm-claim-1');
+        self::assertSame(1, $this->serve->sendSeen, 'a fresh duplicate must not double-enqueue');
+
+        // The row is CONFIRMED by the enqueue (msteams-25): aging it out of
+        // the grace window alone must not re-open it.
+        $db = new \PDO('sqlite:' . $this->map->path);
+        $db->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $db->exec('PRAGMA busy_timeout = 5000');
+        $db->exec('UPDATE seen_inbound SET seen_at = seen_at - ' . (SessionMap::CLAIM_GRACE_SECONDS + 60) . " WHERE inbound_id = 'm-claim-1'");
+        $this->inboundDm('crash probe', false, 'm-claim-1');
+        self::assertSame(1, $this->serve->sendSeen, 'a confirmed claim stays closed past the grace window');
+
+        // Simulate the kill-between-claim-and-enqueue: unconfirm (the crash
+        // arm) + already backdated.
+        $db->exec('UPDATE seen_inbound SET confirmed_at = NULL WHERE inbound_id = ' . "'m-claim-1'");
+        $db = null;
+
+        $this->inboundDm('crash probe', false, 'm-claim-1');
+        self::assertSame(2, $this->serve->sendSeen, 'the redelivery of a dead claim must reprocess');
+
+        $this->inboundDm('crash probe', false, 'm-claim-1');
+        self::assertSame(2, $this->serve->sendSeen, 'and the re-confirmed row stays closed');
+    }
+
     /** @param array<string,mixed> $policy */
     private function boot(array $policy = [], ?PlatformFace $face = null): void
     {
