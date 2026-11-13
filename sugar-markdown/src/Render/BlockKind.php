@@ -7,7 +7,7 @@ namespace SugarCraft\Markdown\Render;
 /**
  * Kinds of blocks that can appear in a document tree.
  *
- * Mirrors glamour's block kind taxonomy for StyleSheet lookup.
+ * Mirrors charmbracelet/glamour's block kind taxonomy for StyleSheet lookup.
  */
 enum BlockKind
 {

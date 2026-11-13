@@ -17,7 +17,7 @@ namespace SugarCraft\Markdown;
  * collisions (see the merge in expandEmojiShortcodes()): house spellings
  * like :heart: (U+2764 U+FE0F) and :email: keep their shipped bytes.
  *
- * Mirrors charmbracelet/glamour WithEmoji / kyokomi/emoji GitHubEmoji.
+ * Mirrors charmbracelet/glamour.WithEmoji / kyokomi/emoji.GitHubEmoji.
  */
 final class GithubEmoji
 {

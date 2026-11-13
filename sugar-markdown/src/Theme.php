@@ -78,16 +78,16 @@ final class Theme
         // ---- glamour-element parity ----
         /**
          * Outer document margin: number of blank lines emitted before
-         * the document body. Mirrors glamour's `Document.Margin`.
+         * the document body. Mirrors charmbracelet/glamour.Document.Margin.
          */
         public readonly int $documentMargin = 0,
         /**
          * Number of cells the document is indented from the left edge.
-         * Mirrors glamour's `Document.Indent`.
+         * Mirrors charmbracelet/glamour.Document.Indent.
          */
         public readonly int $documentIndent = 0,
         /**
-         * Indentation cells per list nesting level. Mirrors glamour's
+         * Indentation cells per list nesting level. Mirrors charmbracelet/glamour's
          * per-list `LevelIndent`. Default 0 means "use bullet width
          * + 1" (the prior behaviour); set explicitly to a positive
          * value to override (glamour stock dark / light themes use 4).
@@ -121,7 +121,7 @@ final class Theme
         /**
          * Style applied to the visible alt-text of inline images,
          * distinct from `$image` which paints the wider `[image]` /
-         * fallback marker. Mirrors glamour's `ImageText` slot.
+         * fallback marker. Mirrors charmbracelet/glamour.ImageText slot.
          */
         public readonly ?Style $imageText = null,
 
@@ -145,7 +145,7 @@ final class Theme
         public readonly string $paragraphSuffix = '',
         /**
          * Casing transform applied to heading bodies — `upper` / `lower`
-         * / `title` / `none`. Default `none`. Mirrors glamour's
+         * / `title` / `none`. Default `none`. Mirrors charmbracelet/glamour's
          * StylePrimitive `Upper` / `Lower` / `Title` flags collapsed
          * into one selector.
          */
@@ -160,21 +160,21 @@ final class Theme
 
         /**
          * Distinct marker style for unordered lists. Default null
-         * falls through to {@see $listMarker}. Mirrors glamour's
-         * `Item.UnorderedList` slot.
+         * falls through to {@see $listMarker}. Mirrors
+         * charmbracelet/glamour.Item.UnorderedList.
          */
         public readonly ?Style $unorderedListMarker = null,
 
         /**
          * `printf` format used for ordered-list markers. Receives the
-         * 1-based item number. Default `'%d.'`. Mirrors glamour's
+         * 1-based item number. Default `'%d.'`. Mirrors charmbracelet/glamour's
          * upstream `Format` field (only the integer-format slice).
          */
         public readonly string $orderedListMarkerFormat = '%d.',
 
         /**
          * Marker glyph for unordered list items. Default `'•'`.
-         * Mirrors glamour's `Item.Prefix` for unordered lists.
+         * Mirrors charmbracelet/glamour.Item.Prefix for unordered lists.
          */
         public readonly string $unorderedListMarkerGlyph = '•',
 
@@ -197,7 +197,7 @@ final class Theme
         // ---- StylePrimitive features (glamour parity) ----
         /**
          * Block-level prefix prepended once before the document body.
-         * Mirrors glamour's `Document.BlockPrefix`.
+         * Mirrors charmbracelet/glamour.Document.BlockPrefix.
          */
         public readonly string $documentBlockPrefix = '',
         /**
@@ -277,7 +277,7 @@ final class Theme
 
     /**
      * Plain-text theme that auto-selects when stdout is not a TTY.
-     * Mirrors glamour's `Notty` style: indistinguishable from `plain()`
+     * Mirrors charmbracelet/glamour.Notty style: indistinguishable from `plain()`
      * but a separate factory so docs can refer to it by name. Use as
      * the fallback in non-interactive scripts (CI logs, file dumps).
      */
@@ -296,7 +296,7 @@ final class Theme
      * output, or test fixtures that should still differentiate
      * headings from body text.
      *
-     * Mirrors glamour's `ASCII` preset.
+     * Mirrors charmbracelet/glamour.ASCII preset.
      */
     public static function ascii(): self
     {

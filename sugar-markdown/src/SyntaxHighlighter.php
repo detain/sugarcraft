@@ -15,6 +15,11 @@ use SugarCraft\Core\Syntax\TokenKind;
  * and styles each via the matching {@see Theme} slot. Falls back to
  * the plain code-block style for unknown / empty languages.
  *
+ * Port origin: stands in for the chroma-backed highlighting glamour
+ * consults (charmbracelet/glamour delegates to charmbracelet/chroma);
+ * this is an approximation over four token kinds, not a mirror of one
+ * upstream symbol.
+ *
  * The lexing itself now lives in sugar-core's
  * {@see \SugarCraft\Core\Syntax\RegexHighlighter} — a pure, style-agnostic
  * primitive shared with other consumers (e.g. candy-codeshot). This class is

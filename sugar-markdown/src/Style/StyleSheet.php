@@ -17,7 +17,7 @@ use SugarCraft\Style\Style;
  * Use fluent with*() overrides to set styles at specific depths:
  *   $sheet->withBlockKind(BlockKind::BlockQuote, $blockquoteStyle)
  *
- * Mirrors glamour's StyleSheet cascading rules; glamour's CSS-text
+ * Mirrors charmbracelet/glamour's StyleSheet cascading rules; glamour's CSS-text
  * stylesheet format is not ingested — sheets are built from Style values.
  */
 final class StyleSheet

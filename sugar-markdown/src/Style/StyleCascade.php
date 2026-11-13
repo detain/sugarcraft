@@ -13,7 +13,7 @@ use SugarCraft\Style\Style;
  * - Child Style overrides parent on any explicitly-set attributes
  * - Unspecified attributes are inherited from parent
  *
- * Mirrors glamour's cascading style resolution where each nested block
+ * Mirrors charmbracelet/glamour's cascading style resolution where each nested block
  * can override specific style attributes while inheriting the rest.
  */
 final class StyleCascade

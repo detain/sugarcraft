@@ -581,7 +581,7 @@ final class Renderer
      * `$default` — and to {@see Theme::ansi()} when no default was
      * supplied (SM-S33: the caller's fallback was previously forced to
      * be ansi, which could not be expressed through this door).
-     * Mirrors glamour's `RenderWithEnvironmentConfig`.
+     * Mirrors charmbracelet/glamour.RenderWithEnvironmentConfig.
      */
     public static function fromEnvironment(?Theme $default = null): self
     {
@@ -599,7 +599,7 @@ final class Renderer
      * their own width semantics; heading passthrough matches glamour).
      * Pass null to disable wrapping; 0 or a negative count throws.
      *
-     * Mirrors glamour's `WithWordWrap`.
+     * Mirrors charmbracelet/glamour.WithWordWrap.
      */
     public function withWordWrap(?int $cols): self
     {
@@ -620,7 +620,7 @@ final class Renderer
     /**
      * Base URL prefixed onto relative `[text](path)` link / image targets.
      * URLs that already have a scheme (http://, https://, mailto:, …)
-     * pass through unchanged. Mirrors glamour's `WithBaseURL`.
+     * pass through unchanged. Mirrors charmbracelet/glamour.WithBaseURL.
      */
     public function withBaseURL(?string $url): self
     {
@@ -631,7 +631,7 @@ final class Renderer
     /**
      * Wrap text inside table cells at the renderer's word-wrap width.
      * Default off (cells render unwrapped, matching glamour's default).
-     * Mirrors glamour's `WithTableWrap`.
+     * Mirrors charmbracelet/glamour.WithTableWrap.
      *
      * NOTE: this wraps EACH CELL at the full `wrapWidth`, so it does
      * not bound the table itself — a three-column table can still render
@@ -648,8 +648,8 @@ final class Renderer
      * Whether links inside table cells render as inline `[text](url)`
      * pairs (default — terse, scannable) or as full hyperlinks. When
      * false, table cells suppress the trailing `(url)` and OSC-8 envelope
-     * since they bloat narrow columns. Mirrors glamour's
-     * `WithInlineTableLinks`.
+     * since they bloat narrow columns. Mirrors
+     * charmbracelet/glamour.WithInlineTableLinks.
      */
     public function withInlineTableLinks(bool $on = true): self
     {
@@ -703,7 +703,7 @@ final class Renderer
      * Use a caller-supplied block cascade instead of {@see StyleSheet::base()}
      * (M7). The sheet styles whole block kinds per nesting depth; the renderer
      * seeds it fresh at each channel entry, so the default (null) keeps every
-     * existing byte. Mirrors glamour's cascade option (element style maps).
+     * existing byte. Mirrors charmbracelet/glamour's cascade option (element style maps).
      */
     public function withStyleSheet(StyleSheet $sheet): self
     {
@@ -715,8 +715,8 @@ final class Renderer
      * CommonMark collapses runs of blank lines; with this on, every run of
      * blank lines between two blocks survives into {@see render()}'s output
      * at the position it held in the source (runs between the items of a
-     * list excepted: lists render tight). Mirrors glamour's
-     * `WithPreservedNewLines`. The stream family buffers while it is on
+     * list excepted: lists render tight). Mirrors
+     * charmbracelet/glamour.WithPreservedNewLines. The stream family buffers while it is on
      * ({@see defersStreaming()}).
      */
     public function withPreservedNewLines(bool $on = true): self
@@ -725,8 +725,8 @@ final class Renderer
     }
 
     /**
-     * Pick a stock theme by name. Mirrors glamour's
-     * `WithStandardStyle($name)`. Accepts every name {@see Theme::byName()}
+     * Pick a stock theme by name. Mirrors charmbracelet/glamour.WithStandardStyle.
+     * Accepts every name {@see Theme::byName()}
      * recognises (the roster is {@see Theme::names()}, alias spellings
      * included); unknown names throw `InvalidArgumentException`
      * listing the valid ones.
@@ -744,7 +744,7 @@ final class Renderer
      * through verbatim. Stream and render channels stay byte-identical
      * because the substitution is byte-local to a text run.
      *
-     * Mirrors glamour's `WithEmoji`.
+     * Mirrors charmbracelet/glamour.WithEmoji.
      */
     public function withEmoji(bool $on = true): self
     {
@@ -999,7 +999,9 @@ final class Renderer
      * character — U+00A0 and up, and multi-byte characters whose continuation
      * bytes fall in 0x80–0x9F (→, 😀), pass untouched.
      *
-     * Mirrors charmbracelet/glamour TUI render invariant.
+     * House behaviour, not upstream parity (2026-11, sugar-markdown-083):
+     * glamour lets text bytes through unswept; the ESC/C0-free render
+     * guarantee this port gives its consumers is our own hardening.
      */
     private static function stripControls(string $s): string
     {
@@ -1118,7 +1120,7 @@ final class Renderer
             $rendered = $imageStyle->render('[image]');
         } else {
             // imageText paints the visible alt-text when set; otherwise
-            // fall through to image. Mirrors glamour's `ImageText` slot.
+            // fall through to image. Mirrors charmbracelet/glamour.ImageText slot.
             $textStyle = $this->theme->imageText ?? $imageStyle;
             $rendered = $textStyle->render($alt);
         }
@@ -1249,7 +1251,9 @@ final class Renderer
      * inject spurious control sequences into the terminal. Applied
      * unconditionally in resolveUrl for defence-in-depth.
      *
-     * Mirrors charmbracelet/glamour URL sanitisation.
+     * House hardening, not upstream parity (2026-11, sugar-markdown-083):
+     * glamour neither scheme-blacklists nor strips destination controls, so
+     * this is our own addition rather than a mirror of glamour behaviour.
      */
     private static function safeUrl(string $url): string
     {
@@ -1439,7 +1443,7 @@ final class Renderer
     /**
      * Apply a heading's case transform to one Text node's literal.
      *
-     * Mirrors glamour's `Upper` / `Lower` / `Title` flags collapsed
+     * Mirrors charmbracelet/glamour's `Upper` / `Lower` / `Title` flags collapsed
      * into a single `case` selector. `none` (default) is identity;
      * unknown selectors fall through to identity. It runs on source text
      * only, never on rendered output: code spans, link URLs (including an

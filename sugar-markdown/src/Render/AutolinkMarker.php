@@ -21,7 +21,7 @@ use League\CommonMark\Parser\InlineParserContext;
  * the parser it wraps, so it runs first; the original never sees input the
  * wrapper accepted.
  *
- * Mirrors charmbracelet/glamour ansi.(*ANSIRenderer).NewElement `case ast.KindAutoLink`.
+ * Mirrors charmbracelet/glamour.ansi.(*ANSIRenderer).NewElement `case ast.KindAutoLink`.
  */
 final class AutolinkMarker implements InlineParserInterface
 {
