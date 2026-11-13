@@ -14,6 +14,7 @@ use SugarCraft\Top\Collect\Ipmi\IpmiState;
 use SugarCraft\Top\Collect\Process\CommandOutcome;
 use SugarCraft\Top\Collect\Process\CommandResult;
 
+use function React\Promise\reject;
 use function React\Promise\resolve;
 
 /**
@@ -438,5 +439,74 @@ final class IpmiTest extends TestCase
         } finally {
             putenv('PATH=' . $saved);
         }
+    }
+
+    public function testTheBackoffSaturatesAtTheCeilingAndNeverEscapesIt(): void
+    {
+        // candy-top-083: the doubling backoff is clamped by BACKOFF_MAX and
+        // the exponent by min(16, …) — a BMC dead for hours must cost one
+        // probe per ceiling window, not an astronomically growing float.
+        $this->script['-S CACHE sdr elist'] = new CommandResult(CommandOutcome::Timeout);
+        $ipmi = $this->reader();
+        $deltas = [];
+        for ($round = 0; $round < 10; $round++) {
+            $s = self::settle($ipmi->poll(10000));
+            $this->assertSame(IpmiState::TimedOut, $s->state, "round $round");
+            $delta = $ipmi->retryAt() - $this->now;
+            $this->assertIsFloat($delta);
+            $this->assertTrue(is_finite($delta), 'the backoff never reaches infinity');
+            $this->assertLessThanOrEqual(Ipmi::BACKOFF_MAX, $delta, 'never above the ceiling');
+            $deltas[] = $delta;
+            $this->now = $ipmi->retryAt();
+        }
+        $this->assertSame([15.0, 30.0, 60.0, 120.0, 240.0, 480.0, 600.0, 600.0, 600.0, 600.0], $deltas, 'doubling, then flat at BACKOFF_MAX');
+    }
+
+    public function testARunnerThatRejectsAnswersNoResponseWithoutLosingTheRound(): void
+    {
+        // candy-top-086: the rejection arm of the round chain must land the
+        // NoResponse default (fail ??=), not bubble the throw out of poll().
+        $ipmi = Ipmi::new(
+            static fn (array $argv, float $timeout): PromiseInterface => reject(new \RuntimeException('runner exploded')),
+            fn (): float => $this->now,
+            '/usr/bin/ipmitool',
+            [$this->dir . '/ipmi0'],
+            static fn (string $p): bool => true,
+            $this->dir,
+            static fn (string $binary): bool => false,
+        );
+        $s = self::settle($ipmi->poll(10000));
+        $this->assertSame(IpmiState::NoResponse, $s->state);
+    }
+
+    public function testSampleOnAPendingLoopRoundThrowsInsteadOfBlocking(): void
+    {
+        // candy-top-087: the Source contract reads synchronously; a
+        // loop-driven round still pending must be a loud LogicException.
+        $ipmi = Ipmi::new(
+            static fn (array $argv, float $timeout): PromiseInterface => (new Deferred())->promise(),
+            fn (): float => $this->now,
+            '/usr/bin/ipmitool',
+            [$this->dir . '/ipmi0'],
+            static fn (string $p): bool => true,
+            $this->dir,
+            static fn (string $binary): bool => false,
+        );
+        $this->expectException(\LogicException::class);
+        $ipmi->sample();
+    }
+
+    public function testTheBlockingFactoryIsGateSettledWithoutEverSpawning(): void
+    {
+        // S-P19 (candy-top-087): the blocking factory reaches gate() and
+        // answers a SYNCHRONOUSLY settled failure snapshot — its
+        // resolve(AsyncCommand::run) runner is never reached. An explicit
+        // binary skips find(), so the gate outcome is host-dependent
+        // (NoDevice without a device, NoAccess with one we cannot open);
+        // either way it is settled now, proving no pending loop round.
+        $ipmi = Ipmi::blocking('/definitely/not/here/ipmitool');
+        [$snap] = $ipmi->sample();
+        $this->assertInstanceOf(IpmiSnapshot::class, $snap);
+        $this->assertContains($snap->state, [IpmiState::NoDevice, IpmiState::NoAccess], 'gate-settled, never spawned');
     }
 }
