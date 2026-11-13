@@ -404,6 +404,12 @@ final class OHLCChart implements ChromeAccessors
      * @param list<Bar>                            $bars
      * @param list<array{label: string, color: string}> $legendItems
      */
+    /**
+     * House mutate(): positional copy-with-overrides feeding the constructor
+     * (see CALIBER_LEARNINGS.md [convention:sugar-charts] — why not the core
+     * Mutable trait). Null means "keep current"; behaviorally identical to a
+     * with*-by-positional-args builder.
+     */
     private function copy(
         ?array $bars = null,
         ?int $width = null,

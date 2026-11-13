@@ -353,6 +353,12 @@ final class Scatter implements ChromeAccessors
      * @param list<array{0:int|float,1:int|float}>       $points
      * @param list<array{label: string, color: string}> $legendItems
      */
+    /**
+     * House mutate(): positional copy-with-overrides feeding the constructor
+     * (see CALIBER_LEARNINGS.md [convention:sugar-charts] — why not the core
+     * Mutable trait). Null means "keep current"; behaviorally identical to a
+     * with*-by-positional-args builder.
+     */
     private function copy(
         ?array $points = null,
         ?int $width = null,

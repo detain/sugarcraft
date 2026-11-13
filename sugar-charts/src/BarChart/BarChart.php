@@ -855,6 +855,12 @@ final class BarChart implements ChromeAccessors
      */
     private const LEGEND_COLORS = ['blue', 'orange', 'green', 'red', 'purple', 'cyan'];
 
+    /**
+     * House mutate(): positional copy-with-overrides feeding the constructor
+     * (see CALIBER_LEARNINGS.md [convention:sugar-charts] — why not the core
+     * Mutable trait). Null means "keep current"; behaviorally identical to a
+     * with*-by-positional-args builder.
+     */
     private function copy(
         ?array $bars = null,
         ?int $width = null,
