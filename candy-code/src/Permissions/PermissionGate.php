@@ -1099,6 +1099,24 @@ final class PermissionGate
             return PermissionDecision::Allow;
         }
 
+        // S-T03: a command past the length door is never reasoned about (the
+        // ShellWords parse, dequoted re-scan and read-only walk cost ~2.5 s at
+        // 1 MB, and no human reviews a megabyte of shell anyway). The modes
+        // that would have asked or classified ask, naming the size; Plan,
+        // DontAsk and Bypass keep their own verdicts, which already refuse or
+        // grant without that reasoning.
+        if ($commitAutoStrikes
+            && ($size = self::oversizedCommand($call)) !== null
+            && ($this->mode === PermissionMode::Default
+                || $this->mode === PermissionMode::AcceptEdits
+                || ($this->mode === PermissionMode::Auto && $this->classifier !== null))
+        ) {
+            $this->lastAutoReason = "the command is {$size} bytes, past the " . self::MAX_REASONED_COMMAND_BYTES
+                . '-byte limit the gate will analyse, so it always asks';
+
+            return PermissionDecision::Ask;
+        }
+
         return match ($this->mode) {
             PermissionMode::Default => $this->evaluateDefault($call, $projectRoot),
             PermissionMode::AcceptEdits => $this->evaluateAcceptEdits($call, $projectRoot),
@@ -1823,6 +1841,22 @@ final class PermissionGate
      * rm -rf "$HOME"/, rm -r -- -f /, sudo rm -rf /, SUDO RM -RF ~,
      * sudo -u root rm -rf /, /bin/rm -rf /, \rm -rf /, (rm -rf /)
      */
+    /**
+     * The length door ({@see evaluateMode()}): commands longer than this are
+     * not parsed or classified by the gate.
+     */
+    public const MAX_REASONED_COMMAND_BYTES = 65536;
+
+    /** Byte length of a `Bash` command past the length door, else null. */
+    private static function oversizedCommand(ToolCall $call): ?int
+    {
+        $command = $call->arguments['command'] ?? null;
+
+        return $call->name === 'Bash' && is_string($command) && strlen($command) > self::MAX_REASONED_COMMAND_BYTES
+            ? strlen($command)
+            : null;
+    }
+
     private function isRmRfRootOrHome(ToolCall $call): bool
     {
         // C-TOOL-6.k: typed input reaches the same floor. A ShellSend carries
@@ -1879,6 +1913,17 @@ final class PermissionGate
      */
     private function textTripsRmRfFloor(string $command): bool
     {
+        // S-T03: past the length door the full parse costs seconds, so a linear
+        // pre-scan first asks whether any word could dequote to `rm` (bare,
+        // quote-split like r''m, or backslashed). No such word means neither
+        // walk below can match; any candidate still gets the full, unchanged
+        // judgement — the floor never loosens, it only skips the provably idle.
+        if (strlen($command) > self::MAX_REASONED_COMMAND_BYTES
+            && preg_match('/(?<![A-Za-z0-9_.-])r[\'"\\\\]*m(?![A-Za-z0-9_.-])/', $command) !== 1
+        ) {
+            return false;
+        }
+
         foreach (ShellWords::parse($command)->commands as $words) {
             if ($this->wordsAreRmRfRootOrHome($words)) {
                 return true;
@@ -2240,7 +2285,8 @@ final class PermissionGate
     {
         $command = $call->arguments['command'] ?? null;
 
-        return is_string($command) && ReadOnlyCommands::planAllows($command);
+        return is_string($command) && strlen($command) <= self::MAX_REASONED_COMMAND_BYTES
+            && ReadOnlyCommands::planAllows($command);
     }
 
     /**
@@ -2257,6 +2303,7 @@ final class PermissionGate
         $command = $call->arguments['command'] ?? null;
 
         return $call->name === 'Bash' && is_string($command) && $this->readOnlyAutoAllow()
+            && strlen($command) <= self::MAX_REASONED_COMMAND_BYTES
             && ReadOnlyCommands::autoAllows($command, $projectRoot === '' ? null : $projectRoot);
     }
 
