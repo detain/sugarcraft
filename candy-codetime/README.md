@@ -47,12 +47,42 @@ candy-codetime export csv 30                      # headless dump of 30 days
 week and opens the dashboard, so you can see the TUI before recording
 anything real.
 
+## Automating collection
+
+**No editor plugins ship with candy-codetime** — the tracker is passive by
+design, so capturing your day is something you wire up once, and this section
+is the whole how-to. Three doors exist, pick one:
+
+1. **The editor hook** (recommended): `examples/plugin-heartbeat.example.sh`
+   is a worked ~35-line POSIX sh script. Call it from a save hook with the
+   saved path and one heartbeat lands per save. It prefers the CLI's
+   `push --` stdin door (ignore patterns, clamps and the advisory lock all
+   apply), and falls back to a raw append under `flock` when no binary is on
+   `PATH`.
+2. **A direct `push`** typed (or scripted) by you: `candy-codetime push
+   <project> <language> <file> [duration]`, backdated with `--time=<unix>`.
+3. **A raw `printf … >> YYYY-MM-DD.jsonl`** from cron — the exact line shape
+   is in *Data layout* below, but see the two caveats there before choosing
+   this door: raw lines are unstamped unless you write `time` into them, and
+   they land in the **file backend only** (a `--backend=sqlite` dashboard
+   never sees them).
+
+A cron recipe for the raw door, five-minute cadence (it still needs `time`
+inline — see the contract in *Data layout*):
+
+```cron
+*/5 * * * * umask 077; D=${CANDY_CODETIME_DIR:-$HOME/.local/share/candy-codetime}; mkdir -p "$D" && printf '{"time": %s, "project": "myproj", "language": "php", "file": "/home/me/myproj/src/Main.php", "duration": 300, "tags": []}\n' "$(date +\%s)" >> "$D/$(date +\%F).jsonl"
+```
+
+(`%` is escaped for cron; the day file is named with the machine's local
+calendar date, matching the store layout.)
+
 ## Commands
 
 | Command | Arguments | What it does |
 |---------|-----------|--------------|
 | `dashboard` | — | Open the TUI (reads the selected backend). Default when no command is given. Without an interactive terminal it refuses with a pointer to `export` instead of hanging. |
-| `push` | `<project> <language> <file> [duration]` | Record one heartbeat. `duration` is whole seconds (default 60); a non-numeric value is rejected, not silently read as 0; durations above one year are clamped to 31,536,000 s. |
+| `push` | `<project> <language> <file> [duration]` \| `--` | Record heartbeats. `duration` is whole seconds (default 60); a non-numeric value is rejected, not silently read as 0; durations above one year are clamped to 31,536,000 s. `--time=<unix>` files a single beat at a past (or future) instant instead of `now` — a malformed value is refused, never coerced. `push --` reads a batch: one JSON heartbeat per line on stdin, each with its own `time`; a malformed line is named with its line number on STDERR and the run exits 1 after the well-formed rows still land. Both forms pass the same ignore door and the same clamps. |
 | `milestone` | `add [name] [description]` \| `list` | Manage release markers. `name` and `description` are read for `add` only. Milestones live only in SQLite, so this command forces the sqlite backend regardless of `--backend`; the dashboard never displays them. |
 | `export` | `<csv\|json\|ics> [days]` | Dump heartbeats for the last N days (default 7, clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1). Output goes to STDOUT — redirect it to a file to save it. |
 | `gaps` | `[days]` | List untracked stretches of at least 300 seconds within the last N days (default 7, days clamped to [1, 3660]; a non-numeric count is refused with a one-line error and exit 1). |
@@ -131,7 +161,12 @@ Each line of a day file is one JSON object:
 `{"time": <unix seconds>, "project": <string>, "language": <string>, "file":
 <path as supplied>, "duration": <seconds>, "tags": <array>}`. The CLI never
 sets tags; a plugin-written tag is honored on read and export. Readers should
-ignore unknown keys.
+ignore unknown keys. Timestamps are part of the payload, not the envelope: a
+line echoed **without** `time` gets stamped at the moment it is *read*, so a
+batch fed in after the fact files every beat under batch-time. If you are
+backfilling, carry the real instant on each line — or feed the batch through
+`push --time=<unix>` (one beat) / `push --` (stdin JSON-lines), which run the
+same ignore door, clamps and locking as an interactive push.
 
 Day files are keyed by the machine's **local** calendar date, so history
 written while crossing time zones stays filed under the date it was tracked.
@@ -214,8 +249,9 @@ that cannot be drawn are counted
 | `Support\Version` | Single-source version constant. |
 | `Lang` | i18n facade (16 locales under `lang/`). |
 
-The Store is intentionally append-only at the file level, so editor plugins can
-`>>` echo a JSON line directly without coordinating with the dashboard — the
+The Store is intentionally append-only at the file level, so editor hooks can
+`>>` echo a JSON line directly without coordinating with the dashboard (no
+plugins ship — see *Automating collection* for the worked example) — the
 trade-off is honest: raw `>>` redirection does not take the advisory lock
 `push` uses, so a hand-echoed line could theoretically interleave; plugin
 integrations should `flock` or just call `push`. The dashboard re-reads on

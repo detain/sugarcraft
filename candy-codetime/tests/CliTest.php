@@ -633,4 +633,55 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('banana', $gaps['stderr']);
         $this->assertSame('', $gaps['stdout'], 'a refused count must print no report');
     }
+
+    /** Run examples/plugin-heartbeat.example.sh with extra env over the default data dir. */
+    private function runHook(string $hookBin, string $file, string $project, string $language): array
+    {
+        $script = dirname(__DIR__) . '/examples/plugin-heartbeat.example.sh';
+        $parentEnv = getenv();
+        $fullEnv = array_merge(is_array($parentEnv) ? $parentEnv : [], [
+            'CANDY_CODETIME_DIR' => $this->dataDir,
+            'CODETIME_HOOK_BIN'  => $hookBin,
+        ]);
+        $proc = proc_open(['sh', $script, $file, $project, $language], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $this->workDir, $fullEnv);
+        $this->assertIsResource($proc);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return ['stdout' => $stdout, 'stderr' => $stderr, 'exit' => proc_close($proc)];
+    }
+
+    public function testExampleHookScriptPushesThroughTheCliDoor(): void
+    {
+        $shim = $this->workDir . '/ct-shim';
+        file_put_contents(
+            $shim,
+            "#!/bin/sh\nexec " . escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(dirname(__DIR__) . '/bin/candy-codetime') . " \"$@\"\n"
+        );
+        chmod($shim, 0755);
+        file_put_contents($this->workDir . '/.sugartrackignore', "*.log\n");
+        $res = $this->runHook($shim, '/home/dev/myproj/src/Main.php', 'myproj', 'php');
+        $this->assertSame(0, $res['exit'], $res['stdout'] . $res['stderr']);
+        $skipped = $this->runHook($shim, '/home/dev/myproj/scratch.log', 'myproj', 'php');
+        $this->assertSame(0, $skipped['exit'], $skipped['stdout'] . $skipped['stderr']);
+        $export = $this->runCli(['export', 'json', '2']);
+        $this->assertSame(0, $export['exit'], $export['stderr']);
+        $this->assertStringContainsString('"project": "myproj"', $export['stdout'], 'the CLI door must land a readable beat');
+        $this->assertStringContainsString('/home/dev/myproj/src/Main.php', $export['stdout']);
+        $this->assertStringNotContainsString('scratch.log', $export['stdout'], 'the push arm must honour the ignore door — a raw echo would not');
+        unlink($shim);
+    }
+
+    public function testExampleHookScriptFallsBackToRawAppend(): void
+    {
+        $res = $this->runHook('candy-codetime-not-on-this-path', '/home/dev/myproj/src/Main.php', 'myproj', 'php');
+        $this->assertSame(0, $res['exit'], $res['stdout'] . $res['stderr']);
+        $this->assertFileExists($this->dataDir . '/' . date('Y-m-d') . '.jsonl', 'the raw arm files under the local calendar date');
+        $export = $this->runCli(['export', 'json', '2']);
+        $this->assertSame(0, $export['exit'], $export['stderr']);
+        $this->assertStringContainsString('"project": "myproj"', $export['stdout'], 'a raw-echoed line must be readable by the store');
+        $this->assertStringContainsString('"duration": 60', $export['stdout']);
+    }
 }
