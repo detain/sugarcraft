@@ -207,4 +207,40 @@ final class LangLocaleParityTest extends TestCase
             \basename($file) . ' copies English verbatim for ' . \count($copied) . ' keys: ' . \implode(', ', $copied)
         );
     }
+
+    /**
+     * CM-66: the "16 locales" figure in help() and the README is a claim
+     * about the catalog shelf, not decoration. Adding or dropping a catalog
+     * reddens the prose here until claim and shelf move together.
+     */
+    public function testTheLocaleFigureInTheProseMatchesTheCatalogShelf(): void
+    {
+        $count = \count(\glob(\dirname(__DIR__) . '/lang/*.php') ?: []);
+        $this->assertSame(16, $count, 'the catalog shelf moved - update the prose claims in the same change');
+
+        $patterns = [
+            'bin/candy-mail' => '/\((\d+) locales\)/',
+            'README.md'      => '/(\d+ catalogs ship|\((\d+)\n?locales ship\))/',
+        ];
+        foreach ($patterns as $rel => $regex) {
+            $text = (string) \file_get_contents(\dirname(__DIR__) . '/' . $rel);
+            $this->assertGreaterThanOrEqual(
+                1,
+                \preg_match_all($regex, $text, $m),
+                $rel . ' must carry the locale-count claim this guard pins'
+            );
+            $figures = $m[1] !== [] ? $m[1] : [];
+            if ($rel === 'README.md' && $figures === []) {
+                $figures = $m[2];
+            }
+            foreach ($figures as $figure) {
+                \preg_match('/(\d+)/', (string) $figure, $d);
+                $this->assertSame(
+                    (string) $count,
+                    $d[1],
+                    $rel . ' advertises ' . $d[1] . ' locales but the shelf ships ' . $count
+                );
+            }
+        }
+    }
 }
