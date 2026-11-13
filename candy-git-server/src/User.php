@@ -107,13 +107,39 @@ final class User
         $keys = $row['authorized_keys'] ?? [];
         $user = new self(
             $username,
-            (bool) ($row['admin'] ?? false),
-            (bool) ($row['active'] ?? true),
+            self::storeBool('admin', $row['admin'] ?? null, false),
+            self::storeBool('active', $row['active'] ?? null, true),
             \is_array($keys) ? \implode("\n", \array_map('strval', $keys)) : '',
             isset($row['password_hash']) ? (string) $row['password_hash'] : null,
         );
 
         return $user;
+    }
+
+    /**
+     * S07 (finding 007, store arm): the user store is a hand-editable JSON
+     * file, and `(bool) 'false'` is TRUE — a literal "false" string in the
+     * admin field would mint a superuser on the very file format an
+     * operator reaches for when the tool misbehaves. Same vocabulary as
+     * the config parser (native bools, 0/1 ints, case-folded true/false/
+     * yes/no/on/off); anything else refuses the ROW, loudly, naming the
+     * field. A corrupt security field must fail closed: the store cannot
+     * load, and the operator sees exactly which user file line lies.
+     */
+    private static function storeBool(string $field, mixed $value, bool $default): bool
+    {
+        if ($value === null) {
+            return $default;
+        }
+        if (\is_bool($value)) {
+            return $value;
+        }
+        $v = \is_int($value) ? (string) $value : (\is_string($value) ? \strtolower(\trim($value)) : '');
+        return match ($v) {
+            '1', 'true', 'yes', 'on'  => true,
+            '0', 'false', 'no', 'off' => false,
+            default => throw new \RuntimeException("user store: field '{$field}' is not a boolean — refusing the row"),
+        };
     }
 
     public function withAuthorizedKeys(string $keys): self

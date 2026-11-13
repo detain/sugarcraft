@@ -212,6 +212,104 @@ final class ConfigTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // S07 (findings 007, 086): strict boolean/integer vocabularies
+    // -------------------------------------------------------------------------
+
+    public function testTheBoolVocabularyCarriesEveryNamedShape(): void
+    {
+        $truthy = ['true', 'True', '"true"', '"YES"', '"on"', '"1"', '1'];
+        $falsy  = ['false', '"false"', '"NO"', '"Off"', '"0"', '0'];
+
+        foreach ($truthy as $literal) {
+            $c = Config::load($this->writeBool('git: { allow_anonymous_read: ' . $literal . ' }'));
+            $this->assertTrue($c->allowAnonymousRead, "{$literal} must read TRUE");
+        }
+        foreach ($falsy as $literal) {
+            $c = Config::load($this->writeBool('git: { allow_anonymous_read: ' . $literal . ' }'));
+            $this->assertFalse($c->allowAnonymousRead, "{$literal} must read FALSE");
+        }
+        // The headline pin: the quoted string 'false' decodes to FALSE.
+        // The old (bool) cast read quoted-'false' as TRUE — an operator
+        // writing allow_anonymous_read: "false" had the OPPOSITE lever
+        // engaged, and nobody could see it.
+        $c = Config::load($this->writeBool('git: { allow_anonymous_read: "false" }'));
+        $this->assertFalse($c->allowAnonymousRead, 'quoted-false is the PHP cast trap this parser exists for');
+    }
+
+    public function testGarbageBooleansThrowNamingTheKey(): void
+    {
+        // Whitespace-padded strings are IN vocabulary (the parser trims);
+        // the garbage cases below are the shapes the cast used to swallow.
+        foreach (['"maybe"', '2', '-1', '1.5', '[]'] as $i => $literal) {
+            try {
+                Config::load($this->writeBool('git: { allow_anonymous_read: ' . $literal . ' }'));
+                $this->fail('non-vocabulary bool accepted: ' . $literal);
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('git.allow_anonymous_read', $e->getMessage(), "the throw must name which key lied (case {$i})");
+            }
+        }
+    }
+
+    public function testIntKnobsRejectUnitStringsFloatsAndOutOfRange(): void
+    {
+        // '30s': the exact PHP cast trap the finding quotes — (int) '30s'
+        // is 30, so a timeout an operator meant as thirty-SECONDS-ish
+        // could quietly become thirty-whatever-the-unit-is.
+        $e = $this->captureThrows('git: { max_timeout: "30s" }');
+        $this->assertStringContainsString('git.max_timeout', $e->getMessage());
+        $this->assertStringContainsString('integer', $e->getMessage());
+
+        $this->assertStringContainsString('git.max_connections', $this->captureThrows('git: { max_connections: -2 }')->getMessage());
+        $this->assertStringContainsString('ssh.idle_timeout', $this->captureThrows('ssh: { idle_timeout: 1.5 }')->getMessage());
+        $this->assertStringContainsString('ssh.max_timeout', $this->captureThrows('ssh: { max_timeout: "1e9" }')->getMessage());
+
+        // Digit strings ARE accepted (YAML quoting heritage), in range.
+        $c = Config::load($this->writeBool('git: { max_timeout: "45" }'));
+        $this->assertSame(45, $c->gitMaxTimeout);
+    }
+
+    public function testMaxPackBytesIsStrictlyPositiveOrAbsent(): void
+    {
+        foreach (['0', '-5', '"30s"', '1.5', '"99999999999999999999"'] as $literal) {
+            try {
+                Config::load($this->writeBool('http: { max_pack_bytes: ' . $literal . ' }'));
+                $this->fail('garbage cap accepted: ' . $literal);
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('http.max_pack_bytes', $e->getMessage());
+            }
+        }
+
+        $c = Config::load($this->writeBool('http: { max_pack_bytes: "1073741824" }'));
+        $this->assertSame(1073741824, $c->maxPackBytes, 'a quoted clean integer stays a valid cap');
+    }
+
+    public function testWorkerPerRequestDefaultsTrueAndParsesStrictly(): void
+    {
+        $this->assertTrue(Config::fromDefaults()->httpWorkerPerRequest, 'the 8b pool is the default posture');
+        $this->assertFalse(Config::load($this->writeBool('http: { worker_per_request: "false" }'))->httpWorkerPerRequest);
+        $this->assertTrue(Config::load($this->writeBool('http: { worker_per_request: "yes" }'))->httpWorkerPerRequest);
+        $this->assertStringContainsString('http.worker_per_request', $this->captureThrows('http: { worker_per_request: sometimes }')->getMessage());
+    }
+
+    private function writeBool(string $line): string
+    {
+        $path = $this->tmpDir . '/bool-' . \substr(\md5($line), 0, 12) . '.yaml';
+        \file_put_contents($path, "name: BoolTest\n" . $line . "\n");
+
+        return $path;
+    }
+
+    private function captureThrows(string $line): \InvalidArgumentException
+    {
+        try {
+            Config::load($this->writeBool($line));
+        } catch (\InvalidArgumentException $e) {
+            return $e;
+        }
+        $this->fail('expected a throw for: ' . $line);
+    }
+
+    // -------------------------------------------------------------------------
     // TLS fields are RESERVED / not enforced — setting them must fail loudly
     // rather than give a false sense of an enabled-but-nonexistent HTTPS
     // listener.

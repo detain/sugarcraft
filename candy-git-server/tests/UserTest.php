@@ -93,8 +93,30 @@ final class UserTest extends TestCase
         $this->assertSame([$k1], $base->authorizedKeysList(), 'a refused call must append nothing');
     }
 
-    public function testWithAdminFlipsOnlyTheAdminFlag(): void
+    /**
+     * S07 (finding 007, store arm): the user store is hand-editable JSON
+     * and `(bool) 'false'` is TRUE — the string "false" in admin used to
+     * mint a superuser. Same vocabulary as config now; garbage refuses the
+     * row so a corrupt security field can never fail open.
+     */
+    public function testStoreRowsCarryStrictBooleansAndRefuseGarbage(): void
     {
+        $u = User::fromArray(['username' => 'a', 'admin' => 'false']);
+        $this->assertFalse($u->isAdmin, "string 'false' in the store means NOT admin");
+
+        $u = User::fromArray(['username' => 'b', 'admin' => 'true', 'active' => 'off']);
+        $this->assertTrue($u->isAdmin);
+        $this->assertFalse($u->isActive);
+
+        $u = User::fromArray(['username' => 'c']);
+        $this->assertFalse($u->isAdmin, 'absent admin defaults to the least-privilege false');
+        $this->assertTrue($u->isActive, 'absent active defaults to true (the VO contract)');
+
+        $this->expectException(\RuntimeException::class);
+        User::fromArray(['username' => 'd', 'admin' => 'maybe']);
+    }
+
+    public function testWithAdminFlipsOnlyTheAdminFlag(): void    {
         $user = User::new('alice')->withActive(false)->withAdmin();
 
         $this->assertTrue($user->isAdmin);

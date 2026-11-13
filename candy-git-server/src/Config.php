@@ -189,16 +189,16 @@ final class Config
         $this->sshPublicUrl     = (string) ($ssh['public_url'] ?? "ssh://localhost:23231");
         $this->sshKeyPath       = $this->resolvePath((string) ($ssh['key_path'] ?? 'ssh/soft_serve_host'), $dataPath);
         $this->sshClientKeyPath = $this->resolvePath((string) ($ssh['client_key_path'] ?? 'ssh/soft_serve_client'), $dataPath);
-        $this->sshMaxTimeout    = (int) ($ssh['max_timeout'] ?? 0);
-        $this->sshIdleTimeout   = (int) ($ssh['idle_timeout'] ?? 120);
+        $this->sshMaxTimeout    = self::parseInt('ssh.max_timeout', $ssh['max_timeout'] ?? null, 0, 0);
+        $this->sshIdleTimeout   = self::parseInt('ssh.idle_timeout', $ssh['idle_timeout'] ?? null, 120, 0);
 
         $git = $data['git'] ?? [];
         $this->gitListenAddr     = (string) ($git['listen_addr'] ?? ':9418');
-        $this->gitMaxTimeout     = (int) ($git['max_timeout'] ?? 0);
-        $this->gitIdleTimeout    = (int) ($git['idle_timeout'] ?? 3);
-        $this->gitMaxConnections = (int) ($git['max_connections'] ?? 32);
-        $this->allowAnonymousRead = (bool) ($git['allow_anonymous_read'] ?? false);
-        $this->mirrorAllowGitProtocol = (bool) ($git['mirror_allow_git_protocol'] ?? false);
+        $this->gitMaxTimeout     = self::parseInt('git.max_timeout', $git['max_timeout'] ?? null, 0, 0);
+        $this->gitIdleTimeout    = self::parseInt('git.idle_timeout', $git['idle_timeout'] ?? null, 3, 0);
+        $this->gitMaxConnections = self::parseInt('git.max_connections', $git['max_connections'] ?? null, 32, 1);
+        $this->allowAnonymousRead = self::parseBool('git.allow_anonymous_read', $git['allow_anonymous_read'] ?? null, false);
+        $this->mirrorAllowGitProtocol = self::parseBool('git.mirror_allow_git_protocol', $git['mirror_allow_git_protocol'] ?? null, false);
 
         $http = $data['http'] ?? [];
         $this->httpListenAddr = (string) ($http['listen_addr'] ?? ':23232');
@@ -216,15 +216,21 @@ final class Config
             throw new \InvalidArgumentException(Lang::t('config.tls_not_supported'));
         }
 
-        $this->maxPackBytes   = isset($http['max_pack_bytes']) ? (int) $http['max_pack_bytes'] : null;
-        $this->httpWorkerPerRequest = (bool) ($http['worker_per_request'] ?? true);
+        // max_pack_bytes is a CAP, and a cap that decodes from garbage is
+        // worse than no cap: '30s' must not become 30 bytes, and 0/-1 must
+        // not silently mean "the 256 MiB default" or an unbounded floor.
+        // Absent ⇒ null (the default lives in maxRequestBodyBytes()).
+        $this->maxPackBytes   = isset($http['max_pack_bytes'])
+            ? self::parseInt('http.max_pack_bytes', $http['max_pack_bytes'], 1, 1)
+            : null;
+        $this->httpWorkerPerRequest = self::parseBool('http.worker_per_request', $http['worker_per_request'] ?? null, true);
         $this->userTrustMode  = self::parseUserTrustMode((string) ($http['user_trust_mode'] ?? 'off'));
         $this->trustedProxies = self::parseTrustedProxies($http['trusted_proxies'] ?? []);
         $this->authSecret     = (string) ($http['auth_secret'] ?? '');
 
         $lfs = $data['lfs'] ?? [];
-        $this->lfsEnabled   = (bool) ($lfs['enabled'] ?? true);
-        $this->lfsSshEnabled = (bool) ($lfs['ssh_enabled'] ?? false);
+        $this->lfsEnabled   = self::parseBool('lfs.enabled', $lfs['enabled'] ?? null, true);
+        $this->lfsSshEnabled = self::parseBool('lfs.ssh_enabled', $lfs['ssh_enabled'] ?? null, false);
 
         $jobs = $data['jobs'] ?? [];
         $this->mirrorPullSchedule = (string) ($jobs['mirror_pull'] ?? '@every 10m');
@@ -238,6 +244,95 @@ final class Config
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * S07 (finding 007): `(bool) 'false'` is TRUE in PHP, and `(bool)` of a
+     * typo'd string is whatever the caster needed to be true — so every
+     * boolean config knob now runs through a named vocabulary: real bools,
+     * int 0/1, and the case-folded, whitespace-trimmed strings
+     * true/false/yes/no/on/off/1/0.
+     * Anything else — 'maybe', '2', an array, a float — throws, naming the
+     * key and the offending shape. A security lever (anonymous read,
+     * git:// admission, worker mode) that silently decodes to the wrong
+     * posture is exactly the fail-open this refuses.
+     *
+     * The message is a raw-English config diagnostic (same class as the
+     * transport failure lines), not a UI string: config corruption is
+     * reported to whoever edits config.yaml, in the words they typed the
+     * key with.
+     *
+     * @param mixed $value raw YAML value (null when the key is absent)
+     */
+    private static function parseBool(string $key, mixed $value, bool $default): bool
+    {
+        if ($value === null) {
+            return $default;
+        }
+        if (\is_bool($value)) {
+            return $value;
+        }
+        $v = \is_int($value) ? (string) $value : (\is_string($value) ? \strtolower(\trim($value)) : '');
+        return match ($v) {
+            '1', 'true', 'yes', 'on'  => true,
+            '0', 'false', 'no', 'off' => false,
+            default => throw new \InvalidArgumentException(
+                'config: ' . $key . ' must be a boolean (true/false/yes/no/on/off/1/0), got '
+                . self::describeValue($value)
+            ),
+        };
+    }
+
+    /**
+     * S07 (finding 086): `(int) '30s'` is 30 and `(int) '1e9'` is 1 — silent
+     * unit truncation on knobs that take bare numbers. Accepted shapes:
+     * real ints (within bounds) and digit strings only; bools, floats and
+     * non-numeric strings throw. Absent key ⇒ default.
+     */
+    private static function parseInt(string $key, mixed $value, int $default, int $min, ?int $max = null): int
+    {
+        if ($value === null) {
+            return $default;
+        }
+        $int = null;
+        if (\is_int($value)) {
+            $int = $value;
+        } elseif (\is_string($value) && \preg_match('/^[+-]?[0-9]+$/', \trim($value)) === 1) {
+            $int = (int) \trim($value);
+            // Overflow guard: '99999999999999999999' parses as a digit
+            // string but wraps silently; a float result means out-of-range.
+            if ((string) $int !== \ltrim(\trim($value), '+')) {
+                $int = null;
+            }
+        }
+        if ($int === null) {
+            throw new \InvalidArgumentException(
+                'config: ' . $key . ' must be an integer, got ' . self::describeValue($value)
+            );
+        }
+        if ($int < $min || ($max !== null && $int > $max)) {
+            $range = $max === null ? '>= ' . $min : $min . '–' . $max;
+            throw new \InvalidArgumentException('config: ' . $key . ' must be ' . $range . ', got ' . $int);
+        }
+
+        return $int;
+    }
+
+    private static function describeValue(mixed $value): string
+    {
+        if (\is_array($value)) {
+            return 'an array';
+        }
+        if (\is_object($value)) {
+            return 'an object';
+        }
+        if (\is_string($value)) {
+            return "string '" . (\strlen($value) > 40 ? \substr($value, 0, 40) . '…' : $value) . "'";
+        }
+        if (\is_float($value)) {
+            return 'number ' . \var_export($value, true);
+        }
+        return \get_debug_type($value) . ' ' . \var_export($value, true);
+    }
 
     public function reposPath(): string
     {
