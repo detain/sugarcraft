@@ -249,10 +249,16 @@ no state to parse, just ask:
 `Suspended` represents a paused command as data: it carries a `resume` callable
 and an optional opaque `state`. It is a container, not a scheduler: nothing in
 this library stores the handle or resumes it for you. A hosting runtime *may*
-adopt it as a storable command value — keep the `Suspended`, call `resume()`
-later when the subscription fires or the model decides to continue, and dispatch
-what comes back — so effects that span multiple update cycles (animations,
-debounced input, async handlers) never execute eagerly. `resume()` **returns** the paused Cmd closure (or
+adopt it as a storable command value, in three steps:
+
+1. Store the `Suspended` in the model as the command value.
+2. Call `resume()` when the subscription fires or the model decides to
+   continue.
+3. Dispatch the `Cmd` that comes back.
+
+Effects that span multiple update cycles (animations, debounced input, async
+handlers) therefore never execute eagerly: an effect runs when — and only
+when — the runtime resumes it, once per resume. `resume()` **returns** the paused Cmd closure (or
 `null` if there is nothing to resume); dispatching it is the caller's job. The
 handle is **fire-once by law**: the resumed latch flips on the first call, so a
 second `resume()` always returns `null` — even when the first call handed back a
