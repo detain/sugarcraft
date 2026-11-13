@@ -211,4 +211,40 @@ final class SectionStreamTest extends TestCase
             [...$first, ...$second, ...$stream->finish()],
         );
     }
+
+    public function testAHeldLadderStreamsWithoutQuadraticReRenders(): void
+    {
+        // FUZZ-01 (#95, with #94/#99/#103 lineage): K held sections whose
+        // labels a later definition resolves one by one used to re-render
+        // EVERY still-held entry on EVERY definition event — Θ(K²) parses.
+        // K=1600 measured 61.3s against render()'s 0.5s before the
+        // per-entry watch-list fix; a held section now only re-renders when
+        // a definition names one of its own unresolved labels. The cap is
+        // machine-relative (the absolute term fails the quadratic shape on
+        // any box while leaving the fixed path a 10x margin); what remains
+        // of the factor over render() is the per-section definition seeding
+        // SM-S07 owns.
+        $renderer = $this->renderer();
+        $doc = '';
+        for ($i = 0; $i < 1600; $i++) {
+            $doc .= "# S$i\n\nsee [q$i]\n\n";
+        }
+        for ($i = 0; $i < 1600; $i++) {
+            $doc .= "# D$i\n\n[q$i]: /u$i\n\n";
+        }
+
+        $start = microtime(true);
+        $rendered = $renderer->render($doc);
+        $renderTime = microtime(true) - $start;
+
+        $start = microtime(true);
+        $streamed = '';
+        foreach ($renderer->stream(str_split($doc, 600)) as $body) {
+            $streamed .= $body;
+        }
+        $streamTime = microtime(true) - $start;
+
+        $this->assertSame($rendered, $streamed, 'the ladder streams byte-identical to render()');
+        $this->assertLessThan(max(20.0, 20 * $renderTime), $streamTime, 'unrelated definitions must not re-render held sections');
+    }
 }

@@ -187,10 +187,11 @@ arrives (column one, after a blank line — or on the line directly
 after a closing code fence, which proves the split with no blank
 line; see `src/Render/SectionScanner.php`) or the input ends — the tail
 after the final heading never emits before the stream finishes. A
-section that still references an undefined link label is held (its
-source and first render both kept) and re-rendered whenever a later
-definition event could resolve it, so definition-first documents stream
-correctly at the cost of that hold.
+section that still holds an unresolved `[label]` pair is held (its
+source and first render both kept) and re-rendered only when a later
+definition names one of the labels it left unresolved, so
+definition-first documents stream correctly at the cost of that hold,
+and a definition unrelated to a held section costs it nothing.
 
 `Writer` is the push-side twin: `Writer::toPath($renderer, $path)` or
 `Writer::toStream($renderer, $resource)` accept chunks through
@@ -227,8 +228,9 @@ $writer->close();
   rendered text, code spans, and indented and fenced code. Raw-HTML
   and URL control-stripping run regardless of the flag; see
   Link safety above.
-- There is no source-size cap: cost is roughly proportional to the
-  input. Only syntax highlighting refuses to try — a fenced body over
+- There is no source-size cap: rendering cost is roughly proportional
+  to the input — see the streaming hold-back bound under Streaming,
+  above. Only syntax highlighting refuses to try — a fenced body over
   `SyntaxHighlighter`'s `MAX_HIGHLIGHT_BYTES` = 1,000,000 bytes
   (≈ 0.95 MiB) degrades to the plain code-block style instead of
   tokenising.
@@ -238,9 +240,14 @@ $writer->close();
   to bound the whole table geometry.
 - The streaming channel keeps a section that waits on a link-reference
   definition in memory (source plus first render) until the definition
-  or the end of input arrives; see Streaming above. A held section is
-  re-rendered on each later definition event, bounded by the document's
-  definition count, not by the number of chunks fed.
+  or the end of input arrives; see Streaming above. A held section
+  stores the normalized labels it left unresolved: it is re-rendered
+  only when a later definition names one of them, and an unrelated
+  definition event just moves a watermark, so a definition costs O(1)
+  for every held section it cannot resolve. Only a pair whose `[` and
+  `]` sit in different text runs — its raw label contains markup the
+  parsed tree no longer shows — keeps the pessimistic bound:
+  re-rendered on each later definition event.
 
 ## What it renders
 

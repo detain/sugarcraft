@@ -524,6 +524,13 @@ final class RegressionCoverageTest extends TestCase
 
     public function testDescriptionListWithDefinitionListStyle(): void
     {
+        // MDTEST-01 (#94): the old guard styled with $plain->bold — a no-op
+        // Style — and asserted the substrings 'Term'/'Definition', so it
+        // could not fail even while the Renderer import pointed at a
+        // nonexistent FQN and the definitionList match arm was dead dispatch.
+        // The import now names Node\DescriptionList, so a real style must
+        // reach the bytes; the plain-theme control pins what an unset slot
+        // renders (no SGR at all) to prove the escape comes from the slot.
         $plain = Theme::plain();
         $styled = new Theme(
             heading1: $plain->heading1, heading2: $plain->heading2,
@@ -534,13 +541,11 @@ final class RegressionCoverageTest extends TestCase
             codeBlock: $plain->codeBlock, link: $plain->link,
             blockquote: $plain->blockquote, listMarker: $plain->listMarker,
             rule: $plain->rule,
-            definitionList: $plain->bold,
+            definitionList: Style::new()->bold(),
         );
-        $r = new Renderer($styled);
-        $out = $r->render("Term\n: Definition");
-        // Should contain styled content.
-        $this->assertStringContainsString('Term', $out);
-        $this->assertStringContainsString('Definition', $out);
+        $out = (new Renderer($styled))->render("Term\n: Definition");
+        $this->assertStringContainsString("\x1b[1mTerm      \x1b[0m", $out, 'the definitionList slot must reach the rendered bytes');
+        $this->assertStringNotContainsString("\x1b", (new Renderer($plain))->render("Term\n: Definition"), 'control: an unset slot leaves the list unstyled');
     }
 
     // ---- Theme factory methods (direct calls) ----------------------------

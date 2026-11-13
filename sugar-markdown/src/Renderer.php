@@ -46,7 +46,7 @@ use League\CommonMark\Extension\Table\TableRow;
 use League\CommonMark\Extension\Table\TableSection;
 use League\CommonMark\Extension\TaskList\TaskListExtension;
 use League\CommonMark\Extension\TaskList\TaskListItemMarker;
-use League\CommonMark\Extension\DescriptionList\DescriptionList as MdDescriptionList;
+use League\CommonMark\Extension\DescriptionList\Node\DescriptionList as MdDescriptionList;
 use League\CommonMark\Extension\DescriptionList\DescriptionListExtension;
 use League\CommonMark\Extension\DescriptionList\Node\Description;
 use League\CommonMark\Extension\DescriptionList\Node\DescriptionTerm;

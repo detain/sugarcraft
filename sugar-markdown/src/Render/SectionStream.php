@@ -9,6 +9,7 @@ use League\CommonMark\Node\Block\AbstractBlock;
 use League\CommonMark\Node\Block\Document;
 use League\CommonMark\Node\Inline\Text;
 use League\CommonMark\Node\Node;
+use League\CommonMark\Normalizer\TextNormalizer;
 use League\CommonMark\Reference\ReferenceMap;
 use SugarCraft\Markdown\Renderer;
 
@@ -43,24 +44,39 @@ use SugarCraft\Markdown\Renderer;
  *    The first definition of a label wins, as in CommonMark.
  *
  * A confirmed section that still carries an unresolved pair is rendered
- * against the definitions known when it was confirmed, then RE-RENDERED on
- * every later definition event while it stays held: its label may finally be
- * defined, and the released body must carry what the finished document would
- * show. That work is bounded by the number of definitions in the document,
- * not by the number of chunks; the open tail alone is parsed afresh per
- * frame. A preview built with `(clone $stream)->finish()` therefore replays
- * the held sections exactly as the full stream would (M4).
- *
- * Cloning is cheap and gives an independent copy, so a caller can render a
- * preview of the open tail with `(clone $stream)->finish()` and keep
- * feeding the original.
+ * against the definitions known when it was confirmed, then held: its entry
+ * stores the normalized labels its pairs could take ({@see $queue}), and it
+ * is re-parsed and re-rendered only when a definition names one of them.
+ * A definition event therefore costs O(1) for every held section it cannot
+ * resolve, and one section's re-renders are bounded by the definitions
+ * naming its own labels — not by the document's definition count, and not
+ * by the number of chunks. (A pair whose `[` and `]` sit in different text
+ * runs carries a label the parsed tree no longer shows verbatim, so such an
+ * entry stays pessimistic and re-renders on every definition event.) The
+ * open tail alone is parsed afresh per frame. A preview built with
+ * `(clone $stream)->finish()` therefore replays the held sections exactly as
+ * the full stream would (M4).
  */
 final class SectionStream
 {
+    /** Beyond this many distinct candidate labels an entry is treated as wild. */
+    private const MAX_WATCH_LABELS = 256;
+
+    /** CommonMark label normalization, the same steps the reference map keys by. */
+    private static TextNormalizer $normalizer;
+
     private SectionScanner $scanner;
 
     /** Every definition of the confirmed sections so far, first per label. */
     private ReferenceMap $known;
+
+    /**
+     * The normalized labels {@see $known} holds, in the order learned —
+     * the watermark slice an entry has not been rendered against yet.
+     *
+     * @var list<string>
+     */
+    private array $learned = [];
 
     /** Source of sections whose proposed end the parser refused, waiting to lead the next one. */
     private string $unconfirmed = '';
@@ -68,11 +84,14 @@ final class SectionStream
     /**
      * Confirmed sections not answered yet: a held one and every section
      * after it, which must wait so bodies leave in order. Every entry carries
-     * its rendered body; `defs` is the size of {@see $known} that body was
-     * rendered against, so a held body stays valid until a definition is
-     * learned after it ({@see $known} only grows).
+     * its rendered body; `defs` is how many definitions had been learned when
+     * that body was rendered, and `watch` the normalized labels of the pairs
+     * still unresolved in it (null: the entry cannot narrow its interest,
+     * every new definition may change it). A held body stays valid across
+     * definition events none of its labels appear in ({@see $known} only
+     * grows, so its watermark just moves).
      *
-     * @var list<array{source: string, body: string, held: bool, defs: int}>
+     * @var list<array{source: string, body: string, held: bool, defs: int, watch: list<string>|null}>
      */
     private array $queue = [];
 
@@ -80,6 +99,7 @@ final class SectionStream
     {
         $this->scanner = new SectionScanner();
         $this->known = new ReferenceMap();
+        self::$normalizer ??= new TextNormalizer();
     }
 
     public function __clone()
@@ -128,20 +148,23 @@ final class SectionStream
             // Parsed first: its definitions apply to the held sections too.
             $document = $this->renderer->parseSection($tail, $this->known);
             $this->learn($document);
+            // No definition can arrive after the document ends: the tail's
+            // unresolved pairs stay literal, its body is final as rendered.
             $this->queue[] = [
                 'source' => $tail,
                 'body' => $this->renderer->renderParsedSection($document),
                 'held' => false,
-                'defs' => \count($this->known),
+                'defs' => \count($this->learned),
+                'watch' => [],
             ];
         }
 
-        $defs = \count($this->known);
+        // Definitions learned from the tail can still resolve held entries.
+        $this->retryHeld();
+
         $bodies = [];
         foreach ($this->queue as $entry) {
-            $bodies[] = $entry['held'] && $entry['defs'] !== $defs
-                ? $this->renderer->renderParsedSection($this->renderer->parseSection($entry['source'], $this->known))
-                : $entry['body'];
+            $bodies[] = $entry['body'];
         }
         $this->queue = [];
 
@@ -171,31 +194,44 @@ final class SectionStream
         $this->unconfirmed = '';
         $heading->detach();
         $this->learn($document);
+        $labels = self::unresolvedLabels($document);
         $this->queue[] = [
             'source' => $source,
             'body' => $this->renderer->renderParsedSection($document),
-            'held' => self::hasUnresolvedReference($document),
-            'defs' => \count($this->known),
+            'held' => $labels !== [],
+            'defs' => \count($this->learned),
+            'watch' => $labels,
         ];
     }
 
     /**
-     * Definitions were learned: re-render every held section against them,
-     * releasing the ones they resolved and refreshing the rest.
+     * Definitions were learned: re-render every held section a newly learned
+     * label can actually resolve, releasing the ones they resolved and
+     * refreshing the rest. Entries none of the new labels appear in keep
+     * their cached body; only their watermark moves, so unrelated
+     * definitions cost O(1) per held section.
      */
     private function retryHeld(): void
     {
-        $defs = \count($this->known);
+        $defs = \count($this->learned);
         foreach ($this->queue as $i => $entry) {
             if (!$entry['held'] || $entry['defs'] === $defs) {
                 continue;
             }
+            $fresh = \array_slice($this->learned, $entry['defs'], $defs - $entry['defs']);
+            if ($entry['watch'] !== null && \array_intersect($entry['watch'], $fresh) === []) {
+                $this->queue[$i]['defs'] = $defs;
+
+                continue;
+            }
             $document = $this->renderer->parseSection($entry['source'], $this->known);
+            $labels = self::unresolvedLabels($document);
             $this->queue[$i] = [
                 'source' => $entry['source'],
                 'body' => $this->renderer->renderParsedSection($document),
-                'held' => self::hasUnresolvedReference($document),
+                'held' => $labels !== [],
                 'defs' => $defs,
+                'watch' => $labels,
             ];
         }
     }
@@ -218,46 +254,89 @@ final class SectionStream
     /** Add the definitions $document met that no earlier section made. */
     private function learn(Document $document): void
     {
-        foreach ($document->getReferenceMap() as $reference) {
+        foreach ($document->getReferenceMap() as $normalizedLabel => $reference) {
             if (!$this->known->contains($reference->getLabel())) {
                 $this->known->add($reference);
+                // The map keys by the normalized label, the same spelling
+                // an unresolved candidate is normalized to.
+                $this->learned[] = (string) $normalizedLabel;
             }
         }
     }
 
     /**
-     * True when the parser left a `[` and a later `]` of the same block as
-     * text: the only shape a later definition can still turn into a link. A
-     * bracket it resolved became a link or image, a code span or block is
-     * not Text, and a task-list marker is its own node. Brackets pair only
-     * inside one block's inline content, so a `]` with no `[` before it in
-     * its block (`x]`, `1) item]`) can never become a link. Over-matching (an
-     * escaped `\[`, a pair holding a link) only holds a section longer.
+     * The normalized labels a later definition could still turn into a link
+     * inside this document: every still-unresolved `[...]` pair the parser
+     * left as text — the only shape a definition can change. A bracket it
+     * resolved became a link or image, a code span or block is not Text, and
+     * a task-list marker is its own node. Brackets pair only inside one
+     * block's inline content, so a `]` with no `[` before it in its block
+     * (`x]`, `1) item]`) can never become a link.
+     *
+     * Returns null when some pair cannot be narrowed: its `[` and `]` sit in
+     * different text runs, and the raw source of the label between them (any
+     * inline markup verbatim) is not recoverable from the tree — such an
+     * entry re-renders on every definition event, and beyond
+     * {@see MAX_WATCH_LABELS} candidates an entry opts into the same
+     * pessimism rather than pay a quadratic scan. Over-matching (an escaped
+     * `\[`, a pair holding a link) only holds a section longer; missing a
+     * candidate would change bytes, so nothing here under-matches.
+     *
+     * @return list<string>|null empty: nothing is held
      */
-    private static function hasUnresolvedReference(Document $document): bool
+    private static function unresolvedLabels(Document $document): ?array
     {
-        /** @var \SplObjectStorage<AbstractBlock, true> $opened blocks whose text already holds a `[` */
+        /** @var \SplObjectStorage<AbstractBlock, true> $opened blocks whose last text run ended inside a `[` */
         $opened = new \SplObjectStorage();
+        /** @var array<string, true> $labels normalized candidate labels, deduplicated */
+        $labels = [];
         foreach ($document->iterator() as $node) {
             if (!$node instanceof Text) {
                 continue;
             }
             $literal = $node->getLiteral();
-            $open = strpos($literal, '[');
-            $close = strrpos($literal, ']');
-            if ($open === false && $close === false) {
+            if (!str_contains($literal, '[') && !str_contains($literal, ']')) {
                 continue;
             }
             $block = self::blockOf($node) ?? $document;
-            if ($close !== false && ($opened->contains($block) || ($open !== false && $open < $close))) {
-                return true;
+            $pending = $opened->contains($block);
+            /** @var list<int> $stack unmatched `[` offsets in this literal */
+            $stack = [];
+            $length = strlen($literal);
+            for ($p = 0; $p < $length; $p++) {
+                $byte = $literal[$p];
+                if ($byte === '[') {
+                    $stack[] = $p;
+                    continue;
+                }
+                if ($byte !== ']') {
+                    continue;
+                }
+                if ($stack !== []) {
+                    $open = (int) array_pop($stack);
+                    $label = self::$normalizer->normalize(substr($literal, $open + 1, $p - $open - 1));
+                    if (!isset($labels[$label])) {
+                        if (\count($labels) >= self::MAX_WATCH_LABELS) {
+                            return null;
+                        }
+                        $labels[$label] = true;
+                    }
+                    continue;
+                }
+                if ($pending) {
+                    // Closes a `[` from an earlier text run: the raw label
+                    // spans markup this scan cannot see. Wild.
+                    return null;
+                }
             }
-            if ($open !== false) {
+            if ($stack !== []) {
                 $opened->attach($block, true);
+            } elseif ($pending) {
+                $opened->detach($block);
             }
         }
 
-        return false;
+        return array_map('strval', array_keys($labels));
     }
 
     /** The block whose inline content holds $node. */
