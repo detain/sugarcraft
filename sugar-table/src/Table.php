@@ -93,6 +93,7 @@ final class Table
     // Viewport virtualization
     /** Number of visible rows. 0 = no virtualization (render all). */
     private int $viewportHeight = 0;
+    private int $maxLines = 0;
 
     /** Vertical scroll offset — first visible row index in the filtered+sorted view. */
     private int $scrollY = 0;
@@ -604,6 +605,44 @@ final class Table
         $clone = clone $this;
         $clone->viewportHeight = \max(0, $height);
         return $clone;
+    }
+
+    /**
+     * Line budget for the data region (OG-3 / ST-20). `withViewportHeight()`
+     * counts ROWS, so under WordWrap a 2-row viewport can paint nine lines;
+     * a line-budgeted host sets this instead (or as well): whole rows are
+     * kept while their cumulative height fits `$lines`, the rest are
+     * truncated, never split. At least one row always renders, and a row
+     * that would be cut off while it is the cursor row pulls the window
+     * forward so the highlight stays on-screen. 0 (default) = no budget;
+     * negatives clamp to 0. Header, footer and borders sit outside it.
+     * Mirrors evertras/bubble-table WithTargetHeight (line-based paging).
+     */
+    public function withMaxLines(int $lines): self
+    {
+        $clone = clone $this;
+        $clone->maxLines = \max(0, $lines);
+        return $clone;
+    }
+
+    public function maxLines(): int
+    {
+        return $this->maxLines;
+    }
+
+    /**
+     * Total lines the current frame paints (border, header, data rows at
+     * their wrapped heights, footer) — 0 when nothing renders. Lets a
+     * line-budgeted host size the surrounding layout without parsing
+     * view() output.
+     */
+    public function renderedLineCount(): int
+    {
+        if ($this->columns === [] || $this->getVisibleColumnIndices() === []) {
+            return 0;
+        }
+
+        return $this->renderToBuffer()->height();
     }
 
     public function withScrollY(int $offset): self
@@ -2051,24 +2090,17 @@ final class Table
         // (audit ST-32): the height pass records each cell's renderCell()
         // output and the paint pass replays it byte-identically, halving the
         // wrap work of every multiline frame.
-        $rowHeights = [];
-        $cellLineMemo = new CellLineMemo();
-        if ($this->multilineMode) {
-            foreach ($rows as $ri => $row) {
-                $rowHeights[$ri] = $this->isExpandedByRow($row)
-                    ? 1
-                    : $this->calculateRowHeight($row, $this->computedColumnWidths, $visibleColumnIndices, $cellLineMemo);
-            }
-            // Close every (column, effective width) group the height pass
-            // walked — replay legality starts at complete().
-            foreach ($visibleColumnIndices as $ci) {
-                $groupColumn = $this->columns[$ci];
-                $groupWidth = \max(1, ($this->computedColumnWidths[$ci] ?? $groupColumn->width) - 2 * $this->cellPadding);
-                $cellLineMemo->complete($groupColumn, $groupWidth);
-            }
-            $totalRowHeight = \array_sum($rowHeights);
-        } else {
-            $totalRowHeight = $rowCount;
+        $pageOffsetForBudget = $this->pageSize > 0 ? $this->page * $this->pageSize : 0;
+        [$rowHeights, $cellLineMemo] = $this->measureRowHeights($rows, $visibleColumnIndices);
+        $totalRowHeight = $this->multilineMode ? \array_sum($rowHeights) : $rowCount;
+
+        if ($this->maxLines > 0 && $rowCount > 0) {
+            [$rows, $scroll] = $this->fitLineBudget($rows, $rowHeights, $scroll, $pageOffsetForBudget);
+            $rowCount = \count($rows);
+            // The memo pairs by row POSITION, so a re-sliced window needs a
+            // fresh height pass or the paint pass would replay the old rows.
+            [$rowHeights, $cellLineMemo] = $this->measureRowHeights($rows, $visibleColumnIndices);
+            $totalRowHeight = $this->multilineMode ? \array_sum($rowHeights) : $rowCount;
         }
 
         // Every row — border, header, data, footer — spans exactly the
@@ -2160,6 +2192,76 @@ final class Table
         }
 
         return $canvas->toBuffer();
+    }
+
+    /**
+     * Height pass: per-row line heights (multiline mode only; expanded rows
+     * are one line) plus the frame-scoped wrap memo it fills (audit ST-32).
+     *
+     * @param list<Row> $rows
+     * @param list<int> $visibleColumnIndices
+     * @return array{0: array<int,int>, 1: CellLineMemo}
+     */
+    private function measureRowHeights(array $rows, array $visibleColumnIndices): array
+    {
+        $rowHeights = [];
+        $cellLineMemo = new CellLineMemo();
+        if (!$this->multilineMode) {
+            return [$rowHeights, $cellLineMemo];
+        }
+        foreach ($rows as $ri => $row) {
+            $rowHeights[$ri] = $this->isExpandedByRow($row)
+                ? 1
+                : $this->calculateRowHeight($row, $this->computedColumnWidths, $visibleColumnIndices, $cellLineMemo);
+        }
+        // Close every (column, effective width) group the height pass walked —
+        // replay legality starts at complete().
+        foreach ($visibleColumnIndices as $ci) {
+            $groupColumn = $this->columns[$ci];
+            $groupWidth = \max(1, ($this->computedColumnWidths[$ci] ?? $groupColumn->width) - 2 * $this->cellPadding);
+            $cellLineMemo->complete($groupColumn, $groupWidth);
+        }
+
+        return [$rowHeights, $cellLineMemo];
+    }
+
+    /**
+     * Apply the withMaxLines() budget to the already viewport-sliced rows.
+     *
+     * @param list<Row> $rows
+     * @param array<int,int> $rowHeights empty outside multiline mode (1 line per row)
+     * @return array{0: list<Row>, 1: int} rows, new scroll
+     */
+    private function fitLineBudget(array $rows, array $rowHeights, int $scroll, int $pageOffset): array
+    {
+        $heights = [];
+        foreach ($rows as $i => $_) {
+            $heights[$i] = $rowHeights[$i] ?? 1;
+        }
+        $cursorSlot = $this->selectable ? $this->selectedIndex - $pageOffset - $scroll : -1;
+        // A cursor outside the window (slot < 0 or >= count) has nothing to protect.
+        if ($cursorSlot >= \count($rows)) {
+            $cursorSlot = -1;
+        }
+
+        $start = 0;
+        while (true) {
+            $used = 0;
+            $end = $start;
+            $n = \count($rows);
+            while ($end < $n && ($end === $start || $used + $heights[$end] <= $this->maxLines)) {
+                $used += $heights[$end];
+                $end++;
+            }
+            // Cursor row truncated off the tail: advance the window start.
+            if ($cursorSlot >= $end && $start < $cursorSlot) {
+                $start++;
+                continue;
+            }
+            break;
+        }
+
+        return [\array_values(\array_slice($rows, $start, $end - $start)), $scroll + $start];
     }
 
     /**

@@ -533,6 +533,15 @@ $currentScroll = $t->scrollY();        // get current scroll offset
 The table automatically slices the visible row range from the filtered+sorted view.
 `scrollY()` returns the current vertical scroll offset.
 
+**Rows, not lines.** `withViewportHeight(n)` counts ROWS: with a wrapping
+column in `withMultilineMode(true)` an `n`-row viewport can paint many more
+than `n` lines. `renderedLineCount()` reports how many lines the frame
+actually paints (border, header, wrapped rows, footer; 0 when nothing
+renders), and `withMaxLines(int $lines)` budgets the data region by lines
+instead: whole rows are kept while their cumulative height fits, the rest are
+truncated (never split), at least one row always renders, and the cursor row
+is kept on-screen. `0` (default) means no budget.
+
 ## Frozen Columns
 
 Pin columns from the left so they remain visible when scrolling horizontally:
@@ -1137,6 +1146,9 @@ in this README is still documented — this table is the completeness floor.
 | `withFrozenCols(array $indices): self` | Pin columns by index so they remain visible during horizontal scroll. |
 | `withFrozenKeys(array $keys): self` | Key-addressed companion of {@see self::withFrozenCols()} (audit ST-24): |
 | `withScrollX(int $offset): self` | Set the horizontal scroll offset for non-frozen columns. |
+| `withMaxLines(int $lines): self` | Line budget for the data region (whole rows; 0 = off) |
+| `maxLines(): int` | The configured line budget |
+| `renderedLineCount(): int` | Lines the current frame paints |
 | `withViewportHeight(int $height): self` | Visible-row window for viewport virtualization. Negatives clamp to 0 |
 | `withScrollY(int $offset): self` | — |
 | `scrollY(): int` | — |
