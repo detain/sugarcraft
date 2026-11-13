@@ -4,7 +4,7 @@
         "captureHostFfmpeg": "/usr/bin/ffmpeg",
         "captureHostFfplay": "/usr/bin/ffplay",
         "captureHostMpv": null,
-        "note": "argv element 0 is the resolved binary path, normalised here to the literal /usr/bin/ffmpeg, /usr/bin/ffplay and /usr/bin/mpv so the fixture is host-independent. The ffmpegDecoder cases come from the real FfmpegDecoder::buildCommand(); the audioFfplay cases from the real AudioPlayer::buildCommand() on this host (where Probe::ffplay() resolves to /usr/bin/ffplay); the audioMpv cases from the verbatim mpv branch of that same method, evaluated directly because mpv is absent here. Header-bearing audio argv (added when findings #52 wired the passthrough) is not part of this pre-refactor fixture; it is pinned in tests/AudioHeaderPassthroughTest.php."
+        "note": "argv element 0 is the resolved binary path, normalised here to the literal /usr/bin/ffmpeg, /usr/bin/ffplay and /usr/bin/mpv so the fixture is host-independent. The ffmpegDecoder cases come from the real FfmpegDecoder::buildCommand(); the audioFfplay cases from the real AudioPlayer::buildCommand() on this host (where Probe::ffplay() resolves to /usr/bin/ffplay); the audioMpv cases from the verbatim mpv branch of that same method, evaluated directly because mpv is absent here. Header-bearing audio argv (added when findings #52 wired the passthrough) is not part of this pre-refactor fixture; it is pinned in tests/AudioHeaderPassthroughTest.php. DISCLOSED GOLDEN MOVE 2026-11-12 (SV-H3, sugar-video-003): every ffmpegDecoder case loses the '-reconnect_on_network_error 1' pair — the option is ffmpeg >=5.1 only and aborted ALL remote input-open on 5.0/4.x hosts; its semantics are subsumed by -reconnect/-reconnect_streamed."
     },
     "ffmpegDecoder": [
         {
@@ -91,8 +91,6 @@
                 "1",
                 "-reconnect_streamed",
                 "1",
-                "-reconnect_on_network_error",
-                "1",
                 "-reconnect_delay_max",
                 "4",
                 "-headers",
@@ -135,8 +133,6 @@
                 "1",
                 "-reconnect_streamed",
                 "1",
-                "-reconnect_on_network_error",
-                "1",
                 "-reconnect_delay_max",
                 "4",
                 "-user_agent",
@@ -174,8 +170,6 @@
                 "-reconnect",
                 "1",
                 "-reconnect_streamed",
-                "1",
-                "-reconnect_on_network_error",
                 "1",
                 "-reconnect_delay_max",
                 "4",
@@ -276,8 +270,6 @@
                 "-reconnect",
                 "1",
                 "-reconnect_streamed",
-                "1",
-                "-reconnect_on_network_error",
                 "1",
                 "-reconnect_delay_max",
                 "4",

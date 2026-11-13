@@ -637,7 +637,7 @@ PHP;
     {
         $cmd = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', 'https://srv/media/m1/stream?sig=x', 80, 48, 24.0);
 
-        foreach (['-reconnect', '-reconnect_streamed', '-reconnect_on_network_error', '-reconnect_delay_max'] as $flag) {
+        foreach (['-reconnect', '-reconnect_streamed', '-reconnect_delay_max'] as $flag) {
             $this->assertContains($flag, $cmd, "network command must carry {$flag}");
         }
 
@@ -681,9 +681,17 @@ PHP;
         $this->assertSame([
             '-reconnect', '1',
             '-reconnect_streamed', '1',
-            '-reconnect_on_network_error', '1',
             '-reconnect_delay_max', '4',
         ], FfmpegCommandBuilder::networkReconnectFlags());
+    }
+
+    /**
+     * @testdox SV-H3: no 5.1-only options in the reconnect block (sugar-video-003)
+     */
+    public function testReconnectBlockCarriesNoFiveOneOnlyFlag(): void
+    {
+        $this->assertNotContains('-reconnect_on_network_error', FfmpegCommandBuilder::networkReconnectFlags());
+        $this->assertNotContains('-reconnect_on_network_error', FfmpegCommandBuilder::networkReconnectFlags(true));
     }
 
     /**
@@ -695,7 +703,6 @@ PHP;
             [
                 '-reconnect', '1',
                 '-reconnect_streamed', '1',
-                '-reconnect_on_network_error', '1',
                 '-reconnect_delay_max', '4',
                 '-max_redirects', '0',
             ],

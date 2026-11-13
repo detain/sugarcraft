@@ -114,6 +114,15 @@ final class FfmpegCommandBuilder
      * stream; `delay_max 4` bounds the total retry window so a dead host still
      * fails rather than hanging playback behind an invisible reconnect loop.
      *
+     * OPTION VINTAGE (sugar-video-003): every flag here exists since ffmpeg
+     * 4.0 (`reconnect`/`reconnect_streamed` since 3.3) — deliberately NO
+     * 5.1-only options: `-reconnect_on_network_error` (≥5.1) made ffmpeg abort
+     * the INPUT OPEN with "Option not found" on 4.x/5.0 hosts, killing ALL
+     * remote playback rather than merely skipping the extra retry trigger
+     * (whose behavior -reconnect_streamed already covers for streamed reads).
+     * `-max_redirects` (the allowlist pin below) is ffmpeg ≥4.4 — binding an
+     * allowlist therefore raises the effective floor to 4.4; see README.
+     *
      * @param bool $hostRestricted when a Reel host allowlist is bound, the
      *               block also pins {@see ALLOWED_MAX_REDIRECTS} so the child
      *               cannot ride a redirect out of the allowlist.
@@ -124,7 +133,6 @@ final class FfmpegCommandBuilder
         $flags = [
             '-reconnect', '1',
             '-reconnect_streamed', '1',
-            '-reconnect_on_network_error', '1',
             '-reconnect_delay_max', '4',
         ];
 

@@ -49,7 +49,15 @@ composer require sugarcraft/sugar-video
 
 Requires:
 - PHP 8.3+
-- `ffmpeg` and `ffprobe` in `$PATH` for `mp4`/`avi`/`webm` playback
+- `ffmpeg` and `ffprobe` in `$PATH` for `mp4`/`avi`/`webm` playback.
+  Effective version floor: **ffmpeg ≥ 4.0** for plain and network playback —
+  the reconnect option block deliberately carries only options that old
+  (`-reconnect`/`-reconnect_streamed` since 3.3, `-reconnect_delay_max` since
+  4.0); the 5.1-only `-reconnect_on_network_error` was dropped precisely
+  because unknown input options abort the open on older builds. Binding a host
+  allowlist (`openUrl(..., allowedHosts:)`/`withAllowedHosts()`) raises the
+  floor to **4.4**, where the `max_redirects` no-redirect transport pin was
+  introduced.
 - `ext-gd` for `.gif` playback (pure-PHP fallback, no ffmpeg needed — for
   *local* files; a remote `.gif` URL routes through `ffmpeg` because the pure-PHP
   decoder has no network transport)
