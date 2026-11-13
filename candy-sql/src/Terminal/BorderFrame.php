@@ -52,7 +52,7 @@ final class BorderFrame
     /**
      * Build the title bar content.
      *
-     * Shows: CandySQL │ Tables: N │ dsn │ version. Only non-empty values are
+     * Shows: candy-sql │ Tables: N │ dsn │ version. Only non-empty values are
      * included.
      */
     private static function buildTitleBar(App $a): string
@@ -64,7 +64,7 @@ final class BorderFrame
         $parts = [];
 
         // App name in bold cyan.
-        $parts[] = $titleStyle->render('CandySQL');
+        $parts[] = $titleStyle->render('candy-sql');
 
         // Table count.
         $parts[] = 'Tables: ' . count($a->browse->tables);
@@ -105,7 +105,7 @@ final class BorderFrame
             // after the pane count grew to 8 — orderedCases() is the source of truth).
             $segments[] = '1-' . count(AdminPane::orderedCases()) . ':select';
             $segments[] = 'j/k:nav';
-            $segments[] = '[admin:' . $a->admin->pane->value . ']';
+            $segments[] = '[' . $a->admin->pane->label() . ']';
         }
         $segments[] = 'q:quit';
 

@@ -29,7 +29,7 @@ final class RendererTest extends TestCase
     public function testRenderIncludesTitleHeader(): void
     {
         $out = Renderer::render(App::start($this->db()));
-        $this->assertStringContainsString('CandySQL', $out);  // wordmark follows the candy-sql package name (D-M30)
+        $this->assertStringContainsString('candy-sql', $out);  // client-023: wordmark is the package name verbatim (D-M30 discipline, one casing)
     }
 
     public function testRenderShowsTablesAndRows(): void
