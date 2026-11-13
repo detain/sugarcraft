@@ -55,8 +55,10 @@ echo $ansi;
 
 ## Examples
 
-- `examples/inline-image.php <path> [width]` prints one image on the terminal's
-  best tier and exits 0/1/2/3 — the shortest read of the detection path.
+- `examples/inline-image.php <image-file> [width-in-cells]` (default width 80)
+  prints one image on the terminal's best tier and exits 0/1/2/3 — the
+  shortest read of the detection path. The script's own header says what each
+  code means; **Detection inputs** below maps the alphabet to the legs.
 - `examples/fixture-gradient.png` is a committed image, so both the quickstart
   above and that script run against the checkout without hunting for a file.
 
