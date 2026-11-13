@@ -3232,6 +3232,22 @@ final class PlayerTest extends TestCase
         }
         $this->assertInstanceOf(\SugarCraft\Video\Decode\FfmpegDecodeFailure::class, $third);
     }
+
+    /**
+     * @testdox L54: subscriptions() answers null by design - a wall-clock subscription would double-tick the pump
+     *
+     * The M27 law, pinned: pacing rides the update()-returned Cmd::tick
+     * chain alone; input and resize arrive through sugar-core's own wiring.
+     * An edit that arms a subscription here would silently double-pump the
+     * player, and until now zero tests mentioned the method at all.
+     */
+    public function testThePlayerShipsNoSubscriptionsByDesign(): void
+    {
+        $decoder = $this->makeFakeDecoder(1);
+        $player = Player::openForTest($decoder, 10.0);
+
+        $this->assertNull($player->subscriptions(), 'M27: null is the deliberate answer — the tick chain owns pacing');
+    }
 }
 
 /**
