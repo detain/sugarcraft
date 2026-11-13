@@ -46,6 +46,16 @@ final class Store implements HeartbeatReader
      */
     public const DAY_CACHE_MAX_DAYS = self::MAX_RANGE_DAYS;
 
+    /**
+     * The third volume bound (CT-S56, finding 072), beside MAX_RANGE_DAYS and
+     * MAX_LINE_BYTES: how many decoded heartbeats one loadRange() may carry.
+     * A dense per-minute store over a decade is millions of rows, and a
+     * silent memory explosion is not an answer, it is a crash. A window
+     * denser than the budget stops at the cap with a loud partial-window
+     * note on stderr, so whatever figures follow admit their own truncation.
+     */
+    public const MAX_RANGE_BEATS = 500_000;
+
     // memoization, not observable state
     private array $dayCache = [];
 
@@ -63,8 +73,14 @@ final class Store implements HeartbeatReader
     /** True once the alt screen owns the terminal (see silenceDiagnostics). */
     private bool $silentDiagnostics = false;
 
-    public function __construct(public readonly string $dir)
-    {}
+    public function __construct(
+        public readonly string $dir,
+        public readonly int $rangeBeatBudget = self::MAX_RANGE_BEATS,
+    ) {
+        if ($rangeBeatBudget < 1) {
+            throw new \InvalidArgumentException('beat budget must be at least 1');
+        }
+    }
 
     /**
      * Clamp a requested day count to [1, MAX_RANGE_DAYS] so an out-of-range
@@ -481,14 +497,39 @@ final class Store implements HeartbeatReader
      */
     public function loadRange(\DateTimeImmutable $from, \DateTimeImmutable $to): array
     {
-        $chunks = [];
+        $beats = [];
         $cur = $from->setTime(0, 0);
         $end = $to->setTime(0, 0);
         while ($cur <= $end) {
-            $chunks[] = $this->loadDay($cur);
-            $cur  = $cur->modify('+1 day');
+            $day  = $this->loadDay($cur);
+            $room = $this->rangeBeatBudget - count($beats);
+            if (count($day) > $room) {
+                $beats = array_merge($beats, array_slice($day, 0, max(0, $room)));
+                $this->noteRangeTruncated();
+                break;
+            }
+            $beats = array_merge($beats, $day);
+            $cur   = $cur->modify('+1 day');
         }
-        return array_merge([], ...$chunks);
+        return $beats;
+    }
+
+    /**
+     * One line naming the cap on stderr (subject to silenceDiagnostics, so
+     * the alt screen never eats a mid-frame print). The note is deliberately
+     * blunt: rows past the budget were never read, and the reader of the
+     * totals must know they are partial.
+     */
+    private function noteRangeTruncated(): void
+    {
+        if ($this->silentDiagnostics) {
+            return;
+        }
+
+        fwrite(STDERR, 'candy-codetime: warning: stopped reading this window at '
+            . $this->rangeBeatBudget
+            . ' beats - the window is denser than one read carries, so the figures below cover a partial window'
+            . "\n");
     }
 
     /** Invalidate the day cache (forces reload on next loadDay). */

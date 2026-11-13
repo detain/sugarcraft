@@ -780,4 +780,79 @@ public function testAppendValidatesTheFullWrittenLineCount(): void
         clearstatcache();
         $this->assertSame(0600, fileperms($file) & 0777, 'the rewrite lands tightened, never loose at the canonical name');
     }
+
+    // ---- CT-S56 (finding 072): the loadRange beat budget.
+
+    public function testADenseRangeStopsAtTheBeatBudgetWithALoudPartialNote(): void
+    {
+        $this->seedDenseWindow();
+
+        $first = $this->runRangeChild('5');
+        $this->assertSame('5', $first[0], 'exactly the budget is served');
+        $this->assertStringContainsString('warning', $first[1]);
+        $this->assertStringContainsString('stopped reading this window at 5 beats', $first[1]);
+        $this->assertStringContainsString('partial window', $first[1]);
+        $this->assertSame(1, substr_count($first[1], "\n"), 'the note is one line');
+
+        // The alt-screen door: a silenced store answers the same count with
+        // total stderr silence (the dashboard collects diagnostics instead).
+        $second = $this->runRangeChild('5', silence: true);
+        $this->assertSame('5', $second[0]);
+        $this->assertSame('', $second[1]);
+
+        // The production budget carries this window whole and says nothing.
+        $third = $this->runRangeChild('default');
+        $this->assertSame('9', $third[0]);
+        $this->assertSame('', $third[1]);
+
+        // The budget itself passes a door: zero or negative can never mean
+        // "read nothing" quietly.
+        try {
+            new Store($this->tmp, 0);
+            $this->fail('a zero beat budget must be refused at the door');
+        } catch (\InvalidArgumentException $error) {
+            $this->assertStringContainsString('at least 1', $error->getMessage());
+        }
+    }
+
+    private function seedDenseWindow(): void
+    {
+        foreach (['2024-05-31', '2024-06-01', '2024-06-02'] as $hour => $day) {
+            $lines = '';
+            for ($i = 0; $i < 3; $i++) {
+                $lines .= json_encode([
+                    'time' => strtotime($day . ' 1' . $hour . ':00:00'),
+                    'project' => 'budget-proj',
+                    'language' => 'php',
+                    'file' => '/srv/budget/x.php',
+                    'duration' => 60,
+                    'tags' => [],
+                ], JSON_THROW_ON_ERROR) . "\n";
+            }
+            file_put_contents($this->tmp . '/' . $day . '.jsonl', $lines);
+        }
+    }
+
+    /**
+     * @return array{0:string,1:string,2:int} stdout, stderr, exit code
+     */
+    private function runRangeChild(string $budget, bool $silence = false): array
+    {
+        $ctor = $budget === 'default'
+            ? 'new \\SugarCraft\\CodeTime\\Store(' . var_export($this->tmp, true) . ')'
+            : 'new \\SugarCraft\\CodeTime\\Store(' . var_export($this->tmp, true) . ', ' . $budget . ')';
+        $script = sys_get_temp_dir() . '/candy-codetime-range-' . bin2hex(random_bytes(4)) . '.php';
+        file_put_contents($script, "<?php\n"
+            . 'require ' . var_export(__DIR__ . '/../vendor/autoload.php', true) . ";\n"
+            . '$store = ' . $ctor . ";\n"
+            . ($silence ? '$store->silenceDiagnostics();' . "\n" : '')
+            . '$rows = $store->loadRange(new \\DateTimeImmutable("2024-05-31"), new \\DateTimeImmutable("2024-06-02"));' . "\n"
+            . 'fwrite(STDOUT, (string) count($rows));' . "\n");
+        $proc = proc_open([PHP_BINARY, $script], [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        [$out, $err] = self::drainPair($pipes[1], $pipes[2]);
+        $exit = proc_close($proc);
+        unlink($script);
+        return [$out, $err, $exit];
+    }
+
 }
