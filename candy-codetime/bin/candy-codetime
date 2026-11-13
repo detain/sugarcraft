@@ -154,6 +154,7 @@ $themeNext = false;
 // scan untouched for every other command.
 $projectFilter = null;
 $tagFilter = null;
+$minSecondsOpt = null;
 $envTheme = getenv('CANDY_CODETIME_THEME');
 if (is_string($envTheme) && $envTheme !== '') {
     $themeOpt = $envTheme;
@@ -209,6 +210,10 @@ foreach (array_slice($argv, 1) as $arg) {
         $tagFilter = substr($arg, strlen('--tag='));
         continue;
     }
+    if (str_starts_with($arg, '--min=')) {
+        $minSecondsOpt = substr($arg, strlen('--min='));
+        continue;
+    }
     $positional[] = $arg;
 }
 if ($backendNext) {
@@ -216,7 +221,7 @@ if ($backendNext) {
     fwrite(STDERR, Lang::t('cli.backend_invalid') . "\n");
     exit(1);
 }
-foreach ([['--project', $projectFilter], ['--tag', $tagFilter]] as [$filterFlag, $filterValue]) {
+foreach ([['--project', $projectFilter], ['--tag', $tagFilter], ['--min', $minSecondsOpt]] as [$filterFlag, $filterValue]) {
     if ($filterValue !== null && trim($filterValue) === '') {
         fwrite(STDERR, Lang::t('cli.export_missing_filter', ['flag' => $filterFlag]) . "\n");
         exit(1);
@@ -809,7 +814,19 @@ if ($cmd === 'gaps') {
     }
     $beats = $applyFilters($beats, $projectFilter, $tagFilter);
 
-    $report = new GapsReport($beats);
+    // CT-S43 (finding 067): the 300 s threshold was a knob-less library
+    // default; --min=<secs> hands it to the user. Same whole-number door
+    // as every other numeric option.
+    $minGapSeconds = 300;
+    if ($minSecondsOpt !== null) {
+        if (!ctype_digit($minSecondsOpt)) {
+            fwrite(STDERR, Lang::t('cli.invalid_min', ['value' => Sanitize::untrusted($minSecondsOpt)]) . "\n");
+            exit(1);
+        }
+        $minGapSeconds = (int) $minSecondsOpt;
+    }
+
+    $report = new GapsReport($beats, $minGapSeconds);
     $gaps = $report->gaps();
 
     if ($gaps === []) {

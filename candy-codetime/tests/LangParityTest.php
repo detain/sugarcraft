@@ -142,7 +142,7 @@ final class LangParityTest extends TestCase
         'push' => '[<project> <language>] <file> [duration] [tags] | --',
         'milestone' => 'add [name] [description] | list',
         'export' => '<csv|json|ics> [days | from [to]]',
-        'gaps' => '[days | from [to]]',
+        'gaps' => '[days | from [to]] [--min=<secs>]',
         'backup' => '',
         'forget' => '--project=<name> [--file-prefix=<path>] [--apply]',
         'help' => '',

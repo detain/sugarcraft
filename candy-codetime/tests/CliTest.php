@@ -1543,4 +1543,29 @@ final class CliTest extends TestCase
         $this->assertStringContainsString('--file-prefix', $result['stderr']);
         $this->assertStringContainsString('needs a value', $result['stderr']);
     }
+
+    // CT-S43 (finding 067): the gap threshold is a reachable knob, refused
+    // like every other numeric option when junked.
+    public function testTheMinSecondsKnobRaisesTheGapThresholdAndJunkIsRefused(): void
+    {
+        $this->seedWindowDays();
+
+        $default = $this->runCli(['gaps', '2025-05', '2025-07']);
+        self::assertSame(0, $default['exit'], $default['stderr']);
+        self::assertSame(2, substr_count($default['stdout'], chr(226) . chr(128) . chr(147)), 'the 300 s default sees both stretches');
+
+        $raised = $this->runCli(['gaps', '2025-05', '2025-07', '--min=999999999']);
+        self::assertSame(0, $raised['exit'], $raised['stderr']);
+        self::assertStringContainsString('No gaps', $raised['stdout'], 'a threshold past every stretch hides them all');
+
+        $junk = $this->runCli(['gaps', '2025-05', '2025-07', '--min=lunch']);
+        self::assertSame(1, $junk['exit'], $junk['stdout'] . $junk['stderr']);
+        self::assertStringContainsString('whole number of seconds', $junk['stderr']);
+        self::assertStringContainsString('lunch', $junk['stderr']);
+        self::assertSame('', $junk['stdout'], 'a refused threshold prints no report');
+
+        $empty = $this->runCli(['gaps', '--min=']);
+        self::assertSame(1, $empty['exit']);
+        self::assertStringContainsString('needs a value', $empty['stderr']);
+    }
 }
