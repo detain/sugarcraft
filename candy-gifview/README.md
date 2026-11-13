@@ -25,6 +25,10 @@ candy-gifview my-animation.gif         # solid-block preset (default)
 candy-gifview my-animation.gif density # ASCII luminance ramp
 ```
 
+```
+candy-gifview [options] <gif> [solid|density]
+```
+
 With a project-local install, invoke the binary as `./vendor/bin/candy-gifview`.
 
 A rolling development phar is published on GitHub Releases under
@@ -69,7 +73,7 @@ works — inline-protocol rendering is a different route, offered by
 | `--duration=SECONDS`  | Stop after SECONDS of playback time — paused time never accrues (a schedule deadline in the model — no wall-clock kill). Needs at least two frames: a single-frame file combined with `--duration` is refused. |
 | `--watch`             | Reload automatically when the source file changes, via a 10 ms event-loop poll. Bare flag — it takes no value. |
 | `--paused`            | Start paused on the first frame (step with the arrow keys, `Space` resumes). Bare flag — it takes no value. |
-| `--help` / `-h`       | Print the usage line (localized) and exit 0.                      |
+| `--help` / `-h`       | Print the usage line (localised) and exit 0.                      |
 | `--version` / `-v`    | Print the version stamp and exit 0.                               |
 
 Flags may appear before or after the positional `<gif>` and preset token.
@@ -86,13 +90,14 @@ and `--fps=10 --speed=2 --speed=3fps` lands on 3 × 2 = 6 fps (the `Nfps`
 form overwrote the rate slot, the multiplier composed onto it). An unknown
 preset token (a typo like `densiy`) is refused with an explicit message — the
 two valid tokens are `solid` and `density`; a third positional argument is
-likewise refused. Stdin is not read: a bare `-` falls through to the
-positional ladder as a file path and is refused as `could not play '-'`.
+likewise refused. Stdin is not read: a bare `-` is treated as an ordinary
+file-path argument and is refused as `could not play '-'`.
 
-A GIF's authored NETSCAPE loop count is honoured by default: `raw N`
-means N extra repeats after the first play (so N+1 total passes) and `raw 0`
-— like a file with no loop extension at all, the deliberate divergence from
-libnsgif's single-play default — plays forever.
+The loop count stored in the file is honoured:
+
+- A count of N means N extra repeats after the first play (N+1 passes in total).
+- A count of 0 — or a file with no loop extension — plays forever.
+- That forever-default deliberately diverges from libnsgif's single-play answer.
 
 ## Keys
 
@@ -113,7 +118,7 @@ The key table is fixed in the player model; keys are not rebindable.
 - Both presets emit 24-bit truecolor SGR: `solid` paints the cell background
   (`48;2`) with a space glyph, `density` paints the foreground (`38;2`) on a
   ramp character. There is no
-  256-color fallback ladder and no `NO_COLOR` / monochrome mode. On a
+  256-colour fallback ladder and no `NO_COLOR` / monochrome mode. On a
   terminal without truecolor the blocks degrade (often to default or
   nearby-index colour); the `density` preset's character ramp stays
   legible there and is the better choice. On `TERM=dumb` or otherwise
@@ -150,22 +155,22 @@ The key table is fixed in the player model; keys are not rebindable.
   "256 decoded" cannot tell a full window from a truncated stream, and
   over-disclosing is the honest direction. `Cli::MAX_FRAMES`
   (4096) is only the outer ceiling.
-- Intake is also bounded by file size (`Cli::MAX_INPUT_BYTES`, 64 MiB —
-  larger files are refused by a size check before being buffered; the check
-  and the read are two separate looks at the path, so a concurrent local
-  swap between them can still land more bytes than the cap announces, while
-  FIFOs and devices are blocked by the engine's `is_file()` gate) and by a
-  resident-cell budget (`Cli::MAX_RESIDENT_CELLS`, 6 million frame cells for the current
-  viewport). The engine separately bounds the requested OUTPUT grid at
-  100 000 cells (`Decoder::MAX_CELLS`) and gates the source GIF's own
+- Intake is also bounded by file size (`Cli::MAX_INPUT_BYTES`, 64 MiB): files
+  over the cap are refused before they are buffered. The size check and the
+  read are two separate looks at the path, so a file swapped between them can
+  still land a few bytes past the cap. FIFOs and devices are blocked by the
+  engine's `is_file()` gate. A resident-cell budget
+  (`Cli::MAX_RESIDENT_CELLS`, 6 million frame cells for the current viewport)
+  bounds the other axis. The engine separately bounds the requested OUTPUT
+  grid at 100,000 cells (`Decoder::MAX_CELLS`) and gates the source GIF's own
   canvas at 2 million pixels (`Decoder::MAX_TOTAL_PIXELS`).
-- `--watch` reloads decode synchronously inside the poll tick — a large
-  replacement file can stall one tick — and a reload that trips any cap
+- `--watch`: the reload's decode runs synchronously inside the poll tick — a
+  large replacement file can stall one tick — and a reload that trips any cap
   above keeps the stale frames rather than blanking the screen.
 - Frames are decoded at the launch size: growing the window reveals no
   extra detail — and not even on a `--watch` reload, which re-decodes at the
   frozen launch budget; only a restart re-queries the terminal. Shrinking
-  re-clamps and hides.
+  re-clamps the grid and crops the frame.
 - Startup decodes before the first frame is painted; a line announcing the
   decode is written to stderr first, so a long wait is at least not silent.
   Quitting restores the terminal's prior contents — the last frame does not
@@ -188,20 +193,17 @@ The key table is fixed in the player model; keys are not rebindable.
   (`←`/`→`) — motion is never mandatory to see content.
 - The player caps frame rate at its own scheduler floors; `--speed=max` is
   opt-in, never the default.
-- All CLI messages are localized: the bin shim calls `T::setLocale(T::detect())`
-  before its first message (there is no `--lang` flag), and `T::detect()`
-  consults `LC_ALL`, then `LC_MESSAGES`, then `LANG` — across 16 locales;
-  in-app playback chrome (the status line) is currently English-only.
+- All CLI messages are localised into 16 locales. The bin shim calls
+  `T::setLocale(T::detect())` before its first message (there is no `--lang`
+  flag); `T::detect()` consults `LC_ALL`, then `LC_MESSAGES`, then `LANG`.
+  The in-app playback chrome (the status line) is currently English-only.
 - **Reduced motion is not auto-detected**: unlike `sugar-spring` and
-  `sugar-toast`, this viewer does NOT read
-  `REDUCE_MOTION`/`PREFERS_REDUCED_MOTION` (nor
-  `Probe::reducedMotion()` from `sugar-colorprofile`) — a motion-averse
-  user must opt in with `--paused` (or step with `←`/`→`) rather than
-  relying on the environment signal. This is a known gap against the
-  fleet convention, disclosed here rather than silently ignored; the app
-  does not read the env signal today, but the seam already exists
-  (`Player`'s `paused:` constructor argument — which `--paused` feeds — and
-  `Probe::reducedMotion()` from `sugar-colorprofile`), so auto-detection
+  `sugar-toast`, this viewer does not read `REDUCE_MOTION` or
+  `PREFERS_REDUCED_MOTION`. Motion-averse users must opt in with `--paused`
+  (or step with `←`/`→`). This is a known gap against the fleet convention,
+  disclosed here rather than silently ignored. The seam already exists —
+  `Player`'s `paused:` constructor argument (which `--paused` feeds) and
+  `Probe::reducedMotion()` from `sugar-colorprofile` — so auto-detection
   would be a small opt-in change.
 
 ## Architecture
@@ -215,9 +217,25 @@ which this viewer does not expose) — lives in
 | File              | Role                                                                 |
 |-------------------|----------------------------------------------------------------------|
 | `bin/candy-gifview` | Autoload probe, locale wiring (`T::setLocale(T::detect())` before the first message), and a `Cli::main()` hand-off — deliberately a thin shim. |
-| `src/Cli.php`     | Argv parsing (`--help`/`--version`, preset token with loud refusal, `--fps`/`--speed`/`--duration`/`--watch`/`--paused`, single-dash refusals), gd preflight, viewport sizing (`viewportCells()` — COLUMNS/LINES environment hatch, else sugar-core's never-throwing `Util\Tty` façade on stdout, two rows reserved (status line + trailing newline guard), 60×24 fallback off a tty), intake caps (frame-count backstop, 64 MiB file gate, resident-cell budget), decode-failure exits (rescue catches take any `\Throwable` so a raw engine `\Error` still exits 1 loudly, wrapped in one localized `could not play` line; every interpolated echo — paths, argv tokens, and the relayed engine reason (which itself embeds a raw path) — passes a single `printable()` control-char choke before it reaches the terminal), Player wiring, Program launch, and signal re-encoding (`stopSignal()` → 128+N). `$play`, `$watchStat` and `$decode` closure seams keep every branch testable without entering the blocking loop. |
+| `src/Cli.php`         | Argv parsing, gd preflight, viewport sizing, intake caps, decode-failure exits, Player wiring, Program launch, and signal re-encoding (`stopSignal()` → 128+N). |
 | `src/Support/Version.php` | Resolves the version stamp: the phar's embedded `metadata['version']` when running from a phar (release `x.y.z` or an honest `dev-<sha>`/`dev-build` stamp), falling back to the compiled `CURRENT` constant. |
-| `src/Lang.php`    | i18n facade over the shared `T` registry, namespace `gifview` (`cli.usage`, `cli.bad_flag`, `cli.bad_value`, `cli.too_many`, `cli.unexpected_value`, `cli.bad_preset`, `cli.no_frames`, `cli.cannot_play`, `cli.reason_frames_over`, `cli.reason_bytes_over`, `cli.reason_cells_over`, `cli.duration_static`, `cli.need_gd`, `cli.decoding`, `cli.truncated` — all shipping in 16 locales). `cli.no_autoload` mirrors, for parity, the string the bin shim prints before autoload exists, where translation cannot run. |
+| `src/Lang.php`    | i18n facade over the shared `T` registry, namespace `gifview` (`cli.usage`, `cli.bad_flag`, `cli.bad_value`, `cli.too_many`, `cli.unexpected_value`, `cli.bad_preset`, `cli.no_frames`, `cli.cannot_play`, `cli.reason_frames_over`, `cli.reason_bytes_over`, `cli.reason_cells_over`, `cli.duration_static`, `cli.need_gd`, `cli.decoding`, `cli.truncated`, `cli.no_autoload` — all 16 keys ship in every locale file; `cli.no_autoload` exists so the parity census sees the string the bin shim prints before autoload, where translation cannot run). |
+
+Three cross-cutting behaviours of `src/Cli.php` worth knowing before reading
+the source:
+
+- The viewport sizing reserves two rows (status line + trailing newline
+  guard) and answers in this order: `COLUMNS`/`LINES` environment hatch,
+  then sugar-core's never-throwing `Util\Tty` probe on stdout, then the
+  fixed 60×24 fallback off a terminal.
+- Every interpolated echo — paths, argv tokens, and the relayed engine
+  reason (which itself embeds a raw path) — passes a single `printable()`
+  control-char choke before it reaches the terminal.
+- The decode-failure rescue catches take any `\Throwable`, so a raw engine
+  `\Error` still exits 1 loudly, wrapped in one localised
+  `could not play` line.
+- The `$play`, `$watchStat` and `$decode` closure seams keep every branch
+  testable without entering the blocking loop.
 
 ## Test
 

@@ -41,11 +41,11 @@ final class Cli
     public const FALLBACK_CELLS_H = 24;
 
     /**
-     * Outer belt on the frames the viewer materialises at once: the whole
+     * Outer ceiling on the frames the viewer materialises at once: the whole
      * animation lives in RAM while playing (sugar-animation exposes no
      * streaming playback seam). The engine window truncates long animations
-     * to its first Decoder::MAX_FRAMES frames before this belt can ever
-     * fire, and the truncation is announced on stderr — this ceiling is
+     * to its first Decoder::MAX_FRAMES frames before this ceiling can ever
+     * fire, and the truncation is announced on stderr — the ceiling is
      * defence in depth for a future engine that stops capping. The live
      * memory gate is {@see MAX_RESIDENT_CELLS}. See README "Limits".
      */
