@@ -9,10 +9,14 @@ use SugarCraft\Vcr\Lang;
 use SugarCraft\Vcr\Migration\MigrationRunner;
 
 /**
- * `candy-vcr migrate <input.cas> [output.cas] [--dry-run]`
+ * `candy-vcr migrate <input.cas> [output.cas] [--dry-run] [--force]`
  *
  * Migrate a cassette to the current format version. If output.cas is
  * omitted the file is migrated in-place after creating a .bak backup.
+ * Naming output.cas explicitly never creates a backup — so an output
+ * that REALPATHS to the input is folded back into the in-place form
+ * (same door, same backup), and an existing distinct output is refused
+ * unless --force names the destruction (finding 058).
  * With --dry-run the cassette is validated but no files are written.
  * Input is a JSONL cassette; the other formats the loader knows (cast,
  * YAML, tape, gzip) are refused rather than fed to the JSON parser, and
@@ -32,8 +36,9 @@ final class MigrateCommand implements DocumentedCommand
     public function usage(): string
     {
         return implode("\n", [
-            Lang::t('cli.usage_label') . ' candy-vcr migrate <input.cas> [output.cas] [--dry-run] [--info]',
+            Lang::t('cli.usage_label') . ' candy-vcr migrate <input.cas> [output.cas] [--dry-run] [--force] [--info]',
             '  --dry-run  ' . Lang::t('migrate.help_dry_run'),
+            '  --force    ' . Lang::t('migrate.help_force'),
             '  --info     ' . Lang::t('migrate.help_info'),
             '  ' . Lang::t('migrate.help_input'),
         ]) . "\n";
@@ -44,11 +49,14 @@ final class MigrateCommand implements DocumentedCommand
         $inputPath = null;
         $outputPath = null;
         $dryRun = false;
+        $force = false;
         $showInfo = false;
 
         foreach ($args as $arg) {
             if ($arg === '--dry-run') {
                 $dryRun = true;
+            } elseif ($arg === '--force') {
+                $force = true;
             } elseif ($arg === '--info') {
                 $showInfo = true;
             } elseif (str_starts_with($arg, '--')) {
@@ -152,8 +160,25 @@ final class MigrateCommand implements DocumentedCommand
             return 2;
         }
 
-        // Determine output path
-        if ($outputPath === null) {
+        // Same-path door (finding 058): `migrate a.cas a.cas` is an in-place
+        // migrate wearing an explicit disguise — realpath() folding names the
+        // match so both spellings (`./a.cas`, `a.cas`) take the backup door
+        // below, never a clobber-without-backup.
+        $samePath = $outputPath !== null
+            && realpath($outputPath) !== false
+            && realpath($outputPath) === realpath($inputPath);
+
+        if ($outputPath !== null && !$samePath) {
+            // Clobber gate (finding 058): an existing distinct output is
+            // destroyed by the write, so it must be named — refused without
+            // --force. The write lands through AtomicFileWriter's
+            // entry-replacing rename, so even --force never writes through a
+            // planted symlink at the output name (CWE-59 stays closed).
+            if (file_exists($outputPath) && !$force) {
+                fwrite($stderr, Lang::t('cli.err', ['verb' => 'migrate', 'message' => Lang::t('migrate.clobber', ['path' => $outputPath])]) . "\n");
+                return 2;
+            }
+        } else {
             $outputPath = $inputPath;
             $backupPath = $inputPath . self::BACKUP_SUFFIX;
 

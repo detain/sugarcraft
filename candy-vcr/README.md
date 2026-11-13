@@ -639,6 +639,9 @@ candy-vcr migrate session.cas
 # Migrate to a new file
 candy-vcr migrate session.cas upgraded.cas
 
+# Replace an existing output file (it is refused without --force)
+candy-vcr migrate session.cas upgraded.cas --force
+
 # Dry-run — validate without writing
 candy-vcr migrate session.cas --dry-run
 
