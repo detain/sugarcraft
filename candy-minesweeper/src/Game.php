@@ -85,6 +85,13 @@ final class Game implements Model
          */
         public readonly int $frameCols = 80,
         public readonly int $frameRows = 24,
+        /**
+         * True once this session has loaded a savegame. A restored clock is
+         * re-anchored from an unvalidated file, so the game can never earn a
+         * best time with it — the flag survives restart (one-way, monotonic
+         * per session) so loading cannot be "laundered" into a record run.
+         */
+        public readonly bool $restoredGame = false,
     ) {
         $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
     }
@@ -230,6 +237,7 @@ final class Game implements Model
                 'cursorY'        => 0,
                 'startedAt'      => null,
                 'elapsedSeconds' => null,
+                'newBest'        => false,
                 'notice'         => Lang::t('ui.restarted'),
             ]), null];
         }
@@ -304,16 +312,17 @@ final class Game implements Model
         $elapsed = $next->startedAt !== null ? microtime(true) - $next->startedAt : null;
         // Best-beat must be judged against the PREVIOUS tally — recordResult()
         // folds the new time in — and only for preset games (custom boards
-        // tally nothing, so they have no bucket to set a record in).
-        $seconds = $elapsed !== null ? (int) $elapsed : null;
+        // tally nothing, so they have no bucket to set a record in), only
+        // when the tally is actually being kept (stats off = no record to
+        // beat, and a badge that celebrates nothing is a lie), and never on
+        // a restored clock (see $restoredGame).
+        $seconds = $elapsed !== null ? (int) $elapsed : null; // honest wall clock, floored
         $preset  = $next->difficulty();
         $won     = $next->board->isWon();
         $prev    = $preset !== null && $next->stats !== null ? $next->stats->bestTime($preset) : null;
-        $isBest  = $preset !== null && $won && $seconds !== null && ($prev === null || $seconds < $prev);
-        $recorded = $next->recordResult($elapsed);
-        if ($isBest) {
-            $recorded = $recorded->mutate(['newBest' => true]);
-        }
+        $isBest  = $preset !== null && $next->stats !== null && !$next->restoredGame
+            && $won && $seconds !== null && ($prev === null || $seconds < $prev);
+        $recorded = $next->recordResult($elapsed)->mutate(['newBest' => $isBest]);
         $recorded->persistStats();
 
         return $recorded;
@@ -442,10 +451,16 @@ final class Game implements Model
         $elapsed = $payload['elapsed'] ?? null;
         // Strict envelope typing: junk shapes refuse the load instead of
         // being coerced (an (int) cast over an array is a TypeError, and a
-        // negative elapsed would render as a garbage '-1:-40' clock).
+        // negative elapsed would render as a garbage '-1:-40' clock). The
+        // clock is additionally clamped to the finite, non-negative,
+        // one-hour band a real save could carry — 1e400 arrives as INF
+        // through json_decode, and a huge finite claim ("win in 9e9 s"
+        // round-trips an inverted leaderboard) is just as forged.
         if (!is_int($cursorX) || !is_int($cursorY)
             || !($elapsed === null || is_int($elapsed) || is_float($elapsed))
-            || (float) $elapsed < 0.0) {
+            || !is_finite((float) $elapsed)
+            || (float) $elapsed < 0.0
+            || (float) $elapsed > 3600.0) {
             return $this->withNotice(Lang::t('ui.load_refused'));
         }
         try {
@@ -466,6 +481,8 @@ final class Game implements Model
             // a running clock from a re-anchored start.
             'startedAt'      => $over ? null : ($elapsed !== null ? microtime(true) - (float) $elapsed : null),
             'elapsedSeconds' => $over && $elapsed !== null ? (int) $elapsed : null,
+            'newBest'        => false,
+            'restoredGame'   => true,
             'notice'         => Lang::t('ui.loaded'),
         ]);
     }
@@ -637,6 +654,12 @@ final class Game implements Model
      * deliberate and documented rather than silently dishonest. They still
      * freeze the elapsed clock, so {@see elapsed()} reports the real final
      * time instead of null once the board is over.
+     *
+     * Time folding: the (int) is a floor — every caller hands a validated
+     * non-negative value, and truncating the sub-second tail down (never up)
+     * cannot inflate a record. A session that restored a save passes null
+     * instead of its elapsed time: the game and win still count, but a clock
+     * re-anchored from a user-editable file is not evidence for a best time.
      */
     public function recordResult(?float $elapsed): self
     {
@@ -653,7 +676,11 @@ final class Game implements Model
         $won = $this->board->isWon();
         return $this->mutate([
             'elapsedSeconds' => $elapsed !== null ? (int) $elapsed : null,
-            'stats'          => $this->stats()->withGame($difficulty, $won, $elapsed !== null ? (int) $elapsed : null),
+            'stats'          => $this->stats()->withGame(
+                $difficulty,
+                $won,
+                $elapsed !== null && !$this->restoredGame ? (int) $elapsed : null,
+            ),
         ]);
     }
 

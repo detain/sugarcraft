@@ -65,12 +65,43 @@ final class BannerFinishTest extends TestCase
 
     public function testWinBannerCarriesFrozenTimeAndFirstRecordBadge(): void
     {
-        $g = self::winDrive(Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0));
+        $g = self::winDrive(Game::withDifficulty(
+            Difficulty::EASY,
+            static fn(int $max): int => 0,
+            stats: new Stats(),
+        ));
         $this->assertNotNull($g->elapsedSeconds, 'the transition frame froze the clock');
         $this->assertTrue($g->newBest, 'no previous tally → the win IS the record');
         $view = $g->view();
         $this->assertStringContainsString(Lang::t('ui.new_best'), $view);
         $this->assertMatchesRegularExpression('/' . preg_quote(Lang::t('ui.cleared'), '/') . ' · \d+:\d\d/', $view, 'banner carries the frozen final time');
+    }
+
+    public function testTallylessWinNeverWearsTheBadge(): void
+    {
+        // msw-03: with stats disabled there is no record to beat — a badge
+        // celebrating a time nobody keeps is a lie, so the gate refuses.
+        $g = self::winDrive(Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0));
+        $this->assertFalse($g->newBest, 'no tally when the transition ran, no record');
+        $this->assertStringNotContainsString(Lang::t('ui.new_best'), $g->view());
+    }
+
+    public function testRestartClearsTheBadgeAndASlowerWinDoesNotRelightIt(): void
+    {
+        // msw-03: newBest used to be one-way sticky — stamped true on the
+        // record win, never cleared. A second (slower) win after r therefore
+        // kept advertising a record it did not set.
+        $g = self::winDrive(Game::withDifficulty(
+            Difficulty::EASY,
+            static fn(int $max): int => 0,
+            stats: new Stats(),
+        ));
+        $this->assertTrue($g->newBest, 'sanity: first win sets the badge');
+        [$restarted, ] = $g->update(self::key(KeyType::Char, 'r'));
+        $this->assertFalse($restarted->newBest, 'r clears the badge with the board');
+        $g = self::winDrive($restarted);
+        $this->assertFalse($g->newBest, '0:00 ties the tally it just set — a tie is no beat');
+        $this->assertStringNotContainsString(Lang::t('ui.new_best'), $g->view());
     }
 
     public function testStoredBestDeniesTheBadge(): void

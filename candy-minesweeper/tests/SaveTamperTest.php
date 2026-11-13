@@ -301,6 +301,107 @@ final class SaveTamperTest extends TestCase
         $this->assertSame(0, self::loadArm($g)->cursorX, 'sanity: a well-typed envelope loads');
     }
 
+    public function testNonFiniteAndOverlongElapsedAreRefused(): void
+    {
+        // msw-03: json_decode delivers 1e400 as INF and any string of nines
+        // as a finite giant — both used to pass the (float) >= 0 rung and
+        // seed the clock with a fantasy. The band is [0, 3600].
+        $g = Game::start(4, 4, 2, static fn(int $max): int => 0);
+        [$g, ] = $g->update(new KeyMsg(KeyType::Space));
+        [$g, ] = $g->update(new KeyMsg(KeyType::Char, 'l')); // cursorX → 1
+        $honest = json_encode([
+            'v' => 1, 'board' => $g->board->serialize(),
+            'cursorX' => 0, 'cursorY' => 0, 'elapsed' => null,
+        ], JSON_THROW_ON_ERROR);
+        self::assertStringContainsString('"elapsed":null', $honest, 'sanity: the null anchor is present to rewrite');
+
+        foreach (['INF via 1e400' => '1e400', 'finite giant' => '999999', 'just over the band' => '3601'] as $why => $literal) {
+            $this->writeSlotRaw(str_replace('"elapsed":null', '"elapsed":' . $literal, $honest));
+            $this->assertSame(1, self::loadArm($g)->cursorX, "elapsed {$why} must refuse the envelope");
+        }
+
+        // Positive control: the top of the band and the floor both still load.
+        foreach (['42', '3600', '0.0'] as $literal) {
+            $this->writeSlotRaw(str_replace('"elapsed":null', '"elapsed":' . $literal, $honest));
+            $this->assertSame(0, self::loadArm($g)->cursorX, "elapsed {$literal} must still load");
+        }
+    }
+
+    /** @param array<string,mixed> $envelope */
+    private function writeSlotRaw(string $json): void
+    {
+        $path = Game::savePath();
+        self::assertIsString($path, 'sanity: HOME is set so the slot resolves');
+        @mkdir(dirname($path), 0700, true);
+        file_put_contents($path, $json);
+    }
+
+    public function testRestoredWinCountsButNeverSetsABestTime(): void
+    {
+        // msw-03 trust spine: the clock rides back from a user-editable file,
+        // so a win on restored time is ineligible for the record — games and
+        // wins still tally, bestTime and the badge never move. The board is
+        // EASY-shaped so it files into the same bucket the record lives in.
+        $seed = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        [$seed, ] = $seed->update(new KeyMsg(KeyType::Space)); // opener, board unfinished
+        $this->assertFalse($seed->board->isWon(), 'sanity: opener leaves the board live');
+        $this->writeSlot([
+            'v'       => 1,
+            'board'   => $seed->board->serialize(),
+            'cursorX' => 0, 'cursorY' => 0,
+            'elapsed' => 5,
+        ]);
+
+        $g = Game::withDifficulty(
+            Difficulty::EASY,
+            static fn(int $max): int => 0,
+            stats: new \SugarCraft\Minesweeper\Stats(easyGames: 4, easyWins: 2, easyBest: 300),
+        );
+        $loaded = self::loadArm($g);
+        $this->assertTrue($loaded->restoredGame, 'L brands the session as restored');
+
+        // Drive the loaded board home: reveal every safe cell not yet open.
+        $board = $loaded->board;
+        for ($y = 0; $y < $board->height; $y++) {
+            for ($x = 0; $x < $board->width; $x++) {
+                $c = $board->cell($x, $y);
+                if ($c !== null && !$c->mine && !$c->revealed) {
+                    $loaded = $this->walkSpace($loaded, $x, $y);
+                }
+            }
+        }
+        $this->assertTrue($loaded->board->isWon(), 'sanity: the restored board was drivable to a win');
+        $this->assertFalse($loaded->newBest, 'a restored clock cannot wear the badge');
+        $this->assertSame(5, $loaded->stats->gamesPlayed(Difficulty::EASY), 'the game still counts');
+        $this->assertSame(3, $loaded->stats->wins(Difficulty::EASY), 'the win still counts');
+        $this->assertSame(300, $loaded->stats->bestTime(Difficulty::EASY), 'the record never moved');
+    }
+
+    public function testRestoredFlagSurvivesRestartButNothingElseLendsIt(): void
+    {
+        $this->assertFalse(Game::start(3, 3, 2)->restoredGame, 'a fresh session starts clean');
+        $this->writeSlot([
+            'v' => 1, 'board' => self::payload(3, 3, 2, false, false, self::blankCells(3, 3)),
+            'cursorX' => 0, 'cursorY' => 0, 'elapsed' => null,
+        ]);
+        [$loaded, ] = Game::start(3, 3, 2)->update(new KeyMsg(KeyType::Char, 'L'));
+        $this->assertTrue($loaded->restoredGame, 'sanity: the load branded it');
+        [$restarted, ] = $loaded->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertTrue($restarted->restoredGame, 'the brand is monotonic per session — no laundering');
+    }
+
+    private function walkSpace(Game $g, int $x, int $y): Game
+    {
+        while ($g->cursorX !== $x) {
+            [$g, ] = $g->update(new KeyMsg($g->cursorX < $x ? KeyType::Right : KeyType::Left));
+        }
+        while ($g->cursorY !== $y) {
+            [$g, ] = $g->update(new KeyMsg($g->cursorY < $y ? KeyType::Down : KeyType::Up));
+        }
+        [$g, ] = $g->update(new KeyMsg(KeyType::Space));
+        return $g;
+    }
+
     public function testNegativeAndStringElapsedAreRefused(): void
     {
         $g = Game::start(4, 4, 2, static fn(int $max): int => 0);
