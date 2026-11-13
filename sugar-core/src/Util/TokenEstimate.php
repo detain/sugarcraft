@@ -79,8 +79,28 @@ final class TokenEstimate
     private const OTHER_SCRIPT = '/(?![\p{Latin}\p{Inherited}\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}\p{Bopomofo}'
         . '\x{3000}-\x{30FF}\x{3100}-\x{31FF}\x{FF00}-\x{FFEF}\x{10000}-\x{10FFFF}])[\p{L}\p{M}]/u';
 
+    /** Per-message role/framing overhead, in tokens, that {@see ofMessages()} adds on top of the text. */
+    public const MESSAGE_OVERHEAD = 10;
+
     private function __construct()
     {
+    }
+
+    /**
+     * Estimated tokens for a run of message bodies: {@see ofText()} of each plus
+     * {@see MESSAGE_OVERHEAD}. Filtering (UI-only rows) and non-text extras
+     * (attachments) are the caller's: feed only the bodies that are sent.
+     *
+     * @param iterable<string> $contents
+     */
+    public static function ofMessages(iterable $contents): int
+    {
+        $total = 0;
+        foreach ($contents as $content) {
+            $total += self::ofText($content) + self::MESSAGE_OVERHEAD;
+        }
+
+        return $total;
     }
 
     /** Estimated tokens for $text, excluding any per-message overhead. */

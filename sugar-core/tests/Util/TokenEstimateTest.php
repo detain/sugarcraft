@@ -68,4 +68,17 @@ final class TokenEstimateTest extends TestCase
         self::assertSame(2 * TokenEstimate::ofToolSchema('Read', 'd', ['type' => 'object']), TokenEstimate::ofToolSchemas([$tool, $tool]));
         self::assertSame(0, TokenEstimate::ofToolSchemas([]));
     }
+
+    public function testOfMessagesAddsTheRoleOverheadPerMessage(): void
+    {
+        self::assertSame(0, TokenEstimate::ofMessages([]));
+        self::assertSame(TokenEstimate::ofText('hello') + 10, TokenEstimate::ofMessages(['hello']));
+        self::assertSame(
+            TokenEstimate::ofText('a') + TokenEstimate::ofText('世界') + 2 * TokenEstimate::MESSAGE_OVERHEAD,
+            TokenEstimate::ofMessages((static function () {
+                yield 'a';
+                yield '世界';
+            })()),
+        );
+    }
 }
