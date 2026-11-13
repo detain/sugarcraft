@@ -10,12 +10,12 @@
 
 # candy-kv
 
-> Formerly published as `sugarcraft/sugar-skate` (renamed 2026-10). <!-- @rename-keep -->
-> Namespace changed: `SugarCraft\Skate\` → `SugarCraft\Kv\`. <!-- @rename-keep -->
-
 candy-kv is a personal key/value store for PHP 8.3+: multi-database support,
 binary-safe values, glob filtering, TTL expiry, JSON/YAML import/export, and a
 small strict CLI. Values land in plain SQLite files you own.
+
+> Formerly published as `sugarcraft/sugar-skate` (renamed 2026-10). <!-- @rename-keep -->
+> Namespace changed: `SugarCraft\Skate\` → `SugarCraft\Kv\`. <!-- @rename-keep -->
 
 Scope note: upstream [skate](https://github.com/charmbracelet/skate) also ships
 an interactive full-screen browser. candy-kv does not — it is the storage
@@ -26,7 +26,16 @@ pane build one on top of `Store::list()`.
 
 - **Multi-database** — separate stores with the `key@dbname` suffix; the SQLite file for a name is created the first time something is written to it (reads of a missing database just see emptiness)
 - **Binary-safe** — values containing NUL bytes or invalid UTF-8 are stored base64-encoded with the binary flag (auto-detected; `--binary`/`--text` override); binary entries export as base64 envelopes and reimport byte-exact
-- **Glob patterns** — `list` and `delete` accept `*` and `?`; matching is case-sensitive and character-wise (the pattern compiles to SQLite LIKE over the stored text, so `?` spans one character, not one byte), `\*`/`\?` stand for literals; `get` takes an exact key only — and a `get` argument may spell that exact key with the same escapes: `get 'ra\*wt'` reads the key `ra*wt`. Raw unescaped `*`/`?` in a `get` argument stay the pattern refusal.
+- **Glob patterns** — `list` and `delete` accept `*` and `?`; `\*`/`\?` spell literals
+
+  - Matching is case-sensitive and character-wise: the pattern compiles to
+    SQLite LIKE over the stored text, so `?` spans one character, not one byte.
+    For a case-insensitive sweep list twice (`User-*` and `user-*`) — or use
+    `*`/`?` wildcards in place of the differing letters
+  - `get` takes an exact key only — raw unescaped `*`/`?` in a `get` argument
+    stay the pattern refusal
+  - An exact key that contains the characters may be spelled with the same
+    escapes: `get 'ra\*wt'` reads the key `ra*wt`
 - **Ordered, filterable listing** — forward or reverse, keys only, values only, or full entries
 - **SQLite-backed** — one file per database under `$XDG_CONFIG_HOME/skate/` (or `~/.config/skate/`; see Data directory)
 - **Iterable streams** — `list()` yields results without loading everything into memory
@@ -34,9 +43,14 @@ pane build one on top of `Store::list()`.
 - **Levenshtein suggestions** — a key miss prints the closest live key (within half the query's codepoint count) to stderr
 - **Import/Export** — JSON and YAML (`yml` accepted), fail-fast: a bad document or an unround-trippable value refuses before writing anything
 - **Atomic transactions** — `transaction()` wraps a callback in BEGIN IMMEDIATE/COMMIT/ROLLBACK
-- **Bounded lock waits** — every SQLite connection opens with a 5-second busy timeout (`Database.php:67`), so two candy-kv processes racing on one database queue on each other's write locks instead of failing instantly with SQLITE_BUSY
-- **Pinned connection pragmas** — each connection opens WAL with a 62.5 MiB page-cache cap (`Database.php:130`/`:135`, read-back-pinned in `tests/StorageContractTest.php`), so list/glob/pattern walks on large stores reread from cache instead of disk; the cap is a ceiling, not an allocation, and a small store never grows past its working set. `synchronous` deliberately stays at FULL: the usual WAL companion `NORMAL` is declined on a secrets store whose write cadence is one commit per command — at that rate the speed win is worth nothing while the power-loss window that can drop the newest commits is. `foreign_keys` is omitted outright: the schema has no relations for the pragma to police
-- **Plain text output** — the CLI emits no color and no escapes of its own; `get` echoes the stored value untouched, so bytes riding in with data reach the terminal verbatim. `--sanitize` collapses a value to one line with C0 controls, ESC, DEL and the UTF-8-encoded C1 controls (`\xC2\x80`–`\xC2\x9F`, the 8-bit CSI introducer included) stripped — a terminal would execute that pair — script-friendly by contract
+- **Pinned connection pragmas** — WAL with a 62.5 MiB page-cache cap and a
+  5-second busy timeout on every connection (`Database.php`); `synchronous`
+  deliberately stays at FULL and `foreign_keys` is omitted outright — the
+  economics of both choices are argued at the pragmas in `src/Database.php`
+- **Plain text output** — the CLI emits no color and no escapes of its own;
+  `get` echoes the stored bytes untouched. `--sanitize` collapses a value to
+  one line, stripping every control a terminal would execute (C0, ESC, DEL,
+  and the UTF-8-encoded C1 pair) — script-friendly by contract
 
 ## Install
 
@@ -46,8 +60,8 @@ composer require sugarcraft/candy-kv
 
 candy-kv needs PHP 8.3+ and the SQLite3 extension (`ext-sqlite3`, declared in
 `composer.json`): the store is a plain SQLite file and there is no fallback
-engine. The CLI lands at `vendor/bin/candy-kv`; invoke it as `vendor/bin/candy-kv` or
-add `vendor/bin` to your `$PATH`. A rolling dev-channel phar (self-contained,
+engine. The CLI lands at `vendor/bin/candy-kv`; add `vendor/bin` to your
+`$PATH`, or invoke the full path. A rolling dev-channel phar (self-contained,
 stamped `dev-<sha>`) is also published:
 
 ```bash
@@ -62,7 +76,14 @@ component — same data contract, sturdier quoting.
 
 ## Quick Start
 
+This runs against the real store, so sandbox it first the way the CLI section
+shows: `XDG_CONFIG_HOME=$(mktemp -d) php test.php`.
+
 ```php
+<?php
+
+require __DIR__ . '/vendor/autoload.php';
+
 use SugarCraft\Kv\Store;
 
 $store = new Store();
@@ -72,8 +93,8 @@ $store->set('greeting', 'Hello, World!');
 echo $store->get('greeting'); // Hello, World!
 
 // With a database — target it with the `key@db` suffix.
-// (set()'s 3rd parameter is `bool $binary`, get()'s is a fallback string —
-// a db name NEVER goes there; the suffix is the only routing mechanism.)
+// (`set()`'s 3rd parameter is `bool $binary`; `get()`'s 2nd is a fallback
+// string. A db name NEVER goes in either — the `@` suffix is the routing.)
 // Values are stored UNENCRYPTED (see Privacy & file modes below).
 $store->set('token@passwords', 'ghp_xxxx');
 echo $store->get('token@passwords');
@@ -84,7 +105,9 @@ foreach ($store->list() as $entry) {
 }
 
 // Glob patterns (list/delete only — get is exact-key)
-foreach ($store->list(pattern: 'user-*') as $entry) { ... }
+foreach ($store->list(pattern: 'user-*') as $entry) {
+    echo "{$entry->key}\n";
+}
 
 // Delete (returns the number of entries removed; patterns too)
 $removed = $store->delete('greeting');
@@ -129,7 +152,7 @@ candy-kv --version
   forever secret.
 - `-d` accepts the delimiter attached (`-d,`) or spaced (`-d ,`); the printed
   delimiter is the raw bytes you asked for. A bare trailing `-d` (`list -d`)
-  is not an error either — it keeps the tab default, unlike the
+  is not an error — it keeps the tab default, unlike the
   value-hungry flags, which refuse a missing or flag-like next token loudly
   (exit 2).
 - `--version` reports the phar build's stamped version when the archive
@@ -149,7 +172,7 @@ Nothing is written on exit 2 paths. The "pattern passed to `get`" refusal
 inspects the raw key bytes (`bin/candy-kv`: `strpbrk($key, '*?')`), so it fires
 on escaped spellings too — see Glob patterns above.
 
-Two edges complete the table. A bare `candy-kv` (no arguments at all) prints
+Two edge cases complete the table. A bare `candy-kv` (no arguments at all) prints
 the help and exits **0** — asking for guidance is not a usage error; exit 2
 starts where a command was named but its arguments are wrong or missing.
 And `prune` with nothing expired is a success (`No expired entries to
@@ -184,8 +207,9 @@ notes
 ```
 
 Newline discipline: `get` never adds a newline (piped `set` stores stdin
-byte-verbatim, so `echo token |` keeps the trailing newline — use `printf %s`
-or pass the value as an argument for exact bytes); `list`, `delete`, `prune`,
+byte-verbatim, so `echo token | candy-kv set k` stores the trailing newline
+too — use `printf %s` or pass the value as an argument for exact bytes);
+`list`, `delete`, `prune`,
 and import success lines are newline-terminated one-shots. `list` scrubs
 control bytes from stored keys/values for the terminal (a multi-line value
 prints as one collapsed line); the `-d` delimiter itself prints raw. Binary
@@ -261,7 +285,7 @@ written before this rule keep answering). A `get` argument carrying an
 *unescaped* `*`/`?` is still refused as a pattern — wildcards are for
 `list`/`delete`, never a fetch.
 
-### Import / Export
+### Import/Export
 
 Import and export support JSON and YAML (`yml` alias). Import runs inside an
 atomic transaction by default; pass `--no-atomic` for multi-database or
