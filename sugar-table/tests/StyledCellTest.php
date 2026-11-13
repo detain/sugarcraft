@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Table\Tests;
 
 use SugarCraft\Table\StyledCell;
+use SugarCraft\Table\Column;
+use SugarCraft\Table\Row;
+use SugarCraft\Table\RowData;
+use SugarCraft\Table\Table;
 use PHPUnit\Framework\TestCase;
 
 final class StyledCellTest extends TestCase
@@ -142,4 +146,59 @@ final class StyledCellTest extends TestCase
         $this->assertSame('1;32', $cell2->style);
         $this->assertSame('1;34', $cell3->style);
     }
+    // ---- render routing (audit ST-50, finding 061) -------------------------
+
+    public function testStyledNullRendersTheMissingIndicatorLikeRawNull(): void
+    {
+        $columns = [Column::new('v', 'Value', 8)];
+        $styled = Table::fromColumns($columns)
+            ->withRows([Row::new(RowData::from(['v' => StyledCell::new(null, '31')]))]);
+        $raw = Table::fromColumns($columns)
+            ->withRows([Row::new(RowData::from(['v' => null]))]);
+
+        $this->assertSame($raw->View(), $styled->View(), 'wrapper-independent no-value shape');
+        $this->assertStringContainsString('-', $raw->View());
+    }
+
+    public function testStyledNullHonoursACustomIndicator(): void
+    {
+        $view = Table::fromColumns([Column::new('v', 'Value', 8)])
+            ->withRows([Row::new(RowData::from(['v' => StyledCell::new(null)]))])
+            ->withMissingIndicator('(empty)')
+            ->View();
+
+        $this->assertStringContainsString('(empty)', $view);
+    }
+
+    public function testStyledFalseKeepsItsLegacyEmptyCast(): void
+    {
+        $view = Table::fromColumns([Column::new('v', 'Value', 8)])
+            ->withRows([Row::new(RowData::from(['v' => StyledCell::new(false)]))])
+            ->View();
+
+        $this->assertStringNotContainsString('-', $view, 'false is a value, not a missing cell');
+    }
+
+    public function testMissingValueMeasuresItsIndicatorHeight(): void
+    {
+        // The height pass must budget what the paint pass prints: a wide
+        // custom indicator in a narrow multiline column takes real rows —
+        // whether the cell is null or styled-null.
+        $styled = Table::fromColumns([Column::new('v', 'V', 4)->withWrapMode(\SugarCraft\Table\WrapMode::Character)])
+            ->withRows([Row::new(RowData::from(['v' => StyledCell::new(null)]))])
+            ->withMultilineMode()
+            ->withCellPadding(0)
+            ->withMissingIndicator('(empty)');
+        $raw = $styled->withRows([Row::new(RowData::from(['v' => null]))]);
+
+        $lines = explode("\n", $styled->View());
+        $this->assertSame($raw->View(), $styled->View());
+        $this->assertCount(count(explode("\n", $raw->View())), $lines);
+        // Header(1) + separator(1) + indicator wrapped to (e / mpty / ) rows:
+        // width 4 forces three content lines for a 7-char indicator.
+        $body = array_slice($lines, 2);
+        $this->assertGreaterThanOrEqual(3, count($body));
+        $this->assertStringContainsString('emp', $body[1]);
+    }
+
 }

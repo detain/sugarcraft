@@ -1829,7 +1829,7 @@ final class Table
 
         foreach ($this->rows as $row) {
             $val = $row->data->get($col->key);
-            if ($val === null) {
+            if (self::isMissingValue($val)) {
                 continue;
             }
             // StyledCell measures its display value, never its SGR wrapper.
@@ -2252,7 +2252,7 @@ final class Table
 
             $val = $rowData->data->get($column->key);
 
-            if ($val === null) {
+            if (self::isMissingValue($val)) {
                 $val = $this->missingIndicator;
             }
 
@@ -2339,7 +2339,7 @@ final class Table
         foreach ($visibleColumnIndices as $ci) {
             $column = $this->columns[$ci];
             $val = $rowData->data->get($column->key);
-            if ($val === null) {
+            if (self::isMissingValue($val)) {
                 $val = $this->missingIndicator;
             }
             $text = self::plainText($val);
@@ -2372,7 +2372,8 @@ final class Table
             $colWidth = $computedWidths[$ci] ?? $column->width;
             $effectiveWidth = $colWidth - (2 * $this->cellPadding);
             $effectiveWidth = \max(1, $effectiveWidth);
-            $cellStr = self::plainText($row->data->get($column->key));
+            $heightVal = $row->data->get($column->key);
+            $cellStr = self::plainText(self::isMissingValue($heightVal) ? $this->missingIndicator : $heightVal);
             // Sanitize before renderCell width measurement
             $cellStr = Sanitize::value($cellStr, true, $this->markedFrameSanitization);
 
@@ -2423,7 +2424,7 @@ final class Table
             $colWidths[$ci] = $colWidth;
 
             $val = $row->data->get($column->key);
-            if ($val === null) {
+            if (self::isMissingValue($val)) {
                 $val = $this->missingIndicator;
             }
 
@@ -2760,6 +2761,21 @@ final class Table
         }
 
         return self::scalarText($val);
+    }
+
+    /**
+     * "No value" means the same thing under either wrapper (audit ST-50,
+     * finding 061): a raw null and a StyledCell(null) both have nothing to
+     * display and both render as the missing-data indicator. Only the null
+     * VALUE qualifies — StyledCell(false) keeps its legacy '' scalar cast.
+     */
+    private static function isMissingValue(mixed $val): bool
+    {
+        if ($val instanceof StyledCell) {
+            return $val->value === null;
+        }
+
+        return $val === null;
     }
 
     /**
