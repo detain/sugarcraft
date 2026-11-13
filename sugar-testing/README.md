@@ -231,7 +231,9 @@ lib's own comparator). A golden here must be byte-stable across machines.
 
 **Missing goldens FAIL.** On a fresh checkout the run fails rather than
 silently green-ing itself; the failure message points at the create flag.
-`SUGAR_TESTING_UPDATE_GOLDENS=1` (legacy alias `UPDATE_GOLDENS=1`) is
+`SUGAR_TESTING_UPDATE_GOLDENS=1` (legacy alias `UPDATE_GOLDENS=1` — a
+deprecated spelling accepted through v1 and scheduled for removal in v2;
+prefer the namespaced variable) is
 CREATE-ONLY: the first run creates the file — and counts a read-back assertion
 proving what it wrote — but an existing golden that differs still **fails and
 is never rewritten**. To re-baseline deliberately, delete the file and rerun

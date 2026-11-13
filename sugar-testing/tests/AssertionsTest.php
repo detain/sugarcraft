@@ -292,4 +292,49 @@ final class AssertionsTest extends TestCase
             );
         }
     }
+
+    public function testGoldenResolvesTheFixturesLayoutRelativeToTheTestDir(): void
+    {
+        $oldEnv = getenv('SUGAR_TESTING_UPDATE_GOLDENS');
+        putenv('SUGAR_TESTING_UPDATE_GOLDENS=1');
+
+        try {
+            Assertions::golden($this->tmpDir . '/', 'layout.txt', 'bytes-v1');
+
+            $this->assertFileExists($this->fixturesDir . '/layout.txt');
+            $this->assertSame('bytes-v1', GoldenFile::load($this->fixturesDir . '/layout.txt'));
+
+            // Identical bytes: the create flag is on, yet comparison runs.
+            Assertions::golden($this->tmpDir, 'layout.txt', 'bytes-v1');
+
+            $this->expectException(\PHPUnit\Framework\AssertionFailedError::class);
+            Assertions::golden($this->tmpDir, 'layout.txt', 'bytes-v2');
+        } finally {
+            if ($oldEnv === false) {
+                putenv('SUGAR_TESTING_UPDATE_GOLDENS');
+            } else {
+                putenv("SUGAR_TESTING_UPDATE_GOLDENS={$oldEnv}");
+            }
+        }
+    }
+
+    public function testGoldenCreateStillHonoursTheLegacyBareFlag(): void
+    {
+        // The bare UPDATE_GOLDENS spelling is a deprecated alias, but it
+        // stays accepted through v1 — including on the golden() wrapper.
+        $oldEnv = getenv('UPDATE_GOLDENS');
+        putenv('UPDATE_GOLDENS=1');
+
+        try {
+            Assertions::golden($this->tmpDir, 'legacy.txt', 'v');
+
+            $this->assertSame('v', GoldenFile::load($this->fixturesDir . '/legacy.txt'));
+        } finally {
+            if ($oldEnv === false) {
+                putenv('UPDATE_GOLDENS');
+            } else {
+                putenv("UPDATE_GOLDENS={$oldEnv}");
+            }
+        }
+    }
 }

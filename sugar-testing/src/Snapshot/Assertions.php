@@ -141,6 +141,32 @@ final class Assertions
     }
 
     /**
+     * Convenience wrapper over {@see assertGoldenAnsi()} for the standard
+     * layout: the golden lives in a `fixtures` directory next to the test
+     * file that asserts it.
+     *
+     * `__DIR__` (or __DIR__ . '/..' from a tests/Sub/ file) is passed as
+     * $testFileDir, so the same call shape works from any nesting depth:
+     *
+     * ```php
+     * Assertions::golden(__DIR__, 'render-basic.txt', $actual);
+     * ```
+     *
+     * The comparison semantics — byte-exact, create-only under the re-
+     * baselining env vars, never rewrite-on-diff — are inherited from
+     * assertGoldenAnsi() unchanged.
+     *
+     * @param string $testFileDir the test file's directory (a `fixtures`
+     *                            subtree is derived from it)
+     * @param string $name        golden file name inside fixtures
+     * @param string $actual      current output bytes to assert
+     */
+    public static function golden(string $testFileDir, string $name, string $actual): void
+    {
+        self::assertGoldenAnsi(rtrim($testFileDir, '/') . '/fixtures/' . $name, $actual);
+    }
+
+    /**
      * Assert that $expected matches the Buffer's cell grid — EVERY cell.
      *
      * The grid is parsed at the boundary and must be well-formed and
@@ -286,9 +312,14 @@ final class Assertions
 
     /**
      * True when either the namespaced or the legacy re-baselining env var is armed.
+     *
+     * The bare `UPDATE_GOLDENS` spelling is a deprecated legacy alias: it
+     * stays accepted through v1 so existing one-off re-baseline invocations
+     * keep working, and is scheduled for removal in v2.
      */
     private static function rebaseliningRequested(): bool
     {
+        // TODO(2027-05): drop the legacy UPDATE_GOLDENS alias read.
         return getenv('SUGAR_TESTING_UPDATE_GOLDENS') === '1'
             || getenv('UPDATE_GOLDENS') === '1';
     }
