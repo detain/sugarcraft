@@ -269,14 +269,30 @@ final class Picture
         return $out;
     }
 
+    /**
+     * iTerm2 inline image: OSC 1337 with base64 PNG.
+     *
+     * The payload rides in {@see CHUNK_PAYLOAD_BYTES}-sized frames — each a
+     * complete `ESC ] 1337 ; File = inline = 1 ; size = N : chunk BEL` with
+     * the same arguments (sugar-charts-095). `size` announces the pre-base64
+     * byte total so an accumulator knows when the image is complete; a
+     * single-frame transfer (the common small case) is byte-identical to the
+     * historic unbounded emit. Even after chunking the caller owns the total
+     * payload: a 40 MB PNG is still 40 MB of escape bytes through the pane,
+     * Sixel-style — no input-size floor exists.
+     */
     private function encodeITerm2(): string
     {
         if ($this->png === '') {
             return $this->fallbackText('iTerm2 inline image needs PNG bytes (use Picture::fromPng).');
         }
-        $b64 = base64_encode($this->png);
+        $b64  = base64_encode($this->png);
         $size = strlen($this->png);
-        return "\x1b]1337;File=inline=1;size={$size}:" . $b64 . "\x07";
+        $out  = '';
+        foreach (str_split($b64, self::CHUNK_PAYLOAD_BYTES) as $chunk) {
+            $out .= "\x1b]1337;File=inline=1;size={$size}:" . $chunk . "\x07";
+        }
+        return $out;
     }
 
     private function fallbackText(string $msg = '[image — terminal protocol not detected]'): string
@@ -288,7 +304,22 @@ final class Picture
     private static function defaultEnv(): array
     {
         $out = [];
-        foreach (['TERM', 'TERM_PROGRAM'] as $k) {
+        foreach (
+            [
+                'TERM',
+                'TERM_PROGRAM',
+                // The arms detect() gained in CH-23 must be readable through
+                // the real-environment path too, or a live tmux pane never
+                // trips the multiplexer gate.
+                'TMUX',
+                'ZELLIJ',
+                'ZELLIJ_SESSION_NAME',
+                'CHARTS_PICTURE_PASSTHROUGH',
+                'KITTY_WINDOW_ID',
+                'WT_SESSION',
+                'WT_PROFILE_ID',
+            ] as $k
+        ) {
             $v = getenv($k);
             if ($v !== false) {
                 $out[$k] = $v;

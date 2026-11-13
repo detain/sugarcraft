@@ -78,6 +78,34 @@ final class PictureDetectTest extends TestCase
         );
     }
 
+    public function testRealEnvironmentPathSeesTheMultiplexerVariables(): void
+    {
+        // defaultEnv() must export every variable detect() consults — a
+        // live tmux pane only trips the gate if TMUX is actually read.
+        $hadTmuxValue = getenv('TMUX');
+        $hadTmux       = $hadTmuxValue !== false;
+        $probe   = getenv('TERM_PROGRAM');
+        putenv('TERM_PROGRAM=iTerm.app');
+        putenv('TMUX=/tmp/tmux-1000/default,42,0');
+        try {
+            $this->assertNull(Picture::detect(), 'the real-env path ignored the TMUX arm');
+            putenv('CHARTS_PICTURE_PASSTHROUGH=1');
+            $this->assertSame(Protocol::ITerm2, Picture::detect());
+        } finally {
+            if ($hadTmux) {
+                putenv('TMUX=' . (string) $hadTmuxValue);
+            } else {
+                putenv('TMUX');
+            }
+            putenv('CHARTS_PICTURE_PASSTHROUGH');
+            if ($probe === false) {
+                putenv('TERM_PROGRAM');
+            } else {
+                putenv('TERM_PROGRAM=' . $probe);
+            }
+        }
+    }
+
     public function testEmptyTmuxVariableIsNotAMultiplexer(): void
     {
         // tmux only exports TMUX with a socket spec; an empty value means
