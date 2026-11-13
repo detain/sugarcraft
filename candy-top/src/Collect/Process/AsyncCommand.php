@@ -68,6 +68,9 @@ final class AsyncCommand
 
     private static bool $hooked = false;
 
+    /** @var (callable(list<string>, array<string,string>): (array{0: \Traversable<mixed>, 1: array<int|string, mixed>}|null))|null */
+    private static ?\Closure $spawnFactory = null;
+
     private string $output = '';
 
     private bool $eof = false;
@@ -330,6 +333,28 @@ final class AsyncCommand
         return $env;
     }
 
+    /**
+     * Test seam (like the sibling subsystems' runner closures): replace the
+     * OS spawn behind {@see run()} and {@see launch()}. The factory takes
+     * the gate-checked argv and the allowlisted child environment and
+     * returns the `[process, pipes]` shape of proc_open for a child it
+     * spawned itself — or null for a spawn failure (the Absent path). The
+     * registry, the kill ladder and the reaping all run over the injected
+     * child exactly as over a real one, which is what makes the timing
+     * around the loop statable: launch a child, decline to run the loop,
+     * and the exited-but-unclosed residue candy-top-042 is about is on the
+     * table as a fact (a real kernel stages no SIGKILL-immune child — a
+     * group-stopped one still dies, which the wedged-driver shape cannot
+     * be faked, only accounted). Null (default) keeps the real proc_open;
+     * a malformed return is a programming error and throws.
+     *
+     * @param (callable(list<string>, array<string,string>): mixed)|null $factory
+     */
+    public static function withSpawnFactory(?callable $factory): void
+    {
+        self::$spawnFactory = $factory === null ? null : \Closure::fromCallable($factory);
+    }
+
     private static function spawn(array $argv, int $maxBytes = self::MAX_OUTPUT): ?self
     {
         // The argv-array form hands argv[0] to execvp, which searches PATH —
@@ -347,18 +372,30 @@ final class AsyncCommand
             self::$hooked = true;
             register_shutdown_function(static fn () => self::shutdown());
         }
-        $pipes = [];
-        // Windows has no /dev/null; PHP's implicit mapping is exactly the
-        // kind of undocumented dependency this file's env law refuses
-        // (candy-top-058) — name the device per OS instead.
-        $devnull = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
-        try {
-            $process = @proc_open($argv, [0 => ['file', $devnull, 'r'], 1 => ['pipe', 'w'], 2 => ['file', $devnull, 'w']], $pipes, null, self::childEnv());
-        } catch (\Error) {
-            return null; // proc_open listed in disable_functions
-        }
-        if (!\is_resource($process)) {
-            return null;
+        if (self::$spawnFactory !== null) {
+            $pair = (self::$spawnFactory)($argv, self::childEnv());
+            if ($pair === null) {
+                return null;
+            }
+            if (!\is_array($pair) || !isset($pair[0], $pair[1][1]) || !\is_resource($pair[0]) || !\is_resource($pair[1][1])) {
+                throw new \InvalidArgumentException('AsyncCommand spawn factory must return [process, pipes] with a resource stdout, or null.');
+            }
+            $process = $pair[0];
+            $pipes = $pair[1];
+        } else {
+            $pipes = [];
+            // Windows has no /dev/null; PHP's implicit mapping is exactly the
+            // kind of undocumented dependency this file's env law refuses
+            // (candy-top-058) — name the device per OS instead.
+            $devnull = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+            try {
+                $process = @proc_open($argv, [0 => ['file', $devnull, 'r'], 1 => ['pipe', 'w'], 2 => ['file', $devnull, 'w']], $pipes, null, self::childEnv());
+            } catch (\Error) {
+                return null; // proc_open listed in disable_functions
+            }
+            if (!\is_resource($process)) {
+                return null;
+            }
         }
         stream_set_blocking($pipes[1], false);
         $child = new self($process, $pipes[1], self::now(), (string) ($argv[0] ?? ''), max(1, $maxBytes));

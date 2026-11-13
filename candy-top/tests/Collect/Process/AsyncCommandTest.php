@@ -35,6 +35,7 @@ final class AsyncCommandTest extends TestCase
 
     protected function tearDown(): void
     {
+        AsyncCommand::withSpawnFactory(null);
         AsyncCommand::shutdown();
         foreach (glob($this->dir . '/*') ?: [] as $f) {
             @unlink($f);
@@ -305,5 +306,98 @@ final class AsyncCommandTest extends TestCase
             rmdir($win); // one literal component on Linux: "C:\Windows\System32"
             rmdir($base);
         }
+    }
+
+    /** S-P18: OS-level death proof — the pid is gone (ESRCH) once reaped. */
+    private static function awaitGone(int $pid, float $limit = 5.0): bool
+    {
+        $until = hrtime(true) / 1e9 + $limit;
+        while (hrtime(true) / 1e9 < $until) {
+            if (!posix_kill($pid, 0)) {
+                return true;
+            }
+            usleep(10000);
+        }
+
+        return false;
+    }
+
+    public function testTheFactorySeesTheGatedArgvAndTheAllowlistedEnvironment(): void
+    {
+        $seen = null;
+        $calls = 0;
+        $factory = static function (array $argv, array $env) use (&$seen, &$calls) {
+            ++$calls;
+            $seen = [$argv, $env];
+
+            return null; // the Absent path, exercised by the same seam
+        };
+        AsyncCommand::withSpawnFactory($factory);
+        $script = $this->script('printf never-runs');
+        $token = getenv('CANDY_TOP_PLANTED_TOKEN');
+        putenv('CANDY_TOP_PLANTED_TOKEN=sk-never-for-the-child');
+        try {
+            // The gate stands BEFORE the seam: a bare name never reaches it.
+            $this->assertSame(CommandOutcome::Absent, AsyncCommand::run(['bare-tool'])->outcome);
+            $this->assertSame(0, $calls, 'the argv gate must run before the factory');
+
+            $this->assertSame(CommandOutcome::Absent, AsyncCommand::run([$script, 'a1'])->outcome);
+            $this->assertSame(1, $calls);
+            $this->assertSame([$script, 'a1'], $seen[0]);
+            $this->assertArrayHasKey('PATH', $seen[1]);
+            $this->assertArrayNotHasKey('CANDY_TOP_PLANTED_TOKEN', $seen[1], 'a planted credential crossed the seam');
+            $this->assertSame(0, AsyncCommand::liveCount(), 'a refused spawn registers nothing');
+        } finally {
+            $token === false ? putenv('CANDY_TOP_PLANTED_TOKEN') : putenv('CANDY_TOP_PLANTED_TOKEN=' . $token);
+        }
+    }
+
+    public function testAFactoryThatReturnsGarbageFailsFast(): void
+    {
+        AsyncCommand::withSpawnFactory(static fn () => 'not-a-child');
+        try {
+            AsyncCommand::run([$this->script('printf x')]);
+            $this->fail('a malformed factory return must throw');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('[process, pipes]', $e->getMessage());
+        }
+    }
+
+    public function testTheKillLadderRunsOverTheInjectedChild(): void
+    {
+        if (!function_exists('posix_kill')) {
+            $this->markTestSkipped('the death proof needs posix_kill');
+        }
+        $pid = 0;
+        $factory = static function (array $argv, array $env) use (&$pid) {
+            $devnull = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+            $pipes = [];
+            $process = proc_open($argv, [0 => ['file', $devnull, 'r'], 1 => ['pipe', 'w'], 2 => ['file', $devnull, 'w']], $pipes, null, $env);
+            if (!is_resource($process)) {
+                return null;
+            }
+            $pid = (int) proc_get_status($process)['pid'];
+
+            return [$process, $pipes];
+        };
+        AsyncCommand::withSpawnFactory($factory);
+
+        $sleeper = $this->script('exec sleep 30');
+        $timeout = AsyncCommand::run([$sleeper], 0.15);
+        $this->assertSame(CommandOutcome::Timeout, $timeout->outcome);
+        $this->assertTrue(self::awaitGone($pid), 'the timeout arm never reached SIGKILL');
+        $this->assertSame(0, AsyncCommand::liveCount(), 'a killed-and-died child leaves the registry');
+
+        $flood = $this->script("printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'");
+        $large = AsyncCommand::run([$flood], 5.0, 16);
+        $this->assertSame(CommandOutcome::TooLarge, $large->outcome);
+        $this->assertTrue(self::awaitGone($pid), 'the overflow arm never reached SIGKILL');
+        $this->assertSame(0, AsyncCommand::liveCount());
+
+        // And through the seam the ordinary outcomes keep their meaning.
+        $this->assertSame(CommandOutcome::Ok, AsyncCommand::run([$this->script('printf fine')])->outcome);
+        $failed = AsyncCommand::run([$this->script('exit 7')]);
+        $this->assertSame(CommandOutcome::Failed, $failed->outcome);
+        $this->assertSame(7, $failed->exit);
     }
 }
