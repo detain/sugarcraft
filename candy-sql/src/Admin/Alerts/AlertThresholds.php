@@ -10,8 +10,10 @@ use SugarCraft\Toast\Position;
  * Immutable threshold configuration for alert conditions.
  *
  * Defines which metrics to watch and at what values alerts fire.
- * Ships with sensible defaults (::new()) and a stricter preset (::strict())
- * for production environments where early warning matters.
+ * Ships with a bare instance (::new()), the workbench-matching preset
+ * (::standard() — the name AGENTS.md's factory vocabulary demands where the
+ * banned `default` reading used to sit, SQL-C25) and a stricter preset
+ * (::strict()) for production environments where early warning matters.
  *
  * All ratio thresholds are expressed as 0.0–1.0 floats (e.g. 0.8 = 80%).
  */
@@ -63,7 +65,7 @@ final class AlertThresholds
      * slow query at 5 seconds, thread running at 50%. Toast enabled
      * at TopRight with 5s auto-dismiss.
      */
-    public static function default(): self
+    public static function standard(): self
     {
         return self::new()
             ->withConnectionWarningThreshold(0.6)

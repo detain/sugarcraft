@@ -7,6 +7,16 @@ namespace SugarCraft\Sql;
 /**
  * The `--version` answer, phar-aware (the DST-1 lesson from candy-code).
  *
+ * Not to be confused with {@see \SugarCraft\Sql\Db\Version} — the twin name
+ * in this namespace tree is deliberate historical surface (SQL-C25/client-032):
+ * this one stamps the APP build, that one parses the SERVER's version string.
+ * A rename here is a published-surface change and sits owner-gated; until it
+ * rules, every consumer crossing the two must alias one (suggested:
+ * `use SugarCraft\Sql\Db\Version as ServerVersion`). No same-file crossing
+ * exists today — bin/candy-sql takes the app stamp, admin/src take the server
+ * VO — so the twins coexist; the note exists so the next reader aliases
+ * instead of guessing.
+ *
  * Two laws meet in this file. 14a7e605a established that the composer-mode
  * answer tracks the installed package through Composer\InstalledVersions —
  * never a number hardcoded in the bin. DST-1 established that a shipped

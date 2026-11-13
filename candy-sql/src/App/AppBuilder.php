@@ -16,6 +16,12 @@ use SugarCraft\Sql\ResultTable;
 /**
  * Fluent builder for App.
  *
+ * Convention census (SQL-C25/client-033, re-grounded against live code): every
+ * `with*()` clones-and-returns (`clone $this`, seventeen sites, zero in-place
+ * mutation), so the builder already speaks the house immutable-fluent
+ * vocabulary and neither the set*-rename nor a clone-semantics change is owed.
+ * The with*-mutates finding predates the clone legs and is retired here.
+ *
  * @method self withDb(DatabaseInterface $db)
  * @method self withFlavor(Flavor $flavor)
  * @method self withTables(array $tables)

@@ -32,7 +32,7 @@ final class AlertThresholdsTest extends TestCase
 
     public function testDefaultFactoryHasExpectedValues(): void
     {
-        $t = AlertThresholds::default();
+        $t = AlertThresholds::standard();
 
         $this->assertSame(0.6, $t->connectionWarningThreshold());
         $this->assertSame(0.8, $t->connectionCriticalThreshold());
@@ -270,7 +270,7 @@ final class AlertThresholdsTest extends TestCase
 
     public function testDefaultAndStrictFactoriesAreDistinct(): void
     {
-        $default = AlertThresholds::default();
+        $default = AlertThresholds::standard();
         $strict = AlertThresholds::strict();
 
         $this->assertNotSame($default->connectionWarningThreshold(), $strict->connectionWarningThreshold());

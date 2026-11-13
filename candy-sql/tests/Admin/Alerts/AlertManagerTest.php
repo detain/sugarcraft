@@ -53,7 +53,7 @@ final class AlertManagerTest extends TestCase
 
     public function testCheckConnectionUsageReturnsEmptyArrayWhenBelowWarning(): void
     {
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::default());
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
         $counters = $this->createConnectionCounters(
             threadsConnected: 50,
             threadsRunning: 5,
@@ -70,7 +70,7 @@ final class AlertManagerTest extends TestCase
     public function testCheckConnectionUsageFiresWarningWhenAboveWarningThreshold(): void
     {
         // Warning at 60%, so 100/151 = 66.2% should trigger warning
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::default());
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
         $counters = $this->createConnectionCounters(
             threadsConnected: 100,
             threadsRunning: 5,
@@ -90,7 +90,7 @@ final class AlertManagerTest extends TestCase
     public function testCheckConnectionUsageFiresCriticalWhenAboveCriticalThreshold(): void
     {
         // Critical at 80%, so 130/151 = 86.1% should trigger critical
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::default());
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
         $counters = $this->createConnectionCounters(
             threadsConnected: 130,
             threadsRunning: 10,
@@ -110,7 +110,7 @@ final class AlertManagerTest extends TestCase
     public function testCheckConnectionUsageFiresAbortedRateWarning(): void
     {
         // Aborted rate at 5%, so 60/1000 = 6% should trigger warning
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::default());
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
         $counters = $this->createConnectionCounters(
             threadsConnected: 50,
             threadsRunning: 5,
@@ -130,7 +130,7 @@ final class AlertManagerTest extends TestCase
     public function testCheckConnectionUsageFiresThreadRunningWarning(): void
     {
         // Thread running at 50%, so 80/151 = 53% should trigger warning
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::default());
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
         $counters = $this->createConnectionCounters(
             threadsConnected: 50,
             threadsRunning: 80, // High thread running relative to max
@@ -150,7 +150,7 @@ final class AlertManagerTest extends TestCase
     public function testCheckConnectionUsageWithWatchedMetricsFilter(): void
     {
         $manager = AlertManager::new()->withThresholds(
-            AlertThresholds::default()->withWatchedMetrics(['aborted_rate'])
+            AlertThresholds::standard()->withWatchedMetrics(['aborted_rate'])
         );
 
         // Both connection usage and aborted rate would fire, but we only watch aborted_rate
@@ -173,7 +173,7 @@ final class AlertManagerTest extends TestCase
     {
         // When ratio is between warning (60%) and critical (80%),
         // only warning should fire, not critical
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::default());
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
         $counters = $this->createConnectionCounters(
             threadsConnected: 100, // 66.2% - above warning, below critical
             threadsRunning: 5,
@@ -190,7 +190,7 @@ final class AlertManagerTest extends TestCase
 
     public function testCheckAllMetricsWithSlowQueryThreshold(): void
     {
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::default());
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
         $statusVars = [];
         $serverVars = ['long_query_time' => '10.0'];
 
@@ -204,7 +204,7 @@ final class AlertManagerTest extends TestCase
 
     public function testCheckAllMetricsIgnoresZeroSlowQueryTime(): void
     {
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::default());
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
         $statusVars = [];
         $serverVars = ['long_query_time' => '0.0'];
 
@@ -215,7 +215,7 @@ final class AlertManagerTest extends TestCase
 
     public function testCheckAllMetricsWithConnectionErrors(): void
     {
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::default());
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
         $statusVars = ['Connection_errors_total' => '150'];
         $serverVars = ['max_connections' => '151'];
 
@@ -228,7 +228,7 @@ final class AlertManagerTest extends TestCase
 
     public function testCheckAllMetricsWithMaxConnectionsUsage(): void
     {
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::default());
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
         $statusVars = ['Threads_connected' => '120'];
         $serverVars = ['max_connections' => '151'];
 
@@ -254,7 +254,7 @@ final class AlertManagerTest extends TestCase
         );
 
         $manager = AlertManager::new()
-            ->withThresholds(AlertThresholds::default())
+            ->withThresholds(AlertThresholds::standard())
             ->withNotifier($notifier);
 
         $result = $manager->checkAndDispatch($counters);
@@ -267,7 +267,7 @@ final class AlertManagerTest extends TestCase
 
     public function testCheckConnectionUsageEdgeCaseAtExactlyThreshold(): void
     {
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::default());
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
         // Exactly at critical threshold: 120.8/151 = 0.8
         $counters = $this->createConnectionCounters(
             threadsConnected: 121,
@@ -285,7 +285,7 @@ final class AlertManagerTest extends TestCase
 
     public function testCheckConnectionUsageZeroMaxConnections(): void
     {
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::default());
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
         $counters = $this->createConnectionCounters(
             threadsConnected: 50,
             threadsRunning: 5,
@@ -302,7 +302,7 @@ final class AlertManagerTest extends TestCase
 
     public function testCheckAllMetricsWithEmptyVariables(): void
     {
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::default());
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
 
         $alerts = $manager->checkAllMetrics([], []);
 
@@ -312,7 +312,7 @@ final class AlertManagerTest extends TestCase
 
     public function testCheckAllMetricsIgnoresConnectionErrorsWhenBelowThreshold(): void
     {
-        $manager = AlertManager::new()->withThresholds(AlertThresholds::default());
+        $manager = AlertManager::new()->withThresholds(AlertThresholds::standard());
         $statusVars = ['Connection_errors_total' => '50']; // Below 100 threshold
         $serverVars = ['max_connections' => '151'];
 
@@ -324,7 +324,7 @@ final class AlertManagerTest extends TestCase
     public function testCheckAllMetricsFilteredByWatchedMetrics(): void
     {
         $manager = AlertManager::new()->withThresholds(
-            AlertThresholds::default()->withWatchedMetrics(['slow_query'])
+            AlertThresholds::standard()->withWatchedMetrics(['slow_query'])
         );
         $statusVars = ['Connection_errors_total' => '200']; // Would trigger if watched
         $serverVars = ['long_query_time' => '10.0']; // Would trigger if watched

@@ -347,7 +347,7 @@ final class DashboardPage extends PageBase
     private function checkAlerts(array $statusVars, array $serverVars): void
     {
         $manager = AlertManager::new()
-            ->withThresholds(AlertThresholds::default())
+            ->withThresholds(AlertThresholds::standard())
             ->withNotifier($this->alertNotifier);
 
         $alerts = $manager->checkAllMetrics($statusVars, $serverVars);

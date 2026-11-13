@@ -367,6 +367,36 @@ final class AccessorDeprecationTest extends TestCase
         $this->assertSame([], $violations, 'a public get-prefix accessor escaped the sweep');
     }
 
+    public function testEveryDeprecationInTheSourceCarriesTheRemovalMarker(): void
+    {
+        // SQL-C25/client-031: the class-level and forwarder @deprecated tags in
+        // src/Database.php (plus one in ProcesslistResult) shipped without the
+        // roster-mandated machine-readable marker — the only outliers, and the
+        // reason the census could not extend to them. Now the rule is universal
+        // and grep-enforced: a new @deprecated without its removal horizon goes
+        // red here instead of drifting silently.
+        $unmarked = [];
+        $iter = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(dirname(__DIR__) . '/src'));
+        foreach ($iter as $file) {
+            if (!$file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+            $src = (string) file_get_contents($file->getPathname());
+            // Whole docblocks, not a window from the tag: the tag paragraph is
+            // free to run across lines carrying `{@see ...}` (whose slash must
+            // not truncate the harvest).
+            preg_match_all('/\/\*\*.*?\*\//s', $src, $blocks, PREG_OFFSET_CAPTURE);
+            foreach ($blocks[0] as [$text, $offset]) {
+                if (!str_contains($text, '@deprecated') || str_contains($text, self::MARKER)) {
+                    continue;
+                }
+                $unmarked[] = $file->getPathname() . ':' . (substr_count(substr($src, 0, $offset), "\n") + 1);
+            }
+        }
+
+        $this->assertSame([], $unmarked, 'an @deprecated block lacks the ' . self::MARKER . ' tag');
+    }
+
     /** @return list<string> ShortClass::legacyName for every marker'd forwarder in src/ */
     private static function srcCensus(): array
     {

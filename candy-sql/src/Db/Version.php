@@ -7,6 +7,12 @@ namespace SugarCraft\Sql\Db;
 /**
  * Immutable value object representing a database server version.
  *
+ * Not to be confused with {@see \SugarCraft\Sql\Version} — the twin name in
+ * this namespace tree is deliberate historical surface (SQL-C25/client-032):
+ * this one parses the SERVER's version string, that one stamps the APP build.
+ * A rename of either sits owner-gated; until it rules, consumers crossing both
+ * must alias one of them.
+ *
  * Parses version strings from MySQL, MariaDB, PostgreSQL, and SQLite,
  * handling the MariaDB "5.5.5-" pseudo-version prefix used for compatibility.
  *

@@ -15,7 +15,7 @@ use SugarCraft\Sql\Admin\Connections\ConnectionCounters;
  *
  * Usage:
  *   $manager = AlertManager::new()
- *       ->withThresholds(AlertThresholds::default())
+ *       ->withThresholds(AlertThresholds::standard())
  *       ->withNotifier(AlertNotifier::withDefaults());
  *
  *   $alerts = $manager->checkConnectionUsage($counters);

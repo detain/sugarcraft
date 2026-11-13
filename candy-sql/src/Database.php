@@ -17,6 +17,7 @@ use SugarCraft\Sql\Db\Export\SqlExporter;
  *
  * @deprecated Use {@see SqliteDatabase} (or ConnectionFactory) directly;
  *             every method here forwards to a SqliteDatabase delegate.
+ *             REMOVED-IN: 2.0.0.
  */
 final class Database implements DatabaseInterface
 {
@@ -25,7 +26,7 @@ final class Database implements DatabaseInterface
     private ?SqlExporter $sqlExporter = null;
 
     /**
-     * @deprecated Use SqliteDatabase::open() instead
+     * @deprecated Use SqliteDatabase::open() instead. REMOVED-IN: 2.0.0.
      */
     public static function open(string $path): self
     {
@@ -55,7 +56,7 @@ final class Database implements DatabaseInterface
     }
 
     /**
-     * @deprecated Use csvExporter() instead
+     * @deprecated Use csvExporter() instead. REMOVED-IN: 2.0.0.
      */
     public function csvExporter(): CsvExporter
     {
@@ -64,7 +65,7 @@ final class Database implements DatabaseInterface
     }
 
     /**
-     * @deprecated Use sqlExporter() instead
+     * @deprecated Use sqlExporter() instead. REMOVED-IN: 2.0.0.
      */
     public function sqlExporter(): SqlExporter
     {
@@ -137,7 +138,7 @@ final class Database implements DatabaseInterface
     }
 
     /**
-     * @deprecated Use CsvExporter via csvExporter() instead
+     * @deprecated Use CsvExporter via csvExporter() instead. REMOVED-IN: 2.0.0.
      */
     public function importCsv(string $path, string $table): void
     {
@@ -145,7 +146,7 @@ final class Database implements DatabaseInterface
     }
 
     /**
-     * @deprecated Use CsvExporter via csvExporter() instead
+     * @deprecated Use CsvExporter via csvExporter() instead. REMOVED-IN: 2.0.0.
      */
     public function exportCsv(string $path, string $table): void
     {
@@ -153,7 +154,7 @@ final class Database implements DatabaseInterface
     }
 
     /**
-     * @deprecated Use SqlExporter via sqlExporter() instead
+     * @deprecated Use SqlExporter via sqlExporter() instead. REMOVED-IN: 2.0.0.
      */
     public function exportSql(string $path): void
     {

@@ -211,7 +211,7 @@ these tables.
 | `Admin\Resilience\StatementTimeoutException` | Thrown when a statement exceeds its wall-clock timeout and is cancelled via `KILL CONNECTION_ID()`. |
 | `Admin\Alerts\Severity` | Enum: `Info`, `Warning`, `Critical`. Maps to `ToastType` via `toToastType()` — `Info→Info`, `Warning→Warning`, `Critical→Error`. |
 | `Admin\Alerts\Alert` | Immutable alert value object: severity, metric, message, value, threshold, firedAt, metricKind. Factory helpers: `::warning()`, `::critical()`, `::info()`. `toToastMessage()` formats based on `MetricKind` — `Ratio` multiplies by 100 (percentage), `Seconds` appends "s", `Count` renders as integer. |
-| `Admin\Alerts\AlertThresholds` | Immutable threshold configuration with fluent `with*()` builders. Presets: `::new()` (bare), `::default()` (60%/80%), `::strict()` (50%/70%). Watches connection usage, aborted rate, slow query time, thread running, connection errors. |
+| `Admin\Alerts\AlertThresholds` | Immutable threshold configuration with fluent `with*()` builders. Presets: `::new()` (bare), `::standard()` (60%/80%), `::strict()` (50%/70%). Watches connection usage, aborted rate, slow query time, thread running, connection errors. |
 | `Admin\Alerts\AlertNotifier` | Toast notification dispatcher. Mute-safe by default (no factory = all calls no-op). `::withDefaults()` bootstraps a standard factory. `notify(Alert)`, `notifyWarning()`, `notifyCritical()`, `notifyError()`, `notifyInfo()`, `view()` composites toast over a background viewport. |
 | `Admin\Alerts\AlertManager` | Stateless alert checker. `checkConnectionUsage(ConnectionCounters)` and `checkAllMetrics(statusVariables, serverVariables)` return `array<string, Alert>`. Each alert carries a `MetricKind` (`Ratio`, `Seconds`, `Count`) that controls how its value is formatted in toast messages. `checkAndDispatch()` combines check + notify in one call. No state held between calls. |
 | `Admin\PerfSchema\PerfSchemaPage` | Performance Schema configuration page with 7 tabs (Easy Setup, Instruments, Consumers, Actors, Objects, Threads, Options). Version-gated loading: `setup_actors` table skipped on <5.6; `setup_objects.ENABLED` column omitted on <5.6.3; `setup_timers` (mutable) used on <8.0 vs `performance_timers` (read-only) on >=8.0. Threads tab shows `INSTRUMENTED` column from `performance_schema.threads`. `[c]` stages a commit — the page lists the prepared statements and waits for `[y]`; any other key cancels (destructive-confirmation parity with the kill and SET GLOBAL prompts). `[r]` reverts. |
@@ -545,7 +545,7 @@ use SugarCraft\Sql\Admin\Alerts\AlertNotifier;
 // un-advertised call wires a no-op notifier — pass muted: false (or see
 // Toast degradation below) for toasts that actually surface.
 $manager = AlertManager::new()
-    ->withThresholds(AlertThresholds::default())
+    ->withThresholds(AlertThresholds::standard())
     ->withNotifier(AlertNotifier::withDefaults(muted: false));
 
 // Or combine check + dispatch in one call. The manager owns the notifier
@@ -577,7 +577,7 @@ foreach ($alerts as $alert) {
 ### Threshold presets
 
 - **`AlertThresholds::new()`** — bare instance, all defaults
-- **`AlertThresholds::default()`** — 60% warning / 80% critical / 5% aborted rate / 5s slow query / 50% thread running
+- **`AlertThresholds::standard()`** — 60% warning / 80% critical / 5% aborted rate / 5s slow query / 50% thread running
 - **`AlertThresholds::strict()`** — 50% warning / 70% critical / 1% aborted rate / 1s slow query / 30% thread running (production-sensitive)
 
 ### Watched metrics
@@ -601,7 +601,7 @@ foreach ($alerts as $alert) {
 // handleAdminTick). The page seeds the manager with its own notifier and
 // folds the returned alerts into page state.
 $manager = AlertManager::new()
-    ->withThresholds(AlertThresholds::default())
+    ->withThresholds(AlertThresholds::standard())
     ->withNotifier($this->alertNotifier);
 
 $alerts = $manager->checkAllMetrics($statusVars, $serverVars);

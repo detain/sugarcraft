@@ -178,7 +178,7 @@ final class ProcesslistResult
     }
 
     /**
-     * @deprecated Use the $isBackground property directly instead.
+     * @deprecated Use the $isBackground property directly instead. REMOVED-IN: 2.0.0.
      *
      * True when this is a background/system thread.
      */
