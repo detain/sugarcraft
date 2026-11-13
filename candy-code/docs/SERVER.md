@@ -188,7 +188,7 @@ engine's own sweep.
 | `serve stop` | it stopped | none was running, or it did not exit |
 | `serve logs` | the log was printed | there is no `server.log` (only a detached server writes one) |
 | `serve url` | a fresh sign-in URL was printed (`--qr`: each URL also as a terminal QR code) | no server runs, or it refused the token |
-| `serve token` | the token was printed (`--rotate`: replaced first, and a running server reloads it) | — (refused at `2` while `CANDY_CODE_SERVER_TOKEN` is set) |
+| `serve token` | the token was printed and a server runs (`--rotate`: replaced first, a running server reloads it; rotating needs no server and exits `0`) | no server runs: the stored token is still printed on stdout, with a stderr warning (`no server is running (stored token shown)`) — refused at `2` while `CANDY_CODE_SERVER_TOKEN` is set |
 
 Under `--output-format json` each prints one `{"result": …}` document — the
 "no server" answers included, as results rather than errors; `logs -f` streams

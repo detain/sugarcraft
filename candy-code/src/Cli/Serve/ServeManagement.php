@@ -318,6 +318,15 @@ trait ServeManagement
             });
         }
 
+        // A plain print with no live server is not a "up" answer: the stored
+        // token is still printed, but the exit code matches status/stop/url so a
+        // readiness probe (`serve token >/dev/null && ...`) is not falsified.
+        // --rotate is a legitimate offline operation and stays exit 0.
+        $down = !$rotate && ($running === null || !$running->isLive());
+        if ($down) {
+            self::stderr(Lang::t('cli.serve.token.no_server'));
+        }
+
         if ($args->outputFormat === NonInteractive::FORMAT_JSON) {
             echo NonInteractive::encodeDocument(['result' => \array_filter([
                 'token' => $token,
@@ -329,7 +338,7 @@ trait ServeManagement
             echo $token . "\n";
         }
 
-        return NonInteractive::EXIT_OK;
+        return $down ? NonInteractive::EXIT_FAILURE : NonInteractive::EXIT_OK;
     }
 
     /**

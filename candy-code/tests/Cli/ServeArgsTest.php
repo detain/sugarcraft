@@ -549,6 +549,36 @@ final class ServeArgsTest extends TestCase
         self::assertSame('/elsewhere', Serve::config(self::parse(['serve']), ['CANDY_CODE_SERVER_DIR' => '/elsewhere'], [])->stateDir);
     }
 
+    public function testTokenWithNoServerRunningPrintsTheStoredTokenButExitsNonZero(): void
+    {
+        $dir = \sys_get_temp_dir() . '/cc-serve-token-' . \bin2hex(\random_bytes(4));
+        $saved = [\getenv('CANDY_CODE_SERVER_DIR'), \getenv('CANDY_CODE_SERVER_TOKEN')];
+        \putenv('CANDY_CODE_SERVER_DIR=' . $dir);
+        \putenv('CANDY_CODE_SERVER_TOKEN');
+        $umask = \umask();
+        try {
+            \ob_start();
+            $code = Serve::run(self::parse(['serve', 'token']));
+            $out = \trim((string) \ob_get_clean());
+            self::assertSame(NonInteractive::EXIT_FAILURE, $code, 'no server: a readiness probe must see a failure');
+            self::assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $out, 'the stored token is still printed');
+
+            \ob_start();
+            $rotated = Serve::run(self::parse(['serve', 'token', '--rotate']));
+            \ob_end_clean();
+            self::assertSame(NonInteractive::EXIT_OK, $rotated, 'rotating offline is a legitimate success');
+        } finally {
+            \umask($umask);
+            foreach (['CANDY_CODE_SERVER_DIR', 'CANDY_CODE_SERVER_TOKEN'] as $i => $name) {
+                $saved[$i] === false ? \putenv($name) : \putenv($name . '=' . $saved[$i]);
+            }
+            foreach (\glob($dir . '/{,.}*', GLOB_BRACE) ?: [] as $f) {
+                \is_file($f) && \unlink($f);
+            }
+            @\rmdir($dir);
+        }
+    }
+
     public function testUrlAcceptsQrAndRefusesItOnEveryOtherSurface(): void
     {
         self::assertSame(['--qr' => true], self::parse(['serve', 'url', '--qr'])->subcommandFlags);
