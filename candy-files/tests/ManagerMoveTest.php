@@ -128,4 +128,43 @@ final class ManagerMoveTest extends TestCase
         $this->assertFileExists($dstFile);
         $this->assertSame('test content', file_get_contents($dstFile));
     }
+    /**
+     * CF-06 (closes audit 006): a move that replaces an existing destination
+     * must announce the victim count — undo reverses the mover but cannot
+     * resurrect the clobbered file.
+     */
+    public function testMoveAnnouncesOverwrittenVictim(): void
+    {
+        $src = $this->srcDir . '/file.txt';
+        $victim = $this->dstDir . '/file.txt';
+        file_put_contents($src, 'payload');
+        file_put_contents($victim, 'old bytes');
+
+        $m = Manager::start($this->srcDir, $this->dstDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));   // onto file.txt
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'm'));
+        $this->assertSame(ConfirmState::MoveSelected, $armed->confirm);
+        [$done] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+
+        $this->assertSame('moved 1 entries (1 overwrote)', $done->status);
+        $this->assertFileDoesNotExist($src);
+        $this->assertFileExists($victim);
+        $this->assertSame('payload', file_get_contents($victim), 'the replacement really happened');
+    }
+
+    /**
+     * A plain move into fresh ground must NOT claim an overwrite.
+     */
+    public function testMoveIntoEmptyDestinationStaysPlain(): void
+    {
+        $src = $this->srcDir . '/file.txt';
+        file_put_contents($src, 'payload');
+
+        $m = Manager::start($this->srcDir, $this->dstDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'm'));
+        [$done] = $armed->update(new KeyMsg(KeyType::Char, 'y'));
+
+        $this->assertSame('moved 1 entries', $done->status);
+    }
 }

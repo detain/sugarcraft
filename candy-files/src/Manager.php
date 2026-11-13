@@ -1075,6 +1075,7 @@ final class Manager implements Model
             return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'));
         }
         $errors = 0;
+        $overwrote = 0;
         $movedItems = [];
         foreach ($names as $name) {
             if ($name === null || $name === '..' || $name === '') {
@@ -1082,9 +1083,19 @@ final class Manager implements Model
             }
             $src = Pane::join($pane->cwd, $name);
             $target = Pane::join($dst, $name);
+            // CF-06: probe the destination BEFORE the leg runs — the copy
+            // engine's schedule-time $existedSrcs pattern. rename() silently
+            // replaces an existing victim on POSIX, and undo can reverse the
+            // mover but cannot resurrect the clobbered file: the count is the
+            // minimum honest face. file_exists misses dangling links, hence
+            // the is_link disjunction.
+            $clobbers = file_exists($target) || is_link($target);
             if (!$this->move($src, $target)) {
                 $errors++;
                 continue; // failed leg: not moved, not undoable, not counted
+            }
+            if ($clobbers) {
+                $overwrote++;
             }
             $movedItems[$src] = $target;
         }
@@ -1094,6 +1105,7 @@ final class Manager implements Model
         $msg = match (true) {
             $errors > 0 => Lang::t('status.moved_with_errors', ['count' => count($movedItems), 'errors' => $errors]),
             $skipped > 0 => Lang::t('status.moved_skipped', ['count' => count($movedItems), 'skipped' => $skipped]),
+            $overwrote > 0 => Lang::t('status.moved_overwrote', ['count' => count($movedItems), 'overwrote' => $overwrote]),
             default => Lang::t('status.moved', ['count' => count($movedItems)]),
         };
         $newUndoStack = $this->undoStack;
@@ -1149,7 +1161,11 @@ final class Manager implements Model
                 ->withInputBuffer(null);
         }
         $renamedItems = [];
-        $renamedItems[$src] = Pane::join($pane->cwd, $newName);
+        $renamedItems[$src] = $dst;
+        // CF-06: same destination pre-probe as performMove — a rename onto an
+        // existing name silently eats that file; announce it (the victim count
+        // is one by construction here).
+        $clobbers = file_exists($dst) || is_link($dst);
         if (!$this->rename($src, $newName)) {
             return $this->withActivePane(fn(Pane $p) =>
                 Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
@@ -1159,15 +1175,25 @@ final class Manager implements Model
         $newUndoStack = $this->undoStack;
         $newUndoStack[] = UndoAction::rename($renamedItems);
         $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
-        return $this->withActivePane(fn(Pane $p) =>
-            Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
-            // Old and new names are raw filesystem bytes — a filename is
-            // attacker-writable data and this string rides straight into the
-            // rendered status line. Sanitize at the message-build choke.
-            ->withConfirm(ConfirmState::None, Lang::t('status.renamed', [
+        // Old and new names are raw filesystem bytes — a filename is
+        // attacker-writable data and these strings ride straight into the
+        // rendered status line. Sanitize at the message-build choke.
+        $msg = $clobbers
+            // Two literal calls (never a ternary inside Lang::t — the
+            // coverage guard greps for literal key spellings).
+            ? Lang::t('status.renamed_overwrote', [
+                'old'       => Entry::sanitizeName($srcName),
+                'new'       => Entry::sanitizeName($newName),
+                'overwrote' => 1,
+            ])
+            : Lang::t('status.renamed', [
                 'old' => Entry::sanitizeName($srcName),
                 'new' => Entry::sanitizeName($newName),
-            ]))
+            ]);
+
+        return $this->withActivePane(fn(Pane $p) =>
+            Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
+            ->withConfirm(ConfirmState::None, $msg)
             ->withInputBuffer(null)
             ->withUndoRedoStacks($newUndoStack, []);
     }

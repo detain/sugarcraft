@@ -370,4 +370,28 @@ final class ManagerRenameTest extends TestCase
         $this->assertSame('/', $canon('/'));
         $this->assertSame('/a', $canon('/a'));
     }
+    /**
+     * CF-06 (closes audit 006, rename leg): renaming onto an existing name
+     * silently eats that file — the status must carry the overwrite marker.
+     */
+    public function testRenameAnnouncesOverwrittenVictim(): void
+    {
+        // NameAsc sort: source.txt sorts ahead of victim.txt.
+        file_put_contents($this->tmpDir . '/source.txt', 'payload');
+        file_put_contents($this->tmpDir . '/victim.txt', 'old bytes');
+
+        $m = Manager::start($this->tmpDir, $this->tmpDir, $this->lister);
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));   // onto source.txt
+        [$armed] = $m->update(new KeyMsg(KeyType::Char, 'R'));
+        $this->assertSame(ConfirmState::RenameSelected, $armed->confirm);
+        foreach (str_split('victim.txt') as $char) {
+            [$m] = $armed->update(new KeyMsg(KeyType::Char, $char));
+            $armed = $m;
+        }
+        [$done] = $armed->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertSame('renamed source.txt to victim.txt (1 overwrote)', $done->status);
+        $this->assertFileDoesNotExist($this->tmpDir . '/source.txt');
+        $this->assertSame('payload', file_get_contents($this->tmpDir . '/victim.txt'));
+    }
 }
