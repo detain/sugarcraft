@@ -41,10 +41,23 @@ final class StatementTimeout
      *                                  lets tests exercise graceful degradation
      *                                  on hosts where pcntl is loaded. True
      *                                  cannot force-enable on a pcntl-less host.
+     * @param \Closure(int, \Closure(int):void): \Closure|null $alarm
+     *                                  Test-only alarm transport (SQL-P12/
+     *                                  adminpages-027): given $seconds and the
+     *                                  production SIGALRM handler, arm and
+     *                                  return the disarm closure. When provided
+     *                                  (and the alarm layer is active) run()
+     *                                  routes arming through it instead of the
+     *                                  pcntl_* calls — the REAL handler, throw
+     *                                  and didTimeout bookkeeping are exercised
+     *                                  with zero wall-clock sleeping. A test
+     *                                  that asserted its own mock's throw was
+     *                                  the vacuous shape this replaces.
      */
     public function __construct(
         private readonly int $timeoutSeconds = self::DEFAULT_SECONDS,
         ?bool $pcntlAvailable = null,
+        private readonly ?\Closure $alarm = null,
     ) {
         $this->pcntlAvailable = ($pcntlAvailable ?? true)
             && function_exists('pcntl_alarm')
@@ -91,26 +104,44 @@ final class StatementTimeout
             }
         };
 
+        $disarm = $this->arm($handler);
+
+        try {
+            return $work();
+        } catch (StatementTimeoutException $e) {
+            $this->timeoutOccurred = true;
+            throw $e;
+        } finally {
+            $disarm();
+        }
+    }
+
+    /**
+     * Install the SIGALRM handler for one bounded execution and return the
+     * closure that undoes it. Production wires pcntl_alarm()/pcntl_signal();
+     * the SQL-P12 test seam swaps the transport while the handed-in handler —
+     * the production one — stays the thing that throws, so the timeout leg
+     * exercises the real wiring bookkeeping (arm, mid-work fire, catch,
+     * didTimeout) without a sleeping process.
+     *
+     * @param callable(int):void $handler
+     */
+    private function arm(callable $handler): callable
+    {
+        if ($this->alarm !== null) {
+            return ($this->alarm)($this->timeoutSeconds, $handler);
+        }
+
         $previousHandler = \pcntl_signal_get_handler(SIGALRM);
         \pcntl_signal(SIGALRM, $handler);
         \pcntl_alarm($this->timeoutSeconds);
 
-        try {
-            $result = $work();
+        return static function () use ($previousHandler): void {
             \pcntl_alarm(0);
-            return $result;
-        } catch (StatementTimeoutException $e) {
-            \pcntl_alarm(0);
-            $this->timeoutOccurred = true;
-            throw $e;
-        } catch (\Throwable $e) {
-            \pcntl_alarm(0);
-            throw $e;
-        } finally {
             if ($previousHandler !== SIG_DFL && $previousHandler !== SIG_IGN) {
                 \pcntl_signal(SIGALRM, $previousHandler);
             }
-        }
+        };
     }
 
     /**

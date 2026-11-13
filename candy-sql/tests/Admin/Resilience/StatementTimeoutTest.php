@@ -10,9 +10,47 @@ use SugarCraft\Sql\Admin\Resilience\StatementTimeoutException;
 
 /**
  * Tests for StatementTimeout.
+ *
+ * SQL-P12 (adminpages-014/-027): the timeout legs used to be hard `usleep`
+ * wall-clock shows (~3.1 s of sleeping per file, load-sensitive) and the
+ * didTimeout leg asserted its own mock's throw — it passed even with the
+ * production alarm wiring broken. The legs now ride the alarm transport
+ * seam (constructor $alarm): the REAL SIGALRM handler is armed by the REAL
+ * run() bookkeeping and fired by the test double instead of the kernel, so
+ * every assertion below can fail against production logic. Exactly one
+ * real-signal integration leg remains ({@see
+ * testTimeoutExceptionIsThrownOnTimeout}) to prove the pcntl transport the
+ * seam stands in for.
  */
 final class StatementTimeoutTest extends TestCase
 {
+    /**
+     * Alarm transport double: captures the production handler so the test
+     * fires it at the exact moment a real SIGALRM would have, and counts
+     * disarms so the arm/disarm bookkeeping is observable.
+     *
+     * @param callable(int):void|null $capturedHandler
+     * @return array{0: callable(int, callable(int):void): callable, 1: \stdClass}
+     */
+    private function seam(?callable &$capturedHandler = null): array
+    {
+        $state = new \stdClass();
+        $state->armedFor = null;
+        $state->disarms = 0;
+        $capturedHandler = null;
+
+        $alarm = static function (int $seconds, callable $handler) use (&$capturedHandler, $state): callable {
+            $state->armedFor = $seconds;
+            $capturedHandler = $handler;
+
+            return static function () use ($state): void {
+                $state->disarms++;
+            };
+        };
+
+        return [$alarm, $state];
+    }
+
     public function testExecuteWithoutPcntlDegradesGracefully(): void
     {
         // Without pcntl, execute should just run normally (no alarm, no
@@ -37,12 +75,21 @@ final class StatementTimeoutTest extends TestCase
         $mockStmt = $this->createMock(\PDOStatement::class);
         $mockStmt->method('execute')->willReturn(true);
 
-        $timeout = new StatementTimeout(timeoutSeconds: 30);
+        [$alarm, $state] = $this->seam($handler);
+        $timeout = new StatementTimeout(timeoutSeconds: 30, alarm: $alarm);
         $timeout->execute($mockStmt, []);
 
         $this->assertFalse($timeout->didTimeout());
+        $this->assertSame(30, $state->armedFor, 'the budget reaches the transport as seconds');
+        $this->assertSame(1, $state->disarms, 'a settled run disarms exactly once');
+        $this->assertNotNull($handler, 'non-vacuity: run() handed the production handler to the transport');
     }
 
+    /**
+     * The ONE real-signal integration leg: pcntl_alarm() actually expires
+     * mid-work and the kernel-delivered SIGALRM runs the production handler.
+     * Everything below fakes only the delivery, never the wiring.
+     */
     public function testTimeoutExceptionIsThrownOnTimeout(): void
     {
         if (!function_exists('pcntl_alarm')) {
@@ -80,27 +127,80 @@ final class StatementTimeoutTest extends TestCase
         $this->assertTrue($result);
     }
 
-    public function testDidTimeoutReturnsTrueAfterTimeout(): void
+    /**
+     * adminpages-027 replacement: didTimeout must be produced by the real
+     * alarm bookkeeping — production handler throws inside work(), run()
+     * catches, stamps, rethrows — not by a mock that threw its own fake.
+     */
+    public function testDidTimeoutReflectsProductionAlarmFiring(): void
+    {
+        if (!defined('SIGALRM')) {
+            $this->markTestSkipped('pcntl signal constants are not available');
+        }
+
+        [$alarm, $state] = $this->seam($handler);
+        $timeout = new StatementTimeout(timeoutSeconds: 1, alarm: $alarm);
+
+        try {
+            $timeout->run(static function () use (&$handler): bool {
+                // Stand-in for the kernel delivering SIGALRM mid-work: the
+                // handler here IS the closure StatementTimeout::run built.
+                $handler(SIGALRM);
+
+                return true;
+            });
+            $this->fail('the production handler must cut the work');
+        } catch (StatementTimeoutException $e) {
+            $this->assertStringContainsString('timed out after 1 s', $e->getMessage(), 'the named error comes from production string-building');
+        }
+
+        $this->assertTrue($timeout->didTimeout());
+        $this->assertSame(1, $state->disarms, 'the cut run still disarms');
+    }
+
+    public function testDidTimeoutFlagResetsPerRun(): void
+    {
+        if (!defined('SIGALRM')) {
+            $this->markTestSkipped('pcntl signal constants are not available');
+        }
+
+        [$alarm, ] = $this->seam($handler);
+        $timeout = new StatementTimeout(timeoutSeconds: 1, alarm: $alarm);
+
+        try {
+            $timeout->run(static function () use (&$handler): void {
+                $handler(SIGALRM);
+            });
+        } catch (StatementTimeoutException) {
+            // Expected
+        }
+        $this->assertTrue($timeout->didTimeout());
+
+        // A subsequent bounded work must not inherit the previous verdict.
+        $timeout->run(static fn (): bool => true);
+        $this->assertFalse($timeout->didTimeout(), 'didTimeout describes the LAST run');
+    }
+
+    public function testSeamDoesNotSwallowForeignErrors(): void
     {
         if (!function_exists('pcntl_alarm')) {
             $this->markTestSkipped('pcntl_alarm is not available');
         }
 
-        $mockStmt = $this->createMock(\PDOStatement::class);
-        $mockStmt->method('execute')->willReturnCallback(function (): void {
-            usleep(100000); // 100ms - this won't exceed our short timeout
-            throw new StatementTimeoutException('Statement execution timed out');
-        });
-
-        $timeout = new StatementTimeout(timeoutSeconds: 1);
+        [$alarm, $state] = $this->seam($handler);
+        $timeout = new StatementTimeout(timeoutSeconds: 1, alarm: $alarm);
 
         try {
-            $timeout->execute($mockStmt, []);
-        } catch (StatementTimeoutException) {
-            // Expected
+            $timeout->run(static function (): void {
+                throw new \RuntimeException('foreign');
+            });
+            $this->fail('foreign throwables must propagate');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('foreign', $e->getMessage());
         }
 
-        $this->assertTrue($timeout->didTimeout());
+        $this->assertFalse($timeout->didTimeout(), 'a foreign error is not a timeout');
+        $this->assertSame(1, $state->disarms);
     }
 
     public function testRunReturnsTheWorkValueUnderBudget(): void
@@ -117,24 +217,26 @@ final class StatementTimeoutTest extends TestCase
 
     public function testRunCutsWorkPastTheBudgetWithANamedError(): void
     {
-        if (!function_exists('pcntl_alarm')) {
-            $this->markTestSkipped('pcntl_alarm is not available');
+        if (!defined('SIGALRM')) {
+            $this->markTestSkipped('pcntl signal constants are not available');
         }
 
-        $timeout = new StatementTimeout(timeoutSeconds: 1);
+        [$alarm, $state] = $this->seam($handler);
+        $timeout = new StatementTimeout(timeoutSeconds: 1, alarm: $alarm);
 
-        $start = microtime(true);
         try {
-            $timeout->run(static function (): bool {
-                usleep(1_500_000);
+            $timeout->run(static function () use (&$handler): bool {
+                $handler(SIGALRM); // the overdue digest leg, delivered at zero cost
+
                 return true;
             });
-            $this->fail('the wall-clock budget must fire inside ~1 s');
+            $this->fail('the wall-clock budget must fire');
         } catch (StatementTimeoutException $e) {
             $this->assertStringContainsString('timed out after 1 s', $e->getMessage());
         }
-        $this->assertLessThan(3.0, microtime(true) - $start);
+
         $this->assertTrue($timeout->didTimeout());
+        $this->assertSame(1, $state->armedFor);
     }
 
     public function testRunDegradesTransparentlyWithoutPcntl(): void
