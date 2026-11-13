@@ -12,11 +12,16 @@
 
 | File | Lines | Purpose |
 |------|-------|---------|
-| `src/Bird.php` | 71 | SugarSpring Projectile physics (gravity + flap impulse) |
-| `src/Game.php` | 263 | Game state, collision, scoring, high scores |
-| `src/Pipe.php` | 45 | Pipe pair with gap collision detection |
-| `src/Renderer.php` | 83 | ASCII framebuffer rendering |
+| `src/Bird.php` | 92 | SugarSpring Projectile physics (gravity + flap impulse) |
+| `src/Game.php` | 875 | Game state, collision, scoring, high scores |
+| `src/Pipe.php` | 57 | Pipe pair with gap collision detection |
+| `src/PipeGenerator.php` | 57 | Score-scaled gap heights + PRNG gap placement |
+| `src/Renderer.php` | 509 | ANSI + plain framebuffer rendering, width fitting |
 | `src/TickMsg.php` | 17 | 30fps tick message |
+| `src/Lang.php` | 22 | i18n wrapper over the sugar-core base (16-locale `lang/`) |
+| `src/Support/Version.php` | 142 | phar-stamp reader answering `--version` |
+
+*(Inventory re-derived `wc -l`-fresh as of 2026-11-13 — an earlier revision of this table was roughly two years stale, and drift here is expected again; re-count before trusting.)*
 
 ### Physics Model
 
@@ -214,7 +219,7 @@ pub fn jump(mut query: Query<&mut Bird>, keyboard_input: Res<ButtonInput<KeyCode
 | **Animation** | None | None | Sprite sheets |
 | **Sound** | None | None | Wing sound on flap |
 | **High scores** | No | JSON file | No |
-| **Tests** | None mentioned | 4 test files | Unknown |
+| **Tests** | None mentioned | 13 test files (as of 2026-11-13) | Unknown |
 
 ---
 
@@ -415,7 +420,7 @@ Stamped 2026-11-13 (flappy-37) against the shipped tree — do not re-implement 
 
 4. **High score persistence is unique to candy-flappy:** Neither flapioca nor Rust implementations persist scores.
 
-5. **Test coverage is deep:** the lib-reviews-1103 wave grew the suite to 190+ tests across twelve files including golden byte pins, posture sweeps and child-process preflight legs.
+5. **Test coverage is deep:** the lib-reviews-1103 wave and its EXEC follow-ups grew the suite to 190+ tests across thirteen files (ls-verified 2026-11-13) including golden byte pins, posture sweeps and child-process preflight legs.
 
 ---
 
