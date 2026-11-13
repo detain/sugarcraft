@@ -309,20 +309,35 @@ final class Toast
      * Expired alerts sitting in the queue are pruned first, on this write.
      *
      * @param list<Action>|null $actions  Clickable action buttons to render beneath the message
+     * @param float|null $ttlSeconds  Relative lifetime resolved AT THIS DOOR
+     *        into an absolute epoch ($expiresAt = microtime(true) + $ttlSeconds)
+     *        — mutually exclusive with $expiresAt (supplying both throws); the
+     *        resolved instant rides the same epoch guards as a hand-passed one,
+     *        so a non-finite $ttlSeconds is refused rather than becoming an
+     *        immortal or born-expired alert.
      * @throws \InvalidArgumentException when $expiresAt is not a finite
      *         absolute epoch — NAN/INF never expire, and a duration-shaped
      *         value below the epoch floor is a silently invisible alert
-     *         otherwise.
+     *         otherwise — or when $expiresAt and $ttlSeconds are both supplied.
      * @throws \LogicException when the toast has been dismissed — call clear() to resume
      */
-    public function alert(ToastType|string $type, string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null): self
+    public function alert(ToastType|string $type, string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null): self
     {
+        if ($expiresAt !== null && $ttlSeconds !== null) {
+            throw new \InvalidArgumentException(
+                'alert() $expiresAt and $ttlSeconds are mutually exclusive — an absolute epoch and a '
+                . 'relative lifetime name the same instant; supply exactly one'
+            );
+        }
         if ($expiresAt !== null && (!\is_finite($expiresAt) || $expiresAt < 1_000_000_000)) {
             throw new \InvalidArgumentException(
                 'alert() $expiresAt must be a finite absolute epoch timestamp (microtime(true)); '
                 . 'NAN/INF never expire, and a relative duration belongs in '
-                . "withDuration() — got {$expiresAt}"
+                . "withDuration() or \$ttlSeconds — got {$expiresAt}"
             );
+        }
+        if ($ttlSeconds !== null) {
+            $expiresAt = \microtime(true) + $ttlSeconds;
         }
         $resolvedType = $type instanceof ToastType
             ? $type
@@ -344,19 +359,31 @@ final class Toast
      *
      * @param float $progress  Value between 0.0 and 1.0 (clamped)
      * @param list<Action>|null $actions  Clickable action buttons to render beneath the progress bar
+     * @param float|null $ttlSeconds  Relative lifetime resolved at this door;
+     *        mutually exclusive with $expiresAt (see alert())
      * @throws \InvalidArgumentException when $expiresAt is not a finite absolute
      *         epoch (NAN/INF, or a duration-shaped value below the floor),
+     *         when $expiresAt and $ttlSeconds are both supplied,
      *         or $progress is non-finite (it reaches the Alert constructor)
      * @throws \LogicException when the toast has been dismissed — call clear() to resume
      */
-    public function progressToast(ToastType|string $type, string $message, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null): self
+    public function progressToast(ToastType|string $type, string $message, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null): self
     {
+        if ($expiresAt !== null && $ttlSeconds !== null) {
+            throw new \InvalidArgumentException(
+                'progressToast() $expiresAt and $ttlSeconds are mutually exclusive — an absolute epoch and a '
+                . 'relative lifetime name the same instant; supply exactly one'
+            );
+        }
         if ($expiresAt !== null && (!\is_finite($expiresAt) || $expiresAt < 1_000_000_000)) {
             throw new \InvalidArgumentException(
                 'progressToast() $expiresAt must be a finite absolute epoch timestamp (microtime(true)); '
                 . 'NAN/INF never expire, and a relative duration belongs in '
-                . "withDuration() — got {$expiresAt}"
+                . "withDuration() or \$ttlSeconds — got {$expiresAt}"
             );
+        }
+        if ($ttlSeconds !== null) {
+            $expiresAt = \microtime(true) + $ttlSeconds;
         }
         $resolvedType = $type instanceof ToastType
             ? $type
@@ -474,35 +501,47 @@ final class Toast
     }
 
     /**
-     * Convenience: show an error alert.
+     * Convenience: show an error alert. Carries the full alert() tail
+     * ($expiresAt/$actions/$id/$ttlSeconds, delegated verbatim) — a shortcut
+     * once took only the message, so extra positional arguments were silently
+     * dropped by PHP: the buttons and id a caller believed attached existed
+     * nowhere.
+     *
+     * @param list<Action>|null $actions
      */
-    public function error(string $message): self
+    public function error(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null): self
     {
-        return $this->alert(ToastType::Error, $message);
+        return $this->alert(ToastType::Error, $message, $expiresAt, $actions, $id, $ttlSeconds);
     }
 
     /**
-     * Convenience: show a warning alert.
+     * Convenience: show a warning alert (full alert() tail, see error()).
+     *
+     * @param list<Action>|null $actions
      */
-    public function warning(string $message): self
+    public function warning(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null): self
     {
-        return $this->alert(ToastType::Warning, $message);
+        return $this->alert(ToastType::Warning, $message, $expiresAt, $actions, $id, $ttlSeconds);
     }
 
     /**
-     * Convenience: show an info alert.
+     * Convenience: show an info alert (full alert() tail, see error()).
+     *
+     * @param list<Action>|null $actions
      */
-    public function info(string $message): self
+    public function info(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null): self
     {
-        return $this->alert(ToastType::Info, $message);
+        return $this->alert(ToastType::Info, $message, $expiresAt, $actions, $id, $ttlSeconds);
     }
 
     /**
-     * Convenience: show a success alert.
+     * Convenience: show a success alert (full alert() tail, see error()).
+     *
+     * @param list<Action>|null $actions
      */
-    public function success(string $message): self
+    public function success(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null): self
     {
-        return $this->alert(ToastType::Success, $message);
+        return $this->alert(ToastType::Success, $message, $expiresAt, $actions, $id, $ttlSeconds);
     }
 
     /**

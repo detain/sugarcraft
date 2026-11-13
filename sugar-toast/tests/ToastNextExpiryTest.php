@@ -82,4 +82,88 @@ final class ToastNextExpiryTest extends TestCase
         $this->assertNull(Toast::new()->secondsUntilNextExpiry());
         $this->assertNull(Toast::new()->info('x')->secondsUntilNextExpiry());
     }
+
+    // ------------------------------------------------------------------
+    // TST-TTL arms: $ttlSeconds is a relative lifetime resolved into an
+    // absolute epoch AT THE DOOR (the conversion Alert::withExpiry() already
+    // does), mutually exclusive with $expiresAt, and available on the four
+    // shortcuts, which used to take the message alone — extra arguments
+    // were silently DROPPED by PHP, buttons and id included.
+    // ------------------------------------------------------------------
+
+    public function testTtlSecondsResolvesToAbsoluteEpochWithinItsOwnBracket(): void
+    {
+        $before = \microtime(true);
+        $t = Toast::new()->alert(ToastType::Info, 'hi', ttlSeconds: 5.0);
+        $after = \microtime(true);
+
+        $expires = $t->activeAlerts()[0]->expiresAt;
+        $this->assertNotNull($expires);
+        $this->assertGreaterThanOrEqual($before + 5.0, $expires, 'ttl resolved short of a full second');
+        $this->assertLessThanOrEqual($after + 5.0, $expires, 'ttl resolved past the door instant');
+    }
+
+    public function testTtlAndAbsoluteExpiryTogetherThrowNamingBothParams(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('$expiresAt and $ttlSeconds are mutually exclusive');
+        Toast::new()->alert(ToastType::Info, 'hi', \microtime(true) + 60.0, ttlSeconds: 5.0);
+    }
+
+    public function testProgressToastCarriesTheSameTtlDoor(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('$expiresAt and $ttlSeconds are mutually exclusive');
+        Toast::new()->progressToast(ToastType::Info, 'sync', 0.5, \microtime(true) + 60.0, ttlSeconds: 5.0);
+    }
+
+    public function testTtlBeatsConfiguredDurationInheritance(): void
+    {
+        // A resolved ttl is no longer "null expiry", so the duration-inheritance
+        // arm must not overwrite the caller's explicit relative lifetime.
+        $before = \microtime(true);
+        $t = Toast::new()->withDuration(300.0)->alert(ToastType::Info, 'mine', ttlSeconds: 5.0);
+        $after = \microtime(true);
+
+        $expires = $t->activeAlerts()[0]->expiresAt;
+        $this->assertLessThanOrEqual($after + 5.0, $expires, 'duration clobbered the explicit ttl');
+        $this->assertGreaterThanOrEqual($before + 5.0, $expires);
+    }
+
+    public function testShortcutCarriesActionsIdAndTtlTogether(): void
+    {
+        $action = new \SugarCraft\Toast\Action('Retry', static function (): void {});
+        $before = \microtime(true);
+        $t = Toast::new(60)->info('Save changes?', ttlSeconds: 5.0, actions: [$action], id: 'x1');
+        $after = \microtime(true);
+
+        $alert = $t->activeAlerts()[0];
+        $this->assertSame([$action], $alert->actions, 'shortcut dropped the buttons');
+        $this->assertSame('x1', $alert->id, 'shortcut dropped the id');
+        $this->assertGreaterThanOrEqual($before + 5.0, $alert->expiresAt);
+        $this->assertLessThanOrEqual($after + 5.0, $alert->expiresAt);
+    }
+
+    public function testNonFiniteTtlIsRefusedNotImmortalised(): void
+    {
+        // The resolved instant rides the Alert epoch guard: NAN + t = NAN.
+        foreach ([\NAN, \INF] as $bad) {
+            try {
+                Toast::new()->alert(ToastType::Info, 'hi', ttlSeconds: $bad);
+                $this->fail('non-finite ttlSeconds must throw');
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('finite absolute epoch', $e->getMessage());
+            }
+        }
+    }
+
+    public function testTtlActuallyExpiresTheAlertEndToEnd(): void
+    {
+        // Scaled-down probe of the acceptance contract: ttlSeconds: 0.02 must
+        // leave the queue past its window with zero host clock math.
+        $t = Toast::new()->alert(ToastType::Info, 'blink', ttlSeconds: 0.02);
+        $this->assertTrue($t->hasActiveAlert());
+        \usleep(30_000);
+        $this->assertFalse($t->pruneExpired()->hasActiveAlert());
+    }
 }

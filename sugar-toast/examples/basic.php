@@ -33,7 +33,10 @@ $t = Toast::new(50)
     ->info('Application started')
     ->success('Connected to server')
     ->warning('Config file not found, using defaults')
-    ->error($remoteError);
+    ->error($remoteError)
+    // Relative lifetime: the door resolves ttlSeconds into an absolute
+    // expiry — no host-side clock math, and mutually exclusive with $expiresAt.
+    ->alert(ToastType::Info, 'Retrying in a moment…', ttlSeconds: 3.0);
 
 echo "=== Toast at TopLeft ===\n";
 echo $t->view($bg, 80, 20) . "\n\n";

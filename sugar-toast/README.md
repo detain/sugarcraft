@@ -321,8 +321,8 @@ extra `maxConcurrent` slot — it is an update, not an append. Each tick
 re-inherits the expiry, so a progress bar whose host stopped ticking
 eventually expires on its own instead of freezing on screen forever.
 `alert()` and `push()` accept ids too; `removeAlert(string $id)` retires a
-single alert by identity. `progressToast()` accepts the same `$expiresAt`
-override as `alert()`. The progress value (0.0–1.0) is clamped on attach
+single alert by identity. `progressToast()` accepts the same `$expiresAt` and
+`$ttlSeconds` overrides as `alert()`. The progress value (0.0–1.0) is clamped on attach
 (`withProgress()`) and again at render; the `Alert` constructor itself only
 refuses non-finite and stores the value as given. `NAN`/`INF` are refused with
 an `InvalidArgumentException` rather than rendering a lying bar.
@@ -475,8 +475,8 @@ already over the new cap survive until the next push evicts them.
 | `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited; `< 1` throws `InvalidArgumentException`) |
 | `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
 | `->withHistoryLimit(?int $n)` | Cap history log, oldest evicted first (default 100; `null` = unbounded; `0` is accepted as a no-history sentinel — negatives alone throw, unlike `withMaxConcurrent`, which refuses anything below 1) |
-| `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert (string type = case-insensitive; `null` expiry inherits `withDuration()`; `id` updates a live alert in place; `$expiresAt` is an absolute epoch — duration-shaped and non-finite (NAN/INF) values throw, durations belong in `withDuration()`) |
-| `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null)` | Add alert with progress bar (0.0–1.0 — out-of-range clamps on attach, NAN/INF throw); same `id` = same box; wrong-slot `$expiresAt` throws |
+| `->alert(ToastType\|string, string, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Add alert (string type = case-insensitive; `null` expiry inherits `withDuration()`; `id` updates a live alert in place; `$expiresAt` is an absolute epoch — duration-shaped and non-finite (NAN/INF) values throw; `$ttlSeconds` is the relative lifetime resolved at this door, mutually exclusive with `$expiresAt`) |
+| `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Add alert with progress bar (0.0–1.0 — out-of-range clamps on attach, NAN/INF throw); same `id` = same box; wrong-slot `$expiresAt` throws; `$ttlSeconds` as in `alert()` |
 | `->push(Alert $alert): self` | Enqueue a pre-built `Alert` (styled/actioned) |
 | `->cancelAlert(int $index): self` | Make a queued alert persistent (never auto-dismisses) |
 | `->removeAlert(string $id): self` | Retire the queued alert with this id, unrecorded (companion of id updates) |
@@ -484,10 +484,10 @@ already over the new cap survive until the next push evicts them.
 | `->extendAll(float $additionalSeconds): self` | Re-arm every expiring alert's timer to N seconds from NOW |
 | `->allowEscToClose(): bool` | Read the Escape-dismiss preference flag (host consumes it; the renderer handles no input) |
 | `->accessibleText(): bool` | Read the accessible-text preference flag |
-| `->error(string $message): self` | Convenience queue for `ToastType::Error` (inherits duration/expiry rules of `alert()`) |
-| `->warning(string $message): self` | Convenience queue for `ToastType::Warning` |
-| `->info(string $message): self` | Convenience queue for `ToastType::Info` |
-| `->success(string $message): self` | Convenience queue for `ToastType::Success` |
+| `->error(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Convenience queue for `ToastType::Error` — full `alert()` tail delegated verbatim (extra args are honoured, never silently dropped; inherits duration/expiry rules of `alert()`) |
+| `->warning(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Convenience queue for `ToastType::Warning` (full `alert()` tail) |
+| `->info(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Convenience queue for `ToastType::Info` (full `alert()` tail) |
+| `->success(string $message, ?float $expiresAt = null, ?array $actions = null, ?string $id = null, ?float $ttlSeconds = null)` | Convenience queue for `ToastType::Success` (full `alert()` tail) |
 | `->hasActiveAlert(): bool` | True if non-expired alerts queued |
 | `->nextExpiry(): ?float` | Soonest expiry instant (epoch seconds, wall clock — an NTP step shifts it) of an auto-dismissing alert, or `null` |
 | `->secondsUntilNextExpiry(): ?float` | Delay until the next expiry, clamped `>= 0.0`, or `null` — schedule one prune tick |
