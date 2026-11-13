@@ -82,6 +82,8 @@ $configPath = null;
 // btop's --themes-dir (S-O07): a custom theme directory ranked above the user
 // and bundled ones for this run — session-only search state, nothing to store.
 $themesDir = null;
+// btop's UTF-8 locale gate takes --utf-force as its escape hatch (S-O04).
+$utfForce = false;
 // btop's launch overrides (-p/-t/-u): session-only config edits that feed
 // the existing keys without persisting (S-O06). null = flag not given.
 $presetIndex = null;
@@ -130,7 +132,7 @@ for ($i = 0; $i < count($args); $i++) {
             $pairs,
         ));
         fwrite(STDOUT, Lang::t('cli.help.title') . "\n\n"
-            . Lang::t('cli.help.usage') . "\n  candy-top [--fake] [--config <path>] [-p N] [-t theme] [-u ms] [--themes-dir <path>] [--version]\n  candy-top self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]\n\n"
+            . Lang::t('cli.help.usage') . "\n  candy-top [--fake] [--config <path>] [-p N] [-t theme] [-u ms] [--themes-dir <path>] [--utf-force] [--version]\n  candy-top self-update [--check] [--rollback] [--allow-unsigned] [--channel=stable|latest]\n\n"
             . Lang::t('cli.help.options') . "\n" . $rows([
                 '--fake' => Lang::t('cli.help.opt.fake'),
                 '--config <path>' => Lang::t('cli.help.opt.config'),
@@ -138,6 +140,7 @@ for ($i = 0; $i < count($args); $i++) {
                 '-t, --theme <name>' => Lang::t('cli.help.opt.theme'),
                 '-u, --update <ms>' => Lang::t('cli.help.opt.update'),
                 '--themes-dir <path>' => Lang::t('cli.help.opt.themes_dir'),
+                '--utf-force' => Lang::t('cli.help.opt.utf_force'),
                 '--version' => Lang::t('cli.help.opt.version'),
                 '-h, --help' => Lang::t('cli.help.opt.help'),
                 '--check' => Lang::t('cli.help.opt.check'),
@@ -150,6 +153,8 @@ for ($i = 0; $i < count($args); $i++) {
     }
     if ($arg === '--fake') {
         $fake = true;
+    } elseif ($arg === '--utf-force') {
+        $utfForce = true;
     } elseif ($arg === '--config' || str_starts_with($arg, '--config=')) {
         $value = $arg === '--config' ? ($args[++$i] ?? null) : substr($arg, 9);
         // A following flag is not a path: `--config --fake` is a missing value.
@@ -213,6 +218,20 @@ for ($i = 0; $i < count($args); $i++) {
         $report(Lang::t('cli.unknown_argument', ['argument' => $arg]));
         exit(2);
     }
+}
+
+// btop.cpp checks the locale's codeset at startup and refuses to render under
+// a non-UTF-8 one — the box and braille glyphs become a garbage-byte lottery.
+// The check answers before the tty gate, like --help's, so it pins from a
+// plain child. A codeset libc cannot report ('' — musl without locale support,
+// some Windows builds) is not a violation: gating on absent data would refuse
+// more users than it protects. --utf-force is the hatch for terminals that
+// misreport their encoding.
+setlocale(LC_CTYPE, '');
+$codeset = defined('CODESET') && function_exists('nl_langinfo') ? strtoupper((string) nl_langinfo(CODESET)) : '';
+if (!$utfForce && $codeset !== '' && !str_contains($codeset, 'UTF-8') && $codeset !== 'UTF8') {
+    $report(Lang::t('cli.not_utf8', ['codeset' => $codeset, 'flag' => '--utf-force']));
+    exit(1);
 }
 
 // btop Term::init refuses to start without an interactive terminal on both

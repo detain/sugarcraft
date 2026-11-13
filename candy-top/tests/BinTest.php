@@ -144,10 +144,11 @@ final class BinTest extends TestCase
         // config-path refusal, every load warning, the box-layout reset
         // notice, the four exit/save-state error reports (2 in the crash
         // path, 2 after run()), the five launch-flag usage refusals (-p/-u/-t,
-        // S-O06), the --themes-dir path refusal (S-O07) and the two after-load
-        // roster refusals (unknown theme, unknown preset). Raised 9 -> 16 on
-        // 2026-11-13 with S-O06, 16 -> 17 the same day with S-O07.
-        $this->assertSame(17, substr_count($source, '$report('), 'no startup diagnostic bypasses $report');
+        // S-O06), the --themes-dir path refusal (S-O07), the non-UTF-8 locale
+        // refusal (S-O04) and the two after-load roster refusals (unknown
+        // theme, unknown preset). Raised 9 -> 16 on 2026-11-13 with S-O06,
+        // 16 -> 17 the same day with S-O07, 17 -> 18 with S-O04.
+        $this->assertSame(18, substr_count($source, '$report('), 'no startup diagnostic bypasses $report');
         $this->assertStringContainsString('foreach ($loaded->warnings as $warning) {', $source);
 
         $at = strpos($source, '$file = ConfigFile::new($configPath);');
@@ -220,10 +221,10 @@ final class BinTest extends TestCase
     {
         [$code, $out] = self::invoke(['--help']);
         $this->assertSame(0, $code);
-        foreach (['-p, --preset <N>', '-t, --theme <name>', '-u, --update <ms>', '[-p N] [-t theme] [-u ms]', '--themes-dir <path>'] as $row) {
+        foreach (['-p, --preset <N>', '-t, --theme <name>', '-u, --update <ms>', '[-p N] [-t theme] [-u ms]', '--themes-dir <path>', '[--utf-force]'] as $row) {
             $this->assertStringContainsString($row, $out, $row . ' is in the help');
         }
-        foreach (['cli.help.opt.preset', 'cli.help.opt.theme', 'cli.help.opt.update', 'cli.help.opt.themes_dir'] as $key) {
+        foreach (['cli.help.opt.preset', 'cli.help.opt.theme', 'cli.help.opt.update', 'cli.help.opt.themes_dir', 'cli.help.opt.utf_force'] as $key) {
             $this->assertStringContainsString(Lang::t($key), $out, "{$key} comes from the lang table");
         }
     }
@@ -256,14 +257,17 @@ final class BinTest extends TestCase
 
     /**
      * @param list<string> $args
+     * @param array<string, string> $env locale overrides merged over the inherited environment
      * @return array{int, string, string}
      */
-    private static function invoke(array $args): array
+    private static function invoke(array $args, array $env = []): array
     {
         $proc = proc_open(
             ['timeout', '20', PHP_BINARY, __DIR__ . '/../bin/candy-top', ...$args],
             [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
             $pipes,
+            null,
+            $env === [] ? null : [...getenv(), 'LC_ALL' => '', 'LC_CTYPE' => '', ...$env],
         );
         self::assertIsResource($proc);
         $out = (string) stream_get_contents($pipes[1]);
@@ -272,5 +276,29 @@ final class BinTest extends TestCase
         fclose($pipes[2]);
 
         return [proc_close($proc), $out, $err];
+    }
+
+    /**
+     * S-O04: the UTF-8 locale gate answers before the tty gate, so a plain
+     * child pins all three arms. glibc reports ANSI_X3.4-1968 for LANG=C;
+     * a libc that cannot report a codeset at all takes the fail-open arm.
+     */
+    public function testLocaleGateRefusesNonUtf8AndHonoursTheHatch(): void
+    {
+        if (PHP_OS_FAMILY !== 'Linux' || !function_exists('nl_langinfo')) {
+            $this->markTestSkipped('the gate is pinned where libc reports codesets (Linux/glibc)');
+        }
+        [$code, , $err] = self::invoke([], ['LANG' => 'C']);
+        $this->assertSame(1, $code, 'LANG=C is refused');
+        $this->assertStringStartsWith('candy-top: ', $err);
+        $this->assertStringContainsString('ANSI_X3.4-1968', $err, 'the refusal names the codeset');
+        $this->assertStringContainsString('--utf-force', $err, 'the refusal names the hatch');
+        $this->assertStringNotContainsString('No tty', $err, 'the locale leg answers before the tty gate');
+
+        [, , $err] = self::invoke([], ['LANG' => 'C.UTF-8']);
+        $this->assertStringContainsString('No tty', $err, 'a UTF-8 locale walks past the gate');
+
+        [, , $err] = self::invoke(['--utf-force'], ['LANG' => 'C']);
+        $this->assertStringContainsString('No tty', $err, '--utf-force takes the hatch');
     }
 }
