@@ -754,6 +754,11 @@
             <code>php counter.php</code>. ↑ ↓ to count, <code>q</code> to quit.
         </p>
 
+        <div class="callout">
+            <h3>Before you install</h3>
+            <p><code>sugarcraft/*</code> packages publish from <code>dev-master</code> until their first tags are cut, so a Composer project left on the default <code>stable</code> minimum-stability cannot resolve them. Add <code>"minimum-stability": "dev", "prefer-stable": true</code> to your root <code>composer.json</code> (or suffix your require with <code>@dev</code>).</p>
+        </div>
+
         <div class="quickstart">
             <h3>1. Install</h3>
             <div class="install">
@@ -796,7 +801,7 @@
 
             <h3 style="margin-top: 32px;">Want a project skeleton instead?</h3>
             <p style="color: var(--ink-2); margin-top: -4px;">
-                <code>composer create-project sugarcraft/candy-starter my-app</code>
+                <code>composer create-project sugarcraft/candy-starter my-app --stability=dev</code>
                 scaffolds a runnable counter app with PHPUnit wired up — see
                 <a href="lib/candy-starter.html">CandyStarter</a>.
             </p>

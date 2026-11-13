@@ -137,6 +137,13 @@ finished binary, scaffold an app, or taste one library. Then a router table
 for &quot;I want to X, which package is that?&quot;, and the install-path truth stated
 once. New to the vocabulary? <a href="/GLOSSARY.html">docs/GLOSSARY.md</a> defines every
 term below.</p>
+<blockquote>
+<p><strong>Before you install</strong> — <code>sugarcraft/*</code> packages publish from <code>dev-master</code>
+until their first tags are cut, so a Composer project left on the default
+<code>stable</code> minimum-stability cannot resolve them. Add
+<code>&quot;minimum-stability&quot;: &quot;dev&quot;, &quot;prefer-stable&quot;: true</code> to your root
+<code>composer.json</code> (or suffix your require with <code>@dev</code>).</p>
+</blockquote>
 <h2><a id="route-a--run-a-finished-app-no-composer-needed" href="#route-a--run-a-finished-app-no-composer-needed" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Route A — run a finished app (no Composer needed)</h2>
 <p>Signed single-file phars ship on the <a href="https://github.com/detain/sugarcraft/releases">releases
 page</a>. Every release carries a
@@ -163,7 +170,7 @@ full story.</p>
 <p>The starter is the shortest path to a running program: <code>bin/start</code> hands a
 Model to sugar-core's <code>Program</code>, which owns the event loop, raw mode, and the
 alt-screen. You only write the Model.</p>
-<pre><code class="language-bash">composer create-project sugarcraft/candy-starter my-app
+<pre><code class="language-bash">composer create-project sugarcraft/candy-starter my-app --stability=dev
 cd my-app
 ./bin/start                       # a counter demo; q / Esc / Ctrl+C quits
 </code></pre>
@@ -286,7 +293,7 @@ still ship to people who never touch Composer — as one signed, self-updating
 <code>.phar</code> file (Route A). PHP 8.3's strict types plus ReactPHP cover the async
 event loop the interactive stack runs on.</p>
 <h2><a id="the-binary-path-truth-once-for-everything-below" href="#the-binary-path-truth-once-for-everything-below" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>The binary-path truth (once, for everything below)</h2>
-<p>Depending on how you got a package, its launcher lives in one of three
+<p>Depending on how you got a package, its launcher lives in one of four
 places — READMEs use <code>vendor/bin/…</code> and <code>./bin/…</code> for different ones:</p>
 <ul>
 <li><strong>You <code>composer require</code>d it into your project</strong> → the command is

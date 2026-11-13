@@ -6,6 +6,12 @@ for "I want to X, which package is that?", and the install-path truth stated
 once. New to the vocabulary? [docs/GLOSSARY.md](GLOSSARY.md) defines every
 term below.
 
+> **Before you install** — `sugarcraft/*` packages publish from `dev-master`
+> until their first tags are cut, so a Composer project left on the default
+> `stable` minimum-stability cannot resolve them. Add
+> `"minimum-stability": "dev", "prefer-stable": true` to your root
+> `composer.json` (or suffix your require with `@dev`).
+
 ## Route A — run a finished app (no Composer needed)
 
 Signed single-file phars ship on the [releases
@@ -42,7 +48,7 @@ Model to sugar-core's `Program`, which owns the event loop, raw mode, and the
 alt-screen. You only write the Model.
 
 ```bash
-composer create-project sugarcraft/candy-starter my-app
+composer create-project sugarcraft/candy-starter my-app --stability=dev
 cd my-app
 ./bin/start                       # a counter demo; q / Esc / Ctrl+C quits
 ```
@@ -129,7 +135,7 @@ event loop the interactive stack runs on.
 
 ## The binary-path truth (once, for everything below)
 
-Depending on how you got a package, its launcher lives in one of three
+Depending on how you got a package, its launcher lives in one of four
 places — READMEs use `vendor/bin/…` and `./bin/…` for different ones:
 
 - **You `composer require`d it into your project** → the command is

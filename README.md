@@ -29,6 +29,12 @@ composer require sugarcraft/sugarcraft        # umbrella metapackage — every l
 composer require sugarcraft/sugar-style   # …or just the package you need
 ```
 
+> **Before you install** — `sugarcraft/*` packages publish from `dev-master`
+> until their first tags are cut, so a Composer project left on the default
+> `stable` minimum-stability cannot resolve them. Add
+> `"minimum-stability": "dev", "prefer-stable": true` to your root
+> `composer.json` (or suffix your require with `@dev`).
+
 ## What's in the box
 
 Every package installs independently with Composer. The libraries are grouped by layer:
