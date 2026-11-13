@@ -461,3 +461,28 @@ public function renderAria(NavStack $stack): array
 - [Carbon Design System: Breadcrumb](https://v10.carbondesignsystem.com/components/breadcrumb/usage)
 - [Open UI Breadcrumb Component](https://open-ui.org/components/breadcrumb)
 - [charmbracelet/bubbles navigator](https://github.com/charmbracelet/bubbles/commit/591f8eb5b9969d126e7ad52e779ca17a55be2cd0)
+
+---
+
+## Status vs shipped port (2026-11-13)
+
+Append-only ledger from the EXEC lane (rows NS-01..NS-31). The historical
+survey above is the research-era record and stays untouched; this section
+maps every recorded gap to its shipped state so future reviewers do not
+re-mint landed work.
+
+| Recorded gap (section) | Shipped state |
+|---|---|
+| §1.2 `examples/navigation.php` calls non-existent methods | Examples fixed and then some: `basic.php`, `navigation.php`, `mouse.php` all run to exit 0 — `mouse.php` is the compilable Scanner/click-zones reference (NS-29) |
+| §1.2 "$nav->view() — NavStack has no view() method" | `NavStack::view()` exists; titles sanitized, separator control-gated (CR/LF/escapes throw, sentinels stripped, empty legal) (NS-30) |
+| §1.2 "$nav2->filter() — NavStack has no filter() method" | Shipped as `filtered()` (canonical, Unicode case fold via `mb_stripos`); `filter()` remains a `@deprecated` forwarder (NS-09) |
+| §1.2 "$shell->pushDirectory() — Shell has no pushDirectory() method" | Shipped; canonical verb is `Shell::withDirectory()` (returns a NEW Shell), `pushDirectory()` is a deprecated forwarder; POSIX-only path split documented (NS-26) |
+| §2.1 "Closable interface — No" | `Closable` ships as NO-DISPATCH vocabulary: the interface + contract docblocks exist, the library emits no lifecycle events itself (README "Lifecycle (Closable)") |
+| §10 Phase 2 "Navigable interface with onEnter()/onLeave()" | `NavigationItem::onEnter()`/`onLeave()` ship as documented no-ops — same no-dispatch posture as Closable |
+| Research-era width notes treating SGR bytes as cells | Cell-exact in the shipped port: `Width::string` strips ANSI before counting (`sugar-core/src/Util/Width.php`, the `string()` docblock "Cell width of a string after stripping ANSI sequences"), so a styled trail elides exactly where the plain one does (NS-01); the honest exception stays documented — a truncated crumb returns a plain byte-prefix |
+| §10 Phase 3 "Click regions" | Per-crumb zones via sugar-mouse `Scanner`; zone ids carry FULL STACK INDICES so routing survives elision; cross-generation dispatch refused (`NavStack::generation()` stamping, NS-08); `scan()` viewport width is REQUIRED (NS-20); `elisionSpan()` publishes the marker cell range for expansion gestures (NS-21) |
+| INDEX "Separator escaping" | `Escape::title()`/`unescape()` ship with the naming contract stated (NS-23) |
+
+Housekeeping: the `docs/research/INDEX.md` status cells for this row still
+carry research-era text; the INDEX is a fleet-wide file and its rollup is
+booked at program closeout, not per lane.
