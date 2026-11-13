@@ -203,4 +203,40 @@ final class ArgumentShapeTest extends TestCase
         $schema = ['type' => 'object', 'patternProperties' => ['[' => ['type' => 'object']]];
         self::assertSame(['anything' => []], ArgumentShape::conform(['anything' => []], $schema));
     }
+
+    /**
+     * The evaluation ceiling: the per-walk memo caps ONE attempt per
+     * pattern, but a hostile inputSchema can carry hundreds of DISTINCT
+     * catastrophic patterns whose bill (~25 ms each) the per-call instance
+     * cannot remember across calls. Past MAX_PATTERN_ATTEMPTS the walk
+     * stops reading patterns entirely — keys keep their decoded shape
+     * (NO-GUESS), the call completes, and a schema with noise beyond the
+     * budget never reaches its trailing real pattern. The under-budget half
+     * proves the ceiling tripped, not patternProperties dying.
+     */
+    public function testPatternEvaluationsStopAtTheBudgetNotAtTheClock(): void
+    {
+        $hostile = ['^target$' => ['type' => 'object']];
+        $noise = [];
+        for ($i = 0; $i < 200; $i++) {
+            $noise['^unmatchable' . $i . '$'] = ['type' => 'object'];
+        }
+        // Insertion order puts the real pattern behind the noise.
+        $beyond = array_merge($noise, $hostile);
+        $within = array_merge(array_slice($noise, 0, 40, true), $hostile);
+
+        $startedAt = microtime(true);
+        self::assertSame(
+            '{"target":[]}',
+            self::wire(['target' => []], ['type' => 'object', 'patternProperties' => $beyond]),
+            'the walk evaluated past its ceiling instead of reading schema-untyped',
+        );
+        self::assertLessThan(1.0, microtime(true) - $startedAt, 'the pattern bill ran into the call');
+
+        self::assertSame(
+            '{"target":{}}',
+            self::wire(['target' => []], ['type' => 'object', 'patternProperties' => $within]),
+            'patternProperties stopped typing under the budget',
+        );
+    }
 }

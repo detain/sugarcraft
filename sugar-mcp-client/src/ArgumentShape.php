@@ -71,7 +71,25 @@ final class ArgumentShape
      */
     private const VISIT_BUDGET = 10000;
 
+    /**
+     * Distinct pattern evaluations one conform() may perform. The visit
+     * budget counts schema nodes, not regexes: a hostile server-authored
+     * inputSchema can carry hundreds of `(a+)+$`-class patterns that each
+     * burn their one memo'd attempt at ~25 ms INSIDE a small node count,
+     * and the quarantine memo dies with the per-call instance — so without
+     * this ceiling every call re-pays the whole pattern bill before a
+     * single frame goes out. Past the budget the remaining patterns read
+     * as schema-untyped (the established NO-GUESS posture). The alternative
+     * hoist — keying the quarantine by schema identity and holding it on
+     * the roster for the connection's lifetime — survives across calls but
+     * leaks attacker-shaped state into shared bookkeeping; the count budget
+     * is minimal and deterministic, so it ships instead.
+     */
+    private const MAX_PATTERN_ATTEMPTS = 64;
+
     private int $visits = 0;
+
+    private int $patternAttempts = 0;
 
     /**
      * Patterns already attempted in this walk that PCRE rejected (a
@@ -274,6 +292,12 @@ final class ArgumentShape
                 // simply fall through to NO-GUESS.
                 $spelling = (string) $pattern;
                 if (isset($this->patternUnusable[$spelling])) {
+                    continue;
+                }
+
+                if (++$this->patternAttempts > self::MAX_PATTERN_ATTEMPTS) {
+                    // The ceiling spends pattern EVALUATIONS, not clock —
+                    // past it every further pattern is refused sight unseen.
                     continue;
                 }
 
