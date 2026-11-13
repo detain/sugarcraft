@@ -1571,7 +1571,12 @@ final class SugarPanels
      * a region rather than the whole screen, and wiping on a manual reset is a
      * surprise the caller did not ask for. Call it when the terminal state is
      * suspect, or to capture a full frame for text extraction (a delta only
-     * carries changed cells and is unreadable as text).
+     * carries changed cells and is unreadable as text). Calling it before EVERY
+     * render is also the region-host recipe: a reset full frame positions
+     * relatively once its leading home token is stripped, so a host can prepend
+     * its own region-origin move and write the rest verbatim — delta frames
+     * address cells absolutely and are full-screen-only (see README
+     * *Frame protocol*).
      *
      * The per-Style SGR-prefix cache is deliberately NOT dropped: a cached
      * opening run belongs to a Style object, not to a frame, so it stays valid

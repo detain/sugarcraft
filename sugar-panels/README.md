@@ -302,6 +302,16 @@ otherwise sit on screen as ghosts. The first frame, a delta, and a zero-area fra
 erase nothing, and a manual `resetPreviousFrame()` does not erase either — a host
 that owns a region did not ask to wipe it.
 
+**Region hosts:** that home is the absolute screen row 1 column 1, and a *delta*
+addresses every run with absolute CUPs — deltas are only safe when the renderer
+owns the whole viewport. A host painting a sub-region of a bigger terminal (a
+band in a dashboard, a pane beside another renderer's output) must call
+`resetPreviousFrame()` before every render, strip the leading `ESC [ H` (and the
+`ESC [ 2J` resize prologue when present), prepend its own cursor move to the
+region origin, and write the rest verbatim: a full frame positions relatively
+after that one token — cells contiguous, rows newline-separated — so it cannot
+pull the cursor out of the region.
+
 **Stateful contract:** the diff cache lives on the `SugarPanels` instance, and one
 instance owns one output region. The first render (and every render after a size
 change) emits the full frame; subsequent same-size renders emit only diff ops —

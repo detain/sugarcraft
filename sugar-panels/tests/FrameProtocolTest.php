@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Panels\Tests;
 
 use SugarCraft\Panels\{Node, SugarPanels};
+use SugarCraft\Core\Util\{Ansi, Width};
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -128,5 +129,32 @@ final class FrameProtocolTest extends TestCase
 
         $this->assertStringNotContainsString(self::ERASE, $shrunk, 'exactly one erase, at the front');
         $this->assertStringNotContainsString(self::HOME, $shrunk);
+    }
+
+    public function testAFullFrameIsRegionRelativeAndADeltaIsNot(): void
+    {
+        // Region-host recipe (README *Frame protocol*): reset before every
+        // render, strip the leading home, prepend a move to the region
+        // origin — a full frame positions relatively after that token (cells
+        // contiguous, rows newline-separated, no absolute CUP inside), so it
+        // cannot yank the cursor out of a sub-region. A delta addresses cells
+        // absolutely and is therefore full-screen-only.
+        $panels = SugarPanels::new();
+        $panels->render(Node::leaf('old')->withBorder(false), 6, 2);
+        $panels->resetPreviousFrame();
+        $body = substr($panels->render(Node::leaf('new')->withBorder(false), 6, 2), strlen(self::HOME));
+
+        $this->assertSame(0, \preg_match('/\x1b\[\d+;\d+H/', $body), 'a full frame carries no absolute move after its home');
+        $rows = \explode("\n", $body);
+        $this->assertCount(2, $rows, 'a region-relative frame advances with newlines, not CUPs');
+        foreach ($rows as $row) {
+            $this->assertSame(6, Width::string(Ansi::strip($row)), 'every row is the viewport width in cells');
+        }
+
+        $delta = SugarPanels::new();
+        $delta->render(Node::leaf('ABC')->withBorder(false), 3, 1);
+        $deltaBody = substr($delta->render(Node::leaf('A C')->withBorder(false), 3, 1), strlen(self::HOME));
+
+        $this->assertSame(1, \preg_match('/\x1b\[\d+;\d+H/', $deltaBody), 'a delta jumps absolutely — it is only safe when the renderer owns the screen');
     }
 }
