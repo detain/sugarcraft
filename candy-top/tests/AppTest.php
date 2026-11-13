@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\I18n\T;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
@@ -17,6 +18,8 @@ use SugarCraft\Core\Msg\MouseWheelMsg;
 use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg\QuitMsg;
+use SugarCraft\Core\Msg\ResumeMsg;
+use SugarCraft\Core\Msg\SuspendMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\TickRequest;
 use SugarCraft\Core\Util\ColorProfile;
@@ -262,6 +265,24 @@ final class AppTest extends TestCase
     {
         [, $cmd] = self::booted(50, 15)->update(new KeyMsg(KeyType::Char, 'q'));
         $this->assertInstanceOf(QuitMsg::class, $cmd?->__invoke());
+    }
+
+    public function testCtrlZSuspendsAndResumeTakesOneSample(): void
+    {
+        [, $cmd] = self::booted(120, 40)->update(new KeyMsg(KeyType::Char, 'z', ctrl: true));
+        $this->assertNotNull($cmd);
+        $this->assertInstanceOf(SuspendMsg::class, $cmd());
+        // The stop itself is the foundation's; behind the size notice the key
+        // still suspends, exactly like quit.
+        [, $behind] = self::booted(50, 15)->update(new KeyMsg(KeyType::Char, 'z', ctrl: true));
+        $this->assertInstanceOf(SuspendMsg::class, $behind?->__invoke());
+        // Suspend asks the model to stash nothing; resume repaints with one
+        // live sample batched like the resize path does.
+        [, $held] = self::booted(120, 40)->update(new SuspendMsg());
+        $this->assertNull($held);
+        [, $resumed] = self::booted(120, 40)->update(new ResumeMsg());
+        $this->assertNotNull($resumed);
+        $this->assertInstanceOf(BatchMsg::class, $resumed());
     }
 
     public function testViewIsEmptyBeforeTheFirstWindowSize(): void

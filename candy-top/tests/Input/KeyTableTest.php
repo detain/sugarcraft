@@ -54,12 +54,12 @@ final class KeyTableTest extends TestCase
     {
         $bindings = KeyTable::bindings();
         $this->assertSame(array_values(array_unique($bindings)), $bindings);
-        foreach (['escape', 'm', 'f1', '?', 'h', 'f2', 'o', 'q', 'ctrl+c', '1', '4', '5', '0', '+', '-', 't', 'k', 's', 'N', 'F', 'u', 'O', 'mouse_click', 'p', 'P', 'ctrl+r', 'x', '[', ']', 'v', 'S', ...KeyName::MODIFIED_ARROWS] as $key) {
+        foreach (['escape', 'm', 'f1', '?', 'h', 'f2', 'o', 'q', 'ctrl+c', 'ctrl+z', '1', '4', '5', '0', '+', '-', 't', 'k', 's', 'N', 'F', 'u', 'O', 'mouse_click', 'p', 'P', 'ctrl+r', 'x', '[', ']', 'v', 'S', ...KeyName::MODIFIED_ARROWS] as $key) {
             $this->assertContains($key, $bindings);
         }
-        foreach (['ctrl+z'] as $later) {
-            $this->assertNotContains($later, $bindings, $later . ' is not wired yet (no suspend)');
-        }
+        // S-O05 (2026-11-13): `ctrl+z` was the one carved-out not-yet row
+        // ("no suspend"); it now suspends via Cmd::suspend and lives in the
+        // documented roster like everything else.
         foreach ($bindings as $b) {
             $this->assertIsString($b);
         }

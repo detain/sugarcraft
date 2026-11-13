@@ -203,6 +203,7 @@ return [
     'help.help' => 'Show this window.',
     'help.reload' => 'Reload config file from disk.',
     'help.quit' => 'Quit program.',
+    'help.suspend' => 'Suspend program; resume with fg.',
     'help.update_ms' => 'Add/Subtract 100 ms to/from update timer.',
     'help.select' => 'Select in process list.',
     'help.detailed' => 'Show detailed information for selected process.',

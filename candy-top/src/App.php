@@ -14,6 +14,8 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\Msg\ResumeMsg;
+use SugarCraft\Core\Msg\SuspendMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Subscriptions;
@@ -537,6 +539,19 @@ final class App implements Model
         if ($msg instanceof ConfigLoadedMsg) {
             return $this->reloaded($msg);
         }
+        if ($msg instanceof SuspendMsg) {
+            // btop's Ctrl+Z suspend. The teardown/raise/restore legs are the
+            // foundation's (Program::suspendProgram); the model keeps nothing
+            // across the stop — collectors sample per tick and saves ride the
+            // exit paths — so there is nothing to stash.
+            return [$this, null];
+        }
+        if ($msg instanceof ResumeMsg) {
+            // After SIGCONT the foundation has reset the renderer and armed a
+            // full repaint; take one sample at once so the first frame back
+            // carries live numbers, exactly like the resize repaint does.
+            return [$this->settledBackdrop(true), Cmd::batch($this->dataTick(), $this->collectAll())];
+        }
         if ($msg instanceof KeyMsg) {
             if (KeyName::dropped($msg)) {
                 return [$this, null];
@@ -546,6 +561,11 @@ final class App implements Model
             if ($name === 'ctrl+c') {
                 // btop's SIGINT handler runs clean_quit, which saves too.
                 return [$self, $self->quitCmd()];
+            }
+            if ($name === 'ctrl+z') {
+                // btop suspends on Ctrl+Z; the stop and the restore are the
+                // foundation's, the decision to leave the screen clean is here.
+                return [$self, Cmd::suspend()];
             }
             if (!$self->framed()) {
                 return $self->sizeNoticeKey($msg);

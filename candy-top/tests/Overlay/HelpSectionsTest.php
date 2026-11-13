@@ -85,7 +85,7 @@ final class HelpSectionsTest extends OverlayTestCase
             $ladder[Lang::t($heading)] = array_map(static fn (KeyRow $r): string => $r->keyLabel(), $rows);
         }
         $this->assertSame([
-            'General' => ['Esc, m', 'Ctrl+R', 'q, Ctrl+C', '+, -, ='],
+            'General' => ['Esc, m', 'Ctrl+R', 'q, Ctrl+C', 'Ctrl+Z', '+, -, ='],
             'Panels & views' => ['p', 'Shift+P', '1', '2', '3', '4', '5, 6, 7, 8, 9, 0', 'x', '[, ]', 'v', 's, S', 'Shift+I', 'd', 'c', 'r', 'e', 'E', '%', 'O', 'g, Ctrl+G'],
             'Navigation & scrolling' => ['Up, Down', 'Pg Up, Pg Down', 'Home, End', 'h, j, k, l', 'g, G'],
             'Process list' => ['Enter', 'Spacebar', 'C', 'Left, Right'],

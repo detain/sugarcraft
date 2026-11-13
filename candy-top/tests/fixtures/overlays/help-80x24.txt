@@ -12,13 +12,13 @@
 ││       Ctrl+R       Reload config  │  │                    forwards.      ││0│
 ││                    file from disk.│  │       Shift+P      Cycle view     ││6│
 ││      q, Ctrl+C     Quit program.  │  │                    presets        ││5│
-││       +, -, =      Add/Subtract   │  │                    backwards.     ││9│
-││                    100 ms to/from │  │          1         Toggle CPU box.││2│
-││                    update timer.  │  │          2         Toggle MEM box.││6│
-│╰───────────────────────────────────╯  │          3         Toggle NET box.││6│
-│                                       │          4         Toggle PROC    ││ │
-│                                       │                    box.           ││ │
-│                                       │  5, 6, 7, 8, 9, 0  Toggle GPU box.││ │
+││       Ctrl+Z       Suspend        │  │                    backwards.     ││9│
+││                    program; resume│  │          1         Toggle CPU box.││2│
+││                    with fg.       │  │          2         Toggle MEM box.││6│
+││       +, -, =      Add/Subtract   │  │          3         Toggle NET box.││6│
+││                    100 ms to/from │  │          4         Toggle PROC    ││ │
+││                    update timer.  │  │                    box.           ││ │
+│╰───────────────────────────────────╯  │  5, 6, 7, 8, 9, 0  Toggle GPU box.││ │
 │                                       ╰───────────────────────────────────╯│ │
 ╰─┘↑ page 1/10 ↓└────────────────────────────────────────────────────────────╯ │
 ╰──────────────────────────────────╯╰──────────────────────────────────────────╯

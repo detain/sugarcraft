@@ -10,8 +10,7 @@ namespace SugarCraft\Top\Input;
  * drift test can re-derive README / docs key rosters from
  * ({@see bindings()}).
  *
- * Rows follow btop's `help_text` (src/btop_menu.cpp:172-218) minus what
- * candy-top does not do (yet): `Ctrl+Z` (no suspend). btop's `5` row
+ * Rows follow btop's `help_text` (src/btop_menu.cpp:172-218) complete. btop's `5` row
  * lists every gpu slot key, 5 through 0 (btop PR #1730); btop PR #1873
  * adds `x` and `[, ]` (the containers box) right after it. btop PR #1476 adds the proc-width rows after `Selected N`;
  * `O` is candy-top's #1873 extension; the vim_keys rows (btop documents
@@ -41,16 +40,16 @@ final class KeyTable
      * @var array<string, list<int>>
      */
     public const SECTIONS = [
-        'help.section.general' => [2, 18, 19, 20],
-        'help.section.panels' => [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 37, 38, 39, 40, 41, 42, 43],
-        'help.section.navigation' => [21, 25, 26, 54, 55],
-        'help.section.process_list' => [22, 23, 24, 27],
-        'help.section.filter' => [33, 34, 35, 36],
-        'help.section.net' => [28, 29, 30, 31, 32],
-        'help.section.actions' => [44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 56],
+        'help.section.general' => [2, 18, 19, 20, 21],
+        'help.section.panels' => [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 38, 39, 40, 41, 42, 43, 44],
+        'help.section.navigation' => [22, 26, 27, 55, 56],
+        'help.section.process_list' => [23, 24, 25, 28],
+        'help.section.filter' => [34, 35, 36, 37],
+        'help.section.net' => [29, 30, 31, 32, 33],
+        'help.section.actions' => [45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 57],
         'help.section.overlays' => [16, 17],
         'help.section.mouse' => [0, 1],
-        'help.section.info' => [57, 58, 59],
+        'help.section.info' => [58, 59, 60],
     ];
 
     private function __construct()
@@ -83,6 +82,7 @@ final class KeyTable
             new KeyRow('F1, ?, h', 'help.help', ['f1', '?', 'h']),
             new KeyRow('Ctrl+R', 'help.reload', ['ctrl+r']),
             new KeyRow('q, Ctrl+C', 'help.quit', ['q', 'ctrl+c']),
+            new KeyRow('Ctrl+Z', 'help.suspend', ['ctrl+z']),
             new KeyRow('+, -, =', 'help.update_ms', ['+', '-', '=']),
             new KeyRow('Up, Down', 'help.select', ['up', 'down']),
             new KeyRow('Enter', 'help.detailed', ['enter']),

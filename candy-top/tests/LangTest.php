@@ -69,8 +69,7 @@ final class LangTest extends TestCase
             'menu.msgbox.cancel',
             'menu.size_error',
             'menu.size_needed',
-            'help.suspend',
-        ] as $dead) {
+        ] as $dead) { // help.suspend rejoined the live roster with S-O05 (2026-11-13)
             $this->assertArrayNotHasKey($dead, $strings, "{$dead} has no consumer: it belongs retired");
         }
     }

@@ -148,7 +148,7 @@ final class HelpFramedLayoutTest extends OverlayTestCase
         $this->assertSame($roster, $content(HelpMenu::widthFor(170)), 'zero wrap continuations in the 59-cell description column at the 166 cap');
 
         $at120 = $content(HelpMenu::widthFor(120));
-        $this->assertSame(99, $at120, 'the 120-column box holds the roster in 99 content lines (39 continuations)');
+        $this->assertSame(100, $at120, 'the 120-column box holds the roster in 100 content lines (39 continuations)');
         $this->assertLessThan(167, $at120, 'strictly fewer lines than the old three-column 117-cap grid (167)');
     }
 
@@ -219,7 +219,7 @@ final class HelpFramedLayoutTest extends OverlayTestCase
         $this->assertCount(3, $plan, 'the greedy still spends exactly three pages at 120x40');
 
         $this->assertSame([
-            [Lang::t('help.section.general') . '@0', Lang::t('help.section.panels') . '@8'],
+            [Lang::t('help.section.general') . '@0', Lang::t('help.section.panels') . '@9'],
             [Lang::t('help.section.panels') . '@0', Lang::t('help.section.navigation') . '@18'],
         ], self::columnShape($plan[0]));
         $this->assertSame([
@@ -263,9 +263,9 @@ final class HelpFramedLayoutTest extends OverlayTestCase
         $this->assertSame([
             [
                 Lang::t('help.section.general') . '@0',
-                Lang::t('help.section.navigation') . '@7',
-                Lang::t('help.section.process_list') . '@15',
-                Lang::t('help.section.filter') . '@22',
+                Lang::t('help.section.navigation') . '@8',
+                Lang::t('help.section.process_list') . '@16',
+                Lang::t('help.section.filter') . '@23',
             ],
             [Lang::t('help.section.panels') . '@0', Lang::t('help.section.net') . '@23'],
         ], self::columnShape($plan[0]), 'Panels rides the right column; the small boxes fill the hole under General');
@@ -305,8 +305,8 @@ final class HelpFramedLayoutTest extends OverlayTestCase
         $this->assertSame([
             [
                 Lang::t('help.section.general') . '@0',
-                Lang::t('help.section.navigation') . '@7',
-                Lang::t('help.section.process_list') . '@15',
+                Lang::t('help.section.navigation') . '@8',
+                Lang::t('help.section.process_list') . '@16',
             ],
             [Lang::t('help.section.panels') . '@0'],
         ], self::columnShape($plan[0]));

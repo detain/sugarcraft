@@ -367,6 +367,7 @@ Context rules, following btop's input handling:
 | `F1, ?, h` | Show this window. | `f1`, `?`, `h` |
 | `Ctrl+R` | Reload config file from disk. | `ctrl+r` |
 | `q, Ctrl+C` | Quit program. | `q`, `ctrl+c` |
+| `Ctrl+Z` | Suspend program; resume with fg. | `ctrl+z` |
 | `+, -, =` | Add/Subtract 100 ms to/from update timer. | `+`, `-`, `=` |
 | `Up, Down` | Select in process list. | `up`, `down` |
 | `Enter` | Show detailed information for selected process. | `enter` |
@@ -730,7 +731,6 @@ These are deliberate deviations and gaps; the accumulated notes live in `CALIBER
 - No PCIe TX/RX line in the gpu boxes (nothing measures PCIe throughput), and no Apple GPUs.
 - No macOS or OpenBSD collectors: btop ships native support for both (macOS since 1.1.0, OpenBSD since 1.3.0); candy-top routes those hosts onto the Linux `/proc` fallback, so every reading stays `n/a` and a start-up `warning` notice says so instead of pretending.
 - AMD NPUs are detected but not measured; Intel GPUs report no VRAM.
-- No `ctrl+z` suspend.
 - No CPU package watts (`show_cpu_watts` has no RAPL reader).
 - No ZFS pool IO.
 - No MAC-address fallback for an interface without an IP.
