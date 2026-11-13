@@ -27,8 +27,12 @@ final class ServerTest extends TestCase
         $this->tmpDir = \sys_get_temp_dir() . '/http-smart-test-' . \uniqid();
         \mkdir($this->tmpDir, 0755, true);
 
-        // Create a minimal config
-        $this->config = Config::fromDefaults();
+        // Config points at THIS test's data directory: the S08 auth
+        // budget ledger (auth-attempts.json) is per-test state under
+        // tmpDir, never a file shared through the /tmp/candy-git-server
+        // default across suite runs and reruns.
+        \file_put_contents($this->tmpDir . '/config.yaml', "name: http-smart-test\n");
+        $this->config = Config::load($this->tmpDir . '/config.yaml');
 
         $this->server = new Server($this->config);
 

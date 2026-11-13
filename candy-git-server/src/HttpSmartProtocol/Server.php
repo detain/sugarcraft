@@ -103,6 +103,13 @@ final class Server
     /** Stats collector override (null = shared instance). */
     private ?Stats $stats = null;
 
+    /**
+     * Failed-Basic-auth attempt ledger (finding 008), built on first use
+     * from the parsed config. Lazy because construction must stay IO-free
+     * (register-only Server instances never authenticate).
+     */
+    private ?AuthAttemptBudget $authBudget = null;
+
     public function __construct(Config $config)
     {
         $this->config = $config;
@@ -117,6 +124,15 @@ final class Server
     private function stats(): Stats
     {
         return $this->stats ?? Stats::instance();
+    }
+
+    private function authBudget(): AuthAttemptBudget
+    {
+        return $this->authBudget ??= new AuthAttemptBudget(
+            $this->config->dataPath . '/auth-attempts.json',
+            $this->config->httpAuthMaxAttempts,
+            $this->config->httpAuthRefillSeconds,
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -199,6 +215,13 @@ final class Server
 
         try {
             return $this->route($headers, $body);
+        } catch (AuthBudgetExhausted $e) {
+            // The budget refused to pay for another bcrypt before any
+            // handler ran; this is policy, not a fault — the 500 path
+            // would log it to STDERR and lie to the client.
+            $this->responseHeaders['Retry-After'] = (string) $e->retryAfterSeconds;
+
+            return $this->errorResponse(429, 'Too many authentication attempts');
         } catch (\Throwable $e) {
             \fwrite(\STDERR, (string) $e);
             return $this->errorResponse(500, 'Internal server error');
@@ -858,7 +881,13 @@ final class Server
      * Looks for Basic auth or session headers. Every Basic-auth refusal
      * path performs one bcrypt verify — against the real digest, or against
      * the decoy when no digest can match — so reply latency never reveals
-     * whether a username exists.
+     * whether a username exists. That deliberate uniform cost is exactly
+     * what makes unbounded attempts a CPU amplifier (finding 008), so the
+     * per-peer + per-username {@see AuthAttemptBudget} is charged BEFORE
+     * any hashing: an exhausted bucket throws {@see AuthBudgetExhausted}
+     * (answered 429 + Retry-After by handleRequest) at zero bcrypt cost,
+     * and a verify that actually succeeded refunds its charge so honest
+     * clients never drain themselves.
      */
     private function getUserFromHeaders(array $headers): ?User
     {
@@ -876,6 +905,14 @@ final class Server
                     if ($colon !== false) {
                         $username = \substr($credentials, 0, $colon);
                         $password = \substr($credentials, $colon + 1);
+                        // The gate runs BEFORE every bcrypt below: the
+                        // whole point of the budget is that a refused
+                        // attempt must be free.
+                        $peer = $this->peerIp === null ? '' : self::normalizeIp($this->peerIp);
+                        $retryAfter = $this->authBudget()->charge($peer, $username);
+                        if ($retryAfter !== null) {
+                            throw new AuthBudgetExhausted($retryAfter);
+                        }
                         $user = $this->users[$username] ?? null;
                         if ($user === null) {
                             // The old shape returned HERE, before any
@@ -903,6 +940,11 @@ final class Server
                         if (!\password_verify($password, $hash)) {
                             return null;
                         }
+                        // The verify succeeded — honest work paid for, so
+                        // the token goes back. A long clone session re-sends
+                        // Basic auth on every request and must never
+                        // rate-limit itself (finding 008).
+                        $this->authBudget()->refund($peer, $username);
                         // A deactivated account authenticates to nothing:
                         // credentials out,
                         // identity null — the request proceeds as anonymous.

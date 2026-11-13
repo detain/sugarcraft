@@ -91,6 +91,16 @@ final class Config
     /** Max buffered packfile size in bytes (null = server default). */
     public readonly ?int $maxPackBytes;
 
+    /**
+     * HTTP auth attempt budget (finding 008): failed-proof burst allowed
+     * per peer AND per username before the server answers 429 without
+     * touching bcrypt, and the seconds a spent bucket takes to regain a
+     * full capacity. Both are S07-vocabulary integers — a security knob
+     * that decodes '30s' into 30 is the fail-open these refuse.
+     */
+    public readonly int $httpAuthMaxAttempts;
+    public readonly int $httpAuthRefillSeconds;
+
     /** Git LFS. */
     public readonly bool $lfsEnabled;
     public readonly bool $lfsSshEnabled;
@@ -224,6 +234,8 @@ final class Config
             ? self::parseInt('http.max_pack_bytes', $http['max_pack_bytes'], 1, 1)
             : null;
         $this->httpWorkerPerRequest = self::parseBool('http.worker_per_request', $http['worker_per_request'] ?? null, true);
+        $this->httpAuthMaxAttempts  = self::parseInt('http.auth_max_attempts', $http['auth_max_attempts'] ?? null, 10, 1, 10000);
+        $this->httpAuthRefillSeconds = self::parseInt('http.auth_refill_seconds', $http['auth_refill_seconds'] ?? null, 60, 1, 86400);
         $this->userTrustMode  = self::parseUserTrustMode((string) ($http['user_trust_mode'] ?? 'off'));
         $this->trustedProxies = self::parseTrustedProxies($http['trusted_proxies'] ?? []);
         $this->authSecret     = (string) ($http['auth_secret'] ?? '');
