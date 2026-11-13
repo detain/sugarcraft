@@ -100,6 +100,7 @@ final class Table
     private bool $rowSeparator = false;
     private int $maxTotalWidth = 0;
     private bool $overflowArrows = false;
+    private bool $strictPercent = false;
     private string $staticFooter = '';
 
     /** Vertical scroll offset — first visible row index in the filtered+sorted view. */
@@ -418,6 +419,7 @@ final class Table
             static fn (int $index): bool => $index < $count,
         ));
         $clone->invalidateRenderCaches();
+        $clone->assertPercentBudget();
         return $clone;
     }
 
@@ -890,7 +892,48 @@ final class Table
         // The hidden set is a solve input — swapping it must re-solve, the
         // same way replacing rows does (ST-11 cache-bust leg).
         $clone->invalidateRenderCaches();
+        $clone->assertPercentBudget();
         return $clone;
+    }
+
+    /**
+     * Opt-in strict percent budgeting (OG-9 arm B / ST-61): with it on, a
+     * VISIBLE Percent set summing past 100 throws InvalidArgumentException
+     * when it is configured (here, withColumns(), withHiddenCols()) instead
+     * of being scaled down at solve time (the default, arm A: over-subscribed
+     * percents are normalised so the set never exceeds the table width).
+     * Applies to the columns the table already holds.
+     */
+    public function withStrictPercent(bool $v = true): self
+    {
+        $clone = clone $this;
+        $clone->strictPercent = $v;
+        $clone->assertPercentBudget();
+        return $clone;
+    }
+
+    private function assertPercentBudget(): void
+    {
+        if (!$this->strictPercent) {
+            return;
+        }
+        $sum = $this->visiblePercentSum();
+        if ($sum > 100.0 + 1e-9) {
+            throw new \InvalidArgumentException(\sprintf('Percent columns sum to %s%%; strict percent budgeting requires at most 100%%', \rtrim(\rtrim(\number_format($sum, 4, '.', ''), '0'), '.')));
+        }
+    }
+
+    /** Sum of the percentValue of every visible Percent column. */
+    private function visiblePercentSum(): float
+    {
+        $sum = 0.0;
+        foreach ($this->columns as $i => $col) {
+            if ($col->columnWidth === ColumnWidth::Percent && !\in_array($i, $this->hiddenCols, true)) {
+                $sum += $col->percentValue;
+            }
+        }
+
+        return $sum;
     }
 
     /**
@@ -2024,6 +2067,13 @@ final class Table
         $hiddenLookup = \array_flip($this->hiddenCols);
         $visibleCount = 0;
 
+        // OG-9 arm A (ST-61): an over-subscribed Percent set (sum > 100) is
+        // normalised to a 100 total, so the converge loop below has a fixed
+        // point and the box stays inside the table width instead of growing
+        // with the over-subscription. Sets at or under 100 are untouched.
+        $percentSum = $this->visiblePercentSum();
+        $percentScale = $percentSum > 100.0 ? 100.0 / $percentSum : 1.0;
+
         // First pass: collect Fixed/Percent widths, count flexible columns
         foreach ($this->columns as $i => $col) {
             if (isset($hiddenLookup[$i])) {
@@ -2037,7 +2087,7 @@ final class Table
             if ($cw === ColumnWidth::Fixed) {
                 $widths[$i] = $col->width;
             } elseif ($cw === ColumnWidth::Percent) {
-                $widths[$i] = (int) \floor($tableWidth * $col->percentValue / 100);
+                $widths[$i] = (int) \floor($tableWidth * $col->percentValue * $percentScale / 100);
             } else {
                 $widths[$i] = null;  // Dynamic or Content — placeholder
                 $flexCount++;
@@ -2215,7 +2265,7 @@ final class Table
                 continue;
             }
             // StyledCell measures its display value, never its SGR wrapper.
-            $str = Sanitize::value(self::plainText($val), false, $this->markedFrameSanitization);
+            $str = Sanitize::value($col->formatText(self::plainText($val)), false, $this->markedFrameSanitization);
             $len = Width::of($str);
             if ($len > $maxLen) {
                 $maxLen = $len;

@@ -784,6 +784,14 @@ The resolver computes widths in several passes:
    (Flex contributes its weight, Dynamic and Content count as one share each)
 5. **Content**: exact content width (min 1)
 
+**Over-subscribed percents.** Visible `Percent` columns summing past 100 are
+normalised (each scaled by `100 / sum`) so the set terminates inside the table
+width — two 60% columns lay out exactly like two 50% ones, with or without a
+`withWidth()` pin; sets at or under 100 are untouched. `withStrictPercent(true)`
+is the opt-in alternative: the same sum throws `InvalidArgumentException` when
+it is configured (`withStrictPercent()`, `withColumns()`, `withHiddenCols()`),
+counting visible columns only.
+
 ## Keeping a Table Across Frames
 
 The render path memoizes its expensive work — the per-column content-width
@@ -1211,6 +1219,7 @@ in this README is still documented — this table is the completeness floor.
 | `withOverflowArrows(bool $v = true): self` | '«'/'»' header overflow marks |
 | `scrollX(): int` | Horizontal scroll offset |
 | `scrollLeft(): self` / `scrollRight(): self` | Pan one scrollable column |
+| `withStrictPercent(bool $v = true): self` | Throw when visible Percent columns sum past 100 |
 | `withRowSeparator(bool $v = true): self` | Rule between data rows |
 | `withStaticFooter(string $text): self` | Fixed footer text replacing the Page/Rows label |
 | `withPaginationWrap(bool $v = true): self` | Cycle cursor/pages instead of clamping |
