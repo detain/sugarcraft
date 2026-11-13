@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\ColorProfile\Probe;
 
+use SugarCraft\Core\Util\Proc\WindowsPipes;
+
 /**
  * Single source of truth for locating the `infocmp` terminfo binary.
  *
@@ -220,8 +222,16 @@ final class InfocmpBinary
             \stream_set_blocking($pipes[1], false);
             \stream_set_blocking($pipes[2], false);
 
+            // Windows (an MSYS infocmp from Git for Windows): the pipes stay
+            // blocking and an fread on the empty stderr parks until the child
+            // exits, so the deadline below was never consulted. Read only what
+            // fstat reports waiting there; EOF is the exit, sampled before the
+            // reads, plus empty pipes.
+            $windows = WindowsPipes::runtimeNeedsIt();
+
             while (true) {
-                $chunk = \fread($pipes[1], 8192);
+                $exited = $windows && !(\proc_get_status($handle)['running'] ?? false);
+                $chunk = $windows ? WindowsPipes::readAvailable($pipes[1], 8192) : \fread($pipes[1], 8192);
                 if (\is_string($chunk) && $chunk !== '') {
                     if (!$pastCap) {
                         $room = self::OUTPUT_CAP_BYTES - \strlen($stdout);
@@ -235,9 +245,12 @@ final class InfocmpBinary
                 }
                 // stderr drains and discards: an unread error pipe is how a
                 // merely chatty infocmp turns into a blocked child.
-                \fread($pipes[2], 8192);
+                $windows ? WindowsPipes::readAvailable($pipes[2], 8192) : \fread($pipes[2], 8192);
 
-                if (\feof($pipes[1]) && \feof($pipes[2])) {
+                if ($windows
+                    ? $exited && WindowsPipes::available($pipes[1]) === 0 && WindowsPipes::available($pipes[2]) === 0
+                    : \feof($pipes[1]) && \feof($pipes[2])
+                ) {
                     break;
                 }
 

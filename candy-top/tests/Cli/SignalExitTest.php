@@ -38,8 +38,11 @@ final class SignalExitTest extends TestCase
     /** @return iterable<string, array{int}> */
     public static function signals(): iterable
     {
-        yield 'SIGTERM' => [SIGTERM];
-        yield 'SIGHUP' => [SIGHUP];
+        // Numbers, not pcntl constants: the provider runs at suite load, and on
+        // a host without pcntl (Windows) a bare SIGTERM is an undefined
+        // constant that killed the whole suite (rc 255) before setUp could skip.
+        yield 'SIGTERM' => [15];
+        yield 'SIGHUP' => [1];
     }
 
     #[DataProvider('signals')]

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dashboard\Plugin;
 
+use SugarCraft\Core\Util\Executable\Locator;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Dashboard\Module\LegacyModule;
 use SugarCraft\Core\Util\Sanitize;
@@ -605,23 +606,10 @@ final class ExternalModule implements LegacyModule
         if ($command === '') {
             return null;
         }
-        if (str_contains($command, DIRECTORY_SEPARATOR) || str_contains($command, '/')) {
-            return (is_file($command) && is_executable($command)) ? $command : null;
-        }
-        $pathEnv = getenv('PATH');
-        if (!is_string($pathEnv) || $pathEnv === '') {
-            return null;
-        }
-        $sep = DIRECTORY_SEPARATOR === '\\' ? ';' : ':';
-        foreach (explode($sep, $pathEnv) as $dir) {
-            if ($dir === '') {
-                continue;
-            }
-            $candidate = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $command;
-            if (is_file($candidate) && is_executable($candidate)) {
-                return $candidate;
-            }
-        }
-        return null;
+
+        // sugar-core's Locator: PATH plus PATHEXT on Windows, where a bare
+        // `my-plugin` is `my-plugin.exe`/`.cmd` on disk and PHP's own
+        // is_executable() is false for a .cmd or .bat.
+        return Locator::locate($command);
     }
 }

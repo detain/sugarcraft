@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image;
 
+use SugarCraft\Core\Util\Proc\WindowsPipes;
 use SugarCraft\ColorProfile\Probe\Capability as ProbeCapability;
 use SugarCraft\ColorProfile\Probe\TerminalProbe;
 use SugarCraft\Core\Util\TtyDetect;
@@ -718,9 +719,10 @@ final class Detect
             return null;
         }
         $descriptorSpec = [
-            0 => ['file', '/dev/null', 'r'],
+            // NUL on Windows, which has no /dev/null.
+            0 => ['file', \DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null', 'r'],
             1 => ['pipe', 'w'],
-            2 => ['file', '/dev/null', 'w'],
+            2 => ['file', \DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null', 'w'],
         ];
         $pipes = [];
         $proc = @proc_open(
@@ -735,7 +737,15 @@ final class Detect
         $stdout    = '';
         $completed = false;
         $deadline  = Deadline::in(self::TERMFEATURES_DEADLINE_MS);
-        while (true) {
+        if (WindowsPipes::runtimeNeedsIt()) {
+            // A Windows pipe defeats the select loop below (ready while
+            // empty, then a parked fread); read what fstat reports waiting
+            // until the child exits, under the same deadline.
+            $drained = WindowsPipes::drainUntilExit([1 => $pipes[1]], WindowsPipes::runningProbe($proc), microtime(true) + self::TERMFEATURES_DEADLINE_MS / 1000, self::TERMFEATURES_MAX_BYTES + 1);
+            $stdout = $drained['buffers'][1];
+            $completed = !$drained['timedOut'] && strlen($stdout) <= self::TERMFEATURES_MAX_BYTES;
+        }
+        while (!WindowsPipes::runtimeNeedsIt()) {
             $remaining = $deadline->remainingMs();
             if ($remaining <= 0) {
                 break;

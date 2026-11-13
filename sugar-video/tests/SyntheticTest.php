@@ -25,6 +25,14 @@ final class SyntheticTest extends TestCase
      * FAIL ON MASTER: the old buildSyntheticGif() emits 1 frame.
      * PASS AFTER FIX: Synthetic::generate() emits 16 phase-shifted frames.
      */
+    public function testDefaultPathLivesInTheHostTempDirectory(): void
+    {
+        // `/tmp` does not exist on Windows; the default follows sys_get_temp_dir().
+        $path = Synthetic::defaultPath();
+        $this->assertSame(\rtrim(\sys_get_temp_dir(), '/\\'), \dirname($path));
+        $this->assertSame('sugar-video-synthetic.gif', \basename($path));
+    }
+
     public function testGenerateProducesAnimatedGif(): void
     {
         if (!extension_loaded('gd')) {

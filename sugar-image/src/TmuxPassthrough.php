@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image;
 
+use SugarCraft\Core\Util\Proc\WindowsPipes;
 use SugarCraft\Image\Support\TmuxBinary;
 
 /**
@@ -207,9 +208,10 @@ final class TmuxPassthrough
             return null;
         }
         $descriptorSpec = [
-            0 => ['file', '/dev/null', 'r'],
+            // NUL on Windows, which has no /dev/null.
+            0 => ['file', \DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null', 'r'],
             1 => ['pipe', 'w'],
-            2 => ['file', '/dev/null', 'w'],
+            2 => ['file', \DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null', 'w'],
         ];
         $pipes = [];
         $proc = @proc_open(array_merge([$binary], $args), $descriptorSpec, $pipes);
@@ -225,7 +227,15 @@ final class TmuxPassthrough
         $stdout = '';
         $completed = false;
         $deadline = hrtime(true) / 1_000_000_000 + self::EXEC_DEADLINE_SECONDS;
-        while (true) {
+        if (WindowsPipes::runtimeNeedsIt()) {
+            // A Windows pipe defeats the select loop below (ready while
+            // empty, then a parked fread); read what fstat reports waiting
+            // until the child exits, under the same deadline.
+            $drained = WindowsPipes::drainUntilExit([1 => $pipes[1]], WindowsPipes::runningProbe($proc), microtime(true) + self::EXEC_DEADLINE_SECONDS, self::MAX_OUTPUT_BYTES + 1);
+            $stdout = $drained['buffers'][1];
+            $completed = !$drained['timedOut'] && strlen($stdout) <= self::MAX_OUTPUT_BYTES;
+        }
+        while (!WindowsPipes::runtimeNeedsIt()) {
             $remaining = $deadline - hrtime(true) / 1_000_000_000;
             if ($remaining <= 0) {
                 break;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Top\Cli;
 
+use SugarCraft\Core\Util\Proc\WindowsPipes;
 use Composer\InstalledVersions;
 use SugarCraft\Top\Support\Version;
 
@@ -264,29 +265,38 @@ final class Help
         $stdout = '';
         $timedOut = false;
         $deadline = \microtime(true) + $timeoutSeconds;
-        while (true) {
-            if (\feof($pipes[1]) && \feof($pipes[2])) {
-                break;
-            }
-            $remaining = $deadline - \microtime(true);
-            if ($remaining <= 0.0) {
-                $timedOut = true;
-                break;
-            }
-            $read = [$pipes[1], $pipes[2]];
-            $write = null;
-            $except = null;
-            $ready = @\stream_select($read, $write, $except, (int) $remaining, (int) (($remaining - (int) $remaining) * 1_000_000));
-            if ($ready === false) {
-                break; // interrupted; drain what arrived, judge below
-            }
-            foreach ($read as $stream) {
-                $chunk = \fread($stream, 8192);
-                if ($chunk === false || $chunk === '') {
-                    continue;
+        if (WindowsPipes::runtimeNeedsIt()) {
+            // A Windows pipe defeats the select loop below (ready while empty,
+            // then a parked fread), so the timeout never fired there; read
+            // what fstat reports waiting until the child exits instead.
+            $drained = WindowsPipes::drainUntilExit([1 => $pipes[1], 2 => $pipes[2]], WindowsPipes::runningProbe($process), $deadline, $maxBytes);
+            $stdout = $drained['buffers'][1];
+            $timedOut = $drained['timedOut'];
+        } else {
+            while (true) {
+                if (\feof($pipes[1]) && \feof($pipes[2])) {
+                    break;
                 }
-                if ($stream === $pipes[1]) {
-                    $stdout .= \substr($chunk, 0, \max(0, $maxBytes - \strlen($stdout)));
+                $remaining = $deadline - \microtime(true);
+                if ($remaining <= 0.0) {
+                    $timedOut = true;
+                    break;
+                }
+                $read = [$pipes[1], $pipes[2]];
+                $write = null;
+                $except = null;
+                $ready = @\stream_select($read, $write, $except, (int) $remaining, (int) (($remaining - (int) $remaining) * 1_000_000));
+                if ($ready === false) {
+                    break; // interrupted; drain what arrived, judge below
+                }
+                foreach ($read as $stream) {
+                    $chunk = \fread($stream, 8192);
+                    if ($chunk === false || $chunk === '') {
+                        continue;
+                    }
+                    if ($stream === $pipes[1]) {
+                        $stdout .= \substr($chunk, 0, \max(0, $maxBytes - \strlen($stdout)));
+                    }
                 }
             }
         }

@@ -9,6 +9,7 @@ use React\EventLoop\LoopInterface;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 
+use SugarCraft\Core\Util\Proc\WindowsPipes;
 use function React\Promise\resolve;
 
 /**
@@ -117,6 +118,12 @@ final class AsyncCommand
         // the give-up path below kills and reports Timeout honestly.
         $selectErrors = 0;
         while (!$child->drain() && ($left = $deadline - self::now()) > 0) {
+            if (WindowsPipes::runtimeNeedsIt()) {
+                // select() calls a Windows pipe ready while it is empty, so it
+                // would spin here; drain() polls, so nap one short slice.
+                usleep((int) max(1000, min(WindowsPipes::POLL_MICROSECONDS, $left * 1e6)));
+                continue;
+            }
             $read = [$child->stdout];
             $write = $except = null;
             if (@stream_select($read, $write, $except, 0, (int) max(1000, min(200000, $left * 1e6))) === false) {
@@ -186,13 +193,27 @@ final class AsyncCommand
         // through these closures would removeReadStream a resource id that
         // now belongs to ANOTHER child's fresh stdout (cross-talk stall).
         $settled = false;
+        // Windows: a pipe is not a usable read-stream watch (select calls it
+        // ready while empty, so the loop would spin on the callback); the
+        // same callback runs off a short periodic timer there instead, and
+        // drain() reads only what is waiting.
+        $windowsPoll = null;
+        $unwatch = static function () use ($loop, $stdout, &$windowsPoll): void {
+            if ($windowsPoll !== null) {
+                $loop->cancelTimer($windowsPoll);
+                $windowsPoll = null;
 
-        $timedOut = static function () use ($child, $loop, $deferred, $stdout, &$settled): void {
+                return;
+            }
+            $loop->removeReadStream($stdout);
+        };
+
+        $timedOut = static function () use ($child, $loop, $deferred, $unwatch, &$settled): void {
             if ($settled) {
                 return;
             }
             $settled = true;
-            $loop->removeReadStream($stdout);
+            $unwatch();
             $child->closeStdout();
             $child->kill();
             $child->reapOnLoop($loop);
@@ -204,14 +225,14 @@ final class AsyncCommand
         // kill reaches the direct child only: argv is exec'd without a shell, so that
         // child IS the tool.
         $timer = $loop->addTimer($timeout, $timedOut);
-        $loop->addReadStream($stdout, static function () use ($child, $loop, $deferred, $stdout, $deadline, &$timer, $timedOut, &$settled): void {
+        $onReadable = static function () use ($child, $loop, $deferred, $unwatch, $deadline, &$timer, $timedOut, &$settled): void {
             if ($settled) {
                 return; // the deadline arm already tore this child down
             }
             if (!$child->drain()) {
                 return;
             }
-            $loop->removeReadStream($stdout);
+            $unwatch();
             $loop->cancelTimer($timer);
             $child->closeStdout();
             if ($child->overflow) {
@@ -240,7 +261,12 @@ final class AsyncCommand
                     $timedOut();
                 }
             });
-        });
+        };
+        if (WindowsPipes::runtimeNeedsIt()) {
+            $windowsPoll = $loop->addPeriodicTimer(WindowsPipes::POLL_MICROSECONDS / 1e6, $onReadable);
+        } else {
+            $loop->addReadStream($stdout, $onReadable);
+        }
 
         return $deferred->promise();
     }
@@ -364,7 +390,7 @@ final class AsyncCommand
         // The contract is an executable path; enforce it here so no caller can
         // widen it by accident and a PATH planted by whoever started the TUI
         // never picks the binary.
-        if ($argv === [] || !\str_contains((string) $argv[0], '/')) {
+        if ($argv === [] || !self::isPath((string) $argv[0])) {
             return null;
         }
         self::reapExited();
@@ -404,6 +430,47 @@ final class AsyncCommand
         return $child;
     }
 
+    /**
+     * Whether $program is a path rather than a bare name for a PATH search.
+     * A Windows absolute path (`C:\…`, `\\server\…`) carries no `/`, and the
+     * old `/`-only test refused it, which kept the GPU panel's nvidia-smi
+     * from ever running there.
+     */
+    private static function isPath(string $program): bool
+    {
+        if (\str_contains($program, '/')) {
+            return true;
+        }
+
+        return PHP_OS_FAMILY === 'Windows' && \str_contains($program, '\\');
+    }
+
+    /**
+     * drain() on Windows: a pipe there cannot be made non-blocking and its
+     * fread parks until the child writes or exits (a 1 s timeout returned
+     * after 7.16 s), so read only what fstat reports waiting. EOF cannot be
+     * seen on a Windows pipe either; it is the child's exit, sampled BEFORE
+     * the reads, plus an empty pipe.
+     */
+    private function drainWindows(): bool
+    {
+        $exited = $this->exited();
+        while (($chunk = WindowsPipes::readAvailable($this->stdout, 65536)) !== '') {
+            $this->output .= $chunk;
+            if (\strlen($this->output) > $this->maxBytes) {
+                $this->overflow = true;
+                $this->output = '';
+
+                return true;
+            }
+        }
+        if ($exited) {
+            $this->eof = true;
+        }
+
+        return $this->eof;
+    }
+
     /** Close every registered child that has exited (never blocks). */
     private static function reapExited(): void
     {
@@ -419,6 +486,9 @@ final class AsyncCommand
     {
         if ($this->stdout === null) {
             return $this->eof || $this->overflow;
+        }
+        if (WindowsPipes::runtimeNeedsIt()) {
+            return $this->drainWindows();
         }
         while (($chunk = @fread($this->stdout, 65536)) !== false && $chunk !== '') {
             $this->output .= $chunk;

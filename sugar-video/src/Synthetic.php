@@ -17,8 +17,19 @@ namespace SugarCraft\Video;
  */
 final class Synthetic
 {
-    /** Default on-disk path for the generated demo GIF. */
+    /**
+     * The POSIX spelling of the default path, kept for callers that read it.
+     * {@see defaultPath()} is what generate() actually uses: `/tmp` does not
+     * exist on Windows, where this string resolves against the current
+     * drive's root.
+     */
     public const DEFAULT_PATH = '/tmp/sugar-video-synthetic.gif';
+
+    /** Default on-disk path for the generated demo GIF: the host's temp directory. */
+    public static function defaultPath(): string
+    {
+        return \rtrim(\sys_get_temp_dir(), '/\\') . \DIRECTORY_SEPARATOR . 'sugar-video-synthetic.gif';
+    }
 
     /** 1×1 transparent GIF used when GD is absent or no frames were produced. */
     private const FALLBACK_GIF = "GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x01\x00;";
@@ -30,7 +41,7 @@ final class Synthetic
      * sweeps across the image, producing a genuine animation when decoded
      * and displayed frame-by-frame.
      *
-     * @param string $path     Output file path
+     * @param ?string $path    Output file path (null: {@see defaultPath()})
      * @param int    $w        Image width in pixels
      * @param int    $h        Image height in pixels
      * @param int    $frames   Number of animation frames (≥2 for animation)
@@ -38,12 +49,14 @@ final class Synthetic
      * @return string The path where the GIF was written
      */
     public static function generate(
-        string $path = self::DEFAULT_PATH,
+        ?string $path = null,
         int $w = 120,
         int $h = 60,
         int $frames = 16,
         int $delayCs = 8,
     ): string {
+        $path ??= self::defaultPath();
+
         // GD-absent fallback: emit the same 1×1 transparent GIF bytes that
         // Reel.php has used historically.  Callers treat any returned path
         // as a valid GIF, so this single-frame fallback is safe — and the

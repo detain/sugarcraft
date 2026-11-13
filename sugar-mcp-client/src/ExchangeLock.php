@@ -119,7 +119,7 @@ final class ExchangeLock
             // House law (candy-core AtomicJsonFile): chmod before the payload
             // publishes, verify it took, and refuse LOUD rather than run
             // unlocked-or-readable.
-            if (@chmod($candidate, 0600) === false || self::modeOf($candidate) !== 0600) {
+            if (self::enforcesModeBits() && (@chmod($candidate, 0600) === false || self::modeOf($candidate) !== 0600)) {
                 fclose($handle);
                 @unlink($candidate);
                 $modeRefused = $candidate;
@@ -480,7 +480,7 @@ final class ExchangeLock
             return null;
         }
 
-        if ($owner && self::modeOf($this->path) !== 0600) {
+        if ($owner && self::enforcesModeBits() && self::modeOf($this->path) !== 0600) {
             // The create-to-chmod window is real (the file briefly exists at
             // the umask default) but BOUNDED and ALWAYS corrected: chmod now,
             // re-verify, and refuse to run on a file that stays readable to
@@ -500,5 +500,17 @@ final class ExchangeLock
         $this->handlePid = $pid;
 
         return $handle;
+    }
+
+    /**
+     * Whether this host has POSIX permission bits to set and verify. Windows
+     * has none: chmod() only toggles read-only and fileperms() reads 0666 for
+     * any writable file, so the 0600 verify failed on EVERY Windows run and
+     * no stdio MCP server could start there. The lock file lives under the
+     * user's own temp directory, which the profile ACL already keeps private.
+     */
+    private static function enforcesModeBits(): bool
+    {
+        return \DIRECTORY_SEPARATOR !== '\\';
     }
 }

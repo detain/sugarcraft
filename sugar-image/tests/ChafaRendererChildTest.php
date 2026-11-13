@@ -217,7 +217,7 @@ final class ChafaRendererChildTest extends TestCase
             // pins is unchanged. (Re-anchored in this lane: the old
             // single-line literal was the shape SI-03 grew.) The #
             // delimiter keeps the literal /dev/null path readable.
-            '#0 => \[\'file\', \'/dev/null\', \'r\'\],\s*1 => \[\'pipe\', \'w\'\],\s*2 => \[\'file\', \$errPath, \'w\'\],\s*\];#',
+            '#0 => \[\'file\', self::devNull\(\), \'r\'\],\s*1 => \[\'pipe\', \'w\'\],\s*2 => \[\'file\', \$errPath, \'w\'\],\s*\];#',
             $source,
             'render() must anchor fd 0 on /dev/null and hold exactly one pipe (stdout) plus a file sink on fd 2',
         );
@@ -310,7 +310,7 @@ final class ChafaRendererChildTest extends TestCase
 
         $this->assertSame(
             2,
-            substr_count($src, "0 => ['file', '/dev/null', 'r']"),
+            substr_count($src, "0 => ['file', self::devNull(), 'r']"),
             'finding 012: both proc_open sites (probe + render) anchor stdin — an unspecified fd 0 leg hands the child OUR terminal input',
         );
         $this->assertStringNotContainsString(

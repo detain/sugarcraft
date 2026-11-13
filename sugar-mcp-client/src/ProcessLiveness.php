@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\McpClient;
 
+use SugarCraft\Core\Util\Tty\Kernel32;
+
 /**
  * The single home of the signal-0 liveness contract this library leans on
  * in three places: who may claim an id sequence, whether a lock's owner
@@ -42,6 +44,20 @@ final class ProcessLiveness
 
         if (is_dir('/proc/self')) {
             return file_exists("/proc/{$pid}");
+        }
+
+        // Windows has neither: ask kernel32 (OpenProcess + exit code), which
+        // certifies absence the way ESRCH does. Without it a crashed
+        // session's lock file was never reclaimed there.
+        if (\PHP_OS_FAMILY === 'Windows' && \extension_loaded('ffi')) {
+            try {
+                $alive = Kernel32::self()->processAlive($pid);
+                if ($alive !== null) {
+                    return $alive;
+                }
+            } catch (\Throwable) {
+                // No answer is "alive", like every other uncertain arm.
+            }
         }
 
         return true;

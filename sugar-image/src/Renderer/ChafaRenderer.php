@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Image\Renderer;
 
+use SugarCraft\Core\Util\Proc\WindowsPipes;
 use SugarCraft\Core\Util\Sanitize;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Lang;
@@ -193,7 +194,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
             // read before it re-opens the unbounded-wait door finding
             // 005 just closed. The sink is this library's own shape for
             // "child output we read after the child is gone".
-            [0 => ['file', '/dev/null', 'r'], 1 => ['file', $outPath, 'w'], 2 => ['file', '/dev/null', 'w']],
+            [0 => ['file', self::devNull(), 'r'], 1 => ['file', $outPath, 'w'], 2 => ['file', self::devNull(), 'w']],
             $pipes,
         );
         if (!is_resource($proc)) {
@@ -286,7 +287,8 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
             // fd 0 on /dev/null (finding 012): a render child inherits
             // our stdin otherwise, and a chafa that reads it would eat
             // user input or wait for an EOF that never comes.
-            0 => ['file', '/dev/null', 'r'],
+            // NUL on Windows, which has no /dev/null.
+            0 => ['file', self::devNull(), 'r'],
             1 => ['pipe', 'w'],
             2 => ['file', $errPath, 'w'],
         ];
@@ -306,7 +308,7 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
                 throw new \RuntimeException(Lang::t('chafa.command_failed', ['error' => 'proc_open returned false']));
             }
 
-            $stdout = self::drainStdout($pipes[1]);
+            $stdout = self::drainStdout($pipes[1], WindowsPipes::runningProbe($process));
             fclose($pipes[1]);
 
             $exitCode = self::reap($process);
@@ -388,10 +390,13 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
      *
      * @param resource $pipe
      */
-    private static function drainStdout($pipe): string
+    private static function drainStdout($pipe, ?\Closure $running = null): string
     {
         $stdout   = '';
         $deadline = self::drainDeadline();
+        if ($running !== null && WindowsPipes::runtimeNeedsIt()) {
+            return self::drainStdoutWindows($pipe, $running);
+        }
         while (true) {
             $read  = [$pipe];
             $write = $except = null;
@@ -421,6 +426,45 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
         }
 
         return $stdout;
+    }
+
+    /**
+     * drainStdout() on Windows: the pipe stays blocking there and select()
+     * calls it ready while empty, so read only what fstat reports waiting.
+     * The no-progress watchdog is the same; EOF is the child's exit (sampled
+     * before the reads) plus an empty pipe.
+     *
+     * @param resource $pipe
+     * @param \Closure(): bool $running
+     */
+    private static function drainStdoutWindows($pipe, \Closure $running): string
+    {
+        $stdout   = '';
+        $deadline = self::drainDeadline();
+        while (microtime(true) < $deadline) {
+            $exited = !$running();
+            $chunk  = WindowsPipes::readAvailable($pipe, self::STDOUT_CHUNK_BYTES);
+            if ($chunk === '') {
+                if ($exited) {
+                    break;
+                }
+                usleep(WindowsPipes::POLL_MICROSECONDS);
+                continue;
+            }
+            $deadline = self::drainDeadline();
+            $room     = self::MAX_STDOUT_BYTES - strlen($stdout);
+            if ($room > 0) {
+                $stdout .= strlen($chunk) <= $room ? $chunk : substr($chunk, 0, $room);
+            }
+        }
+
+        return $stdout;
+    }
+
+    /** The null device every spawn anchors stdin (and the probe's stderr) on: NUL on Windows. */
+    private static function devNull(): string
+    {
+        return \DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
     }
 
     /** Progress-reset clock for the drain watchdog (seam-aware). */
@@ -548,7 +592,9 @@ final class ChafaRenderer implements Renderer, ConfigFingerprintProvider
         $owner = @fileowner($dir);
         $perms = @fileperms($dir);        if ($owner === false || $perms === false
             || $owner !== (function_exists('posix_getuid') ? posix_getuid() : $owner)
-            || ($perms & 0777) !== 0700) {
+            // Windows has no POSIX mode bits (directories read 0777), so the
+            // exact-0700 test can only fail there; the profile ACL guards it.
+            || (\DIRECTORY_SEPARATOR !== '\\' && ($perms & 0777) !== 0700)) {
             return self::$sinkDir = $system;
         }
 

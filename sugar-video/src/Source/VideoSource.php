@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Video\Source;
 
+use SugarCraft\Core\Util\Proc\WindowsPipes;
 use SugarCraft\Core\Util\Proc\BoundedShutdown;
 use SugarCraft\Video\Support\FfmpegCommandBuilder;
 use SugarCraft\Core\Util\Sanitize;
@@ -238,7 +239,7 @@ final class VideoSource
         // a monotonic (hrtime) deadline instead: on overrun the child is killed and the
         // probe returns the empty default (the same "unknown source" shape an
         // absent ffprobe already yields), so playback degrades instead of hanging.
-        $stdout = self::drainWithTimeout($pipes[1], self::PROBE_TIMEOUT_SECONDS);
+        $stdout = self::drainWithTimeout($pipes[1], self::PROBE_TIMEOUT_SECONDS, WindowsPipes::runningProbe($process));
         fclose($pipes[1]);
 
         if ($stdout === null) {
@@ -301,10 +302,22 @@ final class VideoSource
      * The deadline runs on hrtime(), not the wall clock: an NTP step must never
      * truncate the bound and kill a healthy ffprobe mid-drain.
      *
+     * On Windows none of that applies to a pipe (it stays blocking, select()
+     * calls it ready while empty, and the fread parks until ffprobe exits),
+     * so the deadline was lost there; the Windows arm reads only what fstat
+     * reports waiting and treats the child's exit as EOF ($running).
+     *
      * @param resource $pipe
+     * @param null|\Closure(): bool $running child-still-running probe (the Windows arm needs it)
      */
-    private static function drainWithTimeout($pipe, float $timeoutSeconds): ?string
+    private static function drainWithTimeout($pipe, float $timeoutSeconds, ?\Closure $running = null): ?string
     {
+        if ($running !== null && WindowsPipes::runtimeNeedsIt()) {
+            $drained = WindowsPipes::drainUntilExit([$pipe], $running, microtime(true) + $timeoutSeconds, self::MAX_PROBE_OUTPUT_BYTES);
+
+            return $drained['timedOut'] || $drained['overflowed'] ? null : $drained['buffers'][0];
+        }
+
         stream_set_blocking($pipe, false);
         $deadline = hrtime(true) / 1e9 + $timeoutSeconds;
         $buffer = '';

@@ -126,7 +126,10 @@ final class Discovery
             return null;
         }
 
-        $perms = @fileperms($real);
+        // Windows has no POSIX mode bits: every directory reads 0777 there,
+        // so this check refused EVERY plugin directory on Windows. Its access
+        // control is the ACL, which the user profile already keeps private.
+        $perms = \DIRECTORY_SEPARATOR === '\\' ? false : @fileperms($real);
         if ($perms !== false && ($perms & 0o0022) !== 0) {
             error_log("Discovery: refusing to scan group/world-writable plugin directory '{$real}' (finding sugar-dashboard-090).");
 
