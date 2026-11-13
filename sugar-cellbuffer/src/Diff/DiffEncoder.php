@@ -191,6 +191,23 @@ final class DiffEncoder
         return $out;
     }
 
+    /**
+     * Precondition (same house law as {@see encodeRepeatRun()}'s glyph
+     * caveat): ECH erases with the TERMINAL'S ACTIVE pen — the erased
+     * columns take the current SGR background, they are not forced to the
+     * default blank. Real {@see Buffer::diff()} output always settles the
+     * pen to the default style before an EraseRunOp (blank runs are only
+     * detected against default-style cells, and the pen transition riding
+     * the preceding ops clears it), so the wire and the grid agree. A
+     * HAND-BUILT stream that erases under an active pen diverges from the
+     * model it claims to paint: {@see Buffer::applyDiff()} writes true
+     * default blanks into the grid regardless of the pen, so the model
+     * reads blank-by-value while the wire says "blank in the pen's
+     * colour". The encoder deliberately does NOT inject a reset: that
+     * would tax every real frame (the safe path) to cover a caller bug.
+     * Byte-shape evidence: see the wire-shape pin in DiffEncoderTest
+     * (documents, does not bless).
+     */
     private function encodeEraseRun(EraseRunOp $op): string
     {
         if ($op->count <= 0) {

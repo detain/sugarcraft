@@ -550,4 +550,43 @@ final class DiffEncoderTest extends TestCase
 
         self::assertSame("\x1b[1;1H", $buf->diffToAnsi($buf));
     }
+
+    /**
+     * CB-29 (documents, does not bless): ECH erases with the terminal's
+     * ACTIVE pen. Real diff() never reaches this shape — blank runs are
+     * detected against default-style cells so the pen is already reset —
+     * but a hand-built stream that erases under bold-red produces the
+     * bytes verbatim: no reset is injected before \x1b[3X. This pin is
+     * the byte evidence for the encodeEraseRun() precondition docblock;
+     * the model side (applyDiff) writes true default blanks regardless,
+     * which is exactly the wire-vs-grid divergence being disclosed.
+     */
+    public function testEraseRunWithActivePenDocumentsWireShape(): void
+    {
+        $pen = new Style(fg: 0xFF0000, attrs: Style::ATTR_BOLD);
+
+        $bytes = (new DiffEncoder())->encode([
+            new SetStyleOp($pen),
+            new MoveCursorOp(2, 1),
+            new EraseRunOp(3),
+        ]);
+
+        // SGR transition lands, CUP addresses, ECH rides the pen UNCLEARED,
+        // trailing reset only appears in the epilogue.
+        self::assertSame(
+            "\x1b[1;1H\x1b[0;38;2;255;0;0;1m\x1b[2;3H\x1b[3X\x1b[0m",
+            $bytes,
+        );
+
+        // And the grid model side: the same stream applied to a buffer
+        // yields default blanks — value-equal to Cell::new(), NOT pen-tinted.
+        $buf = Buffer::new(6, 3)->applyDiff([
+            new SetStyleOp($pen),
+            new MoveCursorOp(2, 1),
+            new EraseRunOp(3),
+        ]);
+        foreach ([2, 3, 4] as $col) {
+            self::assertTrue($buf->cellAt($col, 1)->equals(Cell::blank()));
+        }
+    }
 }
