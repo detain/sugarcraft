@@ -55,8 +55,7 @@ use SugarCraft\Pty\PtyException;
  * argument-injection primitive that no quoting can express. It is refused at
  * the boundary that can still name it.
  *
- * Mirrors charmbracelet/x/exec's Windows `escapeArgs` step, and the
- * `CommandLineToArgvW` contract at
+ * The `CommandLineToArgvW` contract at
  * https://learn.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments
  */
 final class CommandLine

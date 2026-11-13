@@ -13,7 +13,8 @@ use SugarCraft\Pty\PumpOptions;
  * Byte pump that forwards stdin ↔ master PTY with back-pressure,
  * EOF grace, and optional SIGWINCH / keepalive / child-exit callbacks.
  *
- * Mirrors charmbracelet/bubbletea/pty.Pump for Go parity.
+ * For Go parity this mirrors the pump leg of bubbletea's pty-driven
+ * event loop; there is no upstream type named Pump.
  * Extracted from {@see \SugarCraft\SshServer\Transport\InProcessTransport}.
  *
  * @see creack/pty.Pump

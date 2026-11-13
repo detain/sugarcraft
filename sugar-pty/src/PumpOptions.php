@@ -9,10 +9,14 @@ use SugarCraft\Core\Concerns\Mutable;
 /**
  * Readonly value object holding pump configuration for the PTY byte pump.
  *
- * Mirrors charmbracelet/bubbletea/pty.PumpOptions for Go parity.
+ * For Go parity this mirrors the options object of bubbletea's
+ * pty-driven event loop; there is no upstream type named PumpOptions.
  *
  * Defaults are pulled verbatim from the SSH-tested values in
  * InProcessTransport so there is zero behavioural drift on migration.
+ * Those values live INLINE in InProcessTransport — it names no
+ * constants — so the per-option notes below cite the class, never a
+ * fabricated constant symbol (sugar-pty-028).
  */
 final class PumpOptions
 {
@@ -25,7 +29,8 @@ final class PumpOptions
      * stream_select poll interval — 50 ms keeps CPU near zero on idle
      * while staying snappy under typing-rate I/O.
      *
-     * Mirrors InProcessTransport::PUMP_TIMEOUT_USEC.
+     * The inline select deadline of sugar-ssh-server's
+     * InProcessTransport became DEFAULT_SELECT_TIMEOUT_US here.
      */
     public const DEFAULT_SELECT_TIMEOUT_US = 50000;
 
@@ -34,7 +39,8 @@ final class PumpOptions
      * the PTY. Drains any tail bytes the kernel buffered on the master
      * after the child exited or stdin EOF'd.
      *
-     * Mirrors InProcessTransport::FLUSH_DEADLINE_SEC.
+     * The inline post-loop flush window of sugar-ssh-server's
+     * InProcessTransport became DEFAULT_FLUSH_DEADLINE_SEC here.
      */
     public const DEFAULT_FLUSH_DEADLINE_SEC = 0.5;
 
@@ -45,7 +51,8 @@ final class PumpOptions
      * / cat / well-behaved children; daemon-style children (sleep,
      * non-tty-aware loops) get force-closed at the deadline.
      *
-     * Mirrors InProcessTransport::STDIN_EOF_GRACE_SEC.
+     * The inline stdin-EOF grace of sugar-ssh-server's
+     * InProcessTransport became DEFAULT_STDIN_EOF_GRACE_SEC here.
      */
     public const DEFAULT_STDIN_EOF_GRACE_SEC = 0.3;
 
@@ -53,7 +60,8 @@ final class PumpOptions
      * VEOF char (Ctrl+D, 0x04). In cooked-mode PTY this signals EOF
      * on the slave's stdin to the inner child.
      *
-     * Mirrors InProcessTransport::VEOF.
+     * The inline VEOF byte of sugar-ssh-server's InProcessTransport
+     * became DEFAULT_VEOF here.
      */
     public const DEFAULT_VEOF = "\x04";
 

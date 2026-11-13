@@ -472,7 +472,8 @@ final class Expect
      * the returned Expect carries the pre-EOF output in `$before` and a
      * null `$lastMatch`.
      *
-     * Mirrors charmbracelet/mbubbletea/expect.Exp.
+     * The antecedent is Netflix's go-expect, like the rest of this
+     * class — there is no charmbracelet expect port to mirror.
      *
      * @throws ExpectTimeoutException when the master never EOFs within
      *         `$timeoutSec`. This method never throws ExpectEofException.
