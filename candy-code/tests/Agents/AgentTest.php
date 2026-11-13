@@ -2296,8 +2296,12 @@ final class AgentTest extends TestCase
                 . 'diff --cached, diff)',
         );
 
+        // S-O06: a diff-free render is memoised on a HEAD+status fingerprint
+        // (SystemPromptMemo), so the first one pays its three live polls plus
+        // the one fingerprint read; SystemPromptMemoTest pins the hit path.
+        \SugarCraft\Code\Agents\SystemPromptMemo::reset();
         $this->assertSame(
-            3,
+            4,
             self::gitSubprocessesDuring(static function () use ($block): void {
                 self::probeAgent($block->withWriteSinceLastRender(false))->systemPrompt();
             }),
@@ -3333,6 +3337,7 @@ final class AgentTest extends TestCase
             $this->assertTrue(chdir($repo), "could not enter the fixture repository {$repo}");
 
             foreach ([2, 4] as $stages) {
+                \SugarCraft\Code\Agents\SystemPromptMemo::reset();
                 $name = 'm11-engine-pipeline-' . $stages;
                 $systemPrompts = [];
 
@@ -3380,13 +3385,13 @@ final class AgentTest extends TestCase
 
                 $this->assertCount($stages, $systemPrompts, "the M-11 pipeline handed the executor {$stages} requests worth of system prompt");
                 $this->assertSame(
-                    5 + 3 * ($stages - 1),
+                    5 + 4 + ($stages - 2),
                     $subprocesses,
-                    'the first stage must pay the full five live polls and every later stage three: two diff '
-                        . 'sections withheld behind the positive no-write self-reports. Any other number means '
-                        . 'the suppression leg stopped deriving from reports - five per stage is the old cost, '
-                        . 'three flat would mean stage one got suppressed too, and anything lower would mean '
-                        . 'the volatile half is being memoised, which the live-polled law forbids.'
+                    'the first stage must pay the full five live polls; the second pays three plus one '
+                        . 'HEAD+status fingerprint read (SystemPromptMemo miss, diffs withheld behind the '
+                        . 'positive no-write self-reports); every later stage over an unchanged repository '
+                        . 'pays only the fingerprint read (memo hit). Five per stage is the old cost, and '
+                        . 'a diff-carrying render is never memoised (the freshness law).'
                 );
 
                 $dateInsensitive = array_map(

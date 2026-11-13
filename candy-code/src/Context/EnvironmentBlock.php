@@ -957,6 +957,28 @@ final readonly class EnvironmentBlock implements PromptSection
     }
 
     /**
+     * A stable digest of everything the block renders that is NOT the polled
+     * git section (S-O06): cwd, model, the date the block shows, platform,
+     * cutoff, references and the diff settings. Explicit rather than
+     * `serialize($this)` because the lazily memoised repo probe would change a
+     * serialised form between the first render and the second of one object.
+     */
+    public function memoIdentity(): string
+    {
+        return hash('sha256', json_encode([
+            $this->cwd,
+            $this->modelName,
+            ($this->now ?? new DateTimeImmutable())->format('Y-m-d'),
+            $this->platform,
+            $this->volatile,
+            $this->diffsAfterWrites,
+            $this->diffMaxBytes,
+            $this->knowledgeCutoff,
+            $this->projectReferences,
+        ], JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '');
+    }
+
+    /**
      * Whether {@see render()} appends the git section (the full, pre-1.A-1
      * block) or stops after the seven static lines.
      */

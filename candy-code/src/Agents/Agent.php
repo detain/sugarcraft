@@ -1030,8 +1030,9 @@ final readonly class Agent
      */
     public function systemPrompt(?EnvironmentBlock $environment = null): string
     {
-        $rendered = ($environment ?? $this->environment ?? EnvironmentBlock::capture($this->environmentRoot ?? (string) getcwd(), $this->model))
-            ->render();
+        $rendered = SystemPromptMemo::render(
+            $environment ?? $this->environment ?? EnvironmentBlock::capture($this->environmentRoot ?? (string) getcwd(), $this->model),
+        );
 
         return $this->prompt === '' ? $rendered : $this->prompt . "\n\n" . $rendered;
     }
