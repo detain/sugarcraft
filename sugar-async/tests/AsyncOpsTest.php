@@ -675,9 +675,9 @@ final class AsyncOpsTest extends TestCase
     }
 
     /**
-     * Covers lines 155-156: when the operation callable throws synchronously
-     * (before returning a promise), the exception is caught and converted to
-     * a rejected promise.
+     * When the operation callable throws synchronously (before returning a
+     * promise), retryAttempt() catches it and converts it to a rejected
+     * promise — the cycle never sees a raw throw from the callable.
      */
     public function testRetryCatchesSynchronousOperationThrow(): void
     {
@@ -709,18 +709,14 @@ final class AsyncOpsTest extends TestCase
     }
 
     /**
-     * Covers lines 189-190: when the timer callback throws synchronously
-     * during retry scheduling, the exception is caught and the deferred is
-     * rejected with it.
-     *
-     * Note: This code path is extremely hard to trigger in practice because
-     * retryAttempt() always returns a Promise. The try-catch at lines 189-190
-     * is defensive code for edge cases where retryAttempt() might throw
-     * synchronously (e.g., stack overflow on deep recursion, memory error).
-     * We verify the catch block exists and is syntactically correct by
-     * ensuring the code compiles and basic retry functionality works.
+     * Honest scope, replacing a retired "covers the timer-callback catch"
+     * claim that never touched the catch: this drives the whole retry cycle
+     * through a mock loop that fires timers synchronously — non-standard loop
+     * behaviour the production StreamSelectLoop never shows — and pins the
+     * exponential schedule the cycle asks for. The catch itself is driven for
+     * real by testNonPromiseOperationResultRejectsInsteadOfPoisoningTheLoop.
      */
-    public function testRetryWithMockLoopStillFunctions(): void
+    public function testRetryRunsThroughAnImmediateFiringMockLoop(): void
     {
         // Use a mock loop that fires timers immediately (synchronously)
         // to verify retry still works with non-standard loop behavior
@@ -753,5 +749,45 @@ final class AsyncOpsTest extends TestCase
 
         $this->assertSame('success', $result);
         $this->assertSame(3, $attempts);
+        $this->assertSame([0.01, 0.02], $delays, 'the base backoff doubles per stage (un-jittered schedule)');
+    }
+
+    /**
+     * Drives the defensive catch around the recursive retryAttempt() call in
+     * the backoff timer callback: an operation that returns a non-promise
+     * makes retryAttempt() throw synchronously (on ->then()), and the catch
+     * converts that throw into a rejection instead of letting it escape into
+     * the loop tick. Delete the catch locally and this test detonates out of
+     * $loop->run() — that is the mutation proof.
+     */
+    public function testNonPromiseOperationResultRejectsInsteadOfPoisoningTheLoop(): void
+    {
+        $loop = new \React\EventLoop\StreamSelectLoop();
+        $attempts = 0;
+
+        $error = null;
+        AsyncOps::retry(
+            function () use (&$attempts): mixed {
+                $attempts++;
+                if ($attempts === 1) {
+                    return \React\Promise\reject(new \RuntimeException('first failed'));
+                }
+                return 'not a promise'; // retryAttempt() throws on ->then()
+            },
+            attempts: 3,
+            baseBackoffSeconds: 0.01,
+            loop: $loop,
+        )->then(null, static function (\Throwable $e) use (&$error): void {
+            $error = $e;
+        });
+
+        $loop->addTimer(0.5, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run(); // must return on its own: the rejection settles the cycle
+
+        $this->assertInstanceOf(\Error::class, $error);
+        $this->assertStringContainsString('then()', $error->getMessage());
+        $this->assertSame(2, $attempts, 'the cycle dies at the offending stage instead of keep retrying');
     }
 }
