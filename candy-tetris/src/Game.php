@@ -708,8 +708,9 @@ final class Game implements Model
                 if ($moved->lockResets >= self::LOCK_DELAY_RESET_CAP) {
                     // Cap exhausted: the forced lock lands on this
                     // successful grounded input instead of opening an
-                    // untimed fresh window (the float-jiggle bypass —
-                    // which never increments the counter — ends here).
+                    // untimed fresh window (the float-jiggle bypass of
+                    // candy-tetris-021 — counted by the float leg below —
+                    // ends here).
                     $locked = $moved->lockAndSpawn();
                     if ($locked->over === true) {
                         return [$locked, null];
@@ -738,7 +739,15 @@ final class Game implements Model
         if ($moved->lockWindowGeneration !== null) {
             // Piece floated off the surface: close the window (the armed
             // message goes stale) and make sure gravity is running again.
-            return self::armGravity($moved->mutate(['lockWindowGeneration' => null]));
+            // The close-and-re-arm COUNTS as a reset (candy-tetris-021):
+            // an overhang nudge loop that only ever closed and re-opened
+            // windows was the bypass this cap exists to stop, so budget it
+            // like the grounded move-reset does.
+            $changes = ['lockWindowGeneration' => null];
+            if ($moved->lockResets < self::LOCK_DELAY_RESET_CAP) {
+                $changes['lockResets'] = $moved->lockResets + 1;
+            }
+            return self::armGravity($moved->mutate($changes));
         }
 
         return [$moved, null];

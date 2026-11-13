@@ -447,6 +447,42 @@ final class GameTest extends TestCase
         $this->assertNotSame($state->piece, $locked->piece, 'the live window generation locks the piece');
     }
 
+    /**
+     * candy-tetris-021 (float-jiggle exploit): a piece perched on an
+     * overhang edge alternates grounded (opens the window) and floated
+     * (closed it WITHOUT counting a reset), so the 15-reset cap was
+     * unreachable and the piece could be held forever. The float leg now
+     * budgets its close like the grounded move-reset does: 16 nudge loops
+     * over the edge must run the budget out and force the lock.
+     */
+    public function testOverhangNudgeLoopRunsIntoTheResetCapAndLocks(): void
+    {
+        $g = Game::startWithLockDelay(new Bag(static fn(int $_max): int => 0), 500)
+            ->mutate(['piece' => new Piece(Tetromino::I, 1, 1, 16)]); // column 3, rows 16..19
+        $rows = $g->board->rows();
+        $rows[20][3] = Tetromino::I; // single-cell shelf: grounded at x=1, floated at x=0
+        $g = $g->mutate(['board' => new Board($rows)]);
+
+        [$state, $cmd] = $g->update($this->gravity());
+        $this->assertNotNull($cmd, 'grounding on the shelf opens the window');
+        $this->assertSame(0, $state->lockResets);
+
+        $perchedBoard = $state->board;
+        $lockedAt = null;
+        for ($i = 0; $i < 32; $i++) { // 16 left↔right nudge loops
+            [$state, $cmd] = $state->update($this->key($i % 2 === 0 ? 'left' : 'right'));
+            if ($state->board !== $perchedBoard) {
+                $lockedAt = $i + 1; // only a lock mutates the stack here
+                break;
+            }
+        }
+
+        $this->assertNotNull($lockedAt, 'the overhang nudge loop must end in a forced lock, not run forever');
+        $this->assertSame(30, $lockedAt, 'the 15th float-close exhausts the budget and the next grounded input locks');
+        $this->assertSame(0, $state->lockResets, 'the respawned piece starts a fresh budget');
+        $this->assertFalse($state->over, 'the lock was a normal lock-and-spawn');
+    }
+
     public function testAirborneInputClosesTheLockWindow(): void
     {
         // Moving off a surface cancels the armed window; the still-queued
