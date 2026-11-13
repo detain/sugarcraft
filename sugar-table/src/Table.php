@@ -2626,7 +2626,11 @@ final class Table
         }
         $labelWidth = Width::of($label);
         if ($labelWidth > $contentWidth) {
-            $label = Width::truncate($label, $contentWidth);
+            // ST-57 (finding 072): footer and empty-state labels used to die
+            // through the silent Width::truncate — the same law the data
+            // cells learned in ST-17 now covers this seat: an over-wide
+            // label announces its cut with '…'.
+            $label = Column::clipToWidth($label, $contentWidth);
             $labelWidth = Width::of($label);
         }
         $padLeft = \intdiv($contentWidth - $labelWidth, 2);
