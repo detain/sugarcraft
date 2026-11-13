@@ -418,7 +418,9 @@ final class DragTracker
 
 **Problem:** sugar-mouse assumes all motion events are relevant; no way to filter.
 
-**Approach:** Add `setMotionTracking(bool)` to Manager:
+**Approach:** Add `setMotionTracking(bool)` to Manager (2026-11 erratum:
+shipped as the pure byte-builder `motionTrackingAnsi()`, renamed from
+`setMotionTracking()`; no mode-filter is wired into `anyInBounds()`):
 1. When disabled (default), `anyInBounds()` only checks on button events
 2. When enabled, checks on every `MouseMotionMsg`
 3. Mirrors BubbleTea's `MouseMode` concept
@@ -451,7 +453,7 @@ final class DragTracker
 
 ### Phase 4: Motion Mode Toggle (1-2 hours)
 
-- [ ] Add `Manager::setMotionTracking(bool)`
+- [ ] Add `Manager::setMotionTracking(bool)` (done as `Manager::motionTrackingAnsi()`, renamed 2026-11)
 - [ ] Update `anyInBounds()` to respect mode
 - [ ] Update documentation
 

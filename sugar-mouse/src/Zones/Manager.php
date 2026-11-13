@@ -118,7 +118,10 @@ final class Manager
     }
 
     /**
-     * Toggle mouse motion reporting.
+     * Build the all-motion tracking byte sequence — RETURNS bytes, emits
+     * nothing. The old `setMotionTracking` name taught setter reflexes and
+     * a discarded call was a silent zero-effect failure; this name states
+     * what the method is.
      *
      * When `$on` is true, returns the paired sequence enabling
      * all-motion tracking (mode 1003) AND SGR extended coordinate
@@ -141,11 +144,22 @@ final class Manager
      * lifecycle note in README's Mouse-tracking modes section.
      *
      * Mirrors bubblezone's `Manager::SetMotionTracking` (which emits
-     * the bare 1003 pair; this lib ships the 1006 companion).
+     * the bare 1003 pair; this lib ships the 1006 companion), named after
+     * the house `Ansi::mouseAllMotion*` spelling it delegates to.
+     */
+    public function motionTrackingAnsi(bool $on): string
+    {
+        return $on === true ? Ansi::mouseAllMotionOn() : Ansi::mouseAllMotionOff();
+    }
+
+    /**
+     * @deprecated Renamed to {@see motionTrackingAnsi()} — this is a pure
+     *             byte-string builder, not a setter. The alias delegates
+     *             byte-for-byte; it retires next cycle.
      */
     public function setMotionTracking(bool $on): string
     {
-        return $on === true ? Ansi::mouseAllMotionOn() : Ansi::mouseAllMotionOff();
+        return $this->motionTrackingAnsi($on);
     }
 
     /** Read-only accessor for the prefix this manager prepends to ids. */

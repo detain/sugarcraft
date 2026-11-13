@@ -261,7 +261,7 @@ nor sugar-core; decoding them is sugar-input's opt-in path. Swapping
 `1006` for either of those modes is a host-layer decision that changes
 what your input layer must speak, not just what the coordinates mean.
 
-`Manager::setMotionTracking(bool)` returns the all-motion byte string:
+`Manager::motionTrackingAnsi(bool)` returns the all-motion byte string:
 `\x1b[?1003h\x1b[?1006h` on enable and the LIFO `\x1b[?1006l\x1b[?1003l` on
 disable — motion tracking plus the SGR coordinate companion, byte-identical
 to sugar-core's `Ansi::mouseAllMotionOn()/Off()`. Core ships the same pairing
@@ -593,10 +593,13 @@ if ($msg instanceof DoubleClickMsg) {
 
 ### Motion tracking escape sequences
 
-`Manager::setMotionTracking(bool $on)` returns the terminal escape
+`Manager::motionTrackingAnsi(bool $on)` returns the terminal escape
 sequence that enables (`\x1b[?1003h\x1b[?1006h`) or disables
 (`\x1b[?1006l\x1b[?1003l`) all-motion tracking (mode 1003) together
-with SGR extended coordinates (mode 1006). Write the returned string to
+with SGR extended coordinates (mode 1006). The name is literal: it
+returns bytes and emits nothing (renamed from `setMotionTracking()`,
+whose setter shape invited discarding the return — a deprecated alias
+still delegates). Write the returned string to
 the TTY to activate motion reporting before processing mouse move
 events. This manager does not directly emit — it is a
 text-processing component that produces the raw CSI sequence.
@@ -678,7 +681,7 @@ so construction from a `range()` result is unambiguous.
 | `Manager` | `scan(output, ?width = null)` | Merge-record zones into the registry (re-recorded ids replace, absent ids persist; a `newPrefix()` manager skips ids outside its prefix, a `newGlobal()` manager records every id), strip markers, clamp columns to `?width` |
 | `Manager` | `anyInBounds(mouseMsg)` | Return the innermost zone under the mouse |
 | `Manager` | `get(name)` | Get zone by name |
-| `Manager` | `setMotionTracking(bool)` | Return paired CSI 1003+1006 enable / LIFO disable sequence |
+| `Manager` | `motionTrackingAnsi(bool)` | Return paired CSI 1003+1006 enable / LIFO disable sequence (bytes only, emits nothing; formerly the `setMotionTracking` setter) |
 | `Manager` | `allInBounds(mouseMsg)` | Every covering zone, smallest area first |
 | `Manager` | `zoneAt(col, row)` | Cell hit-test without a mouse message |
 | `Manager` | `anyInBoundsAndUpdate(model, msg)` | Dispatch `MsgZoneInBounds` into a Model |

@@ -14,21 +14,34 @@ final class ManagerMotionTrackingTest extends TestCase
      * its mouseAllMotion* pairing, these go red and this lib decides —
      * a silently drifted wire contract is what the mode review caught.
      */
-    public function testSetMotionTrackingTrueReturnsEnableSequence(): void
+    public function testMotionTrackingAnsiTrueReturnsEnableSequence(): void
     {
         $m = Manager::newGlobal();
 
-        $seq = $m->setMotionTracking(true);
+        $seq = $m->motionTrackingAnsi(true);
 
         $this->assertSame("\x1b[?1003h\x1b[?1006h", $seq);
     }
 
-    public function testSetMotionTrackingFalseReturnsDisableSequence(): void
+    public function testMotionTrackingAnsiFalseReturnsDisableSequence(): void
     {
         $m = Manager::newGlobal();
 
-        $seq = $m->setMotionTracking(false);
+        $seq = $m->motionTrackingAnsi(false);
 
         $this->assertSame("\x1b[?1006l\x1b[?1003l", $seq);
+    }
+
+    /**
+     * The deprecated setter-shaped alias must stay byte-identical to the
+     * honest name until it retires — a consumer mid-migration cannot see
+     * two different wires for one manager.
+     */
+    public function testDeprecatedSetMotionTrackingAliasDelegatesByteIdentical(): void
+    {
+        $m = Manager::newGlobal();
+
+        $this->assertSame($m->motionTrackingAnsi(true), $m->setMotionTracking(true));
+        $this->assertSame($m->motionTrackingAnsi(false), $m->setMotionTracking(false));
     }
 }
