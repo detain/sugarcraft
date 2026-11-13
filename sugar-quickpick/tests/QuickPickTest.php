@@ -724,27 +724,41 @@ final class QuickPickTest extends TestCase
         $this->assertStringContainsString('> ', $result);
     }
 
-    public function testCachedComputedWidthInvalidatedOnType(): void
+    public function testWidthMemoInvalidatedOnType(): void
     {
-        // With windowWidth=0 (auto), calling type() must invalidate the cached
+        // With windowWidth=0 (auto), calling type() must invalidate the memoised
         // width so the next view() recomputes rather than reusing a stale value.
         $h = $this->makeQuickPick()
             ->setWindowWidth(0) // auto
             ->show();
 
-        // First render — populates the cache.
+        // First render — populates the memo.
         $bg1 = str_repeat(str_repeat(' ', 30) . "\n", 5);
         $h->view($bg1);
 
         $reflection = new \ReflectionClass($h);
-        $cached = $reflection->getProperty('cachedComputedWidth');
-        $cached->setAccessible(true);
-        $firstCache = $cached->getValue($h);
-        $this->assertNotNull($firstCache, 'cache should be populated after first render');
+        $memo = $reflection->getProperty('widthMemo');
+        $memo->setAccessible(true);
+        $this->assertNotNull($memo->getValue($h)->width, 'memo should be populated after first render');
 
-        // type() changes filter → cache must be cleared.
+        // type() changes filter → memo must be cleared.
         $h = $h->type('a');
-        $this->assertNull($cached->getValue($h), 'cache must be invalidated after type()');
+        $this->assertNull($memo->getValue($h)->width, 'memo must be invalidated after type()');
+    }
+
+    public function testViewingLeavesNoObservableMutationOnTheReceiver(): void
+    {
+        // -023: view() may fill the shared width memo, but the model must still
+        // behave as if rendering were side-effect free — a twin that never
+        // rendered produces byte-identical output. A memo bug that cached the
+        // WRONG width breaks this equality; a mere cache hit does not.
+        $bg = str_repeat(str_repeat(' ', 30) . "\n", 5);
+
+        $rendered = $this->makeQuickPick()->setWindowWidth(0)->show();
+        $rendered->view($bg); // warm the memo through this handle
+        $fresh = $this->makeQuickPick()->setWindowWidth(0)->show();
+
+        $this->assertSame($fresh->view($bg), $rendered->view($bg));
     }
 
     public function testHighlightFuzzyWithNullResultFallsBackToPrintableText(): void

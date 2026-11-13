@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Fuzzy\FuzzyMatcher;
 use SugarCraft\QuickPick\Support\AnsiWalk;
 use SugarCraft\QuickPick\Support\UntrustedText;
+use SugarCraft\QuickPick\Support\WidthMemo;
 use SugarCraft\Style\Border;
 use SugarCraft\Style\Style;
 use SugarCraft\Pty\SignalForwarder;
@@ -128,8 +129,12 @@ final class QuickPick
     /** Width of the overlay window (0 = auto from prompt). */
     private int $windowWidth = 0;
 
-    /** Cached auto-computed width (invalidated when filter or items change). */
-    private ?int $cachedComputedWidth = null;
+    /**
+     * Auto-width cache, shared by handle across every clone of this family
+     * (see {@see WidthMemo}). Kept as an object, not a property, so that a
+     * resize observed by ANY instance invalidates the view of ALL of them.
+     */
+    private WidthMemo $widthMemo;
 
     /** Top-left X offset for the overlay. */
     private int $xOffset = 0;
@@ -170,6 +175,7 @@ final class QuickPick
         ?\Closure $itemFormatter = null,
         ?\Closure $filterFn = null,
     ) {
+        $this->widthMemo     = new WidthMemo();
         $this->itemFactory   = new ItemFactory();
         $this->allItems      = $this->coerceItems($items);
         $this->installCorpusMemos();
@@ -204,7 +210,7 @@ final class QuickPick
     public function withItems(array $items): self
     {
         $clone = clone $this;
-        $clone->cachedComputedWidth = null;
+        $clone->widthMemo->invalidate();
         $clone->allItems = $clone->coerceItems($items);
         $clone->installCorpusMemos();
         // Early exit when no filter active — avoid applyFilter() overhead for the common empty-text case.
@@ -220,7 +226,7 @@ final class QuickPick
         $clone = clone $this;
         // The prompt feeds computeWidth(); a stale cache would keep the old
         // header-sized frame after a longer prompt arrives (M10).
-        $clone->cachedComputedWidth = null;
+        $clone->widthMemo->invalidate();
         $clone->prompt = $prompt;
         return $clone;
     }
@@ -318,7 +324,7 @@ final class QuickPick
         $clone = clone $this;
         // Item widths feed computeWidth() through the formatter; the cache
         // must not survive a formatter swap (M10).
-        $clone->cachedComputedWidth = null;
+        $clone->widthMemo->invalidate();
         $clone->itemFormatter = $fn;
         return $clone;
     }
@@ -326,7 +332,7 @@ final class QuickPick
     public function setFilterFn(\Closure $fn): self
     {
         $clone = clone $this;
-        $clone->cachedComputedWidth = null;
+        $clone->widthMemo->invalidate();
         $clone->filterFn = $fn;
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = 0;
@@ -355,7 +361,7 @@ final class QuickPick
     public function setRanker(?FuzzyMatcher $matcher): self
     {
         $clone = clone $this;
-        $clone->cachedComputedWidth = null;
+        $clone->widthMemo->invalidate();
         $clone->ranker = $matcher;
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = 0;
@@ -452,28 +458,42 @@ final class QuickPick
             return false;
         }
 
-        // Capture $this in a local variable so the static closure can
-        // dereference the live QuickPick instance when invoked asynchronously
-        // (the closure outlives the attachSigwinch() call frame).
+        // Capture $this in a local variable so the static closure can dereference
+        // the attach-time instance for its geometry read (ttySize() is pure I/O:
+        // it queries the terminal, not model state). The width invalidation
+        // deliberately does NOT go through $model — it routes through the shared
+        // WidthMemo handle, so every clone in the family sees the resize.
         $model = $this;
         return SignalForwarder::attachSigwinchToFd(
             // A DESCRIPTOR, not `(int) \STDIN` — see self::STDIN_DESCRIPTOR for
             // why the cast silently targeted STDOUT instead.
             self::STDIN_DESCRIPTOR,
             static fn(): array => $model->ttySize(),
-            static function (int $cols, int $rows) use ($model): void {
-                // mm3: an auto-width frame sized against the OLD geometry is
-                // stale the moment the terminal changes shape. Invalidate the
-                // cache on the instance this handler was attached to; clones
-                // made later never bound a handler (documented caveat — the
-                // README warns attachSigwinch() binds the attach-time object).
-                $model->invalidateAutoWidth();
-                $cb = $model->onResize;
-                if ($cb !== null) {
-                    $cb($cols, $rows);
-                }
-            },
+            $this->sigwinchHandler(),
         );
+    }
+
+    /**
+     * The composed callback attachSigwinch() registers: invalidate the shared
+     * width memo, then forward (cols, rows) to the attach-time instance's
+     * $onResize. Exposed as a seam so the resize semantics are testable
+     * without a terminal — SignalForwarder only fires on a real TIOCSWINSZ.
+     */
+    private function sigwinchHandler(): \Closure
+    {
+        $model = $this;
+        $memo  = $this->widthMemo;
+        return static function (int $cols, int $rows) use ($model, $memo): void {
+            // mm3: an auto-width frame sized against the OLD geometry is stale
+            // the moment the terminal changes shape. The memo is shared by
+            // handle, so one invalidation reaches the live clone no matter
+            // when attachSigwinch() ran relative to the fluent pipeline.
+            $memo->invalidate();
+            $cb = $model->onResize;
+            if ($cb !== null) {
+                $cb($cols, $rows);
+            }
+        };
     }
 
     /**
@@ -502,7 +522,7 @@ final class QuickPick
     public function show(): self
     {
         $clone = clone $this;
-        $clone->cachedComputedWidth = null;
+        $clone->widthMemo->invalidate();
         $clone->isShown = true;
         $clone->cursor  = 0;
         $clone->filterText = '';
@@ -538,7 +558,7 @@ final class QuickPick
             return $this; // reject input when cap reached
         }
         $clone = clone $this;
-        $clone->cachedComputedWidth = null;
+        $clone->widthMemo->invalidate();
         $clone->filterText .= $char;
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = 0;
@@ -571,7 +591,7 @@ final class QuickPick
         if ($clone->filterText === '') {
             return $clone;
         }
-        $clone->cachedComputedWidth = null;
+        $clone->widthMemo->invalidate();
         $clone->filterText = \mb_substr($clone->filterText, 0, -1, 'UTF-8');
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = \max(0, \min($clone->cursor, \count($clone->filteredItems) - 1));
@@ -581,7 +601,7 @@ final class QuickPick
     public function clear(): self
     {
         $clone = clone $this;
-        $clone->cachedComputedWidth = null;
+        $clone->widthMemo->invalidate();
         $clone->filterText = '';
         $clone->filteredItems = $clone->allItems;
         $clone->cursor = 0;
@@ -745,7 +765,7 @@ final class QuickPick
         } else {
             // Auto width sizes the CONTENT; the border is added on top so
             // item text never loses two cells to the frame.
-            $innerWidth = $this->cachedComputedWidth ??= $this->autoWidth();
+            $innerWidth = $this->widthMemo->width ??= $this->autoWidth();
             $outerWidth = $border !== null ? $innerWidth + 2 : $innerWidth;
         }
 
@@ -1167,15 +1187,6 @@ final class QuickPick
         // can never exceed the live terminal; degenerate zero-width probes
         // are already absorbed by ttySize()'s `?: 80` fallback.
         return \min($this->computeWidth(), $cols);
-    }
-
-    /**
-     * Drop the memoised auto-width so the next view() re-measures against
-     * the current terminal and item set. Called by the SIGWINCH handler.
-     */
-    private function invalidateAutoWidth(): void
-    {
-        $this->cachedComputedWidth = null;
     }
 
     /**

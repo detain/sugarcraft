@@ -22,6 +22,7 @@ use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 use ReflectionClass;
 use ReflectionMethod;
+use ReflectionProperty;
 use SplFileInfo;
 use SugarCraft\QuickPick\QuickPick;
 use SugarCraft\Pty\SignalForwarder;
@@ -208,5 +209,56 @@ final class QuickPickSigwinchTest extends TestCase
         $this->assertIsArray($forwarded, 'the installed handler must reach the callback');
         $this->assertGreaterThan(0, $forwarded['cols'], 'handler must forward a real width');
         $this->assertGreaterThan(0, $forwarded['rows'], 'handler must forward a real height');
+    }
+
+    public function testTheHandlerInvalidatesTheWidthMemoAcrossTheCloneFamily(): void
+    {
+        // -082/-023(b): the invalidation half of the handler never ran in CI
+        // (the tty test above skips on piped stdin). The seam below invokes the
+        // exact closure attachSigwinch() registers, so the resize semantics are
+        // asserted on any host.
+        $attached = QuickPick::new(['alpha'])->show()->withOnResize(static function (int $cols, int $rows): void {
+        });
+
+        $handlerMethod = new ReflectionMethod(QuickPick::class, 'sigwinchHandler');
+        $handlerMethod->setAccessible(true);
+        $handler = $handlerMethod->invoke($attached);
+
+        $memo = new ReflectionProperty(QuickPick::class, 'widthMemo');
+        $memo->setAccessible(true);
+
+        $bg = str_repeat(str_repeat(' ', 40) . "\n", 5);
+        $attached->view($bg); // warm the memo (ttySize falls back to 80x24 on pipes)
+        $this->assertNotNull($memo->getValue($attached)->width, 'render must populate the memo');
+
+        // setOffset() invalidates nothing on its own; the clone shares the warm
+        // memo, which is what makes the next assertions about the HANDLER.
+        $later = $attached->setOffset(3, 0);
+        $this->assertNotNull($memo->getValue($later)->width, 'clones share the memo by handle');
+
+        $handler(100, 40);
+
+        $this->assertNull($memo->getValue($attached)->width, 'the handler must clear the memo');
+        $this->assertNull(
+            $memo->getValue($later)->width,
+            'the resize must reach clones made AFTER the attach — the attach-time binding '
+            . 'must not leave the live fluent chain silently rendering a stale width',
+        );
+    }
+
+    public function testTheHandlerStillForwardsGeometryThroughTheSeam(): void
+    {
+        $forwarded = null;
+        $model = QuickPick::new(['a'])->withOnResize(
+            static function (int $cols, int $rows) use (&$forwarded): void {
+                $forwarded = [$cols, $rows];
+            },
+        );
+
+        $handlerMethod = new ReflectionMethod(QuickPick::class, 'sigwinchHandler');
+        $handlerMethod->setAccessible(true);
+        $handlerMethod->invoke($model)(132, 43);
+
+        $this->assertSame([132, 43], $forwarded, 'the geometry half must still reach the callback');
     }
 }

@@ -530,12 +530,13 @@ non-tty STDIN (pipe, redirect) the callback may simply never fire even
 though the attach succeeded. If you want a size-polling fallback, gate it
 on `stream_isatty(STDIN)` — not on the return value.
 
-Attach binds the object you called it on. The handler closes over the
-attach-time QuickPick instance and invalidates that instance's width cache —
-in a fluent-clone library that matters: after `$h = $h->with…(...)` replaces
-your variable, the live instance never sees the resize and the discarded
-clone re-probes geometry nobody renders. Attach LAST, after the pipeline
-settles, or re-attach whenever you replace the instance.
+The width memo is a shared object, not a per-instance property, so a resize
+invalidates the whole clone family at once: attach before or after your
+fluent pipeline settles, the live clone still sees every geometry change.
+One binding does remain instance-flavoured: the handler forwards to the
+attach-time instance's registered callback, so call `withOnResize()` before
+`attachSigwinch()` — a callback swapped in on a later clone is not
+re-registered by the old handler.
 
 Signals are process-global. In a long-lived host (PHP-FPM worker, ReactPHP
 daemon, test suite) detach them at session teardown with

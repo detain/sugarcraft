@@ -29,7 +29,10 @@ foreach ($rawItems as $n => $value) {
 // Background to composite the overlay onto (10 lines)
 $bg = str_repeat("example background line\n", 10);
 
-// Build a QuickPick instance
+// Build a QuickPick instance. Note: each step below rebinds $picker to a
+// fluent clone, and the shared width memo follows every clone — a SIGWINCH
+// invalidates the whole family, so re-attaching after each step is not
+// required (register the withOnResize() callback before attachSigwinch()).
 $picker = QuickPick::new($items)
     ->setPrompt('🔍 Search: ')
     ->setWindowHeight(10)
