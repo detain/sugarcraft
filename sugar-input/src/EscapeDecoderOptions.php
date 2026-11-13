@@ -4,23 +4,28 @@ declare(strict_types=1);
 
 namespace SugarCraft\Input;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
  * Configuration options for EscapeDecoder protocol filtering.
  *
  * Allows applications to disable unused protocol parsing to reduce overhead.
  * All four protocol families are enabled by default; trailing-escape
  * deferral is a behaviour, not a protocol, and it defaults OFF. The options
- * are immutable — the decoder reads them at construction; a different mix
- * means a new instance (named arguments make that a one-liner).
+ * are immutable: the decoder reads them at construction, and every change
+ * yields a new instance — derive one setting from another with the with*()
+ * methods, or build the whole mix with named arguments in one expression.
  *
  * @example
  * ```php
  * $options = new EscapeDecoderOptions(enableMouse: false);
+ * $options = $options->withKitty(false);   // derives; $options is unchanged
  * $decoder = new EscapeDecoder($options);
  * ```
  */
 final class EscapeDecoderOptions
 {
+    use Mutable;
     /**
      * @param bool $enableMouse   Mouse reporting: SGR 1006/1016 (CSI < b ; x ; y M|m),
      *                            urxvt 1015 (CSI b ; x ; y M) and X10 (CSI M b x y).
@@ -48,4 +53,29 @@ final class EscapeDecoderOptions
         public readonly bool $enablePaste = true,
         public readonly bool $deferTrailingEscape = false,
     ) {}
+
+    public function withMouse(bool $enabled = true): self
+    {
+        return $this->mutate(['enableMouse' => $enabled]);
+    }
+
+    public function withKitty(bool $enabled = true): self
+    {
+        return $this->mutate(['enableKitty' => $enabled]);
+    }
+
+    public function withFocus(bool $enabled = true): self
+    {
+        return $this->mutate(['enableFocus' => $enabled]);
+    }
+
+    public function withPaste(bool $enabled = true): self
+    {
+        return $this->mutate(['enablePaste' => $enabled]);
+    }
+
+    public function withTrailingEscapeDeferral(bool $deferred = true): self
+    {
+        return $this->mutate(['deferTrailingEscape' => $deferred]);
+    }
 }

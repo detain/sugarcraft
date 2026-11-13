@@ -76,4 +76,61 @@ final class EscapeDecoderOptionsTest extends TestCase
         $this->assertTrue($opts->enableFocus);
         $this->assertFalse($opts->enablePaste);
     }
+
+    public function testEachWithDerivesANewInstanceAndFlipsOnlyItsOwnField(): void
+    {
+        $derivations = [
+            'withMouse' => 'enableMouse',
+            'withKitty' => 'enableKitty',
+            'withFocus' => 'enableFocus',
+            'withPaste' => 'enablePaste',
+            'withTrailingEscapeDeferral' => 'deferTrailingEscape',
+        ];
+
+        // Start from the all-disabled mix so every flip is toward true, and
+        // no field can be confused with its default.
+        $base = new EscapeDecoderOptions(
+            enableMouse: false,
+            enableKitty: false,
+            enableFocus: false,
+            enablePaste: false,
+        );
+
+        foreach ($derivations as $method => $property) {
+            $derived = $base->{$method}();
+
+            $this->assertNotSame($base, $derived, $method . ' must return a new instance');
+            $this->assertTrue($derived->{$property}, $method . ' sets ' . $property);
+
+            foreach ($derivations as $otherMethod => $otherProperty) {
+                if ($otherProperty === $property) {
+                    continue;
+                }
+                $this->assertFalse($derived->{$otherProperty}, $method . ' leaves ' . $otherProperty . ' alone');
+            }
+
+            $this->assertFalse($base->{$property}, $method . ' must not mutate the original');
+        }
+    }
+
+    public function testWithTakesAnExplicitFalseToDisableAgain(): void
+    {
+        $opts = (new EscapeDecoderOptions())->withKitty(false);
+
+        $this->assertFalse($opts->enableKitty);
+        $this->assertTrue($opts->enableMouse);
+    }
+
+    public function testChainedDerivationsCompose(): void
+    {
+        $opts = (new EscapeDecoderOptions())
+            ->withMouse(false)
+            ->withTrailingEscapeDeferral();
+
+        $this->assertFalse($opts->enableMouse);
+        $this->assertTrue($opts->deferTrailingEscape);
+        $this->assertTrue($opts->enableKitty);
+        $this->assertTrue($opts->enableFocus);
+        $this->assertTrue($opts->enablePaste);
+    }
 }
