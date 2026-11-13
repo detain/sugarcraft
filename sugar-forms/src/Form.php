@@ -172,8 +172,11 @@ final class Form implements Model
     }
 
     /**
-     * Show / hide the inline `! error` line under fields with active
-     * validation errors. Default on. Mirrors huh's `WithShowErrors`.
+     * Show / hide the inline `! error` line (and its `? ` help satellite)
+     * rendered by fields with active validation errors: Form::view() passes
+     * this flag into every field's `view($showErrors)`. The end-of-form
+     * error {@see withErrorSummary()} block is a separate composer and is
+     * NOT affected. Default on. Mirrors huh's `WithShowErrors`.
      */
     public function withShowErrors(bool $on = true): self
     {
@@ -482,7 +485,7 @@ final class Form implements Model
             if (isset($hidden[$i]) && $i !== $this->focusedIndex) {
                 continue;
             }
-            $blocks[] = $f->view();
+            $blocks[] = $f->view($this->showErrors);
         }
         if (count($this->groups) > 1 && $this->showHelp && $group->showHelp) {
             $blocks[] = $theme->help->render(
@@ -525,7 +528,7 @@ final class Form implements Model
         $line  = $title === '' ? $value : ($title . ': ' . $value);
         // SF-3 (M8): titles/errors/values all reach a terminal surface.
         $line = RenderSafe::clean($line);
-        return $err !== null ? $line . "\n! " . RenderSafe::clean($err) : $line;
+        return ($this->showErrors && $err !== null) ? $line . "\n! " . RenderSafe::clean($err) : $line;
     }
 
     /**

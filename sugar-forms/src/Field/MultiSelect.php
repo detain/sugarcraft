@@ -183,7 +183,7 @@ final class MultiSelect implements \SugarCraft\Forms\Field
         };
     }
 
-    public function view(): string
+    public function view(bool $showErrors = true): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);
@@ -202,8 +202,10 @@ final class MultiSelect implements \SugarCraft\Forms\Field
         if ($this->error !== null) {
             // Constraint/validator messages can echo user input — clean at the
             // display site (the stored $this->error / getError() stay raw).
-            $lines[] = '! ' . RenderSafe::clean($this->error);
-            foreach ($this->errorHelpLines() as $helpLine) {
+            if ($showErrors) {
+                $lines[] = '! ' . RenderSafe::clean($this->error);
+            }
+            foreach ($showErrors ? $this->errorHelpLines() : [] as $helpLine) {
                 $lines[] = $helpLine;
             }
         }

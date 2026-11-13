@@ -157,7 +157,7 @@ final class Text implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVali
         return [$next, $cmd];
     }
 
-    public function view(): string
+    public function view(bool $showErrors = true): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);
@@ -166,8 +166,8 @@ final class Text implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVali
         if ($desc  !== '') { $lines[] = $desc; }
         $lines[] = $this->area->view();
         // Validator messages can echo user input — clean at the display site.
-        if ($this->error !== null)     { $lines[] = '! ' . RenderSafe::clean($this->error); }
-        foreach ($this->errorHelpLines() as $helpLine) {
+        if ($showErrors && $this->error !== null) { $lines[] = '! ' . RenderSafe::clean($this->error); }
+        foreach ($showErrors ? $this->errorHelpLines() : [] as $helpLine) {
             $lines[] = $helpLine;
         }
         return implode("\n", $lines);

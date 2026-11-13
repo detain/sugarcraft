@@ -223,7 +223,7 @@ final class Date implements \SugarCraft\Forms\Field
      * {@see Confirm} uses for its pill — these widgets have no themeable
      * style slots (the E736 3.9 rationale applies verbatim).
      */
-    public function view(): string
+    public function view(bool $showErrors = true): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);

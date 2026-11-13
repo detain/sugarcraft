@@ -285,7 +285,7 @@ final class Slider implements \SugarCraft\Forms\Field
      * like Confirm's raw-reverse pills — these widgets carry no themeable
      * style slots (E736 3.9 rationale).
      */
-    public function view(): string
+    public function view(bool $showErrors = true): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);

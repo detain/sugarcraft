@@ -200,7 +200,7 @@ Form::groups(
 | `withTheme(Theme)` | Switch the colour palette. |
 | `withAccessible(bool)` | Render one `label: value` line for the focused field — for screen readers / dumb terminals. Echo-mode fields project their display characters via `displayValue()`; the stored secret is never read aloud. |
 | `withShowHelp(bool)` | Toggles the multi-group `Step X of Y` indicator (view() consults it only alongside more-than-one group and the group's own help flag). It renders no footer: `keyBinds()` / `help()` compose host-facing binding rows that view() never draws. |
-| `withShowErrors(bool)` | **Stored, not consumed**: fields render their `! error` line whenever an error is stored (`Field/Input.php:670` and siblings, unconditional at render) — no render path reads this flag, so today it suppresses nothing. Implementing consumption in field render vs deprecating the flag is an open owner decision; the row states the shipped truth. |
+| `withShowErrors(bool)` | False suppresses the inline `! error` row (and its `? ` help line) that `Input::view()`, `Text::view()`, `MultiSelect::view()` and `NumberField::view()` print for fields with active errors, and the same row in the accessible view; the error summary block from `withErrorSummary()` is a separate composer and stays rendered. |
 | `withWidth(int)`, `withHeight(int)` | Pin the rendered geometry. |
 | `withTimeout(int $ms)` | Stores a wall-clock budget (ms) for the host runtime to consult; the `Form` model itself starts no timer. |
 | `withKeyMap(?KeyMap)` | Override the bindings for `Next` / `Prev` / `Submit` / `Abort` on a single form. |

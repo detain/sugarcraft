@@ -113,7 +113,7 @@ final class Note implements \SugarCraft\Forms\Field
     public function blur(): Field         { return $this->carryNonCtorState(new self($this->key, $this->title, $this->description, $this->height, $this->next, $this->nextLabel, false)); }
     public function update(Msg $msg): array { return [$this, null]; }
 
-    public function view(): string
+    public function view(bool $showErrors = true): string
     {
         $parts = [];
         $title = $this->resolveTitle($this->title);

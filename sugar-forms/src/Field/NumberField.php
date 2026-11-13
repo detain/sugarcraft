@@ -231,7 +231,7 @@ final class NumberField implements Field
     }
 
     /** Render title/description, the draft line, then any parse error. */
-    public function view(): string
+    public function view(bool $showErrors = true): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);
@@ -243,7 +243,7 @@ final class NumberField implements Field
             $lines[] = $desc;
         }
         $lines[] = $this->text->view();
-        if ($this->error !== null) {
+        if ($showErrors && $this->error !== null) {
             // Parse messages quote the offending draft — clean at the
             // display site (getError() stays raw, Input::view() precedent).
             $lines[] = '! ' . RenderSafe::clean($this->error);

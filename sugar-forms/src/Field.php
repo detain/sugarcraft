@@ -45,8 +45,15 @@ interface Field
      */
     public function update(Msg $msg): array;
 
-    /** Render the field as a multi-line ANSI string. */
-    public function view(): string;
+    /**
+     * Render the field as a multi-line ANSI string. `$showErrors` is
+     * the enclosing form's {@see \SugarCraft\Forms\Form::withShowErrors()}
+     * knob: false suppresses the inline `! error` row and its `? ` help
+     * satellite (the form's error SUMMARY is a separate composer, always
+     * rendered when enabled). Default true keeps a standalone field's
+     * render byte-identical to the pre-SF-7 shape.
+     */
+    public function view(bool $showErrors = true): string;
 
     /** True while this field currently holds keyboard focus. */
     public function isFocused(): bool;

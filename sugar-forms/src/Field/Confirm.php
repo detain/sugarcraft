@@ -156,7 +156,7 @@ final class Confirm implements \SugarCraft\Forms\Field
      * decision beyond a correctness pass. Pill text stays behind
      * RenderSafe::clean() so user-supplied labels cannot inject escapes.
      */
-    public function view(): string
+    public function view(bool $showErrors = true): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);

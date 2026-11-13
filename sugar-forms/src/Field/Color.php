@@ -183,7 +183,7 @@ final class Color implements \SugarCraft\Forms\Field
      * its background code but adds REVERSE, so it renders as a hollow slot
      * punched out of the painted plane.
      */
-    public function view(): string
+    public function view(bool $showErrors = true): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);

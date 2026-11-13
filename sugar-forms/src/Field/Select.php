@@ -427,7 +427,7 @@ final class Select implements \SugarCraft\Forms\Field
         };
     }
 
-    public function view(): string
+    public function view(bool $showErrors = true): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);

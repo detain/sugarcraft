@@ -649,7 +649,7 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
         };
     }
 
-    public function view(): string
+    public function view(bool $showErrors = true): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);
@@ -664,9 +664,11 @@ final class Input implements \SugarCraft\Forms\Field, \SugarCraft\Forms\AsyncVal
         if ($this->error !== null) {
             // Validator messages can echo user input — clean at the display
             // site (the stored $this->error / getError() stay raw).
-            $lines[] = '! ' . RenderSafe::clean($this->error);
+            if ($showErrors) {
+                $lines[] = '! ' . RenderSafe::clean($this->error);
+            }
         }
-        foreach ($this->errorHelpLines() as $helpLine) {
+        foreach ($showErrors ? $this->errorHelpLines() : [] as $helpLine) {
             $lines[] = $helpLine;
         }
         return implode("\n", $lines);

@@ -87,7 +87,7 @@ final class FilePicker implements \SugarCraft\Forms\Field
         return [$this->mutate(picker: $p), $cmd];
     }
 
-    public function view(): string
+    public function view(bool $showErrors = true): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);

@@ -270,7 +270,7 @@ final class RadioPills implements Field
      * Confirm idiom, deliberately unpainted: E736 3.9 — these widgets carry
      * no themeable style slots).
      */
-    public function view(): string
+    public function view(bool $showErrors = true): string
     {
         $lines = [];
         $title = $this->resolveTitle($this->title);
