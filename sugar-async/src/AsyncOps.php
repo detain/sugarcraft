@@ -33,6 +33,50 @@ use function React\Promise\resolve;
 final class AsyncOps
 {
     /**
+     * Sink for swallowed-failure notices; null means the PHP default.
+     *
+     * @var (callable(string): void)|null
+     */
+    private static ?\Closure $logSink = null;
+
+    /**
+     * Redirect (or restore) the destination of swallowed-failure notices.
+     *
+     * Every hook failure this library swallows (cancellation callbacks,
+     * the retry/pendingNotice hooks, subscription disposal) is logged, not
+     * propagated — see the hook-failure invariant in the README. By default
+     * the line goes to error_log(); a TUI host that must not interleave text
+     * over a live frame installs a sink here to route those lines wherever
+     * it keeps diagnostics. Pass null to restore the error_log default.
+     *
+     * A sink that throws is itself swallowed: the notice seam must never
+     * turn a contained failure back into a propagating one.
+     *
+     * @param (callable(string): void)|null $sink
+     */
+    public static function setLogSink(?callable $sink): void
+    {
+        self::$logSink = $sink === null ? null : \Closure::fromCallable($sink);
+    }
+
+    /**
+     * Route one swallowed-failure notice through the configured sink.
+     *
+     * @internal The library's four hook-failure sites call this; hosts use
+     *           {@see setLogSink()} and never call it directly.
+     */
+    public static function logFailure(string $message): void
+    {
+        $sink = self::$logSink ?? static fn(string $line): bool => \error_log($line);
+        try {
+            $sink($message);
+        } catch (\Throwable) {
+            // A broken sink is the host's problem to notice in its own
+            // diagnostics; it must not escape the hook that failed first.
+        }
+    }
+
+    /**
      * Wrap a promise with a timeout. If the timeout fires before the
      * promise settles, the returned promise rejects with TimeoutException.
      * The inner promise is NOT cancelled and keeps running to completion.
@@ -694,7 +738,7 @@ final class AsyncOps
                     try {
                         $onRetry($attempt, $delay);
                     } catch (\Throwable $hookError) {
-                        error_log('sugar-async: retry progress hook failed: ' . $hookError->getMessage());
+                        self::logFailure('sugar-async: retry progress hook failed: ' . $hookError->getMessage());
                     }
                 }
                 $deferred = new Deferred();
@@ -1053,7 +1097,7 @@ final class AsyncOps
                 try {
                     $onPending();
                 } catch (\Throwable $noticeError) {
-                    error_log('sugar-async: pending notice failed: ' . $noticeError->getMessage());
+                    self::logFailure('sugar-async: pending notice failed: ' . $noticeError->getMessage());
                 }
                 return; // advisory: the wait continues
             }

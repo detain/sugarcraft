@@ -166,7 +166,7 @@ final class CancellationToken
             try {
                 $callback();
             } catch (\Throwable $e) {
-                \error_log('sugar-async: cancellation callback failed: ' . $e->getMessage());
+                AsyncOps::logFailure('sugar-async: cancellation callback failed: ' . $e->getMessage());
             }
         }
         $this->callbacks = [];

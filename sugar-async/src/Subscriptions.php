@@ -130,7 +130,7 @@ final class Subscriptions implements Subscription, \Countable
             try {
                 $subscription->unsubscribe();
             } catch (\Throwable $e) {
-                \error_log('sugar-async: subscription disposal failed: ' . $e->getMessage());
+                AsyncOps::logFailure('sugar-async: subscription disposal failed: ' . $e->getMessage());
             }
         }
     }

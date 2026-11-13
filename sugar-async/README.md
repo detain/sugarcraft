@@ -70,12 +70,14 @@ further guarantees:
   their registrations the moment the operation settles, so long-lived tokens do not
   accumulate closures.
 - A callback that throws is **logged, never propagated** — teardown paths cannot
-  surprise the canceller. "Logged" means `error_log()`: under the default PHP
-  configuration the line lands on stderr, and this library offers no
-  logger-injection seam, so a TUI tearing down mid-frame should expect a stray
-  interleaved line to corrupt the in-progress render. The hook-failure sites are
-  the cancellation callbacks (`CancellationToken`), the `retry` `onRetry:` and
-  `pendingNotice` hooks (`AsyncOps`), and the disposal pass behind
+  surprise the canceller. "Logged" means `error_log()` by default: under the
+  default PHP configuration the line lands on stderr, and a TUI tearing down
+  mid-frame may see a stray interleaved line corrupt the in-progress render —
+  so `AsyncOps::setLogSink($callable)` exists to redirect those notices into
+  the host's own diagnostics instead, and `setLogSink(null)` restores the
+  default. The hook-failure sites are the cancellation callbacks
+  (`CancellationToken`), the `retry` `onRetry:` and `pendingNotice` hooks
+  (`AsyncOps`), and the disposal pass behind
   `Subscriptions::unsubscribe()`.
   `CancellationToken::none()` is a shared never-cancelled
   sentinel for "no token here" plumbing: its `onCancel()` hands back an
