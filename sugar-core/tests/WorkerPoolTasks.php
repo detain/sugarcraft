@@ -90,6 +90,21 @@ final class WorkerPoolTasks
         throw new ProgramException('worker-side program failure');
     }
 
+    /**
+     * sc-33 incomplete-result probe: returns an instance of a class the
+     * response allow-list does not name (see WorkerPoolPrivateObject).
+     */
+    public static function privateObject(): WorkerPoolPrivateObject
+    {
+        return new WorkerPoolPrivateObject();
+    }
+
+    /** False-positive guard for the sc-33 instance check: the NAME as text is legal. */
+    public static function markerText(): string
+    {
+        return 'payload mentioning __PHP_Incomplete_Class by name only';
+    }
+
     /** Autoloader leg: naming a core class inside the task body. */
     public static function coreClassSeen(): string
     {

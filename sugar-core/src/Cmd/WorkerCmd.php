@@ -20,6 +20,16 @@ use SugarCraft\Core\WorkerPool;
  * The returned Msg will be a {@see WorkerResultMsg} with the result
  * or error when the worker finishes.
  *
+ * sc-33 (finding sugar-core-032): exactly one delivery channel per
+ * outcome, verified on disk — a RESOLVED promise here always carries a
+ * WorkerResultMsg whose error is null (resolveJob rejects rather than
+ * resolves when an error rode back), so every failure path — serialization,
+ * worker death, pool stop, a task-side throw, or a result the response
+ * allow-list cannot carry (the named __PHP_Incomplete_Class rejection of
+ * the sc-33 envelope verdict) — arrives as ExceptionMsg and nothing else.
+ * A Program's Update loop never sees the same failure twice over two
+ * channels.
+ *
  * @see WorkerPool
  */
 final class WorkerCmd

@@ -530,6 +530,160 @@ final class WorkerPoolTest extends TestCase
         $pool->stop();
     }
 
+    public function testQueueCapRefusesAtTheDoor(): void
+    {
+        // sc-33 (ASYNC-RC-17): outstanding work is bounded visibly. Cap 2:
+        // first dispatch takes the in-flight slot, second fills the queue,
+        // third is refused synchronously with the named message.
+        $pool = new WorkerPool($this->loop, 1, 2);
+        $parked = [];
+        $pool->dispatch([WorkerPoolTasks::class, 'pi'])->then(null, function (\Throwable $e) use (&$parked): void {
+            $parked[] = $e;
+        });
+        $pool->dispatch([WorkerPoolTasks::class, 'pi'])->then(null, function (\Throwable $e) use (&$parked): void {
+            $parked[] = $e;
+        });
+
+        try {
+            $pool->dispatch([WorkerPoolTasks::class, 'pi']);
+            $this->fail('the third dispatch must be refused');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('outstanding-job cap', $e->getMessage());
+        }
+
+        $pool->stop();
+        $this->assertCount(2, $parked, 'stop() settles the two parked jobs loudly; the refused one never existed');
+        $pool2 = new WorkerPool($this->loop, 1, 0);
+        $uncapped = $pool2->dispatch([WorkerPoolTasks::class, 'pi']);
+        $uncapped->then(null, static function (): void {
+        });
+        $this->assertInstanceOf(\React\Promise\PromiseInterface::class, $uncapped);
+        $pool2->stop();
+        try {
+            new WorkerPool($this->loop, 1, -5);
+            $this->fail('a negative cap must fail fast');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('must be 0 (unbounded) or positive', $e->getMessage());
+        }
+    }
+
+    public function testIncompleteResultRejectedByName(): void
+    {
+        // sc-33: a task returning an instance of a class the response
+        // allow-list does not name must reject with the named
+        // incomplete-result error — never resolve to a half-object.
+        $pool = new WorkerPool($this->loop, 1);
+        $outcome = ['rejected' => null, 'resolved' => null];
+        $pool->dispatch([WorkerPoolTasks::class, 'privateObject'])
+            ->then(
+                function (WorkerResultMsg $msg) use (&$outcome): void {
+                    $outcome['resolved'] = $msg;
+                    $this->loop->stop();
+                },
+                function (\Throwable $e) use (&$outcome): void {
+                    $outcome['rejected'] = $e;
+                    $this->loop->stop();
+                },
+            );
+        $this->loop->addTimer(10.0, function (): void {
+            $this->loop->stop();
+            $this->fail('incomplete-result probe never settled');
+        });
+        $this->spinLoop();
+
+        $this->assertInstanceOf(\RuntimeException::class, $outcome['rejected']);
+        $this->assertStringContainsString('disallowed class instance', $outcome['rejected']->getMessage());
+        $this->assertNull($outcome['resolved'], 'an incomplete result must never resolve');
+        $pool->stop();
+    }
+
+    public function testResultTextContainingTheMarkerNameStillResolves(): void
+    {
+        // sc-33 false-positive guard: the rejection is an INSTANCE check,
+        // not a substring ban — a legitimate task result that merely MENTIONS
+        // the class name crosses untouched.
+        $pool = new WorkerPool($this->loop, 1);
+        $resolved = null;
+        $pool->dispatch([WorkerPoolTasks::class, 'markerText'])
+            ->then(function (WorkerResultMsg $msg) use (&$resolved): void {
+                $resolved = $msg;
+                $this->loop->stop();
+            }, function (\Throwable $e): void {
+                $this->loop->stop();
+                $this->fail('marker-looking TEXT was rejected: ' . $e->getMessage());
+            });
+        $this->loop->addTimer(10.0, function (): void {
+            $this->loop->stop();
+            $this->fail('marker-text probe never settled');
+        });
+        $this->spinLoop();
+
+        $this->assertInstanceOf(WorkerResultMsg::class, $resolved);
+        $this->assertStringContainsString('__PHP_Incomplete_Class', $resolved->result);
+        $pool->stop();
+    }
+
+    public function testStopSettlesParkedJobsWithoutNesting(): void
+    {
+        // sc-33 (ASYNC-RC-15) contract surface: one death/refill pass settles
+        // every parked job exactly once — no recursive cascade, no job left
+        // unsettled. stop() is the deterministic form of that drain.
+        $pool = new WorkerPool($this->loop, 1);
+        $settled = [];
+        $capture = function (\Throwable $e) use (&$settled): void {
+            $settled[] = $e->getMessage();
+        };
+        for ($i = 0; $i < 4; $i++) {
+            $pool->dispatch([WorkerPoolTasks::class, 'pi'])->then(null, $capture);
+        }
+        $pool->stop();
+
+        $this->assertCount(4, $settled, 'every parked job settled exactly once');
+        foreach ($settled as $index => $message) {
+            $this->assertStringContainsString('stopped before job ' . ($index + 1) . ' completed', $message);
+        }
+    }
+
+    public function testWorkerCmdUsesExactlyOneChannelPerOutcome(): void
+    {
+        // sc-33 (finding sugar-core-032 first leg): the Cmd surface must
+        // deliver success as WorkerResultMsg and failure as ExceptionMsg —
+        // never both channels for one outcome.
+        $pool = new WorkerPool($this->loop, 1);
+
+        $failed = null;
+        WorkerCmd::run($pool, [WorkerPoolTasks::class, 'boom'])()
+            ->promise
+            ->then(function ($msg) use (&$failed): void {
+                $failed = $msg;
+                $this->loop->stop();
+            });
+        $this->loop->addTimer(10.0, function (): void {
+            $this->loop->stop();
+            $this->fail('boom arm never settled');
+        });
+        $this->spinLoop();
+        $this->assertInstanceOf(ExceptionMsg::class, $failed, 'a worker failure is ExceptionMsg, not a result-with-error');
+        $this->assertStringContainsString('task exploded', $failed->exception->getMessage());
+
+        $ok = null;
+        WorkerCmd::run($pool, [WorkerPoolTasks::class, 'sapiName'])()
+            ->promise
+            ->then(function ($msg) use (&$ok): void {
+                $ok = $msg;
+                $this->loop->stop();
+            });
+        $this->loop->addTimer(10.0, function (): void {
+            $this->loop->stop();
+            $this->fail('success arm never settled');
+        });
+        $this->spinLoop();
+        $this->assertInstanceOf(WorkerResultMsg::class, $ok);
+        $this->assertNull($ok->error);
+        $this->assertSame('cli', $ok->result);
+        $pool->stop();
+    }
+
     private function spinLoop(): void
     {
         $this->loop->run();

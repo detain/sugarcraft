@@ -43,6 +43,16 @@ use SugarCraft\Core\Msg\WorkerResultMsg;
  * created-and-forgotten pool costs nothing; and each worker keeps a
  * bounded stderr tail that failure rejections surface verbatim.
  *
+ * Envelope decision and lifecycle honesty (sc-33): the serialize envelope
+ * STAYS (see the verdict comment in handleWorkerLine) and the silent
+ * __PHP_Incomplete_Class tail is converted into a named rejection; the
+ * queue gains visible backpressure through a configurable outstanding-job
+ * cap (DEFAULT_MAX_OUTSTANDING_JOBS, 0 = unbounded) that refuses at the
+ * door rather than growing without end; a dead worker refills its slot
+ * through an ITERATIVE guarded loop, not a death→spawn→death recursion;
+ * and stop()'s reap ladder runs once over the whole pool, not once per
+ * worker. The pool never retries a task — a settled job is settled.
+ *
  * Mirrors the worker-pool pattern of charmbracelet/bubbletea, the machinery for offloading heavy
  * computation off the UI thread.
  *
@@ -81,6 +91,15 @@ final class WorkerPool
     /** sc-30: how much of a worker's stderr the pool keeps for failure reports. */
     private const STDERR_TAIL_BYTES = 4096;
 
+    /**
+     * sc-33 (ASYNC-RC-17): soft cap on outstanding work — pending + queued.
+     * The maps were unbounded, so a caller dispatching in a hot loop grew
+     * memory and work the pool could never finish. Reaching the cap refuses
+     * NEW dispatches at the door with a named exception (visible
+     * backpressure); 0 disables the cap for hosts that own their bound.
+     */
+    public const DEFAULT_MAX_OUTSTANDING_JOBS = 1024;
+
     /** Literal signal numbers: sugar-core does not require ext-pcntl and proc_terminate() takes the number directly. */
     private const SIGTERM = 15;
     private const SIGKILL = 9;
@@ -93,6 +112,8 @@ final class WorkerPool
 
     private int $concurrency;
 
+    private readonly int $maxOutstandingJobs;
+
     private bool $started = false;
 
     /** @var TimerInterface|null */
@@ -100,6 +121,9 @@ final class WorkerPool
 
     /** @var array<string, Deferred<WorkerResultMsg>> map: jobId => Deferred */
     private array $pending = [];
+
+    /** sc-33: re-entry guard for the death-refill loop (ASYNC-RC-15). */
+    private bool $refilling = false;
 
     private int $jobCounter = 0;
 
@@ -109,8 +133,15 @@ final class WorkerPool
     public function __construct(
         private readonly LoopInterface $loop,
         int $concurrency = self::DEFAULT_CONCURRENCY,
+        int $maxOutstandingJobs = self::DEFAULT_MAX_OUTSTANDING_JOBS,
     ) {
+        if ($maxOutstandingJobs < 0) {
+            throw new \InvalidArgumentException(
+                'WorkerPool outstanding-job cap must be 0 (unbounded) or positive, got ' . $maxOutstandingJobs
+            );
+        }
         $this->concurrency = max(1, $concurrency);
+        $this->maxOutstandingJobs = $maxOutstandingJobs;
     }
 
     public function concurrency(): int
@@ -138,6 +169,20 @@ final class WorkerPool
             // the replacement contract in the message — before any Deferred
             // is parked, so nothing can hang on the refusal.
             throw new \InvalidArgumentException(Lang::t('worker.string_task_removed', ['name' => $task]));
+        }
+
+        if ($this->maxOutstandingJobs > 0
+            && count($this->pending) + count($this->queue) >= $this->maxOutstandingJobs) {
+            // sc-33 (ASYNC-RC-17): visible backpressure instead of silent
+            // unbounded growth — a hot dispatch loop used to enlarge two
+            // arrays the pool could never finish feeding. Refused BEFORE
+            // any Deferred exists, so the caller keeps a clean handle on
+            // reality; 0 disables the cap for hosts that own their bound.
+            throw new \InvalidArgumentException(Lang::t('worker.queue_full', [
+                'pending' => count($this->pending),
+                'queue'   => count($this->queue),
+                'cap'     => $this->maxOutstandingJobs,
+            ]));
         }
 
         if (!$this->started) {
@@ -309,10 +354,18 @@ final class WorkerPool
         // against pipe corruption. sc-29 widened the list to the library's own
         // throwable surface (the concrete Exception/* classes, matched EXACTLY —
         // PHP allow-lists are by-name, not by-lineage) so a task failure that
-        // crosses back as a ProgramException arrives as the real class instead
-        // of a __PHP_Incomplete_Class shrug. The full result-envelope decision
-        // (values-as-objects, JSON alternative) is sc-33's; this is the
-        // error-shape floor, written at both ends.
+        // crosses back as a ProgramException arrives as the real class.
+        //
+        // ENVELOPE VERDICT (sc-33, closing the decision sc-29 deferred): the
+        // serialize envelope STAYS. A JSON rewrite loses float bit-fidelity
+        // and gains nothing a local child needs (no cross-language story, no
+        // human inspection on a base64 pipe), while the two-stage allow-list
+        // already gives task-side containment. The one silent failure mode
+        // the shape had — a disallowed result class materialising as
+        // __PHP_Incomplete_Class — dies below with a named rejection, so the
+        // contract reads: results cross as scalars/arrays or as classes
+        // named in the allow-list; anything else is a loud error, never a
+        // half-object.
         $decoded = base64_decode($line, true);
         // The child always writes strict-mode-valid base64; a frame that
         // fails even base64_decode is corruption and must travel the SAME
@@ -348,12 +401,53 @@ final class WorkerPool
             return;
         }
 
+        // sc-33: __PHP_Incomplete_Class is the shape a disallowed class took
+        // through the old allow-list — silently half-materialised, dangerous
+        // to touch, and invisible unless inspected. A substring probe over
+        // the frame bytes would false-positive on any task that legitimately
+        // RETURNS that text, so the check walks the unserialized values for
+        // actual incomplete instances instead. The contract reads: results
+        // cross as scalars/arrays or classes named in the allow-list;
+        // anything else is a loud rejection, never a half-object.
+        if (self::containsIncomplete($data['result'] ?? null) || self::containsIncomplete($data['error'] ?? null)) {
+            $this->resolveJob($worker, new WorkerResultMsg(
+                result: null,
+                error: new \RuntimeException(Lang::t('worker.incomplete_result')),
+                workerId: $worker->id,
+            ));
+            return;
+        }
+
         $result = new WorkerResultMsg(
             result: $data['result'] ?? null,
             error: $data['error'] ?? null,
             workerId: $worker->id,
         );
         $this->resolveJob($worker, $result);
+    }
+
+    /**
+     * Does this unserialized value hide a __PHP_Incomplete_Class anywhere
+     * inside it? Structures deeper than the cap are treated as containing
+     * one (reject): the walk bound is a hard guarantee, not a hint.
+     */
+    private static function containsIncomplete(mixed $value, int $depth = 0): bool
+    {
+        if (is_object($value)) {
+            return get_class($value) === '__PHP_Incomplete_Class';
+        }
+        if (!is_array($value)) {
+            return false;
+        }
+        if ($depth >= 64) {
+            return true;
+        }
+        foreach ($value as $item) {
+            if (self::containsIncomplete($item, $depth + 1)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function resolveJob(WorkerState $worker, WorkerResultMsg $result): void
@@ -536,15 +630,44 @@ final class WorkerPool
         }
 
         if ($this->hasQueuedJob()) {
-            [$nextJobId, $nextTask] = array_shift($this->queue);
-            if (count($this->workers) < $this->concurrency) {
-                $this->spawnWorker($nextJobId, $nextTask);
-            } else {
-                $this->queue[] = [$nextJobId, $nextTask];
+            // sc-33 (ASYNC-RC-15): refill ITERATIVELY. The old shape was one
+            // shift + one spawnWorker, and spawnWorker's failure path came
+            // back through handleWorkerDeath — recursion as deep as the
+            // queue. This loop drains one job per pass with no nesting:
+            // each iteration either puts a job on a fresh worker (which may
+            // itself die and re-enter — the guard below keeps that re-entry
+            // from draining twice, it only settles its own job) or the
+            // spawn self-rejects and the queue moves on. The loop
+            // terminates because every pass removes an element from
+            // $this->queue.
+            if (!$this->refilling) {
+                $this->refilling = true;
+                try {
+                    while ($this->hasQueuedJob() && count($this->workers) < $this->concurrency) {
+                        [$nextJobId, $nextTask] = array_shift($this->queue);
+                        $this->spawnWorker($nextJobId, $nextTask);
+                    }
+                } finally {
+                    $this->refilling = false;
+                }
             }
         }
 
         $this->releaseTickIfIdle();
+    }
+
+    /**
+     * Settle one parked job as a failure without touching workers or the
+     * queue (sc-33): the spawn-failure door needs the reject, not the death
+     * cascade — and the cascade was the recursion this removal ends.
+     */
+    private function rejectJob(string $jobId, string $reason): void
+    {
+        if (isset($this->pending[$jobId])) {
+            $deferred = $this->pending[$jobId];
+            unset($this->pending[$jobId]);
+            $deferred->reject(new \RuntimeException($reason));
+        }
     }
 
     /**
@@ -558,14 +681,27 @@ final class WorkerPool
         return $tail === '' ? '' : ' (worker stderr: ' . $tail . ')';
     }
 
-    private function spawnWorker(string $currentJobId, callable|string $task): void
+    /**
+     * Launch a child, register it, and hand it the job it was launched for.
+     * Returns false only when no child exists to serve the job — in which
+     * case the job has already been rejected (sc-33: the return feeds the
+     * iterative refill loop in handleWorkerDeath, never a recursive one).
+     */
+    private function spawnWorker(string $currentJobId, callable|string $task): bool
     {
         $workerId = $this->workerCounter++;
 
         $scriptPath = $this->createWorkerScript();
         if ($scriptPath === false) {
-            $this->handleWorkerDeath(new WorkerState($workerId, null, null, null, null), 'Failed to create worker script', $currentJobId);
-            return;
+            // sc-33 (ASYNC-RC-15): settle this job directly. The old shape
+            // called handleWorkerDeath() — which pulls the NEXT queued job
+            // and spawns again — so a persistent script failure recursed
+            // once per queued job (stack depth = queue length, with every
+            // intermediate spawn attempt also burning a worker id). The
+            // death handler now loops; a failed spawn here simply rejects
+            // its own job and lets that loop take the next bite.
+            $this->rejectJob($currentJobId, 'Failed to create worker script');
+            return false;
         }
 
         // MERGE, not replace (sc-29): proc_open's env array is the child's
@@ -594,8 +730,8 @@ final class WorkerPool
 
         if (!is_resource($process)) {
             @unlink($scriptPath);
-            $this->handleWorkerDeath(new WorkerState($workerId, null, null, null, null), 'Failed to start worker process', $currentJobId);
-            return;
+            $this->rejectJob($currentJobId, 'Failed to start worker process');
+            return false;
         }
 
         // sc-30: every pipe stays NON-BLOCKING. The old re-block of stdin fed
@@ -641,6 +777,11 @@ final class WorkerPool
         $this->workers[$workerId] = $worker;
 
         $this->sendToWorker($worker, $currentJobId, $task);
+
+        // sc-33: true means 'a child was launched for this job' — the job
+        // itself may still fail over the pipe (that is the death path's
+        // business); the refill loop only needs to know the slot exists.
+        return true;
     }
 
     private function createWorkerScript(): string|false
@@ -705,6 +846,10 @@ while (!feof($fd)) {
             throw new \RuntimeException('Worker payload is not callable');
         }
         $result = $callable();
+        // sc-33 contract at both ends: values cross as scalars/arrays, or
+        // as classes the PARENT allow-list names. A user class returned by
+        // a task arrives parent-side as an incomplete instance and is
+        // rejected there by name — never half-materialised.
         $response = base64_encode(serialize(['result' => $result, 'error' => null]));
     } catch (\Throwable $e) {
         $response = base64_encode(serialize(['result' => null, 'error' => $e]));

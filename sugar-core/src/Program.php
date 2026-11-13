@@ -496,6 +496,12 @@ final class Program
         // A re-run must not carry the previous run's stop reason into
         // stopSignal(): reset before anything in this run can record one.
         $this->stopSignal = null;
+        // sc-33 (ASYNC-RC-14): same discipline for the render DIFF cache.
+        // A re-run deliberately keeps model and subscription-reconciliation
+        // state, but lastRenderedBody across lives made the first frame of
+        // run #2 diff against the CLOSED screen — a stale tail instead of a
+        // fresh paint. Reset at the same door as stopSignal.
+        $this->lastRenderedBody = null;
         $this->setupTerminal();
         $this->installSignalHandlers();
 
