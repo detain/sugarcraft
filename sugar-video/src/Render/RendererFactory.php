@@ -50,6 +50,12 @@ final class RendererFactory
 
     /**
      * The terminal's capability report — probed once, memoized thereafter.
+     *
+     * SV-L65/065: the SEAT-side twin of {@see \SugarCraft\Video\Source\VideoSource::probe()} — what
+     * the terminal can receive (protocol claims, color profile, block-glyph
+     * safety), never what the video file contains; source questions belong
+     * over there. {@see supportedModes()} below filters only this transport
+     * truth; the full build+seat+size verdict is {@see support()}.
      */
     public static function diagnose(): ProbeReport
     {
@@ -97,6 +103,13 @@ final class RendererFactory
 
     /**
      * Every Mode this terminal can honestly render right now.
+     *
+     * SV-L65/065: the transport-only list — seat reception per supports(),
+     * not the full verdict. A mode named here can still be un-paintable by
+     * this PHP build or too large for the pane; {@see support()} (and its
+     * boolean door {@see canRender()}) is the unified surface that folds in
+     * ext-gd, block-glyph safety and the SV-H7 window — hosts wanting one
+     * honest answer per mode ask there, not by filtering this list.
      *
      * @return list<Mode>
      */

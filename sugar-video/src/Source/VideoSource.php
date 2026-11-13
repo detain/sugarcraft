@@ -167,6 +167,14 @@ final class VideoSource
      *        (same SSRF transport law as the decoder — see
      *        {@see FfmpegCommandBuilder::ALLOWED_MAX_REDIRECTS}), so even the
      *        metadata child cannot be redirected out of the allowlist.
+     *
+     * SV-L65/065: this is the SOURCE-side probe — what the file holds
+     * (geometry, duration, fps, the audio stream's existence), answered by
+     * ffprobe. The SEAT-side question (what the terminal can receive:
+     * protocol claims, color profile, block-glyph safety) belongs to
+     * {@see \SugarCraft\Video\Render\RendererFactory::diagnose()}; the two probes are orthogonal and
+     * neither reads what the other reads — this call never negotiates with
+     * the terminal, that one never opens the file.
      */
     public static function probe(string $path, bool $hostRestricted = false): self
     {
