@@ -42,7 +42,9 @@ RUN pip install --upgrade pip && \
 WORKDIR /repo
 
 # Run as non-root user for security (Codacy: Semgrep_dockerfile.security.missing-user)
-RUN addgroup -g 1000 appgroup && adduser -u 1000 -G appgroup -s /bin/sh -D appuser
+# Debian-form flags, NOT BusyBox shorts: the Ubuntu-22.04 base ships the Perl
+# adduser/addgroup which reject -g/-u/-D ("Option g is ambiguous" on a live host).
+RUN addgroup --gid 1000 appgroup && adduser --uid 1000 --gid 1000 --shell /bin/sh --no-create-home --disabled-password --system appuser
 USER appuser
 
 CMD ["python", "/repo/scripts/generate_icons.py", "--help"]
