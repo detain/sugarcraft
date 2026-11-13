@@ -124,7 +124,7 @@ rather than silently truncating:
 - `filtered()` walks array payloads recursively and refuses payloads nested
   deeper than 64 levels (a self-referencing payload would otherwise recurse
   until the process dies).
-- `Shell::pushDirectory()` and `Url::parse()` grow stacks from external input
+- `Shell::withDirectory()` (formerly `pushDirectory()`) and `Url::parse()` grow stacks from external input
   through the same `push()` guards — hostile path/URL input costs at most a
   loud refusal, never an unbounded render.
 - On the renderer side, `Breadcrumb::setSeparator()` refuses empty and
@@ -301,7 +301,8 @@ to see, from one accessor, whether the selection survived the width math.
 ## Shell
 
 `Shell` is a convenience facade pairing a stack with a renderer through
-immutable operations — every `with*` (and `pushDirectory`) returns a NEW
+immutable operations — every `with*` (including `withDirectory`; the
+verb-named `pushDirectory` is a deprecated forwarder to it, NS-26) returns a NEW
 `Shell` and never mutates the receiver. The boundary is thinner than
 "immutable" suggests in one way: the item list carries the same
 `NavigationItem` objects (titles and payloads are readonly, so sharing is
@@ -327,14 +328,16 @@ $shell->renderBreadcrumb();         // "Home › Settings" — $shell unchanged
 // Directory-driven stacks are EXPLICIT: nothing detects directory changes,
 // your host loop (cwd watcher, cd command, file browser) calls this —
 // also immutable-returning, so capture the result:
-$shell = $shell->pushDirectory('/home/user/projects');  // appends home, user, projects
+$shell = $shell->withDirectory('/home/user/projects');  // appends home, user, projects
 ```
 
-`pushDirectory()` stores the accumulated path (`/home`, `/home/user`, …) as each
+`withDirectory()` stores the accumulated path (`/home`, `/home/user`, …) as each
 crumb's data and does not URL-decode segments. Within one call, `.` segments are
 skipped and `..` cancels only same-call segments — a `..`-only path pushes
 NOTHING, and climbing out of an existing stack is `withPop()`, not
-`pushDirectory('..')`. Note `withPop()` empties a depth-1 stack (guard with
+`withDirectory('..')`. The split is POSIX `/` only — a Windows drive path
+arrives as one `C:`-bearing crumb; explode it host-side first (NS-26).
+Note `withPop()` empties a depth-1 stack (guard with
 `NavStack::canPop()` to keep the root).
 
 ## Url

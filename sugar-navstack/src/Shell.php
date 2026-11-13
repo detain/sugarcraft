@@ -166,10 +166,20 @@ final class Shell
      * A path with more than {@see NavStack::MAX_STACK_DEPTH} components
      * throws part-way (the returned Shell does not exist).
      *
+     * Split is POSIX `/` ONLY (NS-26): a Windows-style path arrives as one
+     * `C:`-bearing crumb (backslash never splits, `..` never engages) —
+     * hosts fed drive paths should explode them first; auto-recognizing
+     * `\`/`:` on POSIX hosts misroutes more than it helps, so this port
+     * documents the law instead of guessing the OS.
+     *
+     * Returns a NEW Shell despite the verb name. The name is historical;
+     * the honest immutable verb is {@see withDirectory()}, to which this
+     * is now a deprecated forwarder (NS-26).
+     *
      * Project addition (research §10) — upstream KevM/bubbleo Shell has no
      * pushDirectory.
      */
-    public function pushDirectory(string $path): self
+    public function withDirectory(string $path): self
     {
         $segments = \array_filter(
             \explode('/', \trim($path, '/')),
@@ -198,5 +208,16 @@ final class Shell
             $newStack->push($segment, $acc);
         }
         return $this->copy($newStack);
+    }
+
+    /**
+     * @deprecated NS-26 naming outlier — verb name, immutable return.
+     *             {@see withDirectory()} is the canonical spelling; this
+     *             forwarder delegates byte-for-byte and keeps the shipped
+     *             call surface working unchanged.
+     */
+    public function pushDirectory(string $path): self
+    {
+        return $this->withDirectory($path);
     }
 }

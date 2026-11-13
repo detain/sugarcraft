@@ -413,4 +413,31 @@ final class ShellTest extends TestCase
         $cancel = Shell::new()->pushDirectory('/a/b/..');
         $this->assertSame(['a'], array_map(static fn ($i): string => $i->title, $cancel->stack->items()));
     }
+    // ─── withDirectory() canonical + pushDirectory() forwarder (NS-26) ───────
+
+    public function testPushDirectoryForwardsToWithDirectoryByteIdentically(): void
+    {
+        $base = Shell::new()->withPush('Root');
+        $canonical  = $base->withDirectory('/home/user/projects');
+        $deprecated = $base->pushDirectory('/home/user/projects');
+
+        self::assertSame(
+            $canonical->renderBreadcrumb(),
+            $deprecated->renderBreadcrumb(),
+            'the forwarder must answer byte-for-byte like the canonical verb'
+        );
+        self::assertSame(
+            \array_map(static fn($i): array => [$i->title, $i->data], $canonical->stack->items()),
+            \array_map(static fn($i): array => [$i->title, $i->data], $deprecated->stack->items())
+        );
+    }
+
+    public function testWithDirectoryIsPosixOnlySplit(): void
+    {
+        // Documented law (NS-26): backslash never splits, '..' never engages
+        // a drive path — the whole Windows-style string arrives as ONE crumb.
+        $shell = Shell::new()->withDirectory('C:\Users\me');
+        self::assertCount(1, $shell->stack->items());
+        self::assertSame('C:\Users\me', $shell->stack->items()[0]->title);
+    }
 }
