@@ -289,9 +289,10 @@ $t = Table::fromColumns([...])
     ->withViewportHeight(15);
 
 // sugar-input decodes key presses into KeyEvent (sugar-pty carries the raw
-// bytes; sugar-mouse is the pointer companion). Its $key names are
-// PascalCase ("ArrowDown"), while handleKey()/scrollYForKey() match the
-// Table::KEY_* values ('arrowDown') strictly — translate the names:
+// bytes; sugar-mouse is the pointer companion). A KeyEvent's key name is
+// PascalCase — "ArrowDown" — while Table::handleKey() and scrollYForKey()
+// match the Table::KEY_* constant values strictly — 'arrowDown'. So a
+// sugar-input key must be translated before it reaches the table:
 /** @var KeyEvent $event */
 $key = match ($event->key) {
     'ArrowUp'   => Table::KEY_ARROW_UP,
@@ -522,7 +523,7 @@ echo $t->View();                       // ID and Name always visible
 ### How It Works
 
 - **Frozen columns** (specified by index — or by key with `withFrozenKeys()`, the audit-ST-24 companion) are always rendered, regardless of scroll position
-- **The frozen set must be a contiguous prefix starting at index 0** — `withFrozenCols([1])` or `[0, 2]` throws `InvalidArgumentException` (and frozen indices must stay disjoint from hidden ones); to freeze non-adjacent columns, re-order them first or hide the columns in between
+- **The frozen set must be a contiguous prefix starting at index 0.** `withFrozenCols([1])` or `[0, 2]` throws `InvalidArgumentException`, and frozen indices must stay disjoint from hidden ones. Consequence: to freeze non-adjacent columns, re-order them first or hide the columns in between
 - **Non-frozen columns** scroll horizontally: they become visible starting at index `count(frozenCols) + scrollX`
 - Use `withScrollX($offset)` to scroll the non-frozen columns
 
