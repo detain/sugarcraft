@@ -332,6 +332,10 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
      */
     private const PAGE_QUOTES = [
         'STDERR_LINE_FORMAT' => [
+            // S-O29: the CHANGELOG's one-shot hardening bullet describes that
+            // every labelled stderr line composes its `candy-code` prefix once
+            // — prose about the shape, not a quotation of a rendered line.
+            'CHANGELOG.md' => self::PAGE_QUOTE_IS_PROSE,
             'README.md' => ReadmeSettingsTierClaimTest::class
                 . '::testOneShortDenyGlobRemovesEveryToolButOneWithoutNamingAnyOfThem',
             'docs/ENVIRONMENT.md' => self::PAGE_QUOTE_IS_PROSE,
@@ -549,12 +553,20 @@ final class BootstrapLaunchFormatConstantsTest extends TestCase
         // `deny` value every disabledMcpServers pattern maps to. MCP-3 added
         // the user tier's two decision keys, in body order: `userStatus` in
         // the OR-ed launch gate, `userPath` at the tier read.
-        'mcpClient' => ["'path'", "'status'", "'userStatus'", "'canonicalRoot'", "'/'", "'userPath'", "''", "'fingerprint'", "'summary'", "'deny'", "'; '"],
+        // Operator-only diagnostics (G-13: untranslated, Log channel/raw, never
+        // the user's terminal framing): the unusable-pin-file Log::channel
+        // line and the damaged-pin-file Log::raw refusal each hold their
+        // sentence inline in body order, ahead of `userPath`; they are not
+        // launcher-printed stderr lines, so they own no named constant.
+        'mcpClient' => ["'path'", "'status'", "'userStatus'", "'canonicalRoot'", "'/'", "'MCP trust pins '", "' unusable ('", "'); treated as no record'", "'refusing to start MCP servers: '", "' is empty or unreadable; run `candy-code mcp trust` to re-approve'", "'userPath'", "''", "'fingerprint'", "'summary'", "'deny'", "'; '"],
         // Audit 15d-05's binding row: the plural pair and the is/are pick.
         'reportMemorySkips' => ["''", "'s'", "'is'", "'are'"],
-        // Audit R1's two rows carry no literal: S-X08 moved the plural
-        // grammar into one catalogue key per plural class (cli.deferral.*).
-        'reportPromptBudgetDeferrals' => [],
+        // Audit R1's two rows: S-X08 moved the plural grammar into one
+        // catalogue key per plural class (cli.deferral.*), so what the body
+        // holds is those six Lang::t keys and the two placeholder names they
+        // read (`count`, `list`) — plumbing for the named catalogue entries,
+        // not message text, in body order.
+        'reportPromptBudgetDeferrals' => ["'cli.deferral.instruction_one'", "'cli.deferral.instruction_other'", "'count'", "'list'", "'cli.deferral.skill_one'", "'cli.deferral.skill_other'"],
         // Audit R12: both sentences are named constants and both keys are, so
         // the body holds no literal at all.
         'reportNonsenseLimits' => [],
