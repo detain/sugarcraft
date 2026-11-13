@@ -44,6 +44,23 @@ use WeakReference;
  */
 final class Program
 {
+    /**
+     * Running byte cap per capture stream in {@see drainCapturedPipes()}
+     * (audit sugar-core-002). Overflow truncates with a marker and keeps
+     * draining, so an oversized child still terminates cleanly instead of
+     * growing the TUI's memory without bound.
+     */
+    private const MAX_EXEC_CAPTURE_BYTES = 1 << 20;
+
+    /**
+     * Wall-clock ceiling for the whole exec capture wait
+     * ({@see drainCapturedPipes()}). A grandchild inheriting the pipe write
+     * ends means the child's streams may never reach EOF — without this
+     * bound the wait was unbounded and Ctrl-C could not end it (the input
+     * reader is suspended during exec).
+     */
+    public const EXEC_WAIT_DEADLINE_SECONDS = 120.0;
+
     private Model $model;
     private readonly LoopInterface $loop;
     /** @var resource */
@@ -1063,7 +1080,8 @@ final class Program
     }
 
     /**
-     * Read two capture pipes concurrently until both reach EOF.
+     * Read two capture pipes concurrently until both reach EOF, honoring a
+     * running byte cap and a wall-clock deadline.
      *
      * WHY NOT SEQUENTIALLY: each kernel pipe holds ~64 KiB. Reading stdout to
      * EOF first deadlocks the moment the child also overflows stderr — stdout
@@ -1072,18 +1090,37 @@ final class Program
      * 2026-09-30). Interleaving through stream_select keeps both buffers
      * moving regardless of how much either stream carries.
      *
-     * Non-blocking + a 1s select tick mirrors the writeOutput() short-write
-     * loop's shape: select failure (signal interrupt) abandons draining with
-     * what came through rather than looping blindly.
+     * sugar-core-002 consolidation (cap + deadline + interrupt retry in ONE
+     * loop shape, not per-cause patches): the old shape treated a
+     * `stream_select() === false` return — a signal-dispatch race, not a
+     * dead pipe — as permission to stop waiting, and runExec then handed
+     * the half-drained handles to an unconditional blocking `proc_close()`.
+     * A grandchild holding the inherited pipe write ends froze the whole
+     * TUI there with Ctrl-C dead. The loop now retries transient select
+     * failures inside the deadline, and returns `timedOut` so the caller
+     * can kill and bound-reap the child instead of freezing.
      *
      * @param  resource|null $stdoutPipe
      * @param  resource|null $stderrPipe
-     * @return array{0: string, 1: string} captured [stdout, stderr]
+     * @param  float         $deadlineSeconds wall ceiling for the whole wait
+     * @param  int           $capBytes        running cap per captured stream
+     * @return array{0: string, 1: string, 2: bool} captured [stdout, stderr, timedOut]
      */
-    private static function drainCapturedPipes($stdoutPipe, $stderrPipe): array
-    {
+    private static function drainCapturedPipes(
+        $stdoutPipe,
+        $stderrPipe,
+        float $deadlineSeconds = self::EXEC_WAIT_DEADLINE_SECONDS,
+        int $capBytes = self::MAX_EXEC_CAPTURE_BYTES,
+    ): array {
         $stdout = '';
         $stderr = '';
+        $stdoutTruncated = false;
+        $stderrTruncated = false;
+        // Data-stream marker, deliberately NOT Lang::t(): it rides inside
+        // captured child output (ExecMsg), where a localized string would
+        // corrupt machine-parsed payloads. Documented in the README.
+        $marker = "\n...[capture truncated at {$capBytes} bytes]";
+
         /** @var array<int, resource> $open */
         $open = [];
         foreach ([$stdoutPipe, $stderrPipe] as $pipe) {
@@ -1093,19 +1130,47 @@ final class Program
             }
         }
 
+        $start = hrtime(true);
+        $timedOut = false;
         while ($open !== []) {
+            if ((hrtime(true) - $start) / 1e9 >= $deadlineSeconds) {
+                $timedOut = true;
+                break;
+            }
             $read = $open;
             $write = $except = null;
             if (@stream_select($read, $write, $except, 1) === false) {
-                break;
+                // sugar-core-002: a transient select failure must not
+                // abandon the drain — retry inside the deadline instead of
+                // falling through to the blocking reap.
+                usleep(2000);
+                continue;
             }
             foreach ($read as $stream) {
                 $chunk = fread($stream, 65536);
                 if ($chunk !== false && $chunk !== '') {
                     if ($stream === $stdoutPipe) {
-                        $stdout .= $chunk;
+                        if ($stdoutTruncated) {
+                            continue; // over cap — keep draining, discard bytes
+                        }
+                        $room = $capBytes - strlen($stdout);
+                        if (strlen($chunk) > $room) {
+                            $stdout .= substr($chunk, 0, $room) . $marker;
+                            $stdoutTruncated = true;
+                        } else {
+                            $stdout .= $chunk;
+                        }
                     } else {
-                        $stderr .= $chunk;
+                        if ($stderrTruncated) {
+                            continue;
+                        }
+                        $room = $capBytes - strlen($stderr);
+                        if (strlen($chunk) > $room) {
+                            $stderr .= substr($chunk, 0, $room) . $marker;
+                            $stderrTruncated = true;
+                        } else {
+                            $stderr .= $chunk;
+                        }
                     }
                     continue;
                 }
@@ -1121,7 +1186,7 @@ final class Program
             }
         }
 
-        return [$stdout, $stderr];
+        return [$stdout, $stderr, $timedOut];
     }
 
     private function runExec(ExecRequest $req): void
@@ -1178,7 +1243,22 @@ final class Program
                 ]));
             }
             if ($req->captureOutput === true) {
-                [$stdout, $stderr] = self::drainCapturedPipes($pipes[1] ?? null, $pipes[2] ?? null);
+                [$stdout, $stderr, $timedOut] = self::drainCapturedPipes($pipes[1] ?? null, $pipes[2] ?? null);
+                if ($timedOut) {
+                    // sugar-core-002: the capture window expired with pipes
+                    // still open (a grandchild holding the write ends is the
+                    // classic shape). Kill it, reap inside a bounded window,
+                    // and surface a structured failure — the old flow fell
+                    // through to an unconditional blocking proc_close() that
+                    // froze the TUI with the input reader suspended.
+                    $bytes = strlen($stdout) + strlen($stderr);
+                    self::terminateAndReap($proc, 2.0);
+                    throw new \RuntimeException(Lang::t('program.exec_deadline_exceeded', [
+                        'cmd'     => is_array($cmd) ? implode(' ', $cmd) : $cmd,
+                        'seconds' => self::EXEC_WAIT_DEADLINE_SECONDS,
+                        'bytes'   => $bytes,
+                    ]));
+                }
             }
             $exit = proc_close($proc);
         } catch (\Throwable $t) {
@@ -1197,6 +1277,47 @@ final class Program
         $this->dispatch(new ExecMsg($exit, $err, $stdout, $stderr));
         if ($produced !== null) {
             $this->dispatch($produced);
+        }
+    }
+
+    /**
+     * Kill a runaway exec child and wait a bounded time for the kernel to
+     * reap it (audit sugar-core-002, called from the deadline arm of
+     * runExec()). SIGTERM first, SIGKILL escalation once the bound passes
+     * — and if even that leaves the handle unreapable, the caller proceeds
+     * WITHOUT a blocking close: PHP releases the handle at shutdown, which
+     * is strictly better than freezing the live TUI on someone else's
+     * grandchild.
+     *
+     * @param resource $proc
+     */
+    private static function terminateAndReap($proc, float $boundSeconds): bool
+    {
+        proc_terminate($proc);
+        $start = hrtime(true);
+        while (true) {
+            if (!proc_get_status($proc)['running']) {
+                proc_close($proc);
+                return true;
+            }
+            if ((hrtime(true) - $start) / 1e9 >= $boundSeconds) {
+                if (defined('SIGKILL')) {
+                    proc_terminate($proc, SIGKILL);
+                }
+                // One grace tick after the escalation, then give up on the
+                // reap — the structured exec failure is already propagating
+                // through the caller's exception path.
+                $grace = hrtime(true);
+                while ((hrtime(true) - $grace) / 1e9 < 0.25) {
+                    if (!proc_get_status($proc)['running']) {
+                        proc_close($proc);
+                        return true;
+                    }
+                    usleep(5000);
+                }
+                return false;
+            }
+            usleep(5000);
         }
     }
 
@@ -1924,15 +2045,25 @@ final class Program
      * renderer frames, RawMsg / PrintMsg, terminal-mode bytes, cursor /
      * title / progress emitters — flows through here so cassettes
      * reflect what the user actually saw.
+     *
+     * @param float $deadline writability ceiling (tests pass short bounds;
+     *                        production callers always take the default)
      */
-    private function writeOutput(string $bytes): void
+    private function writeOutput(string $bytes, float $deadline = Renderer::WRITE_WAIT_DEADLINE): void
     {
         // Loop over short writes: a single fwrite() to a PTY/pipe (e.g. an
         // SSH session) with a partially full kernel buffer consumes only what
         // fits and returns a short count. Dropping the tail left mode-setting
         // sequences and large RawMsg/PrintMsg payloads partially emitted.
+        //
+        // sugar-core-018 (mirrors Renderer::writeAll()): a stream_select()
+        // false return is a transient interrupt, not "writable never" —
+        // retry MAX_SELECT_FALSE_RETRY consecutive ticks inside a
+        // WRITE_WAIT_DEADLINE wall bound before giving up on the tail.
         $len = strlen($bytes);
         $written = 0;
+        $selectFalse = 0;
+        $start = hrtime(true);
         // A closed resource makes fwrite()/stream_select() throw TypeError (the
         // @ silencer does not cover that), and a torn pipe returns false with
         // a Notice. Teardown is best-effort: swallow and let later restore
@@ -1944,18 +2075,30 @@ final class Program
                     break;
                 }
                 if ($n === 0) {
+                    if ((hrtime(true) - $start) / 1e9 >= $deadline) {
+                        break;
+                    }
                     $w = [$this->output];
                     $r = $e = null;
                     if (@stream_select($r, $w, $e, 1) === false) {
-                        break;
+                        if (++$selectFalse > Renderer::MAX_SELECT_FALSE_RETRY) {
+                            break;
+                        }
+                        continue;
                     }
+                    $selectFalse = 0;
                     continue;
                 }
                 $written += $n;
             }
         } catch (\Throwable) {
         }
-        $this->recorder?->recordOutput($bytes);
+        // sugar-core-018: the recorder tee sees FLUSHED bytes only — a
+        // cassette that claims bytes the stream refused never matches what
+        // the user saw on glass.
+        if ($this->recorder !== null && $written > 0) {
+            $this->recorder->recordOutput($written === $len ? $bytes : substr($bytes, 0, $written));
+        }
     }
 
     /**

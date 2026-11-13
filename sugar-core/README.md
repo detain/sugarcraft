@@ -694,6 +694,22 @@ model only: a screen pushed later is *not* re-inited; initialise it in the
 returns `[Model, ?Cmd]` — the runtime applies the Cmd, dispatches
 its Msg, and feeds the result back into `update()`.
 
+**Exec capture and output recording.** A `Cmd::exec()` with
+`captureOutput: true` drains the child's stdout/stderr interleaved under a
+per-stream byte cap (1 MiB each — overflow is truncated with an ASCII
+`...[capture truncated at N bytes]` marker inside the captured text, which
+is deliberately not localized) and a 120-second wall-clock deadline for the
+whole wait. If the pipes never reach EOF (typically a grandchild holding the
+inherited write ends open), the child is terminated (SIGTERM, escalating to
+SIGKILL) and reaped inside a bounded window, and the resulting `ExecMsg`
+carries a `RuntimeException` with the localized
+`program.exec_deadline_exceeded` message — the TUI never freezes there.
+Terminal writes in both the renderer and the program loop are short-write
+safe and bounded the same way: a stalled output stream drops the frame tail
+after a 30-second writability wait, and the `Recorder` tee (the candy-vcr
+cassette hook) receives only the **flushed** prefix — what a recording
+claims is always what actually reached the wire.
+
 The `examples/` directory has runnable demos for each pattern:
 [`counter`](examples/counter.php) (basic), [`simple`](examples/simple.php)
 (minimal quit-on-key), [`timer`](examples/timer.php)
