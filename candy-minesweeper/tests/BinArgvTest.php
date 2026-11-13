@@ -314,6 +314,34 @@ final class BinArgvTest extends TestCase
         $this->assertStringNotContainsString("\x1b", $out, 'raw ESC must never reach the help screen');
     }
 
+    public function testHelpMirrorsEveryKeyTheGameAnswers(): void
+    {
+        // msw-36 (findings -109/-111): --help is the ONE text a player reads
+        // BEFORE launch, with no in-app legend behind it — so it must mirror
+        // the full binding table. The letters are derived from the same
+        // update()-source regex msw-35 installed for the in-game footer:
+        // a future binding that skips the legend reddens this leg too.
+        $game = (string) file_get_contents(\dirname(__DIR__) . '/src/Game.php');
+        preg_match('/public function update\(.*?\n    \}\n/s', $game, $slice);
+        self::assertNotSame([], $slice, 'sanity: the update() slice is findable');
+        preg_match_all("/char === '([A-Za-z])'/", $slice[0], $letters);
+        self::assertGreaterThan(5, count($letters[1]), 'sanity: the roster derives the bound keys');
+
+        [$code, $out, $err] = self::runBinary(['--help']);
+        $this->assertSame(0, $code, 'stderr was: ' . $err);
+        foreach (array_unique($letters[1]) as $letter) {
+            $this->assertStringContainsString($letter, $out, "the legend must print bound key '{$letter}'");
+        }
+        // The companions the old text omitted (MA-007, DOC-END-007): Enter,
+        // q's aliases, and every mouse gesture.
+        foreach (['space/enter', 'q/Esc', 'Ctrl+C', 'left click', 'right flags', 'middle chords', 'double-click'] as $token) {
+            $this->assertStringContainsString($token, $out, "--help must teach '{$token}'");
+        }
+        // -109's orphan is now a labelled notes line with -30's honesty.
+        $this->assertStringContainsString('notes:  there is no pause', $out);
+        $this->assertStringContainsString('wall-clock', $out);
+    }
+
     // ---- msw-32: POSIX end-of-options and the -v alias (finding -070) ----
 
     public function testEndOfOptionsMarkerIsAcceptedInsteadOfRefused(): void

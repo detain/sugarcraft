@@ -151,9 +151,11 @@ $usage = "usage: candy-minesweeper --easy | --standard | --medium | --expert\n"
       . "       candy-minesweeper [width] [height] [mines]\n"
       . "       board sizes are columns (width) then rows (height) —\n"
       . "       e.g. candy-minesweeper 16 10 starts 16 wide by 10 tall\n"
-      . "       keys: hjkl/arrows move · Home/End row · PgUp/PgDn half-page\n"
-      . "       space reveal · f flag/question · c chord · S save · L load ·\n"
-      . "       r restart · n new game · q quit\n"
+      . "       keys:   hjkl/arrows move · Home/End row · PgUp/PgDn half-page\n"
+      . "       space/enter reveal · f flag/question · c chord · S save · L load\n"
+      . "       r restart · n new game · q/Esc quit · Ctrl+C quits immediately\n"
+      . "       mouse:  left click reveals (double-click chords) · right flags\n"
+      . "       middle chords · the cursor follows the click · wheel stays inert\n"
       . "       save slot: " . ($slotPath === null ? '$HOME/.config/candy-minesweeper/savegame.json' : cliVisible($slotPath, CLI_PATH_CAP)) . "\n"
       . "       stats: set CANDY_MINESWEEPER_STATS=/path/stats.json to tally across sessions\n";
 $args   = array_slice($argv ?? [], 1);
@@ -174,8 +176,13 @@ if (in_array('--help', $flagTokens, true) || in_array('-h', $flagTokens, true)) 
         . "       candy-minesweeper -v | --version  Print the version\n"
         . "       candy-minesweeper -h | --help     Show this help\n"
         . "       a standalone -- ends option parsing (positional-only after it)\n"
-        . "       no pause; plain launch plays the 10x10 board (G5-b ruling — press n\n"
-        . "       in-game to pick a preset or type a custom shape; no mid-session resize re-fit)\n");
+        . "       notes:  there is no pause — the live clock is wall-clock, so an\n"
+        . "               AFK spell or a suspended laptop inflates a running game,\n"
+        . "               and best times are minima a dishonestly slow first entry\n"
+        . "               shadows until beaten; a plain launch deals the classic\n"
+        . "               10x10 board and n re-deals any preset or custom shape\n"
+        . "               live (G5-b ruling); the board renders in full — no\n"
+        . "               mid-session resize re-fit.\n");
     exit(0);
 }
 
