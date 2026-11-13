@@ -6,10 +6,17 @@ namespace SugarCraft\Code\Media;
 
 use InvalidArgumentException;
 use RuntimeException;
+use SugarCraft\Image\PngMetadata;
 
 /**
  * PNG container codec for the A1111 infotext round-trip — no SD server, no
  * library, pure byte work over the chunk framing of ISO/IEC 15948.
+ *
+ * S-N02 (R11): the chunk-framing engine now lives in sugar-image
+ * {@see \SugarCraft\Image\PngMetadata} (which owns the golden corpus and every
+ * law below); this class is the app-side adapter keeping the call-site
+ * vocabulary plus the one GD-specific method the library does not carry
+ * ({@see encodeGd()}). The laws below are documented where they are enforced.
  *
  * Plan W1.7 (plan_crush_media.md): "stamp/read the `parameters` tEXt chunk
  * ourselves and encode gd→PNG bytes". Payload text itself is produced and
@@ -54,36 +61,23 @@ use RuntimeException;
  */
 final class Png
 {
-    /** Size ceiling both directions — sibling of sugar-image ImageSource::MAX_BYTES (64 MiB). */
-    public const MAX_BYTES = 67_108_864;
+    /** Size ceiling both directions — see {@see PngMetadata::MAX_BYTES}. */
+    public const MAX_BYTES = PngMetadata::MAX_BYTES;
 
-    /**
-     * Text-payload ceiling for ONE tEXt/iTXt chunk, enforced in both
-     * directions (W7 security MED-1). Generation parameters are KB-scale
-     * prose — A1111 prompts and settings never approach even a tenth of
-     * this — so 1 MiB is orders of magnitude of honest headroom while
-     * capping the DEFLATE ratio-bomb: a hostile server's few-KB compressed
-     * iTXt could otherwise inflate unboundedly into memory. The reader
-     * refuses oversized text with null (fail-null law), the writer refuses
-     * it loudly, so no file this class emits is one its reader rejects.
-     */
-    public const MAX_TEXT_BYTES = 1_048_576;
+    /** Per-chunk text ceiling — see {@see PngMetadata::MAX_TEXT_BYTES}. */
+    public const MAX_TEXT_BYTES = PngMetadata::MAX_TEXT_BYTES;
 
     /** A1111 default `pnginfo_section_name` (§3.5): the full parameters block. */
-    public const KEYWORD_PARAMETERS = 'parameters';
+    public const KEYWORD_PARAMETERS = PngMetadata::KEYWORD_PARAMETERS;
 
-    /** Modern-A1111 bare-prompt companion chunk keyword, written as iTXt by upstream. */
-    public const KEYWORD_PROMPT = 'prompt';
+    /** Modern-A1111 bare-prompt companion chunk keyword. */
+    public const KEYWORD_PROMPT = PngMetadata::KEYWORD_PROMPT;
 
     /** Strategy reported by {@see writeText()}: ASCII text rides a plain tEXt chunk. */
-    public const STRATEGY_TEXT = 'tEXt';
+    public const STRATEGY_TEXT = PngMetadata::STRATEGY_TEXT;
 
     /** Strategy reported by {@see writeText()}: non-ASCII text rides a compressed iTXt chunk. */
-    public const STRATEGY_ITXT = 'iTXt';
-
-    private const SIGNATURE = "\x89PNG\r\n\x1a\n";
-
-    private const TEXT_CHUNKS = ['tEXt' => true, 'iTXt' => true];
+    public const STRATEGY_ITXT = PngMetadata::STRATEGY_ITXT;
 
     private function __construct()
     {
@@ -92,135 +86,41 @@ final class Png
     /** Magic sniff: eight fixed signature bytes, nothing more. */
     public static function isPng(string $bytes): bool
     {
-        return str_starts_with($bytes, self::SIGNATURE);
+        return PngMetadata::isPng($bytes);
     }
 
-    /**
-     * Extract the text stored under `$keyword`, or null for ANY unfavourable
-     * shape: not a PNG, oversized, truncated tail, CRC-mismatched chunk,
-     * malformed text chunk, compressed iTXt that will not inflate (including
-     * one that would inflate past {@see MAX_TEXT_BYTES}), a text payload over
-     * that ceiling, or simply absent keyword. Never throws (reader resilience
-     * law).
-     */
+    /** Text under `$keyword`, or null for any unfavourable shape; never throws. */
     public static function readText(string $pngBytes, string $keyword = self::KEYWORD_PARAMETERS): ?string
     {
-        $chunks = self::scan($pngBytes);
-        if ($chunks === null) {
-            return null;
-        }
-        $text = null;
-        foreach ($chunks as $chunk) {
-            if (!isset(self::TEXT_CHUNKS[$chunk['type']])) {
-                continue;
-            }
-            $entry = self::decodeTextChunk($chunk['type'], self::dataOf($pngBytes, $chunk));
-            if ($entry === null) {
-                return null; // malformed text chunk = damaged container, fail closed
-            }
-            if ($entry['keyword'] !== $keyword) {
-                continue;
-            }
-            if ($chunk['type'] === 'iTXt') {
-                return $entry['text']; // iTXt priority over tEXt (PNG spec §4.2.3.1)
-            }
-            $text ??= $entry['text']; // first tEXt occurrence wins
-        }
-
-        return $text;
+        return PngMetadata::readText($pngBytes, $keyword);
     }
 
     /**
-     * Return the PNG with `$keyword` carrying `$text`: an existing tEXt/iTXt
-     * chunk with that keyword is REPLACED in place — never appended as a
-     * duplicate — and every other chunk keeps its bytes and ordering
-     * untouched, including trailing bytes after IEND. No matching chunk → a
-     * new one is inserted immediately before IEND.
+     * Replace-in-place / insert-before-IEND of one text keyword.
      *
-     * Strategy law (W1.7 step 2): ASCII text → tEXt (latin-1 raw, what A1111
-     * itself writes); anything else → iTXt compressed with empty language and
-     * translated-keyword fields. `$strategy` reports which was chosen.
+     * @param string|null $strategy out: which chunk type carried the text
      *
-     * @throws InvalidArgumentException on non-PNG input, > 64 MiB input,
-     *                                  damaged framing/CRC, an illegal
-     *                                  keyword, NUL bytes in the text, text
-     *                                  over the 1 MiB ceiling, or a produced
-     *                                  file over the 64 MiB cap
+     * @throws InvalidArgumentException on non-PNG, damage, bad keyword, oversize
      */
     public static function writeText(string $pngBytes, string $keyword, string $text, ?string &$strategy = null): string
     {
-        $chunks = self::requireParseable($pngBytes, 'writeText');
-        if (!self::isValidKeyword($keyword)) {
-            throw new InvalidArgumentException('PNG text-chunk keyword must be 1-79 printable bytes with no NUL and no leading/trailing space.');
-        }
-        if (str_contains($text, "\x00")) {
-            throw new InvalidArgumentException('PNG text-chunk payload may not contain NUL bytes.');
-        }
-        if (strlen($text) > self::MAX_TEXT_BYTES) {
-            throw new InvalidArgumentException('PNG text-chunk payload exceeds the 1 MiB text ceiling.');
-        }
-        $strategy = self::strategyFor($text);
-        $replacement = self::chunk($strategy, $keyword . "\x00" . ($strategy === self::STRATEGY_TEXT
-            ? $text
-            : chr(1) . chr(0) . "\x00\x00" . gzcompress($text, 9)));
-        $rebuilt = self::SIGNATURE;
-        $placed = false;
-        foreach ($chunks as $chunk) {
-            $isText = isset(self::TEXT_CHUNKS[$chunk['type']]);
-            $entry = $isText ? self::decodeTextChunk($chunk['type'], self::dataOf($pngBytes, $chunk)) : null;
-            if ($isText && $entry === null) {
-                throw new InvalidArgumentException("Png::writeText(): {$chunk['type']} chunk payload malformed at offset {$chunk['start']}.");
-            }
-            $isTarget = $isText && $entry['keyword'] === $keyword;
-            if ($isTarget && $placed) {
-                continue; // duplicate occurrence of the keyword → collapsed, never kept
-            }
-            if ($chunk['type'] === 'IEND' && !$placed) {
-                $rebuilt .= $replacement; // absent keyword → insert before IEND
-                $placed = true;
-            }
-            if ($isTarget) {
-                $rebuilt .= $replacement; // in-place replacement
-                $placed = true;
-                continue;
-            }
-            $rebuilt .= substr($pngBytes, $chunk['start'], $chunk['end'] - $chunk['start']);
-        }
-        $rebuilt .= substr($pngBytes, $chunks[count($chunks) - 1]['end']); // preserve any post-IEND tail verbatim
-        if (strlen($rebuilt) > self::MAX_BYTES) {
-            throw new InvalidArgumentException('Produced PNG would exceed the 64 MiB ceiling.');
-        }
-
-        return $rebuilt;
+        return PngMetadata::writeText($pngBytes, $keyword, $text, $strategy);
     }
 
     /**
-     * Stamp the full infotext block: `$text` becomes the `parameters` chunk
-     * (in place, per the replacement law) and an already-present `prompt`
-     * chunk is re-synced to the first line of the text — the A1111 pair
-     * law ("parameters" tEXt carries everything, "prompt" iTXt carries the
-     * bare prompt). A file without a `prompt` chunk is not given one: the
-     * minimal-diff / preservation law outranks minting upstream's newer
-     * companion chunk on our stamps.
+     * Stamp the A1111 infotext (parameters chunk, plus an existing prompt chunk).
      *
      * @throws InvalidArgumentException with the same shapes as {@see writeText()}
      */
     public static function setInfotext(string $pngBytes, string $text): string
     {
-        $stamped = self::writeText($pngBytes, self::KEYWORD_PARAMETERS, $text);
-        if (self::readText($stamped, self::KEYWORD_PROMPT) !== null) {
-            $prompt = strstr($text, "\n", true);
-            $stamped = self::writeText($stamped, self::KEYWORD_PROMPT, $prompt === false ? $text : $prompt);
-        }
-
-        return $stamped;
+        return PngMetadata::setInfotext($pngBytes, $text);
     }
 
     /**
-     * Encode a GD image to PNG bytes (plan W1.7 step 4: "encodeGd wraps
-     * `imagepng($im)` output buffering; no resample/blend logic here —
-     * mosaic's job"). Requires ext-gd; the produced bytes obey the same
-     * 64 MiB ceiling as every other output.
+     * Encode a GD image to PNG bytes (plan W1.7 step 4). Requires ext-gd; the
+     * produced bytes obey the same 64 MiB ceiling as every other output. Stays
+     * app-side: the library codec is pure byte work and carries no GD seam.
      *
      * @throws RuntimeException         if imagepng() fails or emits nothing
      * @throws InvalidArgumentException if the encoded bytes exceed 64 MiB
@@ -240,175 +140,9 @@ final class Png
         return $bytes;
     }
 
-    /**
-     * Strategy law in one place (W1.7 step 2): ASCII rides tEXt; non-ASCII
-     * that is legal UTF-8 rides compressed iTXt; raw 8-bit bytes that are not
-     * valid UTF-8 (a legacy latin-1 dump) ride tEXt verbatim — exactly
-     * "A1111 writes tEXt with the raw str", since iTXt text must be UTF-8.
-     */
+    /** Strategy law: ASCII → tEXt; UTF-8 → compressed iTXt; raw 8-bit → tEXt. */
     public static function strategyFor(string $text): string
     {
-        if (mb_check_encoding($text, 'ASCII')) {
-            return self::STRATEGY_TEXT;
-        }
-
-        return mb_check_encoding($text, 'UTF-8') ? self::STRATEGY_ITXT : self::STRATEGY_TEXT;
-    }
-
-    // ------------------------------------------------------------------ internals
-
-    /**
-     * Parse the chunk framing into trusted records
-     * `{type,start,end,dataStart,length}` or null for any damage — the Early
-     * Exit guard stack of the reader: signature, size cap, IHDR-first,
-     * complete frames, CRC over type+data, stop at IEND.
-     *
-     * LAZY-FRAMING LAW (W7.5 perf pass): records carry framing integers only,
-     * never the payload bytes. The CRC rides one transient `type+data` copy
-     * that is checked and dropped inside the iteration, so scanning a 64 MiB
-     * container costs the size of its largest chunk at peak instead of a
-     * second whole-file allocation held for every caller — text consumers
-     * extract payloads on demand through {@see dataOf()}.
-     *
-     * @return list<array{type: string, start: int, end: int, dataStart: int, length: int}>|null
-     */
-    private static function scan(string $pngBytes): ?array
-    {
-        if (strlen($pngBytes) > self::MAX_BYTES || !self::isPng($pngBytes)) {
-            return null;
-        }
-        $offset = 8;
-        $total = strlen($pngBytes);
-        $chunks = [];
-        while (true) {
-            if ($total - $offset < 12) {
-                return null; // truncated tail: not even a minimal frame
-            }
-            $length = unpack('N', substr($pngBytes, $offset, 4))[1];
-            $end = $offset + 12 + $length;
-            if ($end > $total) {
-                return null; // truncated chunk
-            }
-            $type = substr($pngBytes, $offset + 4, 4);
-            $crc = unpack('N', substr($pngBytes, $offset + 8 + $length, 4))[1];
-            if ($crc !== (crc32(substr($pngBytes, $offset + 4, 4 + $length)) & 0xFFFFFFFF)) {
-                return null; // CRC covers type+data (PNG spec §5.3) — mismatch = damaged
-            }
-            if ($chunks === [] && $type !== 'IHDR') {
-                return null;
-            }
-            $chunks[] = ['type' => $type, 'start' => $offset, 'end' => $end, 'dataStart' => $offset + 8, 'length' => $length];
-            if ($type === 'IEND') {
-                return $chunks; // stop at IEND; any trailing bytes are the caller's to preserve
-            }
-            $offset = $end;
-        }
-    }
-
-    /**
-     * One chunk's payload bytes, extracted only where a caller truly needs
-     * them — the lazy half of {@see scan()}'s framing-records law.
-     *
-     * @param array{type: string, start: int, end: int, dataStart: int, length: int} $chunk
-     */
-    private static function dataOf(string $pngBytes, array $chunk): string
-    {
-        return substr($pngBytes, $chunk['dataStart'], $chunk['length']);
-    }
-
-    /**
-     * Writer-side gate: same walk, loud verdicts instead of null.
-     *
-     * @return list<array{type: string, start: int, end: int, dataStart: int, length: int}>
-     */
-    private static function requireParseable(string $pngBytes, string $caller): array
-    {
-        if (!self::isPng($pngBytes)) {
-            throw new InvalidArgumentException("Png::{$caller}(): input is not a PNG (bad 8-byte signature).");
-        }
-        if (strlen($pngBytes) > self::MAX_BYTES) {
-            throw new InvalidArgumentException("Png::{$caller}(): input exceeds the 64 MiB ceiling.");
-        }
-        $chunks = self::scan($pngBytes);
-        if ($chunks === null) {
-            throw new InvalidArgumentException("Png::{$caller}(): PNG chunk framing damaged (truncated tail, CRC mismatch, or missing IHDR/IEND).");
-        }
-
-        return $chunks;
-    }
-
-    /**
-     * Decode one tEXt/iTXt chunk payload.
-     *
-     * tEXt: `keyword \0 text` (latin-1).
-     * iTXt: `keyword \0 compFlag compMethod lang \0 translatedKeyword \0 text`
-     * (UTF-8; compFlag 1 → zlib deflate, inflated here).
-     *
-     * @return array{keyword: string, text: string}|null null = malformed
-     */
-    private static function decodeTextChunk(string $type, string $data): ?array
-    {
-        $nul = strpos($data, "\x00");
-        if ($nul === false) {
-            return null;
-        }
-        $keyword = substr($data, 0, $nul);
-        if ($type === 'tEXt') {
-            $text = substr($data, $nul + 1);
-
-            return strlen($text) > self::MAX_TEXT_BYTES || str_contains($text, "\x00")
-                ? null
-                : ['keyword' => $keyword, 'text' => $text];
-        }
-        if (strlen($data) < $nul + 4) {
-            return null;
-        }
-        $compFlag = ord($data[$nul + 1]);
-        $compMethod = ord($data[$nul + 2]);
-        if ($compFlag > 1 || $compMethod !== 0) {
-            return null;
-        }
-        $langEnd = strpos($data, "\x00", $nul + 3);
-        if ($langEnd === false) {
-            return null;
-        }
-        $transEnd = strpos($data, "\x00", $langEnd + 1);
-        if ($transEnd === false) {
-            return null;
-        }
-        $text = substr($data, $transEnd + 1);
-        if ($compFlag === 1) {
-            // max_length caps the DEFLATE ratio-bomb at the text ceiling: a
-            // stream expanding past MAX_TEXT_BYTES returns false (W7 MED-1),
-            // so a hostile server's few-KB chunk can never mint hundreds of MB.
-            $inflated = @gzuncompress($text, self::MAX_TEXT_BYTES);
-            if ($inflated === false) {
-                return null;
-            }
-            $text = $inflated;
-        }
-
-        return strlen($text) > self::MAX_TEXT_BYTES || str_contains($text, "\x00")
-            ? null
-            : ['keyword' => $keyword, 'text' => $text];
-    }
-
-    /** Frame a payload as length+type+data+crc(type.data) — the PNG spec §5.3 law. */
-    private static function chunk(string $type, string $data): string
-    {
-        return pack('N', strlen($data)) . $type . $data . pack('N', crc32($type . $data) & 0xFFFFFFFF);
-    }
-
-    /**
-     * PNG spec §4.2.3.1/§4.2.3.3 keyword shape: 1-79 printable Latin-1 bytes,
-     * no NUL, no leading or trailing space.
-     */
-    private static function isValidKeyword(string $keyword): bool
-    {
-        return $keyword !== ''
-            && strlen($keyword) <= 79
-            && preg_match('/^[\x20-\x7E\xA1-\xFF]+$/', $keyword) === 1
-            && !str_starts_with($keyword, ' ')
-            && !str_ends_with($keyword, ' ');
+        return PngMetadata::strategyFor($text);
     }
 }

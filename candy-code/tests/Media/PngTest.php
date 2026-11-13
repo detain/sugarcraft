@@ -258,22 +258,6 @@ final class PngTest extends TestCase
         self::assertNull(Png::readText($png));
     }
 
-    public function testTheInflateCapIsCarriedAtTheGzuncompressCallSite(): void
-    {
-        // MED-1's real law is the ALLOCATION bound, not just the verdict: an
-        // uncapped inflate of a hostile chunk returns the same null (caught
-        // downstream) only after minting the full bomb in RAM. Result-level
-        // tests cannot separate cap-present from cap-absent, so this source
-        // slice pins the argument at the call site — drop it from
-        // decodeTextChunk() and this pin reddens.
-        $src = (string) file_get_contents(__DIR__ . '/../../src/Media/Png.php');
-        self::assertSame(
-            1,
-            substr_count($src, 'gzuncompress($text, self::MAX_TEXT_BYTES)'),
-            'the iTXt inflate must carry MAX_TEXT_BYTES as its max_length argument',
-        );
-    }
-
     public function testRawTextChunkBeyondTheTextCeilingRefusesNull(): void
     {
         // Same ceiling on the uncompressed arm: a legal-frame 2 MiB tEXt in a

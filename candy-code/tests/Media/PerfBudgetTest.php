@@ -160,7 +160,7 @@ final class PerfBudgetTest extends TestCase
 
     public function testThePngScanRecordsCarryFramingNotPayloads(): void
     {
-        $source = (string) file_get_contents(__DIR__ . '/../../src/Media/Png.php');
+        $source = (string) file_get_contents(__DIR__ . '/../../vendor/sugarcraft/sugar-image/src/PngMetadata.php'); // S-N02: the engine moved to sugar-image
         $scanAt = strpos($source, 'private static function scan(');
         $dataOfAt = strpos($source, 'private static function dataOf(');
         $this->assertNotFalse($scanAt);
