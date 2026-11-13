@@ -45,4 +45,6 @@ return [
     'program.screen_stack_unsupported' => 'root model {root} does not own a screen stack, so {msg} was refused',
     'ansi.selection_invalid' => 'clipboard selection parameter {selection} is not an OSC 52 selector (c, p, s, 0-7, comma-separated combinations)',
     'ansi.clipboard_payload_too_large' => 'clipboard payload is {bytes} bytes, over the {limit}-byte OSC 52 bound',
+    'raw_mode.stream_not_mappable' => 'raw mode was requested on stream {stream}, but its descriptor names no stty-targetable device — pass a terminal stream that resolves to a path, or a non-tty stream, and the toggle no-ops',
+    'raw_mode.stty_failed' => 'stty rejected mode {mode} with exit {status} — the terminal discipline was not changed',
 ];
