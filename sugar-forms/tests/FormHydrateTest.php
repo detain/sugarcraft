@@ -61,6 +61,41 @@ final class FormHydrateTest extends TestCase
         $this->assertSame($form, $form->hydrate([]));
     }
 
+    public function testHydrateSurfacesAbsentSelectOptionAsNoteNotThrow(): void
+    {
+        // SF-22 (sugar-forms-072): withSelected() is a documented public
+        // no-op for absent values, and hydrate routed through it — a drifted
+        // snapshot diverged SILENTLY. The restore keeps succeeding (no throw
+        // conversion); the divergence is told on the returned form.
+        $form = Form::new(Select::new('size')->withOptions('S', 'M', 'L'));
+        $next = $form->hydrate(['size' => 'XL']);
+
+        $this->assertNotSame($form, $next, 'hydrate stays fluent');
+        $this->assertSame('S', $next->values()['size'], 'absent option leaves the selection untouched');
+        $this->assertSame(['size'], array_keys($next->hydrateNotes), 'the decline is told, not swallowed');
+        $this->assertStringContainsString('XL', $next->hydrateNotes['size']);
+
+        // A later clean hydrate replaces the slot.
+        $clean = $next->hydrate(['size' => 'M']);
+        $this->assertSame([], $clean->hydrateNotes);
+        $this->assertSame('M', $clean->values()['size']);
+    }
+
+    public function testValuesFramePathSurvivesDriftedEnumPool(): void
+    {
+        // SF-22 (sugar-forms-024): value() projected via from(), so a pool
+        // drifted off the enum threw ValueError INSIDE the frame path
+        // Form::values(). tryFrom maps the unmappable selection to null.
+        $form = Form::new(
+            Select::new('mode')->withOptions('zzz', 'red')->withEnum(HydrateColour::class),
+        );
+        $this->assertSame(['mode' => null], $form->values());
+
+        // The happy path still projects.
+        $ok = Select::new('mode')->withOptions('red', 'zzz')->withEnum(HydrateColour::class);
+        $this->assertSame(HydrateColour::Red, $ok->value());
+    }
+
     public function testUnknownKeyFailsLoudAndLeavesFormUntouched(): void
     {
         $form = Form::new(Input::new('a'), Input::new('b'));

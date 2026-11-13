@@ -127,6 +127,16 @@ final class SelectTest extends TestCase
         $this->assertInstanceOf(DummyBackedEnum::class, $f->value());
     }
 
+    public function testEnumModeUnmappableTitleReadsNull(): void
+    {
+        // SF-22 (sugar-forms-024): from() exploded on a drifted pool;
+        // tryFrom projects the unmappable selection to null.
+        $f = Select::new('test')
+            ->withOptions('zzz', 'foo')
+            ->withEnum(DummyBackedEnum::class);
+        $this->assertNull($f->value(), 'the default selection is the drifted title');
+    }
+
     public function testHeightSetter(): void
     {
         $f = Select::new('test')

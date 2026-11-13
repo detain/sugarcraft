@@ -249,8 +249,9 @@ final class Select implements \SugarCraft\Forms\Field
     }
 
     /**
-     * When a backed enum class is provided, the selected value is coerced
-     * to the enum via `EnumClass::from($stringValue)`. The option titles
+     * When a backed enum class is provided, the selected value is projected
+     * to the enum via `EnumClass::tryFrom($stringValue)` (unmappable titles
+     * read null — see value()). The option titles
      * must match the enum case values exactly. Mirrors no upstream symbol: huh has
      * no enum option mode (SugarCraft-native, modeled on tty-prompt enum_select
      * per docs/research/libraries/sugar-forms-huh-research.md §3.6).
@@ -299,6 +300,15 @@ final class Select implements \SugarCraft\Forms\Field
     }
 
     public function key(): string  { return $this->key; }
+    /**
+     * Enum mode projects through {@see \BackedEnum::tryFrom()}, NOT from():
+     * an option title that drifted off the enum (the pool was re-armed with
+     * a subset, the enum gained/renamed cases) projects to null so the
+     * frame path `Form::values()` never explodes (sugar-forms-024). The
+     * option titles are expected to match enum case values exactly; a null
+     * read IS the divergence signal, and hydrate surfaces the absent-value
+     * note (sugar-forms-072) via {@see Form::$hydrateNotes}.
+     */
     public function value(): mixed
     {
         $sel = $this->list->selectedItem();
@@ -306,7 +316,7 @@ final class Select implements \SugarCraft\Forms\Field
         if ($value === null || $this->enumClass === null) {
             return $value;
         }
-        return $this->enumClass::from($value);
+        return $this->enumClass::tryFrom($value);
     }
 
     public function focus(): array

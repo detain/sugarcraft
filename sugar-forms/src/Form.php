@@ -94,6 +94,18 @@ final class Form implements Model
         public readonly array $asyncErrors = [],
         /** Monotonic generation counter for async validation rounds. */
         public readonly int $asyncValidationSeq = 0,
+        /**
+         * SF-22 (sugar-forms-072): per-field divergence notes from the most
+         * recent {@see hydrate()} call — a snapshot value a setter silently
+         * declines (a Select option that no longer exists) keeps the restore
+         * succeeding but gets TOLD here instead of swallowed. Keyed by field
+         * key; empty on every clean hydrate. Notes never convert to a throw:
+         * the two-pass atomic fail-loud machinery stays reserved for values
+         * that cannot be parsed at all.
+         *
+         * @var array<string,string> fieldKey => note
+         */
+        public readonly array $hydrateNotes = [],
     ) {}
 
     /**
@@ -949,11 +961,21 @@ final class Form implements Model
      * caller's trusted saved state; validation answers it via
      * {@see validateAll()} / the submit gate afterwards.
      *
+     * One divergence class is TOLD, not thrown (SF-22, sugar-forms-072): a
+     * Select whose snapshot value is no longer among its options keeps the
+     * restore succeeding (withSelected()'s documented public no-op) and
+     * records a per-field note on the returned form's {@see $hydrateNotes}
+     * map. A clean hydrate resets the slot to empty.
+     *
      * @param array<string,mixed> $values
      */
     public function hydrate(array $values): self
     {
         if ($values === []) {
+            // Pinned early-exit (identity): a no-op hydrate touches nothing —
+            // including the $hydrateNotes slot, which keeps telling the last
+            // real hydrate's divergences until the next non-empty call
+            // replaces it.
             return $this;
         }
 
@@ -978,20 +1000,26 @@ final class Form implements Model
 
         // Pass 2 — apply onto one working copy so the fluent chain costs a
         // single mutate() (each setter returns the new field instance).
+        // $notes collects SF-22 divergence notes from setters that decline a
+        // parsed value (an absent Select option): the restore still succeeds,
+        // the divergence is told on the returned form's hydrateNotes slot.
         $fieldsByGroup = $this->fieldsByGroup;
+        $notes         = [];
         foreach ($applies as [$group, $index, $setter]) {
-            $fieldsByGroup[$group][$index] = $setter($fieldsByGroup[$group][$index]);
+            $fieldsByGroup[$group][$index] = $setter($fieldsByGroup[$group][$index], $notes);
         }
 
-        return $this->mutate(fieldsByGroup: $fieldsByGroup);
+        return $this->mutate(fieldsByGroup: $fieldsByGroup, hydrateNotes: $notes);
     }
 
     /**
      * Resolve the per-class hydration setter after type-checking the raw
-     * snapshot value. Returns a closure Field→Field so application stays
-     * decoupled from resolution (pass 1 judges, pass 2 writes).
+     * snapshot value. Returns a closure (Field, notes-by-ref)→Field so
+     * application stays decoupled from resolution (pass 1 judges, pass 2
+     * writes) and a setter that declines its value can surface an SF-22
+     * divergence note without throwing.
      *
-     * @return \Closure(Field): Field
+     * @return \Closure(Field, array<string,string>): Field
      */
     private static function hydrateSetter(Field $field, string $key, mixed $raw): \Closure
     {
@@ -999,19 +1027,28 @@ final class Form implements Model
             $field instanceof Field\Input,
             $field instanceof Field\Text,
             $field instanceof Field\Color
-                => static function (Field $f) use ($key, $raw): Field {
+                => static function (Field $f, array &$notes) use ($key, $raw): Field {
                     $v = self::hydrateString($key, $raw);
                     \assert($f instanceof Field\Input || $f instanceof Field\Text || $f instanceof Field\Color);
                     return $f->withValue($v);
                 },
 
             $field instanceof Field\Select
-                => static function (Field $f) use ($key, $raw): Field {
-                    return $f->withSelected(self::hydrateString($key, $raw));
+                => static function (Field $f, array &$notes) use ($key, $raw): Field {
+                    $v      = self::hydrateString($key, $raw);
+                    \assert($f instanceof Field\Select);
+                    $chosen = $f->withSelected($v);
+                    if ($chosen === $f) {
+                        // withSelected() declines an absent value (documented
+                        // public no-op); the snapshot restore must not diverge
+                        // silently — tell it (sugar-forms-072).
+                        $notes[$key] = Lang::t('form.hydrate_not_in_options', ['key' => $key, 'value' => $v]);
+                    }
+                    return $chosen;
                 },
 
             $field instanceof Field\MultiSelect
-                => static function (Field $f) use ($key, $raw): Field {
+                => static function (Field $f, array &$notes) use ($key, $raw): Field {
                     if (!is_array($raw)) {
                         throw new \InvalidArgumentException(Lang::t('form.hydrate_type', [
                             'key' => $key, 'expected' => 'list<string>', 'actual' => get_debug_type($raw),
@@ -1021,7 +1058,7 @@ final class Form implements Model
                 },
 
             $field instanceof Field\Confirm
-                => static function (Field $f) use ($key, $raw): Field {
+                => static function (Field $f, array &$notes) use ($key, $raw): Field {
                     if (!is_bool($raw)) {
                         throw new \InvalidArgumentException(Lang::t('form.hydrate_type', [
                             'key' => $key, 'expected' => 'bool', 'actual' => get_debug_type($raw),
@@ -1031,7 +1068,7 @@ final class Form implements Model
                 },
 
             $field instanceof Field\Slider
-                => static function (Field $f) use ($key, $raw): Field {
+                => static function (Field $f, array &$notes) use ($key, $raw): Field {
                     if (!is_int($raw) && !is_float($raw)) {
                         throw new \InvalidArgumentException(Lang::t('form.hydrate_type', [
                             'key' => $key, 'expected' => 'int|float', 'actual' => get_debug_type($raw),
@@ -1041,7 +1078,7 @@ final class Form implements Model
                 },
 
             $field instanceof Field\Date
-                => static function (Field $f) use ($key, $raw): Field {
+                => static function (Field $f, array &$notes) use ($key, $raw): Field {
                     if ($raw !== null && !is_string($raw)) {
                         throw new \InvalidArgumentException(Lang::t('form.hydrate_type', [
                             'key' => $key, 'expected' => 'string|null', 'actual' => get_debug_type($raw),
@@ -1765,6 +1802,7 @@ final class Form implements Model
         ?bool $asyncValidating = null,
         ?array $asyncErrors = null,
         ?int $asyncValidationSeq = null,
+        ?array $hydrateNotes = null,
     ): self {
         return new self(
             groups:         $this->groups,
@@ -1787,6 +1825,7 @@ final class Form implements Model
             asyncValidating:     $asyncValidating     ?? $this->asyncValidating,
             asyncErrors:         $asyncErrors         ?? $this->asyncErrors,
             asyncValidationSeq:  $asyncValidationSeq  ?? $this->asyncValidationSeq,
+            hydrateNotes:        $hydrateNotes        ?? $this->hydrateNotes,
         );
     }
 

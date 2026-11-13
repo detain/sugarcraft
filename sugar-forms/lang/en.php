@@ -27,6 +27,7 @@ return [
     'form.hydrate_skippable' => 'Cannot hydrate: field key "{key}" belongs to a skippable field (notes carry no value)',
     'form.hydrate_type' => 'Cannot hydrate field "{key}": expected {expected}, got {actual}',
     'form.hydrate_not_hydratable' => 'Cannot hydrate field "{key}": {type} holds navigation state, not a persisted value',
+    'form.hydrate_not_in_options' => 'Hydrated field "{key}": value "{value}" is not among its options — selection left unchanged',
     'date.invalid_value' => 'Date must be a real calendar date in YYYY-MM-DD form',
     'date.selected' => 'Selected',
     'date.none' => 'none',
