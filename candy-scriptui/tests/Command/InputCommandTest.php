@@ -94,7 +94,43 @@ final class InputCommandTest extends TestCase
 
         $this->assertSame(1, $status);
         $this->assertStringNotContainsString('unknown --cursor-mode', $tester->getDisplay());
-        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/InputCommand.php');
-        $this->assertStringContainsString("fwrite(STDERR, Lang::t('runtime.unknown_choice'", $src);
+
+        // scriptui-53: routing proven at the fd boundary (captured STDERR
+        // carries the exact sentence, captured STDOUT stays empty) instead
+        // of grepping the fwrite(STDERR...) spelling out of source.
+        [$status, $stdout, $stderr] = self::runBinChild(['input', '--cursor-mode=invisible']);
+        $this->assertSame(1, $status);
+        $this->assertSame('', $stdout);
+        $this->assertStringContainsString(
+            "Invalid value for --cursor-mode: 'invisible'. Allowed: blink|static|hidden.",
+            $stderr,
+        );
+    }
+
+    /** @return array{0:int,1:string,2:string} [exitCode, stdout, stderr] */
+    private static function runBinChild(array $args, string $stdin = ''): array
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('bounded child probes require a POSIX timeout(1)');
+        }
+        $bin = \dirname(__DIR__, 2) . '/bin/candy-scriptui';
+        $proc = proc_open(
+            ['timeout', '-s', 'KILL', '20', PHP_BINARY, $bin, ...$args],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            \dirname($bin),
+            ['PATH' => (string) getenv('PATH'), 'HOME' => (string) getenv('HOME')],
+        );
+        self::assertIsResource($proc, 'the bin child must spawn');
+        if ($stdin !== '') {
+            fwrite($pipes[0], $stdin);
+        }
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($proc), $stdout, $stderr];
     }
 }

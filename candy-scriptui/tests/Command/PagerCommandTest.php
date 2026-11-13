@@ -97,12 +97,10 @@ final class PagerCommandTest extends TestCase
     {
         $previous = \SugarCraft\Core\I18n\T::locale();
         \SugarCraft\Core\I18n\T::setLocale('en');
+        $path = '/definitely/not/here.phpunit-' . getmypid();
         try {
             $tester = new CommandTester(new \SugarCraft\ScriptUi\Command\PagerCommand());
-            $status = $tester->execute(
-                ['--file' => '/definitely/not/here.phpunit-' . getmypid()],
-                ['decorated' => false],
-            );
+            $status = $tester->execute(['--file' => $path], ['decorated' => false]);
         } finally {
             \SugarCraft\Core\I18n\T::setLocale($previous);
         }
@@ -110,10 +108,45 @@ final class PagerCommandTest extends TestCase
         $display = $tester->getDisplay();
         $this->assertSame(1, $status);
         $this->assertStringNotContainsString('Could not read file', $display);
-        $src = (string) file_get_contents(__DIR__ . '/../../src/Command/PagerCommand.php');
-        $this->assertStringContainsString("fwrite(STDERR, Lang::t('io.read_failed'", $src);
         // Before the Lang import fix this path fataled: "Class ... not found".
         $this->assertStringNotContainsString('Class "', $display);
+
+        // scriptui-53: the localized failure sentence is captured from the
+        // real bin's STDERR (proving the fwrite routing AND the Lang import
+        // together), not grepped out of the command's source text.
+        [$childStatus, $stdout, $stderr] = self::runBinChild(['pager', '--file=' . $path]);
+        $this->assertSame(1, $childStatus);
+        $this->assertSame('', $stdout);
+        $this->assertStringContainsString("Could not read file: $path.", $stderr);
+        $this->assertStringNotContainsString('Class "', $stderr);
+        $this->assertStringNotContainsString('not found', $stderr, 'the historical Lang-import fatal must stay dead');
+    }
+
+    /** @return array{0:int,1:string,2:string} [exitCode, stdout, stderr] */
+    private static function runBinChild(array $args, string $stdin = ''): array
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('bounded child probes require a POSIX timeout(1)');
+        }
+        $bin = \dirname(__DIR__, 2) . '/bin/candy-scriptui';
+        $proc = proc_open(
+            ['timeout', '-s', 'KILL', '20', PHP_BINARY, $bin, ...$args],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            \dirname($bin),
+            ['PATH' => (string) getenv('PATH'), 'HOME' => (string) getenv('HOME')],
+        );
+        self::assertIsResource($proc, 'the bin child must spawn');
+        if ($stdin !== '') {
+            fwrite($pipes[0], $stdin);
+        }
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($proc), $stdout, $stderr];
     }
 
     /**

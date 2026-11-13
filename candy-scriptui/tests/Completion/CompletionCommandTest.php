@@ -71,8 +71,18 @@ final class CompletionCommandTest extends TestCase
         $this->assertSame(1, $status);
         // The eval'd stream is DATA: the refusal goes to STDERR instead.
         $this->assertStringNotContainsString('unsupported shell', $output);
-        $src = (string) file_get_contents(__DIR__ . '/../../src/CompletionCommand.php');
-        $this->assertStringContainsString("Lang::t('runtime.unknown_choice'", $src);
+
+        // scriptui-53: the refusal is captured from the real bin's STDERR
+        // at the fd boundary — exact sentence, clean eval'd stdout —
+        // replacing the source grep of the Lang::t('runtime.unknown_choice'
+        // call text.
+        [$childStatus, $stdout, $stderr] = self::runBinChild(['completion', '--shell=ksh']);
+        $this->assertSame(1, $childStatus);
+        $this->assertSame('', $stdout, 'the eval stream must stay empty on refusal');
+        $this->assertStringContainsString(
+            "Invalid value for --shell: 'ksh'. Allowed: bash|zsh|fish.",
+            $stderr,
+        );
     }
 
     public function testNewlineBearingShellCannotForgeOutputLines(): void
@@ -109,5 +119,32 @@ final class CompletionCommandTest extends TestCase
 
         $this->assertStringContainsString('complete -F', $output);
         $this->assertStringContainsString('compgen', $output);
+    }
+
+    /** @return array{0:int,1:string,2:string} [exitCode, stdout, stderr] */
+    private static function runBinChild(array $args, string $stdin = ''): array
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('bounded child probes require a POSIX timeout(1)');
+        }
+        $bin = \dirname(__DIR__, 2) . '/bin/candy-scriptui';
+        $proc = proc_open(
+            ['timeout', '-s', 'KILL', '20', PHP_BINARY, $bin, ...$args],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+            \dirname($bin),
+            ['PATH' => (string) getenv('PATH'), 'HOME' => (string) getenv('HOME')],
+        );
+        self::assertIsResource($proc, 'the bin child must spawn');
+        if ($stdin !== '') {
+            fwrite($pipes[0], $stdin);
+        }
+        fclose($pipes[0]);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($proc), $stdout, $stderr];
     }
 }
