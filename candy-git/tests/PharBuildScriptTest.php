@@ -53,6 +53,60 @@ final class PharBuildScriptTest extends TestCase
         self::assertSame('', $out, 'refusals are stderr-only; stdout stays clean');
     }
 
+    public function testVendorDevWeightIsPrunedButRuntimeCodeAndSrcSurvive(): void
+    {
+        $script = realpath(__DIR__ . '/../tools/build-phar.php');
+        self::assertIsString($script);
+        $pkg = sys_get_temp_dir() . '/cg-prune-' . bin2hex(random_bytes(4));
+        mkdir($pkg . '/tools', 0o755, true);
+        copy($script, $pkg . '/tools/build-phar.php');
+        foreach (['bin', 'src', 'lang'] as $root) {
+            mkdir($pkg . '/' . $root, 0o755, true);
+        }
+        $keep = ['vendor/autoload.php', 'vendor/sugarcraft/pkg/src/Keep.php', 'vendor/sugarcraft/pkg/src/Tests/Keep.php', 'vendor/sugarcraft/pkg/composer.json'];
+        $drop = ['vendor/sugarcraft/pkg/tests/FooTest.php', 'vendor/sugarcraft/pkg/Tests/B.php', 'vendor/sugarcraft/pkg/examples/d.php', 'vendor/sugarcraft/pkg/.vhs/x.tape', 'vendor/sugarcraft/pkg/docs/a.html', 'vendor/sugarcraft/pkg/phpunit.xml.dist', 'vendor/sugarcraft/pkg/README.md'];
+        foreach ([...$keep, ...$drop] as $rel) {
+            @mkdir(dirname($pkg . '/' . $rel), 0o755, true);
+            file_put_contents($pkg . '/' . $rel, "x\n");
+        }
+        try {
+            [$exit, $out, $err] = self::runBuildAt($pkg . '/tools/build-phar.php', ['--vendor=monorepo', '--list-files']);
+        } finally {
+            exec('rm -rf ' . escapeshellarg($pkg));
+        }
+
+        self::assertSame(0, $exit, $err);
+        $listed = array_filter(explode("\n", $out));
+        foreach ($keep as $rel) {
+            self::assertContains($rel, $listed);
+        }
+        foreach ($drop as $rel) {
+            self::assertNotContains($rel, $listed);
+        }
+    }
+
+    /**
+     * @param list<string> $args
+     *
+     * @return array{0: int, 1: string, 2: string}
+     */
+    private static function runBuildAt(string $script, array $args): array
+    {
+        $proc = proc_open(
+            [PHP_BINARY, '-d', 'phar.readonly=0', $script, ...$args],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        self::assertIsResource($proc);
+        fclose($pipes[0]);
+        $out = (string) stream_get_contents($pipes[1]);
+        $err = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($proc), $out, $err];
+    }
+
     public function testVersionAnswersCurrentOutsideAnArchiveAndNullForUnopenablePaths(): void
     {
         self::assertSame('', Version::hostArchive(), 'a phpunit process never lives inside an archive');
