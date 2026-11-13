@@ -380,6 +380,11 @@ a host application opts in process-wide:
 The CLI performs this at startup; library embedders decide. Missing keys in an active
 locale fall back to English; the en catalog is the last stop before the raw key.
 
+16 catalogs ship (`ar` through `zh-cn`). Traditional Chinese (`zh-tw`) is a dated
+exception, recorded per the owner ruling of 2026-11-12: this lib's i18n wave stays
+at the 16-code set the parity guard enumerates, even though a few fleet apps carry
+a `zh-tw` catalog of their own.
+
 ## Architecture
 
 - `Email` — immutable email message value object
