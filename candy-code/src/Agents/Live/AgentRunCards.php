@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Code\Agents\Live;
 
+use SugarCraft\Core\Util\AtomicJsonFile;
+
 /**
  * The record every delegated run keeps of itself so the messaging tools can
  * find it (roadmap 4.4): `SendMessage`, `Subagents` and `InterruptAgent`.
@@ -307,12 +309,11 @@ final class AgentRunCards
     }
 
     /**
-     * Read-modify-write $path under an exclusive lock on its sibling `.lock`,
-     * the new card renamed into place so a reader never sees half of one.
-     *
-     * Deliberately local: sugar-core's AtomicJsonFile has no mutate-under-lock
-     * yet (one lock across read AND write), so this stays the single
-     * local shape until it does. @see R1a
+     * Read-modify-write $path under one exclusive lock held across the read
+     * AND the publish, delegated to sugar-core's AtomicJsonFile::mutate()
+     * (rider R1a) so a card never sees a lost update and a reader never sees
+     * half of one. A symlinked card or directory is refused, and any
+     * filesystem failure answers null — this seat never throws.
      *
      * @param \Closure(?array<string, mixed>): ?array<string, mixed> $change
      *
@@ -320,46 +321,28 @@ final class AgentRunCards
      */
     private static function locked(string $path, \Closure $change): ?array
     {
-        $previous = umask(0o077);
+        $dir = \dirname($path);
+        if (is_link($dir) || is_link($path)) {
+            return null;
+        }
+
         try {
-            $dir = \dirname($path);
-            if (!is_dir($dir) && !@mkdir($dir, 0o700, true) && !is_dir($dir)) {
-                return null;
-            }
-            if (is_link($dir) || is_link($path)) {
-                return null;
-            }
-            $lock = @fopen($path . '.lock', 'c');
-            if ($lock === false) {
-                return null;
-            }
-            try {
-                if (!flock($lock, LOCK_EX)) {
-                    return null;
-                }
-                $current = is_file($path) ? self::normalise(json_decode((string) @file_get_contents($path), true)) : null;
-                $next = $change($current);
-                if ($next === null) {
-                    return null;
-                }
-                $json = json_encode($next, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-                $temp = @tempnam($dir, 'card-');
-                if ($json === false || $temp === false) {
-                    return null;
-                }
-                if (@file_put_contents($temp, $json) !== \strlen($json) || !@rename($temp, $path)) {
-                    @unlink($temp);
+            return AtomicJsonFile::new($path)->withPermissions(0o600)->mutate(
+                static function (array $current) use ($change): ?array {
+                    $next = $change($current === [] ? null : $current);
+                    if ($next === null) {
+                        return null;
+                    }
+                    // Substitute invalid UTF-8 the way the hand-rolled encoder did,
+                    // so a clipped multibyte tail cannot fail the whole publish.
+                    $json = json_encode($next, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
 
-                    return null;
-                }
-
-                return $next;
-            } finally {
-                flock($lock, LOCK_UN);
-                fclose($lock);
-            }
-        } finally {
-            umask($previous);
+                    return $json === false ? null : (array) json_decode($json, true);
+                },
+                static fn (mixed $raw): array => self::normalise($raw) ?? [],
+            );
+        } catch (\RuntimeException | \JsonException) {
+            return null;
         }
     }
 

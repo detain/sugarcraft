@@ -65,4 +65,19 @@ final class AgentRunCardsLostUpdateTest extends TestCase
     {
         self::assertNull(AgentRunCards::updateRun('s1', 'nope', static fn (array $c): array => $c, $this->root));
     }
+
+    public function testCardIsPublishedPrivateThroughTheCanonicalMutate(): void
+    {
+        self::assertTrue(AgentRunCards::recordRun('s1', ['runId' => 'r1', 'parent' => 'p', 'inboxSession' => 'i'], $this->root));
+        $card = $this->root . '/s1/r1/card.json';
+        self::assertSame(0o600, fileperms($card) & 0o777);
+        self::assertSame('r1', json_decode((string) file_get_contents($card), true)['runId']);
+    }
+
+    public function testCorruptCardIsNotRevivedByUpdate(): void
+    {
+        AgentRunCards::recordRun('s1', ['runId' => 'r1', 'parent' => 'p', 'inboxSession' => 'i'], $this->root);
+        file_put_contents($this->root . '/s1/r1/card.json', '{not json');
+        self::assertNull(AgentRunCards::updateRun('s1', 'r1', static fn (array $c): array => $c, $this->root));
+    }
 }
