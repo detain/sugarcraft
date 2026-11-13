@@ -793,7 +793,7 @@ final class SugarPanels
                 if ($lastCol >= 0) {
                     if ($marks < self::MAX_CARRY) {
                         $keep = $this->clipCodepoints($seg, self::MAX_CARRY - $marks);
-                        $cells[$y][$x + $lastCol] .= $keep;
+                        $this->appendCell($x + $lastCol, $y, $keep, $cells);
                         $marks += \strlen($keep);
                     }
                 } else {
@@ -830,12 +830,12 @@ final class SugarPanels
         // cell when the whole line fit; if we truncated mid-line they belonged to
         // clipped cells and are dropped (reset safety below still closes the span).
         if ($truncated === false && $trailing !== '' && $lastCol >= 0) {
-            $cells[$y][$x + $lastCol] .= $trailing;
+            $this->appendCell($x + $lastCol, $y, $trailing, $cells);
             $styleOpen = $this->sgrLeavesStyleOpen($trailing, $styleOpen);
         }
 
         if ($styleOpen && $lastCol >= 0) {
-            $cells[$y][$x + $lastCol] .= "\x1b[0m";
+            $this->appendCell($x + $lastCol, $y, "\x1b[0m", $cells);
         }
 
         // Pad the remainder of the region with spaces (overwriting prior content).
@@ -1196,7 +1196,7 @@ final class SugarPanels
             if ($lastCell >= 0) {
                 $openAfterTrailing = $trailing !== '' ? $this->sgrLeavesStyleOpen($trailing, $styleOpen) : $styleOpen;
                 if ($openAfterTrailing === true) {
-                    $cells[$y][$lastCell] .= "\x1b[0m";
+                    $this->appendCell($lastCell, $y, "\x1b[0m", $cells);
                 }
             }
         }
@@ -1283,6 +1283,21 @@ final class SugarPanels
         if ($y < 0 || $y >= \count($cells)) return;
         if ($x < 0 || $x >= \count($cells[$y])) return;
         $cells[$y][$x] = $char;
+    }
+
+    /**
+     * Append to the cell at ($x, $y) — the carry/escape/reset legs that grow an
+     * already-placed cell rather than replace it. Bounds-checked exactly like
+     * {@see setChar}: an out-of-region append is dropped instead of materialising
+     * a stray column or row (a raw `$cells[..] .=` on a missing index would
+     * create one), which is what keeps every in-region assumption in the callers
+     * from turning a future relaxation into a silent grid-widening write.
+     */
+    private function appendCell(int $x, int $y, string $extra, array &$cells): void
+    {
+        if ($y < 0 || $y >= \count($cells)) return;
+        if ($x < 0 || $x >= \count($cells[$y])) return;
+        $cells[$y][$x] .= $extra;
     }
 
     /**
