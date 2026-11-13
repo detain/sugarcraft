@@ -241,13 +241,23 @@ final class CmdTest extends TestCase
         $this->assertCount(2, $msg->cmds);
     }
 
-    public function testEveryReturnsTickRequest(): void
+    public function testEveryReturnsSharedPeriodicRequest(): void
     {
-        $msg = (Cmd::every(1.0, static fn () => null))();
-        $this->assertInstanceOf(TickRequest::class, $msg);
-        // delay should be <= 1 second (alignment to wall-clock).
-        $this->assertLessThanOrEqual(1.0, $msg->seconds);
-        $this->assertGreaterThanOrEqual(0.0, $msg->seconds);
+        // sugar-core-004: every() hands the Program an EveryRequest — the
+        // sentinel for the SHARED periodic chain per distinct interval —
+        // instead of the old per-call one-shot TickRequest re-arm.
+        $produce = static fn (): ?\SugarCraft\Core\Msg => null;
+        $msg     = (Cmd::every(1.0, $produce))();
+        $this->assertInstanceOf(\SugarCraft\Core\EveryRequest::class, $msg);
+        $this->assertSame(1.0, $msg->period);
+        $this->assertSame($produce, $msg->produce);
+    }
+
+    public function testEveryClampsTinyPeriods(): void
+    {
+        $msg = (Cmd::every(0.0, static fn (): ?\SugarCraft\Core\Msg => null))();
+        $this->assertInstanceOf(\SugarCraft\Core\EveryRequest::class, $msg);
+        $this->assertSame(1e-3, $msg->period);
     }
 
     public function testPrintfReturnsPrintMsg(): void

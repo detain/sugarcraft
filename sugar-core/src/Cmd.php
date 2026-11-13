@@ -76,28 +76,23 @@ final class Cmd
     }
 
     /**
-     * Wall-clock-aligned periodic tick. Unlike {@see tick()} which
-     * uses an independent clock per Cmd, `every($d)` aligns to wall-
-     * clock multiples of `$d` seconds — multiple `every($d, ...)`
-     * Cmds with the same period share a single tick. Useful for
-     * synchronised animations across components.
+     * Wall-clock-aligned periodic tick — shared per interval. Every
+     * `every($d, ...)` consumer with the same period rides ONE periodic
+     * timer chain aligned to wall-clock multiples of `$d` seconds,
+     * fanned out to each registered producer; re-registering the same
+     * produce closure keeps its existing seat (no stacking). A producer
+     * that returns `null` steps down — its deliveries stop and the timer
+     * tears itself down when the last consumer leaves. This synchronised
+     * cadence is the shipped contract (audit sugar-core-004).
+     *
+     * Mirrors Bubble Tea's `tea.Every`.
      *
      * @param \Closure(\DateTimeImmutable): ?Msg $produce
      */
     public static function every(float $seconds, \Closure $produce): \Closure
     {
         return static function () use ($seconds, $produce): Msg {
-            // Compute the delay until the next wall-clock alignment.
-            $now = microtime(true);
-            $period = max(1e-3, $seconds);
-            $next = ceil($now / $period) * $period;
-            $delay = max(0.0, $next - $now);
-            $deliver = static function () use ($produce): ?Msg {
-                /** @var \DateTimeImmutable $now */
-                $now = (new \DateTimeImmutable())->setTimestamp((int) microtime(true));
-                return $produce($now);
-            };
-            return new TickRequest($delay, $deliver);
+            return new EveryRequest(max(1e-3, $seconds), $produce);
         };
     }
 

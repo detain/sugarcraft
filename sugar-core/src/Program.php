@@ -167,6 +167,18 @@ final class Program
      */
     private array $oneShotTimers = [];
     /**
+     * Shared periodic tickers from `Cmd::every` (audit sugar-core-004):
+     * exactly ONE wall-clock-aligned timer chain per distinct period,
+     * fanned out to every registered producer. A producer returning null
+     * steps down from its seat; the chain tears down with the last seat.
+     * The chain rides oneShotTimers (each link is an addOneShotTimer), so
+     * releaseRuntime() already cancels the live link — the registry map
+     * itself is emptied there too.
+     *
+     * @var array<string, array{timer: ?TimerInterface, listeners: list<\Closure(\DateTimeImmutable): ?Msg>}>
+     */
+    private array $sharedPeriodics = [];
+    /**
      * Bumped by {@see releaseRuntime()}. A `futureTick()` callback cannot be
      * cancelled the way a timer can, so every one this Program queues
      * captures the generation it was queued under and goes inert once that
@@ -917,6 +929,12 @@ final class Program
                     $this->dispatch($produced);
                 }
             });
+            return;
+        }
+        if ($msg instanceof EveryRequest) {
+            // sugar-core-004: the producer joins the SHARED periodic chain
+            // for its interval instead of arming another private timer.
+            $this->addSharedPeriodic($msg->period, $msg->produce);
             return;
         }
         if ($msg instanceof RawMsg) {
@@ -1724,6 +1742,80 @@ final class Program
      * Arm a one-shot timer that {@see releaseRuntime()} can still cancel:
      * tracked until it fires, forgotten the moment it does.
      */
+    /**
+     * Attach a producer to the shared periodic chain for $period, arming
+     * the chain when it is the first consumer for that interval
+     * (audit sugar-core-004 — the old `Cmd::every` armed an independent
+     * one-shot re-arm per subscription; the docblock's "share a single
+     * tick" claim is now the implementation).
+     *
+     * Re-registering the same produce closure replaces its existing seat
+     * rather than stacking a duplicate delivery per tick.
+     *
+     * @param \Closure(\DateTimeImmutable): ?Msg $produce
+     */
+    private function addSharedPeriodic(float $period, \Closure $produce): void
+    {
+        $period = max(1e-3, $period);
+        $key    = sprintf('%.6F', $period);
+        if (isset($this->sharedPeriodics[$key])) {
+            $id = spl_object_id($produce);
+            foreach ($this->sharedPeriodics[$key]['listeners'] as $i => $existing) {
+                if (spl_object_id($existing) === $id) {
+                    $this->sharedPeriodics[$key]['listeners'][$i] = $produce;
+                    return; // same seat, latest version — no stacking
+                }
+            }
+            $this->sharedPeriodics[$key]['listeners'][] = $produce;
+            return;
+        }
+        $this->sharedPeriodics[$key] = ['timer' => null, 'listeners' => [$produce]];
+        $this->armSharedPeriodic($key, $period);
+    }
+
+    /**
+     * Arm (or re-arm) the single timer chain for $key aligned to the next
+     * wall-clock multiple of $period. On each fire every seated producer
+     * gets the tick; `null` returns step the producer down, and when the
+     * last seat leaves the chain tears itself down (no timer is re-armed).
+     */
+    private function armSharedPeriodic(string $key, float $period): void
+    {
+        $now   = microtime(true);
+        $delay = max(0.0, ceil($now / $period) * $period - $now);
+        $this->sharedPeriodics[$key]['timer'] = $this->addOneShotTimer($delay, function () use ($key, $period): void {
+            if (!isset($this->sharedPeriodics[$key])) {
+                return; // torn down (releaseRuntime) between links
+            }
+            $stamp = (new \DateTimeImmutable())->setTimestamp((int) microtime(true));
+            $seats     = [];
+            $delivered = [];
+            foreach ($this->sharedPeriodics[$key]['listeners'] as $produce) {
+                try {
+                    $msg = $produce($stamp);
+                } catch (\Throwable $t) {
+                    $this->routeThrowable($t);
+                    $seats[] = $produce; // absorbed: the consumer keeps its seat
+                    continue;
+                }
+                if ($msg === null) {
+                    continue; // stepped down: this ticker is done (tea.Every nil)
+                }
+                $seats[]     = $produce;
+                $delivered[] = $msg;
+            }
+            if ($seats === []) {
+                unset($this->sharedPeriodics[$key]); // last seat left: tear down
+                return;
+            }
+            $this->sharedPeriodics[$key]['listeners'] = $seats;
+            $this->armSharedPeriodic($key, $period); // re-align to the NEXT multiple (no skew)
+            foreach ($delivered as $msg) {
+                $this->dispatch($msg);
+            }
+        });
+    }
+
     private function addOneShotTimer(float $seconds, \Closure $callback): TimerInterface
     {
         // WHY the by-ref capture: addTimer() needs the callback before the
@@ -1766,6 +1858,9 @@ final class Program
             $this->loop->cancelTimer($timer);
         }
         $this->oneShotTimers = [];
+        // Shared periodic chains ride oneShotTimers (cancelled above);
+        // drop the registry so a later run() starts from zero seats.
+        $this->sharedPeriodics = [];
         $this->escapeFlushPending = false;
         $this->pasteIdleTimer = null;
         $this->restoreSignalHandlers();
