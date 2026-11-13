@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\GitServer\SSH;
 
 use SugarCraft\GitServer\Lang;
+use SugarCraft\GitServer\Support\LogSafety;
 use SugarCraft\GitServer\{AccessControl, Config, Repo, User};
 
 /**
@@ -162,25 +163,13 @@ final class SSHServer
     }
 
     /**
-     * Neutralize a client-claimed token for the operator log. The username
-     * (and the refused command/repo shapes) arrive straight from the peer:
-     * a CR/LF inside a claimed name forges additional STDERR lines, and an
-     * unbounded one floods the log. Strip C0 controls and DEL, collapse
-     * whitespace runs, and clip. Identity on any legitimate name — the
-     * account lookup above still uses the raw token, so sanitizing here
-     * cannot alias a real account.
+     * Seam kept for the suite's forge-and-neutralize pin, which binds
+     * through it; the behavior itself lives in the shared {@see LogSafety}
+     * helper both server faces now log through (027).
      */
     private static function logSafe(string $token): string
     {
-        $clean = \preg_replace('/[\x00-\x1F\x7F]+/', ' ', $token) ?? '';
-        $clean = \trim($clean);
-        if (\strlen($clean) > 64) {
-            // Byte clip, no marker: ext-mbstring is not a declared
-            // dependency, and appending an ellipsis could split a
-            // multi-byte sequence already inside the kept prefix.
-            $clean = \substr($clean, 0, 64);
-        }
-        return $clean === '' ? '<empty>' : $clean;
+        return LogSafety::token($token);
     }
 
     /**

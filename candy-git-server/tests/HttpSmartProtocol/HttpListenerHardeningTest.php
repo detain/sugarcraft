@@ -22,8 +22,10 @@ use SugarCraft\GitServer\Repo;
  * chunk scanner agrees with the whole-buffer decoder on every framing
  * edge, an oversize LFS object is refused before its bytes are
  * materialised in memory, duplicate Content-Length claims that DISAGREE
- * and Transfer-Encoding values that merely CONTAIN the chunked token are
- * refused or ignored at the socket, and IPv6 peers are handed downstream
+ * and any Transfer-Encoding shape the listener cannot frame alone —
+ * unknown codings, chunked coexisting with Content-Length (028) — are
+ * refused at the socket, the access log forges no lines from claimed
+ * request bytes (027), and IPv6 peers are handed downstream
  * bare (never '[::1]').
  *
  * @covers \SugarCraft\GitServer\HttpSmartProtocol\HttpListener
@@ -300,7 +302,7 @@ final class HttpListenerHardeningTest extends TestCase
         }
     }
 
-    public function testChunkedFramingNeedsTheExactTransferEncodingToken(): void
+    public function testUnknownTransferEncodingCodingIsRefusedAtTheSocket(): void
     {
         $loop = new StreamSelectLoop();
         $this->loop = $loop;
@@ -314,18 +316,74 @@ final class HttpListenerHardeningTest extends TestCase
         );
         $listener->start();
         try {
-            // A substring-matched 'chunkedx' would arm the chunk scanner and
-            // this plain Content-Length body would sit unfilled until the
-            // deadlines reaped it; exact-token matching frames it normally.
+            // 028 flipped the old posture: a substring-matched 'chunkedx'
+            // no longer silently frames through the co-located
+            // Content-Length — an unknown coding is a framing differential
+            // (chained proxies would disagree with the origin about where
+            // the body ends), so the socket answers 400 before awaiting
+            // any body, exactly as RFC 9112 §6.3 demands.
             $client = $this->connect($listener);
             \fwrite($client, "POST /ghost.git/git-upload-pack HTTP/1.1\r\nHost: t\r\nTransfer-Encoding: chunkedx\r\nContent-Length: 5\r\n\r\nhello");
             $response = $this->readResponse($loop, $client, 1.5);
 
-            self::assertStringStartsWith('HTTP/1.1 404', $response, 'a header VALUE merely containing the token does not enable chunked framing');
-            self::assertStringContainsString('Repository not found', $response);
+            self::assertStringStartsWith('HTTP/1.1 400', $response, 'a coding the listener cannot frame is refused, not ignored');
+            self::assertStringNotContainsString('Repository not found', $response, 'the request never reaches the router');
         } finally {
             $listener->stop();
         }
+    }
+
+    public function testChunkedCoexistingWithContentLengthIsRefusedAtTheSocket(): void
+    {
+        // 028 core: the old shape preferred chunked and dropped the CL
+        // claim in silence. A fronting proxy that honors CL while the
+        // origin honors chunked reads a different request from one
+        // socket — the coexistence itself is the attack, so both
+        // claims must be refused rather than ranked.
+        $loop = new StreamSelectLoop();
+        $this->loop = $loop;
+        $listener = new HttpListener(
+            $this->makeServer(null),
+            '127.0.0.1',
+            0,
+            $loop,
+            idleTimeoutSeconds: 60.0,
+            absoluteDeadlineSeconds: 60.0
+        );
+        $listener->start();
+        try {
+            $client = $this->connect($listener);
+            \fwrite($client, "POST /ghost.git/git-upload-pack HTTP/1.1\r\nHost: t\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n");
+            $response = $this->readResponse($loop, $client, 1.5);
+
+            self::assertStringStartsWith('HTTP/1.1 400', $response, 'TE and CL together cannot be framed honestly');
+            self::assertStringNotContainsString('Repository not found', $response, 'the request never reaches the router');
+        } finally {
+            $listener->stop();
+        }
+    }
+
+    public function testAccessLogLineNeutralizesForgedRequestBytes(): void
+    {
+        // 027: method and path are client-claimed request-line bytes; an
+        // embedded LF in the target used to print a second COMPLETE
+        // access entry. One line in, one line out — the forged text
+        // survives only as inert spaces inside the sanitized path.
+        $formatter = \Closure::bind(
+            static fn (?string $peer, string $method, string $path): string => HttpListener::accessLogLine($peer, $method, $path, 404, 20, 0.5),
+            null,
+            HttpListener::class
+        );
+
+        $line = $formatter('127.0.0.1', 'GET', "/a\naccess 1.2.3.4 GET /forged 200 0 0.0ms");
+        self::assertStringNotContainsString("\n", $line, 'a claimed path cannot terminate its own log line');
+        self::assertMatchesRegularExpression('/^access [^' . "\x00" . '-' . "\x1F\x7F" . ']*\z/', $line, 'one physical entry to the very byte, control-free body — the forged text survives only as inert data inside the sanitized path');
+        self::assertStringContainsString('/a access 1.2.3.4', $line, 'sanitizing collapses the LF but keeps what the peer actually sent visible');
+
+        $long = $formatter(null, 'GET', '/' . \str_repeat('x', 200));
+        self::assertLessThanOrEqual(256, \strlen($long), 'an unbounded request line cannot bloat the log');
+        $empty = $formatter('-', 'GET', "\x00\x1F");
+        self::assertStringContainsString('<empty>', $empty, 'a fully-control path still prints as a bounded placeholder, not as blank');
     }
 
     public function testFramingDecisionIsParsedOnceAndRidesTheSeat(): void

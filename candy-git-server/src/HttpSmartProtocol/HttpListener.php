@@ -8,6 +8,7 @@ use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use SugarCraft\GitServer\Support\HttpWire;
+use SugarCraft\GitServer\Support\LogSafety;
 use SugarCraft\GitServer\Support\WorkerFork;
 
 /**
@@ -452,32 +453,59 @@ final class HttpListener
 
     /**
      * Parse the body-framing decision from a complete header block —
-     * ONCE per seat (047). Precedence and semantics are unchanged from
-     * the old per-tick shape: an explicit chunked TE wins, otherwise
-     * the single Content-Length claim, otherwise disagreement between
-     * duplicates is malformed (refused), otherwise zero-length.
+     * ONCE per seat (047). This listener frames exactly one coding:
+     * chunked, or a single agreeing Content-Length claim. RFC 9112
+     * §6.3 (028): TE coexisting with CL, or TE naming a coding this
+     * server does not frame, are framing DIFFERENTIALS — chained
+     * proxies (the topology the README recommends) would disagree with
+     * the origin about where the body ends. Every such shape lands in
+     * 'malformed', which the pump answers with 400 before a byte of
+     * body is awaited.
      *
      * @return array{mode: 'chunked'|'length'|'malformed', length?: int}
      */
     private function parseBodyFraming(string $head): array
     {
-        if ($this->hasHeader($head, 'transfer-encoding', 'chunked')) {
-            return ['mode' => 'chunked'];
-        }
-
+        $teTokens = [];
         $length = null;
+        $clSeen = false;
         foreach (\explode("\r\n", $head) as $line) {
-            if (\preg_match('/^content-length:\s*(\d+)$/i', $line, $m) !== 1) {
+            $colon = \strpos($line, ':');
+            if ($colon === false) {
                 continue;
             }
-            $value = (int) $m[1];
-            if ($length !== null && $length !== $value) {
-                // Request-smuggling bait: two claims about where the body
-                // ends. Last-wins would silently adopt whichever framing a
-                // downstream proxy may not have seen; refuse the request.
+            $name = \strtolower(\trim(\substr($line, 0, $colon)));
+            if ($name === 'transfer-encoding') {
+                foreach (\explode(',', \substr($line, $colon + 1)) as $token) {
+                    $coding = \strtolower(\trim($token));
+                    if ($coding !== '') {
+                        $teTokens[$coding] = true;
+                    }
+                }
+            } elseif ($name === 'content-length') {
+                if (\preg_match('/^\s*(\d+)\s*$/i', \substr($line, $colon + 1), $m) !== 1) {
+                    continue; // not a length claim this layer can frame
+                }
+                $value = (int) $m[1];
+                if ($clSeen && $length !== $value) {
+                    // Request-smuggling bait: two claims about where the body
+                    // ends. Last-wins would silently adopt whichever framing a
+                    // downstream proxy may not have seen; refuse the request.
+                    return ['mode' => 'malformed'];
+                }
+                $clSeen = true;
+                $length = $value;
+            }
+        }
+
+        if ($teTokens !== []) {
+            if ($clSeen || \count($teTokens) !== 1 || !isset($teTokens['chunked'])) {
+                // 028: coexistence or an unfed coding is a differential,
+                // not a preference order — refuse where chunked once won.
                 return ['mode' => 'malformed'];
             }
-            $length = $value;
+
+            return ['mode' => 'chunked'];
         }
 
         return ['mode' => 'length', 'length' => $length ?? 0];
@@ -617,32 +645,6 @@ final class HttpListener
         }
     }
 
-    /**
-     * True when the named header carries $value as one of its comma-list
-     * tokens. Substring matching would let 'Transfer-Encoding: xchunkedz'
-     * (or any header merely CONTAINING the word) arm the chunked framing
-     * path, so the comparison is per-token and exact.
-     */
-    private function hasHeader(string $head, string $lowerName, string $value): bool
-    {
-        foreach (\explode("\r\n", $head) as $line) {
-            $colon = \strpos($line, ':');
-            if ($colon === false) {
-                continue;
-            }
-            if (\strtolower(\trim(\substr($line, 0, $colon))) !== $lowerName) {
-                continue;
-            }
-            foreach (\explode(',', \substr($line, $colon + 1)) as $token) {
-                if (\strtolower(\trim($token)) === $value) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
     /** Hand the assembled request to the router and write its response. */
     /** @param resource $client */
     private function dispatch($client, string $head, string $body): void
@@ -724,14 +726,21 @@ final class HttpListener
     /**
      * One line per served request, shaped after git daemon's log style:
      * `access <peer> <METHOD> <path> <status> <bytes> <elapsed>`.
+     *
+     * Method and path are CLIENT-CLAIMED request-line bytes (027): an
+     * embedded LF in the target forges a second complete entry on the
+     * operator log, and an unbounded one floods it. Both run through the
+     * shared LogSafety helper the SSH face has always used — dispatch and
+     * the router still act on the raw bytes, so neutralizing here cannot
+     * change which request was served, only how it is reported.
      */
     private static function accessLogLine(?string $peer, string $method, string $path, int $status, int $bytes, float $elapsedMs): string
     {
         return \sprintf(
             'access %s %s %s %d %d %.1fms',
-            $peer ?? '-',
-            $method,
-            $path,
+            LogSafety::token($peer ?? '-'),
+            LogSafety::token($method),
+            LogSafety::token($path),
             $status,
             $bytes,
             $elapsedMs
