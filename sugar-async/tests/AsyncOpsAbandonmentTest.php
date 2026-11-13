@@ -11,6 +11,7 @@ use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
 use SugarCraft\Async\AsyncOps;
 use SugarCraft\Async\CancellationSource;
+use SugarCraft\Async\CancellationToken;
 use SugarCraft\Async\OperationCancelledException;
 use SugarCraft\Async\TimeoutException;
 
@@ -123,37 +124,15 @@ final class AsyncOpsAbandonmentTest extends TestCase
     public function testExplodingInnerCancelDoesNotPoisonDeadlineTimerTick(): void
     {
         $loop = new StreamSelectLoop();
-        $inner = new class implements PromiseInterface {
-            public function then(?callable $onFulfilled = null, ?callable $onRejected = null): PromiseInterface
-            {
-                return $this;
-            }
-
-            public function otherwise(callable $onRejected): PromiseInterface
-            {
-                return $this;
-            }
-
-            public function catch(callable $onRejected): PromiseInterface
-            {
-                return $this;
-            }
-
-            public function finally(callable $onFulfilledOrRejected): PromiseInterface
-            {
-                return $this;
-            }
-
-            public function always(callable $onFulfilledOrRejected): PromiseInterface
-            {
-                return $this;
-            }
-
-            public function cancel(): void
-            {
-                throw new \RuntimeException('driver abort exploded');
-            }
-        };
+        // A driver that never settles and whose cancel() explodes. The mock
+        // is generated from the REAL interface at runtime, so it cannot drift
+        // the way the old hand-rolled PromiseInterface implementation could;
+        // a react/promise Promise with a throwing canceller would NOT model
+        // the scenario (v3 converts canceller throws into self-rejections, so
+        // cancel() would never explode outward to the wrapper).
+        $inner = $this->createMock(PromiseInterface::class);
+        $inner->method('then')->willReturnSelf();
+        $inner->method('cancel')->willThrowException(new \RuntimeException('driver abort exploded'));
 
         $error = null;
         AsyncOps::withDeadline($loop, $inner, 0.005)
@@ -173,37 +152,15 @@ final class AsyncOpsAbandonmentTest extends TestCase
 
     public function testExplodingInnerCancelStillAbandonsWrappers(): void
     {
-        $inner = new class implements PromiseInterface {
-            public function then(?callable $onFulfilled = null, ?callable $onRejected = null): PromiseInterface
-            {
-                return $this;
-            }
-
-            public function otherwise(callable $onRejected): PromiseInterface
-            {
-                return $this;
-            }
-
-            public function catch(callable $onRejected): PromiseInterface
-            {
-                return $this;
-            }
-
-            public function finally(callable $onFulfilledOrRejected): PromiseInterface
-            {
-                return $this;
-            }
-
-            public function always(callable $onFulfilledOrRejected): PromiseInterface
-            {
-                return $this;
-            }
-
-            public function cancel(): void
-            {
-                throw new \RuntimeException('driver abort exploded');
-            }
-        };
+        // A driver that never settles and whose cancel() explodes. The mock
+        // is generated from the REAL interface at runtime, so it cannot drift
+        // the way the old hand-rolled PromiseInterface implementation could;
+        // a react/promise Promise with a throwing canceller would NOT model
+        // the scenario (v3 converts canceller throws into self-rejections, so
+        // cancel() would never explode outward to the wrapper).
+        $inner = $this->createMock(PromiseInterface::class);
+        $inner->method('then')->willReturnSelf();
+        $inner->method('cancel')->willThrowException(new \RuntimeException('driver abort exploded'));
 
         $deadlineError = null;
         $deadline = AsyncOps::withDeadline(new StreamSelectLoop(), $inner, 30.0);
@@ -354,5 +311,77 @@ final class AsyncOpsAbandonmentTest extends TestCase
 
         $this->assertSame('survives', $resolved);
         $this->assertNull($error);
+    }
+
+    /**
+     * Number of callbacks still registered on a token — the registration-count
+     * probe (the callback list is private; reflection is the measurement
+     * seam, mirroring armedTimers() on the loop side).
+     */
+    private static function pendingRegistrations(CancellationToken $token): int
+    {
+        $property = new \ReflectionProperty(CancellationToken::class, 'callbacks');
+        $property->setAccessible(true);
+        /** @var array<int, callable(): void> $callbacks */
+        $callbacks = $property->getValue($token);
+
+        return count($callbacks);
+    }
+
+    public function testAbandoningCancellableDropsItsTokenRegistration(): void
+    {
+        // Leak census (five abandons against a driver that never settles):
+        // pre-fix each wrapper left its full closure chain on the token for
+        // the token's life, because only the settle handlers unsubscribed —
+        // and a hung inner never reaches them.
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        for ($i = 0; $i < 5; $i++) {
+            $inner = new Deferred(); // no canceller: ignores cancel(), never settles
+            $wrapped = AsyncOps::cancellable($inner->promise(), $token);
+            $wrapped->then(null, static function (\Throwable $e): void {
+                // The abandonment rejection is expected; nothing to observe.
+            });
+            $wrapped->cancel();
+        }
+
+        $this->assertSame(0, self::pendingRegistrations($token), 'abandoned wrappers must not accumulate on a long-lived token');
+    }
+
+    public function testCooperativeCancellableSettlementDropsItsTokenRegistration(): void
+    {
+        // Control for the same census: a driver that settles normally.
+        $source = CancellationSource::new();
+        $token = $source->token();
+
+        for ($i = 0; $i < 5; $i++) {
+            $inner = new Deferred();
+            $wrapped = AsyncOps::cancellable($inner->promise(), $token);
+            $wrapped->then(null, static function (\Throwable $e): void {
+            });
+            $inner->resolve('done');
+            unset($wrapped);
+        }
+
+        $this->assertSame(0, self::pendingRegistrations($token));
+    }
+
+    public function testCancellableLabelRidesTheRejectionAsData(): void
+    {
+        $source = CancellationSource::new();
+        $inner = new Deferred();
+
+        $error = null;
+        AsyncOps::cancellable($inner->promise(), $source->token(), label: 'user-sync')
+            ->then(null, static function (\Throwable $e) use (&$error): void {
+                $error = $e;
+            });
+
+        $source->cancel();
+
+        $this->assertInstanceOf(OperationCancelledException::class, $error);
+        $this->assertSame('user-sync', $error->label(), 'the label arrives as data, not message archaeology');
+        $this->assertStringContainsString('user-sync', $error->getMessage());
     }
 }

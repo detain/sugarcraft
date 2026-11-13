@@ -217,13 +217,15 @@ caller can walk away:
   failed server-side kill is *unobservable* here — the rejection is the timeout,
   never a receipt that the abort worked. A bounded I/O ceiling — not a blanket
   per-request wall-clock killer.
-- `cancellable(promise, token, onCancel:)` — the returned promise rejects
+- `cancellable(promise, token:, onCancel:, label:)` — the returned promise rejects
   immediately with `OperationCancelledException` when the token fires, a late inner
   result is dropped, and an optional `onCancel` hook fires at most once as a
   best-effort abort of the underlying work — likewise silently fault-tolerant: if
   the hook or the inner `cancel()` throws, nothing propagates and you cannot tell
-  the abort failed. The wrapper unsubscribes its own token registration at
-  settlement.
+  the abort failed. Passing `null` for `token:` returns the inner promise
+  UNWRAPPED — no registration, no overhead. The wrapper unsubscribes its own
+  token registration the moment the operation settles OR is abandoned, so a hung
+  driver cannot accumulate dead closures on a long-lived token.
 - `singleFlight(keyFn, worker)` — coalescing callable: concurrent calls with the
   same key share ONE worker invocation and the same promise; the slot frees on
   settle (success, failure, or synchronous throw). The partition is the key

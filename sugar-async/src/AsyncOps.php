@@ -61,12 +61,12 @@ final class AsyncOps
         /** @var \React\EventLoop\TimerInterface|null */
         $timer = null;
 
-        $deferred = new Deferred(static function () use (&$settled, $loop, &$timer): never {
+        $deferred = new Deferred(static function () use (&$settled, $loop, &$timer, $label): never {
             $settled = true;
             if ($timer !== null) {
                 $loop->cancelTimer($timer);
             }
-            throw new OperationCancelledException('Async operation cancelled');
+            throw new OperationCancelledException(self::cancellationMessage($label), label: $label);
         });
 
         // Arm the timeout BEFORE attaching the settle handlers. react/promise
@@ -168,7 +168,7 @@ final class AsyncOps
         /** @var \React\EventLoop\TimerInterface|null */
         $timer = null;
 
-        $deferred = new Deferred(function () use (&$settled, $loop, &$timer, $promise, $onTimeout): never {
+        $deferred = new Deferred(function () use (&$settled, $loop, &$timer, $promise, $onTimeout, $label): never {
             $settled = true;
             if ($timer !== null) {
                 $loop->cancelTimer($timer);
@@ -177,7 +177,7 @@ final class AsyncOps
                 try {
                     $onTimeout();
                 } catch (\Throwable) {
-                    // Same law as the deadline path: a failed kill is not the
+                    // Same invariant as the deadline path: a failed kill is not the
                     // caller's truth.
                 }
             }
@@ -186,7 +186,7 @@ final class AsyncOps
             } catch (\Throwable) {
                 // The abandonment rejection below stands regardless.
             }
-            throw new OperationCancelledException('Async operation cancelled');
+            throw new OperationCancelledException(self::cancellationMessage($label), label: $label);
         });
 
         $timer = $loop->addTimer($seconds, function () use (&$settled, $deferred, $promise, $seconds, $onTimeout, $label): void {
@@ -261,19 +261,23 @@ final class AsyncOps
      * Extracted from the candy-sql CancellableQuery pattern.
      *
      * A token reused across many operations does not accumulate: the wrapper
-     * unsubscribes its own registration the moment the operation settles, and
-     * onCancel() hands back a removal handle for consumer code to do the same.
+     * unsubscribes its own registration the moment the operation settles OR is
+     * abandoned, and onCancel() hands back a removal handle for consumer code
+     * to do the same.
      *
      * @template T
      * @param PromiseInterface<T> $promise  The in-flight operation
      * @param CancellationToken|null $token  Cancel handle; null returns the promise untouched
      * @param null|callable(): void $onCancel  Underlying-work abort hook (fired once, errors swallowed)
+     * @param string|null $label  Operation name woven into the rejection
+     *        message and carried on {@see OperationCancelledException::label()}.
      * @return PromiseInterface<T>
      */
     public static function cancellable(
         PromiseInterface $promise,
         ?CancellationToken $token,
         ?callable $onCancel = null,
+        ?string $label = null,
     ): PromiseInterface {
         if ($token === null) {
             return $promise;
@@ -302,19 +306,27 @@ final class AsyncOps
             }
         };
 
-        $deferred = new Deferred(static function () use ($abort): never {
+        // The registration is captured by reference: cancel() cannot fire
+        // before the method returns, so the canceller always sees the
+        // assigned handle. Dropping it here (not only at settlement) is what
+        // keeps an abandoned operation from leaving its closure chain on a
+        // long-lived token forever — a driver that never settles would
+        // otherwise hold the hold-open until the token itself dies.
+        $registration = null;
+        $deferred = new Deferred(static function () use ($abort, &$registration, $label): never {
             $abort();
-            throw new OperationCancelledException('Async operation cancelled');
+            $registration?->unsubscribe();
+            throw new OperationCancelledException(self::cancellationMessage($label), label: $label);
         });
 
         // onCancel fires synchronously when the token is already cancelled,
         // so a pre-cancelled token rejects before the result can land.
-        $registration = $token->onCancel(static function () use (&$settled, $abort, $deferred): void {
+        $registration = $token->onCancel(static function () use (&$settled, $abort, $deferred, $label): void {
             if ($settled === true) {
                 return;
             }
             $abort();
-            $deferred->reject(new OperationCancelledException('Async operation cancelled'));
+            $deferred->reject(new OperationCancelledException(self::cancellationMessage($label), label: $label));
         });
 
         $promise->then(
@@ -702,6 +714,14 @@ final class AsyncOps
     private static function subject(?string $label): string
     {
         return $label === null ? 'Operation' : 'Operation "' . $label . '"';
+    }
+
+    /** Rejection text for an abandoned or cancelled wait: named when labelled. */
+    private static function cancellationMessage(?string $label): string
+    {
+        return $label === null
+            ? 'Async operation cancelled'
+            : self::subject($label) . ' cancelled';
     }
 
     private static function timeoutMessage(?string $label, float $seconds): string
