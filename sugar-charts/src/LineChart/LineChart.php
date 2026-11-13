@@ -373,8 +373,8 @@ final class LineChart extends Chart
      * replacing any point/connector cells it crosses (marks are annotations
      * ON TOP), with an optional label right-aligned over the run when it
      * fits. WHY: this is the "consumed by LineChart" render pass that
-     * {@see MarkLine}'s class docblock documents; Mirrors ntcharts'
-     * `MarkLine` overlay concept.
+     * {@see MarkLine}'s class docblock documents — a SugarCraft
+     * extension (no upstream twin; see sugar-charts-research matrix).
      *
      * @param list<MarkLine> $marks  default [] renders nothing (byte-identical)
      * @throws \InvalidArgumentException if the list contains a non-MarkLine element

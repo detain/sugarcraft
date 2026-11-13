@@ -14,7 +14,8 @@ use SugarCraft\Core\Util\Color;
 /**
  * Helpers for building Buffer-backed chart renderers.
  *
- * Mirrors charmbracelet/lipgloss Buffer rendering pipeline.
+ * Built on the sugar-cellbuffer Buffer substrate (the charmbracelet/
+ * cellbuffer port); the composition helpers themselves are lib-local.
  */
 final class BufferHelper
 {

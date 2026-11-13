@@ -9,7 +9,8 @@ use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Support\Finite;
 
 /**
- * One Open / High / Low / Close bar for {@see OHLCChart}. Immutable.
+ * One Open / High / Low / Close bar for {@see OHLCChart}. Mirrors
+ * ntcharts' `ohlc` bar value. Immutable.
  *
  * `$open` and `$close` define the body; `$high` and `$low` extend the
  * wick. A bullish bar (`$close > $open`) renders with one glyph; a

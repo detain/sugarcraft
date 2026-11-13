@@ -9,7 +9,9 @@ use SugarCraft\Charts\Support\FrameSize;
 use SugarCraft\Core\Util\Width;
 
 /**
- * Shared legend / title / axis-label composition logic.
+ * Shared legend / title / axis-label composition logic. Antecedent:
+ * lib-local compositor (sugar-charts-008); the surfaces it lays out
+ * mirror ntcharts' legend/title composition.
  *
  * The single compositor for every renderer: the ChartExtras renderers
  * (BarChart, Scatter, OHLCChart) and the Chart base alike carry these

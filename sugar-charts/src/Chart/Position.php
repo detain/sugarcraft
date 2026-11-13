@@ -6,6 +6,7 @@ namespace SugarCraft\Charts\Chart;
 
 /**
  * Positioning constants for chart elements like legend and title.
+ * Mirrors ntcharts' element position option (top/bottom/left/right).
  */
 enum Position
 {

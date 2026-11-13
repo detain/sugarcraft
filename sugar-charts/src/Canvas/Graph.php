@@ -628,7 +628,9 @@ final class Graph
      * Compute a list of "nice" numbers for axis tick labeling.
      *
      * Returns evenly-spaced round numbers that divide the given range
-     * into readable intervals. Mirrors ntcharts' `niceNumbers` helper.
+     * into readable intervals. Antecedent: Heckbert's "Nice Numbers for
+     * Graph Labels" ladder (a SugarCraft primitive — the research matrix
+     * lists nice axis ticks in none of the surveyed libraries).
      *
      * Single ladder implementation of the lib (sugar-charts-026): the
      * default formatter-less axes reach it through

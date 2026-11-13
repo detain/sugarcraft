@@ -7,7 +7,9 @@ namespace SugarCraft\Charts\Picture;
 use SugarCraft\Core\Util\Color;
 
 /**
- * Pure-PHP Sixel encoder. Translates a 2D RGB pixel grid into a
+ * Pure-PHP Sixel encoder (antecedent: the Sixel DCS grammar, ISO 8613-6;
+ * serves ntcharts' `picture` Sixel-fallback role — the encoder
+ * implementation is lib-local). Translates a 2D RGB pixel grid into a
  * `ESC P q ... ESC \` Device Control String suitable for terminals
  * that speak Sixel. Wire support: xterm (only --enable-sixel builds),
  * mlterm, foot, iTerm2, WezTerm, Windows Terminal (preview-gated since

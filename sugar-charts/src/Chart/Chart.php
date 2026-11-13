@@ -17,7 +17,8 @@ use SugarCraft\Style\Theme;
 
 /**
  * Base chart class providing common features like legend, title,
- * axis labels, and data labels.
+ * axis labels, and data labels. Mirrors ntcharts' shared chart-base
+ * composition (title/legend/padding assembled around each plot type).
  *
  * Chart implementations should extend this class and implement
  * the `renderChart()` method to produce the raw chart output.

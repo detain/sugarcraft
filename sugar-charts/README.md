@@ -402,11 +402,14 @@ is the text drawn for one of the evenly-spaced *slots* along an axis
 Axis tick values are not a nice-number ladder: the live path
 (`LineChart::resolveXLabels` / `resolveYLabels`) emits evenly-spaced
 **raw** values between the data bounds (a Y axis can read
-`8, 5.6667, 3.3333, 1`) and yields no labels at all unless a label
-formatter is set — the formatter decides how those values render.
-`Graph::niceNumbers` and `NiceScale` are caller-facing 1-2-5×10ⁿ
-primitives (ntcharts mirrors) with zero production callers in the
-render path; call them yourself when you want human-readable bounds.
+`8, 5.6667, 3.3333, 1`). Formatter-set axes use your formatter; formatter-
+free axes now fall back to a Heckbert "nice numbers" ladder
+(`NiceScale::ticks`) pinned to true plot rows, so default output reads
+`8, 6, 4, 2` instead of the raw division. `Graph::niceNumbers` and
+`NiceScale` are the lib's nice-number primitives (Heckbert antecedent —
+a SugarCraft extension, not an upstream mirror); the default LineChart
+axes route through `NiceScale::ticks`, and you can call them directly
+for custom ladders.
 
 ## Shared foundations
 

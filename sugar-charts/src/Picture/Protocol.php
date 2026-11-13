@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Picture;
 
 /**
- * Inline-image escape protocol used by {@see Picture}. Each protocol
+ * Inline-image escape protocol used by {@see Picture}. Mirrors the
+ * escape routing of ntcharts' `picture` module; the Protocol enum
+ * abstraction itself is lib-local. Each protocol
  * encodes pixel data into a different escape envelope:
  *
  * - **Sixel** (`ESC P q ... ESC \`) — DCS-wrapped 6-bit-stripe encoding.

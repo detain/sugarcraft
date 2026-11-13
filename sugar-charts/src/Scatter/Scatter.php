@@ -20,7 +20,8 @@ use SugarCraft\Charts\Support\NumberLabel;
 use SugarCraft\Core\Util\Width;
 
 /**
- * Scatter plot — like {@see \SugarCraft\Charts\LineChart\LineChart} but
+ * Scatter plot. Mirrors ntcharts' `scatter` package — like
+ * {@see \SugarCraft\Charts\LineChart\LineChart} but
  * each point is plotted independently with no connecting strokes. The
  * X and Y ranges are auto-detected from the data unless pinned via
  * {@see withXRange()} / {@see withYRange()}.

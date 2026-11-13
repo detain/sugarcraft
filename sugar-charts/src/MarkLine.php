@@ -10,8 +10,11 @@ use SugarCraft\Charts\Support\Finite;
 use SugarCraft\Charts\Support\UntrustedText;
 
 /**
- * A horizontal reference-line annotation value object. Mirrors ntcharts'
- * `MarkLine` concept — a solid, dashed, or dotted line at a fixed Y value
+ * A horizontal reference-line annotation value object. SugarCraft
+ * extension after the Plotly/ECharts markLine pattern — the research
+ * matrix lists mark lines in none of the surveyed terminal libraries
+ * (docs/research/libraries/sugar-charts-research.md), so there is no
+ * upstream twin to mirror. A solid, dashed, or dotted line at a fixed Y value
  * (Min / Max / Average of the dataset) across the full plot width.
  *
  * MarkLine is an immutable value object consumed by LineChart: register

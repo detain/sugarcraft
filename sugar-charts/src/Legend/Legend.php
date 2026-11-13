@@ -16,6 +16,8 @@ use SugarCraft\Style\Style;
 
 /**
  * Renders a chart legend with colored indicators and series labels.
+ * Mirrors ntcharts' legend composition (indicator + label rows at a
+ * position around the chart).
  *
  * The legend displays each series as a colored indicator (block character)
  * followed by its label. It supports four positions: top, bottom, left,

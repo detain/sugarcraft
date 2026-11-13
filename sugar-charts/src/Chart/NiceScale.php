@@ -17,7 +17,11 @@ use SugarCraft\Charts\Support\Finite;
  * crosses a round boundary, with a floor of 100 so tiny series still get a
  * sensible axis.
  *
- * @see Mirrors mysql-workbench/charting.py DBTimeLineGraph.auto_scale ceiling logic
+ * Antecedent: Paul Heckbert's "Nice Numbers for Graph Labels" (Graphics
+ * Gems I) — the round-number ladder, not a port. The ceiling auto-scale
+ * policy (leading digit bumped, floor 100) is lib-local; no surveyed
+ * terminal charting library ships nice axis ticks
+ * (docs/research/libraries/sugar-charts-research.md).
  */
 final class NiceScale
 {

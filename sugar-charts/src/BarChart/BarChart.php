@@ -19,7 +19,8 @@ use SugarCraft\Core\Util\Width;
 use SugarCraft\Style\Style;
 
 /**
- * Vertical bar chart drawn with `█` blocks. Bars are spaced one column
+ * Vertical bar chart. Mirrors ntcharts' `barchart` package — bars drawn
+ * with `█` blocks. Bars are spaced one column
  * apart and labels are written underneath, truncated to fit when too
  * long. Y-axis range is computed from the data unless explicit
  * {@see withMin()} / {@see withMax()} are provided.
