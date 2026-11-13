@@ -20,7 +20,7 @@ use PHPUnit\Framework\TestCase;
  */
 final class ToastDocApiCensusTest extends TestCase
 {
-    private const KNOWN_CLASSES = ['Toast', 'Alert', 'Action', 'HistoryLog', 'Position', 'ToastType', 'Overflow', 'SymbolSet', 'Lang'];
+    private const KNOWN_CLASSES = ['Toast', 'ToastFrame', 'Alert', 'Action', 'HistoryLog', 'Position', 'ToastType', 'Overflow', 'SymbolSet', 'Lang'];
 
     private const ENUM_CLASSES = ['Position', 'ToastType', 'Overflow', 'SymbolSet'];
 

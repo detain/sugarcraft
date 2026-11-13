@@ -410,15 +410,17 @@ foreach ($toast->actionRects($background, $cols, $rows) as $n => $rect) {
 `actionRects()`/`actionAt()`/`activeAlerts()` all ignore expired alerts, so
 the clickable set is exactly what is on screen.
 
-**Pass the same frame you rendered.** These hit-tests recompute the layout
-from the arguments you give them — they do not read a saved last-frame —
-and the composed frame is `max(background lines, viewportHeight, total
-stack height)`. Calling them with the `''` / 80 / 24 defaults after
-`view($bg, $cols, $rows)` painted over a taller background therefore lays
-the boxes out against a SHORTER frame: bottom and middle rows shift, and
-the rectangles no longer describe the screen the user sees. The defaults are
-a convenience for hosts that never composite over a background; everyone
-else repeats their three `view()` arguments verbatim.
+**Hit-test the frame you rendered.** The doors read the last `view()` by
+default: omit the frame arguments and `actionRects()`/`actionAt()` answer
+about exactly the bytes on screen (the layout memo lives until any state
+changes, so it can never go stale). Passing frame arguments is still
+allowed — but arguments that DIFFER from the last render throw
+`\LogicException` instead of quietly describing a screen nobody is
+looking at. `frame()` hands the whole thing over as a value: composed
+`rows`, the top box's `x`/`y`, `actionRects()`, `actionAt($col, $row)`,
+and `boxRows()` — the frame as lines, which over an empty background are
+just the box rows, so parsing rendered ANSI to locate the box is no longer
+required.
 
 ## Styled Alerts
 
@@ -509,8 +511,10 @@ already over the new cap survive until the next push evicts them.
 | `->dismiss() / clear() / pruneExpired()` | Lifecycle: `dismiss()` files EVERY queued alert (expired included) into history and stops rendering until `clear()`, which also resets the flag but files nothing; `pruneExpired()` drops expired alerts silently |
 | `->history(): list<Alert>` | Return all recorded alerts — dismissed, `DropOldest` evictees AND `DropNewest` refusals; cumulative, `clear()` never resets it |
 | `->activeAlerts(): list<Alert>` | The live queue exactly as `view()` sees it — expired filtered, queue order; the index space `cancelAlert()`/`extendAlert()` and `actionRects()`'s `alertIndex` share |
-| `->actionRects(string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>` | Absolute frame cells of every painted `[Label]` button (the `"[+N more]"` fold row is not clickable) |
-| `->actionAt(int $col, int $row, string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): ?Action` | The dispatch door: which Action (if any) covers a frame position — where two boxes share rows, the top-most (newest) one wins |
+| `->actionRects(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>` | Absolute frame cells of every painted `[Label]` button in the frame (omitted args read the last render; args differing from it throw `\LogicException`) — the `"[+N more]"` fold row is not clickable |
+| `->frame(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?ToastFrame` | The rendered frame as a value: composed `rows`, top-box `x`/`y`, `actionRects()`, `actionAt($col, $row)`, `boxRows()`; null when nothing renders |
+| `->actionAt(int $col, int $row, ?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?Action` | The dispatch door: which Action (if any) covers a position of the frame on screen — omitted args read the last render, mismatched args throw; where two boxes share rows, the top-most (newest) one wins |
+| `ToastFrame::boxRows(): list<string>` | The composed frame as lines (no trailing-newline artefact) — over an empty background these are exactly the box rows, so dashboard-style consumers stop splitting rendered ANSI |
 | `Lang::t(string $key, array $params = []): string` | Translate a known key ('dismiss', 'count', 'type.*') — the inherited sugar-core helper behind `ToastType::label()` |
 | `->view(string $background, int $viewportWidth = 80, int $viewportHeight = 24): string` | Render toast layer over background; both dimensions must lie in `1..Toast::MAX_VIEWPORT_DIMENSION` (4 096 per dimension) and fit `Toast::MAX_VIEWPORT_CELLS` (a 1 000 000-cell product cap) or an `InvalidArgumentException` is thrown before any allocation — the frame is a real `width × height` cell grid, so bogus winsizes fail loud instead of exhausting memory. Boxes that cannot fit ellipsize (`…`): on very narrow frames the drop clears the whole styled prefix — icon and the accessible severity word (`withAccessibleText()`) go together, with the line indent — and message/action content degrades instead of vanishing. |
 

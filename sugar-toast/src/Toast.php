@@ -117,6 +117,14 @@ final class Toast
     private bool $hostZoneCarry = true;
 
     /**
+     * Per-instance layout memo keyed by (background, width, height):
+     * ['key'=>[bg,w,h],'layout'=>?array,'output'=>string,'frame'=>?ToastFrame].
+     * mutate() drops it on every state change, so the frame the hit-test
+     * doors read can never lag the queue they describe (finding 001).
+     */
+    private ?array $frameMemo = null;
+
+    /**
      * Maximum number of concurrent alerts (null = unlimited).
      *
      * Growth caveat, stated honestly: with the default null cap the queue only
@@ -332,6 +340,16 @@ final class Toast
             $clone->{$k} = $v;
         }
         return $clone;
+    }
+
+    /**
+     * Fresh state is a fresh frame: every door that clones (mutate() or the
+     * raw queue-arrival clones) sheds the render memo in this one choke, so
+     * no clone can ever serve bytes computed from its parent's queue.
+     */
+    private function __clone()
+    {
+        $this->frameMemo = null;
     }
 
     // -------------------------------------------------------------------------
@@ -868,11 +886,46 @@ final class Toast
      */
     public function view(string $background, int $viewportWidth = 80, int $viewportHeight = 24): string
     {
-        $layout = $this->layout($background, $viewportWidth, $viewportHeight);
-        if ($layout === null) {
-            return $background;
+        return $this->renderLayout($background, $viewportWidth, $viewportHeight)['output'];
+    }
+
+    /**
+     * The single layout path: one layout() pass per (background, width,
+     * height) triple, memoized on the instance until any state mutates.
+     * view(), frame() and the hit-test doors all read through here, so the
+     * bytes on screen and the rects describing them can never come from two
+     * different layout passes.
+     *
+     * @return array{key:array{string,int,int},layout:?array,output:string,frame:?ToastFrame}
+     */
+    private function renderLayout(string $background, int $viewportWidth, int $viewportHeight): array
+    {
+        $memo = $this->frameMemo;
+        if ($memo !== null
+            && $memo['key'][0] === $background
+            && $memo['key'][1] === $viewportWidth
+            && $memo['key'][2] === $viewportHeight) {
+            return $memo;
         }
 
+        $layout = $this->layout($background, $viewportWidth, $viewportHeight);
+        $output = $layout === null ? $background : $this->composite($layout);
+
+        return $this->frameMemo = [
+            'key' => [$background, $viewportWidth, $viewportHeight],
+            'layout' => $layout,
+            'output' => $output,
+            'frame' => null,
+        ];
+    }
+
+    /**
+     * Blit the placed boxes over the filled background grid from layout().
+     *
+     * @param array $layout
+     */
+    private function composite(array $layout): string
+    {
         $viewport = $layout['viewport'];
         $bgGrid = $viewport;
 
@@ -889,6 +942,38 @@ final class Toast
         }
 
         return $viewport->toAnsi();
+    }
+
+    /**
+     * Resolve optional frame arguments for the hit-test doors against the
+     * last-rendered frame (finding 001). Omitted parts read the memo; with
+     * nothing rendered yet the legacy ('', 80, 24) defaults apply. Supplied
+     * parts that DIFFER from the memo throw \LogicException — a hit-test
+     * describing a screen nobody rendered is worse than a loud crash.
+     *
+     * @return array{string,int,int}
+     */
+    private function resolveFrameArgs(string $door, ?string $background, ?int $viewportWidth, ?int $viewportHeight): array
+    {
+        $memo = $this->frameMemo;
+        $bg = $background ?? ($memo === null ? '' : $memo['key'][0]);
+        $w = $viewportWidth ?? ($memo === null ? 80 : $memo['key'][1]);
+        $h = $viewportHeight ?? ($memo === null ? 24 : $memo['key'][2]);
+        if ($memo !== null
+            && ($background !== null || $viewportWidth !== null || $viewportHeight !== null)
+            && ($bg !== $memo['key'][0] || $w !== $memo['key'][1] || $h !== $memo['key'][2])) {
+            throw new \LogicException(\sprintf(
+                '%s(): asked about %dx%d over %s, but the last view() rendered %dx%d over %s — hit-test the frame you drew, or omit the arguments to read the memo',
+                $door,
+                $w,
+                $h,
+                $bg === '' ? 'an empty background' : 'a marked background',
+                $memo['key'][1],
+                $memo['key'][2],
+                $memo['key'][0] === '' ? 'an empty background' : 'a marked background'
+            ));
+        }
+        return [$bg, $w, $h];
     }
 
     /**
@@ -1131,13 +1216,41 @@ final class Toast
      *
      * @return list<array{action:Action, alert:Alert, alertIndex:int, actionIndex:int, row:int, col:int, width:int}>
      */
-    public function actionRects(string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): array
+    public function actionRects(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): array
     {
-        $layout = $this->layout($background, $viewportWidth, $viewportHeight);
-        if ($layout === null) {
-            return [];
-        }
+        [$bg, $w, $h] = $this->resolveFrameArgs(__FUNCTION__, $background, $viewportWidth, $viewportHeight);
+        return $this->frame($bg, $w, $h)?->actionRects() ?? [];
+    }
 
+    /**
+     * The frame currently on screen (or the one the arguments describe) as a
+     * {@see ToastFrame}: composed bytes, top-box origin, and hit rects as
+     * data. null when nothing renders. Optional arguments resolve against
+     * the last render's memo exactly like {@see actionRects()}.
+     */
+    public function frame(?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?ToastFrame
+    {
+        [$bg, $w, $h] = $this->resolveFrameArgs(__FUNCTION__, $background, $viewportWidth, $viewportHeight);
+        $memo = $this->renderLayout($bg, $w, $h);
+        if ($memo['layout'] === null) {
+            return null;
+        }
+        if ($memo['frame'] === null) {
+            $boxes = $memo['layout']['boxes'];
+            $top = $boxes[\count($boxes) - 1];
+            $memo['frame'] = new ToastFrame($top['x'], $top['y'], $memo['output'], $this->computeRects($memo['layout']));
+            $this->frameMemo = $memo;
+        }
+        return $memo['frame'];
+    }
+
+    /**
+     * @param array $layout
+     *
+     * @return list<array{action:Action,alert:Alert,alertIndex:int,actionIndex:int,row:int,col:int,width:int}>
+     */
+    private function computeRects(array $layout): array
+    {
         $rects = [];
         foreach ($layout['boxes'] as $alertIndex => $placed) {
             $alert = $placed['alert'];
@@ -1174,28 +1287,17 @@ final class Toast
     }
 
     /**
-     * Which Action (if any) covers frame position ($col, $row)? Where two
-     * boxes share rows, the top-most one wins; a position with no button
-     * returns null. The frame arguments are used to RECOMPUTE the layout —
-     * pass the same ones {@see view()} rendered, or the rows shift (see
-     * {@see actionRects()}). This is the dispatch door the README's
-     * host-side mouse/keyboard recipe calls.
+     * Which Action (if any) covers frame position ($col, $row) of the frame
+     * the host is looking at? Omitted arguments read the last-rendered frame;
+     * supplied ones that differ from it throw (see {@see actionRects()}).
+     * Where two boxes share rows, the top-most (newest) one wins — the
+     * visible button is the hittable one. This is the dispatch door the
+     * README's host-side mouse/keyboard recipe calls.
      */
-    public function actionAt(int $col, int $row, string $background = '', int $viewportWidth = 80, int $viewportHeight = 24): ?Action
+    public function actionAt(int $col, int $row, ?string $background = null, ?int $viewportWidth = null, ?int $viewportHeight = null): ?Action
     {
-        // Walk from the back of the stack: layout() emits boxes in queue
-        // order and view() composites them in that order, so a later box
-        // paints OVER an earlier one. On a clamped stack two boxes can land
-        // on the SAME rows; the visible — and therefore hittable — button is
-        // the one added last. Matching in queue order would fire a callback
-        // for a button hidden beneath a newer box, breaking the contract
-        // that the clickable set is exactly what is on screen.
-        foreach (\array_reverse($this->actionRects($background, $viewportWidth, $viewportHeight)) as $rect) {
-            if ($rect['row'] === $row && $col >= $rect['col'] && $col < $rect['col'] + $rect['width']) {
-                return $rect['action'];
-            }
-        }
-        return null;
+        [$bg, $w, $h] = $this->resolveFrameArgs(__FUNCTION__, $background, $viewportWidth, $viewportHeight);
+        return $this->frame($bg, $w, $h)?->actionAt($col, $row);
     }
 
     /**
