@@ -125,6 +125,37 @@ final class QuickPickTest extends TestCase
         $this->assertSame(4, $h->cursor());
     }
 
+    public function testNegativeCursorStepsThrow(): void
+    {
+        // -025: cursorUp(-99) used to land at cursor 99 where selected()
+        // answers null — a negative step silently reversed direction and
+        // walked the cursor out of range. The default is to refuse loudly;
+        // a silent clamp would hide the host bug instead.
+        $h = $this->makeQuickPick()->show();
+
+        try {
+            $h->cursorUp(-99);
+            $this->fail('cursorUp(-99) must throw InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('cursorUp', $e->getMessage());
+            $this->assertStringContainsString('-99', $e->getMessage());
+        }
+
+        try {
+            $h->cursorDown(-1);
+            $this->fail('cursorDown(-1) must throw InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('cursorDown', $e->getMessage());
+        }
+
+        try {
+            $h->cursorUp(0);
+            $this->fail('cursorUp(0) must throw InvalidArgumentException');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('cursorUp', $e->getMessage());
+        }
+    }
+
     public function testSelectedItem(): void
     {
         $h = $this->makeQuickPick()->show()->type('a');

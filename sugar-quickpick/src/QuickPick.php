@@ -237,15 +237,23 @@ final class QuickPick
     /**
      * Set the overlay width in cells.
      *
-     * 0 = auto: width is computed from prompt + items and clamped to the
-     * terminal's column count (auto width can never exceed the screen).
+     * The domain rule (-027): negatives are meaningless and clamp to 0 =
+     * auto (width computed from prompt + items, clamped to the terminal).
      * A positive value is the OUTER width — when a border is attached via
-     * withBorder(), two of those cells go to the side runes.
+     * withBorder(), two of those cells go to the side runes, and the
+     * render clamps such a frame to a border-consumed minimum of 3 cells
+     * (two runes + one content cell) so the border is never sliced.
+     * An over-wide positive value is clamped to the live terminal's
+     * columns at compose time — a frame wider than the screen would
+     * wrap, breaking the composite's width contract.
      */
     public function setWindowWidth(int $w): self
     {
         $clone = clone $this;
-        $clone->windowWidth = $w;
+        // -027: negatives used to reach view() verbatim; only `> 0` hid
+        // them. Normalise at the boundary so the field is always trusted
+        // downstream (0 = auto, positive = outer width).
+        $clone->windowWidth = \max(0, $w);
         return $clone;
     }
 
@@ -254,7 +262,10 @@ final class QuickPick
      * placement: it does NOT show or hide the overlay (M4).
      *
      * Negative offsets would index the background from the wrong side and
-     * silently smear the composite; they clamp to 0 (mm8).
+     * silently smear the composite; they clamp to 0 (mm8). The column is
+     * clamped at compose time so the overlay never starts past the live
+     * terminal's right edge (-063: setOffset(1000, 0) used to emit
+     * 1023-cell rows).
      */
     public function setOffset(int $x, int $y): self
     {
@@ -548,6 +559,13 @@ final class QuickPick
 
     public function cursorUp(int $n = 1): self
     {
+        // -025: a negative step silently reversed direction and parked the
+        // cursor out of range (cursorUp(-99) on 5 items landed at 99, where
+        // selected() answers null). Hiding a host bug is worse than an
+        // exception — refuse it loudly.
+        if ($n < 1) {
+            throw new \InvalidArgumentException("cursorUp() requires a step of 1 or more, got $n");
+        }
         $clone = clone $this;
         $clone->cursor = \max(0, $clone->cursor - $n);
         return $clone;
@@ -555,6 +573,11 @@ final class QuickPick
 
     public function cursorDown(int $n = 1): self
     {
+        // -025: mirror of cursorUp — a negative step is a host bug, refuse
+        // it instead of silently moving the wrong way.
+        if ($n < 1) {
+            throw new \InvalidArgumentException("cursorDown() requires a step of 1 or more, got $n");
+        }
         $clone = clone $this;
         $max = \count($clone->filteredItems) - 1;
         $clone->cursor = \min($max >= 0 ? $max : 0, $clone->cursor + $n);
@@ -676,10 +699,18 @@ final class QuickPick
         $border = $this->border;
 
         if ($this->windowWidth > 0) {
-            // The caller chose the OUTER width; a border frame consumes two
-            // of its cells for the side runes.
-            $outerWidth = $this->windowWidth;
-            $innerWidth = $border !== null ? \max(1, $outerWidth - 2) : $outerWidth;
+            // The caller chose the OUTER width; clamp it to the live
+            // terminal (-027: an over-cols width used to compose wrapping
+            // rows). A border frame consumes two of its cells for the side
+            // runes and needs a third for content — never slice the runes.
+            $cols       = $this->ttySize()['cols'];
+            $outerWidth = \min($this->windowWidth, $cols);
+            if ($border !== null) {
+                $outerWidth = \max(3, $outerWidth);
+                $innerWidth = $outerWidth - 2;
+            } else {
+                $innerWidth = $outerWidth;
+            }
         } else {
             // Auto width sizes the CONTENT; the border is added on top so
             // item text never loses two cells to the frame.
@@ -1019,7 +1050,12 @@ final class QuickPick
     {
         $cols = $this->ttySize()['cols'];
 
-        return \min($this->computeWidth(), \max(20, $cols));
+        // -059: the old clamp was min(computed, max(20, cols)) — on a real
+        // terminal narrower than 20 columns the 20-cell comfort ceiling
+        // exceeded the screen itself, so an "auto" frame wrapped. The width
+        // can never exceed the live terminal; degenerate zero-width probes
+        // are already absorbed by ttySize()'s `?: 80` fallback.
+        return \min($this->computeWidth(), $cols);
     }
 
     /**
@@ -1089,8 +1125,14 @@ final class QuickPick
 
     private function compositeOver(array $overlayLines, int $winWidth, array $bgLines): string
     {
-        $x = $this->xOffset;
-        $y = $this->yOffset;
+        // -063: an extreme x offset used to compose rows as wide as
+        // xOffset+width (setOffset(1000, 0) emitted 1023-cell lines).
+        // Clamp the placement column to the live terminal's right edge;
+        // y is bounded by the background itself (rows past it are the
+        // host's own padding), so only x needs the guard.
+        $cols = $this->ttySize()['cols'];
+        $x    = \min($this->xOffset, \max(0, $cols - $winWidth));
+        $y    = $this->yOffset;
 
         foreach ($overlayLines as $lineIdx => $line) {
             $destY = $y + $lineIdx;

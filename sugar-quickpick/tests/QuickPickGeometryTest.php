@@ -7,6 +7,7 @@ namespace SugarCraft\QuickPick\Tests;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\QuickPick\{QuickPick, FilteredItem, Item};
 use SugarCraft\QuickPick\Support\UntrustedText;
+use SugarCraft\Style\Border;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -177,6 +178,77 @@ final class QuickPickGeometryTest extends TestCase
                     );
                 }
             }
+        }
+    }
+
+    public function testAutoWidthNeverExceedsLiveTerminal(): void
+    {
+        // -059: the old clamp was min(computed, max(20, cols)) — on a real
+        // terminal narrower than 20 cells the 20-cell ceiling exceeded the
+        // screen itself. The rule now is simply min(computed, cols); on a
+        // >=20-col host the observable pin is "never wraps the screen, and
+        // the degenerate probe's fallback (80) already covers zero width".
+        $cols = (new \SugarCraft\Core\Util\Tty(\STDIN))->size()['cols'] ?: 80;
+        $h = QuickPick::new(['a'])->setWindowHeight(3)->show();
+        $lines = \explode("\n", $h->view(\implode("\n", \array_fill(0, 4, ''))));
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual($cols, Width::of($line), 'auto frame must never exceed the terminal');
+        }
+    }
+
+    public function testNegativeWidthIsAutoAndWideWidthClampsToScreen(): void
+    {
+        // -027: setWindowWidth had zero validation — negatives happened to
+        // read as auto downstream but were never normalised, and an
+        // over-cols width composed rows that wrapped the screen.
+        $items = [new FilteredItem(1, 'apple')];
+        $this->assertSame(
+            $this->frame(QuickPick::new($items)->setWindowWidth(0), $items),
+            $this->frame(QuickPick::new($items)->setWindowWidth(-7), $items),
+            'negative widths must normalise to auto (0)'
+        );
+
+        $cols = (new \SugarCraft\Core\Util\Tty(\STDIN))->size()['cols'] ?: 80;
+        $lines = $this->frame(QuickPick::new($items)->setWindowWidth(100000)->setWindowHeight(3), $items);
+        $this->assertSame($cols, Width::of($lines[0]), 'an over-wide frame must clamp to the live columns');
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual($cols, Width::of($line));
+        }
+    }
+
+    public function testBorderedFrameNeverSlicesItsRunes(): void
+    {
+        // -027: a bordered outer width of 1-2 used to compute inner=max(1,
+        // outer-2) and emit three-cell rows anyway — the border lied about
+        // the width it was given. The frame now floors at its
+        // border-consumed minimum (two runes + one content cell).
+        $h = QuickPick::new(['apple'])
+            ->setWindowWidth(2)
+            ->setWindowHeight(3)
+            ->withBorder(Border::normal())
+            ->show();
+        $lines = \explode("\n", $h->view(\implode("\n", \array_fill(0, 4, ''))));
+
+        $this->assertSame(3, Width::of($lines[0]), 'bordered frame floors at 3 cells');
+        $this->assertSame(3, Width::of($lines[1]));
+    }
+
+    public function testOffsetColumnClampsToTerminalRightEdge(): void
+    {
+        // -063: setOffset(1000, 0) composed 1020+-cell rows. The column is
+        // clamped at compose time so the overlay never starts past the
+        // screen's right edge.
+        $cols = (new \SugarCraft\Core\Util\Tty(\STDIN))->size()['cols'] ?: 80;
+        $h = QuickPick::new(['apple'])
+            ->setWindowWidth(20)
+            ->setWindowHeight(3)
+            ->setOffset(1000, 0)
+            ->show();
+        $lines = \explode("\n", $h->view(\implode("\n", \array_fill(0, 4, ''))));
+
+        $this->assertSame($cols, Width::of($lines[0]), 'extreme offset pins the frame to the right edge');
+        foreach ($lines as $line) {
+            $this->assertLessThanOrEqual($cols, Width::of($line), 'no composed row may exceed the terminal');
         }
     }
 

@@ -149,7 +149,7 @@ A custom `setFilterFn()` predicate still applies on top of the ranker.
 | **Overlay compositing** | Background view renders underneath; overlay chars replace background at specified positions |
 | **Background continues updating** | The QuickPick doesn't block the underlying view |
 | **Fully styleable** | Custom filter prompt, item format, matching highlight, window dimensions |
-| **String renderer** | `view()` returns strings you manage; the only terminal I/O is the STDIN geometry probe the auto-width path runs on a width-cache miss (see `setWindowWidth` — pick a fixed width and renders are ioctl-free) and the opt-in `attachSigwinch()` resize attach (an `ioctl` + `pcntl` handler), which you never have to call |
+| **String renderer** | `view()` returns strings you manage; the only terminal I/O is the STDIN geometry probe the auto-width path runs on a width-cache miss plus the screen-clamp probe every render applies (see `setWindowWidth` — a width that fits the screen renders identically everywhere) and the opt-in `attachSigwinch()` resize attach (an `ioctl` + `pcntl` handler), which you never have to call |
 | **Item interface** | Work with structured `Item` objects instead of raw strings |
 | **Persistent history** | `FileHistory` stores items as JSONL for session persistence |
 | **Custom filter predicates** | `setFilterFn()` lets you filter items by arbitrary criteria |
@@ -220,19 +220,26 @@ public function setMatchStyle(string $ansiStyle): self
 public function setWindowHeight(int $h): self
 
 // Set overlay width. 0 (default) = auto: the computed prompt+items width is
-// clamped to min(computed, max(20, cols)) — a 20-column floor guards
-// degenerate probes. Every width-cache miss on the auto path PROBED the
+// clamped to min(computed, cols) — an auto frame never exceeds the live
+// terminal (-059: the old max(20, cols) ceiling wrapped real sub-20-column
+// screens; a degenerate zero-width probe is absorbed by the 80-column
+// fallback instead). Every width-cache miss on the auto path PROBED the
 // terminal: sugar-core Tty on STDIN (FFI ioctl TIOCSWINSZ, stty shell-out
 // fallback), and a non-interactive STDIN answers the 80×24 default, so a
 // piped run renders at phantom width. The cache invalidates on every
 // mutation that can change the width (filter edits, item/prompt swaps), so
 // chained auto-mode builders re-probe per affected operation. A positive
-// value is the OUTER width (a border consumes two of those cells) and makes
-// renders ioctl-free: no probe, no fallback, fully deterministic.
+// value is the OUTER width, negative inputs clamp to 0/auto, and it is
+// clamped down to the live columns at render time (-027: an over-cols width
+// used to compose wrapping rows); a border consumes two of those cells with
+// a border-consumed minimum of 3 so the runes are never sliced. That screen
+// clamp is the one geometry probe the explicit-width path still runs.
 public function setWindowWidth(int $w): self
 
 // Position the overlay at (x, y). Pure placement: visibility is unchanged
-// (use show()/hide()) and negative coordinates clamp to 0.
+// (use show()/hide()), negative coordinates clamp to 0, and the column is
+// clamped at compose time so the overlay never starts past the terminal's
+// right edge (-063: setOffset(1000, 0) used to emit 1023-cell rows).
 public function setOffset(int $x, int $y): self
 
 // Custom item formatter:
@@ -310,10 +317,13 @@ public function backspace(): self
 // Clear filter text and show all items
 public function clear(): self
 
-// Move cursor up (default 1)
+// Move cursor up (default 1). A step below 1 throws InvalidArgumentException
+// (-025: negative steps silently reversed direction and parked the cursor
+// out of range).
 public function cursorUp(int $n = 1): self
 
-// Move cursor down (default 1)
+// Move cursor down (default 1). A step below 1 throws (same rule as
+// cursorUp).
 public function cursorDown(int $n = 1): self
 
 // Jump to first item
