@@ -429,17 +429,18 @@ with your content.
 
 ## Empty States
 
-The degenerate shapes have defined, non-crashing output:
+These edge cases render predictable output instead of crashing:
 
 - **No columns to paint** — a table with zero columns, or with every column hidden
   (`withHiddenCols()` covering them all), renders as the empty string.
-- **No rows** — columns with no rows render the translatable `No data` line
-  (`no_data`, see Internationalization) centered in the content area; it shows
-  whether or not the header row is visible, and in borderless and footer-armed
-  tables alike. When `Filter()` or `search()` narrows every row away the line
-  is different by design: `No rows match your filter` (`no_matches`) says the
-  rows exist and the needle excludes them — an empty store and an over-strict
-  filter never look identical.
+- **No rows** — a table whose row set is empty renders the translatable
+  `No data` line (`no_data`, see Internationalization) centered in the content
+  area. It shows whether or not the header row is visible, and in borderless
+  and footer-armed tables alike.
+- **Filtered to nothing** — when `Filter()` or `search()` narrows every row
+  away, the line reads `No rows match your filter` (`no_matches`) instead:
+  the rows exist and the needle excludes them, so an empty store and an
+  over-strict filter never look identical.
 - **Scrolled past the end** — `withScrollX()` at or beyond the number of scrollable
   (non-frozen) columns leaves none visible: with no frozen prefix the whole table
   renders as the empty string; with one, only the frozen columns paint.
@@ -1081,15 +1082,20 @@ is the classic off-by-one-page bug. Pick by call site:
 - **Fail fast**: Invalid indices throw `OutOfBoundsException`
 
 ```php
-// Combined with pagination — page 1
+// With 30 rows: expand the first row of page 1 (rows are 0-based).
 $t = $t->withPageSize(10)->withPage(1)->withExpandedRows([0]);
 
-// Row index 0 refers to the first row on page 1, not the first row overall
-$t->isExpanded(0);   // true — row 0 on page 1 is expanded
+// Index 0 is this page's first slot — the row 10 overall, not the first
+// row of the table.
+$t->isExpanded(0);   // true
 
-// Row index 5 on page 2 might be a different Row object
+// Switching pages re-bases the index: slot 0 now holds row 20 overall,
+// a different Row object that was never expanded.
 $t = $t->withPage(2);
-$t->isExpanded(5);   // depends on whether that row was expanded on page 2
+$t->isExpanded(0);   // false
+
+// The three index domains — cursor, expansion slots, styleFunc row — are
+// tabulated under Row Index Domains in Expanded Rows above.
 ```
 
 ## Accessors
@@ -1114,7 +1120,7 @@ and the roster in that test drift apart. Rename-era history lives in
 ## Shared Foundations
 
 sugar-table adopts `sugar-cellbuffer` for all buffer-based rendering. Layout fills a flat mutable
-`RenderCanvas` grid in a single pass; it is frozen into an immutable `Buffer` exactly once per
+`RenderCanvas` grid in a single pass; it is materialized into an immutable `Buffer` exactly once per
 `View()` call. `View()` writes only internal render memos (width solve, filter/sort cache, style
 parse) — never visible state.
 
