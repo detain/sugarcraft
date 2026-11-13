@@ -775,6 +775,7 @@ you can tell the first cause from the other two. The two-call
 | `Manager` | `clear(?id)` / `close()` | Drop one zone (id or wire id) / wipe registry + disable |
 | `Zone` | `toMouseEvent(mouseMsg)` | Core→primitive action/button bridge |
 | `Scan` | `strip(rendered)` | Public byte-wise removal of well-formed tags |
+| `Scanner` | `idsStartingWith(prefix)` | Zones whose ids begin with `$prefix` — the reading side of the prefix vocabulary (`newPrefix()` stamps, this selects); formerly spelled `prefixed()`, which remains as a deprecated alias |
 | `Mark` | `untrusted(text)` | Sweep foreign sentinel framing bytes off untrusted labels |
 | `Zones` (static) | `mark` / `scan` / `get` / `clear` / `close` / `setEnabled` / `isEnabled` / `newPrefix` / `anyInBounds*` | Package-level facade over the default manager |
 | `Zones` (static) | `defaultManager()` | Read the shared default `Manager` the package-level facade routes through (`Manager::newUnprefixed()` builds a different, independent instance) |

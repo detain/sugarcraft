@@ -83,9 +83,12 @@ final class Scanner
     /**
      * Return all zones whose id starts with $prefix.
      *
+     * The SELECTING side of the prefix vocabulary: `Manager::newPrefix()`
+     * stamps namespaces onto ids, this filter reads them back out.
+     *
      * @return array<string, Zone>
      */
-    public function prefixed(string $prefix): array
+    public function idsStartingWith(string $prefix): array
     {
         $result = [];
         foreach ($this->zones as $id => $zone) {
@@ -94,6 +97,19 @@ final class Scanner
             }
         }
         return $result;
+    }
+
+    /**
+     * @deprecated Renamed to {@see idsStartingWith()} — one word, one
+     *             direction: stamps belong to `newPrefix()`, this filter
+     *             selects. The alias delegates byte-for-byte; removal is a
+     *             gated BC decision, not an accident.
+     *
+     * @return array<string, Zone>
+     */
+    public function prefixed(string $prefix): array
+    {
+        return $this->idsStartingWith($prefix);
     }
 
     /**

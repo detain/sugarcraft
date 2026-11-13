@@ -186,9 +186,9 @@ final class ScannerTest extends TestCase
         self::assertCount(3, $all);
     }
 
-    // ─── prefixed() ─────────────────────────────────────────────────────────
+    // ─── idsStartingWith() ─────────────────────────────────────────────────
 
-    public function testPrefixedReturnsMatchingZones(): void
+    public function testIdsStartingWithReturnsMatchingZones(): void
     {
         $mark = new Mark();
         $rendered = $mark->wrap('item-0', 'FIRST')
@@ -196,7 +196,7 @@ final class ScannerTest extends TestCase
             . $mark->wrap('btn-ok', 'OK');
 
         $scanner = Scanner::new()->scan($rendered);
-        $prefixed = $scanner->prefixed('item-');
+        $prefixed = $scanner->idsStartingWith('item-');
 
         self::assertCount(2, $prefixed);
         self::assertArrayHasKey('item-0', $prefixed);
@@ -204,12 +204,30 @@ final class ScannerTest extends TestCase
         self::assertArrayNotHasKey('btn-ok', $prefixed);
     }
 
-    public function testPrefixedReturnsEmptyArrayForNoMatch(): void
+    /**
+     * SM-S29: the deprecated `prefixed()` alias delegates byte-for-byte to
+     * `idsStartingWith()` — same keys, same order, same objects. Removal of
+     * the alias is a gated BC decision, not an accident.
+     */
+    public function testDeprecatedPrefixedAliasIsIdenticalToIdsStartingWith(): void
+    {
+        $mark = new Mark();
+        $rendered = $mark->wrap('item-0', 'FIRST') . $mark->wrap('btn-ok', 'OK');
+        $scanner = Scanner::new()->scan($rendered);
+
+        self::assertSame(
+            $scanner->idsStartingWith('item-'),
+            $scanner->prefixed('item-'),
+        );
+        self::assertSame($scanner->idsStartingWith(''), $scanner->prefixed(''), 'empty prefix selects all, both spellings');
+    }
+
+    public function testIdsStartingWithReturnsEmptyArrayForNoMatch(): void
     {
         $mark = new Mark();
         $scanner = Scanner::new()->scan($mark->wrap('item-0', 'X'));
 
-        $result = $scanner->prefixed('none-');
+        $result = $scanner->idsStartingWith('none-');
         self::assertSame([], $result);
     }
 
