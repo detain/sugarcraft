@@ -142,7 +142,7 @@ return [
     'config.warn.read_only' => 'Config file {path} is read-only; settings were not saved.',
     'config.warn.write_failed' => 'Could not write config file {path}: {reason}',
     'config.warn.read_failed' => 'Could not read config file {path}',
-    'config.warn.no_config_dir' => 'Could not determine config path: Make sure `$XDG_CONFIG_HOME` or `$HOME` is set',
+    'config.warn.no_config_dir' => 'Could not determine config path: Make sure `$XDG_CONFIG_HOME`, `$HOME`, `$APPDATA` or `$USERPROFILE` is set',
 
     // ---- presets (btop presetsValid) ---------------------------------------
     'config.preset.too_many' => 'Too many presets entered!',

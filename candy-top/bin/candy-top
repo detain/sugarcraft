@@ -145,10 +145,12 @@ if (!stream_isatty(STDIN) || !stream_isatty(STDOUT)) {
     exit(1);
 }
 
-// ConfigFile::new throws when neither XDG_CONFIG_HOME nor HOME is usable
-// (audit m27). Unguarded that is a PHP fatal — stack trace, exit 255 — on
-// the one stream the user is reading, breaking the `candy-top: …` refusal
-// discipline every other startup path keeps. It exits 2, like a bad argument.
+// ConfigFile::new throws when no config path can be derived at all — neither
+// XDG_CONFIG_HOME/HOME nor the Windows-native APPDATA/USERPROFILE tail is
+// usable (audit m27, candy-top-128). Unguarded that is a PHP fatal — stack
+// trace, exit 255 — on the one stream the user is reading, breaking the
+// `candy-top: …` refusal discipline every other startup path keeps.
+// It exits 2, like a bad argument.
 try {
     $file = ConfigFile::new($configPath);
 } catch (\RuntimeException $e) {

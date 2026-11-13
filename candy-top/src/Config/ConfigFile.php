@@ -37,7 +37,8 @@ final class ConfigFile
      *
      * @param array<string, string>|null $env Environment override (tests); null reads the process env.
      *
-     * @throws \RuntimeException When no path is given and neither XDG_CONFIG_HOME nor HOME is usable.
+     * @throws \RuntimeException When no path is given and no config location can be
+     *                           derived from the environment (see {@see defaultPath()}).
      */
     public static function new(?string $path = null, ?array $env = null): self
     {
@@ -49,10 +50,20 @@ final class ConfigFile
 
     /**
      * `$XDG_CONFIG_HOME/candy-top/config.conf`, else
-     * `$HOME/.config/candy-top/config.conf`, else null.
+     * `$HOME/.config/candy-top/config.conf`, else the Windows-native tail
+     * `$APPDATA/candy-top/config.conf`, else
+     * `$USERPROFILE/.config/candy-top/config.conf`, else null.
      *
      * Per the XDG base-directory spec a relative XDG_CONFIG_HOME is invalid
      * and ignored (btop only checks that it exists).
+     *
+     * The Windows tail closes the native-cmd/PowerShell boot refusal (candy-top-128):
+     * those hosts carry neither HOME nor XDG_CONFIG_HOME, so the old chain
+     * threw and bin exited 2 before the TUI opened, while the sibling state
+     * and theme chains merely degraded. APPDATA is the platform's config
+     * home (the XDG equivalent, like Go's os.UserConfigDir) and USERPROFILE
+     * the home equivalent; the lookup is env-driven, not OS-gated, so a
+     * Git-Bash $HOME keeps its existing path untouched.
      *
      * @param array<string, string>|null $env
      */
@@ -74,6 +85,17 @@ final class ConfigFile
         $home = $get('HOME');
         if ($home !== '') {
             return rtrim($home, '/') . '/.config/' . self::DIR_NAME . '/' . self::FILE_NAME;
+        }
+        // Windows-shaped roots mix both separators freely ('C:\Users\x');
+        // PHP and the Win32 file APIs accept '/' in every position, so only
+        // a trailing native separator is trimmed before joining.
+        $appData = $get('APPDATA');
+        if ($appData !== '') {
+            return rtrim($appData, '/\\') . '/' . self::DIR_NAME . '/' . self::FILE_NAME;
+        }
+        $userProfile = $get('USERPROFILE');
+        if ($userProfile !== '') {
+            return rtrim($userProfile, '/\\') . '/.config/' . self::DIR_NAME . '/' . self::FILE_NAME;
         }
 
         return null;

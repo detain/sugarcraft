@@ -51,6 +51,47 @@ final class ConfigFileTest extends TestCase
         $this->assertNull(ConfigFile::defaultPath([]));
     }
 
+    public function testDefaultPathConsultsTheWindowsNativeTail(): void
+    {
+        // Native cmd/PowerShell hosts (candy-top-128): neither HOME nor
+        // XDG_CONFIG_HOME exists there, APPDATA/USERPROFILE are the
+        // convention, and boot used to refuse outright.
+        $this->assertSame(
+            'C:\\Users\\u\\AppData\\Roaming/candy-top/config.conf',
+            ConfigFile::defaultPath(['APPDATA' => 'C:\\Users\\u\\AppData\\Roaming\\']),
+            'APPDATA is the config-home equivalent; a trailing native separator is trimmed',
+        );
+        $this->assertSame(
+            'C:\\Users\\u/.config/candy-top/config.conf',
+            ConfigFile::defaultPath(['USERPROFILE' => 'C:\\Users\\u']),
+            'USERPROFILE is the home equivalent, mirroring the HOME/.config shape',
+        );
+        $this->assertSame(
+            'C:\\Users\\u\\AppData\\Roaming/candy-top/config.conf',
+            ConfigFile::defaultPath(['USERPROFILE' => 'C:\\Users\\u', 'APPDATA' => 'C:\\Users\\u\\AppData\\Roaming']),
+            'APPDATA wins over USERPROFILE, as XDG_CONFIG_HOME wins over HOME',
+        );
+        $this->assertSame(
+            'C:\\Users\\u/.config/candy-top/config.conf',
+            ConfigFile::defaultPath(['APPDATA' => '', 'USERPROFILE' => 'C:\\Users\\u']),
+            'an empty APPDATA falls through, like an empty HOME does',
+        );
+    }
+
+    public function testDefaultPathKeepsHomeAheadOfTheWindowsTail(): void
+    {
+        // Git-Bash sets HOME alongside the Windows vars; the established
+        // location must not churn for existing installs.
+        $this->assertSame(
+            '/home/u/.config/candy-top/config.conf',
+            ConfigFile::defaultPath([
+                'HOME' => '/home/u',
+                'USERPROFILE' => 'C:\\Users\\u',
+                'APPDATA' => 'C:\\Users\\u\\AppData\\Roaming',
+            ]),
+        );
+    }
+
     public function testDefaultPathReadsProcessEnvWhenNoOverride(): void
     {
         $xdg = getenv('XDG_CONFIG_HOME');

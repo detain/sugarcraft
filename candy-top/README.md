@@ -406,7 +406,7 @@ Only bare left presses act as clicks. Right and middle clicks and modified click
 
 ## Configuration
 
-**Location.** The config is read from `$XDG_CONFIG_HOME/candy-top/config.conf`, or `~/.config/candy-top/config.conf` when `XDG_CONFIG_HOME` is unset or not absolute. `--config <path>` reads another file and makes that file the save target. The directory is named `candy-top` so btop's own file is never touched.
+**Location.** The config is read from `$XDG_CONFIG_HOME/candy-top/config.conf`, or `~/.config/candy-top/config.conf` when `XDG_CONFIG_HOME` is unset or not absolute. Native Windows (cmd/PowerShell) carries neither, so `$APPDATA/candy-top/config.conf` is tried next, then `$USERPROFILE/.config/candy-top/config.conf`. `--config <path>` reads another file and makes that file the save target. The directory is named `candy-top` so btop's own file is never touched.
 
 **Format.** The format is btop's own: `#` comments and `name = value` lines, with strings in double quotes. A btop `btop.conf` copied over loads as-is. Unknown keys are skipped silently, so files from other btop versions also load. A value that fails validation is dropped with a warning on stderr, and the option keeps its previous value. A later duplicate of a key wins. A value rejected with a warning also marks the file for rewrite: with `save_config_on_exit` on, the whole file is normalized on save, so the rejected spelling disappears and the key comes back holding the value actually in force.
 
