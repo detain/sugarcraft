@@ -25,16 +25,18 @@ return [
     'cli.initializing'         => 'CandyGitServer-gegevensmap initialiseren: {path}',
     'cli.done'                 => 'Klaar.',
     'cli.next_steps'           => 'Volgende stappen:',
-    'cli.next_step_1'          => '  1. Maak een account: candy-git-server user add admin {path}',
+    'cli.next_step_1'          => '  1. Maak een account: candy-git-server user add --admin admin {path}',
 
     'cli.next_step_2'          => '  2. Maak een repository: candy-git-server repo create <naam> {path} (voeg --public toe om anoniem lezen te publiceren)',
 
     'cli.next_step_3'          => '  3. Serveer via smart HTTP: candy-git-server serve --http --repo-root {path}/repositories',
     'cli.usage_user_root'      => 'Gebruik: candy-git-server user add|key|list|token',
-    'cli.usage_user_add'       => 'Gebruik: candy-git-server user add <username> [data-path] [--password <pw>|-]',
+    'cli.usage_user_add'       => 'Gebruik: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] een HTTP-proxytokensignatuur aanmaken',
     'cli.usage_user_key'       => 'Gebruik: candy-git-server user key <username> [key-file]',
-    'cli.user_created'         => "Gebruiker '{username}' aangemaakt (admin: true)",
+    'cli.user_created'         => "Gebruiker '{username}' aangemaakt (admin: {admin})",
+    // S21: least-privilege `user add` flags (finding 036).
+    'cli.user_add_flags_conflict' => '--admin en --read sluiten elkaar uit.',
     'cli.user_password_stored' => 'Wachtwoord opgeslagen als hash.',
     'cli.user_key_hint'        => "Gebruik 'candy-git-server user key {username} <key-file|->' om een SSH-sleutel toe te voegen.",
     'cli.user_key_read_failed' => 'Kon sleutel niet lezen uit: {file}',

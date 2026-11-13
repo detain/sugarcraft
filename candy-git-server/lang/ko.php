@@ -25,16 +25,18 @@ return [
     'cli.initializing'         => 'CandyGitServer 데이터 디렉토리 초기화 중: {path}',
     'cli.done'                 => '완료.',
     'cli.next_steps'           => '다음 단계:',
-    'cli.next_step_1'          => '  1. 계정 생성: candy-git-server user add admin {path}',
+    'cli.next_step_1'          => '  1. 계정 생성: candy-git-server user add --admin admin {path}',
 
     'cli.next_step_2'          => '  2. 저장소 생성: candy-git-server repo create <이름> {path} (익명 공개 읽기는 --public 추가)',
 
     'cli.next_step_3'          => '  3. smart HTTP로 서비스: candy-git-server serve --http --repo-root {path}/repositories',
     'cli.usage_user_root'      => '사용법: candy-git-server user add|key|list|token',
-    'cli.usage_user_add'       => '사용법: candy-git-server user add <username> [data-path] [--password <pw>|-]',
+    'cli.usage_user_add'       => '사용법: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] HTTP 프록시 토큰 서명 발급',
     'cli.usage_user_key'       => '사용법: candy-git-server user key <username> [key-file]',
-    'cli.user_created'         => "사용자 '{username}' 생성됨 (admin: true)",
+    'cli.user_created'         => "사용자 '{username}' 생성됨 (admin: {admin})",
+    // S21: least-privilege `user add` flags (finding 036).
+    'cli.user_add_flags_conflict' => '--admin 및 --read는 동시에 사용할 수 없습니다.',
     'cli.user_password_stored' => '비밀번호가 해시로 저장되었습니다.',
     'cli.user_key_hint'        => "SSH 공개키를 추가하려면 'candy-git-server user key {username} <key-file|->'을 사용하세요.",
     'cli.user_key_read_failed' => '파일에서 키 읽기 실패: {file}',

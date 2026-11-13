@@ -25,16 +25,18 @@ return [
     'cli.initializing'         => 'Inicjowanie katalogu danych CandyGitServer: {path}',
     'cli.done'                 => 'Gotowe.',
     'cli.next_steps'           => 'Następne kroki:',
-    'cli.next_step_1'          => '  1. Utwórz konto: candy-git-server user add admin {path}',
+    'cli.next_step_1'          => '  1. Utwórz konto: candy-git-server user add --admin admin {path}',
 
     'cli.next_step_2'          => '  2. Utwórz repozytorium: candy-git-server repo create <nazwa> {path} (dodaj --public, aby udostępnić anonimowe odczyty)',
 
     'cli.next_step_3'          => '  3. Obsługuj przez smart HTTP: candy-git-server serve --http --repo-root {path}/repositories',
     'cli.usage_user_root'      => 'Użycie: candy-git-server user add|key|list|token',
-    'cli.usage_user_add'       => 'Użycie: candy-git-server user add <username> [data-path] [--password <pw>|-]',
+    'cli.usage_user_add'       => 'Użycie: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] wygeneruj podpis tokena proxy HTTP',
     'cli.usage_user_key'       => 'Użycie: candy-git-server user key <username> [key-file]',
-    'cli.user_created'         => "Użytkownik '{username}' utworzony (admin: true)",
+    'cli.user_created'         => "Użytkownik '{username}' utworzony (admin: {admin})",
+    // S21: least-privilege `user add` flags (finding 036).
+    'cli.user_add_flags_conflict' => '--admin i --read wykluczają się wzajemnie.',
     'cli.user_password_stored' => 'Hasło zapisano jako hash.',
     'cli.user_key_hint'        => "Użyj 'candy-git-server user key {username} <key-file|->', aby dodać klucz publiczny SSH.",
     'cli.user_key_read_failed' => 'Nie udało się odczytać klucza z: {file}',

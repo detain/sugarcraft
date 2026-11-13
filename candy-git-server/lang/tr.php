@@ -25,16 +25,18 @@ return [
     'cli.initializing'         => 'CandyGitServer veri dizini başlatılıyor: {path}',
     'cli.done'                 => 'Tamamlandı.',
     'cli.next_steps'           => 'Sonraki adımlar:',
-    'cli.next_step_1'          => '  1. Hesap oluştur: candy-git-server user add admin {path}',
+    'cli.next_step_1'          => '  1. Hesap oluştur: candy-git-server user add --admin admin {path}',
 
     'cli.next_step_2'          => '  2. Depo oluştur: candy-git-server repo create <ad> {path} (anonim okumaya açmak için --public ekle)',
 
     'cli.next_step_3'          => '  3. Smart HTTP ile sun: candy-git-server serve --http --repo-root {path}/repositories',
     'cli.usage_user_root'      => 'Kullanım: candy-git-server user add|key|list|token',
-    'cli.usage_user_add'       => 'Kullanım: candy-git-server user add <username> [data-path] [--password <pw>|-]',
+    'cli.usage_user_add'       => 'Kullanım: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] mint an HTTP proxy token signature',
     'cli.usage_user_key'       => 'Kullanım: candy-git-server user key <username> [key-file]',
-    'cli.user_created'         => "'{username}' kullanıcısı oluşturuldu (admin: true)",
+    'cli.user_created'         => "'{username}' kullanıcısı oluşturuldu (admin: {admin})",
+    // S21: least-privilege `user add` flags (finding 036).
+    'cli.user_add_flags_conflict' => '--admin ve --read birbiriyle çelişir.',
     'cli.user_password_stored' => 'Parola karma olarak saklandı.',
     'cli.user_key_hint'        => "SSH açık anahtarı eklemek için 'candy-git-server user key {username} <key-file|->' kullanın.",
     'cli.user_key_read_failed' => 'Anahtar okunamadı: {file}',

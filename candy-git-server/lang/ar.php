@@ -25,16 +25,18 @@ return [
     'cli.initializing'         => 'جاري تهيئة دليل بيانات CandyGitServer: {path}',
     'cli.done'                 => 'تم.',
     'cli.next_steps'           => 'الخطوات التالية:',
-    'cli.next_step_1'          => '  1. أنشئ حسابًا: candy-git-server user add admin {path}',
+    'cli.next_step_1'          => '  1. أنشئ حسابًا: candy-git-server user add --admin admin {path}',
 
     'cli.next_step_2'          => '  2. أنشئ مستودعًا: candy-git-server repo create <اسم> {path} (أضف --public للنشر للقراءة المجهولة)',
 
     'cli.next_step_3'          => '  3. قدّم عبر smart HTTP: candy-git-server serve --http --repo-root {path}/repositories',
     'cli.usage_user_root'      => 'الاستخدام: candy-git-server user add|key|list|token',
-    'cli.usage_user_add'       => 'الاستخدام: candy-git-server user add <username> [data-path] [--password <pw>|-]',
+    'cli.usage_user_add'       => 'الاستخدام: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] إنشاء توقيع رمز الوكيل HTTP',
     'cli.usage_user_key'       => 'الاستخدام: candy-git-server user key <username> [key-file]',
-    'cli.user_created'         => "تم إنشاء المستخدم '{username}' (admin: true)",
+    'cli.user_created'         => "تم إنشاء المستخدم '{username}' (admin: {admin})",
+    // S21: least-privilege `user add` flags (finding 036).
+    'cli.user_add_flags_conflict' => 'لا يمكن استخدام --admin و --read معًا.',
     'cli.user_password_stored' => 'تم حفظ كلمة المرور بصيغة تجزئة.',
     'cli.user_key_hint'        => "استخدم 'candy-git-server user key {username} <key-file|->' لإضافة مفتاح SSH العام.",
     'cli.user_key_read_failed' => 'فشل قراءة المفتاح من: {file}',

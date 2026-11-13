@@ -532,6 +532,13 @@ function cmdUserAdd(array $args): int
 
     $username = $args[0];
     $password = null;
+    // S21 least-privilege (finding 036): an account is NOT an admin by
+    // default. --admin raises the full-can global posture; --read states
+    // the default out loud (mutually exclusive with --admin). The old
+    // shape minted every CLI account as a global admin — the lib's
+    // weakest default posture, softened by explicit flags.
+    $admin = false;
+    $explicitRead = false;
     $positional = [];
     for ($i = 1; $i < \count($args); $i++) {
         if ($args[$i] === '--password') {
@@ -546,7 +553,18 @@ function cmdUserAdd(array $args): int
             $password = \substr($args[$i], \strlen('--password='));
             continue;
         }
+        if ($args[$i] === '--admin') {
+            $admin = true;
+            continue;
+        }
+        if ($args[$i] === '--read') {
+            $explicitRead = true;
+            continue;
+        }
         $positional[] = $args[$i];
+    }
+    if ($admin && $explicitRead) {
+        return error(Lang::t('cli.user_add_flags_conflict') . "\n");
     }
     if ($password === '-') {
         $raw = \stream_get_contents(\STDIN);
@@ -565,7 +583,7 @@ function cmdUserAdd(array $args): int
         if ($store->find($username) !== null) {
             return error(Lang::t('cli.user_exists', ['username' => $username, 'path' => $store->path()]) . "\n");
         }
-        $user = User::new($username)->withAdmin(true);
+        $user = User::new($username)->withAdmin($admin);
         if ($password !== null) {
             // Only the password_hash() digest is persisted; the plaintext
             // is used once and discarded (never reaches users.json).
@@ -577,7 +595,7 @@ function cmdUserAdd(array $args): int
         return error('candy-git-server: ' . $e->getMessage() . "\n");
     }
 
-    echo Lang::t('cli.user_created', ['username' => $username]) . "\n";
+    echo Lang::t('cli.user_created', ['username' => $username, 'admin' => $admin ? 'true' : 'false']) . "\n";
     echo Lang::t('cli.user_key_hint', ['username' => $username]) . "\n";
     if ($password !== null) {
         echo Lang::t('cli.user_password_stored') . "\n";

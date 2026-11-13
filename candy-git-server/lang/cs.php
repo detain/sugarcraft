@@ -25,16 +25,18 @@ return [
     'cli.initializing'         => 'Inicializace datového adresáře CandyGitServer: {path}',
     'cli.done'                 => 'Hotovo.',
     'cli.next_steps'           => 'Další kroky:',
-    'cli.next_step_1'          => '  1. Vytvořte účet: candy-git-server user add admin {path}',
+    'cli.next_step_1'          => '  1. Vytvořte účet: candy-git-server user add --admin admin {path}',
 
     'cli.next_step_2'          => '  2. Vytvořte repozitář: candy-git-server repo create <název> {path} (pro anonymní čtení přidejte --public)',
 
     'cli.next_step_3'          => '  3. Obsluhujte přes smart HTTP: candy-git-server serve --http --repo-root {path}/repositories',
     'cli.usage_user_root'      => 'Použití: candy-git-server user add|key|list|token',
-    'cli.usage_user_add'       => 'Použití: candy-git-server user add <username> [data-path] [--password <pw>|-]',
+    'cli.usage_user_add'       => 'Použití: candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] mint an HTTP proxy token signature',
     'cli.usage_user_key'       => 'Použití: candy-git-server user key <username> [key-file]',
-    'cli.user_created'         => "Uživatel '{username}' vytvořen (admin: true)",
+    'cli.user_created'         => "Uživatel '{username}' vytvořen (admin: {admin})",
+    // S21: least-privilege `user add` flags (finding 036).
+    'cli.user_add_flags_conflict' => '--admin a --read se vzájemně vylučují.',
     'cli.user_password_stored' => 'Heslo uloženo jako hash.',
     'cli.user_key_hint'        => "Pro přidání veřejného klíče SSH použijte 'candy-git-server user key {username} <key-file|->'.",
     'cli.user_key_read_failed' => 'Nelze číst klíč z: {file}',

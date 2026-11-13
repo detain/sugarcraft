@@ -25,16 +25,18 @@ return [
     'cli.initializing'         => '正在初始化 CandyGitServer 数据目录：{path}',
     'cli.done'                 => '完成。',
     'cli.next_steps'           => '下一步：',
-    'cli.next_step_1'          => '  1. 创建账户: candy-git-server user add admin {path}',
+    'cli.next_step_1'          => '  1. 创建账户: candy-git-server user add --admin admin {path}',
 
     'cli.next_step_2'          => '  2. 创建仓库: candy-git-server repo create <名称> {path} (加 --public 公开匿名读取)',
 
     'cli.next_step_3'          => '  3. 通过 smart HTTP 服务: candy-git-server serve --http --repo-root {path}/repositories',
     'cli.usage_user_root'      => '用法：candy-git-server user add|key|list|token',
-    'cli.usage_user_add'       => '用法：candy-git-server user add <username> [data-path] [--password <pw>|-]',
+    'cli.usage_user_add'       => '用法：candy-git-server user add <username> [data-path] [--password <pw>|-] [--admin|--read]',
     'cli.usage_user_token' => 'Usage: candy-git-server user token <username> [ttl-seconds] [data-path] mint an HTTP proxy token signature',
     'cli.usage_user_key'       => '用法：candy-git-server user key <username> [key-file]',
-    'cli.user_created'         => "用户 '{username}' 已创建（admin: true）",
+    'cli.user_created'         => "用户 '{username}' 已创建（admin: {admin}）",
+    // S21: least-privilege `user add` flags (finding 036).
+    'cli.user_add_flags_conflict' => '--admin 与 --read 互斥，不能同时使用。',
     'cli.user_password_stored' => '密码已作为哈希存储。',
     'cli.user_key_hint'        => "使用 'candy-git-server user key {username} <key-file|->' 添加 SSH 公钥。",
     'cli.user_key_read_failed' => '读取密钥失败：{file}',

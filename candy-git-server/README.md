@@ -259,10 +259,12 @@ the process and the shell sees 130/143). Anonymous reads
 are served only when `git.allow_anonymous_read: true` is configured
 (default off — fail-closed); unauthenticated requests for gated content
 answer 401 with a `WWW-Authenticate: Basic` challenge so git prompts for
-credentials. Push requires an account with write access — every account
-the CLI creates is an admin (`user add` sets `User::withAdmin(true)`; admin
-passes every check, so collaborator-only and `allowPush` scoping is not
-reachable through the CLI yet). Accounts and the anonymous-read lever are
+credentials. Push requires an account with write access — accounts the CLI
+creates are least-privilege by default: `user add` without flags mints a
+non-admin, `--admin` raises a global admin (passes every check) and
+`--read` states the default out loud (the two are mutually exclusive), so
+the collaborator-only and `allowPush` scoping rides the repo's persisted
+metadata for non-admin accounts. Accounts and the anonymous-read lever are
 taken from the config file: `--config F` makes the data path `dirname(F)`
 and `users.json` is read from there; without `--config` the default data
 path applies (`CANDY_GIT_SERVER_DATA_PATH`, else
@@ -613,10 +615,11 @@ everywhere, and the extension manifest. What remains open:
 7. **Locale coverage of CLI help copy** — the en strings are the reference
    and every key exists in all 16 locales, but a few translated help
    lines lag en wording changes.
-8. **Every CLI account is an admin.** `user add` mints `withAdmin(true)`
-   accounts only; non-admin (collaborator-scoped) account creation is
-   open work, so the per-repo collaborator/allowPush model is currently
-   reachable only by library callers persisting their own users.json.
+8. **Admin elevation is CLI-explicit; collaborator grants are not.**
+   `user add` creates least-privilege accounts by default — a global admin
+   only comes from `user add --admin`. The per-repo collaborator lists
+   behind non-admin access are still not CLI-manageable, so that scoping
+   remains library-caller work persisting repo metadata directly.
 
 ## Shared foundations
 
