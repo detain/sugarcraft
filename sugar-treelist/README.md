@@ -47,7 +47,10 @@ use SugarCraft\TreeList\Model;
 //
 // Fluent setters RETURN NEW Models — rebind (or chain); instances are
 // immutable as far as data goes — but view()/resetPreviousFrame() mutate
-// the delta-render row memo in place (see Delta rendering).
+// the delta-render row memo in place (see Delta rendering), and two no-op
+// doors skip even the clone: withoutFilter() with no filter installed, and
+// sort() with no lessFunc installed, return $this itself (identity, not a
+// fresh copy — see Filter state machine).
 $model = Model::tree()
     ->withWidth(80)
     ->withHeight(24)
@@ -263,6 +266,13 @@ Filter state transitions (the `unfiltered` from-state is the state once `without
 |------|----|---------|
 | `unfiltered` | `filtering` | `withFilterFn()` called (filter applied, items reduced) |
 | `filtering` | `unfiltered` | `withoutFilter()` called (original items restored) |
+
+Both halves of that law carry one exception to the rebind rule:
+`withoutFilter()` on a model that has **no filter installed** is an identity
+no-op — it returns `$this` itself, minting no clone — and `sort()` with **no
+`lessFunc` installed** likewise hands back `$this` (a silent no-ordering
+pass, not an error). Rebinding stays correct in every case; identity-aware
+callers just see the same object on those two no-op paths.
 
 The machine is deliberately two cases. Upstream (lipgloss bubbles) models a
 third `FilterApplied` state bridging "a predicate is installed" and "it has
