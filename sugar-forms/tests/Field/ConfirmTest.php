@@ -218,4 +218,35 @@ final class ConfirmTest extends TestCase
         $this->assertTrue($hidden->isHidden([]));
         $this->assertTrue($hidden->value());
     }
+
+    public function testPillLabelsResolveThroughLangAtViewTime(): void
+    {
+        // SF-34 (sugar-forms-040): new() no longer bakes 'Yes'/'No'.
+        $c = Confirm::new('q');
+        $this->assertSame('', $c->affirmative, 'affirmative unset at ctor');
+        $this->assertSame('', $c->negative, 'negative unset at ctor');
+        $this->assertStringContainsString(' Yes ', $c->view(), 'en fallback keeps the shipped pills');
+        $this->assertStringContainsString(' No ', $c->view());
+
+        $tmp = sys_get_temp_dir() . '/sf34-conf-' . uniqid();
+        @mkdir($tmp . '/forms-lang', 0777, true);
+        $dir = $tmp . '/forms-lang';
+        file_put_contents($dir . '/fr.php', "<?php\nreturn ['field.confirm_yes' => 'Oui', 'field.confirm_no' => 'Non'];\n");
+        $realDir = (new \ReflectionClass(\SugarCraft\Forms\Lang::class))->getConstant('DIR');
+        $oldLocale = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::overrideNamespace('forms', $dir);
+        \SugarCraft\Core\I18n\T::setLocale('fr');
+        try {
+            $this->assertStringContainsString(' Oui ', $c->view(), 'already-built field re-colors on locale switch');
+            $this->assertStringContainsString(' Non ', $c->view());
+            $hostSet = $c->withLabels('Go', 'Stop');
+            $this->assertStringContainsString(' Go ', $hostSet->view(), 'explicit labels win over the locale');
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($oldLocale);
+            \SugarCraft\Core\I18n\T::overrideNamespace('forms', $realDir);
+            @unlink($dir . '/fr.php');
+            @rmdir($dir);
+            @rmdir($tmp);
+        }
+    }
 }

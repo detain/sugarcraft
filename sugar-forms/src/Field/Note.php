@@ -7,6 +7,7 @@ namespace SugarCraft\Forms\Field;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Lang;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Forms\Field;
@@ -39,7 +40,12 @@ final class Note implements \SugarCraft\Forms\Field
         public readonly string $description = '',
         public readonly int $height = 0,
         public readonly bool $next = false,
-        public readonly string $nextLabel = 'Next',
+        // SF-34 (sugar-forms-041): '' is the unset sentinel — view()
+        // resolves the label through Lang, so a locale switch re-colors
+        // already-built notes; an explicit label (even '') keeps winning
+        // EXCEPT the empty one, which now means unset (disclosed; mirrors
+        // Confirm::new() and zero in-repo empty-label callers).
+        public readonly string $nextLabel = '',
         public readonly bool $focused = false,
     ) {}
 
@@ -129,7 +135,8 @@ final class Note implements \SugarCraft\Forms\Field
             // Clean at the DISPLAY site — an attacker-influenced button
             // label must not smuggle terminal-injection bytes into the
             // rendered output. SGR is preserved.
-            $parts[] = $marker . '[ ' . RenderSafe::clean($this->nextLabel) . ' ]';
+            $label = $this->nextLabel !== '' ? $this->nextLabel : Lang::t('field.next');
+            $parts[] = $marker . '[ ' . RenderSafe::clean($label) . ' ]';
         }
         $body = implode("\n", $parts);
         if ($this->height > 0) {

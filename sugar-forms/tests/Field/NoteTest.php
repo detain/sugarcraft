@@ -62,4 +62,43 @@ final class NoteTest extends TestCase
         $this->assertTrue($n->isFocused());
         $this->assertStringContainsString('> [ Next ]', $n->view());
     }
+
+    public function testNextLabelIsLangResolvedAtViewTimeNotCtorBaked(): void
+    {
+        // SF-34 (sugar-forms-041): the ctor no longer bakes 'Next' — the
+        // property carries the unset sentinel and view() resolves through
+        // Lang, so a locale switch re-colors ALREADY-BUILT notes.
+        $n = Note::new('intro')->withNext(true);
+        $this->assertSame('', $n->nextLabel, 'ctor must not bake the English default');
+        $this->assertStringContainsString('[ Next ]', $n->view(), 'en fallback keeps the shipped bytes');
+
+        $tmp = sys_get_temp_dir() . '/sf34-lang-' . uniqid();
+        @mkdir($tmp . '/forms-lang', 0777, true);
+        $dir = $tmp . '/forms-lang';
+        file_put_contents($dir . '/fr.php', "<?php\nreturn ['field.next' => 'Continuer'];\n");
+        $realDir = (new \ReflectionClass(\SugarCraft\Forms\Lang::class))->getConstant('DIR');
+        $oldLocale = \SugarCraft\Core\I18n\T::locale();
+        \SugarCraft\Core\I18n\T::overrideNamespace('forms', $dir);
+        \SugarCraft\Core\I18n\T::setLocale('fr');
+        try {
+            $this->assertStringContainsString('[ Continuer ]', $n->view(), 'post-construction locale switch flips the button');
+            $hostSet = $n->withNextLabel('Proceed ->');
+            $this->assertStringContainsString('[ Proceed -> ]', $hostSet->view(), 'explicit host labels keep winning');
+        } finally {
+            \SugarCraft\Core\I18n\T::setLocale($oldLocale);
+            \SugarCraft\Core\I18n\T::overrideNamespace('forms', $realDir);
+            @unlink($dir . '/fr.php');
+            @rmdir($dir);
+            @rmdir($tmp);
+        }
+    }
+
+    public function testExplicitEmptySentinelResolvesLikeDefault(): void
+    {
+        // Deliberate disclosure: '' has meant "unset" since SF-34 (new()
+        // stopped baking English), so an explicit empty label now resolves
+        // to the locale default instead of rendering a bare bracket.
+        $n = Note::new('intro')->withNext(true)->withNextLabel('');
+        $this->assertStringContainsString('[ Next ]', $n->view());
+    }
 }

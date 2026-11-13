@@ -7,6 +7,7 @@ namespace SugarCraft\Forms\Field;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Forms\HasThemeChrome;
+use SugarCraft\Forms\Lang;
 use SugarCraft\Forms\Theme;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
@@ -45,7 +46,12 @@ final class Confirm implements \SugarCraft\Forms\Field
 
     public static function new(string $key, bool $default = false): self
     {
-        return new self($key, $default, false, '', '', 'Yes', 'No');
+        // SF-34 (sugar-forms-040): no English baked at the ctor — '' is the
+        // unset sentinel and view() resolves through Lang, so a locale
+        // switch re-colors already-constructed fields. Disclosed choice:
+        // an explicit withLabels('', '') resolves like unset instead of
+        // painting an empty pill; zero in-repo callers pass empty labels.
+        return new self($key, $default, false, '', '', '', '');
     }
 
     public function withTitle(string $t): self       { return $this->mutate(title: $t); }
@@ -168,8 +174,10 @@ final class Confirm implements \SugarCraft\Forms\Field
         if ($title !== '') { $lines[] = $this->themedTitle($title, $theme) . $this->readonlyTitleSuffix(); }
         if ($desc  !== '') { $lines[] = RenderSafe::clean($desc); }
 
-        $yesPill = ' ' . RenderSafe::clean($this->affirmative) . ' ';
-        $noPill  = ' ' . RenderSafe::clean($this->negative) . ' ';
+        // SF-34 (sugar-forms-040): an unset pill name resolves through Lang
+        // at VIEW time (explicit host labels keep winning).
+        $yesPill = ' ' . RenderSafe::clean($this->affirmative !== '' ? $this->affirmative : Lang::t('field.confirm_yes')) . ' ';
+        $noPill  = ' ' . RenderSafe::clean($this->negative !== '' ? $this->negative : Lang::t('field.confirm_no')) . ' ';
         // SF-9 (sugar-forms-007): the chosen pill rides the theme cursor
         // slot (ansi() cursor is Style::reverse() — byte-identical to the
         // legacy hard-coded pair; other presets add their colour).
