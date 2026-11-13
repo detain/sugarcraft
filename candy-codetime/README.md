@@ -16,13 +16,18 @@
 
 ![candy-codetime dashboard TUI: seven-day window with project and language rankings and a daily timeline](.vhs/dashboard.gif)
 
-candy-codetime — a privacy-first coding-time tracker for PHP 8.3+. Storage is
-local by default: one append-only JSONL file per day, with an optional
-embedded-SQLite backend (`--backend=sqlite`) for milestone tracking and
-time-indexed range queries. Nothing leaves your machine — no cloud, no daemon,
-and no database
-*server* (SQLite is an in-process library reading a file you own). The
-dashboard is a SugarCraft TUI that reads whichever backend you selected.
+candy-codetime — a privacy-first coding-time tracker. Requires PHP 8.3+.
+
+It does not watch you. A **heartbeat** is one activity sample — *I was working
+on this file, in this language, for this many seconds* — and candy-codetime
+records only what it is explicitly told: a hand-typed `push`, a save hook, a
+cron entry, or an editor keybinding calling the CLI. No editor plugins ship;
+the binding is one command line. Storage is local by default: one append-only
+JSONL file per day, with an optional embedded-SQLite backend
+(`--backend=sqlite`) for milestone tracking and time-indexed range queries.
+Nothing leaves your machine — no cloud, no daemon, and no database *server*
+(SQLite is an in-process library reading a file you own). The dashboard is a
+SugarCraft TUI that reads whichever backend you selected.
 
 ## Install
 
@@ -30,6 +35,7 @@ dashboard is a SugarCraft TUI that reads whichever backend you selected.
 composer global require sugarcraft/candy-codetime
 # the global bin dir varies by composer version and platform; ask composer:
 BIN="$(composer global config bin-dir --absolute)"
+export PATH="$BIN:$PATH"   # keep this line in your shell profile
 "$BIN/candy-codetime" push myproj php src/Main.php 120
 ```
 
@@ -48,11 +54,22 @@ agree byte-wise on that stamp. `tools/build-phar.php` documents the build.
 
 ## Quick start
 
+You need PHP 8.3 or newer; the SQLite backend additionally needs the `sqlite3`
+extension, and the dashboard needs a terminal. The commands below assume the
+`export PATH` line from Install is in effect.
+
 ```bash
-candy-codetime push myproj php src/Main.php 120   # record one heartbeat
+candy-codetime push myproj php src/Main.php 120
+#                 │      │    │              └ seconds of work covered (optional; default 60)
+#                 │      │    └ the file you were working on
+#                 │      └ its language
+#                 └ project to report under
 candy-codetime                                    # open the dashboard
 candy-codetime export csv 30                      # headless dump of 30 days
 ```
+
+Project and language may be omitted when the file argument makes them
+inferable (see `push` below).
 
 `php examples/dashboard.php` seeds a throwaway data directory with a pretend
 week and opens the dashboard, so you can see the TUI before recording
