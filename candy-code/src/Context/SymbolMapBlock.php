@@ -45,6 +45,15 @@ use SugarCraft\Code\RepoMap\TagCache;
  *    each), gets no map at all.
  * Every failure degrades to the empty block; none reaches the turn.
  *
+ * A CHANGED TREE DOES NOT STALL THE TURN (S-O23, owner ruling G-07=B). Every
+ * finished map is also kept as the project's latest. When the tree's own key
+ * misses but a previous map exists, the session is served THAT map, marked
+ * {@see rebuilding()}, while {@see SymbolMapRebuilder} builds the fresh one in
+ * a detached process; the next session reads it as a cache hit and
+ * EngineBackend tells the user once. Where no background rebuild can start
+ * (no pcntl, an in-memory cache) or nothing previous exists (first ever
+ * capture), the build runs in-line as before.
+ *
  * TRUST. Each line under a path is source text quoted from the checkout —
  * repository bytes, like the instruction files. They pass through
  * {@see PromptFence::escape()}, this block's own fence is neutralised in them,
@@ -91,10 +100,14 @@ final readonly class SymbolMapBlock implements PromptSection
         . 'is quoted from that file and `⋮` marks elided lines. It is a starting point, not the code: Read a file before '
         . 'relying on a line, and call the RepoMap tool for a fresh map focused on the files you are working in.';
 
+    /** The cache key of the project's most recent finished map (body: JSON `{map, files}`). */
+    private const LATEST_KEY = 'symbol-map/latest/' . self::VERSION . '/' . self::MAX_TOKENS;
+
     private function __construct(
         private string $map,
         private int $files,
         private string $skipReason,
+        private bool $rebuilding = false,
     ) {
     }
 
@@ -137,12 +150,16 @@ final readonly class SymbolMapBlock implements PromptSection
      * {@see skipReason()} says why.
      *
      * @param ?string $cachePath the tag cache; null is the project's default under the home directory
+     * @param ?\Closure(string, string): bool $startRebuild starts the detached rebuild
+     *        for (root, cache path) and says whether one is running; false builds in-line.
+     *        Null is {@see SymbolMapRebuilder::start()}.
      */
     public static function capture(
         string $root,
         ?string $cachePath = null,
         ?CtagsSymbolExtractor $ctags = null,
         float $budgetSeconds = self::EXTRACTION_BUDGET_SECONDS,
+        ?\Closure $startRebuild = null,
     ): self {
         try {
             if (self::disabledBySettings()) {
@@ -154,11 +171,9 @@ final readonly class SymbolMapBlock implements PromptSection
                 return self::empty('no project directory');
             }
 
-            $builder = RepoMapBuilder::new(
-                $rootReal,
-                TagCache::open($cachePath ?? TagCache::defaultPath($rootReal) ?? ':memory:'),
-                $ctags,
-            );
+            $cachePath ??= TagCache::defaultPath($rootReal) ?? ':memory:';
+            $open = static fn (): RepoMapBuilder => RepoMapBuilder::new($rootReal, TagCache::open($cachePath), $ctags);
+            $builder = $open();
             $listing = $builder->codeFiles(self::MAX_FILES);
             if (!$listing['ok']) {
                 return self::empty('not a git checkout');
@@ -178,7 +193,24 @@ final readonly class SymbolMapBlock implements PromptSection
             $key = self::cacheKey($stamps);
             $cached = $builder->cache()->rendered($key);
             if ($cached !== null) {
+                self::keepAsLatest($builder->cache(), $cached, $count);
+
                 return new self($cached, $count, '');
+            }
+
+            $previous = self::latest($builder->cache());
+            if ($previous !== null) {
+                // The detached worker is a fork, and SQLite must not be carried
+                // across one with a connection open (its per-process lock
+                // bookkeeping then lies to the child's own connection, which
+                // loses its writes): drop ours first, reopen if the worker
+                // could not start and the build runs in-line.
+                $builder = null;
+                \gc_collect_cycles();
+                if (($startRebuild ?? SymbolMapRebuilder::start(...))($rootReal, $cachePath)) {
+                    return new self($previous['map'], $previous['files'], '', true);
+                }
+                $builder = $open();
             }
 
             $deadline = hrtime(true) + (int) (max(0.0, $budgetSeconds) * 1e9);
@@ -192,6 +224,7 @@ final readonly class SymbolMapBlock implements PromptSection
                 return self::empty('nothing to map');
             }
             $builder->cache()->storeRendered($key, $map);
+            self::keepAsLatest($builder->cache(), $map, $count);
 
             return new self($map, $count, '');
         } catch (\Throwable $e) {
@@ -218,6 +251,15 @@ final readonly class SymbolMapBlock implements PromptSection
     public function files(): int
     {
         return $this->files;
+    }
+
+    /**
+     * Whether this block is the PREVIOUS map standing in while a fresh one
+     * builds in the background (S-O23): the tree changed since it was made.
+     */
+    public function rebuilding(): bool
+    {
+        return $this->rebuilding;
     }
 
     /** Why the capture produced no map, or '' when it did (or was never tried). */
@@ -251,6 +293,30 @@ final readonly class SymbolMapBlock implements PromptSection
         return self::FENCE . "\n" . self::PREAMBLE . "\n\n"
             . self::escapeOwnFence(PromptFence::escape(trim($this->map, "\n")))
             . "\n</symbol-map>";
+    }
+
+    /** @return array{map: string, files: int}|null the project's last finished map */
+    private static function latest(TagCache $cache): ?array
+    {
+        $raw = $cache->rendered(self::LATEST_KEY);
+        if ($raw === null) {
+            return null;
+        }
+        $row = json_decode($raw, true);
+        if (!\is_array($row) || !\is_string($row['map'] ?? null) || $row['map'] === '' || !\is_int($row['files'] ?? null)) {
+            return null;
+        }
+
+        return ['map' => $row['map'], 'files' => $row['files']];
+    }
+
+    private static function keepAsLatest(TagCache $cache, string $map, int $files): void
+    {
+        $latest = self::latest($cache);
+        if ($latest !== null && $latest['map'] === $map && $latest['files'] === $files) {
+            return;
+        }
+        $cache->storeRendered(self::LATEST_KEY, (string) json_encode(['map' => $map, 'files' => $files], \JSON_INVALID_UTF8_SUBSTITUTE));
     }
 
     /** @param array<string, array{0: int, 1: int, 2: string}> $stamps */

@@ -445,6 +445,15 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
     private static array $unreapedChildren = [];
 
     /**
+     * Session ids the "symbol map is rebuilding" notice (S-O23) was already
+     * shown for. Static, like the reap list: the backend is rebuilt by
+     * clone-with-named-args and a per-instance flag would not survive it.
+     *
+     * @var array<string, true>
+     */
+    private static array $symbolMapNoticed = [];
+
+    /**
      * @param array<int, \SugarCraft\Code\Tools\Tool>   $tools
      * @param array<int, \SugarCraft\Code\Skills\Skill> $skills
      */
@@ -4268,7 +4277,16 @@ final class EngineBackend implements Backend, ReportsContextWindow, ReportsPromp
         // `CANDY_CODE_DISABLE_SYMBOL_MAP` turns it off.
         if (!\SugarCraft\Code\Context\SymbolMapBlock::disabledByEnvironment()) {
             try {
-                $this->newRuntime(new HookManager(new HookRegistry()))->primeSymbolMap($this->sessionApp());
+                $symbolMap = $this->newRuntime(new HookManager(new HookRegistry()))->primeSymbolMap($this->sessionApp());
+                // S-O23 (G-07=B): the previous map stands in while a fresh one
+                // builds in the background. Said once per session, here in the
+                // parent where the notice sink lives; the standing map is
+                // memo-held, so every later turn returns the same block.
+                if ($symbolMap->rebuilding() && !isset(self::$symbolMapNoticed[$this->sessionApp()->sessionId])) {
+                    self::$symbolMapNoticed = \array_slice(self::$symbolMapNoticed, -63, null, true);
+                    self::$symbolMapNoticed[$this->sessionApp()->sessionId] = true;
+                    \SugarCraft\Code\Diagnostics\RuntimeNoticeSink::warn(Lang::t('chat.symbol_map.rebuilding'));
+                }
             } catch (\Throwable) {
                 // No map this turn; the child assembles without the slot.
             }

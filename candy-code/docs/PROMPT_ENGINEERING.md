@@ -43,7 +43,11 @@ static `<env>` block last. Counted from the live method, there are thirteen slot
    5.5-5), unfocused and capped at 1,024 tokens. PerSession and byte-stable: `EngineBackend` captures
    it once per session in the parent before a turn's fork (`Runtime::primeSymbolMap()`) and the
    session memo holds it until a refresh point; a session with no capture assembles no slot at all,
-   so every other prompt build is unchanged.
+   so every other prompt build is unchanged. A changed tree does not stall that first turn: when the
+   project's cache holds a previous map, the session keeps THAT map (still byte-stable for the whole
+   session) while a detached worker (`SymbolMapRebuilder`) builds the fresh one, the next session reads
+   it as a cache hit, and the transcript says so once (`chat.symbol_map.rebuilding`). Without a previous
+   map, or where no worker can start, the build runs in-line as before.
 6. **User-tier rules** — each enabled rule from `RuleLoader::load()` whose tier is `user` gets its
    own fence, `user-rules`, with the operator-authority preamble — except a `paths:`-scoped rule,
    which is delivered at tool time instead (see the trigger bullets below). The user and project

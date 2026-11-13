@@ -13,6 +13,7 @@ use SugarCraft\Code\Context\PromptSection;
 use SugarCraft\Code\Context\SessionPromptMemo;
 use SugarCraft\Code\Context\Stability;
 use SugarCraft\Code\Context\SymbolMapBlock;
+use SugarCraft\Code\Context\SymbolMapRebuilder;
 use SugarCraft\Code\Hooks\HookManager;
 use SugarCraft\Code\Hooks\HookRegistry;
 use SugarCraft\Code\Message;
@@ -86,7 +87,89 @@ final class SymbolMapBlockTest extends TestCase
         // An edit is a different tree: the map is rebuilt.
         file_put_contents($this->dir . '/repo/src/Extra.php', "<?php\nfinal class Extra { public function go(): void { new Ledger(); } }\n");
         $this->git('add', '-A');
-        self::assertSame(4, SymbolMapBlock::capture($this->dir . '/repo', $this->cache())->files());
+        self::assertSame(4, SymbolMapBlock::capture($this->dir . '/repo', $this->cache(), null, SymbolMapBlock::EXTRACTION_BUDGET_SECONDS, static fn (): bool => false)->files());
+    }
+
+    public function testAChangedTreeServesThePreviousMapAndStartsABackgroundRebuild(): void
+    {
+        $this->checkout();
+        $first = SymbolMapBlock::capture($this->dir . '/repo', $this->cache(), null, 4.0, static fn (): bool => self::fail('the first-ever capture has no previous map to stand in'));
+        self::assertFalse($first->rebuilding());
+
+        $this->addExtra();
+        $calls = [];
+        $stood = SymbolMapBlock::capture($this->dir . '/repo', $this->cache(), null, 4.0, static function (string $root, string $cache) use (&$calls): bool {
+            $calls[] = [$root, $cache];
+
+            return true;
+        });
+
+        self::assertTrue($stood->rebuilding());
+        self::assertSame($first->map(), $stood->map(), 'the previous map stands in byte for byte');
+        self::assertSame(3, $stood->files());
+        self::assertSame([[realpath($this->dir . '/repo'), $this->cache()]], $calls);
+    }
+
+    public function testARefusedBackgroundRebuildFallsBackToBuildingInLine(): void
+    {
+        $this->checkout();
+        SymbolMapBlock::capture($this->dir . '/repo', $this->cache(), null, 4.0, static fn (): bool => false);
+        $this->addExtra();
+
+        $built = SymbolMapBlock::capture($this->dir . '/repo', $this->cache(), null, 4.0, static fn (): bool => false);
+
+        self::assertFalse($built->rebuilding());
+        self::assertSame(4, $built->files());
+    }
+
+    public function testTheRebuildWorkerStoresTheFreshMapSoTheNextSessionHitsIt(): void
+    {
+        $this->checkout();
+        SymbolMapBlock::capture($this->dir . '/repo', $this->cache(), null, 4.0, static fn (): bool => false);
+        $this->addExtra();
+
+        self::assertSame(0, SymbolMapRebuilder::run((string) realpath($this->dir . '/repo'), $this->cache()));
+
+        $next = SymbolMapBlock::capture($this->dir . '/repo', $this->cache(), null, 4.0, static fn (): bool => self::fail('a stored map is a plain cache hit'));
+        self::assertFalse($next->rebuilding());
+        self::assertSame(4, $next->files());
+    }
+
+    public function testASecondWorkerLeavesWhileTheMutexIsHeld(): void
+    {
+        $this->checkout();
+        $this->addExtra();
+        @mkdir(\dirname($this->cache()), 0700, true);
+        $held = fopen(SymbolMapRebuilder::lockPath($this->cache()), 'c');
+        self::assertIsResource($held);
+        self::assertTrue(flock($held, \LOCK_EX | \LOCK_NB));
+
+        self::assertSame(0, SymbolMapRebuilder::run((string) realpath($this->dir . '/repo'), $this->cache()));
+        self::assertFileDoesNotExist($this->cache(), 'the worker that lost the mutex built nothing');
+        self::assertTrue(SymbolMapRebuilder::start((string) realpath($this->dir . '/repo'), $this->cache()), 'an in-flight rebuild counts as started');
+        fclose($held);
+    }
+
+    public function testTheDetachedWorkerFinishesWhileTheSessionKeepsThePreviousMap(): void
+    {
+        if (!SymbolMapRebuilder::available()) {
+            self::markTestSkipped('ext-pcntl/posix unavailable');
+        }
+        $this->checkout();
+        SymbolMapBlock::capture($this->dir . '/repo', $this->cache(), null, 4.0, static fn (): bool => false);
+        $this->addExtra();
+
+        $standing = SymbolMapBlock::capture($this->dir . '/repo', $this->cache());
+        self::assertTrue($standing->rebuilding(), 'default wiring starts the detached rebuild');
+
+        $deadline = microtime(true) + 60.0;
+        do {
+            usleep(100_000);
+            $now = SymbolMapBlock::capture($this->dir . '/repo', $this->cache(), null, 4.0, static fn (): bool => true);
+        } while ($now->rebuilding() && microtime(true) < $deadline);
+
+        self::assertFalse($now->rebuilding(), 'the detached worker stored the fresh map');
+        self::assertSame(4, $now->files());
     }
 
     public function testATokenizingBudgetThatRunsOutGivesNoMapAndKeepsTheWork(): void
@@ -188,6 +271,12 @@ final class SymbolMapBlockTest extends TestCase
         file_put_contents($this->dir . '/repo/src/Shop.php', "<?php\nfinal class Shop\n{\n    public function buy(): void { (new Ledger())->post(1); }\n}\n");
         file_put_contents($this->dir . '/repo/src/Till.php', "<?php\nfinal class Till\n{\n    public function ring(): void { (new Ledger())->post(2); }\n}\n");
         $this->git('init', '-q');
+        $this->git('add', '-A');
+    }
+
+    private function addExtra(): void
+    {
+        file_put_contents($this->dir . '/repo/src/Extra.php', "<?php\nfinal class Extra { public function go(): void { new Ledger(); } }\n");
         $this->git('add', '-A');
     }
 
