@@ -105,8 +105,10 @@ final class PumpOptions
     /**
      * Called on each idle tick (stream_select returned 0). Use for
      * keepalive, polling, or any periodic housekeeping. Distinct from
-     * {@see onSigwinch} which carries real terminal-dimension values
-     * and is driven by the consumer's {@see SignalForwarder} callback.
+     * {@see onSigwinch}: the resize signal itself is consumed by the
+     * consumer's {@see SignalForwarder}, and onSigwinch only reports
+     * the resulting size change observed on this same tick — it is a
+     * polled observer riding the idle loop, never a signal hook.
      *
      * @var (\Closure(): void)|null
      */
@@ -274,6 +276,13 @@ final class PumpOptions
     /**
      * Attach (or detach) a tee target for stdin / output / resize events.
      * Returns a new {@see PumpOptions} — never mutates `$this`.
+     *
+     * CAVEAT mirrored from the README ("Recording sessions"): the
+     * recorder in the example below, `SugarCraft\Vcr\Recorder`, lives
+     * in **sugarcraft/candy-vcr**, a DEV-ONLY dependency of this
+     * package — apps copying the pattern must
+     * `composer require sugarcraft/candy-vcr` first. The interface
+     * type here, `SugarCraft\Core\Recorder`, ships with sugar-core.
      *
      * Consumers chain it like:
      * `new PumpOptions()->withRecorder(\SugarCraft\Vcr\Recorder::open(...))`.

@@ -202,7 +202,10 @@ Inside, a single `stream_select()` loop watches:
 - master → host STDOUT (forward output to the user),
 - a timeout that fires the optional `onIdle` callback
   (`PumpOptions`; `keepalive` is its legacy alias). `onSigwinch` is
-  *not* timeout-driven — it fires when terminal dimensions change; see
+  *not* timeout-driven or signal-driven of its own: the consumer's
+  `SignalForwarder` applies resizes, and the pump merely observes the
+  resulting size change on an idle tick (polled; never fires on a
+  0×0-opened session; not delivered by `MultiPump`'s sync path). See
   the README "Pump callbacks" table,
 - the child's `exited()` probe.
 
