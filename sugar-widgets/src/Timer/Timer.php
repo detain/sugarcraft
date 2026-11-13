@@ -46,13 +46,29 @@ final class Timer implements Model
 
     public static function new(float $duration, float $interval = 1.0): self
     {
-        if ($duration < 0.0) {
+        self::checkDuration($duration);
+        self::checkInterval($interval);
+        return new self($duration, $interval, false, false);
+    }
+
+    /**
+     * One validation ladder for the duration door and the reset() door
+     * (sugar-spring's precedent: non-finite throws at ingress). NaN used
+     * to pass `$duration < 0.0`, so a NaN timer ran forever and never
+     * fired; INF meant the same silent-forever contract (M8).
+     */
+    private static function checkDuration(float $v): void
+    {
+        if (!is_finite($v) || $v < 0.0) {
             throw new \InvalidArgumentException(Lang::t('timer.duration_nonneg'));
         }
-        if ($interval <= 0.0) {
+    }
+
+    private static function checkInterval(float $v): void
+    {
+        if (!is_finite($v) || $v <= 0.0) {
             throw new \InvalidArgumentException(Lang::t('timer.interval_positive'));
         }
-        return new self($duration, $interval, false, false);
     }
 
     public function init(): ?\Closure
@@ -112,6 +128,7 @@ final class Timer implements Model
     public function reset(?float $duration = null): self
     {
         $d = $duration ?? $this->remaining;
+        self::checkDuration($d);
         return new self($d, $this->interval, false, false, $this->id, $this->epoch);
     }
 
@@ -158,9 +175,7 @@ final class Timer implements Model
      */
     public function withInterval(float $interval): self
     {
-        if ($interval <= 0.0) {
-            throw new \InvalidArgumentException(Lang::t('timer.interval_positive'));
-        }
+        self::checkInterval($interval);
         return new self($this->remaining, $interval, $this->running, $this->timedOut, $this->id, $this->epoch);
     }
 
@@ -171,10 +186,16 @@ final class Timer implements Model
         return Cmd::tick($this->interval, static fn(): Msg => new TickMsg($id, $epoch));
     }
 
-    /** Format seconds as "H:MM:SS" / "M:SS" / "0:SS" depending on magnitude. */
+    /**
+     * Format seconds as "H:MM:SS" / "M:SS" / "0:SS" depending on magnitude.
+     * Non-finite input and negative durations render the sane zero state
+     * ('0:00'), matching the NaN-clamps-to-empty posture the percent ladder
+     * holds — a public static, so it is QA-visible surface (M63; the
+     * consistent '-0:05' spelling stays the gated alternative).
+     */
     public static function format(float $seconds): string
     {
-        $total = (int) round($seconds);
+        $total = (int) round(is_finite($seconds) ? max(0.0, $seconds) : 0.0);
         $h = intdiv($total, 3600);
         $m = intdiv($total % 3600, 60);
         $s = $total % 60;

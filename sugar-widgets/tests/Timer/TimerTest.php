@@ -193,4 +193,54 @@ final class TimerTest extends TestCase
         $t = Timer::new(5.0);
         $this->assertSame('0:05', $t->view());
     }
+
+    // ─── finite guards + reset validation + negative format (008/063) ──
+
+    public function testNonFiniteDurationThrowsAtNew(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Timer::new(NAN);
+    }
+
+    public function testInfiniteDurationThrowsAtNew(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Timer::new(INF);
+    }
+
+    public function testNonFiniteIntervalThrowsAtNew(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Timer::new(5.0, NAN);
+    }
+
+    public function testNonFiniteIntervalThrowsAtWithInterval(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Timer::new(5.0)->withInterval(INF);
+    }
+
+    public function testResetValidatesTheSameDoorAsTheFactory(): void
+    {
+        $t = Timer::new(5.0);
+        $this->expectException(\InvalidArgumentException::class);
+        $t->reset(NAN);
+    }
+
+    public function testResetRejectsNegativeDuration(): void
+    {
+        $t = Timer::new(5.0);
+        $this->expectException(\InvalidArgumentException::class);
+        $t->reset(-1.0);
+    }
+
+    public function testFormatRendersSaneZeroForNegativeAndNonFinite(): void
+    {
+        $this->assertSame('0:00', Timer::format(-5.0));
+        $this->assertSame('0:00', Timer::format(-0.4));
+        $this->assertSame('0:00', Timer::format(NAN));
+        $this->assertSame('0:00', Timer::format(INF));
+        $this->assertSame('0:05', Timer::format(5.0), 'positive rendering unchanged');
+        $this->assertSame('1:02:03', Timer::format(3723.0));
+    }
 }

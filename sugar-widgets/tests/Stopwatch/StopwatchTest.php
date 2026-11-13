@@ -168,4 +168,16 @@ final class StopwatchTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         Stopwatch::new(-1.0);
     }
+
+    public function testNonFiniteIntervalThrowsAtBothDoors(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Stopwatch::new(INF);
+    }
+
+    public function testNonFiniteIntervalThrowsAtWithInterval(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Stopwatch::new(1.0)->withInterval(NAN);
+    }
 }
