@@ -168,7 +168,7 @@ final class CliLoopWatchTest extends TestCase
         };
 
         $armed = null;
-        [$exit] = $this->cli(['--watch', $path], function (Player $p) use ($stat): int {
+        [$exit] = $this->cli(['--watch', $path], function (Player $p): int {
             // Token never moves: the probe must report no change, keeping the
             // Player instance and re-arming the next poll tick.
             [$same, $cmd] = $p->update(new WatchMsg());
@@ -206,7 +206,7 @@ final class CliLoopWatchTest extends TestCase
         // black frames, and the reload must land on the looped gradient.
         $swapped = $this->withLoopBlock($this->gradientGifBytes(), 1);
 
-        [$exit, , $err] = $this->cli(['--watch', $path], function (Player $p) use ($path, $stat, $swapped): int {
+        [$exit, , $err] = $this->cli(['--watch', $path], function (Player $p) use ($path, $swapped): int {
             $before = $p;
             file_put_contents($path, $swapped);
             [$next, $cmd] = $p->update(new WatchMsg());
@@ -237,7 +237,7 @@ final class CliLoopWatchTest extends TestCase
             return array_shift($tokens) ?? ['dev' => 1, 'ino' => 8, 'size' => 100, 'mtime_ns' => 2000];
         };
 
-        [$exit] = $this->cli(['--watch', $path], function (Player $p) use ($path, $stat): int {
+        [$exit] = $this->cli(['--watch', $path], function (Player $p) use ($path): int {
             file_put_contents($path, 'not a gif at all');
             [$same, $cmd] = $p->update(new WatchMsg());
             self::assertSame($p, $same, 'half-written file keeps the stale frames (chicle guard shape)');
