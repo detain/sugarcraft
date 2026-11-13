@@ -578,6 +578,105 @@ final class DatePickerStyleTest extends TestCase
             'the last day of May must stay visible at the capped width');
     }
 
+    /**
+     * dp-08: the accept set is an enumerated truth (SUPPORTED_SGR) joined to
+     * the decoder by this matrix — every member admits through a setter AND
+     * decodes to a live style, every outsider is refused loudly with the
+     * code named. Literals are spelled independently of the const on purpose:
+     * dropping a member from SUPPORTED_SGR without dropping the decoder arm
+     * (or the other way round) reddens a row here.
+     *
+     * @return array<string, array{0: string, 1: string}> code => kind
+     */
+    public static function supportedSgrProvider(): array
+    {
+        $cases = [];
+        foreach ([1, 2, 3, 4, 5, 6, 7, 9] as $n) {
+            $cases['attr ' . $n] = [(string) $n, 'attr'];
+        }
+        foreach ([...range(30, 37), ...range(90, 97)] as $n) {
+            $cases['fg ' . $n] = [(string) $n, 'fg'];
+        }
+        foreach ([...range(40, 47), ...range(100, 107)] as $n) {
+            $cases['bg ' . $n] = [(string) $n, 'bg'];
+        }
+
+        return $cases;
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('supportedSgrProvider')]
+    public function testEverySupportedSgrRoundTrips(string $code, string $kind): void
+    {
+        // The setter admits it...
+        $picker = $this->dp->withHeaderStyle($code);
+        $this->assertNotSame($this->dp, $picker);
+
+        // ...and the decoder gives it a live style: attributes flip attrs,
+        // colours land on the right channel only.
+        $style = $this->invokeSgrToBufferStyle($code);
+        $this->assertNotNull($style, $code . ' is in the accept set but decodes to nothing');
+        match ($kind) {
+            'fg' => $this->assertNotNull($style->fg()),
+            'bg' => $this->assertNotNull($style->bg()),
+            default => $this->assertTrue(
+                $style->attrs() !== 0,
+                $code . ' must set at least one attribute bit',
+            ),
+        };
+    }
+
+    /**
+     * Refused set: nothing here has a decoder arm, so nothing may be
+     * silently accepted. `58;5;9` and the 38/48 families mis-decoded before
+     * dp-08; the off-codes were no-op lies.
+     */
+    public static function refusedSgrProvider(): array
+    {
+        $codes = [
+            '0', '8', '21', '22', '23', '24', '25', '26', '27', '28', '29',
+            '38', '39', '48', '49', '53', '58', '60', '70', '80', '89',
+            '98', '99', '108', '109', '110', '255', '999',
+        ];
+        $cases = [];
+        foreach ($codes as $c) {
+            $cases['refuse ' . $c] = [$c];
+        }
+        foreach (['1;39', '58;5;9', '38;5;226', '48;2;1;2;3', '100;108'] as $combo) {
+            $cases['refuse ' . $combo] = [$combo];
+        }
+
+        return $cases;
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('refusedSgrProvider')]
+    public function testUndecodableSgrIsRefusedLoudlyNamingTheCode(string $code): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('no decoder arm');
+
+        try {
+            $this->dp->withHeaderStyle($code);
+        } catch (\InvalidArgumentException $e) {
+            // The message names the offending code and quotes the full input,
+            // so every part is disclosed for a host to fix.
+            foreach (explode(';', $code) as $part) {
+                $this->assertStringContainsString($part, $e->getMessage());
+            }
+
+            throw $e;
+        }
+    }
+
+    public function testBrightBackgroundDecodesOnBgChannel(): void
+    {
+        // 100-107 mirror 90-97 on the background channel (the buffer carries
+        // bright-bg colours; dp-08 shipped the arm rather than refuse them).
+        $style = $this->invokeSgrToBufferStyle('104');
+        $this->assertNotNull($style);
+        $this->assertNotNull($style->bg());
+        $this->assertNull($style->fg());
+    }
+
     private function invokeGraphemeWidth(string $g): int
     {
         $ref = new \ReflectionClass($this->dp);

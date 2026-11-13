@@ -52,6 +52,20 @@ final class DatePicker
     private const SGR_MAX_LEN = 32;
 
     /**
+     * The SGR accept set — single source of truth for what {@see assertSgr()}
+     * admits, enumerated exactly as {@see sgrToBufferStyle()} decodes: no code
+     * may live in one without the other (the style test matrix pins every
+     * member round-trips and every outsider is refused).
+     */
+    private const SUPPORTED_SGR = [
+        1, 2, 3, 4, 5, 6, 7, 9,                // attributes (8=hidden has no arm)
+        30, 31, 32, 33, 34, 35, 36, 37,      // standard foregrounds
+        40, 41, 42, 43, 44, 45, 46, 47,      // standard backgrounds
+        90, 91, 92, 93, 94, 95, 96, 97,      // bright foregrounds
+        100, 101, 102, 103, 104, 105, 106, 107, // bright backgrounds
+    ];
+
+    /**
      * Lower month-position bound of the calendar itself: January 0001
      * (position encoding is year*12 + month-1). The library represents no
      * dates below year 1 — the view floors there so grid dates stay valid
@@ -987,14 +1001,16 @@ final class DatePicker
      * Validate an SGR code string — must be empty, or digit groups joined by
      * single semicolons (e.g. "1;31", "7", ""). Dangling or empty parameter
      * shapes (";", "1;", "1;;2") are refused: sgrToBufferStyle() explodes on
-     * ';' and would silently mis-parse them. The extended-colour introducers
-     * 38 and 48 are refused too: sgrToBufferStyle() has no way to consume the
-     * trailing colour parameters, so "38;5;226" would drop 38 and 226 and
-     * leave the bare 5 to be misread as ATTR_BLINK — accepting then
-     * mis-decoding is worse than a loud refusal. Throws if a full escape
-     * sequence is passed, which would mangle that parsing. The offending
-     * input is control-byte-escaped in the message so a forged ESC can never
-     * reach the terminal through the error path.
+     * ';' and would silently mis-parse them. Every numeric code must be a
+     * member of {@see self::SUPPORTED_SGR} — the accept set and the decoder
+     * are one enumerated truth, and the widget's standing principle applies:
+     * accepting a code that then gets silently dropped or mis-decoded (the
+     * old `58;5;9` → blink+strike read, the `39` "reset" that suppressed a
+     * marker) is worse than a loud refusal. Off-codes (`0`, `21`-`29`, …) are
+     * refused for the same reason: a no-op setter is a misleading setter.
+     * Throws if a full escape sequence is passed, which would mangle that
+     * parsing. The offending input is control-byte-escaped in the message so
+     * a forged ESC can never reach the terminal through the error path.
      *
      * @throws \InvalidArgumentException
      */
@@ -1021,10 +1037,11 @@ final class DatePicker
         }
 
         foreach (\explode(';', $s) as $code) {
-            $n = (int) $code;
-            if ($n === 38 || $n === 48) {
+            if (!\in_array((int) $code, self::SUPPORTED_SGR, true)) {
                 throw new \InvalidArgumentException(
-                    'SGR extended-colour codes 38/48 are not supported, got: ' . $quoted
+                    'SGR code ' . $quoted . ' contains ' . $code
+                    . ', which has no decoder arm; only attributes 1-7, 9, foregrounds 30-37/90-97'
+                    . ' and backgrounds 40-47/100-107 are supported'
                 );
             }
         }
@@ -1094,13 +1111,16 @@ final class DatePicker
         $codes = \explode(';', $sgr);
         foreach ($codes as $code) {
             $code = (int) $code;
-            // Basic colors: 30-37 foreground, 40-47 background, 90-97 bright fg
+            // Colors mirror SUPPORTED_SGR: 30-37/90-97 foregrounds,
+            // 40-47/100-107 backgrounds (bright arms share ansiColorToRgb)
             if ($code >= 30 && $code <= 37) {
                 $fg = $this->ansiColorToRgb($code - 30, false);
             } elseif ($code >= 40 && $code <= 47) {
                 $bg = $this->ansiColorToRgb($code - 40, false);
             } elseif ($code >= 90 && $code <= 97) {
                 $fg = $this->ansiColorToRgb($code - 90, true);
+            } elseif ($code >= 100 && $code <= 107) {
+                $bg = $this->ansiColorToRgb($code - 100, true);
             } elseif ($code === 1) {
                 $attrs |= Style::ATTR_BOLD;
             } elseif ($code === 2) {

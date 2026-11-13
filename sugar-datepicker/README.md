@@ -204,14 +204,16 @@ re-passing it.
 ## Styling
 
 Seven style setters accept bare SGR digit strings (e.g. `'7'`, `'1;31'`,
-`'4;35'`) up to `SGR_MAX_LEN` (32 characters); escape sequences, dangling
-delimiters and the extended-color introducers `38`/`48` are rejected with an
-`InvalidArgumentException`. Note the introducer `58` (underline-color) is NOT
-rejected — it decodes as unrelated attributes, so avoid it. Only part of the
-SGR space decodes: attributes `1,2,3,4,5,6,7,9` and colors `30-37`/`40-47`/
-`90-97`; other well-formed codes (`0`, `21`-`29`, `39`, `49`, `53`) are
-silently dropped, so `withTodayStyle('39')` suppresses the today marker rather
-than resetting its style:
+`'4;35'`) up to `SGR_MAX_LEN` (32 characters). The accept set and the decoder
+are one enumerated truth (`SUPPORTED_SGR`): attributes `1`-`7` and `9`,
+foregrounds `30`-`37`/`90`-`97`, backgrounds `40`-`47`/`100`-`107`. Anything
+else — escape sequences, dangling delimiters, the extended-color introducers
+`38`/`48` and `58`, the reset/off codes (`0`, `21`-`29`, `39`, `49`, `53`),
+`8` (hidden) and out-of-table numbers — is refused loudly with the offending
+code named, because a setter that silently dropped the code (or mis-read
+`58;5;9` as blink+strike) would be a style lie. Blink `5`/`6` is accepted but
+discouraged — prefer `1`/`4`/`7`; hosts with a reduced-motion lint should
+avoid it:
 
 ```php
 $picker = $picker
