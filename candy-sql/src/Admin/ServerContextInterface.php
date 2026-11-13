@@ -10,7 +10,7 @@ namespace SugarCraft\Sql\Admin;
  * Caches server variables, status variables with timestamps, plugin list,
  * and parsed version/flavor information. Read by all admin pages.
  *
- * @see Mirrors charmbracelet/lazysql ServerContext
+ * @see Mirrors jorgerojas26/lazysql ServerContext
  */
 interface ServerContextInterface
 {

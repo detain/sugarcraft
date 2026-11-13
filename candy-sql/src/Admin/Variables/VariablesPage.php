@@ -39,7 +39,7 @@ use SugarCraft\Sql\CellValue;
  *   [e]       - edit selected variable (dynamic vars only)
  *   [q]       - quit to previous view
  *
- * @see Mirrors charmbracelet/lazysql VariablesPage
+ * @see Mirrors jorgerojas26/lazysql VariablesPage
  */
 final class VariablesPage extends PageBase implements RowNavigable
 {

@@ -16,7 +16,7 @@ namespace SugarCraft\Sql\Db;
  * Parses version strings from MySQL, MariaDB, PostgreSQL, and SQLite,
  * handling the MariaDB "5.5.5-" pseudo-version prefix used for compatibility.
  *
- * @see Mirrors charmbracelet/lazysql version detection
+ * @see Mirrors jorgerojas26/lazysql version detection
  */
 final readonly class Version
 {

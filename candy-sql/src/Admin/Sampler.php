@@ -14,7 +14,7 @@ use SugarCraft\Sql\Db\SamplerInterface;
  * consumed from StatusSnapshotProviderInterface::wasReset() (which
  * delegates to ServerContext::wasReset()).
  *
- * @see Mirrors charmbracelet/lazysql Sampler
+ * @see Mirrors jorgerojas26/lazysql Sampler
  */
 final class Sampler implements SamplerInterface
 {

@@ -16,7 +16,7 @@ use SugarCraft\Sql\Db\ReconnectManagerInterface;
  * 2003 (Can't connect to MySQL server), and 2013 (Lost connection
  * during query). Attempts reconnection and lets caller retry.
  *
- * @see Mirrors charmbracelet/lazysql reconnect logic
+ * @see Mirrors jorgerojas26/lazysql reconnect logic
  */
 final class ReconnectManager implements ReconnectManagerInterface
 {

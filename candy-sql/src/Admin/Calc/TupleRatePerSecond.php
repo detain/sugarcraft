@@ -10,7 +10,7 @@ namespace SugarCraft\Sql\Admin\Calc;
  * Some status variables store comma-separated key:value pairs. This class
  * computes rates for individual tuple components using precompiled closures.
  *
- * @see Mirrors charmbracelet/lazysql TupleRatePerSecond
+ * @see Mirrors jorgerojas26/lazysql TupleRatePerSecond
  */
 final class TupleRatePerSecond
 {

@@ -10,7 +10,7 @@ namespace SugarCraft\Sql\Db;
  * Abstracts the database operations so App can work with any
  * DatabaseInterface implementation (SQLite, MySQL, Postgres, or test fakes).
  *
- * @see Mirrors charmbracelet/lazysql Database interface
+ * @see Mirrors jorgerojas26/lazysql Database interface
  */
 interface DatabaseInterface
 {

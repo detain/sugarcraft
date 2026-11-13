@@ -17,7 +17,7 @@ use SugarCraft\Sql\CellValue;
  * errorScreen() is shown. Otherwise, build() renders the page.
  * refresh() is called on periodic updates.
  *
- * @see Mirrors charmbracelet/lazysql AdminPage
+ * @see Mirrors jorgerojas26/lazysql AdminPage
  */
 abstract class PageBase implements Model
 {

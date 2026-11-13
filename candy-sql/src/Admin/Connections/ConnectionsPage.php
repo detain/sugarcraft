@@ -25,7 +25,7 @@ use SugarCraft\Table\{Column, Row, RowData, Table};
  * Id, User, Host, DB, Command, Time, State, Info. Provides detail tabs
  * for selected threads.
  *
- * @see Mirrors charmbracelet/lazysql connections page
+ * @see Mirrors jorgerojas26/lazysql connections page
  */
 final class ConnectionsPage extends PageBase implements RowNavigable
 {

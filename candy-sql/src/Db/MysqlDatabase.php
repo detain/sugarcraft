@@ -7,7 +7,7 @@ namespace SugarCraft\Sql\Db;
 /**
  * MySQL implementation of DatabaseInterface using PDO.
  *
- * Mirrors charmbracelet/lazysql MySQL backend
+ * Mirrors jorgerojas26/lazysql MySQL backend
  */
 final class MysqlDatabase implements DatabaseInterface
 {

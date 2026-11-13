@@ -9,7 +9,7 @@ use SugarCraft\Sql\Lang;
 /**
  * SQLite implementation of DatabaseInterface.
  *
- * Mirrors charmbracelet/lazysql SQLite backend
+ * Mirrors jorgerojas26/lazysql SQLite backend
  */
 final class SqliteDatabase implements DatabaseInterface
 {

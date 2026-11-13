@@ -14,7 +14,7 @@ use SugarCraft\Sql\Db\DatabaseInterface;
  * as killing those can destabilize the server. Prepared statement IDs are
  * used to prevent SQL injection.
  *
- * @see Mirrors charmbracelet/lazysql connection actions
+ * @see Mirrors jorgerojas26/lazysql connection actions
  */
 final class ConnectionActions
 {

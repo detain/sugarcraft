@@ -15,7 +15,7 @@ use SugarCraft\Sql\CellValue;
  * queries. Background detection uses threads.TYPE (FOREGROUND/BACKGROUND)
  * rather than the NULL/empty user heuristic.
  *
- * @see Mirrors charmbracelet/lazysql processlist row
+ * @see Mirrors jorgerojas26/lazysql processlist row
  */
 final class ProcesslistResult
 {

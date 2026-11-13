@@ -7,7 +7,7 @@ namespace SugarCraft\Sql\Db;
 /**
  * PostgreSQL implementation of DatabaseInterface using PDO.
  *
- * Mirrors charmbracelet/lazysql PostgreSQL backend
+ * Mirrors jorgerojas26/lazysql PostgreSQL backend
  */
 final class PostgresDatabase implements DatabaseInterface
 {

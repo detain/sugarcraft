@@ -12,7 +12,7 @@ use SugarCraft\Sql\Admin\StatusSnapshot;
  * Reads Threads_*, Connections, Aborted_*, Connection_errors_* variables
  * and computes derived ratios (e.g. connection usage ratio).
  *
- * @see Mirrors charmbracelet/lazysql connection counters
+ * @see Mirrors jorgerojas26/lazysql connection counters
  */
 final class ConnectionCounters
 {

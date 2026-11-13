@@ -10,7 +10,7 @@ namespace SugarCraft\Sql\Admin\Connections;
  * Controls visibility of sleeping/background threads, info column loading,
  * and auto-refresh interval.
  *
- * @see Mirrors charmbracelet/lazysql connection filters
+ * @see Mirrors jorgerojas26/lazysql connection filters
  */
 final class ConnectionFilters
 {

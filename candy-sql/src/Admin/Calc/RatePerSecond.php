@@ -10,7 +10,7 @@ namespace SugarCraft\Sql\Admin\Calc;
  * Uses precompiled closures to avoid eval. Deltas are computed as
  * newValue - oldValue, clamped to zero if negative (counter wrap).
  *
- * @see Mirrors charmbracelet/lazysql RatePerSecond
+ * @see Mirrors jorgerojas26/lazysql RatePerSecond
  */
 final class RatePerSecond
 {

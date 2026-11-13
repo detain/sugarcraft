@@ -45,7 +45,7 @@ use SugarCraft\Sql\Db\Version;
  * full connection timeout. E646 bans blanket timeouts on our side, so this
  * is a disclosed property, not an oversight.
  *
- * @see Mirrors charmbracelet/lazysql ServerContext
+ * @see Mirrors jorgerojas26/lazysql ServerContext
  */
 final class ServerContext implements ServerContextInterface
 {

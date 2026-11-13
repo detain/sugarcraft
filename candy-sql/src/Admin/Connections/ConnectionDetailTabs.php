@@ -13,7 +13,7 @@ use SugarCraft\Sql\Admin\ServerContextInterface;
  * Attributes: session_connect_attrs join to get client info
  * MDL: metadata lock info from information_schema or performance_schema
  *
- * @see Mirrors charmbracelet/lazysql connection detail tabs
+ * @see Mirrors jorgerojas26/lazysql connection detail tabs
  */
 final class ConnectionDetailTabs
 {

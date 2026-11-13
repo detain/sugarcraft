@@ -19,7 +19,7 @@ use SugarCraft\Sql\Db\Identifier;
  * safety of server- and user-sourced text is the renderer's contract, not
  * this one - see CellValue::sanitize at the paint choke.
  * Produces RFC-4180 compliant CSV with formula-injection protection.
- * Mirrors charmbracelet/lazysql CSV export logic.
+ * Mirrors jorgerojas26/lazysql CSV export logic.
  */
 final class CsvExporter
 {

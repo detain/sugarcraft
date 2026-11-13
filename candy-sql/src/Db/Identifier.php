@@ -30,7 +30,7 @@ namespace SugarCraft\Sql\Db;
  * The double-quote arms have no backslash channel (PG standard_conforming_strings
  * on; SQLite literals are quote-doubling only) so they keep plain doubling.
  *
- * Mirrors charmbracelet/lazysql identifier quoting logic.
+ * Mirrors jorgerojas26/lazysql identifier quoting logic.
  */
 final class Identifier
 {

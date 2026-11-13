@@ -14,7 +14,7 @@ namespace SugarCraft\Sql\Admin;
  *   - Handles both "mysql:host=..." (prefixed) and "host=..." (bare) DSNs.
  *   - Returns null when the key is absent rather than returning an empty string.
  *
- * @see Mirrors charmbracelet/lazysql DsnParser
+ * @see Mirrors jorgerojas26/lazysql DsnParser
  */
 final class DsnParser
 {

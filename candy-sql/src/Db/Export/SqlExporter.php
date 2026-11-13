@@ -13,7 +13,7 @@ use SugarCraft\Sql\Db\Identifier;
  *
  * Dumps all tables as INSERT statements.
  * Driver-agnostic, safe SQL (no eval, no password logging).
- * Mirrors charmbracelet/lazysql SQL dump logic.
+ * Mirrors jorgerojas26/lazysql SQL dump logic.
  *
  * Note: CREATE TABLE generation is omitted because obtaining the full
  * CREATE statement in a driver-neutral way is not feasible. The INSERT

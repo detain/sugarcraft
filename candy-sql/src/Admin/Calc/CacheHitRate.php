@@ -10,7 +10,7 @@ namespace SugarCraft\Sql\Admin\Calc;
  * Used for PostgreSQL buffer cache metrics where we want to show
  * the hit ratio rather than raw counter values.
  *
- * @see Mirrors charmbracelet/lazysql cache hit rate calculation
+ * @see Mirrors jorgerojas26/lazysql cache hit rate calculation
  */
 final class CacheHitRate
 {

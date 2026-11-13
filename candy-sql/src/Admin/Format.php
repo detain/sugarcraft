@@ -14,7 +14,7 @@ use SugarCraft\Core\Util\Format as CoreFormat;
  * class is retained as the established candy-sql entry point; prefer
  * `SugarCraft\Core\Util\Format` directly in new code.
  *
- * @see Mirrors charmbracelet/lazysql Format utilities
+ * @see Mirrors jorgerojas26/lazysql Format utilities
  */
 final class Format
 {
