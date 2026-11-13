@@ -89,9 +89,8 @@ final class Column
     }
 
     /**
-     * Alias of withFlexibleWidth() under the upstream flex-width name, so
-     * ports from Go read 1:1. Mirrors Evertras/bubble-table.NewFlexColumn's
-     * flexFactor / the upstream FlexWidth naming.
+     * Alias of withFlexibleWidth() under the Go flex-width name, so ports
+     * read 1:1. Mirrors Evertras/bubble-table.NewFlexColumn's flexFactor.
      *
      * Like its primary, this sets the flex WEIGHT only — the column must
      * still declare `ColumnWidth::Flex` (or `Dynamic`) via withWidthMode();

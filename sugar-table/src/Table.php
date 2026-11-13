@@ -891,9 +891,11 @@ final class Table
     }
 
     /**
-     * Expand affordance analogue of Evertras/bubble-table's WithRowExpanded
-     * family (identity check of a row object against the expanded set;
-     * upstream has no per-row predicate method to mirror).
+     * Expand affordance for a row — a sugar-table extension: upstream has
+     * no row-expansion concept at all (PARITY-grepped against bubble-table
+     * main, v1.19 and v1.17; the upstream family citation this docblock
+     * once carried was phantom). Identity check of a row object against
+     * the expanded set.
      *
      * @param Row $row The row object to check (identity-based, not index-based)
      * @return bool True if the row is currently expanded
