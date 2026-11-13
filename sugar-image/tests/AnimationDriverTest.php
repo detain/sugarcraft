@@ -11,6 +11,7 @@ use SugarCraft\Image\FrameTickMsg;
 use SugarCraft\Image\ImageSource;
 use SugarCraft\Image\Renderer\HalfBlockRenderer;
 use SugarCraft\Image\Renderer\KittyRenderer;
+use SugarCraft\Image\Renderer\Renderer;
 
 /**
  * Tests for AnimationDriver — verifies the render+delete cycle with a
@@ -165,6 +166,57 @@ final class AnimationDriverTest extends TestCase
         $init = $driver->init();
         $this->assertNotNull($init);
         $this->assertSame(0.1, $init()->seconds);
+    }
+
+    public function testViewPaysTheEncodeSynchronouslyOnTheCallerThread(): void
+    {
+        // sugar-image-104 doc truth. MIN_TICK_MS floors the GAP between
+        // ticks; it does not make the encode cheap, and view() runs it
+        // inline. A deliberately slow renderer measures the pin directly:
+        // if this ever completes without spending the simulated encode
+        // cost, the driver gained a non-blocking path — and the class
+        // docblock's paced-not-non-blocking claim (and this test) must be
+        // updated together, not silently.
+        $slow = new class implements Renderer {
+            public function render(ImageSource $image, int $width, ?int $height = null): string
+            {
+                \usleep(60_000);
+                return 'SLOW-FRAME';
+            }
+
+            public function name(): string
+            {
+                return 'slow';
+            }
+
+            public function supportsAlpha(): bool
+            {
+                return false;
+            }
+
+            public function isInline(): bool
+            {
+                return false;
+            }
+
+            public function delete(string $imageId): string
+            {
+                return '';
+            }
+        };
+
+        $driver = new AnimationDriver($this->animation, $slow, 4, 2);
+
+        $start  = \microtime(true);
+        $bytes  = $driver->view();
+        $tookMs = (int) round((\microtime(true) - $start) * 1000);
+
+        $this->assertStringContainsString('SLOW-FRAME', $bytes);
+        $this->assertGreaterThanOrEqual(
+            55,
+            $tookMs,
+            'view() must run the encode on the caller thread — the class docblock promises paced, synchronous frames',
+        );
     }
 
     public function testUpdateIgnoresUnknownMessage(): void

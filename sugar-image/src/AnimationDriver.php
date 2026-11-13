@@ -17,7 +17,16 @@ use SugarCraft\Image\Renderer\Renderer;
  *
  * Frame timing uses {@see Cmd::tick()}; per-frame redraw uses the
  * {@see Renderer::delete()} API, emitted in the
- * order that renderer family's delete semantics allow.
+ * order that renderer family's delete semantics allow. The timing is
+ * PACED, not non-blocking: MIN_TICK_MS floors the gap between ticks, but
+ * {@see self::view()} runs the frame's delete+encode inline on the calling
+ * (loop) thread, so on a slow backend the encode cost adds to every
+ * frame's wall time and pins the loop between frames rather than being
+ * hidden behind the tick. A loop-sensitive application that cannot afford
+ * that per-frame cost should route the animation through the async seam —
+ * {@see PacedAsyncRenderer} (slice-budgeted, yield-per-slice) or
+ * {@see AdaptiveImage::precompute()} (encode once, replay bytes) — instead
+ * of driving this Model from the loop.
  *
  * Delete-before-redraw left a per-frame empty-cell window (visible
  * flicker). The fix is per family, because the one delete() contract has
