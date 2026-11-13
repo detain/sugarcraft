@@ -35,6 +35,8 @@ $program = new Program(
         colorProfile: $profile,
         // flappy-09: tap-to-flap, mirroring the bin (minesweeper CellMotion).
         mouseMode: $profile !== ColorProfile::NoTty ? MouseMode::CellMotion : MouseMode::Off,
+        // flappy-20: blur freezes the world, focus resumes it debt-free.
+        reportFocus: true,
     ),
 );
 $final = $program->run();

@@ -203,6 +203,9 @@ $program = new Program(
         // is unplayable on touch terminals (Termux, ttyd). minesweeper
         // precedent: CellMotion press-only, gated off for a refusal frame.
         mouseMode: $profile !== ColorProfile::NoTty ? MouseMode::CellMotion : MouseMode::Off,
+        // flappy-20 (finding -022): DECSET 1004 on — the terminal reports
+        // focus, the model freezes the world while the window is away.
+        reportFocus: true,
     ),
 );
 $final = $program->run();

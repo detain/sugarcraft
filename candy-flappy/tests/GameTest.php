@@ -7,7 +7,9 @@ namespace SugarCraft\Flappy\Tests;
 use SugarCraft\Core\BatchMsg;
 use SugarCraft\Core\InputReader;
 use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\BlurMsg;
 use SugarCraft\Core\Msg\ColorProfileMsg;
+use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
@@ -266,6 +268,7 @@ final class GameTest extends TestCase
                 'highScores' => $board->highScores,
                 'newRecord' => $board->newRecord,
                 'started' => $board->started,
+                'blurred' => $board->blurred,
                 'frameCols' => $board->frameCols,
                 'frameRows' => $board->frameRows,
                 'colorProfile' => $board->colorProfile,
@@ -308,6 +311,14 @@ final class GameTest extends TestCase
         $this->assertSame([3, 9, 12], $merged->highScores);
         $this->assertTrue($merged->newRecord);
         $inherited($merged, ['highScores']);
+
+        // flappy-20: the blur flag must thread through mutate() too — a
+        // true value has to survive a resize, or alt-tab + resize silently
+        // unfreezes the board without a FocusGainedMsg.
+        [$blurred, ] = $board->update(new BlurMsg());
+        $this->assertTrue($blurred->blurred);
+        [$resizeBlurred, ] = $blurred->update(new WindowSizeMsg(90, 30));
+        $this->assertTrue($resizeBlurred->blurred, 'mutate() dropped blurred');
     }
 
     /**
@@ -819,6 +830,47 @@ final class GameTest extends TestCase
         [$small, ] = $g->update(new WindowSizeMsg(40, 10));
         [$tapSmall, ] = $small->update($click);
         $this->assertFalse($tapSmall->started, 'a tap behind the notice must not start the run');
+    }
+
+    /**
+     * flappy-20 (finding -022): blur freezes the world — the subscription
+     * stands down, in-race ticks are ignored, repeat blurs are a no-op —
+     * and focus resumes exactly where the bird hung, with NO catch-up
+     * (one tick advances one step, never a debt of missed frames).
+     */
+    public function testBlurFreezesTheWorldAndFocusResumesItDebtFree(): void
+    {
+        $g = Game::start(static fn(int $_max): int => 0, $this->hermeticConfigDir());
+        [$g, ] = $g->update(new KeyMsg(KeyType::Space, ''));
+        $g = $g->tickN(3);
+        $this->assertNotNull($g->subscriptions());
+
+        [$blurred, ] = $g->update(new BlurMsg());
+        $this->assertTrue($blurred->blurred);
+        $this->assertNull($blurred->subscriptions(), 'a blurred board arms nothing');
+
+        // A double blur is state-noise: identity is kept.
+        [$again, ] = $blurred->update(new BlurMsg());
+        $this->assertSame($blurred, $again);
+
+        // A tick that raced in before the reconcile is dropped unstepped.
+        [$held, $cmd] = $blurred->update(new TickMsg());
+        $this->assertSame($blurred, $held);
+        $this->assertNull($cmd);
+
+        // Focus returns: frozen point preserved, exactly one chain armed,
+        // and one tick = one step (no debt replay of the blur window).
+        [$resumed, ] = $blurred->update(new FocusGainedMsg());
+        $this->assertFalse($resumed->blurred);
+        $subs = $resumed->subscriptions();
+        $this->assertNotNull($subs);
+        $this->assertSame(['game-tick'], array_map(static fn($s): string => $s->id, $subs->all()));
+        [$stepped, ] = $resumed->update(new TickMsg());
+        $this->assertSame($resumed->tickIndex + 1, $stepped->tickIndex, 'resume must not replay time');
+
+        // A spurious focus report on an unblurred board changes nothing.
+        [$same, ] = $g->update(new FocusGainedMsg());
+        $this->assertSame($g, $same);
     }
 
     public function testRestartWhileAliveEmitsNoFreshTimerChain(): void

@@ -8,7 +8,9 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\BlurMsg;
 use SugarCraft\Core\Msg\ColorProfileMsg;
+use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
@@ -123,6 +125,15 @@ final class Game implements Model
         public readonly bool $newRecord = false,
         /** False until the first flap (M10 ready phase). */
         public readonly bool $started = false,
+        /**
+         * flappy-20 (finding -022): the terminal window lost focus (DECSET
+         * 1004 BlurMsg). A 30 fps gravity game dies in about a second of
+         * alt-tab, so a blurred board freezes: subscriptions stand down and
+         * ticks arriving in the race window are ignored. FocusGainedMsg
+         * unfreezes with no tick debt — the world resumes exactly where it
+         * stopped, it does not replay the time away.
+         */
+        public readonly bool $blurred = false,
         ?\Closure $rand = null,
         ?string $configDir = null,
         /** Live viewport (M6): seeded at MIN, replaced by WindowSizeMsg. */
@@ -311,6 +322,7 @@ final class Game implements Model
             highScores: $changes['highScores'] ?? $this->highScores,
             newRecord: $changes['newRecord'] ?? $this->newRecord,
             started: $changes['started'] ?? $this->started,
+            blurred: $changes['blurred'] ?? $this->blurred,
             // The live PRNG cell rides the lineage (tetris re-attaches its
             // stream the same way): a mutation must never re-roll the dice.
             rand: $this->rand,
@@ -408,6 +420,21 @@ final class Game implements Model
         // this is a tap, never drag noise — minesweeper precedent. Same
         // posture law as the keyboard flap: a dead board or a notice screen
         // swallows the press, anywhere else the first click starts the run.
+        // flappy-20 (finding -022): the focus pair, plain state — blur
+        // freezes (subscriptions stand down, in-flight ticks are dropped),
+        // focus resumes with no catch-up and no debt.
+        if ($msg instanceof BlurMsg) {
+            if ($this->blurred === true) {
+                return [$this, null];
+            }
+            return [$this->mutate(['blurred' => true]), null];
+        }
+        if ($msg instanceof FocusGainedMsg) {
+            if ($this->blurred === false) {
+                return [$this, null];
+            }
+            return [$this->mutate(['blurred' => false]), null];
+        }
         if ($msg instanceof MouseClickMsg) {
             if ($this->crashed === true || $this->tooSmall() === true) {
                 return [$this, null];
@@ -507,6 +534,11 @@ final class Game implements Model
         }
         if ($msg instanceof TickMsg) {
             if ($this->crashed) {
+                return [$this, null];
+            }
+            // flappy-20: a tick that raced in before Program's reconcile
+            // cancelled the chain must not step a frozen (blurred) board.
+            if ($this->blurred === true) {
                 return [$this, null];
             }
             if ($this->started === false) {
@@ -684,7 +716,8 @@ final class Game implements Model
         // pin — with no subscription there is no source a TickMsg could ever
         // arrive from pre-start.
         if ($this->crashed === true || $this->tooSmall() === true
-            || $this->colorProfile === ColorProfile::NoTty || $this->started === false) {
+            || $this->colorProfile === ColorProfile::NoTty || $this->started === false
+            || $this->blurred === true) {
             return null;
         }
         return self::$liveSubscriptions ??= (new Subscriptions())->withTick(
