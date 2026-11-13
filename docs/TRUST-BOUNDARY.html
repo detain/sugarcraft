@@ -133,7 +133,7 @@
 
 <h1><a id="trust-boundary--the-fleet-security-contract" href="#trust-boundary--the-fleet-security-contract" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>Trust boundary — the fleet security contract</h1>
 <p>Every SugarCraft library that renders, spawns, or consumes data lives
-against the same handful of trust rules. This page is the single
+by the same handful of trust rules. This page is the single
 discoverable home for them: per-lib docblocks implement them, tests
 pin them, and a finding that violates one of them is a security
 finding, not a style nit. Report violations via
@@ -157,29 +157,29 @@ OSC 8 targets).</p>
 <tbody>
 <tr>
 <td>Plain text into cells, titles, labels</td>
-<td><code>Sanitize::untrusted()</code> (:239)</td>
+<td><code>Sanitize::untrusted()</code></td>
 <td>Strips ANSI (<code>Ansi::strip</code>) and removes C0 controls except TAB/LF/CR, DEL, and the UTF-8-encoded C1 range — byte-wise, so malformed UTF-8 cannot smuggle a survivor past a <code>/u</code> pattern (fail-closed).</td>
 </tr>
 <tr>
 <td>Text into a user-facing display where bidi/zero-width tricks matter</td>
-<td><code>Sanitize::untrustedForDisplay()</code> (:314)</td>
+<td><code>Sanitize::untrustedForDisplay()</code></td>
 <td>The above, plus CR/CRLF→LF mapping, plus <code>markInvisibleFormatting()</code> — invisible directional/zero-width codepoints are replaced by visible <code>&lt;U+202E&gt;</code>-style notations instead of being silently eaten.</td>
 </tr>
 <tr>
 <td>Text into a frame that already carries zone markers or image markers</td>
-<td><code>Sanitize::untrustedForMarkedFrames()</code> (:682)</td>
+<td><code>Sanitize::untrustedForMarkedFrames()</code></td>
 <td><code>untrusted()</code> plus a surgical sweep of the two zone sentinels only (§2), preserving legitimate marker traffic.</td>
 </tr>
 <tr>
 <td>Raw paste / keyboard input from a terminal</td>
-<td><code>untrustedForMarkedFrames()</code></td>
+<td><code>Sanitize::untrustedForMarkedFrames()</code></td>
 <td>InputReader's paste path uses it: a pasted blob is attacker-authored <em>and</em> frame-marked by the time it lands.</td>
 </tr>
 </tbody>
 </table>
 <p><code>untrusted()</code> deliberately passes the Private Use Area through — the
 PUA is our marker arena (§2), not foreign traffic. Cell-level shaping
-(<code>cellValue()</code> :171, <code>controlChars()</code> :148, <code>visibleControls()</code> :554)
+(<code>cellValue()</code>, <code>controlChars()</code>, <code>visibleControls()</code>)
 are separate documented tools; do not confuse them with the untrusted
 gate.</p>
 <p>Dated accepted residual (2026-11, sugar-markdown-068): OSC-8 link
@@ -193,25 +193,24 @@ would silently discard links hosts are built on. Per-lib posture: the
 <code>sugar-markdown</code> README, &quot;Link safety&quot;.</p>
 <h2><a id="2-the-ue000uf8ff-arena" href="#2-the-ue000uf8ff-arena" class="heading-permalink" aria-hidden="true" tabindex="-1" title="Permalink">#</a>2. The U+E000–U+F8FF arena</h2>
 <p>SugarCraft reserves the entire BMP Private Use Area
-(<code>PUA_BMP_FIRST</code> U+E000 … <code>PUA_BMP_LAST</code> U+F8FF, Sanitize.php :74/:77)
+(constants <code>PUA_BMP_FIRST</code> U+E000 … <code>PUA_BMP_LAST</code> U+F8FF in <code>Sanitize.php</code>)
 as its internal marker space:</p>
 <ul>
-<li><strong>Zone sentinels U+E000 / U+E001</strong> (<code>ZONE_SENTINEL_OPEN/CLOSE</code>,
-:80/:83): <code>sugar-mouse</code> <code>Mark::zone()</code> / <code>Scan</code> wrap clickable
+<li><strong>Zone sentinels U+E000 / U+E001</strong> (<code>Sanitize::ZONE_SENTINEL_OPEN/CLOSE</code>): <code>sugar-mouse</code> <code>Mark::zone()</code> / <code>Scan</code> wrap clickable
 overlay zones in these zero-width cells. Because they are PUA
-codepoints they pass through <code>untrusted()</code> — which is exactly why
-<code>stripZoneSentinels()</code> (:641, surgical <code>str_replace</code> of the two
+codepoints, they pass through <code>untrusted()</code> — which is exactly why
+<code>Sanitize::stripZoneSentinels()</code> (a surgical <code>str_replace</code> of the two
 sentinels only) exists and why untrusted text must be swept with
 <code>untrustedForMarkedFrames()</code> before it can enter a marked frame:
 forged sentinels could otherwise hijack a zone.</li>
-<li><strong>Image markers from U+E002 upward</strong> (<code>ImageOverlay::MARKER_BASE = 0xE002</code> (:62), <code>MAX_IMAGES = 6398</code> (:89), topping the arena at
+<li><strong>Image markers from U+E002 upward</strong> (<code>ImageOverlay::MARKER_BASE = 0xE002</code>, <code>MAX_IMAGES = 6398</code>, topping the arena at
 exactly U+F8FF — the class lives at <code>sugar-core/src/ImageOverlay.php</code>
 and consumers such as <code>sugar-gallery</code>'s <code>PosterCard</code> emit its
 markers): the marker range and the
 sentinel range are <strong>disjoint by construction</strong>. Nerd Font / icon
 glyphs live outside the reserved band.</li>
-<li><code>stripPrivateUse()</code> (:660) removes the whole BMP PUA via the
-byte-wise pattern at :96 — the safe direction is over-match, and a
+<li><code>Sanitize::stripPrivateUse()</code> removes the whole BMP PUA via its
+byte-wise pattern — the safe direction is over-match, and a
 <code>/u</code> pattern would silently match nothing on malformed input, so it
 is not used.</li>
 </ul>
@@ -246,9 +245,10 @@ documentation and isolation</strong>, not pretending config is data:</p>
 code execution at startup. <code>candy-code</code> mitigates by <em>not</em> handing
 the stdio child its inherited credentials —
 <code>candy-code/src/MCP/McpClient.php</code> strips credential-shaped environment
-variables in <code>resolveEnv()</code> (:1734), collects them in
-<code>recordStrippedSecretEnv()</code> (:891), and answers the accessor and
-one-sentence launch notice at :501/:522; a server that needs a
+variables in <code>resolveEnv()</code>, collects them in
+<code>recordStrippedSecretEnv()</code>, and answers them through the
+<code>strippedSecretEnv()</code> accessor and its one-sentence
+<code>strippedSecretEnvNotice()</code>; a server that needs a
 secret declares <code>${VAR}</code> in its <code>env</code> block (or is named in
 <code>secretEnvAllowlist</code>).</p>
 </li>
