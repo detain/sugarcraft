@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Timer on a real event loop — the Subscriptions::withTick → TickMsg →
+ * Timer on a real event loop — the Subscriptions::withTick → TimerTick →
  * update() → [model, Cmd] chain end to end.
  *
  *   q                 quit
@@ -13,7 +13,7 @@ declare(strict_types=1);
  * This is the counterpart to examples/timer.php (which only formats
  * durations): here the arming seam documented in the README's message
  * cheat-sheet is made concrete. The host arms one periodic tick
- * subscription that produces the exact Timer\TickMsg the component
+ * subscription that produces the exact Timer\TimerTick the component
  * matches — id and epoch taken from the started timer so the msg passes
  * the generation guard — and the countdown renders every second until
  * the TimeoutMsg fires. The timer's own one-shot reschedule Cmd is
@@ -30,7 +30,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\Subscriptions;
-use SugarCraft\Widgets\Timer\TickMsg;
+use SugarCraft\Widgets\Timer\TimerTick;
 use SugarCraft\Widgets\Timer\Timer;
 
 // Start the timer once up-front and keep its armed model state; the
@@ -53,12 +53,12 @@ $model = new class($started) implements Model {
         if (!$this->timer->isRunning()) {
             return null;
         }
-        // The host arms the loop: produce the exact TickMsg this Timer
+        // The host arms the loop: produce the exact TimerTick this Timer
         // instance matches (its id, its current generation epoch).
         $id = $this->timer->id;
         $epoch = $this->timer->epoch;
         return (new Subscriptions())
-            ->withTick('timer-loop', $this->timer->interval(), static fn (): Msg => new TickMsg($id, $epoch));
+            ->withTick('timer-loop', $this->timer->interval(), static fn (): Msg => new TimerTick($id, $epoch));
     }
 
     /**

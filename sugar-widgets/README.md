@@ -64,8 +64,8 @@ The counted inventory lives once, in the intro at the top of this file.
 | `Spinner\Spinner` | Animated loading glyph — 12 built-in styles _(deprecated alias — re-exported from `SugarCraft\Forms\Spinner` in `sugarcraft/sugar-forms`)_ | `Spinner\TickMsg` |
 | `Progress\Progress` | Static progress bar (gradient fill optional, `withColors(...)` / `withColorFunc(...)` / `withShowValue(...)`; render modes via `withRenderMode(ProgressRenderMode)` — `Block` / `Line` / `Slim` — and custom percent copy via `withPercentFormat(string)`) | — |
 | `Progress\AnimatedProgress` | Spring-physics-animated progress bar (powered by `sugarcraft/sugar-spring`); honours `REDUCE_MOTION` *and* `PREFERS_REDUCED_MOTION` (read through the sugar-colorprofile probe — any value outside `''`/`0`/`false`/`no`/`off`) by snapping to the target percent within one tick | `SpringTickMsg` |
-| `Timer\Timer` | Countdown timer — `Timer::new($duration, $interval = 1.0)` (duration is required); `remaining` / `interval` are promoted readonly properties, the methods are `interval(): float`, `timeout(): float` (remaining seconds — `0` once `TimeoutMsg` has fired) and `withInterval(float)`; there is no `remaining()` method. When not running, `view()` appends a dim state tag (`paused`, or `timeout` once `TimeoutMsg` has fired) so the state is visible in the frame — running bytes are byte-identical; hosts style it themselves from the plain-text `stateLabel()`. In-flight ticks from stopped generations are refused via the tick `epoch` | `Timer\TickMsg`, `TimeoutMsg` |
-| `Stopwatch\Stopwatch` | Count-up timer; `elapsed`, `interval()`, `withInterval(float)`. `elapsed` is a **tick-count accumulator** (ticks × interval), not wall-clock — it advances only while `update()` consumes ticks. Same dim state tag as `Timer` while not running, with `not started` and `paused` distinct (`stateLabel()`) | `Stopwatch\TickMsg` |
+| `Timer\Timer` | Countdown timer — `Timer::new($duration, $interval = 1.0)` (duration is required); `remaining` / `interval` are promoted readonly properties, the methods are `interval(): float`, `timeout(): float` (remaining seconds — `0` once `TimeoutMsg` has fired) and `withInterval(float)`; there is no `remaining()` method. When not running, `view()` appends a dim state tag (`paused`, or `timeout` once `TimeoutMsg` has fired) so the state is visible in the frame — running bytes are byte-identical; hosts style it themselves from the plain-text `stateLabel()`. In-flight ticks from stopped generations are refused via the tick `epoch` | `Timer\TimerTick` (deprecated alias `TickMsg`), `TimeoutMsg` |
+| `Stopwatch\Stopwatch` | Count-up timer; `elapsed`, `interval()`, `withInterval(float)`. `elapsed` is a **tick-count accumulator** (ticks × interval), not wall-clock — it advances only while `update()` consumes ticks. Same dim state tag as `Timer` while not running, with `not started` and `paused` distinct (`stateLabel()`) | `Stopwatch\StopwatchTick` (deprecated alias `TickMsg`) |
 | `TextInput\TextInput` | Single-line input with autocomplete + validators + `ValidateOn` timing + restrict pattern + vim mode + placeholder styling + prefix/suffix + `Styles` _(deprecated alias — re-exported from `SugarCraft\Forms\TextInput`)_ | — |
 | `TextArea\TextArea` | Multi-line editor with line numbers / set-prompt-func / `focused()` / `cursor()` / `line()` / `column()`; `Ctrl+O` opens the buffer in `$EDITOR` (`withEditorExtension('.md')` to control the syntax-highlight suffix) _(deprecated alias — re-exported from `SugarCraft\Forms\TextArea`)_ | `TextArea\TextAreaEditedMsg` |
 | `Viewport\Viewport` | Scrollable text region with mouse-wheel, scrollbar, horizontal scroll, `setWidth(int)` / `setHeight(int)` _(deprecated alias — re-exported from `SugarCraft\Forms\Viewport`)_ | `ViewportTickMsg` |
@@ -121,8 +121,8 @@ Forward these into your model's `update()` so the embedded component
 can react: `SugarCraft\Widgets\Cursor\BlinkMsg` (Cursor / TextInput,
 deprecated alias of `Forms\Cursor\BlinkMsg`),
 `SugarCraft\Widgets\Spinner\TickMsg` (Spinner),
-`SugarCraft\Widgets\Timer\TickMsg` + `SugarCraft\Widgets\Timer\TimeoutMsg`,
-`SugarCraft\Widgets\Stopwatch\TickMsg`,
+`SugarCraft\Widgets\Timer\TimerTick` + `SugarCraft\Widgets\Timer\TimeoutMsg`,
+`SugarCraft\Widgets\Stopwatch\StopwatchTick`,
 `SugarCraft\Widgets\Progress\SpringTickMsg` (AnimatedProgress),
 `SugarCraft\Widgets\TextArea\TextAreaEditedMsg` (TextArea's Ctrl+O
 round-trip), `SugarCraft\Widgets\Viewport\ViewportTickMsg` (Viewport's
@@ -139,7 +139,11 @@ instance or armed before the current transition, so N animated bars on
 one loop advance only their own chain. Timer and
 Stopwatch ticks also carry an `epoch` (generation counter bumped by
 `start()`): a tick armed before a stop/start flip is refused rather than
-double-counted.
+double-counted. Ticks are per-widget types: `TimerTick` and
+`StopwatchTick` each name their owner (the old shared `TickMsg`
+spellings are deprecated aliases, removal at 2.0), and feeding one
+widget's tick into the other's `update()` raises `TypeError` at the
+loop instead of silently no-oping.
 Reduced motion is gated per component: `AnimatedProgress` honours
 `REDUCE_MOTION` / `PREFERS_REDUCED_MOTION` itself, but
 `Cursor\BlinkMsg` and `Spinner\TickMsg` are not gated in the widget —

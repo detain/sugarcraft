@@ -60,7 +60,11 @@ final class Stopwatch implements Model
      */
     public function update(Msg $msg): array
     {
-        if ($msg instanceof TickMsg && $msg->id === $this->id && $msg->epoch === $this->epoch && $this->running) {
+        if ($msg instanceof \SugarCraft\Widgets\Timer\TimerTick) {
+            // Wiring bug, not noise: see the matching guard in Timer (013).
+            throw new \TypeError('TimerTick fed to Stopwatch::update(); ticks are per-widget.');
+        }
+        if ($msg instanceof StopwatchTick && $msg->id === $this->id && $msg->epoch === $this->epoch && $this->running) {
             $next = new self($this->elapsed + $this->interval, $this->interval, true, $this->id, $this->epoch);
             return [$next, $next->tick()];
         }
@@ -131,7 +135,7 @@ final class Stopwatch implements Model
     public function isRunning(): bool { return $this->running; }
 
     /**
-     * Stable per-instance ID — used by {@see TickMsg} to route the
+     * Stable per-instance ID — used by {@see StopwatchTick} to route the
      * matching update events. Mirrors the upstream Bubbles `ID()`.
      */
     public function id(): int { return $this->id; }
@@ -139,7 +143,7 @@ final class Stopwatch implements Model
     /**
      * Elapsed seconds as a tick-count accumulator (ticks consumed ×
      * {@see $interval}) — NOT wall-clock: it advances only while update()
-     * consumes TickMsgs, so a stalled loop or a stopped chain freezes it
+     * consumes StopwatchTicks, so a stalled loop or a stopped chain freezes it
      * regardless of real time passed (M14).
      */
     public function elapsed(): float { return $this->elapsed; }
@@ -168,7 +172,7 @@ final class Stopwatch implements Model
     {
         $id = $this->id;
         $epoch = $this->epoch;
-        return Cmd::tick($this->interval, static fn(): Msg => new TickMsg($id, $epoch));
+        return Cmd::tick($this->interval, static fn(): StopwatchTick => new StopwatchTick($id, $epoch));
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

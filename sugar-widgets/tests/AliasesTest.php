@@ -71,6 +71,12 @@ final class AliasesTest extends TestCase
             // Viewport
             'Viewport\\Viewport'         => [\SugarCraft\Widgets\Viewport\Viewport::class,         \SugarCraft\Forms\Viewport\Viewport::class],
             'Viewport\\ViewportTickMsg'  => [\SugarCraft\Widgets\Viewport\ViewportTickMsg::class,  \SugarCraft\Forms\Viewport\ViewportTickMsg::class],
+
+            // In-lib renames (W-11/sugar-widgets-013): the bare TickMsg
+            // spellings survive as deprecated aliases of the widget-named
+            // ticks. Map stays exhaustive over grep class_alias src/.
+            'Timer\\TickMsg'             => [\SugarCraft\Widgets\Timer\TickMsg::class,             \SugarCraft\Widgets\Timer\TimerTick::class],
+            'Stopwatch\\TickMsg'         => [\SugarCraft\Widgets\Stopwatch\TickMsg::class,         \SugarCraft\Widgets\Stopwatch\StopwatchTick::class],
         ];
     }
 

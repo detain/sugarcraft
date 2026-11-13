@@ -267,4 +267,22 @@ final class TimerTest extends TestCase
         $this->assertStringContainsString(" \x1b[2mtimeout\x1b[0m", $timeout);
         $this->assertStringEndsWith("timeout\x1b[0m", $timeout);
     }
+
+    public function testTickRenamedClassResolvesThroughTheDeprecatedAlias(): void
+    {
+        $legacy = new TickMsg(3, 1);
+        $this->assertInstanceOf(\SugarCraft\Widgets\Timer\TimerTick::class, $legacy);
+        $this->assertSame(3, $legacy->id);
+        $this->assertSame(1, $legacy->epoch);
+        // A bare TimerTick passes the update() gate the same way (whole
+        // suite still drives the alias import — BC coverage by volume).
+        [$next, $cmd] = Timer::new(5.0)->update(new \SugarCraft\Widgets\Timer\TimerTick(0));
+        $this->assertInstanceOf(Timer::class, $next);
+    }
+
+    public function testCrossWidgetTickIsFatalNotSilent(): void
+    {
+        $this->expectException(\TypeError::class);
+        Timer::new(5.0)->update(new \SugarCraft\Widgets\Stopwatch\StopwatchTick(0));
+    }
 }

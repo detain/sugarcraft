@@ -12,7 +12,7 @@ use SugarCraft\Style\Style;
 
 /**
  * Countdown timer. Construct with a duration; call {@see start()} to begin
- * ticking. {@see update()} consumes {@see TickMsg}s and reschedules the
+ * ticking. {@see update()} consumes {@see TimerTick}s and reschedules the
  * next tick until {@see $remaining} hits zero, at which point a single
  * {@see TimeoutMsg} is dispatched and the timer stops itself.
  *
@@ -82,7 +82,12 @@ final class Timer implements Model
      */
     public function update(Msg $msg): array
     {
-        if ($msg instanceof TickMsg && $msg->id === $this->id && $msg->epoch === $this->epoch && $this->running) {
+        if ($msg instanceof \SugarCraft\Widgets\Stopwatch\StopwatchTick) {
+            // Wiring bug, not noise: a Stopwatch tick can never advance a
+            // Timer, and silently no-oping hid the crossed feed (013).
+            throw new \TypeError('StopwatchTick fed to Timer::update(); ticks are per-widget.');
+        }
+        if ($msg instanceof TimerTick && $msg->id === $this->id && $msg->epoch === $this->epoch && $this->running) {
             $newRemaining = max(0.0, $this->remaining - $this->interval);
             if ($newRemaining <= 0.0) {
                 $next = new self(0.0, $this->interval, false, true, $this->id, $this->epoch);
@@ -166,7 +171,7 @@ final class Timer implements Model
     public function timedOut(): bool  { return $this->timedOut; }
 
     /**
-     * Stable per-instance ID — used by {@see TickMsg} / {@see TimeoutMsg}
+     * Stable per-instance ID — used by {@see TimerTick} / {@see TimeoutMsg}
      * routing. Mirrors upstream Bubbles `ID()`.
      */
     public function id(): int { return $this->id; }
@@ -202,7 +207,7 @@ final class Timer implements Model
     {
         $id = $this->id;
         $epoch = $this->epoch;
-        return Cmd::tick($this->interval, static fn(): Msg => new TickMsg($id, $epoch));
+        return Cmd::tick($this->interval, static fn(): TimerTick => new TimerTick($id, $epoch));
     }
 
     /**

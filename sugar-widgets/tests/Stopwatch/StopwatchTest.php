@@ -195,4 +195,17 @@ final class StopwatchTest extends TestCase
         $this->assertStringContainsString(" \x1b[2mnot started\x1b[0m", $fresh->view());
         $this->assertStringContainsString(" \x1b[2mpaused\x1b[0m", $stopped->view());
     }
+
+    public function testTickRenamedClassResolvesThroughTheDeprecatedAlias(): void
+    {
+        $legacy = new TickMsg(3, 1);
+        $this->assertInstanceOf(\SugarCraft\Widgets\Stopwatch\StopwatchTick::class, $legacy);
+        $this->assertSame(3, $legacy->id);
+    }
+
+    public function testCrossWidgetTickIsFatalNotSilent(): void
+    {
+        $this->expectException(\TypeError::class);
+        Stopwatch::new()->update(new \SugarCraft\Widgets\Timer\TimerTick(0));
+    }
 }
