@@ -694,4 +694,66 @@ final class ReelTest extends TestCase
         $this->assertSame(1, substr_count($src, 'windowSize: $windowSeed'),
             'the single Program construction in play() carries the seed');
     }
+    /**
+     * @testdox SV-M19: the frame budget threads through the single build choke
+     *
+     * Load-bearing: drop the frameBudgetMs arm in buildPlayer and the 120 ms
+     * pin reddens; remove the set-sentinel and the 0.0 opt-out pin reddens
+     * (null would mask it as "unset"). Unset derives Player's own default,
+     * and a negative value never reaches a Player.
+     */
+    public function testTheFrameBudgetThreadsThroughTheBuildChoke(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD not available');
+        }
+
+        $budget = static fn (Player $p): float => (new \ReflectionProperty(Player::class, 'frameBudgetMs'))->getValue($p);
+        $fpsOf = static fn (Player $p): float => (new \ReflectionProperty(Player::class, 'fps'))->getValue($p);
+
+        $gif = Synthetic::generate(
+            sys_get_temp_dir() . '/sugar-video-m19-' . getmypid() . '-' . bin2hex(random_bytes(4)) . '.gif',
+            16,
+            8,
+            4,
+            4,
+        );
+
+        try {
+            $explicit = $this->withoutPathBinaries(
+                static fn (): Player => Reel::open($gif)->withFrameBudget(120.0)->toPlayer(),
+            );
+            try {
+                $this->assertSame(120.0, $budget($explicit), 'an explicit budget reaches the built Player');
+            } finally {
+                $explicit->stop();
+            }
+
+            $optOut = $this->withoutPathBinaries(
+                static fn (): Player => Reel::open($gif)->withFrameBudget(0.0)->toPlayer(),
+            );
+            try {
+                $this->assertSame(0.0, $budget($optOut), '0.0 threads as the unbounded opt-out, not as unset');
+            } finally {
+                $optOut->stop();
+            }
+
+            $defaulted = $this->withoutPathBinaries(static fn (): Player => Reel::open($gif)->toPlayer());
+            try {
+                $this->assertSame(
+                    max(Player::DEFAULT_FRAME_BUDGET_FLOOR_MS, 2000.0 / $fpsOf($defaulted)),
+                    $budget($defaulted),
+                    'an unset budget derives Player::open\'s max(50ms, 2 x frame interval)'
+                );
+            } finally {
+                $defaulted->stop();
+            }
+
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage('frame budget must not be negative');
+            Reel::open($gif)->withFrameBudget(-1.0);
+        } finally {
+            @unlink($gif);
+        }
+    }
 }

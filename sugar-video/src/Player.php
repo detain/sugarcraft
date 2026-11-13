@@ -64,6 +64,13 @@ final class Player implements Model
     /** Minimum and maximum terminal column/row bounds for resize clamping. */
     public const MIN_COLS = 10;
     public const MAX_COLS = 200;
+    /**
+     * SV-M19: floor of the DEFAULT per-tick decode budget armed by
+     * {@see open()} — max(this, 2 × frame interval). A tick may walk at most
+     * that long synchronously before yielding the rest of a catch-up to the
+     * next tick, so a long seek keeps painting while it converges.
+     */
+    public const DEFAULT_FRAME_BUDGET_FLOOR_MS = 50.0;
     public const MIN_ROWS = 5;
     public const MAX_ROWS = 80;
 
@@ -177,9 +184,11 @@ final class Player implements Model
      * @param WebVtt|null $subtitles  Parsed subtitle track, or null when no subtitles
      * @param array<array-key, string> $headers HTTP request headers for a remote
      *                            http(s) source, re-presented on every decoder rebuild
-     * @param float        $frameBudgetMs Wall-clock budget (ms) for one tick's catch-up
-     *                            decode before it defers the rest to the next tick
-     *                            (0 = unbounded, the pre-budget behaviour)
+     * @param float|null   $frameBudgetMs Wall-clock budget (ms) for one tick's catch-up
+     *                            decode before it defers the rest to the next tick.
+     *                            SV-M19: null = the default budget max(50ms, 2 × frame
+     *                            interval); an explicit 0.0 keeps the old unbounded
+     *                            single-tick walk (the parity hosts pass it).
      * @param (callable():Mode)|null $autoModeChooser Test seam consulted ONLY when
      *                            $mode is null: supplies the resolved auto-mode
      *                            without probing the live terminal, so the default
@@ -194,7 +203,7 @@ final class Player implements Model
      *                            (SSRF transport law, see
      *                            {@see FfmpegCommandBuilder::ALLOWED_MAX_REDIRECTS}).
      */
-    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, ?Mode $mode = null, bool $loop = false, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20, ?WebVtt $subtitles = null, array $headers = [], float $frameBudgetMs = 0.0, ?\Closure $autoModeChooser = null, bool $hostRestricted = false): self
+    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, ?Mode $mode = null, bool $loop = false, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20, ?WebVtt $subtitles = null, array $headers = [], ?float $frameBudgetMs = null, ?\Closure $autoModeChooser = null, bool $hostRestricted = false): self
     {
         // m11: every pacing site divides by fps (Cmd::tick(1.0/fps)); refuse a
         // non-positive override at the boundary before a Model can exist. The
@@ -270,6 +279,14 @@ final class Player implements Model
         }
 
         // Player starts paused; the first tick is scheduled when playback begins.
+        // SV-M19: an unset budget is no longer "walk the whole catch-up
+        // synchronously" — open() defaults one tick to at most
+        // max(50ms, 2 frame intervals) of decode work before yielding the
+        // remainder to the next tick. 0.0 stays the documented opt-out, and
+        // the hand-built entries (fromDecoder/openForTest) keep their old
+        // unbounded default so parity fixtures are untouched.
+        $frameBudgetMs ??= max(self::DEFAULT_FRAME_BUDGET_FLOOR_MS, 2000.0 / max(0.001, $fps));
+
         return new self(
             decoder: $decoder,
             mode: $mode,

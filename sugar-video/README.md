@@ -519,19 +519,23 @@ reinvented: [sugar-image](../sugar-image) (image → cell renderers),
   altogether and logs `header.ignored_local_source.audio` (with any credentials in
   the URL redacted) rather than sending credentials to a file.
 
-- **Decode is synchronous with an optional per-tick budget.** `next()` reads the
+- **Decode is synchronous behind a per-tick budget.** `next()` reads the
   ffmpeg stdout pipe — non-blocking, behind a bounded `stream_select()` deadline —
   so a stalled network source surfaces as end-of-stream instead of hanging the
-  loop. A tick that falls behind by many frames will decode the catch-up frames
-  inline; set a budget via `Player::open(..., frameBudgetMs: 8.0)` to cap that
-  work per tick (remaining catch-up converges over subsequent ticks instead of
-  blocking one). The budget is checked between frames, so it cannot preempt a
-  single frame decode already in flight; per-read bounding comes from the pipe
-  timeout.
+  loop. A tick that falls behind by many frames decodes the catch-up frames
+  inline, but only within a budget: `Player::open()` now arms a default of
+  `max(50 ms, 2 × frame interval)` (SV-M19), and `Reel::withFrameBudget($ms)`
+  threads a custom value through the build (remaining catch-up converges over
+  subsequent ticks instead of blocking one — a long seek keeps painting while
+  it catches up). Pass `0.0` to opt out into the old unbounded single-tick
+  walk; hand-built entries (`fromDecoder`/`openForTest`) keep that unbounded
+  default for parity fixtures. The budget is checked between frames, so it
+  cannot preempt a single frame decode already in flight; per-read bounding
+  comes from the pipe timeout.
 
 ## Public API
 
-The entry points worth knowing: `Reel` (open/openUrl/play/toPlayer + `withMode/withAutoMode/withFps/withLoop/withRamp/withSize/withSubtitles/withAudio/withAllowedHosts/withHeaders/withCellPx`), `Player` (open/fromDecoder + pause/play/stop/isStopped/withSeek/withSubtitles/withAudio/frameAt/seekToSeconds/position/duration), `AudioPlayer` (start/stop/pause/resume/mute/unmute/isMuted/isPlaying/hasStarted/position/exitCode), `Synthetic::generate` (path defaults to `Synthetic::DEFAULT_PATH`; the returned path is the source of truth — a refused target yields a private stand-in path), `WebVtt::parse`, `VideoSource::probe`, `HttpHeaders::parse`, `Probe`, `DecoderFactory::new`, and `RendererFactory` (`auto`/`autoMode`/`supports`/`supportedModes`/`diagnose`). Two `Probe` classes share the short name: the roster entry here is `SugarCraft\Video\Source\Probe` (external-binary presence checks for ffmpeg/ffprobe/ffplay/mpv), while the auto-mode fallback above is `SugarCraft\ColorProfile\Probe`.
+The entry points worth knowing: `Reel` (open/openUrl/play/toPlayer + `withMode/withAutoMode/withFps/withLoop/withRamp/withSize/withSubtitles/withAudio/withFrameBudget/withAllowedHosts/withHeaders/withCellPx`), `Player` (open/fromDecoder + pause/play/stop/isStopped/withSeek/withSubtitles/withAudio/frameAt/seekToSeconds/position/duration), `AudioPlayer` (start/stop/pause/resume/mute/unmute/isMuted/isPlaying/hasStarted/position/exitCode), `Synthetic::generate` (path defaults to `Synthetic::DEFAULT_PATH`; the returned path is the source of truth — a refused target yields a private stand-in path), `WebVtt::parse`, `VideoSource::probe`, `HttpHeaders::parse`, `Probe`, `DecoderFactory::new`, and `RendererFactory` (`auto`/`autoMode`/`supports`/`supportedModes`/`diagnose`). Two `Probe` classes share the short name: the roster entry here is `SugarCraft\Video\Source\Probe` (external-binary presence checks for ffmpeg/ffprobe/ffplay/mpv), while the auto-mode fallback above is `SugarCraft\ColorProfile\Probe`.
 
 Ceilings that shape what plays: source capture is capped at 64 MiB per file (`GifDecoder::MAX_SOURCE_BYTES`, `AnimatedWebpDecoder::MAX_SOURCE_BYTES`); animated WebP at `MAX_FRAMES` 4096 frames, `MAX_CANVAS_PIXELS` 2048² per canvas and `MAX_TOTAL_PIXELS` 33,554,432 pixels summed across the file; GIF residency at an internal `GifDecoder` cap of 8 000 000 decoded pixels per playthrough; subtitles at 4 MiB (`Reel::MAX_SUBTITLE_BYTES`) and 10 000 cues (`WebVtt::MAX_CUES`, announced when truncated); the terminal geometry clamps to 10-200 columns and 5-80 rows (`Player::MIN/MAX_COLS`, `MIN/MAX_ROWS`). ffprobe output drains under an 8 MiB ceiling and a 10 s deadline; each ffmpeg frame read is bounded by a per-fill timeout.
 

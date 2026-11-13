@@ -79,6 +79,12 @@ final class Reel
      *               once {@see withSize()} supplied an explicit geometry, so play() can
      *               seed the program's first frame with it; an unseeded Reel asks the
      *               terminal instead, and the terminal's own size message always wins.
+     * @param float|null   $frameBudgetMs  Per-tick decode budget (ms) threaded to the
+     *               built Player, or null while unset (Player::open then arms its
+     *               SV-M19 default max(50ms, 2 × frame interval))
+     * @param bool         $frameBudgetSet  Sentinel paired with the nullable budget:
+     *               0.0 is a LEGAL value (the unbounded opt-out), so presence cannot
+     *               ride the value itself (same law as $fpsSet).
      */
     private function __construct(
         private readonly string $path,
@@ -96,6 +102,8 @@ final class Reel
         private readonly bool $cellPxSet = false,
         private readonly bool $audioEnabled = true,
         private readonly bool $sizeSet = false,
+        private readonly ?float $frameBudgetMs = null,
+        private readonly bool $frameBudgetSet = false,
     ) {
     }
 
@@ -380,6 +388,32 @@ final class Reel
     }
 
     /**
+     * Set the per-tick decode budget (milliseconds) threaded to the built
+     * Player (SV-M19). Returns a new Reel (immutable).
+     *
+     * The budget bounds how long ONE update() tick may walk a catch-up
+     * synchronously before yielding the remainder to the next tick — a long
+     * seek then keeps painting frames while it converges instead of freezing
+     * input and redraw. Unset, the built Player arms Player::open's default
+     * max(50ms, 2 × frame interval). 0.0 is the documented opt-out: the whole
+     * walk runs in one tick (the pre-budget behaviour the parity fixtures
+     * use). Negative values are refused at the boundary.
+     *
+     * @throws \InvalidArgumentException If $ms is negative
+     */
+    public function withFrameBudget(float $ms): self
+    {
+        // SV-M19: a negative budget would expire before the first frame is
+        // even attempted — every deadline check would yield immediately and
+        // catch-up would never progress. Refuse it, keep 0.0 as the opt-out.
+        if ($ms < 0.0) {
+            throw new \InvalidArgumentException(Lang::t('player.frame_budget_negative', ['ms' => (string) $ms]));
+        }
+
+        return $this->with(frameBudgetMs: $ms, frameBudgetSet: true);
+    }
+
+    /**
      * Attach a subtitle file (WebVTT or SRT) to the player.
      *
      * Returns a new Reel (immutable). The file is read and parsed at play()
@@ -618,6 +652,10 @@ final class Reel
             $cellPxH,
             $subtitles,
             $this->headers,
+            // SV-M19: null = unset, so Player::open arms its default budget;
+            // an explicit 0.0 from withFrameBudget() threads through as the
+            // unbounded opt-out.
+            frameBudgetMs: $this->frameBudgetSet ? $this->frameBudgetMs : null,
             hostRestricted: $this->allowedHosts !== null,
         );
 
@@ -707,6 +745,10 @@ final class Reel
         bool $fpsSet = false,
         ?bool $audioEnabled = null,
         ?bool $sizeSet = null,
+        ?float $frameBudgetMs = null,
+        // SV-M19: same law as fpsSet — 0.0 is a legal budget (the unbounded
+        // opt-out), so a null prop cannot mark "the caller handed it".
+        ?bool $frameBudgetSet = null,
     ): self {
         // AutoMode sentinel → null (play() will resolve to auto-detected mode).
         $resolvedMode = $mode instanceof AutoMode ? null : ($mode ?? $this->mode);
@@ -727,6 +769,8 @@ final class Reel
             $cellPxSet ?? $this->cellPxSet,
             $audioEnabled ?? $this->audioEnabled,
             $sizeSet ?? $this->sizeSet,
+            $frameBudgetSet ? $frameBudgetMs : $this->frameBudgetMs,
+            $frameBudgetSet ?? $this->frameBudgetSet,
         );
     }
 

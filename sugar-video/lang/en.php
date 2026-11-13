@@ -57,4 +57,5 @@ return [
     'player.error_status' => '[error] {failure}',
     'player.restart_hint' => '0 restart  q quit',
     'player.quit_hint' => 'q quit',
+    'player.frame_budget_negative' => 'frame budget must not be negative, got {ms} ms',
 ];

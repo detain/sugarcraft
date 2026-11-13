@@ -2852,6 +2852,45 @@ final class PlayerTest extends TestCase
         $arm = substr($src, strpos($src, '// M21: a cell covers'), strpos($src, 'self::areaAverageRgb(', strpos($src, '// M21: a cell covers')));
         $this->assertStringContainsString('intdiv($cx * $w, max(1, $bufW))', $arm, 'the cell box maps through the buffer grid');
     }
+    /**
+     * @testdox SV-M19: open() arms a default frame budget instead of an unbounded walk
+     *
+     * Load-bearing: revert the null-default in Player::open and the first
+     * assertion reddens (0.0); drop the floor and the 100fps arm reddens.
+     * The computed budget is max(50ms, 2 × frame interval); explicit 0.0
+     * stays the documented unbounded opt-out (parity hosts).
+     */
+    public function testOpenArmsTheDefaultFrameBudgetFromTheFrameInterval(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD not available');
+        }
+
+        $computed = Player::open($this->createTempGif(), 40, 20, 15.0);
+        $this->assertEqualsWithDelta(
+            2000.0 / 15.0,
+            $this->getPlayerProperty($computed, 'frameBudgetMs'),
+            1e-6,
+            'a 15fps source budgets 2 frame intervals (133.(3) ms)'
+        );
+        $computed->stop();
+
+        $floored = Player::open($this->createTempGif(), 40, 20, 100.0);
+        $this->assertSame(
+            Player::DEFAULT_FRAME_BUDGET_FLOOR_MS,
+            $this->getPlayerProperty($floored, 'frameBudgetMs'),
+            'a high-fps source still gets the 50 ms floor'
+        );
+        $floored->stop();
+
+        $optOut = Player::open($this->createTempGif(), 40, 20, 15.0, frameBudgetMs: 0.0);
+        $this->assertSame(
+            0.0,
+            $this->getPlayerProperty($optOut, 'frameBudgetMs'),
+            'explicit 0.0 remains the unbounded opt-out'
+        );
+        $optOut->stop();
+    }
 }
 
 /**
