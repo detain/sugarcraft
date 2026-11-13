@@ -1059,7 +1059,10 @@ final class Model
     /**
      * Page size for withCursorPageUp()/withCursorPageDown(): one viewport height worth
      * of ITEMS (not displayed lines — multi-line items advance by one per page
-     * unit; this is the documented upstream semantic).
+     * unit; this is the documented upstream semantic). A zero-height viewport —
+     * legal before any resize, only the render doors refuse it — pages by one
+     * item, the same max(1, height) floor the overflow guards use, so the
+     * movers never silently freeze while Up/Down still walk the list.
      */
     private function pageSpan(int $pages): int
     {
@@ -1072,7 +1075,7 @@ final class Model
         if ($pages < \intdiv(\PHP_INT_MIN, $factor)) {
             return \PHP_INT_MIN;
         }
-        return $this->height * $pages;
+        return $factor * $pages;
     }
 
     /**

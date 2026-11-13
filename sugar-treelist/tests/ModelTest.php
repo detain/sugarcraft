@@ -1149,6 +1149,26 @@ final class ModelTest extends TestCase
         $this->assertSame(4, $m->cursorIndex()); // Last index
     }
 
+    /**
+     * sugar-treelist-024: pageSpan() uses the same max(1, height) factor its
+     * own overflow guards measure against — a height-0 viewport (legal before
+     * any resize; only the render doors refuse to paint it) pages one item
+     * per page unit and saturates like the other movers, instead of silently
+     * freezing PageUp/PageDown while Up/Down still walk the list.
+     */
+    public function testPageUpDownOnZeroHeightViewportSaturatesLikeOtherMovers(): void
+    {
+        $m = Model::new()
+            ->withViewport(80, 0)
+            ->withItemsFromArray(['a', 'b', 'c', 'd'])
+            ->withCursor(2);
+
+        $this->assertSame(1, $m->withCursorPageUp()->cursorIndex());
+        $this->assertSame(0, $m->withCursorPageUp(5)->cursorIndex());
+        $this->assertSame(3, $m->withCursorPageDown()->cursorIndex());
+        $this->assertSame(3, $m->withCursorPageDown(5)->cursorIndex());
+    }
+
     public function testCursorToStart(): void
     {
         $m = $this->model;
