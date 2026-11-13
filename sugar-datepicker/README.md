@@ -232,10 +232,13 @@ chain above chose, and none of the seven setters influence it.
 
 ## Keyboard handling
 
-`handleKey()` maps the eight `KEY_*` constants — `left`, `right`, `up`, `down`,
-`home`, `end`, `enter`, `esc` (core names this 'escape') — onto cursor
+`handleKey()` maps the `KEY_*` constants — `left`, `right`, `up`, `down`,
+`home`, `end`, `enter`, and BOTH escape spellings `esc` (BC wire value) and
+`escape` (the name sugar-core uses) — onto cursor
 movement, selection and clearing.
-Unrecognized keys are ignored (the receiver is returned unchanged). The `Model`
+Unrecognized keys are surfaced through `error_log('datepicker: unknown key …')`
+and leave the receiver unchanged (loud at integration time, state-safe at
+runtime — no throw). The `Model`
 wrapper routes Enter, Escape, Home and End through these `KEY_*` strings — its
 arrow arm calls the `MoveCursor*` methods directly, and `PageUp`/`PageDown`
 (which have no `KEY_*` constant) call `goToPreviousMonth()`/`goToNextMonth()` —

@@ -83,9 +83,11 @@ final class DatePicker
     public const KEY_DOWN  = 'down';
     public const KEY_ENTER = 'enter';
     // The value string is the handleKey() wire contract; sugar-core spells the
-    // same key KeyType::Escape = 'escape'. The two are reconciled in Model,
-    // never compared to the raw core spelling here.
+    // same key KeyType::Escape = 'escape'. dp-18 accepts BOTH spellings at the
+    // widget surface (KEY_ESCAPE stays 'esc' for BC); Model still routes the
+    // canonical constant.
     public const KEY_ESCAPE = 'esc';
+    public const KEY_ESCAPE_ALT = 'escape';
     public const KEY_HOME  = 'home';
     public const KEY_END   = 'end';
 
@@ -565,14 +567,18 @@ final class DatePicker
      *             (second press); single mode — select the highlighted date
      *             (same semantics as SelectDate(), incl. the empty-cell
      *             fallback and min/max refusal)
-     * Escape:     range mode — clear the range; single mode — clear the
-     *             selection (same as ClearDate())
+     * Escape / esc: range mode — clear the range; single mode — clear the
+     *             selection (same as ClearDate()); both spellings act (dp-18
+     *             accepts the core spelling alongside the BC 'esc' wire value)
      * Home/End:   jump to the first / last valid day of the viewed month
      *             (the month's day-cell window — min/max bounds are not
      *             consulted, so a jump can land on a dimmed out-of-bounds day)
      *
-     * An unrecognized key returns the receiver itself, as does a refused
-     * selection. Callers must compare on state,
+     * An unrecognized key returns the receiver unchanged AND logs
+     * `datepicker: unknown key …` — the wire vocabulary IS the API of a
+     * key-driven widget, so a typo must be loud at integration time (no
+     * throw: handleKey stays pure). A refused selection likewise returns
+     * state-equal results silently. Callers must compare on state,
      * not object identity, to detect a no-op.
      */
     public function handleKey(string $key): self
@@ -600,7 +606,7 @@ final class DatePicker
                 ? $this->handleRangeEnter()
                 : $this->selectDate();
         }
-        if ($key === self::KEY_ESCAPE) {
+        if ($key === self::KEY_ESCAPE || $key === self::KEY_ESCAPE_ALT) {
             if ($this->rangeMode) {
                 $clone = clone $this;
                 $clone->rangeStart = null;
@@ -612,7 +618,9 @@ final class DatePicker
             return $this->clearDate();
         }
 
-        // Unrecognized key: no state to change — return the receiver.
+        // Unknown key: loud at integration, state-safe at runtime.
+        \error_log('datepicker: unknown key ' . $key);
+
         return $this;
     }
 

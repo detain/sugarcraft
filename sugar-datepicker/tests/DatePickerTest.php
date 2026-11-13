@@ -919,4 +919,64 @@ final class DatePickerTest extends TestCase
 
         $this->assertSame($next->view(30, true), $next->view());
     }
+
+    // ------------------------------------------------------------------
+    // dp-18: escape wire vocabulary + loud unknown keys
+    // ------------------------------------------------------------------
+
+    /** @return array<string, array{0: string}> */
+    public static function escapeSpellingProvider(): array
+    {
+        return ["BC 'esc'" => ['esc'], "core 'escape'" => ['escape']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('escapeSpellingProvider')]
+    public function testBothEscapeSpellingsAct(string $spelling): void
+    {
+        // Single mode: clears the selection...
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-10'))
+            ->handleKey(DatePicker::KEY_ENTER);
+        $this->assertNotNull($dp->selectedDate());
+        $cleared = $dp->handleKey($spelling);
+        $this->assertNull($cleared->selectedDate(), "'$spelling' must clear in single mode");
+
+        // ...range mode: clears the pending range without touching selection.
+        $range = DatePicker::new(new \DateTimeImmutable('2026-05-10'))
+            ->withRangeMode(true)
+            ->handleKey(DatePicker::KEY_ENTER);
+        $this->assertNotNull($range->rangeStart());
+        $cancelled = $range->handleKey($spelling);
+        $this->assertNull($cancelled->rangeStart(), "'$spelling' must drop the armed range");
+    }
+
+    public function testConstantsPinBothEscapeSpellings(): void
+    {
+        $this->assertSame('esc', DatePicker::KEY_ESCAPE);
+        $this->assertSame('escape', DatePicker::KEY_ESCAPE_ALT);
+    }
+
+    public function testUnknownKeyIsLoudInErrorLogButNeverThrows(): void
+    {
+        $log = (function (string $key): string {
+            $file = \tempnam(\sys_get_temp_dir(), 'dpkey');
+            $prev = \ini_set('error_log', $file);
+            try {
+                $dp = DatePicker::new(new \DateTimeImmutable('2026-05-10'));
+                $same = $dp->handleKey($key);
+                $this->assertSame($dp, $same, 'an unknown key must not change state');
+                $this->assertSame($dp, $same->handleKey(''));
+
+                return (string) \file_get_contents($file);
+            } finally {
+                if ($prev === false) {
+                    \ini_restore('error_log');
+                } else {
+                    \ini_set('error_log', $prev);
+                }
+                @\unlink($file);
+            }
+        })('entr');
+
+        $this->assertStringContainsString('datepicker: unknown key entr', $log);
+    }
 }
