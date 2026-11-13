@@ -727,7 +727,7 @@ final readonly class ShellWords
     {
         $target = $redirection['target'] ?? '';
 
-        return match ($redirection['op']) {
+        return match ($redirection['op'] ?? '') {
             '>&' => preg_match('/^(?:\d+-?|-)$/', $target) === 1
                 || in_array($target, self::INERT_OUTPUT_TARGETS, true),
             '<&' => preg_match('/^(?:\d+-?|-)$/', $target) === 1,

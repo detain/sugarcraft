@@ -292,4 +292,14 @@ final class ShellWordsTest extends TestCase
         $this->assertCount(1, $redirections);
         $this->assertSame($inert, ShellWords::isInertRedirection($redirections[0]));
     }
+
+    public function testOpLessRedirectionIsNotInertAndRaisesNoWarning(): void
+    {
+        // Fail closed: a malformed record (no 'op') must answer false, not
+        // trip an undefined-key warning on a grant path.
+        $this->assertFalse(ShellWords::isInertRedirection(['command' => 0, 'fd' => null, 'target' => '/dev/null']));
+        $this->assertFalse(ShellWords::isInertRedirection([]));
+        // Opposite polarity: a well-formed inert record still grants.
+        $this->assertTrue(ShellWords::isInertRedirection(['command' => 0, 'fd' => null, 'op' => '>', 'target' => '/dev/null']));
+    }
 }
