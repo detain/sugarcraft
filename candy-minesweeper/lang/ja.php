@@ -10,7 +10,7 @@ declare(strict_types=1);
 
 return [
     'board.too_small' => '盤面が小さすぎます',
-    'board.minecount_out_of_range' => '地雷数 が範囲外です',
+    'board.minecount_out_of_range' => '地雷数が範囲外です',
     'board.rows_shape_mismatch' => 'グリッドデータが {width}×{height} の盤面と一致しません',
     'custom.min_rows' => '行数は2以上である必要があります',
     'custom.min_cols' => '列数は2以上である必要があります',

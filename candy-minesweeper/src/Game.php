@@ -510,7 +510,7 @@ final class Game implements Model
         // readable while the clock pulses. Dead inputs must not count: space
         // on a revealed cell, an unmapped key and a click on finished ground
         // leave the board and cursor exactly where they were, and wiping the
-        // boot "savegame is waiting" hint on such a press made the hint
+        // boot "save is waiting" hint on such a press made the hint
         // vanish under the first stray keystroke (finding 063's live probe).
         $changed = $next->board !== $this->board
             || $next->cursorX !== $this->cursorX

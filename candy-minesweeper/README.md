@@ -106,6 +106,8 @@ Colour degrades gracefully: with `NO_COLOR` set, `CLICOLOR=0`, or `TERM=dumb`, t
 
 The interface follows your locale. The binary arms `T::setLocale(T::detect())` before the program starts (`LC_ALL` → `LC_MESSAGES` → `LANG`, `C`/POSIX falling back to English), and every visible string — the mines/flags/remaining/time status line, the win and lose banners, the help footer, the new-game picker and its custom-board form — routes through `Lang::t`. Sixteen locales ship in `lang/` (ar, cs, de, en, es, fr, it, ja, ko, nl, pl, pt, pt-br, ru, tr, zh-cn); the English file is the source of truth and `LocaleParityTest` fails if any locale drifts in key set or order.
 
+The sixteen files cover 16 of the 17 codes `LOCALES.md` recommends — `zh-tw` is a deliberate exclusion: traditional wording does not diverge from the shipped simplified file at this app's copy scale, so the house rule for regional variants applies and the code falls through to English until a proper region hand-off changes that. Value style follows target-language convention: the English toasts and banners are deliberately lowercase while locales that capitalise their sentence-style copy do so in their own files — consistency is per-locale, not cross-locale. Each locale also keeps one grammatical register across its `ui.*` strings (cs and tr use informal imperatives, de impersonal infinitives), so the address a player meets in a toast never shifts from the one in a banner.
+
 ## Architecture
 
 Pure-state classes plus the runtime Model, renderer, UI helper, and persistence:

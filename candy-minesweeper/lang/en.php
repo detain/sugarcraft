@@ -3,6 +3,11 @@
 /**
  * English (default) translations for candy-minesweeper.
  *
+ * Value style (finding -078): this file deliberately keeps toast and banner
+ * copy lowercase — capitalisation follows target-language convention, so
+ * locales that sentence-case their UI copy do so in their own files; the
+ * rule is per-locale consistency, not cross-locale case uniformity.
+ *
  * @return array<string, string>
  */
 
@@ -35,13 +40,13 @@ return [
     'ui.help_session' => 'r  restart  ·  S  save  ·  L  load  ·  q / Esc / Ctrl+C  quit',
     'ui.saved' => 'game saved',
     'ui.restarted' => 'board restarted',
-    'ui.loaded' => 'savegame loaded',
-    'ui.no_save' => 'no savegame to load',
-    'ui.load_refused' => 'savegame refused (unreadable or tampered)',
+    'ui.loaded' => 'save loaded',
+    'ui.no_save' => 'no save to load',
+    'ui.load_refused' => 'save refused (unreadable or tampered)',
     'ui.save_failed' => 'save failed',
     'ui.chord_not_ready' => 'chord needs the flags to match the number',
     'ui.confirm_quit' => 'press q again to quit — this game is unsaved',
-    'ui.resume' => 'a savegame is waiting — press L to load it',
+    'ui.resume' => 'a save is waiting — press L to load it',
     'ui.new_best' => 'NEW BEST',
     'ui.beat_best' => '{prev} → NEW BEST',
     'ui.picker_title' => 'choose a board',

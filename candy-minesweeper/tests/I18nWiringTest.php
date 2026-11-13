@@ -83,8 +83,10 @@ final class I18nWiringTest extends TestCase
 
         T::setLocale('de');
         // 'Neustart' alone also appears in the de help footer — pin the boom
-        // line by a substring unique to it.
-        $this->assertStringContainsString('Boom — drücken Sie r', Renderer::render($g), 'boom line translates');
+        // line by a substring unique to it (post -076 register unify: the
+        // banner rides the locale-wide impersonal infinitive, not the Sie
+        // form the old copy mixed in).
+        $this->assertStringContainsString('Boom — r zum Neustart drücken', Renderer::render($g), 'boom line translates');
 
         $wonRows = [];
         $revealed = 0;
