@@ -7,12 +7,11 @@
  * Replace the `Counter` import below with your own Model once you've
  * forked this template. The Program harness (event loop, render
  * tick, signal handling, raw-mode setup, alt-screen lifecycle) is
- * production-ready out of the box — you just write the Model. The
- * Model's `subscriptions()` method is the seam for live Msg sources
- * (ticks, streams, signals); `Cmd::promise()` resolutions and the
- * public `Program::send()` are the other doors non-keyboard Msgs
- * reach `update()` through — all three are spelled out in the
- * README's "Getting Msgs in".
+ * production-ready out of the box — you just write the Model. Msgs
+ * reach `update()` through four doors: the terminal is the harness's,
+ * while `subscriptions()`, `Cmd::promise()` resolutions and the
+ * public `Program::send()` are the three you wire — all four are
+ * spelled out in the README's "Getting Msgs in".
  * Supports an opt-in panic handler via `Log::installPanicHandler()`
  * (uncomment below).
  */

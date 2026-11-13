@@ -27,10 +27,10 @@ use SugarCraft\Style\Style;
  * keyboard handling, and SugarStyle styling in view().
  *
  * The Model is immutable — `update()` returns a *new* Counter
- * rather than mutating $n. This is the Elm-architecture pattern
- * SugarCraft is built on: state lives in value objects, transitions
- * are pure functions, side effects (timers, HTTP, file I/O) get
- * scheduled as Cmds.
+ * rather than mutating $n. This is the Elm-style Model–Update–View
+ * architecture SugarCraft is built on: state lives in value objects,
+ * transitions are pure functions, side effects (timers, HTTP, file
+ * I/O) get scheduled as Cmds.
  *
  * Not every Msg is a key: the harness also dispatches `WindowSizeMsg`
  * (at startup and on every resize) and `ExceptionMsg` (the async

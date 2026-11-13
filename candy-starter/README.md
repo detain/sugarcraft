@@ -81,9 +81,20 @@ final class Greeter implements Model
 }
 ```
 
-Only the *return* of `init()` is optional — the method itself is required, and returning `null` just means "no startup Cmd". `subscriptions()` is likewise required; return `null` when the model needs no subscriptions. And note the fence above narrows `view(): string` deliberately: the interface's contract is `string|View` (the `View` value object adds cursor placement and shape, window title, taskbar progress (OSC 9;4), terminal foreground/background colours (OSC 10/11), a per-frame mouse-tracking mode, focus reporting, bracketed paste, and a pixel-graphics image layer), so a plain-string app may narrow — but if you ever want those extras your return type must widen back to `string|View`.
+Only the *return* of `init()` is optional — the method itself is required, and returning `null` just means "no startup Cmd". `subscriptions()` is likewise required; return `null` when the model needs no subscriptions. And note the fence above narrows `view(): string` deliberately. The interface's contract is `string|View`, and the `View` value object carries extras a plain string frame cannot express:
 
-The shape follows the MVC-style Model–Update–View architecture. State lives on the value object, transitions are pure functions, side effects (timers, HTTP, file I/O) get *scheduled* as Cmds rather than executed inline. The demo schedules only `Cmd::quit()`; `sugar-core`'s `Cmd` also offers `every()`, `tick()`, `promise()` and friends — return one from `init()` or `update()` and the harness runs it, feeding whatever `Msg` it produces back through `update()`.
+- cursor placement and shape
+- window title
+- taskbar progress (OSC 9;4)
+- terminal foreground/background colours (OSC 10/11)
+- a per-frame mouse-tracking mode
+- focus reporting
+- bracketed paste
+- a pixel-graphics image layer
+
+A plain-string app may narrow — but if you ever want any of those extras, your return type must widen back to `string|View`.
+
+This shape is the Elm-style Model–Update–View architecture. State lives on the value object, transitions are pure functions, side effects (timers, HTTP, file I/O) get *scheduled* as Cmds rather than executed inline. The demo schedules only `Cmd::quit()`; `sugar-core`'s `Cmd` also offers `every()`, `tick()`, `promise()` and friends — return one from `init()` or `update()` and the harness runs it, feeding whatever `Msg` it produces back through `update()`.
 
 `update()` returns the next `Model` — a fresh instance whenever state changes, the current one whenever it doesn't. It never mutates `$this`: that's why the demo declares `public readonly int $n`, and why the "no change" arm can honestly return `$this`.
 
@@ -93,13 +104,13 @@ Keys are not the only traffic `update()` sees. The harness also dispatches `Wind
 
 ### Getting Msgs in
 
-`update()` only ever sees what the harness dispatches, and there are exactly three doors in. The terminal is the first: keystrokes, mouse events, resizes and pastes arrive as `Msg` objects with no work from you. The other two are yours to use — and the `bin/start` promise that "you just write the Model" holds only because they exist:
+`update()` only ever sees what the harness dispatches, and there are exactly four doors in. The terminal is the first: keystrokes, mouse events, resizes and pastes arrive as `Msg` objects with no work from you. The other three are yours to wire — and the `bin/start` promise that "you just write the Model" holds only because they exist:
 
 - **`subscriptions()` — the live-source seam.** The required interface method is not decoration. Return a `Subscriptions` collection — e.g. `(new Subscriptions())->withTick('clock', 1.0, $produce)` (also `withKey`, `withSignal`, `withCustom`; each `produce` is a `Closure(): Msg`) — and the harness starts every entry, re-diffs the set after each `update()` cycle (starting new ones, cancelling dropped ones), and dispatches whatever a subscription's `produce` returns for as long as it stays in the set. The demo returns `null`: nothing live, nothing to reconcile.
 - **A promise that resolves to a Msg.** `Cmd::promise($factory)` runs work off-loop; when its promise resolves **with a `Msg`**, the harness dispatches that Msg straight into your `update()` (resolving `null` dispatches nothing), and a rejection arrives as an `ExceptionMsg` — the failure channel named above.
 - **`Program::send()`.** Public on the harness, and not a test-only back door — the harness itself uses it, e.g. its resize poll injects `WindowSizeMsg` through `send()`. Anything holding the program handle can push a Msg onto the running loop; a `send()` issued before `run()` is buffered and drained when the loop starts.
 
-The demo takes none of these doors (no subscriptions, no promises, external `send()` has no caller in `bin/start`) — but every real app wires at least one, and they are how non-keyboard traffic reaches the Model.
+The demo takes none of these doors (no subscriptions, no promises, external `send()` has no caller in `bin/start`) — and before any door opens at all, the harness dispatches boot Msgs (`EnvMsg`, `ColorProfileMsg`, an initial `WindowSizeMsg`) that every `Model` must tolerate; "Beyond keys" shows the branching. Every real app wires at least one door, and they are how non-keyboard traffic reaches the Model.
 
 ### Trust boundary
 
