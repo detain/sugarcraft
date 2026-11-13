@@ -2082,6 +2082,11 @@ final class StdioMcpServer implements McpServer
      * handler), so a server that streams progress forever is within its
      * rights; the convoy cost of a wedged answerer is the documented
      * serialisation law — one pipe, one conversation — not a counting defect.
+     * Both halves of that ruling are pinned by StdioMcpServerFailureGatesTest
+     * (the twelve-frame exempt stream that still gets its reply, and the
+     * permanent flood that must end on the caller's timed-out rail, never as
+     * strike blame), so revisiting the exemption is a loud decision and not
+     * a rediscovery.
      *
      * $deadline is taken by reference because answering a server request
      * pauses it: the wall clock a server-request handler spends is added

@@ -22,10 +22,19 @@ declare(strict_types=1);
 // With --deep-id it floods depth-65 envelopes addressed to the AWAITING id:
 // the parser cannot read them for nesting, so the strike-bucket classification
 // must win over the false "answered neither result nor error" server blame.
+//
+// With --progress it floods twelve notifications/progress frames — VALID,
+// method-bearing, over the strike threshold — and then answers: the strike
+// exemption is by design (answered frames fire the notification handler, they
+// do not join the bucket). With --progress --starve the flood is forever and
+// the call is never answered: the bounded wait must end with the honest
+// no-reply story, never a strike refusal.
 
 $recovers = in_array('--recovers', $argv, true);
 $parseError = in_array('--parse-error', $argv, true);
 $deepId = in_array('--deep-id', $argv, true);
+$progress = in_array('--progress', $argv, true);
+$starve = in_array('--starve', $argv, true);
 $strikes = $recovers ? 7 : 9; // threshold is 8; 9 crosses it, 7 stays under
 
 $write = static function (array|string $payload): void {
@@ -86,6 +95,39 @@ while (($line = fgets(STDIN)) !== false) {
                     $write(['jsonrpc' => '2.0', 'id' => $id, 'result' => $deep]);
                 }
                 break; // then alive, listening, silent
+            }
+
+            if ($progress) {
+                $frame = static fn (int $n): string => json_encode([
+                    'jsonrpc' => '2.0',
+                    'method' => 'notifications/progress',
+                    'params' => ['progressToken' => 'tick', 'progress' => $n],
+                ]);
+
+                if ($starve) {
+                    // Flood forever (30s orphan backstop): twelve method-
+                    // bearing frames are already past the strike ceiling, so
+                    // any counting of these would refuse long before a real
+                    // deadline could matter.
+                    $born = microtime(true);
+                    $n = 0;
+                    while (microtime(true) - $born < 30.0) {
+                        echo $frame($n++), "\n";
+                        if (!fflush(STDOUT)) {
+                            exit(0); // reader is gone; nothing left to do
+                        }
+                        usleep(1000);
+                    }
+                    exit(0);
+                }
+
+                for ($n = 0; $n < 12; $n++) { // threshold is 8; twelve cross it
+                    $write($frame($n));
+                }
+                $write(['jsonrpc' => '2.0', 'id' => $id, 'result' => [
+                    'content' => [['type' => 'text', 'text' => 'progressed']],
+                ]]);
+                break;
             }
 
             // All four shapes below are unattributable by construction; they

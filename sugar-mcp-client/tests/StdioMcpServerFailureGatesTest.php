@@ -497,6 +497,49 @@ final class StdioMcpServerFailureGatesTest extends TestCase
     }
 
     /**
+     * The exemption by design, pinned: method-bearing frames are ANSWERED (or
+     * fire the notification handler), so they never join the strike bucket —
+     * twelve progress notifications (the ceiling is eight) stream past and
+     * the honest reply after them still lands. Guards the readResponse
+     * ruling that a server which streams progress forever is within its
+     * rights; the day a throughput ceiling is revisited, this pin is where
+     * the old ruling surfaces as a loud red, not a forgotten docblock.
+     */
+    public function testAProgressFrameStreamIsExemptFromTheStrikeCount(): void
+    {
+        $server = $this->spawn('unattributable_server.php', ['--progress']);
+        $server->start();
+
+        $reply = $server->callTool('echo', ['raw' => 'first'], timeoutSeconds: 20.0);
+
+        self::assertArrayNotHasKey('error', $reply, 'the progress flood was struck instead of absorbed');
+        self::assertSame([['type' => 'text', 'text' => 'progressed']], $reply['content'] ?? $reply);
+    }
+
+    /**
+     * The other half of the ruling: a PERMANENT progress stream holds the
+     * exchange open until the CALLER'S bound ends it — the bounded wait
+     * closes on the timed-out rail, never strike blame. The
+     * accepted cost of the exemption is that a deadline-less call against a
+     * wedged answerer hangs; bounds are the caller's law, stated rather
+     * than counted around.
+     */
+    public function testAPermanentProgressFloodEndsAsNoReplyNotStrikeRefusal(): void
+    {
+        $server = $this->spawn('unattributable_server.php', ['--progress', '--starve']);
+        $server->start();
+
+        $reply = $server->callTool('echo', ['raw' => 'first'], timeoutSeconds: 2.0);
+
+        self::assertArrayHasKey('error', $reply, 'an unanswering flood should end the bounded wait in error');
+        self::assertStringStartsWith('Tool call timed out', $reply['error'],
+            'the flood ended on some other rail than the caller-bounded timeout story');
+        self::assertStringNotContainsString('attributable to no request', $reply['error'],
+            'progress frames joined the strike bucket — the by-design exemption is gone');
+        self::assertTrue($server->isUp(), 'the exemption is a diagnosis law, not a teardown trigger');
+    }
+
+    /**
      * Review M8: a NULL-id ERROR frame is not anonymous noise — JSON-RPC
      * sends it to reply to a request it could not parse, and this client
      * provokes that shape with its dead-holder newline repair. The wait must
